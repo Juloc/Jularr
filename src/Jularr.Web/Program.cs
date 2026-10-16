@@ -349,10 +349,22 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
-    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("172.16.0.0/12"));
-    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("192.168.0.0/16"));
-    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("fc00::/7"));
+    var configured = builder.Configuration["JULARR_TRUSTED_PROXIES"];
+    foreach (var entry in (configured ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        if (System.Net.IPAddress.TryParse(entry, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+        else if (System.Net.IPNetwork.TryParse(entry, out var network))
+        {
+            options.KnownIPNetworks.Add(network);
+        }
+        else
+        {
+            throw new InvalidOperationException("JULARR_TRUSTED_PROXIES must contain valid IP addresses or CIDR ranges.");
+        }
+    }
 });
 
 builder.Services.AddSingleton<MediaProcessRunner>();

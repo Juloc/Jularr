@@ -533,6 +533,7 @@ public static class PlaybackDecisionEngine
         {
             PlaybackLimitSource.Preset => PlaybackReasonCodes.QualityLimit,
             PlaybackLimitSource.NetworkDefault => PlaybackReasonCodes.RemoteStartLimit,
+            PlaybackLimitSource.ServerEgress => PlaybackReasonCodes.ServerEgressLimit,
             PlaybackLimitSource.Stalls => PlaybackReasonCodes.StallLimit,
             PlaybackLimitSource.TranscodeSpeed => PlaybackReasonCodes.TranscodeTooSlow,
             PlaybackLimitSource.Headroom => PlaybackReasonCodes.QualityRaised,

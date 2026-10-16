@@ -7,6 +7,13 @@ namespace Jularr.Web.Features.Playback.Transcoding;
 /// What one delivery costs the server. Each class has its own concurrent-session limit so a
 /// cheap remux can never be starved by (or starve) CPU-bound software encodes.
 /// </summary>
+public enum PlaybackWanUploadMode
+{
+    Off,
+    Automatic,
+    Manual
+}
+
 public enum PlaybackCostClass
 {
     SoftwareVideo,
@@ -30,10 +37,20 @@ public sealed record PlaybackTranscodingSettings(
     string HlsCachePath,
     long CacheBudgetBytes,
     long FreeSpaceFloorBytes,
-    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal)
+    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal,
+    int WanUploadBudgetKbps = 0,
+    PlaybackWanUploadMode WanUploadMode = PlaybackWanUploadMode.Off,
+    bool PreparedRenditionsEnabled = false,
+    long PreparedCacheBudgetBytes = 10L << 30,
+    int PreparationStartHourUtc = 1,
+    int PreparationEndHourUtc = 5)
 {
     public const string DefaultHlsCachePath = "/data/playback-cache/hls";
     public const int MaxSessionsPerClass = 64;
+    public const int MaxWanUploadBudgetKbps = 1_000_000;
+    public const int AutomaticFallbackBudgetKbps = 8_000;
+    public const long MinPreparedCacheBudgetBytes = 1L << 20;
+    public const long MaxPreparedCacheBudgetBytes = 1024L << 30;
     public const long BytesPerGiB = 1L << 30;
     // The Admin form offers whole GiB (so at least 1); the stored rule only refuses a budget too small to hold a single segment.
     public const long MinCacheBudgetGiB = 1;
@@ -51,6 +68,18 @@ public sealed record PlaybackTranscodingSettings(
         CacheBudgetBytes: 10 * BytesPerGiB,
         FreeSpaceFloorBytes: 5 * BytesPerGiB,
         BufferPreset: PlaybackBufferPreset.Normal);
+
+    public bool InPreparationWindow(DateTimeOffset now) =>
+        PreparationStartHourUtc < PreparationEndHourUtc
+            ? now.Hour >= PreparationStartHourUtc && now.Hour < PreparationEndHourUtc
+            : now.Hour >= PreparationStartHourUtc || now.Hour < PreparationEndHourUtc;
+
+    public int EffectiveWanUploadBudgetKbps => WanUploadMode switch
+    {
+        PlaybackWanUploadMode.Manual => WanUploadBudgetKbps,
+        PlaybackWanUploadMode.Automatic => AutomaticFallbackBudgetKbps,
+        _ => 0
+    };
 
     public int LimitFor(PlaybackCostClass costClass) =>
         costClass switch
@@ -75,7 +104,11 @@ public enum PlaybackSettingsIssueCode
     LimitRange,
     BudgetRange,
     FloorRange,
-    BufferPresetInvalid
+    BufferPresetInvalid,
+    WanUploadBudgetInvalid,
+    WanUploadModeInvalid,
+    PreparedCacheBudgetInvalid,
+    PreparationWindowInvalid
 }
 
 /// <summary>One rejected setting: the field name and why.</summary>
@@ -111,6 +144,34 @@ public static class PlaybackTranscodingSettingsRules
         if (floor < 0 || floor > PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB * PlaybackTranscodingSettings.BytesPerGiB)
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes), PlaybackSettingsIssueCode.FloorRange));
+        }
+
+        if (settings.WanUploadBudgetKbps < 0 || settings.WanUploadBudgetKbps > PlaybackTranscodingSettings.MaxWanUploadBudgetKbps)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
+        }
+
+        if (settings.PreparedCacheBudgetBytes < PlaybackTranscodingSettings.MinPreparedCacheBudgetBytes ||
+            settings.PreparedCacheBudgetBytes > PlaybackTranscodingSettings.MaxPreparedCacheBudgetBytes)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.PreparedCacheBudgetBytes), PlaybackSettingsIssueCode.PreparedCacheBudgetInvalid));
+        }
+
+        if (settings.PreparationStartHourUtc is < 0 or > 23 ||
+            settings.PreparationEndHourUtc is < 0 or > 23 ||
+            settings.PreparationStartHourUtc == settings.PreparationEndHourUtc)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.PreparationStartHourUtc), PlaybackSettingsIssueCode.PreparationWindowInvalid));
+        }
+
+        if (!Enum.IsDefined(settings.WanUploadMode))
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadMode), PlaybackSettingsIssueCode.WanUploadModeInvalid));
+        }
+
+        if (settings.WanUploadMode == PlaybackWanUploadMode.Manual && settings.WanUploadBudgetKbps == 0)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
         }
 
         if (!Enum.IsDefined(settings.BufferPreset))
@@ -391,7 +452,13 @@ public sealed class PlaybackTranscodingSettingsStore
         long? CacheBudgetBytes,
         long? FreeSpaceFloorBytes,
         string[]? RetiredCachePaths,
-        PlaybackBufferPreset? BufferPreset = null)
+        PlaybackBufferPreset? BufferPreset = null,
+        int? WanUploadBudgetKbps = null,
+        PlaybackWanUploadMode? WanUploadMode = null,
+        bool? PreparedRenditionsEnabled = null,
+        long? PreparedCacheBudgetBytes = null,
+        int? PreparationStartHourUtc = null,
+        int? PreparationEndHourUtc = null)
     {
         public static Persisted From(Stored stored) =>
             new(
@@ -404,7 +471,13 @@ public sealed class PlaybackTranscodingSettingsStore
                 stored.Settings.CacheBudgetBytes,
                 stored.Settings.FreeSpaceFloorBytes,
                 stored.RetiredRoots,
-                stored.Settings.BufferPreset);
+                stored.Settings.BufferPreset,
+                stored.Settings.WanUploadBudgetKbps,
+                stored.Settings.WanUploadMode,
+                stored.Settings.PreparedRenditionsEnabled,
+                stored.Settings.PreparedCacheBudgetBytes,
+                stored.Settings.PreparationStartHourUtc,
+                stored.Settings.PreparationEndHourUtc);
 
         public PlaybackTranscodingSettings ToSettings()
         {
@@ -418,7 +491,13 @@ public sealed class PlaybackTranscodingSettingsStore
                 HlsCachePath ?? defaults.HlsCachePath,
                 CacheBudgetBytes ?? defaults.CacheBudgetBytes,
                 FreeSpaceFloorBytes ?? defaults.FreeSpaceFloorBytes,
-                BufferPreset ?? defaults.BufferPreset);
+                BufferPreset ?? defaults.BufferPreset,
+                WanUploadBudgetKbps ?? defaults.WanUploadBudgetKbps,
+                WanUploadMode ?? (WanUploadBudgetKbps is > 0 ? PlaybackWanUploadMode.Manual : PlaybackWanUploadMode.Off),
+                PreparedRenditionsEnabled ?? defaults.PreparedRenditionsEnabled,
+                PreparedCacheBudgetBytes ?? defaults.PreparedCacheBudgetBytes,
+                PreparationStartHourUtc ?? defaults.PreparationStartHourUtc,
+                PreparationEndHourUtc ?? defaults.PreparationEndHourUtc);
         }
     }
 }

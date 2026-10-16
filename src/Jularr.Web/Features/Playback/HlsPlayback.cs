@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Admin;
@@ -23,6 +24,13 @@ public sealed record HlsPlaybackAsset(
     string ContentType,
     bool EnableRangeProcessing);
 
+/// <summary>Per-session producer evidence; null ahead means ffmpeg has not reported a reliable output position.</summary>
+public sealed record HlsPacingSnapshot(
+    bool IsPaused,
+    double? ProducedAheadSeconds,
+    double TargetAheadSeconds,
+    double LowWaterSeconds);
+
 /// <summary>What one cache sweep removed.</summary>
 public sealed record HlsSweepResult(int ExpiredSessions, int PrunedForPolicy, int OrphanDirectories, int CrashedSessions = 0);
 
@@ -38,6 +46,12 @@ public interface IHlsEncoderProcess : IDisposable
     string ErrorSummary { get; }
 
     void Kill();
+}
+
+/// <summary>Optional per-process pause/resume; unsupported platforms continue normal delivery.</summary>
+public interface IHlsPausableEncoderProcess
+{
+    bool TrySetPaused(bool paused);
 }
 
 public delegate IHlsEncoderProcess HlsProcessStarter(IReadOnlyList<string> arguments);
@@ -97,6 +111,13 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
     public int ActiveSessions => _sessions.Count;
 
+    public HlsPacingSnapshot? GetPacingSnapshot(Guid sessionId, string profileId) =>
+        _sessions.TryGetValue(sessionId, out var entry) &&
+        string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal) &&
+        !HasCrashed(entry)
+            ? entry.GetPacingSnapshot()
+            : null;
+
     public async Task<HlsPlaybackSession> StartAsync(
         Guid episodeId,
         string profileId,
@@ -125,7 +146,9 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         Func<string, IReadOnlyList<string>> buildArguments,
         IDisposable? lease,
         CancellationToken cancellationToken,
-        Action<PlaybackTranscodeSample>? onProgress = null)
+        Action<PlaybackTranscodeSample>? onProgress = null,
+        double? remainingDurationSeconds = null,
+        PlaybackCostClass? costClass = null)
     {
         ArgumentNullException.ThrowIfNull(buildArguments);
         if (string.IsNullOrWhiteSpace(profileId))
@@ -171,10 +194,6 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 try
                 {
                     process = _startProcess(buildArguments(directory));
-                    if (onProgress is not null && process is IFfmpegProgressSource progressSource)
-                    {
-                        progressSource.ProgressReported += onProgress;
-                    }
                 }
                 catch
                 {
@@ -182,7 +201,15 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                     throw;
                 }
 
-                entry = new Entry(sessionId, episodeId, profileId, directory, process, startSeconds, _time.GetUtcNow(), lease);
+                entry = new Entry(
+                    sessionId, episodeId, profileId, directory, process, startSeconds,
+                    _time.GetUtcNow(), lease, _time, PlaybackBufferPolicy.For(policy.BufferPreset, PlaybackDeliveryMode.Transcode),
+                    onProgress, remainingDurationSeconds, costClass);
+                if (process is IFfmpegProgressSource progressSource)
+                {
+                    progressSource.ProgressReported += entry.RecordProgress;
+                }
+
                 _sessions[sessionId] = entry;
             }
         }
@@ -311,13 +338,50 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             return null;
         }
 
-        // Serving a segment is the one access that keeps a session alive.
-        entry.Touch(_time.GetUtcNow());
+        // Polling a playlist or init header does not prove the viewer consumes media.
+        // Only a fetched segment renews the cache lifetime and advances producer demand.
+        if (s_segmentPattern.IsMatch(fileName))
+        {
+            var requested = int.Parse(fileName.AsSpan(8, 5), NumberStyles.None, CultureInfo.InvariantCulture);
+            entry.SegmentRequested(requested, _time.GetUtcNow());
+        }
 
         return new HlsPlaybackAsset(
             path,
             ContentType(fileName),
             fileName != "index.m3u8");
+    }
+
+    public bool HasReclaimableStalePaused(
+        PlaybackCostClass costClass, string profileId, bool sameProfileOnly)
+    {
+        var now = _time.GetUtcNow();
+        return _sessions.Values.Any(entry =>
+            (!sameProfileOnly || entry.ProfileId == profileId) &&
+            entry.CanReclaim(costClass, sameProfileOnly, now,
+                BudgetPruneIdleAfter + TimeSpan.FromSeconds(30)));
+    }
+
+    public bool ReclaimStalePaused(PlaybackCostClass costClass, string profileId, bool sameProfileOnly)
+    {
+        lock (_gate)
+        {
+            var now = _time.GetUtcNow();
+            var stale = _sessions.Values
+                .Where(entry =>
+                    (!sameProfileOnly || entry.ProfileId == profileId) &&
+                    entry.CanReclaim(costClass, sameProfileOnly, now,
+                        BudgetPruneIdleAfter + TimeSpan.FromSeconds(30)))
+                .OrderBy(entry => entry.LastAccessUtc)
+                .FirstOrDefault();
+            if (stale is null || !_sessions.ContainsKey(stale.SessionId))
+            {
+                return false;
+            }
+
+            Remove(stale.SessionId, HlsSessionEndReason.Idle);
+            return true;
+        }
     }
 
     public int CleanupExpired()
@@ -414,6 +478,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             "-v", "error",
             "-nostdin",
             "-y",
+            "-progress", "pipe:2", "-nostats",
             "-fflags", "+genpts"
         };
 
@@ -802,11 +867,22 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         IHlsEncoderProcess process,
         double startSeconds,
         DateTimeOffset createdAtUtc,
-        IDisposable? lease)
+        IDisposable? lease,
+        TimeProvider time,
+        PlaybackBufferPolicy buffer,
+        Action<PlaybackTranscodeSample>? onProgress,
+        double? remainingDurationSeconds,
+        PlaybackCostClass? costClass)
     {
+        private readonly object _pacingGate = new();
         private long _lastAccessTicks = createdAtUtc.UtcTicks;
-
         private IDisposable? _lease = lease;
+        private int _lastRequestedSegment = -1;
+        private double? _producedSeconds;
+        private bool _paused;
+        private bool _hasPaused;
+        private DateTimeOffset? _previousProgressAt;
+        private double? _previousOutputSeconds;
 
         public Guid SessionId { get; } = sessionId;
         public Guid EpisodeId { get; } = episodeId;
@@ -817,7 +893,94 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         public DateTimeOffset CreatedAtUtc { get; } = createdAtUtc;
         public DateTimeOffset LastAccessUtc => new(Interlocked.Read(ref _lastAccessTicks), TimeSpan.Zero);
 
+        public bool CanReclaim(
+            PlaybackCostClass requestedClass, bool sameProfileOnly, DateTimeOffset now, TimeSpan minIdle)
+        {
+            lock (_pacingGate)
+            {
+                return (sameProfileOnly || costClass == requestedClass) &&
+                       _lease is not null &&
+                       _paused &&
+                       !Process.HasExited &&
+                       now - LastAccessUtc >= minIdle;
+            }
+        }
+
+        public void SegmentRequested(int requested, DateTimeOffset now)
+        {
+            Interlocked.Exchange(ref _lastAccessTicks, now.UtcTicks);
+            lock (_pacingGate)
+            {
+                _lastRequestedSegment = Math.Max(_lastRequestedSegment, requested);
+                if (_paused && _producedSeconds is { } produced &&
+                    produced - (_lastRequestedSegment + 1) * SegmentSeconds <= buffer.LowWaterSeconds &&
+                    Process is IHlsPausableEncoderProcess pausable && pausable.TrySetPaused(false))
+                {
+                    _paused = false;
+                    // FFmpeg's cumulative speed includes time spent sleeping. Measure the
+                    // active output interval after a resume instead of treating this wait as an overloaded encoder.
+                    _previousProgressAt = null;
+                    _previousOutputSeconds = null;
+                }
+            }
+        }
+
         public void Touch(DateTimeOffset now) => Interlocked.Exchange(ref _lastAccessTicks, now.UtcTicks);
+
+        public HlsPacingSnapshot GetPacingSnapshot()
+        {
+            lock (_pacingGate)
+            {
+                return new HlsPacingSnapshot(
+                    _paused,
+                    _producedSeconds is { } produced
+                        ? Math.Max(0, produced - (_lastRequestedSegment + 1) * SegmentSeconds)
+                        : null,
+                    buffer.TargetAheadSeconds,
+                    buffer.LowWaterSeconds);
+            }
+        }
+
+        public void RecordProgress(PlaybackTranscodeSample sample)
+        {
+            var reading = sample;
+            lock (_pacingGate)
+            {
+                if (Process is IHlsPausableEncoderProcess pausable &&
+                    sample.OutputSeconds is { } produced && double.IsFinite(produced) && produced >= 0)
+                {
+                    var now = time.GetUtcNow();
+                    if (_hasPaused)
+                    {
+                        double? activeSpeed = _previousProgressAt is { } previousAt &&
+                                              _previousOutputSeconds is { } previousOutput &&
+                                              now > previousAt && produced >= previousOutput
+                            ? Math.Min(PlaybackTranscodeMeter.MaxSpeed, (produced - previousOutput) / (now - previousAt).TotalSeconds)
+                            : null;
+                        reading = sample with { Speed = activeSpeed };
+                    }
+
+                    _producedSeconds = produced;
+                    _previousProgressAt = now;
+                    _previousOutputSeconds = produced;
+                    // Without an accurate remaining duration a pause near EOF can prevent ffmpeg from
+                    // finalising EXT-X-ENDLIST. Never pause during the last buffer window.
+                    if (!_paused && remainingDurationSeconds is { } remaining &&
+                        double.IsFinite(remaining) && remaining > 0 &&
+                        produced < remaining - buffer.TargetAheadSeconds &&
+                        produced - (_lastRequestedSegment + 1) * SegmentSeconds >= buffer.TargetAheadSeconds &&
+                        pausable.TrySetPaused(true))
+                    {
+                        _paused = true;
+                        _hasPaused = true;
+                        _previousProgressAt = null;
+                        _previousOutputSeconds = null;
+                    }
+                }
+            }
+
+            onProgress?.Invoke(reading);
+        }
 
         /// <summary>Frees the encoder slot once; safe to call from any path that notices the encoder is gone.</summary>
         public void ReleaseLease() => Interlocked.Exchange(ref _lease, null)?.Dispose();
@@ -854,9 +1017,10 @@ internal sealed class CacheUsage
 }
 
 /// <summary>The real ffmpeg of an HLS session. Arguments are passed as a list, never through a shell.</summary>
-public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
+public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IHlsPausableEncoderProcess, IFfmpegProgressSource
 {
     private readonly Process _process;
+    private readonly object _signalGate = new();
     private readonly FfmpegStderrReader _stderr = new();
 
     private FfmpegHlsProcess(Process process)
@@ -936,7 +1100,49 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
         return wrapper;
     }
 
-    public void Kill() => _process.Kill(entireProcessTree: true);
+    public bool TrySetPaused(bool paused)
+    {
+        // The Docker host is Linux. Other host platforms fall back to unpaced HLS.
+        // The lock serializes signals with Kill/Dispose, so a retired PID cannot be signalled by a late progress event.
+        if (!OperatingSystem.IsLinux() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+        {
+            return false;
+        }
 
-    public void Dispose() => _process.Dispose();
+        lock (_signalGate)
+        {
+            if (HasExited)
+            {
+                return false;
+            }
+
+            return UnixSignals.Kill(_process.Id, paused ? UnixSignals.Stop : UnixSignals.Continue) == 0;
+        }
+    }
+
+    public void Kill()
+    {
+        lock (_signalGate)
+        {
+            _process.Kill(entireProcessTree: true);
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_signalGate)
+        {
+            _process.Dispose();
+        }
+    }
+
+    private static class UnixSignals
+    {
+        public const int Stop = 19;
+        public const int Continue = 18;
+
+        [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+        public static extern int Kill(int pid, int signal);
+    }
 }

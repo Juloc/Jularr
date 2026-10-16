@@ -125,6 +125,386 @@ public sealed class CanonicalPlaybackPlanTests
     }
 
     [TestMethod]
+    public async Task OnlyProvenanceLinkedRenditionsCanReplaceTheOriginal()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Safe Video Renditions" };
+        fixture.Db.Works.Add(movie);
+        await fixture.Db.SaveChangesAsync();
+
+        const string originalCodec = "\"codec_name\": \"h264\"";
+        const string originalContainer = "\"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\"";
+        var hevcStereo = MediaProbeFixtures.H264Stereo
+            .Replace(originalCodec, "\"codec_name\": \"hevc\"", StringComparison.Ordinal)
+            .Replace("\"profile\": \"High\"", "\"profile\": \"Main\"", StringComparison.Ordinal)
+            .Replace(originalContainer, "\"format_name\": \"matroska,webm\"", StringComparison.Ordinal);
+        var original = await AttachAsync(fixture, storage, movie.Id, null, "a-hevc.mkv", hevcStereo);
+        var candidate = await AttachAsync(fixture, storage, movie.Id, null, "b-h264.mp4", MediaProbeFixtures.H264Stereo);
+        await fixture.Inventory.EnsureAnalyzedAsync(original.StoredFileId, CancellationToken.None);
+        await fixture.Inventory.EnsureAnalyzedAsync(candidate.StoredFileId, CancellationToken.None);
+
+        var planner = new PlaybackPlanService(
+            fixture.Db,
+            fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        var input = new PlaybackPlanInput(
+            null, ClientKinds.Web, ChromeAgent, IPAddress.Parse("203.0.113.9"),
+            Network: new PlaybackNetworkReport(ThroughputKbps: 24_000));
+
+        var unproven = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, unproven.MediaFileId,
+            "A separate imported edition is not evidence of the same cut, default language or timeline.");
+
+        var sourceAnalysis = (await fixture.Inventory.GetManyAsync(
+            [original.StoredFileId], CancellationToken.None))[original.StoredFileId];
+        Assert.IsNotNull(sourceAnalysis.SourceFingerprint);
+        var candidateFingerprint = await MediaInventoryService.TryComputeFingerprintAsync(candidate.Path, CancellationToken.None);
+        Assert.IsNotNull(candidateFingerprint);
+        var externallySerialized = System.Text.Json.JsonSerializer.Serialize(sourceAnalysis);
+        Assert.IsFalse(externallySerialized.Contains("SourceFingerprint", StringComparison.Ordinal));
+        Assert.IsFalse(externallySerialized.Contains("SourceSizeBytes", StringComparison.Ordinal));
+        Assert.IsFalse(externallySerialized.Contains("SourceLastWriteTimeUtc", StringComparison.Ordinal));
+        var version = await fixture.Db.WorkVersions.FindAsync(candidate.WorkVersionId);
+        Assert.IsNotNull(version);
+        version.Source = "jularr-prepared:v1";
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            outputFingerprint = candidateFingerprint,
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        var sourceVersion = await fixture.Db.WorkVersions.FindAsync(original.WorkVersionId);
+        Assert.IsNotNull(sourceVersion);
+        sourceVersion.Source = null;
+        await fixture.Db.SaveChangesAsync();
+
+        var installed = await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None);
+        Assert.AreEqual(1, installed.Count, "A disposable prepared cache entry is not an installed acquisition version.");
+        Assert.AreEqual(original.StoredFileId, installed[0].StoredFileId);
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count,
+            "Playback can still consider the verified derivative without exposing it as an installed release.");
+
+        var verified = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(candidate.StoredFileId, verified.MediaFileId);
+        Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, verified.Plan.Mode,
+            "A verified identical-timeline rendition avoids video re-encoding.");
+        Assert.AreEqual(candidate.StoredFileId, verified.Session!.MediaFileId);
+
+        // An automatically prepared file may sort before its source by filename.
+        // It can never become the canonical original just because the filename changed.
+        var preparedStored = await fixture.Db.StoredFiles.FindAsync(candidate.StoredFileId);
+        Assert.IsNotNull(preparedStored);
+        var earlierPath = Path.Combine(Path.GetDirectoryName(preparedStored.Path)!, "0-prepared-video.mp4");
+        File.Move(preparedStored.Path, earlierPath);
+        preparedStored.Path = earlierPath;
+        await fixture.Db.SaveChangesAsync();
+        var candidatesByOrigin = await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None);
+        Assert.AreEqual(original.StoredFileId, candidatesByOrigin[0].StoredFileId);
+        var sortedPlan = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(candidate.StoredFileId, sortedPlan.MediaFileId,
+            "The verified rendition remains selectable even when its path sorts ahead of the source.");
+
+        // The database can still reference a derivative that the cache sweeper has evicted.
+        // A missing output must never cause playback to select an unavailable version.
+        var temporarilyMissing = earlierPath + ".unavailable";
+        File.Move(earlierPath, temporarilyMissing);
+        try
+        {
+            var missingPrepared = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, missingPrepared.MediaFileId,
+                "When the prepared bytes are gone, live transcoding from the original remains possible.");
+            var missingReplan = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader",
+                input with { ReplacesSessionId = verified.Session.Id }, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, missingReplan.MediaFileId,
+                "Re-planning cannot reuse the old session's vanished derivative.");
+        }
+        finally
+        {
+            File.Move(temporarilyMissing, earlierPath);
+        }
+
+        // Even while the output path exists, its bytes may be stale or truncated.
+        // Do not reuse the old ffprobe data of a physically replaced prepared file.
+        File.Move(earlierPath, temporarilyMissing);
+        try
+        {
+            File.WriteAllBytes(earlierPath, [0x00, 0x01, 0x02]);
+            var corruptPrepared = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, corruptPrepared.MediaFileId,
+                "A modified prepared cache file must not replace an intact original.");
+        }
+        finally
+        {
+            File.Delete(earlierPath);
+            File.Move(temporarilyMissing, earlierPath);
+        }
+
+        // A source removed on disk, but not yet detached by a library scan, cannot
+        // turn a prepared cache file into the sole playable version of that Work.
+        var originalPath = original.Path;
+        var missingSourcePath = originalPath + ".unavailable";
+        File.Move(originalPath, missingSourcePath);
+        try
+        {
+            var missingOriginal = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, missingOriginal.MediaFileId,
+                "The source must remain the canonical choice when its bytes are missing.");
+            Assert.AreEqual(PlaybackDeliveryMode.Unavailable, missingOriginal.Plan.Mode);
+        }
+        finally
+        {
+            File.Move(missingSourcePath, originalPath);
+        }
+
+        var local = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { RemoteAddress = IPAddress.Loopback, Network = null }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, local.MediaFileId,
+            "LAN Auto means Original, so it must not prefer a smaller pre-encoded version.");
+
+        var selectedAudio = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { AudioStreamIndex = 1 }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, selectedAudio.MediaFileId,
+            "Track indices belong to a particular file, even when a prepared version has the same language.");
+
+        var requestedOriginal = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with
+            {
+                Quality = PlaybackQualityPreset.Original,
+                ReplacesSessionId = verified.Session.Id
+            }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, requestedOriginal.MediaFileId,
+            "Explicit Original never silently switches to a lossy prepared file.");
+
+        var continued = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { ReplacesSessionId = unproven.Session!.Id }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, continued.MediaFileId,
+            "An in-progress seek/re-plan retains its current physical file and timeline.");
+
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            outputFingerprint = new string('0', 64),
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+        var corruptProvenance = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, corruptProvenance.MediaFileId,
+            "A prepared version with the wrong output fingerprint must not be reused.");
+
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = new string('0', 64),
+            outputFingerprint = candidateFingerprint,
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+        var stale = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, stale.MediaFileId,
+            "A changed source fingerprint invalidates an otherwise compatible prepared file.");
+        var staleSeek = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { ReplacesSessionId = verified.Session.Id },
+            CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, staleSeek.MediaFileId,
+            "A now revoked derivative cannot survive simply because an older session used it.");
+
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            outputFingerprint = candidateFingerprint,
+            recipeVersion = 2,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+        var unknownRecipe = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, unknownRecipe.MediaFileId,
+            "Future preparation recipes require explicit compatibility review before selecting their output.");
+
+        await storage.RemoveFilesAsync([original.StoredFileId], CancellationToken.None);
+        var orphaned = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None);
+        Assert.IsNull(orphaned,
+            "A surviving prepared rendition is not allowed to masquerade as the missing source file.");
+
+        // Even a future/unknown renderer version remains cache data, not a fallback
+        // original or an installed version. Only its playback eligibility may evolve.
+        version.Source = "jularr-prepared:v2";
+        await fixture.Db.SaveChangesAsync();
+        Assert.AreEqual(0, (await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None)).Count);
+        Assert.IsNull(await storage.ResolveVideoAsync(movie.Id, null, CancellationToken.None));
+        Assert.IsNull(await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task PreparedVideoPublication_RequiresVerifiedOutputAndKeepsOriginalAsInstalledRelease()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Prepared Release" };
+        fixture.Db.Works.Add(movie);
+        await fixture.Db.SaveChangesAsync();
+
+        var hevcStereo = MediaProbeFixtures.H264Stereo
+            .Replace("\"codec_name\": \"h264\"", "\"codec_name\": \"hevc\"", StringComparison.Ordinal)
+            .Replace("\"profile\": \"High\"", "\"profile\": \"Main\"", StringComparison.Ordinal)
+            .Replace("\"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\"",
+                     "\"format_name\": \"matroska,webm\"", StringComparison.Ordinal);
+        var source = await AttachAsync(
+            fixture, storage, movie.Id, null, "source.mkv", hevcStereo);
+        var sourceAnalysis = await fixture.Inventory.EnsureAnalyzedAsync(
+            source.StoredFileId, CancellationToken.None);
+        Assert.IsNotNull(sourceAnalysis);
+
+        var cacheRoot = Path.Combine(fixture.TempRoot, "prepared-cache");
+        Directory.CreateDirectory(cacheRoot);
+        var output = Path.Combine(cacheRoot, "mobile-1080.mp4");
+        await File.WriteAllBytesAsync(output, new byte[3072]);
+
+        var missingProbe = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            storage.PublishVerifiedPreparedVideoAsync(
+                source, sourceAnalysis, output, cacheRoot, "mobile1080",
+                fixture.Runner, CancellationToken.None));
+        Assert.IsNotNull(missingProbe);
+        Assert.AreEqual(1, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count,
+            "Failed ffprobe must not publish any prepared Version.");
+
+        fixture.Runner.Returns(output, MediaProbeFixtures.H264Stereo);
+        var prepared = await storage.PublishVerifiedPreparedVideoAsync(
+            source, sourceAnalysis, output, cacheRoot, "mobile1080",
+            fixture.Runner, CancellationToken.None);
+        Assert.AreEqual(CanonicalMediaStorageService.PreparedVideoVersionSource, prepared.VersionSource);
+        Assert.AreNotEqual(source.StoredFileId, prepared.StoredFileId);
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count);
+        var installed = await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None);
+        Assert.AreEqual(1, installed.Count);
+        Assert.AreEqual(source.StoredFileId, installed[0].StoredFileId);
+
+        await fixture.Inventory.EnsureAnalyzedAsync(prepared.StoredFileId, CancellationToken.None);
+        var planner = new PlaybackPlanService(
+            fixture.Db, fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        var playback = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            new PlaybackPlanInput(
+                null, ClientKinds.Web, ChromeAgent, IPAddress.Parse("203.0.113.9"),
+                Network: new PlaybackNetworkReport(ThroughputKbps: 24_000)),
+            CancellationToken.None);
+        Assert.IsNotNull(playback);
+        Assert.AreEqual(prepared.StoredFileId, playback.MediaFileId,
+            "A published and analyzed prepared version should be reused instead of starting a live HEVC conversion.");
+
+        var same = await storage.PublishVerifiedPreparedVideoAsync(
+            source, sourceAnalysis, output, cacheRoot, "mobile1080",
+            fixture.Runner, CancellationToken.None);
+        Assert.AreEqual(prepared.StoredFileId, same.StoredFileId,
+            "Publishing one recipe twice must return the existing canonical derivative.");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            storage.PublishVerifiedPreparedVideoAsync(
+                source, sourceAnalysis, source.Path, cacheRoot, "unsafe",
+                fixture.Runner, CancellationToken.None));
+
+        File.Delete(source.Path);
+        await File.WriteAllBytesAsync(source.Path, new byte[512]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            storage.PublishVerifiedPreparedVideoAsync(
+                source, sourceAnalysis, output, cacheRoot, "sourcechanged",
+                fixture.Runner, CancellationToken.None));
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count,
+            "Stale original bytes cannot create a second derivative.");
+    }
+
+    [DataTestMethod]
+    [DataRow("shifted-timeline")]
+    [DataRow("different-audio-language")]
+    [DataRow("different-soundtrack-title")]
+    [DataRow("distorted-picture")]
+    public async Task PreparedRenditionsCannotChangeTimelineOrTrackIdentity(string mismatch)
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Different Edition" };
+        fixture.Db.Works.Add(movie);
+        await fixture.Db.SaveChangesAsync();
+
+        var originalJson = MediaProbeFixtures.H264Stereo
+            .Replace("\"codec_name\": \"h264\"", "\"codec_name\": \"hevc\"", StringComparison.Ordinal)
+            .Replace("\"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\"", "\"format_name\": \"matroska,webm\"", StringComparison.Ordinal);
+        var derivativeJson = mismatch switch
+        {
+            "shifted-timeline" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"duration\": \"1440.0\"", "\"duration\": \"1420.0\"", StringComparison.Ordinal),
+            "different-audio-language" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"language\": \"jpn\"", "\"language\": \"eng\"", StringComparison.Ordinal),
+            "different-soundtrack-title" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"language\": \"jpn\"", "\"language\": \"jpn\", \"title\": \"Commentary\"", StringComparison.Ordinal),
+            "distorted-picture" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"width\": 1920", "\"width\": 1280", StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
+        };
+
+        var original = await AttachAsync(fixture, storage, movie.Id, null, "a-hevc.mkv", originalJson);
+        var other = await AttachAsync(fixture, storage, movie.Id, null, "b-h264.mp4", derivativeJson);
+        var originalAnalysis = await fixture.Inventory.EnsureAnalyzedAsync(original.StoredFileId, CancellationToken.None);
+        await fixture.Inventory.EnsureAnalyzedAsync(other.StoredFileId, CancellationToken.None);
+        Assert.IsNotNull(originalAnalysis!.SourceFingerprint);
+        var otherFingerprint = await MediaInventoryService.TryComputeFingerprintAsync(other.Path, CancellationToken.None);
+        Assert.IsNotNull(otherFingerprint);
+
+        var version = await fixture.Db.WorkVersions.FindAsync(other.WorkVersionId);
+        Assert.IsNotNull(version);
+        version.Source = "jularr-prepared:v1";
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = originalAnalysis.SourceFingerprint,
+            outputFingerprint = otherFingerprint,
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var planner = new PlaybackPlanService(
+            fixture.Db, fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        var result = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Parse("203.0.113.9"),
+                Network: new PlaybackNetworkReport(ThroughputKbps: 24_000)),
+            CancellationToken.None);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(original.StoredFileId, result.MediaFileId,
+            "A marked prepared file is not enough: seek positions and audio/forced-subtitle selection must be equivalent.");
+    }
+
+    [TestMethod]
     public async Task CanonicalBootstrapUsesTracksAndWorkEpisodeNavigation()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();

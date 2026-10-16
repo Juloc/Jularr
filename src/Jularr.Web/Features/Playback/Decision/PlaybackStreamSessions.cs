@@ -127,6 +127,8 @@ public sealed class PlaybackStreamSession(
     bool deferRetirement)
 {
     private PlaybackStreamSession? _replacing = deferRetirement ? replaced : null;
+    private int _deliveryStarted;
+    private long _lastDeliveryActivityTicks;
 
     private readonly object gate = new();
 
@@ -188,6 +190,25 @@ public sealed class PlaybackStreamSession(
     /// playing; null otherwise. The old session is retired by <see cref="TakeReplacing"/> after the first output of this one succeeded.
     /// </summary>
     public PlaybackStreamSession? Replacing => Volatile.Read(ref _replacing);
+
+    public bool HasStartedDelivery => Volatile.Read(ref _deliveryStarted) != 0;
+
+    /// <summary>Only actual stream output or authenticated progress counts toward live WAN demand.</summary>
+    public bool HasRecentDelivery(DateTimeOffset since)
+    {
+        var lastDeliveryTicks = Interlocked.Read(ref _lastDeliveryActivityTicks);
+        var latest = Telemetry.Latest;
+        return HasStartedDelivery &&
+               lastDeliveryTicks >= since.UtcTicks &&
+               (latest is not { State: PlaybackClientState.Paused } ||
+                lastDeliveryTicks > latest.ReportedAtUtc.UtcTicks);
+    }
+
+    public void MarkDeliveryStarted()
+    {
+        Interlocked.Exchange(ref _lastDeliveryActivityTicks, time.GetUtcNow().UtcTicks);
+        Interlocked.Exchange(ref _deliveryStarted, 1);
+    }
 
     /// <summary>Hands the session being replaced to whoever retires it (once); null when there is none or it was already taken.</summary>
     public PlaybackStreamSession? TakeReplacing() => Interlocked.Exchange(ref _replacing, null);
@@ -304,7 +325,7 @@ public sealed record PlaybackStreamSelections(
     PlaybackModePreference ModePreference,
     string ClientKind);
 
-public sealed class PlaybackStreamSessionStore(TimeProvider time)
+public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTranscodingSettingsStore? settings = null)
 {
     public const int MaxSessions = 64;
     public const int MaxSessionsPerProfile = 6;
@@ -317,6 +338,22 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
     public event Action<PlaybackStreamSession>? Removed;
 
     public int Count => sessions.Count;
+
+    public int ActiveRecentDeliveries()
+    {
+        var since = time.GetUtcNow() - TimeSpan.FromSeconds(30);
+        return sessions.Values.Count(session => session.Replacing is null && session.HasRecentDelivery(since));
+    }
+
+    public int ActiveExternalDeliveries(Guid? replacingSessionId = null)
+    {
+        var since = time.GetUtcNow() - TimeSpan.FromSeconds(30);
+        return sessions.Values.Count(session =>
+            session.Id != replacingSessionId &&
+            session.Replacing is null &&
+            session.HasRecentDelivery(since) &&
+            session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown);
+    }
 
     public PlaybackStreamSession Create(
         string profileId,
@@ -417,9 +454,29 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
 
         if (session.Telemetry.Apply(report) == PlaybackTelemetryOutcome.ShowsProgress)
         {
+            session.MarkDeliveryStarted();
             session.Touch(time.GetUtcNow());
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// A direct file request belongs to a playback session only when the authenticated
+    /// profile, physical file and chosen File transport all agree. An old bootstrap URL
+    /// without a session id still works, but cannot affect WAN attribution.
+    /// </summary>
+    public bool MarkDirectContentRequested(Guid sessionId, string profileId, Guid mediaFileId)
+    {
+        var session = Peek(sessionId, profileId);
+        if (session is null || session.MediaFileId != mediaFileId ||
+            session.Plan.Transport != PlaybackTransport.File)
+        {
+            return false;
+        }
+
+        session.MarkDeliveryStarted();
+        session.Touch(time.GetUtcNow());
         return true;
     }
 
@@ -530,8 +587,34 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
             reading.State,
             policy));
 
-        // Raising the quality adds load; a server that already struggles with a conversion of this kind is not asked for more.
-        return decision.Advice == PlaybackAdaptationAdvice.StepUp && IsTranscodeOverloaded(reading.Backend is { } backend && backend != PlaybackHardwareBackend.Software, session)
+        if (decision.Reason != PlaybackAdaptationReason.TranscodeTooSlow &&
+            settings?.Current.EffectiveWanUploadBudgetKbps is > 0 and var budget &&
+            session.Plan.Quality.Network != PlaybackNetworkClass.Local &&
+            session.Plan.Quality.DeliveredBitrateKbps is { } delivered &&
+            now - session.CreatedAtUtc >= policy.MinSessionAge &&
+            session.Telemetry.Latest is { } latest &&
+            latest.State != PlaybackClientState.Paused &&
+            now - latest.ReportedAtUtc <= PlaybackSessionTelemetry.FreshFor)
+        {
+            var active = Math.Max(1, ActiveExternalDeliveries());
+            var limit = Math.Max(100, (int)(budget * 0.85 / active));
+            if (delivered > limit + Math.Max(128, limit / 20))
+            {
+                return new PlaybackAdaptationDecision(
+                    PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.ServerEgress);
+            }
+
+            if (decision.Advice == PlaybackAdaptationAdvice.StepUp &&
+                session.Plan.Quality.LimitSource == PlaybackLimitSource.ServerEgress &&
+                session.Plan.Quality.LimitKbps is { } currentLimit &&
+                limit <= currentLimit + Math.Max(128, currentLimit / 20))
+            {
+                return PlaybackAdaptationDecision.None;
+            }
+        }
+
+        return decision.Advice == PlaybackAdaptationAdvice.StepUp &&
+               IsTranscodeOverloaded(reading.Backend is { } backend && backend != PlaybackHardwareBackend.Software, session)
             ? PlaybackAdaptationDecision.None
             : decision;
     }

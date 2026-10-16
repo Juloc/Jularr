@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Admin;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Playback.Transcoding;
@@ -16,7 +17,12 @@ namespace Jularr.Web.Pages.Admin;
 /// <see cref="PlaybackTranscodingSettingsStore"/> validates and stores.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AdminSystem)]
-public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSettingsStore store, PlaybackTranscodeSlots slots) : PageModel
+public sealed class TranscodingModel(
+    AppDbContext db,
+    PlaybackTranscodingSettingsStore store,
+    PlaybackTranscodeSlots slots,
+    IStackResourceTelemetry resources,
+    TimeProvider time) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -47,6 +53,27 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
     [BindProperty]
     public PlaybackBufferPreset BufferPreset { get; set; }
 
+    [BindProperty]
+    public PlaybackWanUploadMode WanUploadMode { get; set; }
+
+    [BindProperty]
+    public int WanUploadBudgetMbps { get; set; }
+
+    [BindProperty]
+    public bool PreparedRenditionsEnabled { get; set; }
+
+    [BindProperty]
+    public long PreparedCacheBudgetGiB { get; set; }
+
+    [BindProperty]
+    public int PreparationStartHourUtc { get; set; }
+
+    [BindProperty]
+    public int PreparationEndHourUtc { get; set; }
+
+    /// <summary>Recent Jularr-container TX rate only; not ISP uplink capacity or video-only traffic.</summary>
+    public double? ContainerOutboundMbps { get; private set; }
+
     public int Running(PlaybackCostClass costClass) => slots.Active(costClass);
 
     /// <summary>The value of one per-class session field, addressed by the form field name the page posts.</summary>
@@ -65,6 +92,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        ReadContainerOutbound();
         try
         {
             // A read for display: what the server enforces (store.Current) is not touched by opening the page.
@@ -81,6 +109,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        ReadContainerOutbound();
 
         if (!ModelState.IsValid)
         {
@@ -89,6 +118,10 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
 
         // Out-of-range input stays out of range after the multiplication instead of overflowing into a valid value.
         long ToBytes(long gibibytes) => Math.Clamp(gibibytes, -1, 1_000_000_000) * PlaybackTranscodingSettings.BytesPerGiB;
+
+        var uploadKbps = WanUploadBudgetMbps is >= 0 and <= PlaybackTranscodingSettings.MaxWanUploadBudgetKbps / 1000
+            ? WanUploadBudgetMbps * 1000
+            : -1;
 
         var result = await store.SaveAsync(
             new PlaybackTranscodingSettings(
@@ -100,7 +133,13 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
                 HlsCachePath ?? "",
                 ToBytes(CacheBudgetGiB),
                 ToBytes(FreeSpaceFloorGiB),
-                BufferPreset),
+                BufferPreset,
+                uploadKbps,
+                WanUploadMode,
+                PreparedRenditionsEnabled,
+                ToBytes(PreparedCacheBudgetGiB),
+                PreparationStartHourUtc,
+                PreparationEndHourUtc),
             cancellationToken);
         if (!result.Succeeded)
         {
@@ -116,6 +155,52 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         return RedirectToPage();
     }
 
+    /// <summary>Owner-approved one-off preparation; this cannot queue jobs while the policy is Off.</summary>
+    public async Task<IActionResult> OnPostPrepareAsync(
+        long workId,
+        Guid? workEpisodeId,
+        CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (workId <= 0 || workEpisodeId == Guid.Empty)
+        {
+            return BadRequest();
+        }
+
+        if (!store.Current.PreparedRenditionsEnabled)
+        {
+            return new StatusCodeResult(StatusCodes.Status409Conflict);
+        }
+
+        var preparation = HttpContext.RequestServices.GetRequiredService<
+            Jularr.Web.Features.Playback.PlaybackPreparationService>();
+        var operationId = await preparation.QueueVerifiedAsync(
+            workId, workEpisodeId, cancellationToken);
+        if (operationId is null)
+        {
+            return new StatusCodeResult(StatusCodes.Status409Conflict);
+        }
+
+        TempData["Status"] = Ui["admin.transcoding.preparationQueued"];
+        return RedirectToPage();
+    }
+
+    private void ReadContainerOutbound()
+    {
+        var sample = resources.GetSnapshot().Current;
+        if (sample?.Jularr?.SendBytesPerSecond is not { } bytesPerSecond ||
+            !double.IsFinite(bytesPerSecond) || bytesPerSecond < 0)
+        {
+            return;
+        }
+
+        var age = time.GetUtcNow() - sample.AtUtc;
+        if (age >= TimeSpan.Zero && age <= TimeSpan.FromSeconds(30))
+        {
+            ContainerOutboundMbps = Math.Round(bytesPerSecond * 8 / 1_000_000, 1);
+        }
+    }
+
     private void Fill(PlaybackTranscodingSettings settings)
     {
         TranscodingEnabled = settings.TranscodingEnabled;
@@ -127,6 +212,12 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         CacheBudgetGiB = settings.CacheBudgetBytes / PlaybackTranscodingSettings.BytesPerGiB;
         FreeSpaceFloorGiB = settings.FreeSpaceFloorBytes / PlaybackTranscodingSettings.BytesPerGiB;
         BufferPreset = settings.BufferPreset;
+        WanUploadMode = settings.WanUploadMode;
+        WanUploadBudgetMbps = settings.WanUploadBudgetKbps / 1000;
+        PreparedRenditionsEnabled = settings.PreparedRenditionsEnabled;
+        PreparedCacheBudgetGiB = settings.PreparedCacheBudgetBytes / PlaybackTranscodingSettings.BytesPerGiB;
+        PreparationStartHourUtc = settings.PreparationStartHourUtc;
+        PreparationEndHourUtc = settings.PreparationEndHourUtc;
     }
 
     private static string FormField(string settingsField) =>
@@ -139,6 +230,10 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
             nameof(PlaybackTranscodingSettings.CacheBudgetBytes) => nameof(CacheBudgetGiB),
             nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes) => nameof(FreeSpaceFloorGiB),
             nameof(PlaybackTranscodingSettings.BufferPreset) => nameof(BufferPreset),
+            nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps) => nameof(WanUploadBudgetMbps),
+            nameof(PlaybackTranscodingSettings.WanUploadMode) => nameof(WanUploadMode),
+            nameof(PlaybackTranscodingSettings.PreparedCacheBudgetBytes) => nameof(PreparedCacheBudgetGiB),
+            nameof(PlaybackTranscodingSettings.PreparationStartHourUtc) => nameof(PreparationStartHourUtc),
             _ => nameof(HlsCachePath)
         };
 

@@ -165,6 +165,7 @@ public sealed class PlaybackEncoderArgumentTests
         var arguments = PlaybackDeliveryCommand.Hls(Source, plan, 0, "/cache/x", new PlaybackEncoderTarget(PlaybackHardwareBackend.Vaapi, RenderNode, HardwareDecoding: true)).ToList();
 
         Assert.AreEqual("copy", Value(arguments, "-c:v"));
+        Assert.AreEqual("pipe:2", Value(arguments, "-progress"), "HLS remux progress is needed to pace its segment producer.");
         CollectionAssert.DoesNotContain(arguments, "-init_hw_device");
         CollectionAssert.DoesNotContain(arguments, "-hwaccel");
         CollectionAssert.DoesNotContain(arguments, "-vf");

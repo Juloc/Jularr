@@ -20,7 +20,8 @@ public enum PlaybackAdaptationReason
     Stalls,
     LowBuffer,
     TranscodeTooSlow,
-    ThroughputHeadroom
+    ThroughputHeadroom,
+    ServerEgress
 }
 
 /// <summary><paramref name="TierKbps"/> is the tier a step up leads to (decided here so the next plan cannot disagree), null otherwise.</summary>

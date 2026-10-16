@@ -320,6 +320,37 @@ public sealed class PlaybackDecisionEngineTests
     }
 
     [TestMethod]
+    public void ServerEgressBudgetCapsEvenAnExplicitOriginalRequest()
+    {
+        var network = new PlaybackNetworkConditions(
+            PlaybackNetworkClass.Remote,
+            EstimatedThroughputKbps: 60_000,
+            ServerEgressLimitKbps: 4_250);
+        var original = PlaybackDecisionEngine.Decide(Request(HevcHdrMkv, Android) with
+        {
+            Quality = PlaybackQualityPreset.Original,
+            Network = network
+        });
+
+        Assert.AreEqual(4_250, original.Quality.LimitKbps);
+        Assert.AreEqual(PlaybackLimitSource.ServerEgress, original.Quality.LimitSource);
+        Assert.AreEqual(PlaybackDeliveryMode.Transcode, original.Mode);
+        Assert.IsTrue(original.WhyNot(PlaybackDeliveryMode.DirectPlay)
+            .Any(reason => reason.Code == PlaybackReasonCodes.ServerEgressLimit));
+
+        var lowerUserPreset = PlaybackAutoQuality.Resolve(
+            PlaybackQualityPreset.Mbps2,
+            network);
+        Assert.AreEqual(2_000, lowerUserPreset.MaxKbps);
+        Assert.AreEqual(PlaybackLimitSource.Preset, lowerUserPreset.Source);
+
+        var disabled = PlaybackAutoQuality.Resolve(
+            PlaybackQualityPreset.Original,
+            network with { ServerEgressLimitKbps = null });
+        Assert.IsNull(disabled.MaxKbps);
+    }
+
+    [TestMethod]
     public void RepeatedStallsStepDownOneLadderRung()
     {
         var limit = PlaybackAutoQuality.Resolve(
@@ -747,6 +778,8 @@ public sealed class PlaybackDecisionEngineTests
         Assert.AreEqual(PlaybackNetworkClass.Local, PlaybackNetworkClassifier.Classify(IPAddress.Parse("fd12::1"), null));
         Assert.AreEqual(PlaybackNetworkClass.Local, PlaybackNetworkClassifier.Classify(IPAddress.Loopback, null));
         Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("100.101.1.1"), null), "Overlay VPN clients may be anywhere.");
+        Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("fd7a:115c:a1e0::42"), null));
+        Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("fd7a:115c:a1e0:b1a::2"), null));
         Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("203.0.113.9"), null));
         Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("2001:db8::1"), null));
         Assert.AreEqual(
@@ -756,6 +789,18 @@ public sealed class PlaybackDecisionEngineTests
             PlaybackNetworkClass.Metered,
             PlaybackNetworkClassifier.Classify(IPAddress.Parse("203.0.113.9"), new PlaybackNetworkReport(SaveData: true)));
         Assert.AreEqual(PlaybackNetworkClass.Unknown, PlaybackNetworkClassifier.Classify(null, null));
+        Assert.AreEqual(
+            PlaybackNetworkClass.Unknown,
+            PlaybackNetworkClassifier.Classify(IPAddress.Parse("10.0.0.5"), null, hasUntrustedForwardedFor: true));
+        Assert.AreEqual(
+            PlaybackNetworkClass.Unknown,
+            PlaybackNetworkClassifier.Classify(IPAddress.Parse("203.0.113.9"), null, hasUntrustedForwardedFor: true));
+        Assert.AreEqual(
+            PlaybackNetworkClass.Metered,
+            PlaybackNetworkClassifier.Classify(
+                IPAddress.Parse("192.168.1.20"),
+                new PlaybackNetworkReport(SaveData: true),
+                hasUntrustedForwardedFor: true));
     }
 
     [TestMethod]

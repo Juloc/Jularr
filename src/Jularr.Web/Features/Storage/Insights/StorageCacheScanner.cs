@@ -61,6 +61,9 @@ public sealed partial class StorageCacheScanner(
     [GeneratedRegex("^(?<id>[0-9a-f]{32})-(?<size>[0-9]+)-(?<ticks>[0-9]+)-(compatible|device-hevc|server-h264)\\.mp4$", RegexOptions.CultureInvariant)]
     private static partial Regex PreparedFilePattern();
 
+    [GeneratedRegex("^prepared-[0-9a-f]{32}-[0-9a-f]{24}-mobile1080\\.mp4$", RegexOptions.CultureInvariant)]
+    private static partial Regex VerifiedPreparedFilePattern();
+
     [GeneratedRegex("^(?<id>[0-9a-f]{32})-", RegexOptions.CultureInvariant)]
     private static partial Regex MediaPrefixPattern();
 
@@ -103,7 +106,12 @@ public sealed partial class StorageCacheScanner(
 
         // The playback cache folder also holds the HLS and trickplay folders, which are their own areas.
         return area == StorageCacheAreaKind.PreparedPlayback
-            ? MeasureFiles(Directory.EnumerateFiles(root), cancellationToken)
+            ? MeasureFiles(
+                Directory.EnumerateFiles(root).Concat(
+                    Directory.Exists(Path.Combine(root, "prepared-v1"))
+                        ? Directory.EnumerateFiles(Path.Combine(root, "prepared-v1"))
+                        : []),
+                cancellationToken)
             : MeasureTree(root, cancellationToken);
     }
 
@@ -164,6 +172,47 @@ public sealed partial class StorageCacheScanner(
                 found.Add(new ReclaimCandidate(
                     StorageCacheAreaKind.PreparedPlayback, entry.Path, false, entry.Bytes, 1,
                     ReclaimReason.SourceChanged));
+            }
+        }
+
+        // The verified rendition producer uses a dedicated flat subdirectory. Only failed/
+        // interrupted *unregistered* files are reclaimable here. Registered StoredFiles
+        // remain protected (including an active session) until #414's canonical eviction
+        // policy acquires a safe reference/lease; blindly deleting them would break playback.
+        var verifiedRoot = Path.Combine(root, "prepared-v1");
+        if (Directory.Exists(verifiedRoot))
+        {
+            var inspected = new List<(string Path, FileInfo Info)>();
+            foreach (var path in Directory.EnumerateFiles(verifiedRoot).Take(512))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (TryInspectFile(path, out var info) &&
+                    now - new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero) >
+                    PreparedWorkMaxAge &&
+                    (path.EndsWith(".tmp", StringComparison.Ordinal) ||
+                     VerifiedPreparedFilePattern().IsMatch(Path.GetFileName(path))))
+                {
+                    inspected.Add((path, info));
+                }
+            }
+
+            if (inspected.Count > 0)
+            {
+                var candidatePaths = inspected.Select(item => item.Path).ToArray();
+                var attachedPaths = (await db.StoredFiles.AsNoTracking()
+                        .Where(file => candidatePaths.Contains(file.Path))
+                        .Select(file => file.Path)
+                        .ToListAsync(cancellationToken))
+                    .ToHashSet(StringComparer.Ordinal);
+                foreach (var (path, info) in inspected)
+                {
+                    if (!attachedPaths.Contains(path))
+                    {
+                        found.Add(new ReclaimCandidate(
+                            StorageCacheAreaKind.PreparedPlayback, path,
+                            false, info.Length, 1, ReclaimReason.InterruptedWork));
+                    }
+                }
             }
         }
 
