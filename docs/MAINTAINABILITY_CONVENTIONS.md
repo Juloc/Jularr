@@ -35,65 +35,32 @@ A competent developer should be able to predict where behavior lives before sear
 
 ## 3. Required backend boundary
 
-The target dependency direction is:
+**Canonical target for the planned cutover:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md). The old generic Store-first diagram is replaced by this explicit authorized **Data / Service / Logic / Infrastructure** structure. This is a **target**, not currently implemented.
 
-```text
-Frontend / native client
-        ↓
-API / Razor / transport
-        ↓
-Authorization / user-context boundary
-        ↓
-Domain / application core
-        ↓
-Store / persistence
-        ↓
-PostgreSQL
-```
+~~~text
+Web/Razor/HTTP/Android/TV (presentation and thin transport only)
+                    ↓
+Service.User|Admin|System.<Entity>.V1 (auth/module/resource gate;
+    static SELECT projections; composition of authorized Logic actions)
+        ↙                         ↘
+Data.<Area>.<Entity>.V1        Logic.<Entity> (unversioned, role-neutral;
+(typed request/data/result)    ALL SQL writes/domain changes/side effects)
+         ↑                           ↑
+         └── neutral Data.<Entity>    └── Infrastructure.Sql
+                                           ↓
+                                        PostgreSQL
+~~~
 
-### Store / persistence
+**Responsibilities, mandatory for all new/touched cutover implementation:**
 
-Persistence components:
-
-- own SQL and persistence mapping;
-- know PostgreSQL/data concerns;
-- do not own HTTP/Razor/UI behavior;
-- do not decide Owner/Admin/User permissions;
-- do not become a second business-rule owner.
-
-### Domain / application core
-
-Domain/application code:
-
-- owns business invariants and reusable business operations;
-- validates domain state;
-- is role-agnostic: it does not decide that a caller is Owner/Admin/User;
-- receives explicit actor/profile/resource data when business behavior genuinely depends on them;
-- can be called safely from authorized HTTP flows, background work or other canonical entry points.
-
-### Authorization / user-context boundary
-
-The authorization boundary:
-
-- resolves the current actor/profile and effective capabilities;
-- verifies that actor may execute the use case;
-- passes explicit IDs/data to the lower operation;
-- never relies on hidden/disabled UI as authorization.
-
-Do not create an `AuthorizedXService` wrapper for every trivial operation merely to make a diagram symmetrical. Use the simplest clear boundary that keeps permission logic above role-agnostic domain/persistence behavior.
-
-### API / Razor / transport
-
-Endpoints/pages:
-
-- authenticate and authorize;
-- validate transport/request shape;
-- call the canonical use case/read model;
-- translate canonical results/errors into HTTP/UI;
-- do not duplicate domain rules;
-- do not become a second persistence owner.
-
-New/touched Razor Pages and API handlers MUST NOT add direct database access when a canonical Store/Query owner should own it.
+- **Data.<Area>.<Entity>.V1:** one file per area/entity/version containing all read/update parameter, input, result, filter/sort types; no executable behavior. **Data.<Entity>** contains neutral internal change/domain objects, no role/V1.
+- **Service.<Area>.<Entity>.V1:** one file per area/entity/version containing its multiple read/update operations. User/Admin/System are separate trust/permission areas; User normal pages remain User even for Owner accounts. Read operations may contain static parameterized **pure SELECT only**. Other operations orchestrate one or several Logic functions but NEVER perform direct database mutation, SELECT FOR UPDATE, filesystem/provider side effects or connection management.
+- **Logic.<Entity>:** ONE independent, versionless, role-neutral owner for real mutations and non-DB effects. It owns data changes/row locks/domain invariants; several Logic owners can participate in one Service-owned transaction through the **same** neutral connection and transaction. No independent Commit/nested transaction during that workflow. Mandatory invariant goes in Logic, not independently duplicated in User/Admin services.
+- **Infrastructure.Sql:** neutral context and centrally managed NpgsqlDataSource, with restricted ReadSql and Logic write-capable interfaces on the same underlying SqlContext. No Logic -> Service circular dependency.
+- **ServiceRuntime:** startup-validates GetOperationType(Read/Create/Update/Delete/Execute), ResultTypes (exactly one default), SortKeys (exactly one default for lists), module and permissions. READ uses actual PostgreSQL READ ONLY transaction plus read-only C# facade; Write kinds use short shared DB transaction; Execute explicitly defines outer transaction policy. Service Base commits/rolls back once.
+- **Web/API/Razor:** can call only authorized Services; no direct Logic, SqlContext, Store, catalog, provider or scanner. Razor server-side calls via DI, never HTTP back into itself. Browser JS/native may call thin HTTP endpoints forwarding to the same Services. Authenticate and validate request/CSRF at transport, but all authoritative authorization is rechecked in Service Gate and transaction where races matter.
+- **Error/exception:** standardized errors and output DTOs, no blanket guessed NotFound from 0 UPDATE rows; stable localized safe errors per #853.
+- **No extra ceremony:** do not introduce per-SELECT forwarding repositories, generic mutation engines, mirrored public CRUD services, a second operation queue, or speculative interfaces merely to satisfy a diagram.
 
 ## 4. Resource identity
 
@@ -122,7 +89,7 @@ Provider IDs remain separate mapping/provenance fields. AniList/TMDB/etc. IDs ne
 
 ## 5. SQL-first persistence for new/touched paths
 
-For Jularr, the target persistence style is explicit, parameterized PostgreSQL SQL behind the owning Store/Persistence component.
+For the coordinated Jularr clean cut, **only pure static SQL SELECT read projections belong in Service; all mutations and non-DB side effects belong to the single role-neutral `Logic.<Entity>` owner**, using the same neutral SQL/transaction context for multi-step Service workflows. Existing EF/Store paths remain current-runtime code until individually migrated; do not extend them as the new architecture. Details: [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md).
 
 - Do not add new EF-heavy persistence paths when an explicit Store/SQL path is appropriate.
 - Existing EF paths are migrated incrementally when intentionally touched; do not perform a bulk conversion solely for style.
@@ -348,7 +315,7 @@ A change should be understandable to a human reviewer.
 Before implementation, every agent regardless of capability level must be able to answer:
 
 1. What feature/domain owns this responsibility?
-2. What existing Store/service/query/component already owns the nearest equivalent behavior?
+2. What existing Service read projection or role/version-neutral Logic/domain owner already owns the nearest equivalent behavior?
 3. Is this a read, mutation, policy decision, transport concern or persistence concern?
 4. What IDs/data contracts does the canonical owner use?
 5. Which business rule is authoritative?

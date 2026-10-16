@@ -2,6 +2,10 @@
 
 **Status:** Owner-approved **target-state contract**, 2026-10-09. **Not implemented**. The current `dev` schema and runtime remain operational until a separately authorized atomic cutover.
 
+**Service/Data/Logic target:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md) is binding for the new namespaces, Select-only Services, Logic-owned mutations, shared transactions, OperationType, DTO files and SQL execution. This document remains the owner of the SCHEMA. Older Store/DTO/service examples elsewhere are not authoritative for the future runtime.
+
+**DB-cutover execution:** [DATABASE_CUTOVER_EXECUTION_PLAN.md](DATABASE_CUTOVER_EXECUTION_PLAN.md) is the step-by-step agent plan for inventory, closing exact DDL gaps, building an isolated fresh baseline, updating every consumer, verifying the complete runtime and requesting a separate destructive reset approval. The schema rules in THIS document govern each target table; the execution document does not silently settle any still-open schema choices.
+
 **Scope:** One clean PostgreSQL install baseline for the test-only Jularr deployment, after completing the schema contract. No old-database backfill, permanent compatibility bridges, dual-write, AniLingo/SQLite compatibility or migration chain is required for this cutover. Do **not** delete existing migrations, modify runtime tables, reset an instance, or deploy from this planning document. Once the fresh baseline is installed, subsequent feature changes use ordinary forward-only migrations against the new schema.
 
 This document is the **owner's current product decision** on clean-cut identity, naming, relationships and implementation rules. It supersedes contradictory *target-state* assumptions in `DOMAIN.md`, `ARCHITECTURE.md`, `DOMAIN-AUDIT.md`, `MEDIA_CORE.md`, `IMPLEMENTATION-ROADMAP.md` and old issues. It does not claim those files or today's code have been converted. General database safety and engineering constraints in `DATABASE_CONVENTIONS.md` / central Agent Control remain in force.
@@ -246,7 +250,7 @@ Before generating migrations, deliver one reviewable target-schema inventory con
 
 ### 8.4 Required representative query contracts before baseline
 
-Prove the following SQL shapes as real parameterized, bounded statements, using the same application store/authorization boundary as production:
+Prove the following SQL shapes as real parameterized, bounded statements, using the new Service SELECT / Logic mutation ownership and centrally authorized shared transaction boundary described in SERVICE_DATA_LOGIC_ARCHITECTURE.md:
 
 1. **Watchlist WorkCards:** `ProfileId` security filter; page `WatchlistEntries` first; join `Works`, effective locale/region title and image fallback, Work-level local availability, audio/subtitle languages, completion/progress, wanted/download/monitoring state and rating without one query per Work. Return `WorkId`, `CoverImageId`, `BannerImageId`, `DisplayName`, availability and language arrays. `LEFT JOIN LATERAL`/window selection or bounded pre-aggregation is acceptable; the chosen form must avoid row multiplication from simultaneous artwork/track/episode joins.
 2. **Library/discovery/search:** server-side type, profile and visibility filters; bounded Page/PageSize OFFSET pages by default, with a deterministic unique ORDER BY; keyset only as an evidenced exception. Use normalized/provider-aware search without local full-table application filtering or synchronous metadata fetch.

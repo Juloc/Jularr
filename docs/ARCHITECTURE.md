@@ -2,6 +2,8 @@
 
 Status: architecture context. **Owner-approved clean-cut database target and new-feature data rules: [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md).** That target contract overrides contradictory older domain assumptions below (especially Games, progress, Account/Profile and old backfills), but does not change the running schema yet.
 
+**Binding backend layer/namespace target (2026-10-10): [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md).** It supersedes older DbContext/Store-first, unversioned routes, colocated Service/DTO and role-neutral external entrypoint examples below for the clean cut. New/touched UI/API uses authorized scoped Services, Read Service owns SELECT only, shared role/version-neutral Logic owns every mutation/side effect, and separate V1 Data DTOs plus a shared neutral SQL Context. This is NOT the current runtime.
+
 ## 1. Goals
 
 - One modular application, not a collection of parallel mini-products.
@@ -353,23 +355,17 @@ GET  /api/discovery
 POST /api/translation/jobs
 ```
 
-Exact routes are implementation details to finalize per vertical slice; the rule is stable capability contracts, not page-specific database-shaped APIs.
+**The route examples directly above are historical conceptual samples, NOT the new target.** Clean cut routes are version-first `/api/v1/{resource}` and `/api/v1/admin/{resource}` with real consumer demand, and thin adapters to User/Admin scoped operations. Exact feature routes require consumer inventory before migration.
 
 ## 7. Persistence
 
 PostgreSQL is the only target production relational database.
 
-### DbContext
-A single physical DbContext is acceptable for the modular monolith, but configuration and ownership must be modularized. The current giant `AppDbContext` must not remain the place where all domain knowledge accumulates.
+### Data / Service / Logic target ownership
 
-Target:
-- module-owned entity configurations (`IEntityTypeConfiguration<T>`)
-- module-owned migrations/schema decisions coordinated centrally
-- explicit indexes/constraints
-- normalized language/provider identifiers
-- no SQLite compatibility shaping new schema
+The new target persistence is explicit, static, typed, parameterized PostgreSQL. Authorized Read Services own **ONLY** their needed SELECT projections; all actual mutations, FOR UPDATE locks, database writes and filesystem/provider effects are owned by role/version-neutral Logic. ServiceRuntime owns actor/module/permission checks, `GetOperationType()` and one neutral SQL context/transaction shared across multiple Logic functions. Ordinary Read service SQL runs under PostgreSQL READ ONLY transaction mode, not merely a C# Boolean. The entity-first naming, separate Data-V1 DTO files, role-scoped Service V1 classes and neutral Logic files are defined in [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md).
 
-SQLite import remains migration tooling only and is removable after the supported migration window.
+The existing EF `AppDbContext` and old migrations remain **current runtime**, not target-layer instructions. The schema and constraints are owned by [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md). No extra generic CRUD repository or SQLite runtime compatibility layer.
 
 ### Transactions
 - use database transactions for local atomic changes;
