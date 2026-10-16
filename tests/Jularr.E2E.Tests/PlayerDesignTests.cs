@@ -24,6 +24,24 @@ namespace Jularr.E2E.Tests
             await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
             var settings = page.Locator("#player-settings");
             await Assertions.Expect(settings).ToBeVisibleAsync();
+            await Assertions.Expect(settings.Locator("h2")).ToHaveCountAsync(0);
+            var tabs = (await settings.Locator("header .navigation-tabs").BoundingBoxAsync())!;
+            var close = (await settings.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).BoundingBoxAsync())!;
+            Assert.AreEqual(tabs.Y, close.Y, 1);
+            Assert.AreEqual(tabs.Height, close.Height, 1);
+            Assert.AreEqual(close.Width, close.Height, 1);
+
+            // Native picker keeps keyboard selection.
+            var audio = settings.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true });
+            await Assertions.Expect(audio).ToHaveCSSAsync("appearance", "base-select");
+            await Assertions.Expect(audio).ToHaveCSSAsync("min-height", "36px");
+            await audio.FocusAsync();
+            await page.Keyboard.PressAsync("Space");
+            await Assertions.Expect(audio).ToHaveJSPropertyAsync("value", "0");
+            await page.Keyboard.PressAsync("ArrowDown");
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(audio).ToHaveValueAsync("1");
+            await audio.SelectOptionAsync("0");
             await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToBeVisibleAsync();
 
             // Only changed sample defaults.

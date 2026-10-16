@@ -19,5 +19,8 @@ states without loading the playback client, making API calls or starting a
 stream/session. Its Audio/Subtitles/Playback/Info popover uses shared fields,
 toggles, buttons and navigation styles. Caption text, defaults and technical facts
 are explicit samples; none imply working persistence or processing.
+The settings capsule starts with its tabs and a matching-height Close button.
+Select popups use the shared native `base-select` styling where supported;
+other browsers retain their native picker without a JavaScript replacement.
 
 Binding decisions and remaining integration: [Player design](../../../../docs/PLAYER_DESIGN.md).

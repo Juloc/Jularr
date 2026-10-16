@@ -64,12 +64,12 @@ namespace Jularr.Frontend.Pages.Development.Design
 
             return new Div(
                 new Div(
-                    new Header(new H2(new Text("design.player.settings")),
+                    new Header(
+                        new Div(new NavigationTabs([
+                            new("player.audio", "#settings-audio", true), new("player.subtitles", "#settings-subtitles", false),
+                            new("design.player.playback", "#settings-playback", false), new("design.player.info", "#settings-info", false)
+                        ], "nav.tabs")).Attribute("data-settings-tabs", ""),
                         new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
-                    new Div(new NavigationTabs([
-                        new("player.audio", "#settings-audio", true), new("player.subtitles", "#settings-subtitles", false),
-                        new("design.player.playback", "#settings-playback", false), new("design.player.info", "#settings-info", false)
-                    ], "nav.tabs")).Attribute("data-settings-tabs", ""),
                     new Div(
                         SettingsPane("audio", "player.audio", audio, true),
                         SettingsPane("subtitles", "player.subtitles", subtitles),
