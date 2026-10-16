@@ -110,7 +110,8 @@ namespace Jularr.Backend.Logic.Acquisition
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
-                AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer)),
+                AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer,
+                    target.OriginalLanguage)),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),
@@ -138,6 +139,19 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             var until = published.UtcDateTime.AddMinutes(profile.DelayMinutes);
+            return until > now ? until : null;
+        }
+
+        // A book in none of the requested languages waits as long as the profile's delay since the target became wanted; then it is read translated.
+        public static DateTime? LanguageDelayUntil(QualityProfile profile, WantedTargetData target, CandidateEvaluation winner, DateTime now)
+        {
+            if (target.MediaTypeId != MediaType.Book || target.MediaSubtypeId == MediaSubtype.Manga || profile.DelayMinutes == 0 || target.RequestedLocales.Length == 0
+                || winner.Candidate.Languages.Any(language => target.RequestedLocales.Any(wanted => wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase))))
+            {
+                return null;
+            }
+
+            var until = target.WantedSince.AddMinutes(profile.DelayMinutes);
             return until > now ? until : null;
         }
 

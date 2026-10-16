@@ -243,6 +243,43 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Book_ReadsInTheProfilesLanguage_AndWithoutAnEditionInItTakesTheOriginalAfterTheProfilesDelay()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeBookSources());
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+
+            // The earliest edition names the language it was written in; a German profile sees the German edition's title, an English one the book's own.
+            Assert.AreEqual("en", await host.ScalarAsync("SELECT \"OriginalLanguage\" FROM \"Works\" WHERE \"Id\" = " + work.Id));
+            foreach (var (locale, title) in new[] { ("de-DE", "Stolz und Vorurteil"), ("en-GB", "Pride and Prejudice") })
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = '" + locale + "') WHERE \"Id\" = 101");
+                Assert.AreEqual(title, await host.ScalarAsync("SELECT \"Title\" FROM \"ProfileWorks\" WHERE \"ProfileId\" = 101 AND \"WorkId\" = " + work.Id), locale);
+            }
+
+            // Asked for in French, which it was never published in: the automatic search waits the profile's delay, then takes the book in its own language.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "UiLocales" ("Locale", "Name") VALUES ('fr-FR', 'Français');
+                UPDATE "AcquisitionProfiles" SET "Definition" = jsonb_set("Definition", '{DelayMinutes}', '120') WHERE "MediaTypeId" = 3 AND "MediaSubtypeId" IS NULL;
+                """);
+            var wantedId = await CreateWantedAsync(host, work.Id);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr-FR')");
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual("release_delayed", await host.ScalarAsync("SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" = " + wantedId));
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"CreatedAt\" = now() - interval '3 hours', \"NextSearchAt\" = NULL WHERE \"Id\" = " + wantedId);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" = " + wantedId));
+
+            // The request tells the reader it comes translated.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"RequestedByProfileId\" = 101, \"RequestedByAccountId\" = 41");
+            using var requests = await host.SendAsync(HttpMethod.Get, "/api/v1/requests");
+            StringAssert.Contains(await requests.Content.ReadAsStringAsync(), "\"readsTranslated\":true");
+        }
+
+        [TestMethod]
         public async Task Book_Series_FromOpenLibraryThenHardcover_AndAnAdministratorsChoiceStays()
         {
             using var storage = new TemporaryDirectory();

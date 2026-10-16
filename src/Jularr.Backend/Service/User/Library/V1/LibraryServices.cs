@@ -27,7 +27,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 SELECT
                     work."Id",
                     work."MediaTypeId",
-                    work."CanonicalTitle" AS "Title",
+                    visible."Title" AS "Title",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
@@ -90,7 +90,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 ORDER BY
                     CASE WHEN @LibrarySortTypeId = 1 THEN available."AddedAt" END DESC NULLS LAST,
                     CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
-                    work."CanonicalTitle",
+                    visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
@@ -119,7 +119,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                     progress."WorkId",
                     asset."Id" AS "MediaAssetId",
                     work."MediaTypeId",
-                    work."CanonicalTitle" AS "Title",
+                    visible."Title" AS "Title",
                     (
                         SELECT
                             fact."Value"

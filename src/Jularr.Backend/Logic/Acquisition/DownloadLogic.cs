@@ -172,7 +172,8 @@ namespace Jularr.Backend.Logic.Acquisition
                         WHERE
                             edition."WorkId" = work."Id"
                             AND edition."LanguageCode" = ANY(requested."Languages")
-                    ) AS "Isbns"
+                    ) AS "Isbns",
+                    work."OriginalLanguage"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"

@@ -104,7 +104,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var volumes = Enumerable.Range(1, media.Volumes ?? 0).Select(volume => new { Volume = volume });
             var data = new WorkMetadataData(MediaType.Book, AniListMatching.Subtype(media.Format) ?? MediaSubtype.Manga, Namespace, media.Id.ToString(CultureInfo.InvariantCulture),
                 TextLimit.Cut(title, 500)!, TextLimit.Cut(media.EnglishTitle is null ? media.NativeTitle : media.RomajiTitle, 500), media.Year is >= 1800 and <= 2200 ? media.Year : null, "[]",
-                JsonSerializer.Serialize(volumes), JsonSerializer.Serialize(facts), Namespace, null);
+                JsonSerializer.Serialize(volumes), JsonSerializer.Serialize(facts), Namespace, null) { OriginalLanguage = media.OriginalLanguage };
             var people = WorkPeopleLogic.Rows(media.People).ToArray();
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {

@@ -88,6 +88,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var editions = WorkEditionLogic.Choose(found);
+            data = new WorkMetadataData(data.MediaTypeId, data.MediaSubtypeId, data.Namespace, data.Value, data.CanonicalTitle, data.OriginalTitle, data.ReleaseYear, data.ExternalIdentities,
+                data.Units, data.Facts, data.ProviderKey, data.ReleasedOn)
+            {
+                Translations = JsonSerializer.Serialize(editions.Where(item => item.Edition.Title is not null && item.Language.Length == 2)
+                    .Select(item => new { item.Language, Region = (string?)null, item.Edition.Title, Overview = (string?)null })),
+                OriginalLanguage = found.Where(edition => edition.Language is not null).OrderBy(edition => edition.Year ?? int.MaxValue)
+                    .Select(edition => LanguageCodes.ToTwoLetter(edition.Language)).FirstOrDefault(code => code is { Length: 2 })
+            };
             var series = await ReadSeriesAsync(context, found, ct);
             var people = WorkPeopleLogic.Rows(work.People)
                 .Concat(editions.SelectMany(item => WorkPeopleLogic.Rows(item.Edition.People, editionLanguage: item.Language, editionFormat: item.Format))).ToArray();

@@ -26,8 +26,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default, string? installedQuality = null,
-            string[]? editionTitles = null, string[]? isbns = null)
+            string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null)
         {
+            OriginalLanguage = originalLanguage;
             EditionTitles = editionTitles ?? [];
             Isbns = isbns ?? [];
             WantedSince = wantedSince;
@@ -131,6 +132,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Isbns))]
         public string[] Isbns { get; }
+
+        // The language the Work was made in; an untagged book release is taken to be in it.
+        [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
+        public string? OriginalLanguage { get; }
     }
 
     internal sealed class UnitStateData : BaseData

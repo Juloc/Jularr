@@ -17,7 +17,7 @@ namespace Jularr.Integrations.Logic.AniList
         private static long _blockedUntilTicks;
 
         private const string Fields =
-            "id type format title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } bannerImage trailer { id site } "
+            "id type format countryOfOrigin title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } bannerImage trailer { id site } "
             + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { id name { full } } } } relations { edges { relationType node { id type } } }";
 
         public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
@@ -89,7 +89,11 @@ namespace Jularr.Integrations.Logic.AniList
             var trailer = Child(media, "trailer") is { } video && Text(video, "site") == "youtube" && Text(video, "id") is { Length: 11 } key
                 && key.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_') ? key : null;
             return new AniListMedia(mediaId, Text(media, "format"), romaji, Text(title, "english"), Text(title, "native"), synonyms, year, Count(media, "episodes", 5000),
-                Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer) { People = people };
+                Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer)
+            {
+                People = people,
+                OriginalLanguage = Text(media, "countryOfOrigin") switch { "JP" => "ja", "KR" => "ko", "CN" or "TW" => "zh", _ => null }
+            };
         }
 
         private static string? Https(string? url) => url is not null && url.StartsWith("https://", StringComparison.Ordinal) ? url : null;

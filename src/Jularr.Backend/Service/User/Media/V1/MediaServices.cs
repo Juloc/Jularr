@@ -62,10 +62,10 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     visible."MediaSubtypeId",
-                    work."CanonicalTitle",
+                    visible."Title" AS "CanonicalTitle",
                     (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    facts."Overview",
+                    visible."Overview",
                     facts."PosterUrl",
                     facts."BackdropUrl",
                     (
@@ -143,7 +143,6 @@ namespace Jularr.Backend.Service.User.Media.V1
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                     LEFT JOIN LATERAL (
                         SELECT
-                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Overview'))[1] AS "Overview",
                             (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
                             (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Backdrop'))[1] AS "BackdropUrl",
                             (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Genres'))[1] AS "Genres",
@@ -318,7 +317,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     visible."MediaSubtypeId",
-                    work."CanonicalTitle",
+                    visible."Title" AS "CanonicalTitle",
                     entry."WorkId" IS NOT NULL AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
@@ -351,7 +350,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     )
                 ORDER BY
                     work."ReleaseYear" NULLS LAST,
-                    work."CanonicalTitle",
+                    visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
@@ -380,7 +379,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 SELECT
                     work."Id",
                     work."MediaTypeId",
-                    work."CanonicalTitle" AS "Title",
+                    visible."Title" AS "Title",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
@@ -409,7 +408,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 ORDER BY
                     CASE WHEN @LibrarySortTypeId = 1 THEN entry."CreatedAt" END DESC NULLS LAST,
                     CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
-                    work."CanonicalTitle",
+                    visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;

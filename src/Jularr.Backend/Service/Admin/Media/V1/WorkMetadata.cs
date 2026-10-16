@@ -198,7 +198,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(work.Title, 500)!,
                 work.OriginalTitle == work.Title ? null : TextLimit.Cut(work.OriginalTitle, 500), work.Year is >= 1800 and <= 2200 ? work.Year : null,
-                JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb", work.ReleasedOn);
+                JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb", work.ReleasedOn)
+            {
+                Translations = JsonSerializer.Serialize(work.Translations.Select(translation => new { translation.Language, translation.Region, translation.Title, translation.Overview })),
+                OriginalLanguage = work.OriginalLanguage is { Length: 2 } original && original.All(char.IsAsciiLetterLower) ? original : null
+            };
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);

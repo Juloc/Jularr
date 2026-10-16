@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                     unit."ReleasedOn" AS "Day",
                     work."Id" AS "WorkId",
                     work."MediaTypeId",
-                    work."CanonicalTitle" AS "Title",
+                    visible."Title" AS "Title",
                     (
                         SELECT
                             fact."Value"
@@ -74,7 +74,7 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                     work."ReleasedOn" AS "Day",
                     work."Id" AS "WorkId",
                     work."MediaTypeId",
-                    work."CanonicalTitle" AS "Title",
+                    visible."Title" AS "Title",
                     (
                         SELECT
                             fact."Value"

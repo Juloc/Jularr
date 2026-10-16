@@ -29,14 +29,28 @@ namespace Jularr.Backend.Service.User.Request.V1
                 SELECT
                     request."Id",
                     request."WorkId",
-                    work."CanonicalTitle",
+                    visible."Title" AS "CanonicalTitle",
                     locale."Name" AS "RequestedLanguage",
                     request."AcquisitionRequestStatusTypeId",
                     request."CreatedAt",
                     waiting."OperationId",
                     waiting."ManualUrl",
                     step."ActivityEventTypeId" AS "LatestStepTypeId",
-                    step."OccurredAt" AS "LatestStepAt"
+                    step."OccurredAt" AS "LatestStepAt",
+                    (
+                        work."MediaTypeId" = 3
+                        AND work."OriginalLanguage" IS NOT NULL
+                        AND work."OriginalLanguage" <> lower(split_part(locale."Locale", '-', 1))
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkEditions" AS edition
+                            WHERE
+                                edition."WorkId" = work."Id"
+                                AND edition."LanguageCode" = lower(split_part(locale."Locale", '-', 1))
+                        )
+                    ) AS "ReadsTranslated"
                 FROM
                     "AcquisitionRequests" AS request
                 INNER JOIN

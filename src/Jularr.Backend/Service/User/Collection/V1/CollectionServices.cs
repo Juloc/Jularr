@@ -103,7 +103,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     work."Id",
                     work."MediaTypeId",
                     visible."MediaSubtypeId",
-                    work."CanonicalTitle",
+                    visible."Title" AS "CanonicalTitle",
                     EXISTS (SELECT 1 FROM "WatchlistEntries" AS entry WHERE entry."ProfileId" = collection."ProfileId" AND entry."WorkId" = work."Id") AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
@@ -181,7 +181,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     )
                 ORDER BY
                     item."Position" NULLS LAST,
-                    work."CanonicalTitle",
+                    visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;

@@ -16,6 +16,8 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField ExternalIdentities = new() { AllowBlank = false };
         public static readonly StringField Units = new() { AllowBlank = false };
         public static readonly StringField Facts = new() { AllowBlank = false };
+        public static readonly StringField Translations = new() { AllowBlank = false };
+        public static readonly StringField OriginalLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 2, Required = false };
         public static readonly StringField People = new() { AllowBlank = false };
         public static readonly StringField Editions = new() { AllowBlank = false };
         public static readonly StringArrayField EditionTitles = new() { ItemMaximumLength = 500 };

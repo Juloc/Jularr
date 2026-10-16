@@ -132,7 +132,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Indexers left out for backoff or limits count as unavailable, not as empty.
             var sources = catalogs.Length + newznab.Length + skipped;
             var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
-            var delayed = automatic && selection.Winner is { } winner ? AcquisitionSelectionLogic.DelayUntil(profile, winner, now) : null;
+            var delayed = automatic && selection.Winner is { } winner
+                ? AcquisitionSelectionLogic.DelayUntil(profile, winner, now) ?? AcquisitionSelectionLogic.LanguageDelayUntil(profile, target, winner, now)
+                : null;
             return new WantedSearchResult(selection, offers, unavailable, delayed is null ? AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable) : "release_delayed")
             {
                 DelayedUntil = delayed

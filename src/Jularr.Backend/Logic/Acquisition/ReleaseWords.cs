@@ -19,8 +19,8 @@ namespace Jularr.Backend.Logic.Acquisition
         public static HashSet<string> Words(string value, IReadOnlySet<string> noise) =>
             Tokens(value).Select(word => word.ToLowerInvariant()).Where(word => !noise.Contains(word)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Untagged releases are English.
-        public static string[] ReadLanguages(string title) =>
-            Tokens(title).Select(token => Languages.GetValueOrDefault(token)).OfType<string>().Distinct().DefaultIfEmpty("EN").ToArray();
+        // Untagged releases are English, or a book in the language it was written in.
+        public static string[] ReadLanguages(string title, string untagged = "EN") =>
+            Tokens(title).Select(token => Languages.GetValueOrDefault(token)).OfType<string>().Distinct().DefaultIfEmpty(untagged).ToArray();
     }
 }

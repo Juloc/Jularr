@@ -87,9 +87,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         work."MediaTypeId",
                         tmdb."Value"::integer AS "TmdbId",
                         work."Id" AS "WorkId",
-                        work."CanonicalTitle" AS "Title",
+                        visible."Title" AS "Title",
                         work."ReleaseYear"::integer AS "ReleaseYear",
-                        overview."Value" AS "Overview",
+                        visible."Overview" AS "Overview",
                         poster."Value" AS "PosterUrl",
                         backdrop."Value" AS "BackdropUrl",
                         state."MediaStateTypeId",
@@ -108,18 +108,6 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         JOIN "Works" AS work ON work."Id" = visible."WorkId"
                         JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = work."Id"
                         LEFT JOIN "WorkExternalIdentities" AS tmdb ON tmdb."WorkId" = work."Id" AND tmdb."Namespace" IN ('tmdb_movie', 'tmdb_tv')
-                        LEFT JOIN LATERAL (
-                            SELECT
-                                fact."Value"
-                            FROM
-                                "WorkMetadataFacts" AS fact
-                            WHERE
-                                fact."WorkId" = work."Id"
-                                AND fact."FactKey" = 'Overview'
-                            ORDER BY
-                                fact."IsManual" DESC
-                            LIMIT 1
-                        ) AS overview ON TRUE
                         LEFT JOIN LATERAL (
                             SELECT
                                 fact."Value"
@@ -158,7 +146,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                                 AND title."Title" ILIKE '%' || replace(replace(replace(@Query, '\', '\\'), '%', '\%'), '_', '\_') || '%'
                         )
                     ORDER BY
-                        work."CanonicalTitle",
+                        visible."Title",
                         work."Id"
                     LIMIT @PageSize
                     OFFSET @Offset;

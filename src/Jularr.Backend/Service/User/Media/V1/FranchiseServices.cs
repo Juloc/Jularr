@@ -63,7 +63,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     visible."MediaSubtypeId",
-                    work."CanonicalTitle",
+                    visible."Title" AS "CanonicalTitle",
                     entry."WorkId" IS NOT NULL AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
@@ -89,7 +89,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 ORDER BY
                     work."FranchisePosition" NULLS LAST,
                     work."ReleaseYear" NULLS LAST,
-                    work."CanonicalTitle",
+                    visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;

@@ -194,9 +194,9 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement = workId is null
                 ? """
                   INSERT INTO
-                      "Works" ("MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn")
+                      "Works" ("MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn", "OriginalLanguage")
                   VALUES
-                      (@MediaTypeId, @MediaSubtypeId, @CanonicalTitle, @ReleaseYear, @ReleasedOn)
+                      (@MediaTypeId, @MediaSubtypeId, @CanonicalTitle, @ReleaseYear, @ReleasedOn, @OriginalLanguage)
                   RETURNING
                       "Id";
                   """
@@ -206,6 +206,7 @@ namespace Jularr.Backend.Logic.Media
                   SET
                       "ReleaseYear" = COALESCE(work."ReleaseYear", @ReleaseYear),
                       "ReleasedOn" = COALESCE(@ReleasedOn, work."ReleasedOn"),
+                      "OriginalLanguage" = COALESCE(@OriginalLanguage, work."OriginalLanguage"),
                       "MediaSubtypeId" = CASE WHEN work."IsMediaSubtypeManual" THEN work."MediaSubtypeId" ELSE COALESCE(@MediaSubtypeId, work."MediaSubtypeId") END,
                       "UpdatedAt" = now()
                   WHERE
@@ -259,6 +260,33 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
+            // Each enabled language takes its translated title: the one of its region, else of its language.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "WorkTitles" ("WorkId", "UiLocaleId", "Title", "ProviderId", "IsManual")
+                SELECT DISTINCT ON (locale."Id")
+                    @Id,
+                    locale."Id",
+                    btrim(item."Title"),
+                    provider."Id",
+                    FALSE
+                FROM
+                    jsonb_to_recordset(@Translations::jsonb) AS item ("Language" text, "Region" text, "Title" text, "Overview" text)
+                    JOIN "UiLocales" AS locale ON locale."IsEnabled" AND lower(split_part(locale."Locale", '-', 1)) = lower(item."Language")
+                    CROSS JOIN "Providers" AS provider
+                WHERE
+                    provider."Key" = @ProviderKey
+                    AND length(btrim(item."Title")) BETWEEN 1 AND 500
+                ORDER BY
+                    locale."Id",
+                    lower(locale."Locale") = lower(item."Language" || '-' || COALESCE(item."Region", '')) DESC;
+                """;
+            sql.Parameters.Add(data);
+            sql.Parameters.Add(new WorkIdData(workId.Value));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
             // Provider facts are replaced; manual facts stay, a fact another provider gives stays with it.
             sql = new SqlStatement();
             sql.Statement =
@@ -295,6 +323,34 @@ namespace Jularr.Backend.Logic.Media
                 WHERE
                     provider."Key" = @ProviderKey
                     AND length(btrim(item."Value")) > 0
+                ON CONFLICT DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            sql.Parameters.Add(new WorkIdData(workId.Value));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            // And its translated summary; the instance language keeps the provider's own.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "WorkMetadataFacts" ("WorkId", "FactKey", "UiLocaleId", "Value", "ProviderId")
+                SELECT DISTINCT ON (locale."Id")
+                    @Id,
+                    'Overview',
+                    locale."Id",
+                    left(btrim(item."Overview"), 4000),
+                    provider."Id"
+                FROM
+                    jsonb_to_recordset(@Translations::jsonb) AS item ("Language" text, "Region" text, "Title" text, "Overview" text)
+                    JOIN "UiLocales" AS locale ON locale."IsEnabled" AND lower(split_part(locale."Locale", '-', 1)) = lower(item."Language")
+                    CROSS JOIN "Providers" AS provider
+                WHERE
+                    provider."Key" = @ProviderKey
+                    AND length(btrim(item."Overview")) > 0
+                ORDER BY
+                    locale."Id",
+                    lower(locale."Locale") = lower(item."Language" || '-' || COALESCE(item."Region", '')) DESC
                 ON CONFLICT DO NOTHING;
                 """;
             sql.Parameters.Add(data);

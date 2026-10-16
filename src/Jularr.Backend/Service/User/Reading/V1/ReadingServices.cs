@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     """
                     SELECT
                         work."Id" AS "WorkId",
-                        work."CanonicalTitle" AS "Title",
+                        visible."Title" AS "Title",
                         file."Id" AS "StoredFileId",
                         file."RelativePath",
                         file."SizeBytes",
@@ -106,7 +106,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     SELECT
                         document."Id" AS "DocumentId",
                         asset."WorkId",
-                        coalesce(work."CanonicalTitle", document."Title") AS "Title",
+                        coalesce(visible."Title", document."Title") AS "Title",
                         document."ReadingFormatTypeId",
                         jsonb_array_length(document."Structure" -> 'Sections') AS "SectionCount",
                         document."CacheCompletedAt" IS NOT NULL AS "IsCached",
@@ -147,7 +147,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 """
                 SELECT
                     work."Id" AS "WorkId",
-                    work."CanonicalTitle" AS "Title",
+                    visible."Title" AS "Title",
                     CASE
                         WHEN bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL)
                             AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$' AND file."MissingSince" IS NULL) THEN 2
@@ -164,7 +164,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     AND asset."MediaAssetTypeId" IN (3, 4)
                 GROUP BY
                     work."Id",
-                    work."CanonicalTitle";
+                    visible."Title";
                 """;
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));

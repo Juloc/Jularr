@@ -138,6 +138,9 @@ namespace Jularr.Integrations.Data.Tmdb
         public string? CollectionName { get; }
 
         public TmdbDetails Details { get; }
+
+        // Its title and summary in other languages.
+        public IReadOnlyList<TmdbTranslation> Translations { get; init; } = [];
     }
 
     // What a details page describes beyond the identity, named in the requested language.
@@ -185,4 +188,7 @@ namespace Jularr.Integrations.Data.Tmdb
     {
         public TmdbFailure Failure { get; } = failure;
     }
+
+    // A language (ISO 639-1), its region (ISO 3166-1) and the texts TMDB has in it.
+    internal sealed record TmdbTranslation(string Language, string? Region, string? Title, string? Overview);
 }

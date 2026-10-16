@@ -76,7 +76,7 @@ namespace Jularr.Integrations.Logic.Tmdb
         {
             var path = (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture);
             using var document = await ReadAsync(connection, path,
-                [new("append_to_response", "external_ids,credits,videos"), new("include_video_language", connection.Language[..Math.Min(2, connection.Language.Length)] + ",en,null")], ct);
+                [new("append_to_response", "external_ids,credits,videos,translations"), new("include_video_language", connection.Language[..Math.Min(2, connection.Language.Length)] + ",en,null")], ct);
             var root = document.RootElement;
             var result = ParseResult(kind, root) ?? throw new TmdbException(TmdbFailure.InvalidResponse, "TMDB returned a work without a title.");
             var externalIds = root.TryGetProperty("external_ids", out var ids) ? ids : default;
@@ -97,7 +97,13 @@ namespace Jularr.Integrations.Logic.Tmdb
             var collection = root.TryGetProperty("belongs_to_collection", out var series) && series.ValueKind == JsonValueKind.Object ? series : default;
             return new TmdbWork(kind, result.Id, result.Title, result.OriginalTitle, result.Year, result.Overview, result.PosterPath, result.BackdropPath,
                 Text(externalIds, "imdb_id") ?? Text(root, "imdb_id"), Int(externalIds, "tvdb_id"), seasons, genres, Text(root, "original_language"), countries, Int(collection, "id"),
-                Text(collection, "name"), Date(root, kind == TmdbMediaKind.Movie ? "release_date" : "first_air_date"), ParseDetails(kind, root));
+                Text(collection, "name"), Date(root, kind == TmdbMediaKind.Movie ? "release_date" : "first_air_date"), ParseDetails(kind, root))
+            {
+                Translations = [.. Items(root.TryGetProperty("translations", out var translations) ? translations : default, "translations").Select(translation =>
+                    Text(translation, "iso_639_1") is { Length: 2 } language && translation.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+                        ? new TmdbTranslation(language.ToLowerInvariant(), Text(translation, "iso_3166_1"), Text(data, kind == TmdbMediaKind.Movie ? "title" : "name"), Text(data, "overview"))
+                        : null).OfType<TmdbTranslation>().Take(200)]
+            };
         }
 
         // Key crew only: who directed and wrote a movie and its music; a series names its creators.

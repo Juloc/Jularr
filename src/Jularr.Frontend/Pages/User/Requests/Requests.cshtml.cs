@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Requests
 {
-    public sealed class RequestsModel(ReadRequestsV1 read, SaveRequestSourceLinkV1 sourceLink, IAntiforgery antiforgery) : JularrPage
+    public sealed class RequestsModel(ReadRequestsV1 read, SaveRequestSourceLinkV1 sourceLink, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<RequestDetailsV1>? _requests;
 
@@ -27,7 +27,8 @@ namespace Jularr.Frontend.Pages.User.Requests
             {
                 var table = new Table<RequestDetailsV1>(requests.Items)
                     .Content("table.work", item => new A(new ValueText(item.CanonicalTitle)).Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture)))
-                    .Text(item => item.RequestedLanguage, "request.language")
+                    .Content("request.language", item => new Div(new ValueText(item.RequestedLanguage),
+                        item.ReadsTranslated && texts.CanTranslate() ? new Span(new Text("request.readsTranslated")).Class("request-step") : new Span()))
                     .Content("table.status", item => new Div(new Text("request.state." + item.AcquisitionRequestStatusTypeId),
                         item is { LatestStepTypeId: { } step, LatestStepAt: { } at }
                             ? new Span(new Text("request.step." + step), new ValueText(" · " + at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("request-step")

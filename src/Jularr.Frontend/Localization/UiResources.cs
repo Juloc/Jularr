@@ -454,6 +454,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.port", "Port"),
             new("acquisition.connection.ssl", "SSL"),
             new("form.info", "More about this field"),
+            new("request.readsTranslated", "Not published in it; read translated"),
 
             // Field examples and explanations: "hint.<Fields>.<Field>" as the field names them, "hint.acquisition.<Type>" for a connection's address.
             new("hint.AccountFields.Email.placeholder", "name@example.com"),

@@ -294,6 +294,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Film_ShowsItsTitleAndSummaryInTheProfilesLanguage()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            var work = (await imported.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!;
+
+            // A German profile reads TMDB's German title and summary, the one of its own region first; an English one keeps the original.
+            Assert.AreEqual("en", await host.ScalarAsync("SELECT \"OriginalLanguage\" FROM \"Works\" WHERE \"Id\" = " + work.Id));
+            foreach (var (locale, title, summary) in new[] { ("de-DE", "Matrix", "Ein Hacker erfährt die Wahrheit."), ("en-GB", "The Matrix", null) })
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = '" + locale + "') WHERE \"Id\" = 101");
+                using var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id);
+                var shown = (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!;
+                Assert.AreEqual(title, shown.CanonicalTitle, locale);
+                if (summary is not null) Assert.AreEqual(summary, shown.Overview, locale);
+                else Assert.AreNotEqual("Ein Hacker erfährt die Wahrheit.", shown.Overview, locale);
+            }
+        }
+
+        [TestMethod]
         public async Task Rematch_AWronglyMatchedFilm_TakesTheOtherEntryAndKeepsItsFile()
         {
             await using var host = await CreateHostAsync(razor: true);
@@ -393,7 +413,9 @@ namespace Jularr.Backend.Tests
                 {
                     "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
                     "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
-                    "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails + "}",
+                    "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails
+                        + ",\"original_language\":\"en\",\"translations\":{\"translations\":[{\"iso_639_1\":\"de\",\"iso_3166_1\":\"AT\",\"data\":{\"title\":\"Matrix (AT)\",\"overview\":\"\"}},"
+                        + "{\"iso_639_1\":\"de\",\"iso_3166_1\":\"DE\",\"data\":{\"title\":\"Matrix\",\"overview\":\"Ein Hacker erfährt die Wahrheit.\"}}]}}",
                     "/3/tv/1399" => Show[..^1] + ",\"backdrop_path\":\"/show-backdrop.jpg\",\"external_ids\":{\"tvdb_id\":81189},\"seasons\":[]}",
                     "/3/movie/603/recommendations" => """{"results":[{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","poster_path":"/reloaded.jpg"}]}""",
                     "/3/movie/604" => """{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","overview":"The fight goes on.","poster_path":"/reloaded.jpg","external_ids":{"imdb_id":"tt0234215"}}""",

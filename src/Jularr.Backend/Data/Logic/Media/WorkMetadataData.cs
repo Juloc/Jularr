@@ -95,6 +95,13 @@ namespace Jularr.Backend.Data.Logic.Media
         // Titles and facts belong to this provider.
         [DataField(typeof(ProviderFields), nameof(ProviderFields.Key))]
         public string ProviderKey { get; }
+
+        // JSON rows of Language, Region, Title and Overview in other languages; each enabled language takes its best match.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Translations))]
+        public string Translations { get; init; } = "[]";
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.OriginalLanguage))]
+        public string? OriginalLanguage { get; init; }
     }
 
     // A movie's length; a provider that knows none keeps the stored one.

@@ -83,8 +83,9 @@ namespace Jularr.Backend.Data.User.Request.V1
     public sealed class RequestDetailsV1 : BaseResponse
     {
         public RequestDetailsV1(long id, long workId, string canonicalTitle, string requestedLanguage, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, DateTime createdAt,
-            long? operationId = null, string? manualUrl = null, ActivityEventType? latestStepTypeId = null, DateTime? latestStepAt = null)
+            long? operationId = null, string? manualUrl = null, ActivityEventType? latestStepTypeId = null, DateTime? latestStepAt = null, bool readsTranslated = false)
         {
+            ReadsTranslated = readsTranslated;
             LatestStepTypeId = latestStepTypeId;
             LatestStepAt = latestStepAt;
             OperationId = operationId;
@@ -128,6 +129,9 @@ namespace Jularr.Backend.Data.User.Request.V1
 
         [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.OccurredAt), false)]
         public DateTime? LatestStepAt { get; }
+
+        // A book not published in the requested language comes in its own and is read translated.
+        public bool ReadsTranslated { get; }
     }
 
     public sealed class RequestParametersV1 : BaseParameters

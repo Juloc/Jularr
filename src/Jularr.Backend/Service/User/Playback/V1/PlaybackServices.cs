@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 SELECT
                     asset."Id" AS "MediaAssetId",
                     work."Id" AS "WorkId",
-                    work."CanonicalTitle",
+                    visible."Title" AS "CanonicalTitle",
                     asset."MediaAssetTypeId",
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",

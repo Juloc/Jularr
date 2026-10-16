@@ -82,5 +82,8 @@ namespace Jularr.Integrations.Data.AniList
 
         // The credited people with their ids at this provider.
         public IReadOnlyList<ProviderPerson> People { get; init; } = [];
+
+        // The language of its country of origin: Japanese, Korean or Chinese.
+        public string? OriginalLanguage { get; init; }
     }
 }

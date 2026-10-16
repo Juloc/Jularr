@@ -57,6 +57,8 @@ CREATE TABLE "Works" (
     "ReleasedOn" date NULL,
     -- A movie's length; series and books measure their units instead.
     "RuntimeMinutes" smallint NULL CHECK ("RuntimeMinutes" BETWEEN 1 AND 1440),
+    -- The two-letter language it was made or first published in, as its provider says; books in another language are translated from it.
+    "OriginalLanguage" varchar(2) NULL CHECK ("OriginalLanguage" ~ '^[a-z]{2}$'),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
@@ -223,11 +225,48 @@ SELECT
     class."WorkId",
     class."MediaTypeId",
     class."MediaSubtypeId",
-    category."IsHidden"
+    category."IsHidden",
+    COALESCE((
+        SELECT
+            title."Title"
+        FROM
+            "WorkTitles" AS title
+        WHERE
+            title."WorkId" = class."WorkId"
+            AND title."UiLocaleId" = profile."UiLocaleId"
+        ORDER BY
+            title."IsManual" DESC,
+            title."Id"
+        LIMIT 1
+    ), (
+        SELECT
+            work."CanonicalTitle"
+        FROM
+            "Works" AS work
+        WHERE
+            work."Id" = class."WorkId"
+    )) AS "Title",
+    (
+        SELECT
+            fact."Value"
+        FROM
+            "WorkMetadataFacts" AS fact
+        WHERE
+            fact."WorkId" = class."WorkId"
+            AND fact."FactKey" = 'Overview'
+        ORDER BY
+            fact."UiLocaleId" IS NOT DISTINCT FROM profile."UiLocaleId" DESC,
+            fact."IsManual" DESC,
+            fact."UiLocaleId" IS NOT DISTINCT FROM settings."UiLocaleId" DESC,
+            fact."Id"
+        LIMIT 1
+    ) AS "Overview"
 FROM
     "WorkClasses" AS class
     JOIN "ProfileMediaCategories" AS category ON category."MediaSubtypeId" = class."MediaSubtypeId"
-        OR class."MediaSubtypeId" IS NULL AND category."MediaSubtypeId" IS NULL AND category."MediaTypeId" = class."MediaTypeId";
+        OR class."MediaSubtypeId" IS NULL AND category."MediaSubtypeId" IS NULL AND category."MediaTypeId" = class."MediaTypeId"
+    JOIN "Profiles" AS profile ON profile."Id" = category."ProfileId"
+    CROSS JOIN "InstanceSettings" AS settings;
 
 -- One table for seasons, episodes, volumes, chapters and tracks.
 CREATE TABLE "WorkUnitTypes" (
