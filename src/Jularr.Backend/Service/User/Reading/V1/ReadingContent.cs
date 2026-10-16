@@ -148,10 +148,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
             file.Position = 0;
 
             // Only a PDF with text becomes a document.
-            IReadOnlyList<PdfChapter> chapters;
+            PdfBookContent book;
             try
             {
-                chapters = PdfBook.Read(file);
+                book = PdfBook.Read(file);
             }
             catch (PdfWithoutTextException)
             {
@@ -176,12 +176,18 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return true;
             }, ct);
 
-            // Each chapter becomes one section of plain paragraphs, prepared like any book text.
+            // Each chapter becomes one section of plain paragraphs and its pictures, prepared like any book text.
+            var chapters = book.Chapters;
             var sections = new List<ReadingStructureSection>();
             var toc = new List<ReadingStructureEntry>();
             var writer = new ResourceWriter(context, ct);
             var noSections = new Dictionary<string, int>(StringComparer.Ordinal);
-            var noManifest = new Dictionary<string, string>(StringComparer.Ordinal);
+            var pictures = book.Images.ToDictionary(image => image.Path, image => image.MediaType, StringComparer.Ordinal);
+            foreach (var image in book.Images)
+            {
+                await writer.AddAsync(new ReadingResourceData(state.DocumentId, image.Path, image.MediaType, image.Bytes));
+            }
+
             for (var index = 0; index < chapters.Count; index++)
             {
                 var chapter = chapters[index];
@@ -192,13 +198,15 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     toc.Add(new ReadingStructureEntry(heading, index, 1, null));
                 }
 
-                foreach (var paragraph in chapter.Paragraphs)
+                foreach (var block in chapter.Blocks)
                 {
-                    html.Append("<p>").Append(WebUtility.HtmlEncode(paragraph)).Append("</p>");
+                    html.Append(block.Image is { } picture
+                        ? "<p><img alt=\"\" src=\"" + WebUtility.HtmlEncode(picture["pdf/".Length..]) + "\" /></p>"
+                        : "<p>" + WebUtility.HtmlEncode(block.Text) + "</p>");
                 }
 
                 var path = "pdf/" + index.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml";
-                var prepared = ReadingHtml.Prepare(html.Append("</body></html>").ToString(), path, state.DocumentId, noSections, noManifest);
+                var prepared = ReadingHtml.Prepare(html.Append("</body></html>").ToString(), path, state.DocumentId, noSections, pictures);
                 sections.Add(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks));
                 await writer.AddAsync(new ReadingResourceData(state.DocumentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
             }

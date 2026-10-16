@@ -96,7 +96,13 @@ namespace Jularr.Backend.Tests
 
             // The reader offers it; switched off, translation is gone.
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "data-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/\"");
+            var reader = await page.Content.ReadAsStringAsync();
+            StringAssert.Contains(reader, "data-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/\"");
+
+            // Unless the device chose otherwise, a book opens in the profile's language; the original stays one choice away.
+            var locale = (string)(await host.ScalarAsync("SELECT locale.\"Locale\" FROM \"Profiles\" AS profile JOIN \"UiLocales\" AS locale ON locale.\"Id\" = profile.\"UiLocaleId\" WHERE profile.\"Id\" = 101"))!;
+            StringAssert.Contains(reader, "data-profile-language=\"" + System.Globalization.CultureInfo.GetCultureInfo(locale).Parent.EnglishName + "\"");
+            StringAssert.Contains(reader, "data-setting=\"translate\" data-value=\"original\"");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Translation'");
             using var off = await host.SendAsync(HttpMethod.Get, route);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);

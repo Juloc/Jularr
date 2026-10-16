@@ -257,16 +257,33 @@ namespace Jularr.E2E.Tests
 
         // A two-chapter EPUB 3.
         // A text PDF: one Helvetica line per entry, top to bottom, each page in its own content stream.
-        public static string WritePdf(string file, params string[][] pages)
+        public static string WritePdf(string file, params string[][] pages) => WritePdf(file, null, pages);
+
+        // The pages with a coloured picture below the text of one of them.
+        public static string WritePdfWithPicture(string file, int picturePage, params string[][] pages) => WritePdf(file, picturePage, pages);
+
+        private static string WritePdf(string file, int? picturePage, string[][] pages)
         {
             static string Escape(string text) => text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("(", "\\(", StringComparison.Ordinal).Replace(")", "\\)", StringComparison.Ordinal);
             var objects = new List<string> { "<< /Type /Catalog /Pages 2 0 R >>", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>" };
             var kids = new List<string>();
-            foreach (var lines in pages)
+            for (var number = 0; number < pages.Length; number++)
             {
+                var lines = pages[number];
                 var stream = string.Concat(lines.Select((line, index) => "BT /F1 11 Tf 54 " + (780 - index * 15) + " Td (" + Escape(line) + ") Tj ET\n"));
+                var pictures = "";
+                if (number == picturePage)
+                {
+                    // 64 by 48 RGB samples, uncompressed, drawn below the text.
+                    var samples = new string([.. Enumerable.Range(0, 64 * 48).SelectMany(pixel => new[] { (char)(pixel % 64 * 4), (char)(pixel / 64 * 5), (char)160 })]);
+                    objects.Add("<< /Type /XObject /Subtype /Image /Width 64 /Height 48 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length " + samples.Length + " >>\nstream\n" + samples
+                        + "\nendstream");
+                    pictures = " /XObject << /Im1 " + objects.Count + " 0 R >>";
+                    stream += "q 192 0 0 144 54 " + (780 - lines.Length * 15 - 160) + " cm /Im1 Do Q\n";
+                }
+
                 objects.Add("<< /Length " + stream.Length + " >>\nstream\n" + stream + "endstream");
-                objects.Add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents " + objects.Count + " 0 R >>");
+                objects.Add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >>" + pictures + " >> /Contents " + objects.Count + " 0 R >>");
                 kids.Add(objects.Count + " 0 R");
             }
 

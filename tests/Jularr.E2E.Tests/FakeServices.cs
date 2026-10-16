@@ -22,6 +22,10 @@ namespace Jularr.E2E.Tests
         public const string BookTitle = "Pride and Prejudice";
         public const string MangaTitle = "Example Manga";
         public const string NovelTitle = "Example Novel";
+        public const string AnimeTitle = "Example Anime";
+        public const string SonarrKey = "e2e-sonarr-key";
+        private const string AniListAnime = """{"id":103,"type":"ANIME","format":"TV","title":{"romaji":"Reidai Anime","english":"Example Anime","native":null},"synonyms":[],"startDate":{"year":2021},"episodes":2,"status":"FINISHED","description":"A test anime.","coverImage":null,"relations":{"edges":[]},"staff":{"edges":[]}}""";
+        private const string AnimeSeries = """{"id":99002,"name":"Example Anime","original_name":"Reidai Anime","first_air_date":"2021-01-05","overview":"Two test episodes.","original_language":"ja","origin_country":["JP"],"genres":[{"id":16,"name":"Animation"}],"external_ids":{"tvdb_id":990002},"seasons":[{"season_number":1,"name":"Season 1","air_date":"2021-01-05","episode_count":2}]}""";
         private const string AniListNovel = """{"id":102,"type":"MANGA","format":"NOVEL","title":{"romaji":"Reidai Shousetsu","english":"Example Novel","native":null},"synonyms":[],"startDate":{"year":2020},"volumes":1,"status":"FINISHED","description":"A test light novel.","coverImage":null,"staff":{"edges":[{"role":"Story","node":{"name":{"full":"Ren Example"}}}]}}""";
         private const string AniListManga = """{"id":101,"type":"MANGA","format":"MANGA","title":{"romaji":"Reidai Manga","english":"Example Manga","native":null},"synonyms":[],"startDate":{"year":2019},"volumes":1,"status":"FINISHED","description":"A test series.","coverImage":null,"staff":{"edges":[{"role":"Story & Art","node":{"name":{"full":"Mika Example"}}}]}}""";
         private const string AlbumId = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
@@ -52,6 +56,9 @@ namespace Jularr.E2E.Tests
         public Uri OpenLibrary => new(Address, "openlibrary/");
 
         public Uri AniList => new(Address, "anilist/");
+
+        // A Sonarr with one quality profile, its custom format, a root folder and the test series missing.
+        public Uri Sonarr => new(Address, "sonarr/");
 
         // Where SABnzbd puts finished jobs; Jularr maps "/downloads" here.
         public string Downloads { get; }
@@ -104,6 +111,7 @@ namespace Jularr.E2E.Tests
             app.MapGet("/musicbrainz/ws/2/{**path}", MusicBrainzAnswer);
             app.MapGet("/openlibrary/{**path}", OpenLibraryAnswer);
             app.MapPost("/anilist/", AniListAnswer);
+            app.MapGet("/sonarr/api/v3/{**path}", SonarrAnswer);
             app.MapGet("/newznab/api", services.Newznab);
             app.MapGet("/newznab/getnzb/{id}", (string id) => Results.Text("<nzb xmlns=\"http://www.newzbin.com/DTD/2003/nzb\"></nzb>", "application/x-nzb"));
             app.MapPost("/sabnzbd/api", services.Sabnzbd);
@@ -129,7 +137,10 @@ namespace Jularr.E2E.Tests
             return path switch
             {
                 "search/movie" => Json(query.Contains("Bunny", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + Movie + "]}" : "{\"results\":[]}"),
-                "search/tv" => Json(query.Contains("Test Series", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + Series + "]}" : "{\"results\":[]}"),
+                "search/tv" => Json(query.Contains("Test Series", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + Series + "]}"
+                    : query.Contains("Anime", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + AnimeSeries + "]}" : "{\"results\":[]}"),
+                "tv/99002" => Json(AnimeSeries),
+                "tv/99002/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"Beginning","air_date":"2021-01-05"},{"season_number":1,"episode_number":2,"name":"Ending","air_date":"2021-01-12"}]}"""),
                 "movie/10378" => Json(Movie),
                 "tv/99001" => Json(Series),
                 "tv/99001/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"Pilot","air_date":"2020-04-01"},{"season_number":1,"episode_number":2,"name":"Second","air_date":"2020-04-08"}]}"""),
@@ -167,8 +178,35 @@ namespace Jularr.E2E.Tests
         {
             using var reader = new StreamReader(request.Body);
             var query = await reader.ReadToEndAsync();
-            var media = query.Contains("Novel", StringComparison.Ordinal) || query.Contains("102", StringComparison.Ordinal) ? AniListNovel : AniListManga;
+            var media = query.Contains("ANIME", StringComparison.Ordinal) || query.Contains("103", StringComparison.Ordinal) ? AniListAnime
+                : query.Contains("Novel", StringComparison.Ordinal) || query.Contains("102", StringComparison.Ordinal) ? AniListNovel : AniListManga;
             return Json(query.Contains("Page(", StringComparison.Ordinal) ? "{\"data\":{\"Page\":{\"media\":[" + media + "]}}}" : "{\"data\":{\"Media\":" + media + "}}");
+        }
+
+        // Sonarr's API v3 as a takeover reads it; indexers and clients are set up in Jularr itself.
+        private static IResult SonarrAnswer(HttpContext http, string path)
+        {
+            if (http.Request.Headers["X-Api-Key"] != SonarrKey)
+            {
+                return Results.StatusCode(StatusCodes.Status401Unauthorized);
+            }
+
+            return path switch
+            {
+                "indexer" or "downloadclient" => Json("[]"),
+                "rootfolder" => Json("""[{"path":"/tv","defaultQualityProfileId":4}]"""),
+                "series" => Json("""[{"title":"Jularr Test Series","year":2020,"tmdbId":99001,"monitored":true,"qualityProfileId":4,"path":"/tv/Jularr Test Series","statistics":{"episodeFileCount":0,"episodeCount":2}}]"""),
+                "qualityprofile" => Json("""
+                    [{"id":4,"name":"Web 1080p","upgradeAllowed":false,"cutoff":1002,"minFormatScore":0,"items":[
+                      {"quality":{"id":4,"name":"HDTV-720p","source":"television","resolution":720},"items":[],"allowed":false},
+                      {"name":"WEB 1080p","id":1002,"allowed":true,"items":[
+                        {"quality":{"id":3,"name":"WEBDL-1080p","source":"web","resolution":1080},"items":[],"allowed":true},
+                        {"quality":{"id":15,"name":"WEBRip-1080p","source":"webRip","resolution":1080},"items":[],"allowed":true}]}],
+                     "formatItems":[{"format":1,"name":"x265","score":-10000}]}]
+                    """),
+                "customformat" => Json("""[{"id":1,"name":"x265","specifications":[{"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"[xh]\\.?265"}]}]}]"""),
+                _ => Results.NotFound()
+            };
         }
 
         private IResult Newznab(HttpContext http)
@@ -192,7 +230,7 @@ namespace Jularr.E2E.Tests
                       </searching>
                       <categories>
                         <category id="2000" name="Movies"><subcat id="2040" name="HD" /></category>
-                        <category id="5000" name="TV"><subcat id="5040" name="HD" /></category>
+                        <category id="5000" name="TV"><subcat id="5040" name="HD" /><subcat id="5070" name="Anime" /></category>
                         <category id="3000" name="Audio"><subcat id="3040" name="Lossless" /></category>
                         <category id="7000" name="Books"><subcat id="7020" name="EBook" /><subcat id="7030" name="Comics" /></category>
                       </categories>

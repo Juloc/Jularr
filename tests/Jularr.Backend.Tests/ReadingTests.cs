@@ -190,6 +190,7 @@ namespace Jularr.Backend.Tests
                     (676, "The second paragraph " + Long), (662, "and does not end on this page " + Long)],
                 [(780, "but continues on the next one and ends."), (752, "2"), (724, "The second chapter " + Long), (710, "ends with this sentence.")],
                 [(780, "A last paragraph " + Long), (766, "closes the book.")]);
+            pdf = WithPicture(pdf, page: 2, top: 700);
             File.WriteAllBytes(Path.Combine(storage.Path, "1", "Books", "Second Book", "Second Book.pdf"), pdf);
             await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = now() WHERE \"MediaAssetId\" = " + second);
             await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
@@ -208,12 +209,99 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("Page ", StringComparison.Ordinal));
             Assert.AreEqual(2, Regex.Matches(html, "<p ").Count);
 
+            // A picture stays where it stood, after the second chapter's text, and is served as a resource of the book.
+            using var chapter = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/1");
+            var chapterHtml = (await chapter.Content.ReadFromJsonAsync<ReadingSectionV1>())!.Html;
+            var picture = Regex.Match(chapterHtml, "<img[^>]*src=\"([^\"]+)\"");
+            Assert.IsTrue(picture.Success, chapterHtml);
+            Assert.IsTrue(chapterHtml.IndexOf("ends with this sentence.", StringComparison.Ordinal) < picture.Index, chapterHtml);
+            using var image = await host.SendAsync(HttpMethod.Get, WebUtility.HtmlDecode(picture.Groups[1].Value));
+            Assert.AreEqual(HttpStatusCode.OK, image.StatusCode);
+            Assert.AreEqual("image/png", image.Content.Headers.ContentType?.MediaType);
+
             // The reader reflows it and still offers the original.
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + second);
             var reader = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, reader);
             StringAssert.Contains(reader, "href=\"/api/v1/reading/assets/" + second + "/file\"");
             Assert.IsFalse(reader.Contains("<iframe", StringComparison.Ordinal));
+        }
+
+        // The same pages with a picture on one of them, below the given height.
+        private static byte[] WithPicture(byte[] pdf, int page, double top)
+        {
+            using var source = UglyToad.PdfPig.PdfDocument.Open(pdf);
+            var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+            for (var number = 1; number <= source.NumberOfPages; number++)
+            {
+                var copy = builder.AddPage(source, number);
+                if (number == page)
+                {
+                    copy.AddPng(Picture(96, 64), new UglyToad.PdfPig.Core.PdfRectangle(54, top - 120, 234, top));
+                }
+            }
+
+            return builder.Build();
+        }
+
+        // A plain RGB picture as PNG.
+        private static byte[] Picture(int width, int height)
+        {
+            var raw = new MemoryStream();
+            for (var y = 0; y < height; y++)
+            {
+                raw.WriteByte(0);
+                for (var x = 0; x < width; x++)
+                {
+                    raw.Write([(byte)(x * 2), (byte)(y * 3), 160]);
+                }
+            }
+
+            var compressed = new MemoryStream();
+            using (var zlib = new ZLibStream(compressed, CompressionLevel.Optimal, leaveOpen: true))
+            {
+                raw.Position = 0;
+                raw.CopyTo(zlib);
+            }
+
+            var png = new MemoryStream();
+            png.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+            var header = new byte[13];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, width);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4), height);
+            header[8] = 8;
+            header[9] = 2;
+            Chunk(png, "IHDR", header);
+            Chunk(png, "IDAT", compressed.ToArray());
+            Chunk(png, "IEND", []);
+            return png.ToArray();
+        }
+
+        private static void Chunk(Stream png, string type, byte[] data)
+        {
+            var length = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, data.Length);
+            png.Write(length);
+            var body = Encoding.ASCII.GetBytes(type).Concat(data).ToArray();
+            png.Write(body);
+            var crc = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(crc, Crc32(body));
+            png.Write(crc);
+        }
+
+        private static uint Crc32(byte[] bytes)
+        {
+            var crc = 0xFFFFFFFFu;
+            foreach (var value in bytes)
+            {
+                crc ^= value;
+                for (var bit = 0; bit < 8; bit++)
+                {
+                    crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+                }
+            }
+
+            return ~crc;
         }
 
         // Text lines per page at given heights; every page carries a running header.

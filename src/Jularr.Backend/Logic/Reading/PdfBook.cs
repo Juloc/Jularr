@@ -5,12 +5,17 @@ using UglyToad.PdfPig.Core;
 namespace Jularr.Backend.Logic.Reading
 {
     // A PDF with a text layer as a reflowable book: running headers and footers drop, lines join into paragraphs across pages,
-    // short numbered or titled lines on their own start chapters. Scanned pages without text are no book.
+    // short numbered or titled lines on their own start chapters, pictures stay where they stood. Scanned pages without text are no book.
     internal static partial class PdfBook
     {
         // Raised when the converted output changes; old documents are prepared again.
-        public const int AnalyzerVersion = 1;
+        public const int AnalyzerVersion = 2;
         public const int MaximumPages = 5000;
+
+        // Pictures smaller than an icon are decoration; a book keeps a bounded number of bounded pictures.
+        private const double MinimumImagePoints = 48;
+        private const int MaximumImages = 500;
+        private const int MaximumImageBytes = 10 * 1024 * 1024;
 
         // A chapter without headings is split so no section grows unbounded.
         private const int MaximumParagraphs = 150;
@@ -24,9 +29,10 @@ namespace Jularr.Backend.Logic.Reading
         [GeneratedRegex(@"[.!?”""’)…:]$")]
         private static partial Regex SentenceEnd();
 
-        public static IReadOnlyList<PdfChapter> Read(Stream stream)
+        public static PdfBookContent Read(Stream stream)
         {
             List<List<PdfLine>> pages;
+            var images = new List<PdfImage>();
             try
             {
                 using var pdf = PdfDocument.Open(stream);
@@ -35,7 +41,7 @@ namespace Jularr.Backend.Logic.Reading
                     throw new InvalidDataException("The PDF has too many pages.");
                 }
 
-                pages = [.. pdf.GetPages().Select(page => Lines(page))];
+                pages = [.. pdf.GetPages().Select(page => Lines(page).Concat(Images(page, images)).OrderByDescending(line => line.Bottom).ToList())];
             }
             catch (PdfDocumentFormatException exception)
             {
@@ -43,7 +49,7 @@ namespace Jularr.Backend.Logic.Reading
             }
 
             DropRunningLines(pages);
-            var lines = pages.SelectMany(page => page).ToArray();
+            var lines = pages.SelectMany(page => page).Where(line => line.Image is null).ToArray();
             if (lines.Sum(line => line.Text.Length) < Math.Max(200, pages.Count * 20))
             {
                 throw new PdfWithoutTextException();
@@ -51,10 +57,35 @@ namespace Jularr.Backend.Logic.Reading
 
             // The body is the most common size, spacing and left edge; nine in ten lines end before the right margin.
             var body = Mode(lines.Select(line => Math.Round(line.Size)));
-            var spacing = Mode(pages.SelectMany(page => page.Zip(page.Skip(1), (upper, lower) => Math.Round(upper.Bottom - lower.Bottom))).Where(gap => gap > 0).DefaultIfEmpty(body * 1.2));
+            var spacing = Mode(pages.Select(page => page.Where(line => line.Image is null).ToArray())
+                .SelectMany(page => page.Zip(page.Skip(1), (upper, lower) => Math.Round(upper.Bottom - lower.Bottom))).Where(gap => gap > 0).DefaultIfEmpty(body * 1.2));
             var left = Mode(lines.Select(line => Math.Round(line.Left)));
             var right = lines.Select(line => line.Right).Order().ElementAt((int)(lines.Length * 0.9));
-            return Chapters(pages, body, spacing, left, right);
+            return new PdfBookContent(Chapters(pages, body, spacing, left, right), images);
+        }
+
+        // A picture stands in the page's flow at its top edge; PNG where PdfPig decodes it, JPEG as it is stored.
+        private static IEnumerable<PdfLine> Images(UglyToad.PdfPig.Content.Page page, List<PdfImage> images)
+        {
+            foreach (var image in page.GetImages())
+            {
+                if (images.Count >= MaximumImages || image.Bounds.Width < MinimumImagePoints || image.Bounds.Height < MinimumImagePoints)
+                {
+                    continue;
+                }
+
+                var (bytes, mediaType, extension) = image.TryGetPng(out var png) ? (png, "image/png", ".png")
+                    : image.RawMemory.Span is [0xFF, 0xD8, ..] ? (image.RawMemory.ToArray(), "image/jpeg", ".jpg")
+                    : (null, "", "");
+                if (bytes is null || bytes.Length > MaximumImageBytes)
+                {
+                    continue;
+                }
+
+                var path = "pdf/images/" + images.Count.ToString("D5", System.Globalization.CultureInfo.InvariantCulture) + extension;
+                images.Add(new PdfImage(path, mediaType, bytes));
+                yield return new PdfLine(image.Bounds.Top, 0, page.Height) { Image = path };
+            }
         }
 
         private static List<PdfLine> Lines(UglyToad.PdfPig.Content.Page page)
@@ -79,7 +110,7 @@ namespace Jularr.Backend.Logic.Reading
         // Lines at the page edges whose text repeats, digits aside, on a fifth of the pages are headers or footers.
         private static void DropRunningLines(List<List<PdfLine>> pages)
         {
-            static bool AtEdge(PdfLine line) => line.Bottom > line.PageHeight * 0.92 || line.Bottom < line.PageHeight * 0.08;
+            static bool AtEdge(PdfLine line) => line.Image is null && (line.Bottom > line.PageHeight * 0.92 || line.Bottom < line.PageHeight * 0.08);
             var running = pages.SelectMany(page => page.Where(AtEdge)).GroupBy(line => Digits().Replace(line.Text, "#"))
                 .Where(group => group.Count() >= Math.Max(3, pages.Count / 5)).Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
             foreach (var page in pages)
@@ -92,7 +123,7 @@ namespace Jularr.Backend.Logic.Reading
         {
             var chapters = new List<PdfChapter>();
             string? title = null;
-            var paragraphs = new List<string>();
+            var paragraphs = new List<PdfBlock>();
             var lines = new List<string>();
             PdfLine? previous = null;
 
@@ -100,7 +131,7 @@ namespace Jularr.Backend.Logic.Reading
             {
                 if (lines.Count > 0)
                 {
-                    paragraphs.Add(Join(lines));
+                    paragraphs.Add(new PdfBlock(Join(lines), null));
                     lines.Clear();
                 }
 
@@ -126,6 +157,12 @@ namespace Jularr.Backend.Logic.Reading
                 for (var index = 0; index < page.Count; index++)
                 {
                     var line = page[index];
+                    if (line.Image is { } picture)
+                    {
+                        CloseParagraph();
+                        paragraphs.Add(new PdfBlock(null, picture));
+                        continue;
+                    }
 
                     // A short heading line stands apart from its neighbours.
                     var apart = (index == 0 || page[index - 1].Bottom - line.Bottom > spacing * 1.5) && (index + 1 >= page.Count || line.Bottom - page[index + 1].Bottom > spacing * 1.5);
@@ -179,12 +216,22 @@ namespace Jularr.Backend.Logic.Reading
             public double Left => Words.Min(word => word.Left);
             public double Right => Words.Max(word => word.Right);
             public string Text => _text ??= string.Join(' ', Words.OrderBy(word => word.Left).Select(word => word.Text));
+
+            // A picture's path among the book's resources; it has no words.
+            public string? Image { get; init; }
             private string? _text;
         }
     }
 
-    // One chapter of a converted PDF: its heading, if any, and its paragraphs.
-    internal sealed record PdfChapter(string? Title, IReadOnlyList<string> Paragraphs);
+    // One chapter of a converted PDF: its heading, if any, and its paragraphs and pictures in order.
+    internal sealed record PdfChapter(string? Title, IReadOnlyList<PdfBlock> Blocks);
+
+    // A paragraph's text or a picture's path.
+    internal sealed record PdfBlock(string? Text, string? Image);
+
+    internal sealed record PdfImage(string Path, string MediaType, byte[] Bytes);
+
+    internal sealed record PdfBookContent(IReadOnlyList<PdfChapter> Chapters, IReadOnlyList<PdfImage> Images);
 
     // A PDF of scanned pages: it stays a PDF for the browser's own viewer.
     internal sealed class PdfWithoutTextException() : Exception("The PDF has no text layer.");

@@ -96,7 +96,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
                 Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode"),
                 texts.CanTranslate()
-                    ? Setting("reader.translate", [("", "reader.translate.original"), .. Enum.GetValues<TranslationLanguageType>().Select(language => (language.ToString(), "reader.language." + language))], "translate")
+                    ? Setting("reader.translate", [("original", "reader.translate.original"), .. Enum.GetValues<TranslationLanguageType>().Select(language => (language.ToString(), "reader.language." + language))], "translate")
                     : new Span()
             ).Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden");
 
@@ -138,7 +138,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             if (texts.CanTranslate())
             {
                 // The section's translations are shared; the files to translate it come with its route.
+                // A book in another language opens in the profile's, when the engine knows it.
+                var profileLanguage = Enum.TryParse<TranslationLanguageType>(CultureInfo.GetCultureInfo(texts.Locale).Parent.EnglishName, out var known) ? known.ToString() : "";
                 view.Attribute("data-language", document.Language ?? "")
+                    .Attribute("data-profile-language", profileLanguage)
                     .Attribute("data-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/"
                         + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
                     .Attribute("data-route-url", "/api/v1/translation/routes/")

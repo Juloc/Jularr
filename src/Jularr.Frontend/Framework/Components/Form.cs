@@ -340,7 +340,8 @@ namespace Jularr.Frontend.Framework
         {
             // Use canonical field metadata.
             if (_action is null) input.Attribute("disabled", "disabled");
-            if (field.Required && field.Control != FieldControl.Checkbox) input.Attribute("required", "required");
+            // A list may stay empty; it is required only to be sent.
+            if (field.Required && field.Control != FieldControl.Checkbox && !field.ValueType.IsArray) input.Attribute("required", "required");
             if (field.MinimumLength is { } minimumLength) input.Attribute("minlength", minimumLength.ToString(CultureInfo.InvariantCulture));
             if (field.MaximumLength is { } length && !field.ValueType.IsArray) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));

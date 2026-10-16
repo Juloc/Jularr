@@ -9,7 +9,8 @@ interface ReaderSettings {
     size: number;
     theme: "light" | "sepia" | "dark";
     mode: "scroll" | "paged";
-    translate: Language | "";
+    // A language, the original, or unset: then the profile's language.
+    translate: Language | "original" | "";
 }
 
 const SettingsKey = "jularr.reader";
@@ -44,7 +45,7 @@ if (reader?.querySelector("[data-role=content]")) {
     const translate = reader.dataset.translationUrl
         ? translator(reader, content, createTranslationWorker)
         : undefined;
-    if (translate && settings.translate) void translate(settings.translate);
+    if (translate) void translate(target(settings.translate));
 
     // Panels and settings.
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
@@ -55,7 +56,7 @@ if (reader?.querySelector("[data-role=content]")) {
         if (button.dataset.setting === "mode") settings.mode = value as ReaderSettings["mode"];
         if (button.dataset.setting === "translate" && translate) {
             settings.translate = value as ReaderSettings["translate"];
-            void translate(settings.translate);
+            void translate(target(settings.translate));
         }
         apply();
         try { localStorage.setItem(SettingsKey, JSON.stringify(settings)); } catch { /* Optional device storage. */ }
@@ -76,6 +77,12 @@ if (reader?.querySelector("[data-role=content]")) {
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("pagehide", () => report(true));
 
+    // Unset follows the profile's language; the original stays untranslated.
+    function target(choice: ReaderSettings["translate"]): Language | "" {
+        if (choice === "original") return "";
+        return choice || (reader!.dataset.profileLanguage as Language | undefined) || "";
+    }
+
     function load(): ReaderSettings {
         try {
             const value = JSON.parse(localStorage.getItem(SettingsKey) ?? "{}") as Partial<ReaderSettings> | null;
@@ -84,7 +91,7 @@ if (reader?.querySelector("[data-role=content]")) {
                 theme: value?.theme === 'sepia' || value?.theme === 'dark' ? value.theme : Defaults.theme,
                 mode: value?.mode === 'paged' ? value.mode : Defaults.mode,
                 translate: value?.translate === 'English' || value?.translate === 'German' || value?.translate === 'Indonesian' || value?.translate === 'Japanese'
-                    ? value.translate : Defaults.translate
+                    || value?.translate === 'original' ? value.translate : Defaults.translate
             };
         } catch {
             return { ...Defaults };
@@ -97,7 +104,7 @@ if (reader?.querySelector("[data-role=content]")) {
         reader!.style.setProperty("--reader-size", `${settings.size.toFixed(1)}rem`);
         reader!.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => {
             const active = (button.dataset.setting === "theme" && button.dataset.value === settings.theme) || (button.dataset.setting === "mode" && button.dataset.value === settings.mode)
-                || (button.dataset.setting === "translate" && button.dataset.value === settings.translate);
+                || (button.dataset.setting === "translate" && button.dataset.value === (target(settings.translate) || "original"));
             button.setAttribute("aria-pressed", String(active));
         });
     }
