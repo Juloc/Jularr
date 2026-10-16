@@ -34,7 +34,8 @@ namespace Jularr.Backend.Service.System.Backup.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (_options.Path is not { } root || !_tools.CanBackUp)
+            var root = _options.Path;
+            if (!_tools.CanBackUp)
             {
                 throw new ServiceUnavailableException("backup_unavailable");
             }
@@ -100,7 +101,8 @@ namespace Jularr.Backend.Service.System.Backup.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             var since = _time.GetUtcNow().UtcDateTime - TimeSpan.FromHours(Math.Max(1, _options.IntervalHours));
-            if (_options.Path is not { } root || !_tools.CanBackUp || _options.IntervalHours <= 0 || BackupFiles.Newest(root) > since)
+            var root = _options.Path;
+            if (!_tools.CanBackUp || _options.IntervalHours <= 0 || BackupFiles.Newest(root) > since)
             {
                 return new UpdateResult(false);
             }

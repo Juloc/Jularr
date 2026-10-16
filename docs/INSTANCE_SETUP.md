@@ -31,14 +31,14 @@ later Admin settings; do not create a separate configuration system per page.
 
 ## Cross-page behavior
 
-- Current first-Owner slice requires the explicitly configured `JULARR_DB` and
-  installed fresh baseline; startup never creates or migrates a database. Login
+- The first-Owner slice requires the explicitly configured `JULARR_DB`; startup installs
+  the fresh baselines into an empty database and never migrates an existing one. Login
   redirects fresh instances to `/Setup`. Owner creation commits account, profile,
   password, session and permanent bootstrap closure together, then continues in the
   wizard, which resumes at the furthest step reached.
 - `/Admin/Instance` edits the instance name and UiLocaleId through the same
-  services intended for Setup. Its fresh baseline is installed explicitly after
-  Account.sql, never by application startup. Library disables the implemented
+  services intended for Setup. Its fresh baseline follows Account.sql in a new
+  installation. Library disables the implemented
   catalog/watchlist services and navigation without removing data. Public display
   name/default language and User capabilities are connected to Razor; the wizard
   further modules are not yet integrated; media types and subtypes switch on the Instance page.
@@ -67,7 +67,7 @@ later Admin settings; do not create a separate configuration system per page.
 - UI uses the shared PostgreSQL text catalog, English source and stable error/resource
   keys. Breadcrumb is the page heading; no duplicate heading/description. No runtime
   translation during page reads. Offline language packs remain a future requirement.
-- No active database changes, legacy migration, automatic schema installation, heavy
+- No active database changes, legacy migration, schema changes to an existing database, heavy
   runtime deployment or unavailable placeholder wizard controls in the first clean-cut slice.
 
 ## Decisions before implementing

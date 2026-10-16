@@ -28,16 +28,11 @@ namespace Jularr.Backend.Service.Core
         public byte[] Protect(string token) => _protector.Protect(Encoding.UTF8.GetBytes(token));
 
         // Null when no server is connected or Plex is switched off.
-        public async Task<PlexServerConnection?> ConnectAsync(LogicContext context, CancellationToken ct)
-        {
-            var state = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadPlexServerAsync(token), ct);
-            if (state is not { IsEnabled: true, BaseUrl: { } baseUrl, ProtectedSecret: { } secret })
-            {
-                return null;
-            }
+        public async Task<PlexServerConnection?> ConnectAsync(LogicContext context, CancellationToken ct) =>
+            Connect(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadPlexServerAsync(token), ct));
 
-            return new PlexServerConnection(new Uri(baseUrl), Unprotect(secret));
-        }
+        public PlexServerConnection? Connect(PlexServerStateData? state) =>
+            state is { IsEnabled: true, BaseUrl: { } baseUrl, ProtectedSecret: { } secret } ? new PlexServerConnection(new Uri(baseUrl), Unprotect(secret)) : null;
 
         public async Task<PlexServerInfo> ReadServerAsync(PlexServerConnection connection, CancellationToken ct)
         {

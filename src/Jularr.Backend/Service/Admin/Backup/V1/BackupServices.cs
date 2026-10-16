@@ -58,8 +58,8 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
                     setup."Id" = 1;
                 """;
             var state = await Context.ReadSql.ReadRequiredAsync<BackupStateData>(sql, CancellationToken);
-            var items = _options.Path is { } path ? BackupFiles.List(path) : [];
-            return new BackupsV1(new BaseDataList<BackupV1>(items.Select(item => new BackupV1(item.Name, item.CreatedAt, item.SizeBytes, item.IsCompatible, item.IsSealed))), _options.Path is not null && _tools.CanBackUp,
+            var items = BackupFiles.List(_options.Path);
+            return new BackupsV1(new BaseDataList<BackupV1>(items.Select(item => new BackupV1(item.Name, item.CreatedAt, item.SizeBytes, item.IsCompatible, item.IsSealed))), _tools.CanBackUp,
                 state.IsRunning, state.ErrorKey, state.CanRestore && _tools.CanRestore);
         }
     }
@@ -83,7 +83,7 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            if (_options.Path is null || !_tools.CanBackUp)
+            if (!_tools.CanBackUp)
             {
                 throw new ServiceUnavailableException("backup_unavailable");
             }
@@ -109,7 +109,7 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
 
         protected override Task<IServiceOutput> OnExecute()
         {
-            Directory.Delete(BackupFiles.Resolve(_options.Path ?? throw new KeyNotFoundException("The backup was not found."), Parameters.Name), true);
+            Directory.Delete(BackupFiles.Resolve(_options.Path, Parameters.Name), true);
             return Task.FromResult<IServiceOutput>(new UpdateResult(true));
         }
     }
@@ -154,7 +154,7 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
                 throw new DataValidationException(nameof(BackupParametersV1.Name), "setup_completed");
             }
 
-            var folder = BackupFiles.Resolve(_options.Path ?? throw new KeyNotFoundException("The backup was not found."), Parameters.Name);
+            var folder = BackupFiles.Resolve(_options.Path, Parameters.Name);
             if (!BackupFiles.List(_options.Path).Any(item => item.Name == Parameters.Name && item.IsCompatible))
             {
                 throw new DataValidationException(nameof(BackupParametersV1.Name), "backup_incompatible");

@@ -86,11 +86,11 @@ namespace Jularr.Integrations.Logic.Plex
             IReadOnlyList<string> libraryKeys,
             CancellationToken cancellationToken)
         {
-            // Only trusted HTTPS endpoints.
-            if (!serverUri.IsAbsoluteUri || serverUri.Scheme != "https" || serverUri.AbsolutePath != "/"
+            // Only the server root the Owner connected.
+            if (!serverUri.IsAbsoluteUri || serverUri.Scheme is not ("https" or "http") || serverUri.AbsolutePath != "/"
                 || serverUri.UserInfo.Length != 0 || serverUri.Query.Length != 0 || serverUri.Fragment.Length != 0)
             {
-                throw new ArgumentException("A configured HTTPS server root is required.", nameof(serverUri));
+                throw new ArgumentException("A connected server root is required.", nameof(serverUri));
             }
 
             // Use the user's grant.
@@ -136,7 +136,7 @@ namespace Jularr.Integrations.Logic.Plex
                 foreach (var library in libraries.EnumerateArray())
                 {
                     var key = library.GetProperty("key").ToString();
-                    if (libraryKeys.Contains(key, StringComparer.Ordinal))
+                    if (libraryKeys.Count == 0 || libraryKeys.Contains(key, StringComparer.Ordinal))
                     {
                         return true;
                     }

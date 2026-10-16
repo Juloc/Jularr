@@ -1,0 +1,6760 @@
+{
+ "locale": "id",
+ "name": "Bahasa Indonesia",
+ "reviewed": false,
+ "enabled": false,
+ "texts": {
+  "progress.saveFailed": [
+   "Progress could not be saved. Jularr will retry temporary failures.",
+   "Progres tidak dapat disimpan. Jularr akan mencoba lagi jika kegagalannya bersifat sementara."
+  ],
+  "discover.loadRecommendations": [
+   "Load recommendations",
+   "Muat rekomendasi"
+  ],
+  "design.art.washi": [
+   "Washi paper",
+   "Kertas washi"
+  ],
+  "design.art.blossom": [
+   "Blossom branch",
+   "Cabang bunga sakura"
+  ],
+  "design.art.fuji": [
+   "Fuji landscape",
+   "Lanskap Fuji"
+  ],
+  "design.art.torii": [
+   "Torii landscape",
+   "Lanskap Torii"
+  ],
+  "design.art.mascot": [
+   "Jularr mascot",
+   "Maskot Jularr"
+  ],
+  "appearance.accent": [
+   "Accent color",
+   "Warna aksen"
+  ],
+  "appearance.jularrRed": [
+   "Jularr red",
+   "Merah Jularr"
+  ],
+  "appearance.jularrPurple": [
+   "Jularr purple",
+   "Ungu Jularr"
+  ],
+  "appearance.accentDefault": [
+   "Use style default",
+   "Gunakan bawaan gaya"
+  ],
+  "appearance.devicePreference": [
+   "Appearance choices are stored in this browser.",
+   "Pilihan tampilan disimpan di browser ini."
+  ],
+  "design.title": [
+   "Design lab",
+   "Lab desain"
+  ],
+  "design.cards.title": [
+   "Approved cover card states",
+   "Status kartu sampul yang disetujui"
+  ],
+  "design.cards.notice": [
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "Hanya contoh desain; penanda diubah secara lokal dan tindakan membuka pratinjau, tanpa pemutaran pustaka, permintaan, atau perubahan akun. Hijau: lengkap dalam bahasa audio profil. Kuning: lengkap dalam bahasa audio lain. Oranye: sebagian dalam bahasa profil. Kuning-oranye: sebagian dalam bahasa audio lain. Subtitle tidak memengaruhi status ini. Tahan lebih lama untuk melihat trailer resmi tanpa suara."
+  ],
+  "design.introduction": [
+   "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages.",
+   "Bengkel komponen khusus pengembangan. Ini adalah contoh berlabel, bukan data pustaka atau tindakan akun yang berfungsi. Perubahan pada komponen bersama memengaruhi halaman yang sebenarnya."
+  ],
+  "design.controls": [
+   "Buttons and icons",
+   "Tombol dan ikon"
+  ],
+  "design.icons": [
+   "Original Jularr icon catalog",
+   "Katalog ikon asli Jularr"
+  ],
+  "design.tagGenre": [
+   "Fantasy",
+   "Fantasi"
+  ],
+  "design.tagSubtitles": [
+   "Subtitles",
+   "Subtitle"
+  ],
+  "design.toggleOff": [
+   "Off example",
+   "Contoh mati"
+  ],
+  "design.toggleOn": [
+   "On example",
+   "Contoh hidup"
+  ],
+  "design.toggleNotice": [
+   "These switches demonstrate local control states only. They do not save settings.",
+   "Sakelar ini hanya memperagakan status kontrol lokal. Pengaturan tidak disimpan."
+  ],
+  "design.imageCredit": [
+   "Development artwork examples from TMDB. Poster and film artwork rights belong to their respective owners.",
+   "Contoh karya seni pengembangan dari TMDB. Hak atas poster dan karya seni film dimiliki oleh pemiliknya masing-masing."
+  ],
+  "design.trailerCredit": [
+   "Official Your Name trailer from TOHO. Playback connects to YouTube after Play or a sustained hover on cards with a trailer.",
+   "Trailer resmi Your Name dari TOHO. Pemutaran terhubung ke YouTube setelah Putar atau tahan lama pada kartu yang memiliki trailer."
+  ],
+  "media.preview.title": [
+   "Title preview",
+   "Pratinjau judul"
+  ],
+  "media.preview.close": [
+   "Close preview",
+   "Tutup pratinjau"
+  ],
+  "media.preview.playTrailer": [
+   "Play trailer",
+   "Putar trailer"
+  ],
+  "media.preview.noTrailer": [
+   "No trailer available",
+   "Tidak ada trailer"
+  ],
+  "media.preview.externalTrailer": [
+   "Trailer unavailable here? Open it on YouTube.",
+   "Trailer tidak tersedia di sini? Buka di YouTube."
+  ],
+  "media.preview.seriesStatus": [
+   "Series status",
+   "Status serial"
+  ],
+  "media.preview.availability": [
+   "Library availability",
+   "Ketersediaan di pustaka"
+  ],
+  "media.preview.requestStatus": [
+   "Request status",
+   "Status permintaan"
+  ],
+  "media.preview.downloadStatus": [
+   "Download status",
+   "Status unduhan"
+  ],
+  "media.preview.noDownload": [
+   "No active download",
+   "Tidak ada unduhan aktif"
+  ],
+  "design.branding": [
+   "Branding and Original artwork",
+   "Merek dan karya seni asli"
+  ],
+  "design.forms": [
+   "Forms and validation",
+   "Formulir dan validasi"
+  ],
+  "design.layouts": [
+   "Layouts and navigation",
+   "Tata letak dan navigasi"
+  ],
+  "design.media": [
+   "Media components",
+   "Komponen media"
+  ],
+  "design.player": [
+   "Player controls",
+   "Kontrol pemutar"
+  ],
+  "design.playerNotice": [
+   "Layout preview only. No playback session or stream is started here.",
+   "Hanya pratinjau tata letak. Tidak ada sesi pemutaran atau stream yang dimulai di sini."
+  ],
+  "design.primary": [
+   "Primary",
+   "Utama"
+  ],
+  "design.secondary": [
+   "Secondary",
+   "Sekunder"
+  ],
+  "design.disabled": [
+   "Disabled",
+   "Nonaktif"
+  ],
+  "design.selected": [
+   "Selected",
+   "Terpilih"
+  ],
+  "design.exampleTitle": [
+   "Example work",
+   "Contoh karya"
+  ],
+  "design.exampleOtherTitle": [
+   "Another example work",
+   "Contoh karya lain"
+  ],
+  "design.exampleContext": [
+   "Component example",
+   "Contoh komponen"
+  ],
+  "design.exampleOverview": [
+   "Artwork, title, context and actions use the same media components as Library and Discover.",
+   "Gambar, judul, konteks, dan tindakan memakai komponen media yang sama dengan Pustaka dan Jelajahi."
+  ],
+  "design.exampleStatus": [
+   "Preview only",
+   "Hanya pratinjau"
+  ],
+  "design.primaryArea": [
+   "Primary area",
+   "Area utama"
+  ],
+  "design.secondaryArea": [
+   "Secondary area",
+   "Area sekunder"
+  ],
+  "design.validationExample": [
+   "Validation example",
+   "Contoh validasi"
+  ],
+  "design.search": [
+   "Search component examples",
+   "Contoh komponen pencarian"
+  ],
+  "setup.start.title": [
+   "Start and system",
+   "Mulai dan sistem"
+  ],
+  "setup.owner.title": [
+   "Create the first Owner",
+   "Buat Pemilik pertama"
+  ],
+  "setup.owner.passwordConfirmation": [
+   "Confirm password",
+   "Konfirmasi kata sandi"
+  ],
+  "setup.owner.create": [
+   "Create Owner",
+   "Buat Pemilik"
+  ],
+  "setup.owner.closed": [
+   "Initial Owner creation is no longer available.",
+   "Pembuatan Pemilik awal tidak lagi tersedia."
+  ],
+  "account.field.email": [
+   "Email",
+   "Email"
+  ],
+  "account.field.password": [
+   "Password",
+   "Kata sandi"
+  ],
+  "account.field.userName": [
+   "Username or email",
+   "Nama pengguna atau email"
+  ],
+  "account.login.hidePassword": [
+   "Hide password",
+   "Sembunyikan kata sandi"
+  ],
+  "account.login.options": [
+   "Other sign-in options",
+   "Opsi masuk lainnya"
+  ],
+  "account.login.remember": [
+   "Stay signed in",
+   "Tetap masuk"
+  ],
+  "account.login.showPassword": [
+   "Show password",
+   "Tampilkan kata sandi"
+  ],
+  "account.login.submit": [
+   "Sign in",
+   "Masuk"
+  ],
+  "account.login.title": [
+   "Sign in",
+   "Masuk"
+  ],
+  "account.logout.title": [
+   "Sign out",
+   "Keluar"
+  ],
+  "account.logout.submit": [
+   "Sign out",
+   "Keluar"
+  ],
+  "account.plex.start": [
+   "Sign in with Plex",
+   "Masuk dengan Plex"
+  ],
+  "account.plex.authorize": [
+   "Open Plex sign-in",
+   "Buka halaman masuk Plex"
+  ],
+  "account.plex.pending": [
+   "Confirm sign-in in Plex, then continue here. Wait at least five seconds before checking again.",
+   "Konfirmasikan proses masuk di Plex, lalu lanjutkan di sini. Tunggu minimal lima detik sebelum memeriksa lagi."
+  ],
+  "account.plex.complete": [
+   "Check Plex confirmation",
+   "Periksa konfirmasi Plex"
+  ],
+  "account.plex.approval": [
+   "Your registration request is awaiting administrator approval.",
+   "Permintaan pendaftaran Anda menunggu persetujuan administrator."
+  ],
+  "account.profile.required": [
+   "Choose a profile before changing profile settings.",
+   "Pilih profil sebelum mengubah pengaturan profil."
+  ],
+  "account.profile.title": [
+   "Choose a profile",
+   "Pilih profil"
+  ],
+  "account.profile.choose": [
+   "Use profile: ",
+   "Gunakan profil: "
+  ],
+  "account.profile.locked": [
+   "PIN protected",
+   "Dilindungi PIN"
+  ],
+  "account.profile.pin": [
+   "PIN",
+   "PIN"
+  ],
+  "account.profile.pin.submit": [
+   "Unlock",
+   "Buka kunci"
+  ],
+  "profile.pin.save": [
+   "Save PIN",
+   "Simpan PIN"
+  ],
+  "account.profile.add": [
+   "Add profile",
+   "Tambah profil"
+  ],
+  "request.quality": [
+   "Quality",
+   "Kualitas"
+  ],
+  "reader.comic.page": [
+   "Page",
+   "Halaman"
+  ],
+  "reader.comic.direction": [
+   "Reading direction",
+   "Arah baca"
+  ],
+  "reader.comic.spread": [
+   "Two pages",
+   "Dua halaman"
+  ],
+  "request.quality.default": [
+   "Default quality",
+   "Kualitas bawaan"
+  ],
+  "request.rule.add": [
+   "Add rule",
+   "Tambah aturan"
+  ],
+  "request.rule.name": [
+   "Rule name",
+   "Nama aturan"
+  ],
+  "request.rule.description": [
+   "Description",
+   "Deskripsi"
+  ],
+  "request.rule.limit": [
+   "Requests per period",
+   "Permintaan per periode"
+  ],
+  "request.rule.limitColumn": [
+   "Request limit",
+   "Batas permintaan"
+  ],
+  "request.rule.period": [
+   "Rolling period (days)",
+   "Periode bergulir (hari)"
+  ],
+  "request.rule.approval": [
+   "Approval",
+   "Persetujuan"
+  ],
+  "request.rule.manual": [
+   "Manual approval",
+   "Persetujuan manual"
+  ],
+  "request.rule.automatic": [
+   "Automatic approval",
+   "Persetujuan otomatis"
+  ],
+  "request.rule.media": [
+   "Allowed request media",
+   "Media yang boleh diminta"
+  ],
+  "request.rule.profiles": [
+   "Qualities requesters may choose",
+   "Kualitas yang boleh dipilih peminta"
+  ],
+  "request.rule.isDefault": [
+   "Default",
+   "Bawaan"
+  ],
+  "request.rule.delete": [
+   "Delete rule",
+   "Hapus aturan"
+  ],
+  "request.rule.summary": [
+   "{0} requests / {1} days",
+   "{0} permintaan / {1} hari"
+  ],
+  "request.rule.unlimited": [
+   "Unlimited",
+   "Tanpa batas"
+  ],
+  "request.rule.profile": [
+   "Request rule",
+   "Aturan permintaan"
+  ],
+  "request.rule.inherited": [
+   "inherited",
+   "diwarisi"
+  ],
+  "request.rule.overridden": [
+   "adjusted",
+   "disesuaikan"
+  ],
+  "request.rule.override": [
+   "Override the rule's values",
+   "Timpa nilai aturan"
+  ],
+  "request.rule.inheritDefault": [
+   "Default ({0})",
+   "Bawaan ({0})"
+  ],
+  "account.profile.create": [
+   "Create profile",
+   "Buat profil"
+  ],
+  "profile.delete.warning": [
+   "Deleting removes this profile's progress and lists and cancels its open requests. This cannot be undone.",
+   "Menghapus akan menghilangkan progres dan daftar profil ini serta membatalkan permintaannya yang masih terbuka. Tindakan ini tidak dapat dibatalkan."
+  ],
+  "profile.delete.confirm": [
+   "Delete permanently",
+   "Hapus permanen"
+  ],
+  "profile.pin.remove": [
+   "Remove PIN",
+   "Hapus PIN"
+  ],
+  "admin.accounts.profilePinReset": [
+   "Reset PIN",
+   "Reset PIN"
+  ],
+  "account.profile.empty": [
+   "No profiles are assigned to this account.",
+   "Tidak ada profil yang ditetapkan untuk akun ini."
+  ],
+  "session.current": [
+   "Current session",
+   "Sesi saat ini"
+  ],
+  "session.other": [
+   "Other session",
+   "Sesi lain"
+  ],
+  "session.created": [
+   "Signed in: ",
+   "Masuk: "
+  ],
+  "session.expires": [
+   "Expires: ",
+   "Kedaluwarsa: "
+  ],
+  "session.revoke": [
+   "End session",
+   "Akhiri sesi"
+  ],
+  "common.next": [
+   "Next",
+   "Berikutnya"
+  ],
+  "common.previous": [
+   "Previous",
+   "Sebelumnya"
+  ],
+  "common.actions": [
+   "Actions",
+   "Tindakan"
+  ],
+  "common.edit": [
+   "Edit",
+   "Ubah"
+  ],
+  "common.save": [
+   "Save changes",
+   "Simpan perubahan"
+  ],
+  "common.yes": [
+   "Yes",
+   "Ya"
+  ],
+  "common.no": [
+   "No",
+   "Tidak"
+  ],
+  "admin.localization.title": [
+   "UI translations",
+   "Terjemahan antarmuka"
+  ],
+  "admin.languages.title": [
+   "Languages",
+   "Bahasa"
+  ],
+  "admin.languages.code": [
+   "Language code",
+   "Kode bahasa"
+  ],
+  "admin.languages.name": [
+   "Language name",
+   "Nama bahasa"
+  ],
+  "admin.languages.state": [
+   "Language status",
+   "Status bahasa"
+  ],
+  "admin.languages.enabled": [
+   "Enabled",
+   "Aktif"
+  ],
+  "admin.languages.disabled": [
+   "Disabled",
+   "Nonaktif"
+  ],
+  "admin.languages.direction": [
+   "Text direction",
+   "Arah teks"
+  ],
+  "admin.languages.leftToRight": [
+   "Left to right",
+   "Kiri ke kanan"
+  ],
+  "admin.languages.rightToLeft": [
+   "Right to left",
+   "Kanan ke kiri"
+  ],
+  "admin.languages.add": [
+   "Add language",
+   "Tambah bahasa"
+  ],
+  "admin.localization.key": [
+   "Resource key",
+   "Kunci sumber daya"
+  ],
+  "admin.localization.english": [
+   "English source",
+   "Sumber bahasa Inggris"
+  ],
+  "admin.localization.description": [
+   "Translation context",
+   "Konteks terjemahan"
+  ],
+  "admin.localization.translation": [
+   "Translation",
+   "Terjemahan"
+  ],
+  "admin.localization.version": [
+   "Source version",
+   "Versi sumber"
+  ],
+  "admin.localization.status": [
+   "Translation status",
+   "Status terjemahan"
+  ],
+  "admin.localization.status.missing": [
+   "Missing",
+   "Belum ada"
+  ],
+  "admin.localization.status.generated": [
+   "Generated",
+   "Dihasilkan"
+  ],
+  "admin.localization.status.reviewed": [
+   "Reviewed",
+   "Ditinjau"
+  ],
+  "admin.localization.status.manual": [
+   "Manual",
+   "Manual"
+  ],
+  "admin.localization.status.outdated": [
+   "Outdated",
+   "Kedaluwarsa"
+  ],
+  "admin.accounts.title": [
+   "Accounts",
+   "Akun"
+  ],
+  "admin.accounts.name": [
+   "Account name",
+   "Nama akun"
+  ],
+  "admin.accounts.role": [
+   "Role",
+   "Peran"
+  ],
+  "admin.accounts.role.owner": [
+   "Owner",
+   "Pemilik"
+  ],
+  "admin.accounts.role.user": [
+   "User",
+   "Pengguna"
+  ],
+  "admin.accounts.role.mediamanager": [
+   "Media manager",
+   "Pengelola media"
+  ],
+  "admin.accounts.status": [
+   "Account status",
+   "Status akun"
+  ],
+  "admin.accounts.mayConfirmSources": [
+   "May confirm source checks for own requests",
+   "Boleh mengonfirmasi pemeriksaan sumber untuk permintaan sendiri"
+  ],
+  "admin.accounts.enabled": [
+   "Enabled",
+   "Aktif"
+  ],
+  "admin.accounts.disabled": [
+   "Disabled / awaiting approval",
+   "Nonaktif / menunggu persetujuan"
+  ],
+  "admin.accounts.sessionWarning": [
+   "Role or status changes end this account's existing sessions. Enabling an account does not verify its email address.",
+   "Perubahan peran atau status mengakhiri sesi akun ini yang sedang berjalan. Mengaktifkan akun tidak memverifikasi alamat emailnya."
+  ],
+  "admin.accounts.profileId": [
+   "Existing profile ID",
+   "ID profil yang ada"
+  ],
+  "admin.accounts.profiles": [
+   "Assigned profiles",
+   "Profil yang ditetapkan"
+  ],
+  "admin.accounts.profileAdd": [
+   "Assign profile access",
+   "Berikan akses profil"
+  ],
+  "admin.accounts.profileRemove": [
+   "Remove profile access and end affected sessions",
+   "Cabut akses profil dan akhiri sesi terkait"
+  ],
+  "admin.accounts.profileOwned": [
+   "Owned profile: its ownership link cannot be removed here.",
+   "Profil milik sendiri: tautan kepemilikannya tidak dapat dihapus di sini."
+  ],
+  "admin.providers.title": [
+   "Providers",
+   "Penyedia"
+  ],
+  "admin.plex.notConnected": [
+   "Plex server: not connected",
+   "Server Plex: tidak terhubung"
+  ],
+  "admin.plex.connected": [
+   "Plex server connected · {0} titles linked · last sync {1}",
+   "Server Plex terhubung · {0} judul tertaut · sinkronisasi terakhir {1}"
+  ],
+  "admin.plex.notSynced": [
+   "not synced yet",
+   "belum disinkronkan"
+  ],
+  "admin.plex.baseUrl": [
+   "Plex server address",
+   "Alamat server Plex"
+  ],
+  "admin.plex.token": [
+   "Plex token",
+   "Token Plex"
+  ],
+  "admin.plex.connect": [
+   "Connect and test",
+   "Hubungkan dan uji"
+  ],
+  "admin.plex.sync": [
+   "Sync availability now",
+   "Sinkronkan ketersediaan sekarang"
+  ],
+  "admin.plex.signIn": [
+   "Sign in with Plex",
+   "Masuk dengan Plex"
+  ],
+  "admin.plex.registration": [
+   "Plex users may register",
+   "Pengguna Plex boleh mendaftar"
+  ],
+  "admin.plex.registrationApproval": [
+   "New accounts wait for approval",
+   "Akun baru menunggu persetujuan"
+  ],
+  "admin.plex.registrationSections": [
+   "Libraries whose users may register",
+   "Pustaka yang penggunanya boleh mendaftar"
+  ],
+  "hint.PlexFields.SignIn.info": [
+   "Accounts linked to Plex sign in through Plex.",
+   "Akun yang tertaut ke Plex masuk melalui Plex."
+  ],
+  "hint.PlexFields.Registration.info": [
+   "Someone with access to the connected server can ask for an account by signing in with Plex.",
+   "Siapa pun yang memiliki akses ke server yang terhubung dapat meminta akun dengan masuk menggunakan Plex."
+  ],
+  "hint.PlexFields.RegistrationApproval.info": [
+   "An administrator enables each new account first.",
+   "Administrator mengaktifkan setiap akun baru terlebih dahulu."
+  ],
+  "hint.PlexFields.SectionKeys.info": [
+   "None chosen: users of any library may register.",
+   "Tidak ada yang dipilih: pengguna pustaka mana pun boleh mendaftar."
+  ],
+  "admin.plex.disconnect": [
+   "Disconnect Plex server",
+   "Putuskan server Plex"
+  ],
+  "admin.plex.tested": [
+   "Plex {0} answered; libraries: {1}",
+   "Plex {0} menjawab; pustaka: {1}"
+  ],
+  "admin.plex.synced": [
+   "{0} titles linked, {1} new titles added",
+   "{0} judul tertaut, {1} judul baru ditambahkan"
+  ],
+  "admin.mediaServer.notConnected": [
+   "Not connected",
+   "Tidak terhubung"
+  ],
+  "admin.mediaServer.connected": [
+   "Connected · last progress sync {0}",
+   "Terhubung · sinkronisasi progres terakhir {0}"
+  ],
+  "admin.mediaServer.baseUrl": [
+   "Server address",
+   "Alamat server"
+  ],
+  "admin.mediaServer.apiKey": [
+   "API key",
+   "Kunci API"
+  ],
+  "admin.mediaServer.tested": [
+   "{0} {1} answered; {2} users",
+   "{0} {1} menjawab; {2} pengguna"
+  ],
+  "admin.mediaServer.sync": [
+   "Sync progress now",
+   "Sinkronkan progres sekarang"
+  ],
+  "admin.mediaServer.synced": [
+   "{0} positions taken over, {1} sent to the server",
+   "{0} posisi diambil alih, {1} dikirim ke server"
+  ],
+  "admin.mediaServer.disconnect": [
+   "Disconnect server",
+   "Putuskan server"
+  ],
+  "admin.mediaServer.linked": [
+   "{0} shares progress with {1}",
+   "{0} berbagi progres dengan {1}"
+  ],
+  "admin.mediaServer.proposed": [
+   "{0}: proposed profile {1}, not confirmed",
+   "{0}: profil {1} diusulkan, belum dikonfirmasi"
+  ],
+  "admin.mediaServer.unlinked": [
+   "{0} shares no progress",
+   "{0} tidak berbagi progres"
+  ],
+  "admin.mediaServer.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "admin.mediaServer.noProfile": [
+   "None",
+   "Tidak ada"
+  ],
+  "admin.mediaServer.confirm": [
+   "Confirm",
+   "Konfirmasi"
+  ],
+  "media.openInPlex": [
+   "Open in Plex",
+   "Buka di Plex"
+  ],
+  "reader.title": [
+   "Reader",
+   "Pembaca"
+  ],
+  "reader.notFound": [
+   "This book cannot be opened.",
+   "Buku ini tidak dapat dibuka."
+  ],
+  "reader.contents": [
+   "Contents",
+   "Daftar isi"
+  ],
+  "reader.notes": [
+   "Notes",
+   "Catatan"
+  ],
+  "reader.openPdf": [
+   "Open in a new tab",
+   "Buka di tab baru"
+  ],
+  "reader.originalPdf": [
+   "Original PDF",
+   "PDF asli"
+  ],
+  "reader.download": [
+   "Download",
+   "Unduh"
+  ],
+  "reader.download.epub": [
+   "EPUB",
+   "EPUB"
+  ],
+  "reader.download.translated": [
+   "EPUB in {0}, machine-translated",
+   "EPUB dalam {0}, terjemahan mesin"
+  ],
+  "reader.translate.original": [
+   "Original",
+   "Asli"
+  ],
+  "reader.language": [
+   "Language of this book",
+   "Bahasa buku ini"
+  ],
+  "reader.translating": [
+   "Translating",
+   "Menerjemahkan"
+  ],
+  "reader.translationFailed": [
+   "Translation is unavailable right now; the text stays in its language.",
+   "Terjemahan sedang tidak tersedia; teks tetap dalam bahasanya."
+  ],
+  "reader.search": [
+   "Search in this book",
+   "Cari di buku ini"
+  ],
+  "reader.searchEmpty": [
+   "The words do not appear in this book.",
+   "Kata tersebut tidak muncul di buku ini."
+  ],
+  "reader.searchMore": [
+   "Only the first 50 sections with the words are listed.",
+   "Hanya 50 bagian pertama yang memuat kata tersebut yang ditampilkan."
+  ],
+  "reader.notesEmpty": [
+   "Select text to highlight it or add a note.",
+   "Pilih teks untuk menyorotnya atau menambahkan catatan."
+  ],
+  "reader.notesPages": [
+   "Note pages",
+   "Halaman catatan"
+  ],
+  "reader.note": [
+   "Note",
+   "Catatan"
+  ],
+  "reader.deleteNote": [
+   "Delete",
+   "Hapus"
+  ],
+  "reader.highlight.Yellow": [
+   "Yellow",
+   "Kuning"
+  ],
+  "reader.highlight.Green": [
+   "Green",
+   "Hijau"
+  ],
+  "reader.highlight.Blue": [
+   "Blue",
+   "Biru"
+  ],
+  "reader.highlight.Pink": [
+   "Pink",
+   "Merah muda"
+  ],
+  "reader.saveNote": [
+   "Save note",
+   "Simpan catatan"
+  ],
+  "reader.settings": [
+   "Settings",
+   "Pengaturan"
+  ],
+  "reader.previous": [
+   "Previous",
+   "Sebelumnya"
+  ],
+  "reader.next": [
+   "Next",
+   "Berikutnya"
+  ],
+  "reader.end": [
+   "The end",
+   "Tamat"
+  ],
+  "reader.fontSize": [
+   "Text size",
+   "Ukuran teks"
+  ],
+  "reader.smaller": [
+   "Smaller",
+   "Lebih kecil"
+  ],
+  "reader.larger": [
+   "Larger",
+   "Lebih besar"
+  ],
+  "reader.theme": [
+   "Theme",
+   "Tema"
+  ],
+  "reader.theme.light": [
+   "Light",
+   "Terang"
+  ],
+  "reader.theme.sepia": [
+   "Sepia",
+   "Sepia"
+  ],
+  "reader.theme.dark": [
+   "Dark",
+   "Gelap"
+  ],
+  "reader.mode": [
+   "Layout",
+   "Tata letak"
+  ],
+  "reader.mode.scroll": [
+   "Scroll",
+   "Gulir"
+  ],
+  "reader.mode.paged": [
+   "Pages",
+   "Halaman"
+  ],
+  "reader.notCached": [
+   "This book is still being saved for reading without the storage.",
+   "Buku ini masih disimpan agar dapat dibaca tanpa penyimpanan."
+  ],
+  "details.read": [
+   "Read",
+   "Baca"
+  ],
+  "admin.instance.title": [
+   "Instance settings",
+   "Pengaturan instans"
+  ],
+  "admin.instance.name": [
+   "Instance name",
+   "Nama instans"
+  ],
+  "admin.instance.readingCacheMegabytes": [
+   "Reading cache for offline storage (MB)",
+   "Cache bacaan untuk penyimpanan offline (MB)"
+  ],
+  "admin.instance.readingCacheWorks": [
+   "Reading cache: most recently read books",
+   "Cache bacaan: buku yang terakhir dibaca"
+  ],
+  "admin.instance.libraryScanIntervalHours": [
+   "Library scan interval (hours)",
+   "Interval pemindaian pustaka (jam)"
+  ],
+  "admin.instance.historyRetentionDays": [
+   "Keep finished activity for days",
+   "Simpan aktivitas selesai selama (hari)"
+  ],
+  "admin.instance.historyMegabytes": [
+   "Activity history size in MB",
+   "Ukuran riwayat aktivitas dalam MB"
+  ],
+  "admin.instance.collectionLimit": [
+   "Collections per profile",
+   "Koleksi per profil"
+  ],
+  "admin.instance.unitGroupLimit": [
+   "Sections per title",
+   "Bagian per judul"
+  ],
+  "admin.instance.subtitleLanguages": [
+   "Wanted subtitle languages",
+   "Bahasa subtitle yang dicari"
+  ],
+  "admin.instance.usersConfirmSources": [
+   "Users may confirm source checks",
+   "Pengguna boleh mengonfirmasi pemeriksaan sumber"
+  ],
+  "admin.instance.saved": [
+   "Instance settings were saved.",
+   "Pengaturan instans disimpan."
+  ],
+  "admin.providers.scope": [
+   "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
+   "Aktifkan atau nonaktifkan integrasi yang terdaftar. Kemampuan koneksi dan login tetap memerlukan konfigurasi host yang sudah ada."
+  ],
+  "admin.providers.state": [
+   "Provider status",
+   "Status penyedia"
+  ],
+  "admin.providers.enabled": [
+   "Enabled",
+   "Aktif"
+  ],
+  "admin.providers.disabled": [
+   "Disabled",
+   "Nonaktif"
+  ],
+  "profile.field.displayName": [
+   "Profile name",
+   "Nama profil"
+  ],
+  "profile.field.uiLocale": [
+   "Language",
+   "Bahasa"
+  ],
+  "profile.settings.title": [
+   "Profile settings",
+   "Pengaturan profil"
+  ],
+  "profile.settings.save": [
+   "Save changes",
+   "Simpan perubahan"
+  ],
+  "profile.settings.saved": [
+   "Your changes were saved.",
+   "Perubahan Anda disimpan."
+  ],
+  "admin.library.description": [
+   "Imported media and file availability",
+   "Media yang diimpor dan ketersediaan file"
+  ],
+  "admin.activity.title": [
+   "Activity",
+   "Aktivitas"
+  ],
+  "admin.requests.title": [
+   "Requests",
+   "Permintaan"
+  ],
+  "admin.rules.description": [
+   "Approval and request rules",
+   "Aturan persetujuan dan permintaan"
+  ],
+  "admin.rules.title": [
+   "Rules",
+   "Aturan"
+  ],
+  "admin.users.description": [
+   "Account assignments and request permissions",
+   "Penetapan akun dan izin permintaan"
+  ],
+  "admin.users.title": [
+   "Users",
+   "Pengguna"
+  ],
+  "admin.wanted.description": [
+   "Acquisition needs after request approval",
+   "Kebutuhan perolehan setelah permintaan disetujui"
+  ],
+  "admin.wanted.title": [
+   "Wanted",
+   "Dicari"
+  ],
+  "admin.acquisition.title": [
+   "Indexers & download clients",
+   "Indexer & klien unduhan"
+  ],
+  "admin.profiles.title": [
+   "Quality profiles",
+   "Profil kualitas"
+  ],
+  "admin.sources.title": [
+   "Sources",
+   "Sumber"
+  ],
+  "sources.setUpAll": [
+   "Set up all available sources",
+   "Siapkan semua sumber yang tersedia"
+  ],
+  "sources.setUpResult": [
+   "Added: {0}. Waiting for a login or key: {1}.",
+   "Ditambahkan: {0}. Menunggu login atau kunci: {1}."
+  ],
+  "sources.name": [
+   "Source",
+   "Sumber"
+  ],
+  "sources.capabilities": [
+   "Can",
+   "Mampu"
+  ],
+  "sources.configured": [
+   "Set up",
+   "Disiapkan"
+  ],
+  "sources.add": [
+   "Add",
+   "Tambah"
+  ],
+  "sources.group.Books": [
+   "Books",
+   "Buku"
+  ],
+  "sources.group.Novels": [
+   "Light novels, web novels and fanfiction",
+   "Novel ringan, novel web, dan fanfiction"
+  ],
+  "sources.group.Manga": [
+   "Manga",
+   "Manga"
+  ],
+  "sources.group.Audiobooks": [
+   "Audiobooks",
+   "Buku audio"
+  ],
+  "sources.group.Acquisition": [
+   "Usenet",
+   "Usenet"
+  ],
+  "sources.group.Music": [
+   "Music",
+   "Musik"
+  ],
+  "sources.group.Games": [
+   "Games",
+   "Game"
+  ],
+  "sources.group.Subtitles": [
+   "Subtitles",
+   "Subtitle"
+  ],
+  "request.platform": [
+   "Platform",
+   "Platform"
+  ],
+  "admin.takeover.title": [
+   "Take over",
+   "Impor"
+  ],
+  "takeover.source": [
+   "Application",
+   "Aplikasi"
+  ],
+  "takeover.source.Prowlarr": [
+   "Prowlarr (indexers)",
+   "Prowlarr (indexer)"
+  ],
+  "takeover.source.Sonarr": [
+   "Sonarr (indexers, client, missing series)",
+   "Sonarr (indexer, klien, serial yang belum ada)"
+  ],
+  "takeover.source.Radarr": [
+   "Radarr (indexers, client, missing movies)",
+   "Radarr (indexer, klien, film yang belum ada)"
+  ],
+  "takeover.source.Lidarr": [
+   "Lidarr (indexers, client, missing albums)",
+   "Lidarr (indexer, klien, album yang belum ada)"
+  ],
+  "takeover.source.Readarr": [
+   "Readarr (indexers, client, missing books)",
+   "Readarr (indexer, klien, buku yang belum ada)"
+  ],
+  "takeover.mode": [
+   "Mode",
+   "Mode"
+  ],
+  "takeover.preview": [
+   "Preview",
+   "Pratinjau"
+  ],
+  "takeover.apply": [
+   "Take over now",
+   "Impor sekarang"
+  ],
+  "takeover.run": [
+   "Read",
+   "Baca"
+  ],
+  "takeover.empty": [
+   "Nothing to take over.",
+   "Tidak ada yang perlu diimpor."
+  ],
+  "takeover.kind": [
+   "Kind",
+   "Jenis"
+  ],
+  "takeover.kind.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "takeover.kind.Client": [
+   "Download client",
+   "Klien unduhan"
+  ],
+  "takeover.kind.Movie": [
+   "Movie",
+   "Film"
+  ],
+  "takeover.kind.Series": [
+   "Series",
+   "Serial TV"
+  ],
+  "takeover.kind.Album": [
+   "Album",
+   "Album"
+  ],
+  "takeover.kind.Book": [
+   "Book",
+   "Buku"
+  ],
+  "takeover.kind.Profile": [
+   "Quality profile",
+   "Profil kualitas"
+  ],
+  "takeover.kind.Format": [
+   "Custom format",
+   "Format kustom"
+  ],
+  "takeover.kind.RootFolder": [
+   "Root folder",
+   "Folder root"
+  ],
+  "session.audioQuality": [
+   "Music on this device",
+   "Musik di perangkat ini"
+  ],
+  "session.audioQuality.Original": [
+   "Original",
+   "Asli"
+  ],
+  "session.audioQuality.High": [
+   "High (256 kbit/s)",
+   "Tinggi (256 kbit/s)"
+  ],
+  "session.audioQuality.Small": [
+   "Small (128 kbit/s)",
+   "Kecil (128 kbit/s)"
+  ],
+  "takeover.rootFolders": [
+   "Root folders",
+   "Folder root"
+  ],
+  "takeover.assign": [
+   "Take into this library",
+   "Impor ke pustaka ini"
+  ],
+  "takeover.outcome.takeover_no_library": [
+   "No library of this type",
+   "Tidak ada pustaka untuk jenis ini"
+  ],
+  "takeover.outcome.takeover_not_monitored": [
+   "Release type not monitored there",
+   "Jenis release tidak dipantau di sana"
+  ],
+  "takeover.outcome.takeover_exists": [
+   "Already set up",
+   "Sudah disiapkan"
+  ],
+  "takeover.outcome.takeover_needs_key": [
+   "Key needed",
+   "Perlu kunci"
+  ],
+  "takeover.outcome.takeover_will_add": [
+   "Will be added",
+   "Akan ditambahkan"
+  ],
+  "takeover.outcome.takeover_added": [
+   "Added",
+   "Ditambahkan"
+  ],
+  "takeover.outcome.takeover_no_id": [
+   "No provider id",
+   "Tidak ada ID penyedia"
+  ],
+  "takeover.outcome.takeover_no_match": [
+   "No clear match",
+   "Tidak ada kecocokan yang jelas"
+  ],
+  "takeover.outcome.takeover_will_want": [
+   "Will be wanted",
+   "Akan dicari"
+  ],
+  "takeover.outcome.takeover_wanted": [
+   "Wanted",
+   "Dicari"
+  ],
+  "takeover.outcome.takeover_next_run": [
+   "Next run",
+   "Proses berikutnya"
+  ],
+  "takeover.outcome.takeover_no_qualities": [
+   "No quality Jularr knows",
+   "Tidak ada kualitas yang dikenal Jularr"
+  ],
+  "takeover.outcome.takeover_minimum_score": [
+   "Its minimum format score is not taken over",
+   "Skor format minimumnya tidak diimpor"
+  ],
+  "takeover.outcome.takeover_format_skipped": [
+   "Not taken over: conditions Jularr does not support",
+   "Tidak diimpor: kondisi yang tidak didukung Jularr"
+  ],
+  "profile.monitoring": [
+   "Monitoring",
+   "Pemantauan"
+  ],
+  "profile.monitoring.types": [
+   "Release types and statuses",
+   "Jenis dan status release"
+  ],
+  "profile.monitoring.languages": [
+   "Languages",
+   "Bahasa"
+  ],
+  "profile.monitoring.pages": [
+   "At least pages",
+   "Minimal halaman"
+  ],
+  "sources.capability.Metadata": [
+   "metadata",
+   "metadata"
+  ],
+  "sources.capability.Search": [
+   "search",
+   "pencarian"
+  ],
+  "sources.capability.Download": [
+   "download",
+   "unduh"
+  ],
+  "sources.capability.Monitoring": [
+   "chapter monitoring",
+   "pemantauan bab"
+  ],
+  "sources.capability.Link": [
+   "link",
+   "tautan"
+  ],
+  "sources.capability.Subtitles": [
+   "Subtitles",
+   "Subtitle"
+  ],
+  "sources.availability.Ready": [
+   "Ready",
+   "Siap"
+  ],
+  "sources.availability.Account": [
+   "Needs a login or key",
+   "Perlu login atau kunci"
+  ],
+  "sources.availability.Planned": [
+   "Planned",
+   "Direncanakan"
+  ],
+  "sources.availability.ReferenceOnly": [
+   "Reference only",
+   "Hanya referensi"
+  ],
+  "profile.delay": [
+   "Wait for a better release (minutes)",
+   "Tunggu release yang lebih baik (menit)"
+  ],
+  "profile.fallbackQualities": [
+   "Fallback qualities",
+   "Kualitas cadangan"
+  ],
+  "profile.fallbackAfter": [
+   "Accept the fallback after (hours)",
+   "Terima kualitas cadangan setelah (jam)"
+  ],
+  "profile.rules": [
+   "Release rules",
+   "Aturan release"
+  ],
+  "profile.rule.name": [
+   "Rule",
+   "Aturan"
+  ],
+  "profile.rule.condition": [
+   "Condition",
+   "Kondisi"
+  ],
+  "profile.rule.field": [
+   "Field",
+   "Bidang"
+  ],
+  "profile.rule.match": [
+   "Match",
+   "Pencocokan"
+  ],
+  "profile.rule.value": [
+   "Value",
+   "Nilai"
+  ],
+  "profile.rule.effect": [
+   "Effect",
+   "Efek"
+  ],
+  "profile.rule.remove": [
+   "Remove",
+   "Hapus"
+  ],
+  "profile.rule.match.Equals": [
+   "is",
+   "sama dengan"
+  ],
+  "profile.rule.match.Contains": [
+   "contains",
+   "mengandung"
+  ],
+  "profile.rule.match.Regex": [
+   "matches the pattern",
+   "cocok dengan pola"
+  ],
+  "profile.rule.effect.Require": [
+   "Require",
+   "Wajibkan"
+  ],
+  "profile.rule.effect.Prefer": [
+   "Prefer",
+   "Utamakan"
+  ],
+  "profile.rule.effect.Avoid": [
+   "Avoid",
+   "Hindari"
+  ],
+  "profile.rule.effect.Reject": [
+   "Reject",
+   "Tolak"
+  ],
+  "profile.rule.effect.Info": [
+   "Note only",
+   "Hanya catatan"
+  ],
+  "profile.rule.field.RawTitle": [
+   "Release name",
+   "Nama release"
+  ],
+  "profile.rule.field.ReleaseGroup": [
+   "Release group",
+   "Grup release"
+  ],
+  "profile.rule.field.Source": [
+   "Source",
+   "Sumber"
+  ],
+  "profile.rule.field.Resolution": [
+   "Resolution",
+   "Resolusi"
+  ],
+  "profile.rule.field.VideoCodec": [
+   "Video codec",
+   "Codec video"
+  ],
+  "profile.rule.field.BitDepth": [
+   "Bit depth",
+   "Kedalaman bit"
+  ],
+  "profile.rule.field.HdrFormat": [
+   "HDR format",
+   "Format HDR"
+  ],
+  "profile.rule.field.AudioCodec": [
+   "Audio codec",
+   "Codec audio"
+  ],
+  "profile.rule.field.AudioLanguage": [
+   "Audio language",
+   "Bahasa audio"
+  ],
+  "profile.rule.field.SubtitleLanguage": [
+   "Subtitle language",
+   "Bahasa subtitle"
+  ],
+  "profile.rule.field.DualAudio": [
+   "Dual audio",
+   "Audio ganda"
+  ],
+  "profile.rule.field.MultiAudio": [
+   "Multiple audio tracks",
+   "Beberapa trek audio"
+  ],
+  "profile.rule.field.Proper": [
+   "Proper",
+   "Proper"
+  ],
+  "profile.rule.field.Repack": [
+   "Repack",
+   "Repack"
+  ],
+  "profile.rule.field.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "profile.name": [
+   "Name",
+   "Nama"
+  ],
+  "profile.qualities": [
+   "Allowed qualities",
+   "Kualitas yang diizinkan"
+  ],
+  "profile.usage": [
+   "Used by",
+   "Digunakan oleh"
+  ],
+  "profile.default": [
+   "Default",
+   "Bawaan"
+  ],
+  "profile.add.Movie": [
+   "Add movie profile",
+   "Tambah profil film"
+  ],
+  "profile.add.Series": [
+   "Add series profile",
+   "Tambah profil serial"
+  ],
+  "profile.add.Book": [
+   "Add book profile",
+   "Tambah profil buku"
+  ],
+  "profile.add.LightNovel": [
+   "Add light novel profile",
+   "Tambah profil novel ringan"
+  ],
+  "profile.delete": [
+   "Delete profile",
+   "Hapus profil"
+  ],
+  "profile.isDefault": [
+   "Default for its media type",
+   "Bawaan untuk jenis medianya"
+  ],
+  "profile.upgradeAllowed": [
+   "Upgrade to better releases",
+   "Tingkatkan ke release yang lebih baik"
+  ],
+  "profile.cutoff": [
+   "Stop upgrading at",
+   "Berhenti meningkatkan pada"
+  ],
+  "profile.noCutoff": [
+   "No upgrades",
+   "Tanpa peningkatan"
+  ],
+  "profile.section.general": [
+   "General",
+   "Umum"
+  ],
+  "profile.section.qualities": [
+   "Qualities",
+   "Kualitas"
+  ],
+  "profile.section.size": [
+   "Size and terms",
+   "Ukuran dan ketentuan"
+  ],
+  "profile.allowed": [
+   "Allowed",
+   "Diizinkan"
+  ],
+  "profile.rule.none": [
+   "No release rules yet.",
+   "Belum ada aturan release."
+  ],
+  "profile.rule.edit": [
+   "Edit rule",
+   "Ubah aturan"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this profile? Titles using it fall back to the default profile.",
+   "Hapus profil ini? Judul yang memakainya beralih ke profil bawaan."
+  ],
+  "profile.minimumSize": [
+   "Minimum size (MB)",
+   "Ukuran minimum (MB)"
+  ],
+  "profile.maximumSize": [
+   "Maximum size (MB)",
+   "Ukuran maksimum (MB)"
+  ],
+  "profile.mustContain": [
+   "Must contain",
+   "Harus mengandung"
+  ],
+  "profile.mustNotContain": [
+   "Must not contain",
+   "Tidak boleh mengandung"
+  ],
+  "wanted.profile": [
+   "Quality profile",
+   "Profil kualitas"
+  ],
+  "wanted.library": [
+   "Library",
+   "Pustaka"
+  ],
+  "setup.title": [
+   "Setup",
+   "Penyiapan"
+  ],
+  "setup.steps": [
+   "Setup steps",
+   "Langkah penyiapan"
+  ],
+  "setup.step.Instance": [
+   "Instance",
+   "Instans"
+  ],
+  "setup.step.Storage": [
+   "Storage",
+   "Penyimpanan"
+  ],
+  "setup.step.Indexers": [
+   "Indexers",
+   "Indexer"
+  ],
+  "setup.step.Downloads": [
+   "Download clients",
+   "Klien unduhan"
+  ],
+  "setup.step.Providers": [
+   "Providers",
+   "Penyedia"
+  ],
+  "setup.step.Profiles": [
+   "Profiles",
+   "Profil"
+  ],
+  "setup.step.Media": [
+   "Existing media",
+   "Media yang ada"
+  ],
+  "setup.step.Finish": [
+   "Finish",
+   "Selesai"
+  ],
+  "setup.next": [
+   "Continue",
+   "Lanjutkan"
+  ],
+  "setup.finish": [
+   "Finish setup",
+   "Selesaikan penyiapan"
+  ],
+  "setup.blockers": [
+   "Before finishing",
+   "Sebelum selesai"
+  ],
+  "setup.warnings": [
+   "Worth a look",
+   "Perlu diperhatikan"
+  ],
+  "setup.check.library": [
+   "no library yet",
+   "belum ada pustaka"
+  ],
+  "setup.check.tmdb": [
+   "Movies and series need a TMDB key.",
+   "Film dan serial memerlukan kunci TMDB."
+  ],
+  "setup.check.indexer": [
+   "Arr+ has no indexer yet.",
+   "Arr+ belum memiliki indexer."
+  ],
+  "setup.check.downloader": [
+   "Arr+ has no download client yet.",
+   "Arr+ belum memiliki klien unduhan."
+  ],
+  "setup.check.ffmpeg": [
+   "FFmpeg is not configured; files play only as they are.",
+   "FFmpeg belum dikonfigurasi; file hanya diputar apa adanya."
+  ],
+  "admin.works.source": [
+   "Source",
+   "Sumber"
+  ],
+  "admin.works.source.tmdb_movie": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.tmdb_tv": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.openlibrary": [
+   "Open Library",
+   "Open Library"
+  ],
+  "admin.works.source.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "admin.works.source.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
+  ],
+  "admin.works.source.igdb": [
+   "IGDB",
+   "IGDB"
+  ],
+  "admin.matches.title": [
+   "AniList matches",
+   "Kecocokan AniList"
+  ],
+  "admin.matches.empty": [
+   "No match waits for a decision.",
+   "Tidak ada kecocokan yang menunggu keputusan."
+  ],
+  "admin.matches.hint": [
+   "For a series, choose the entry of its first season.",
+   "Untuk serial, pilih entri musim pertamanya."
+  ],
+  "admin.matches.accept": [
+   "Use this entry",
+   "Gunakan entri ini"
+  ],
+  "admin.matches.aniListId": [
+   "AniList entry number",
+   "Nomor entri AniList"
+  ],
+  "admin.matches.dismiss": [
+   "No AniList entry",
+   "Tanpa entri AniList"
+  ],
+  "admin.instance.media": [
+   "Media types",
+   "Jenis media"
+  ],
+  "admin.instance.media.state": [
+   "Availability",
+   "Ketersediaan"
+  ],
+  "admin.instance.media.noLibrary": [
+   "No library yet; nothing is downloaded for it.",
+   "Belum ada pustaka; tidak ada yang diunduh untuknya."
+  ],
+  "profile.media.hidden": [
+   "Hidden media types",
+   "Jenis media yang disembunyikan"
+  ],
+  "admin.accounts.profileMediaBlocked": [
+   "Blocked media types",
+   "Jenis media yang diblokir"
+  ],
+  "wanted.library.default": [
+   "Default library",
+   "Pustaka bawaan"
+  ],
+  "wanted.profile.default": [
+   "Default for this media type",
+   "Bawaan untuk jenis media ini"
+  ],
+  "wanted.release.block": [
+   "Block",
+   "Blokir"
+  ],
+  "wanted.release.unblock": [
+   "Allow again",
+   "Izinkan lagi"
+  ],
+  "acquisition.connection.name": [
+   "Name",
+   "Nama"
+  ],
+  "acquisition.connection.type": [
+   "Type",
+   "Jenis"
+  ],
+  "acquisition.connection.type.Newznab": [
+   "Newznab indexer",
+   "Indexer Newznab"
+  ],
+  "acquisition.connection.type.Sabnzbd": [
+   "SABnzbd",
+   "SABnzbd"
+  ],
+  "acquisition.connection.baseUrl": [
+   "Address",
+   "Alamat"
+  ],
+  "acquisition.connection.host": [
+   "Server",
+   "Server"
+  ],
+  "acquisition.connection.port": [
+   "Port",
+   "Port"
+  ],
+  "acquisition.connection.ssl": [
+   "SSL",
+   "SSL"
+  ],
+  "form.info": [
+   "More about this field",
+   "Selengkapnya tentang kolom ini"
+  ],
+  "request.readsTranslated": [
+   "Not published in it; read translated",
+   "Tidak terbit dalam bahasa ini; dibaca dalam terjemahan"
+  ],
+  "hint.AccountFields.Email.placeholder": [
+   "name@example.com",
+   "name@example.com"
+  ],
+  "hint.AccountFields.Email.info": [
+   "Used to sign in and for password resets.",
+   "Digunakan untuk masuk dan untuk mereset kata sandi."
+  ],
+  "hint.AccountFields.DisplayName.info": [
+   "Shown to other users, for example on requests.",
+   "Ditampilkan kepada pengguna lain, misalnya pada permintaan."
+  ],
+  "hint.AccountFields.AccountRoleTypeId.info": [
+   "Owner: everything. Media manager: titles, requests and wanted lists. User: watch, read and request.",
+   "Pemilik: semuanya. Pengelola media: judul, permintaan, dan daftar yang dicari. Pengguna: menonton, membaca, dan meminta."
+  ],
+  "hint.AccountFields.IsEnabled.info": [
+   "A disabled account cannot sign in; its profiles and history stay.",
+   "Akun yang dinonaktifkan tidak dapat masuk; profil dan riwayatnya tetap ada."
+  ],
+  "hint.AccountFields.MayConfirmSources.info": [
+   "Lets this account confirm a found source itself instead of waiting for an administrator.",
+   "Memungkinkan akun ini mengonfirmasi sendiri sumber yang ditemukan tanpa menunggu administrator."
+  ],
+  "hint.AccountSessionFields.DeviceName.placeholder": [
+   "Living room TV",
+   "TV ruang tamu"
+  ],
+  "hint.AccountSessionFields.DeviceName.info": [
+   "Empty shows the device's platform as its name.",
+   "Jika kosong, platform perangkat ditampilkan sebagai namanya."
+  ],
+  "hint.AccountSessionFields.AudioQuality.info": [
+   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
+   "Asli memutar file apa adanya. Tinggi dan Kecil mengonversi file musik yang lebih besar secara langsung, sehingga menghemat data saat bepergian."
+  ],
+  "hint.ProfileFields.DisplayName.info": [
+   "The name shown when choosing a profile.",
+   "Nama yang ditampilkan saat memilih profil."
+  ],
+  "hint.ProfileFields.UiLocaleId.info": [
+   "Language of the interface and of titles and summaries where a translation exists.",
+   "Bahasa antarmuka serta judul dan sinopsis jika terjemahannya tersedia."
+  ],
+  "hint.ProfilePinFields.Pin.info": [
+   "Three to six digits asked when switching to this profile.",
+   "Tiga sampai enam digit yang diminta saat beralih ke profil ini."
+  ],
+  "hint.AuthenticationFields.NewPassword.info": [
+   "At least 12 characters; a passphrase of several words is easiest to remember.",
+   "Minimal 12 karakter; frasa sandi dari beberapa kata paling mudah diingat."
+  ],
+  "hint.DevicePairingFields.Code.placeholder": [
+   "123456",
+   "123456"
+  ],
+  "hint.DevicePairingFields.Code.info": [
+   "The six-digit code the TV, phone or app shows.",
+   "Kode enam digit yang ditampilkan TV, ponsel, atau aplikasi."
+  ],
+  "hint.AcquisitionConnectionFields.Host.placeholder": [
+   "news.newshosting.com",
+   "news.newshosting.com"
+  ],
+  "hint.AcquisitionConnectionFields.Host.info": [
+   "The server name from your Usenet provider, without nntp:// or https://.",
+   "Nama server dari penyedia Usenet Anda, tanpa nntp:// atau https://."
+  ],
+  "hint.AcquisitionConnectionFields.Port.placeholder": [
+   "563 with SSL, 119 without",
+   "563 dengan SSL, 119 tanpa"
+  ],
+  "hint.AcquisitionConnectionFields.Port.info": [
+   "Empty uses 563 with SSL and 119 without. Some providers also offer 443 or 80.",
+   "Jika kosong, dipakai 563 dengan SSL dan 119 tanpa SSL. Beberapa penyedia juga menawarkan 443 atau 80."
+  ],
+  "hint.AcquisitionConnectionFields.UseSsl.info": [
+   "Encrypts the connection to the news server. Leave it on unless your provider has no SSL.",
+   "Mengenkripsi koneksi ke server berita. Biarkan aktif kecuali penyedia Anda tidak mendukung SSL."
+  ],
+  "hint.AcquisitionConnectionFields.Username.info": [
+   "The login from your provider; leave empty for open servers.",
+   "Login dari penyedia Anda; kosongkan untuk server terbuka."
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.placeholder": [
+   "8",
+   "8"
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.info": [
+   "Parallel connections Jularr opens. Use at most what your plan allows; more is faster.",
+   "Jumlah koneksi paralel yang dibuka Jularr. Gunakan paling banyak sesuai paket Anda; lebih banyak berarti lebih cepat."
+  ],
+  "hint.AcquisitionConnectionFields.Priority.placeholder": [
+   "1 to 100",
+   "1 sampai 100"
+  ],
+  "hint.AcquisitionConnectionFields.Priority.info": [
+   "1 comes first.",
+   "1 didahulukan."
+  ],
+  "hint.AcquisitionConnectionFields.IsEnabled.info": [
+   "A switched-off connection keeps its settings but is not used.",
+   "Koneksi yang dimatikan tetap menyimpan pengaturannya tetapi tidak digunakan."
+  ],
+  "hint.AcquisitionConnectionFields.Categories.placeholder": [
+   "2000, 5000",
+   "2000, 5000"
+  ],
+  "hint.AcquisitionConnectionFields.Categories.info": [
+   "Newznab category numbers, separated by commas. Empty uses the usual ranges of each media type.",
+   "Nomor kategori Newznab, dipisahkan koma. Jika kosong, dipakai rentang umum untuk tiap jenis media."
+  ],
+  "hint.AcquisitionConnectionFields.MediaTypeIds.info": [
+   "None chosen: the indexer is asked for every media type.",
+   "Tidak ada yang dipilih: indexer ditanya untuk setiap jenis media."
+  ],
+  "hint.AcquisitionConnectionFields.SearchesAutomatically.info": [
+   "Manual only: the indexer is asked only when you search by hand.",
+   "Hanya manual: indexer hanya ditanya saat Anda mencari sendiri."
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.placeholder": [
+   "No limit",
+   "Tanpa batas"
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.info": [
+   "Searches per day, as your indexer plan allows; once reached it rests until midnight.",
+   "Pencarian per hari, sesuai paket indexer Anda; setelah tercapai, istirahat sampai tengah malam."
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.placeholder": [
+   "No limit",
+   "Tanpa batas"
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.info": [
+   "Downloads per day, as your indexer plan allows.",
+   "Unduhan per hari, sesuai paket indexer Anda."
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.placeholder": [
+   "movies",
+   "movies"
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.info": [
+   "The SABnzbd category Jularr gives its downloads; empty uses SABnzbd's default.",
+   "Kategori SABnzbd yang diberikan Jularr untuk unduhannya; jika kosong dipakai bawaan SABnzbd."
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.placeholder": [
+   "/downloads/complete",
+   "/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.info": [
+   "Where SABnzbd says it stores finished downloads. Only needed when SABnzbd sees them under another path than Jularr.",
+   "Lokasi yang dilaporkan SABnzbd untuk menyimpan unduhan selesai. Hanya perlu jika SABnzbd melihatnya di path yang berbeda dari Jularr."
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.placeholder": [
+   "/mnt/downloads/complete",
+   "/mnt/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.info": [
+   "The same folder as Jularr sees it.",
+   "Folder yang sama seperti yang dilihat Jularr."
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.placeholder": [
+   "The Matrix 1999",
+   "The Matrix 1999"
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.info": [
+   "A test search; it counts towards the indexer's daily limit.",
+   "Pencarian uji; dihitung dalam batas harian indexer."
+  ],
+  "hint.acquisition.Newznab.placeholder": [
+   "https://indexer.example.com",
+   "https://indexer.example.com"
+  ],
+  "hint.acquisition.Newznab.info": [
+   "The indexer's address as in Prowlarr or Sonarr, without /api.",
+   "Alamat indexer seperti di Prowlarr atau Sonarr, tanpa /api."
+  ],
+  "hint.acquisition.Sabnzbd.placeholder": [
+   "http://192.168.1.10:8080",
+   "http://192.168.1.10:8080"
+  ],
+  "hint.acquisition.Sabnzbd.info": [
+   "SABnzbd's web address with its port.",
+   "Alamat web SABnzbd beserta port-nya."
+  ],
+  "hint.acquisition.Opds.placeholder": [
+   "https://example.com/opds",
+   "https://example.com/opds"
+  ],
+  "hint.acquisition.Opds.info": [
+   "The address of the OPDS catalog feed.",
+   "Alamat feed katalog OPDS."
+  ],
+  "hint.acquisition.Gutenberg.placeholder": [
+   "https://gutendex.com",
+   "https://gutendex.com"
+  ],
+  "hint.acquisition.AnnasArchive.placeholder": [
+   "https://annas-archive.org",
+   "https://annas-archive.org"
+  ],
+  "hint.acquisition.AnnasArchive.info": [
+   "Only HTTPS; the member key travels in the address.",
+   "Hanya HTTPS; kunci anggota ikut dikirim di dalam alamat."
+  ],
+  "hint.acquisition.OpenSubtitles.placeholder": [
+   "https://api.opensubtitles.com",
+   "https://api.opensubtitles.com"
+  ],
+  "hint.acquisition.OpenSubtitles.info": [
+   "Only HTTPS.",
+   "Hanya HTTPS."
+  ],
+  "hint.acquisition.SubDl.placeholder": [
+   "https://api.subdl.com",
+   "https://api.subdl.com"
+  ],
+  "hint.acquisition.SubDl.info": [
+   "Only HTTPS.",
+   "Hanya HTTPS."
+  ],
+  "hint.AcquisitionProfileFields.IsDefault.info": [
+   "New requests of this media type use the default profile.",
+   "Permintaan baru untuk jenis media ini memakai profil bawaan."
+  ],
+  "hint.AcquisitionProfileFields.DelayMinutes.placeholder": [
+   "0",
+   "0"
+  ],
+  "hint.AcquisitionProfileFields.DelayMinutes.info": [
+   "After a good release is published, waits this long for a better one; 0 takes it at once.",
+   "Setelah release yang bagus terbit, menunggu selama ini untuk yang lebih baik; 0 langsung mengambilnya."
+  ],
+  "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
+   "Replaces a present file with a better quality until the cutoff is reached.",
+   "Mengganti file yang ada dengan kualitas lebih baik sampai kualitas target tercapai."
+  ],
+  "hint.AcquisitionProfileFields.FallbackAfterHours.placeholder": [
+   "Never",
+   "Tidak pernah"
+  ],
+  "hint.AcquisitionProfileFields.FallbackAfterHours.info": [
+   "Once the title has been wanted this many hours, the fallback qualities are also taken.",
+   "Setelah judul dicari selama sekian jam, kualitas cadangan juga diterima."
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
+   "No minimum",
+   "Tanpa minimum"
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.info": [
+   "Smaller releases are skipped, often fakes or samples.",
+   "Release yang lebih kecil dilewati, sering kali palsu atau sekadar sampel."
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.placeholder": [
+   "No maximum",
+   "Tanpa maksimum"
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
+   "Larger releases are skipped.",
+   "Release yang lebih besar dilewati."
+  ],
+  "hint.AcquisitionProfileFields.MustContain.placeholder": [
+   "German, DL",
+   "German, DL"
+  ],
+  "hint.AcquisitionProfileFields.MustContain.info": [
+   "Words a release name must contain, separated by commas.",
+   "Kata yang harus ada di nama release, dipisahkan koma."
+  ],
+  "hint.AcquisitionProfileFields.MustNotContain.placeholder": [
+   "CAM, TS",
+   "CAM, TS"
+  ],
+  "hint.AcquisitionProfileFields.MustNotContain.info": [
+   "Words that rule a release out, separated by commas.",
+   "Kata yang membuat release tersingkir, dipisahkan koma."
+  ],
+  "hint.AcquisitionProfileFields.RuleName.info": [
+   "Shown in the search results when the rule matches.",
+   "Ditampilkan di hasil pencarian saat aturan cocok."
+  ],
+  "hint.AcquisitionProfileFields.RuleField.info": [
+   "Which part of the release the rule looks at.",
+   "Bagian release mana yang diperiksa aturan."
+  ],
+  "hint.AcquisitionProfileFields.RuleMatch.info": [
+   "Contains finds the text anywhere; a regular expression allows patterns such as [xh]\\.?265.",
+   "Mengandung menemukan teks di mana saja; ekspresi reguler memungkinkan pola seperti [xh]\\.?265."
+  ],
+  "hint.AcquisitionProfileFields.RuleValue.placeholder": [
+   "x265",
+   "x265"
+  ],
+  "hint.AcquisitionProfileFields.RuleValue.info": [
+   "The text or pattern to look for.",
+   "Teks atau pola yang dicari."
+  ],
+  "hint.AcquisitionProfileFields.RuleEffect.info": [
+   "Require and Reject decide; Prefer and Avoid add or subtract the score; Info only names the match.",
+   "Wajibkan dan Tolak menentukan; Utamakan dan Hindari menambah atau mengurangi skor; Hanya catatan sekadar menyebutkan kecocokan."
+  ],
+  "hint.AcquisitionProfileFields.RuleScore.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.AcquisitionProfileFields.RuleScore.info": [
+   "From -1000 to 1000, added to the release's score.",
+   "Dari -1000 sampai 1000, ditambahkan ke skor release."
+  ],
+  "hint.RequestRuleFields.Description.info": [
+   "Shown to users the rule applies to.",
+   "Ditampilkan kepada pengguna yang terkena aturan ini."
+  ],
+  "hint.RequestRuleFields.MediaKeys.info": [
+   "The media types users of this rule may request.",
+   "Jenis media yang boleh diminta pengguna aturan ini."
+  ],
+  "hint.RequestRuleFields.PeriodDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.RequestRuleFields.PeriodDays.info": [
+   "The limit counts requests of this many days.",
+   "Batas menghitung permintaan dalam sekian hari."
+  ],
+  "hint.RequestRuleFields.RequestLimit.placeholder": [
+   "No limit",
+   "Tanpa batas"
+  ],
+  "hint.RequestRuleFields.RequestLimit.info": [
+   "Requests allowed within the period.",
+   "Jumlah permintaan yang diizinkan dalam periode tersebut."
+  ],
+  "hint.RequestRuleFields.IsAutomaticApproval.info": [
+   "Requests within the limit are approved without an administrator.",
+   "Permintaan dalam batas disetujui tanpa administrator."
+  ],
+  "hint.RequestRuleFields.AcquisitionProfileIds.info": [
+   "Quality profiles users of this rule may choose.",
+   "Profil kualitas yang boleh dipilih pengguna aturan ini."
+  ],
+  "hint.RequestRuleFields.IsDefault.info": [
+   "Applies to every account without its own rule.",
+   "Berlaku untuk setiap akun yang tidak memiliki aturan sendiri."
+  ],
+  "hint.RequestRuleFields.IsOverridden.info": [
+   "This account uses its own limits instead of the default rule.",
+   "Akun ini memakai batasnya sendiri, bukan aturan bawaan."
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.info": [
+   "Season or volume to search; empty searches the whole title.",
+   "Musim atau volume yang dicari; jika kosong, seluruh judul dicari."
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.info": [
+   "Episode or chapter to search; empty searches the whole season.",
+   "Episode atau bab yang dicari; jika kosong, seluruh musim dicari."
+  ],
+  "hint.InstanceSettingsFields.Name.info": [
+   "Shown in the browser tab and on paired devices.",
+   "Ditampilkan di tab browser dan pada perangkat yang dipasangkan."
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.placeholder": [
+   "https://media.example.com/",
+   "https://media.example.com/"
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.info": [
+   "The address Jularr is reached at from outside; the pairing QR code for TVs and apps points to it.",
+   "Alamat tempat Jularr diakses dari luar; kode QR pemasangan untuk TV dan aplikasi mengarah ke sini."
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.placeholder": [
+   "192.168.1.2, 172.16.0.0/12",
+   "192.168.1.2, 172.16.0.0/12"
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.info": [
+   "Reverse proxies whose forwarded client address Jularr believes, as addresses or ranges separated by commas. Empty without a proxy.",
+   "Reverse proxy yang alamat kliennya diteruskan dan dipercaya Jularr, berupa alamat atau rentang yang dipisahkan koma. Kosongkan jika tidak memakai proxy."
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
+   "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
+   "Jam antar pemindaian pustaka otomatis; 0 mematikannya. NAS yang sedang tidur tidak dibangunkan."
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.info": [
+   "History and finished operations older than this are removed.",
+   "Riwayat dan operasi selesai yang lebih lama dari ini dihapus."
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.placeholder": [
+   "10",
+   "10"
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.info": [
+   "The oldest history is removed once it is larger than this.",
+   "Riwayat terlama dihapus begitu ukurannya melebihi ini."
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.info": [
+   "Most collections a profile may keep.",
+   "Jumlah koleksi terbanyak yang boleh disimpan satu profil."
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.info": [
+   "Most episode or chapter groups a profile may keep.",
+   "Jumlah grup episode atau bab terbanyak yang boleh disimpan satu profil."
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.placeholder": [
+   "2048",
+   "2048"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
+   "Space for prepared books and comics; the oldest are removed first.",
+   "Ruang untuk buku dan komik yang sudah disiapkan; yang terlama dihapus lebih dulu."
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
+   "Most books and comics kept prepared at once.",
+   "Jumlah buku dan komik terbanyak yang disiapkan sekaligus."
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
+   "de, en",
+   "de, en"
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.info": [
+   "Two-letter languages searched automatically, in this order.",
+   "Bahasa dua huruf yang dicari otomatis, sesuai urutan ini."
+  ],
+  "hint.InstanceSettingsFields.UsersConfirmSources.info": [
+   "Lets users confirm found sources for their own requests.",
+   "Memungkinkan pengguna mengonfirmasi sumber yang ditemukan untuk permintaan mereka sendiri."
+  ],
+  "hint.InstanceSettingsFields.KeepsReleases.info": [
+   "Keeps the earlier file when a new release of the same film, episode or volume is imported, instead of replacing it.",
+   "Menyimpan file sebelumnya saat release baru dari film, episode, atau volume yang sama diimpor, alih-alih menggantinya."
+  ],
+  "hint.InstanceSettingsFields.RecycleModeId.info": [
+   "Delete removes files for good. A recycle folder keeps them for the days below.",
+   "Hapus menghapus file selamanya. Folder tempat sampah menyimpannya selama jumlah hari di bawah."
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.info": [
+   "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
+   "Jumlah hari file yang dihapus tetap berada di folder tempat sampah; 0 menyimpannya sampai Anda menghapusnya."
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.placeholder": [
+   "Recycle",
+   "Recycle"
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.info": [
+   "A folder on the chosen storage, relative to its share.",
+   "Folder pada penyimpanan yang dipilih, relatif terhadap share-nya."
+  ],
+  "hint.InstanceModuleFields.IsEnabled.info": [
+   "Switched-off modules disappear from menus and pages; their data stays.",
+   "Modul yang dimatikan hilang dari menu dan halaman; datanya tetap ada."
+  ],
+  "hint.UiLocaleFields.Locale.placeholder": [
+   "de-DE",
+   "de-DE"
+  ],
+  "hint.UiLocaleFields.Locale.info": [
+   "Language and region code, such as de-DE or pt-BR.",
+   "Kode bahasa dan wilayah, seperti de-DE atau pt-BR."
+  ],
+  "hint.UiLocaleFields.IsRightToLeft.info": [
+   "For Arabic, Hebrew and other right-to-left scripts.",
+   "Untuk bahasa Arab, Ibrani, dan aksara kanan-ke-kiri lainnya."
+  ],
+  "hint.UiTranslationFields.Text.info": [
+   "Placeholders in braces, such as {0}, must stay.",
+   "Placeholder dalam kurung kurawal, seperti {0}, harus tetap ada."
+  ],
+  "hint.StorageMountFields.Host.placeholder": [
+   "nas.local",
+   "nas.local"
+  ],
+  "hint.StorageMountFields.Host.info": [
+   "The NAS name or IP address, without smb:// or nfs://.",
+   "Nama atau alamat IP NAS, tanpa smb:// atau nfs://."
+  ],
+  "hint.StorageMountFields.SharePath.placeholder": [
+   "/media",
+   "/media"
+  ],
+  "hint.StorageMountFields.SharePath.info": [
+   "The share or exported path on the NAS.",
+   "Share atau path yang diekspor di NAS."
+  ],
+  "hint.StorageMountFields.Username.info": [
+   "An account of the NAS with access to the share.",
+   "Akun NAS yang memiliki akses ke share."
+  ],
+  "hint.StorageMountFields.Domain.placeholder": [
+   "WORKGROUP",
+   "WORKGROUP"
+  ],
+  "hint.StorageMountFields.Password.info": [
+   "Leave empty to keep the saved one.",
+   "Kosongkan untuk mempertahankan yang tersimpan."
+  ],
+  "hint.mediaServer.baseUrl.placeholder": [
+   "http://192.168.1.10:8096",
+   "http://192.168.1.10:8096"
+  ],
+  "hint.StorageMountFields.Domain.info": [
+   "Only for Windows domains; usually empty.",
+   "Hanya untuk domain Windows; biasanya kosong."
+  ],
+  "hint.StorageMountFields.IsReadOnly.info": [
+   "Read-only storage is played and scanned, but downloads are never placed on it.",
+   "Penyimpanan hanya-baca diputar dan dipindai, tetapi unduhan tidak pernah ditempatkan di sana."
+  ],
+  "hint.StorageMountFields.WakeMacAddress.placeholder": [
+   "00:11:22:AA:BB:CC",
+   "00:11:22:AA:BB:CC"
+  ],
+  "hint.StorageMountFields.WakeMacAddress.info": [
+   "The NAS network card, for Wake-on-LAN.",
+   "Kartu jaringan NAS, untuk Wake-on-LAN."
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.placeholder": [
+   "192.168.1.255",
+   "192.168.1.255"
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.info": [
+   "The broadcast address of the NAS network; empty uses 255.255.255.255.",
+   "Alamat broadcast jaringan NAS; jika kosong dipakai 255.255.255.255."
+  ],
+  "hint.StorageMountFields.WakeOnDemand.info": [
+   "Wakes the NAS when something is played from it.",
+   "Membangunkan NAS saat ada yang diputar darinya."
+  ],
+  "hint.SynologyFields.SynologyUrl.placeholder": [
+   "https://nas.local:5001",
+   "https://nas.local:5001"
+  ],
+  "hint.SynologyFields.SynologyUrl.info": [
+   "DSM's address, to show the NAS state and switch it on and off.",
+   "Alamat DSM, untuk menampilkan status NAS serta menyalakan dan mematikannya."
+  ],
+  "hint.LibraryRootFields.RelativePath.placeholder": [
+   "Movies",
+   "Movies"
+  ],
+  "hint.LibraryRootFields.RelativePath.info": [
+   "The folder below the storage's share.",
+   "Folder di bawah share penyimpanan."
+  ],
+  "hint.LibraryRootFields.MediaTypeId.info": [
+   "What the library holds; it decides naming, matching and downloads.",
+   "Isi pustaka; menentukan penamaan, pencocokan, dan unduhan."
+  ],
+  "hint.NamingPatternFields.Folder.placeholder": [
+   "{Title} ({Year})",
+   "{Title} ({Year})"
+  ],
+  "hint.NamingPatternFields.Folder.info": [
+   "Folder for each title, below the library; a slash starts the next folder.",
+   "Folder untuk setiap judul, di bawah pustaka; garis miring memulai folder berikutnya."
+  ],
+  "hint.NamingPatternFields.File.placeholder": [
+   "{Title} ({Year}) {Quality}",
+   "{Title} ({Year}) {Quality}"
+  ],
+  "hint.NamingPatternFields.File.info": [
+   "The placeholders below are filled for every file; the extension is added.",
+   "Placeholder di bawah diisi untuk setiap file; ekstensi ditambahkan."
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.placeholder": [
+   "de",
+   "de"
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.info": [
+   "Two-letter language of the subtitle.",
+   "Bahasa subtitle dua huruf."
+  ],
+  "hint.WorkFields.CanonicalTitle.info": [
+   "The title shown everywhere; providers' titles stay as alternatives.",
+   "Judul yang ditampilkan di mana-mana; judul dari penyedia tetap sebagai alternatif."
+  ],
+  "hint.WorkFields.ReleaseYear.placeholder": [
+   "1999",
+   "1999"
+  ],
+  "hint.WorkFields.ReleaseYear.info": [
+   "Helps tell titles of the same name apart when searching.",
+   "Membantu membedakan judul yang sama saat mencari."
+  ],
+  "hint.WorkMetadataFields.Query.placeholder": [
+   "The Matrix",
+   "The Matrix"
+  ],
+  "hint.WorkMetadataFields.Query.info": [
+   "A title, optionally with its year.",
+   "Sebuah judul, boleh disertai tahunnya."
+  ],
+  "hint.CollectionFields.IsSmart.info": [
+   "A smart collection fills itself from the filters below.",
+   "Koleksi cerdas terisi sendiri dari filter di bawah."
+  ],
+  "hint.CollectionFields.ReleaseYear.placeholder": [
+   "Any year",
+   "Tahun apa saja"
+  ],
+  "hint.CollectionFields.OnlyAvailable.info": [
+   "Only titles that can be played or read now.",
+   "Hanya judul yang kini dapat diputar atau dibaca."
+  ],
+  "hint.CollectionFields.OnlyUnfinished.info": [
+   "Hides titles this profile has finished.",
+   "Menyembunyikan judul yang sudah selesai ditonton atau dibaca profil ini."
+  ],
+  "hint.FranchiseFields.Name.placeholder": [
+   "The Lord of the Rings",
+   "The Lord of the Rings"
+  ],
+  "hint.FranchiseFields.Name.info": [
+   "Empty lets the providers decide the series again.",
+   "Jika kosong, penyedia kembali menentukan seri tersebut."
+  ],
+  "hint.FranchiseFields.Position.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.FranchiseFields.Position.info": [
+   "The title's place in the series; 1.5 sits between 1 and 2.",
+   "Urutan judul dalam seri; 1,5 berada di antara 1 dan 2."
+  ],
+  "hint.IdentityMatchFields.ProviderId.placeholder": [
+   "21",
+   "21"
+  ],
+  "hint.IdentityMatchFields.ProviderId.info": [
+   "The provider's number for the title, from its address.",
+   "Nomor judul menurut penyedia, dari alamatnya."
+  ],
+  "hint.MediaAssetFields.UnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.MediaAssetFields.UnitNumber.info": [
+   "Episode, track or chapter number.",
+   "Nomor episode, trek, atau bab."
+  ],
+  "hint.ProviderCredentialFields.Secret.info": [
+   "Stored encrypted and never shown again; leave empty to keep the saved one.",
+   "Disimpan terenkripsi dan tidak pernah ditampilkan lagi; kosongkan untuk mempertahankan yang tersimpan."
+  ],
+  "hint.ProviderFields.BaseUrl.placeholder": [
+   "http://192.168.1.10:32400",
+   "http://192.168.1.10:32400"
+  ],
+  "hint.ProviderFields.BaseUrl.info": [
+   "The server's address with its port.",
+   "Alamat server beserta port-nya."
+  ],
+  "hint.ProviderFields.ExternalId.info": [
+   "The application id from the provider's developer settings.",
+   "ID aplikasi dari pengaturan pengembang penyedia."
+  ],
+  "hint.ProviderFields.IsEnabled.info": [
+   "A switched-off provider is not asked; its key stays saved.",
+   "Penyedia yang dimatikan tidak ditanya; kuncinya tetap tersimpan."
+  ],
+  "hint.TakeoverFields.TakeoverSourceTypeId.info": [
+   "The program whose settings and missing titles are taken over once.",
+   "Program yang pengaturan dan judul yang belum ada di dalamnya diimpor satu kali."
+  ],
+  "hint.TakeoverFields.Apply.info": [
+   "A preview shows what would happen and changes nothing.",
+   "Pratinjau menunjukkan apa yang akan terjadi dan tidak mengubah apa pun."
+  ],
+  "hint.BackupFields.Name.placeholder": [
+   "before-update",
+   "before-update"
+  ],
+  "acquisition.connection.apiKey": [
+   "API key",
+   "Kunci API"
+  ],
+  "acquisition.connection.priority": [
+   "Priority",
+   "Prioritas"
+  ],
+  "acquisition.connection.enabled": [
+   "State",
+   "Status"
+  ],
+  "acquisition.connection.on": [
+   "Enabled",
+   "Aktif"
+  ],
+  "acquisition.connection.off": [
+   "Disabled",
+   "Nonaktif"
+  ],
+  "acquisition.connection.category": [
+   "Download category",
+   "Kategori unduhan"
+  ],
+  "acquisition.connection.type.Gutenberg": [
+   "Project Gutenberg (public-domain books)",
+   "Project Gutenberg (buku domain publik)"
+  ],
+  "acquisition.connection.type.Opds": [
+   "OPDS catalog",
+   "Katalog OPDS"
+  ],
+  "acquisition.connection.type.AnnasArchive": [
+   "Anna's Archive",
+   "Anna's Archive"
+  ],
+  "acquisition.connection.type.Usenet": [
+   "News server",
+   "Server berita"
+  ],
+  "acquisition.connection.type.OpenSubtitles": [
+   "OpenSubtitles.com",
+   "OpenSubtitles.com"
+  ],
+  "acquisition.connection.type.SubDl": [
+   "SubDL",
+   "SubDL"
+  ],
+  "acquisition.connection.username": [
+   "User name",
+   "Nama pengguna"
+  ],
+  "acquisition.connection.password": [
+   "Password",
+   "Kata sandi"
+  ],
+  "acquisition.connection.memberKey": [
+   "Member key",
+   "Kunci anggota"
+  ],
+  "acquisition.outcome.source_manual_link": [
+   "Confirm at the source, then paste the file link",
+   "Konfirmasikan di sumber, lalu tempelkan tautan file"
+  ],
+  "acquisition.outcome.source_gate": [
+   "The source asks for a manual login or confirmation",
+   "Sumber meminta login atau konfirmasi manual"
+  ],
+  "acquisition.connection.categories": [
+   "Categories",
+   "Kategori"
+  ],
+  "acquisition.connection.remotePath": [
+   "Path reported by the client",
+   "Path yang dilaporkan klien"
+  ],
+  "acquisition.connection.localPath": [
+   "Same path for Jularr",
+   "Path yang sama bagi Jularr"
+  ],
+  "acquisition.connection.addIndexer": [
+   "Add indexer",
+   "Tambah indexer"
+  ],
+  "acquisition.connection.addClient": [
+   "Add download client",
+   "Tambah klien unduhan"
+  ],
+  "acquisition.connection.addUsenet": [
+   "Add news server",
+   "Tambah server berita"
+  ],
+  "nav.group.media": [
+   "Media",
+   "Media"
+  ],
+  "nav.group.requests": [
+   "Requests",
+   "Permintaan"
+  ],
+  "nav.group.acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "acquisition.role.Search": [
+   "Indexers",
+   "Indexer"
+  ],
+  "acquisition.role.Download": [
+   "Download clients",
+   "Klien unduhan"
+  ],
+  "acquisition.role.Subtitles": [
+   "Subtitles",
+   "Subtitle"
+  ],
+  "acquisition.connection.none.Search": [
+   "No indexers yet.",
+   "Belum ada indexer."
+  ],
+  "acquisition.connection.none.Download": [
+   "No download clients yet.",
+   "Belum ada klien unduhan."
+  ],
+  "acquisition.connection.none.Subtitles": [
+   "No subtitle providers yet.",
+   "Belum ada penyedia subtitle."
+  ],
+  "acquisition.connection.addSubtitles": [
+   "Add subtitle provider",
+   "Tambah penyedia subtitle"
+  ],
+  "acquisition.connection.importProwlarr": [
+   "Import from Prowlarr",
+   "Impor dari Prowlarr"
+  ],
+  "acquisition.connection.deleteConfirm": [
+   "Delete this connection? Searches and downloads stop using it.",
+   "Hapus koneksi ini? Pencarian dan unduhan berhenti memakainya."
+  ],
+  "acquisition.connection.searchTitle": [
+   "Test search",
+   "Pencarian uji"
+  ],
+  "acquisition.connection.searchQuery": [
+   "Search text",
+   "Teks pencarian"
+  ],
+  "acquisition.connection.search": [
+   "Search",
+   "Cari"
+  ],
+  "acquisition.connection.searchModes": [
+   "Search modes",
+   "Mode pencarian"
+  ],
+  "acquisition.connection.maxConnections": [
+   "Connections",
+   "Koneksi"
+  ],
+  "acquisition.connection.test": [
+   "Test connection",
+   "Uji koneksi"
+  ],
+  "acquisition.connection.delete": [
+   "Delete",
+   "Hapus"
+  ],
+  "acquisition.connection.unchecked": [
+   "Not tested",
+   "Belum diuji"
+  ],
+  "acquisition.connection.today": [
+   "Used today",
+   "Dipakai hari ini"
+  ],
+  "acquisition.connection.queries": [
+   "queries",
+   "kueri"
+  ],
+  "acquisition.connection.grabs": [
+   "grabs",
+   "grab"
+  ],
+  "acquisition.connection.backoff": [
+   "Failing, paused until",
+   "Gagal, dijeda sampai"
+  ],
+  "acquisition.connection.mediaTypes": [
+   "Media types",
+   "Jenis media"
+  ],
+  "acquisition.connection.searches": [
+   "Searches",
+   "Pencarian"
+  ],
+  "acquisition.connection.automatic": [
+   "Automatic and manual",
+   "Otomatis dan manual"
+  ],
+  "acquisition.connection.manualOnly": [
+   "Manual only",
+   "Hanya manual"
+  ],
+  "acquisition.connection.queryLimit": [
+   "Queries per day",
+   "Kueri per hari"
+  ],
+  "acquisition.connection.grabLimit": [
+   "Grabs per day",
+   "Grab per hari"
+  ],
+  "acquisition.connection.healthy": [
+   "Reachable",
+   "Dapat dijangkau"
+  ],
+  "admin.work.description": [
+   "Canonical Work details, versions and monitoring",
+   "Detail Karya kanonis, versi, dan pemantauan"
+  ],
+  "admin.work.files": [
+   "Local files and versions",
+   "File lokal dan versi"
+  ],
+  "admin.work.hierarchy": [
+   "Work → Structure → Edition → Version → Asset → File",
+   "Karya → Struktur → Edisi → Versi → Aset → File"
+  ],
+  "admin.work.structure": [
+   "Structure and monitoring",
+   "Struktur dan pemantauan"
+  ],
+  "admin.work.title": [
+   "Work",
+   "Karya"
+  ],
+  "admin.works.description": [
+   "Canonical media and monitoring",
+   "Media kanonis dan pemantauan"
+  ],
+  "admin.works.title": [
+   "Works",
+   "Karya"
+  ],
+  "app.name": [
+   "Jularr",
+   "Jularr"
+  ],
+  "app.byJularr": [
+   "by Jularr",
+   "oleh Jularr"
+  ],
+  "instance.module.Library": [
+   "Library",
+   "Pustaka"
+  ],
+  "instance.module.Requests": [
+   "Requests",
+   "Permintaan"
+  ],
+  "instance.module.Acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "requests.title": [
+   "My requests",
+   "Permintaan saya"
+  ],
+  "request.language": [
+   "Requested language",
+   "Bahasa yang diminta"
+  ],
+  "request.create": [
+   "Request this work",
+   "Minta karya ini"
+  ],
+  "request.approve": [
+   "Approve",
+   "Setujui"
+  ],
+  "request.reject": [
+   "Reject",
+   "Tolak"
+  ],
+  "request.empty": [
+   "No requests on this page.",
+   "Tidak ada permintaan di halaman ini."
+  ],
+  "request.tab.All": [
+   "All",
+   "Semua"
+  ],
+  "request.tab.Open": [
+   "Open",
+   "Terbuka"
+  ],
+  "request.tab.Approved": [
+   "Approved",
+   "Disetujui"
+  ],
+  "request.tab.InProgress": [
+   "In progress",
+   "Berlangsung"
+  ],
+  "request.tab.Done": [
+   "Done",
+   "Selesai"
+  ],
+  "request.tab.Rejected": [
+   "Rejected",
+   "Ditolak"
+  ],
+  "request.status.Open": [
+   "Open",
+   "Terbuka"
+  ],
+  "request.status.Approved": [
+   "Approved",
+   "Disetujui"
+  ],
+  "request.status.Searching": [
+   "Searching",
+   "Mencari"
+  ],
+  "request.status.Downloading": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "request.status.Importing": [
+   "Importing",
+   "Mengimpor"
+  ],
+  "request.status.Completed": [
+   "Completed",
+   "Selesai"
+  ],
+  "request.status.Rejected": [
+   "Rejected",
+   "Ditolak"
+  ],
+  "request.status.Failed": [
+   "Failed",
+   "Gagal"
+  ],
+  "request.status.Cancelled": [
+   "Cancelled",
+   "Dibatalkan"
+  ],
+  "request.state.Open": [
+   "Waiting for approval",
+   "Menunggu persetujuan"
+  ],
+  "request.state.Approved": [
+   "Looking for media",
+   "Mencari media"
+  ],
+  "request.state.Searching": [
+   "Looking for media",
+   "Mencari media"
+  ],
+  "request.state.Downloading": [
+   "Getting media",
+   "Mengambil media"
+  ],
+  "request.state.Importing": [
+   "Preparing",
+   "Menyiapkan"
+  ],
+  "request.state.Completed": [
+   "Available",
+   "Tersedia"
+  ],
+  "request.state.Rejected": [
+   "Declined",
+   "Ditolak"
+  ],
+  "request.state.Failed": [
+   "Could not complete the request",
+   "Permintaan tidak dapat diselesaikan"
+  ],
+  "request.state.Cancelled": [
+   "Request cancelled",
+   "Permintaan dibatalkan"
+  ],
+  "media.notForProfile": [
+   "Media is not available for this profile.",
+   "Media ini tidak tersedia untuk profil ini."
+  ],
+  "media.remove": [
+   "Remove",
+   "Hapus"
+  ],
+  "collections.deleteConfirm": [
+   "Delete this collection? The titles themselves stay.",
+   "Hapus koleksi ini? Judul di dalamnya tetap ada."
+  ],
+  "collections.addMedia": [
+   "Add media",
+   "Tambah media"
+  ],
+  "collections.find": [
+   "Find in the library",
+   "Cari di pustaka"
+  ],
+  "collections.add": [
+   "Add",
+   "Tambah"
+  ],
+  "collections.inside": [
+   "In this collection",
+   "Dalam koleksi ini"
+  ],
+  "wanted.empty": [
+   "No wanted works on this page.",
+   "Tidak ada karya yang dicari di halaman ini."
+  ],
+  "wanted.paused": [
+   "Paused",
+   "Dijeda"
+  ],
+  "wanted.pause": [
+   "Pause",
+   "Jeda"
+  ],
+  "wanted.resume": [
+   "Resume",
+   "Lanjutkan"
+  ],
+  "admin.instance.modules": [
+   "Modules",
+   "Modul"
+  ],
+  "admin.instance.module.state": [
+   "Module status",
+   "Status modul"
+  ],
+  "admin.instance.module.retained": [
+   "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
+   "Menonaktifkan Pustaka memblokir layanan media dan menyembunyikan navigasinya. Media dan daftar tontonan yang ada tetap disimpan."
+  ],
+  "common.all": [
+   "All",
+   "Semua"
+  ],
+  "common.seeAll": [
+   "See all",
+   "Lihat semua"
+  ],
+  "details.heroDescription": [
+   "Title, artwork and availability will come from the canonical Work.",
+   "Judul, gambar, dan ketersediaan akan berasal dari Karya kanonis."
+  ],
+  "details.recommendations": [
+   "More like this",
+   "Lainnya yang serupa"
+  ],
+  "details.related": [
+   "Related works",
+   "Karya terkait"
+  ],
+  "details.structure": [
+   "Seasons / structure",
+   "Musim / struktur"
+  ],
+  "details.title": [
+   "Media details",
+   "Detail media"
+  ],
+  "details.units": [
+   "Episodes / editions",
+   "Episode / edisi"
+  ],
+  "details.versions": [
+   "Versions & languages",
+   "Versi & bahasa"
+  ],
+  "details.seasons": [
+   "Seasons",
+   "Musim"
+  ],
+  "details.episodes": [
+   "Episodes",
+   "Episode"
+  ],
+  "details.episodeCount": [
+   "{0} episodes",
+   "{0} episode"
+  ],
+  "details.specials": [
+   "Specials",
+   "Spesial"
+  ],
+  "details.upcoming": [
+   "Upcoming",
+   "Akan datang"
+  ],
+  "details.noEpisodes": [
+   "No episodes known for this season yet.",
+   "Belum ada episode yang diketahui untuk musim ini."
+  ],
+  "details.minutes": [
+   "{0} min",
+   "{0} mnt"
+  ],
+  "details.watchTrailer": [
+   "Watch the trailer on YouTube",
+   "Tonton trailer di YouTube"
+  ],
+  "details.cast": [
+   "Cast & crew",
+   "Pemeran & kru"
+  ],
+  "discover.mediaTypes": [
+   "Media types",
+   "Jenis media"
+  ],
+  "discover.continueWatching": [
+   "Continue watching",
+   "Lanjutkan menonton"
+  ],
+  "discover.continueListening": [
+   "Continue listening",
+   "Lanjutkan mendengarkan"
+  ],
+  "media.continueReading": [
+   "Continue reading",
+   "Lanjutkan membaca"
+  ],
+  "continueReading.dismiss": [
+   "Hide this bar; your reading position stays",
+   "Sembunyikan bilah ini; posisi baca Anda tetap tersimpan"
+  ],
+  "discover.title": [
+   "Discover",
+   "Jelajahi"
+  ],
+  "discover.all": [
+   "All",
+   "Semua"
+  ],
+  "discover.type.movies": [
+   "Movies",
+   "Film"
+  ],
+  "discover.type.series": [
+   "Series",
+   "Serial TV"
+  ],
+  "discover.type.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "discover.type.lightnovels": [
+   "Light novels",
+   "Novel ringan"
+  ],
+  "discover.type.books": [
+   "Books",
+   "Buku"
+  ],
+  "discover.type.manga": [
+   "Manga",
+   "Manga"
+  ],
+  "discover.type.music": [
+   "Music",
+   "Musik"
+  ],
+  "discover.type.games": [
+   "Games",
+   "Game"
+  ],
+  "discover.known": [
+   "In Jularr",
+   "Di Jularr"
+  ],
+  "discover.feed.Trending": [
+   "Trending",
+   "Sedang tren"
+  ],
+  "discover.feed.Top": [
+   "Top rated",
+   "Peringkat teratas"
+  ],
+  "discover.feed.New": [
+   "New releases",
+   "Rilis baru"
+  ],
+  "discover.feed.Upcoming": [
+   "Upcoming",
+   "Akan datang"
+  ],
+  "discover.providerUnavailable": [
+   "Discovery is unavailable right now; your library still works.",
+   "Penjelajahan sedang tidak tersedia; pustaka Anda tetap berfungsi."
+  ],
+  "discover.empty": [
+   "Nothing to show here yet.",
+   "Belum ada yang bisa ditampilkan di sini."
+  ],
+  "discover.noResults": [
+   "Nothing matches this search.",
+   "Tidak ada yang cocok dengan pencarian ini."
+  ],
+  "discover.recentlyAdded": [
+   "Recently added",
+   "Baru ditambahkan"
+  ],
+  "discover.pages": [
+   "Result pages",
+   "Halaman hasil"
+  ],
+  "discover.loadFailed": [
+   "Results could not be loaded. Try again or open the next page.",
+   "Hasil tidak dapat dimuat. Coba lagi atau buka halaman berikutnya."
+  ],
+  "media.state.NotRequested": [
+   "Not requested",
+   "Belum diminta"
+  ],
+  "media.state.Requested": [
+   "Requested",
+   "Diminta"
+  ],
+  "media.state.Available": [
+   "Available",
+   "Tersedia"
+  ],
+  "media.state.InProgress": [
+   "In progress",
+   "Berlangsung"
+  ],
+  "media.continue": [
+   "Continue",
+   "Lanjutkan"
+  ],
+  "media.progress": [
+   "Playback progress",
+   "Progres pemutaran"
+  ],
+  "media.minutesLeft": [
+   "{0} min left",
+   "Sisa {0} mnt"
+  ],
+  "media.readProgress": [
+   "Read progress",
+   "Progres baca"
+  ],
+  "media.percentRead": [
+   "{0}% read",
+   "{0}% dibaca"
+  ],
+  "media.dubs": [
+   "Dubs",
+   "Dub"
+  ],
+  "media.subs": [
+   "Subs",
+   "Sub"
+  ],
+  "media.languageCount": [
+   "{0}: {1} languages",
+   "{0}: {1} bahasa"
+  ],
+  "media.languagePreferred": [
+   "{0}: {1}",
+   "{0}: {1}"
+  ],
+  "media.shelfPrevious": [
+   "Previous titles",
+   "Judul sebelumnya"
+  ],
+  "media.shelfNext": [
+   "Next titles",
+   "Judul berikutnya"
+  ],
+  "media.availability.Available": [
+   "All monitored episodes or units are available.",
+   "Semua episode atau unit yang dipantau tersedia."
+  ],
+  "media.rating": [
+   "Rating",
+   "Peringkat"
+  ],
+  "media.request": [
+   "Request",
+   "Minta"
+  ],
+  "media.availability.ProfileAudio": [
+   "Local audio is available in the profile language.",
+   "Audio lokal tersedia dalam bahasa profil."
+  ],
+  "media.availability.OtherAudio": [
+   "Available locally, but only in other audio languages.",
+   "Tersedia secara lokal, tetapi hanya dalam bahasa audio lain."
+  ],
+  "media.availability.PartialOtherAudio": [
+   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
+   "{0} dari {1} episode atau unit yang dipantau tersedia, tetapi hanya dalam bahasa audio lain."
+  ],
+  "media.availability.Requested": [
+   "Requested",
+   "Diminta"
+  ],
+  "media.availability.badge.Available": [
+   "Available locally",
+   "Tersedia secara lokal"
+  ],
+  "media.availability.badge.ProfileAudio": [
+   "Profile audio available",
+   "Audio profil tersedia"
+  ],
+  "media.availability.badge.OtherAudio": [
+   "Other audio languages",
+   "Bahasa audio lain"
+  ],
+  "media.availability.badge.PartialOtherAudio": [
+   "{0}/{1} · Other audio",
+   "{0}/{1} · Audio lain"
+  ],
+  "media.availability.badge.Partial": [
+   "{0}/{1} available",
+   "{0}/{1} tersedia"
+  ],
+  "media.availability.badge.Downloading": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "media.availability.badge.Searching": [
+   "Searching",
+   "Mencari"
+  ],
+  "media.availability.badge.Requested": [
+   "Requested",
+   "Diminta"
+  ],
+  "media.availability.Partial": [
+   "{0} of {1} monitored episodes or units are available.",
+   "{0} dari {1} episode atau unit yang dipantau tersedia."
+  ],
+  "media.availability.Missing": [
+   "No monitored episodes or units are available.",
+   "Tidak ada episode atau unit yang dipantau yang tersedia."
+  ],
+  "media.availability.Downloading": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "media.availability.Searching": [
+   "Searching or queued for another search",
+   "Mencari atau antre untuk pencarian lain"
+  ],
+  "media.series.Continuing": [
+   "Continuing",
+   "Berlanjut"
+  ],
+  "media.series.Releasing": [
+   "Releasing",
+   "Sedang rilis"
+  ],
+  "media.series.Ended": [
+   "Ended",
+   "Tamat"
+  ],
+  "media.series.Canceled": [
+   "Canceled",
+   "Dibatalkan"
+  ],
+  "media.series.Announced": [
+   "Announced",
+   "Diumumkan"
+  ],
+  "design.languageGerman": [
+   "German",
+   "Jerman"
+  ],
+  "design.genreDrama": [
+   "Drama",
+   "Drama"
+  ],
+  "design.genreRomance": [
+   "Romance",
+   "Romansa"
+  ],
+  "design.genreAdventure": [
+   "Adventure",
+   "Petualangan"
+  ],
+  "design.mediaNotice": [
+   "Sample cards and previews only. Statuses and languages are illustrative; request and library playback actions are disabled. The official trailer is available on Play.",
+   "Hanya contoh kartu dan pratinjau. Status dan bahasa bersifat ilustrasi; tindakan permintaan dan pemutaran pustaka dinonaktifkan. Trailer resmi tersedia lewat Putar."
+  ],
+  "design.mediaLibrary": [
+   "Library cards",
+   "Kartu pustaka"
+  ],
+  "design.mediaDiscover": [
+   "Discover cards",
+   "Kartu Jelajahi"
+  ],
+  "media.watch": [
+   "Watch",
+   "Tonton"
+  ],
+  "media.details": [
+   "Details",
+   "Detail"
+  ],
+  "search.global": [
+   "Search movies and series",
+   "Cari film dan serial"
+  ],
+  "library.scope.all": [
+   "All",
+   "Semua"
+  ],
+  "library.scope.movies": [
+   "Movies",
+   "Film"
+  ],
+  "library.scope.series": [
+   "Series",
+   "Serial TV"
+  ],
+  "library.scope.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "library.scope.books": [
+   "Books",
+   "Buku"
+  ],
+  "library.scope.manga": [
+   "Manga",
+   "Manga"
+  ],
+  "library.scope.lightnovels": [
+   "Light novels",
+   "Novel ringan"
+  ],
+  "library.scope.music": [
+   "Music",
+   "Musik"
+  ],
+  "library.scope.games": [
+   "Games",
+   "Game"
+  ],
+  "library.search": [
+   "Search your library",
+   "Cari di pustaka Anda"
+  ],
+  "library.sort": [
+   "Sort",
+   "Urutkan"
+  ],
+  "library.sort.RecentlyAdded": [
+   "Recently added",
+   "Baru ditambahkan"
+  ],
+  "library.sort.Title": [
+   "Title",
+   "Judul"
+  ],
+  "library.sort.Year": [
+   "Year",
+   "Tahun"
+  ],
+  "library.paging": [
+   "Pages",
+   "Halaman"
+  ],
+  "library.userEmpty": [
+   "Your library is empty. Discover finds something to watch.",
+   "Pustaka Anda kosong. Jelajahi membantu menemukan sesuatu untuk ditonton."
+  ],
+  "form.error": [
+   "Something went wrong.",
+   "Terjadi kesalahan."
+  ],
+  "form.invalid_type": [
+   "Invalid value.",
+   "Nilai tidak valid."
+  ],
+  "form.out_of_range": [
+   "The value is outside the allowed range.",
+   "Nilai berada di luar rentang yang diizinkan."
+  ],
+  "form.required": [
+   "This field is required.",
+   "Kolom ini wajib diisi."
+  ],
+  "form.too_long": [
+   "The value is too long.",
+   "Nilai terlalu panjang."
+  ],
+  "media.all": [
+   "All",
+   "Semua"
+  ],
+  "media.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "media.books": [
+   "Books",
+   "Buku"
+  ],
+  "media.lightNovels": [
+   "Light novels",
+   "Novel ringan"
+  ],
+  "media.manga": [
+   "Manga",
+   "Manga"
+  ],
+  "media.movies": [
+   "Movies",
+   "Film"
+  ],
+  "media.series": [
+   "Series",
+   "Serial TV"
+  ],
+  "nav.breadcrumb": [
+   "Breadcrumb",
+   "Jejak navigasi"
+  ],
+  "nav.admin": [
+   "Admin",
+   "Admin"
+  ],
+  "nav.back": [
+   "Back",
+   "Kembali"
+  ],
+  "nav.home": [
+   "Home",
+   "Beranda"
+  ],
+  "nav.library": [
+   "Library",
+   "Pustaka"
+  ],
+  "nav.mobile": [
+   "Mobile navigation",
+   "Navigasi seluler"
+  ],
+  "nav.primary": [
+   "Main navigation",
+   "Navigasi utama"
+  ],
+  "nav.secondary": [
+   "Secondary navigation",
+   "Navigasi sekunder"
+  ],
+  "nav.tabs": [
+   "Tabs",
+   "Tab"
+  ],
+  "nav.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "nav.settings": [
+   "Settings",
+   "Pengaturan"
+  ],
+  "nav.watchlist": [
+   "Watchlist",
+   "Daftar tontonan"
+  ],
+  "player.title": [
+   "Player",
+   "Pemutar"
+  ],
+  "player.unavailable": [
+   "Playback is not connected yet.",
+   "Pemutaran belum terhubung."
+  ],
+  "preview.admin-library": [
+   "Admin library",
+   "Pustaka admin"
+  ],
+  "preview.admin-requests": [
+   "Admin requests",
+   "Permintaan admin"
+  ],
+  "preview.admin-rules": [
+   "Admin rules",
+   "Aturan admin"
+  ],
+  "preview.admin-users": [
+   "Admin users",
+   "Pengguna admin"
+  ],
+  "preview.admin-wanted": [
+   "Admin wanted",
+   "Dicari admin"
+  ],
+  "preview.admin-work": [
+   "Admin work",
+   "Karya admin"
+  ],
+  "preview.admin-works": [
+   "Admin works",
+   "Karya-karya admin"
+  ],
+  "appearance.title": [
+   "Appearance",
+   "Tampilan"
+  ],
+  "appearance.style": [
+   "Style",
+   "Gaya"
+  ],
+  "appearance.brightness": [
+   "Brightness",
+   "Kecerahan"
+  ],
+  "appearance.original": [
+   "Original",
+   "Asli"
+  ],
+  "appearance.clean": [
+   "Clean",
+   "Bersih"
+  ],
+  "appearance.system": [
+   "System",
+   "Sistem"
+  ],
+  "appearance.light": [
+   "Light",
+   "Terang"
+  ],
+  "appearance.dark": [
+   "Dark",
+   "Gelap"
+  ],
+  "preview.details": [
+   "Details",
+   "Detail"
+  ],
+  "preview.discover": [
+   "Discover",
+   "Jelajahi"
+  ],
+  "preview.player": [
+   "Player",
+   "Pemutar"
+  ],
+  "preview.settings": [
+   "Settings",
+   "Pengaturan"
+  ],
+  "preview.shell": [
+   "Shell",
+   "Shell"
+  ],
+  "preview.watchlist": [
+   "Watchlist",
+   "Daftar tontonan"
+  ],
+  "requests.approved": [
+   "Approved",
+   "Disetujui"
+  ],
+  "requests.done": [
+   "Done",
+   "Selesai"
+  ],
+  "requests.inProgress": [
+   "In progress",
+   "Berlangsung"
+  ],
+  "requests.open": [
+   "Open",
+   "Terbuka"
+  ],
+  "requests.rejected": [
+   "Rejected",
+   "Ditolak"
+  ],
+  "settings.accessibility": [
+   "Accessibility",
+   "Aksesibilitas"
+  ],
+  "settings.account": [
+   "Account",
+   "Akun"
+  ],
+  "settings.appearance": [
+   "Appearance",
+   "Tampilan"
+  ],
+  "settings.audioSubtitles": [
+   "Audio & subtitles",
+   "Audio & subtitle"
+  ],
+  "settings.connections": [
+   "Connections",
+   "Koneksi"
+  ],
+  "settings.general": [
+   "General",
+   "Umum"
+  ],
+  "settings.language": [
+   "Language & region",
+   "Bahasa & wilayah"
+  ],
+  "settings.library": [
+   "Library & display",
+   "Pustaka & tampilan"
+  ],
+  "settings.media": [
+   "Media",
+   "Media"
+  ],
+  "settings.modules": [
+   "Modules & features",
+   "Modul & fitur"
+  ],
+  "settings.personal": [
+   "Personal features",
+   "Fitur pribadi"
+  ],
+  "settings.playback": [
+   "Playback",
+   "Pemutaran"
+  ],
+  "settings.privacy": [
+   "Profile & privacy",
+   "Profil & privasi"
+  ],
+  "settings.profileNotice": [
+   "This will be the Settings tab of your profile.",
+   "Ini akan menjadi tab Pengaturan profil Anda."
+  ],
+  "settings.ratings": [
+   "Ratings",
+   "Peringkat"
+  ],
+  "settings.reader": [
+   "Reader",
+   "Pembaca"
+  ],
+  "settings.security": [
+   "Account & security",
+   "Akun & keamanan"
+  ],
+  "settings.sessions": [
+   "Devices & sessions",
+   "Perangkat & sesi"
+  ],
+  "settings.title": [
+   "Settings",
+   "Pengaturan"
+  ],
+  "shell.preview": [
+   "Shell preview",
+   "Pratinjau shell"
+  ],
+  "shell.previewInfo": [
+   "Presentation preview only. No account or profile data is loaded.",
+   "Hanya pratinjau tampilan. Tidak ada data akun atau profil yang dimuat."
+  ],
+  "shell.search": [
+   "Search",
+   "Cari"
+  ],
+  "shell.skip": [
+   "Skip to content",
+   "Lompat ke konten"
+  ],
+  "skeleton.unconnected": [
+   "This view will show live data when its backend service is available.",
+   "Tampilan ini akan menampilkan data langsung saat layanan backend-nya tersedia."
+  ],
+  "table.actions": [
+   "Actions",
+   "Tindakan"
+  ],
+  "table.titles": [
+   "Titles",
+   "Judul"
+  ],
+  "table.availability": [
+   "Availability",
+   "Ketersediaan"
+  ],
+  "table.language": [
+   "Language / version",
+   "Bahasa / versi"
+  ],
+  "table.lastSearch": [
+   "Last search",
+   "Pencarian terakhir"
+  ],
+  "table.limit": [
+   "Limit",
+   "Batas"
+  ],
+  "table.monitored": [
+   "Monitoring",
+   "Pemantauan"
+  ],
+  "table.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "table.requestedAt": [
+   "Requested at",
+   "Diminta pada"
+  ],
+  "table.requester": [
+   "Requester",
+   "Peminta"
+  ],
+  "table.role": [
+   "Role",
+   "Peran"
+  ],
+  "table.rule": [
+   "Rule",
+   "Aturan"
+  ],
+  "table.size": [
+   "Storage used",
+   "Penyimpanan terpakai"
+  ],
+  "table.status": [
+   "Status",
+   "Status"
+  ],
+  "table.type": [
+   "Type",
+   "Jenis"
+  ],
+  "table.user": [
+   "User",
+   "Pengguna"
+  ],
+  "table.version": [
+   "Version",
+   "Versi"
+  ],
+  "table.work": [
+   "Work / unit",
+   "Karya / unit"
+  ],
+  "toolbar.filter": [
+   "Filter",
+   "Filter"
+  ],
+  "toolbar.label": [
+   "List controls",
+   "Kontrol daftar"
+  ],
+  "toolbar.search": [
+   "Search",
+   "Cari"
+  ],
+  "toolbar.sort": [
+   "Sort",
+   "Urutkan"
+  ],
+  "toolbar.view": [
+   "View",
+   "Tampilan"
+  ],
+  "wanted.requested": [
+   "Requested",
+   "Diminta"
+  ],
+  "wanted.available": [
+   "Available",
+   "Tersedia"
+  ],
+  "wanted.downloading": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "wanted.lastSearch": [
+   "Last search",
+   "Pencarian terakhir"
+  ],
+  "wanted.open": [
+   "Open",
+   "Buka"
+  ],
+  "wanted.openWork": [
+   "Edit title",
+   "Ubah judul"
+  ],
+  "wanted.section.status": [
+   "Status",
+   "Status"
+  ],
+  "wanted.section.choice": [
+   "Profile and library",
+   "Profil dan pustaka"
+  ],
+  "wanted.section.episodes": [
+   "Seasons and episodes",
+   "Musim dan episode"
+  ],
+  "wanted.section.volumes": [
+   "Volumes",
+   "Volume"
+  ],
+  "wanted.searchAutomatic": [
+   "Search automatically",
+   "Cari otomatis"
+  ],
+  "wanted.searchManual": [
+   "Search manually",
+   "Cari manual"
+  ],
+  "admin.work.wanted": [
+   "Search and downloads",
+   "Pencarian dan unduhan"
+  ],
+  "wanted.monitoring": [
+   "Monitoring",
+   "Pemantauan"
+  ],
+  "wanted.progress": [
+   "Progress (%)",
+   "Progres (%)"
+  ],
+  "wanted.grabQueued": [
+   "The release was sent to the download client.",
+   "Release dikirim ke klien unduhan."
+  ],
+  "wanted.tab.search": [
+   "Search",
+   "Cari"
+  ],
+  "wanted.tab.history": [
+   "History",
+   "Riwayat"
+  ],
+  "wanted.search.start": [
+   "Start search",
+   "Mulai pencarian"
+  ],
+  "wanted.view.All": [
+   "All",
+   "Semua"
+  ],
+  "wanted.view.Missing": [
+   "Missing",
+   "Belum ada"
+  ],
+  "wanted.view.CutoffUnmet": [
+   "Cutoff unmet",
+   "Kualitas target belum tercapai"
+  ],
+  "wanted.belowCutoff": [
+   "Below cutoff",
+   "Di bawah kualitas target"
+  ],
+  "wanted.monitorsNewUnits": [
+   "New episodes and volumes",
+   "Episode dan volume baru"
+  ],
+  "wanted.unit": [
+   "Season, episode or volume",
+   "Musim, episode, atau volume"
+  ],
+  "wanted.unit.releasedOn": [
+   "Released",
+   "Dirilis"
+  ],
+  "wanted.unit.present": [
+   "Present",
+   "Ada"
+  ],
+  "wanted.unit.monitored": [
+   "Monitored",
+   "Dipantau"
+  ],
+  "wanted.unit.unmonitored": [
+   "Not monitored",
+   "Tidak dipantau"
+  ],
+  "wanted.unit.partly": [
+   "Partly monitored",
+   "Sebagian dipantau"
+  ],
+  "wanted.unit.start": [
+   "Monitor",
+   "Pantau"
+  ],
+  "wanted.unit.stop": [
+   "Stop monitoring",
+   "Berhenti memantau"
+  ],
+  "wanted.search.season": [
+   "Season",
+   "Musim"
+  ],
+  "wanted.search.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "wanted.search.volume": [
+   "Volume",
+   "Volume"
+  ],
+  "wanted.search.empty": [
+   "No releases were found.",
+   "Tidak ada release yang ditemukan."
+  ],
+  "wanted.search.decision": [
+   "Decision",
+   "Keputusan"
+  ],
+  "wanted.search.score": [
+   "Score",
+   "Skor"
+  ],
+  "wanted.search.release": [
+   "Release",
+   "Release"
+  ],
+  "wanted.search.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "wanted.search.age": [
+   "Age (days)",
+   "Usia (hari)"
+  ],
+  "wanted.search.size": [
+   "Size",
+   "Ukuran"
+  ],
+  "wanted.search.quality": [
+   "Quality",
+   "Kualitas"
+  ],
+  "wanted.search.reason": [
+   "Reason",
+   "Alasan"
+  ],
+  "wanted.search.grab": [
+   "Select and download",
+   "Pilih dan unduh"
+  ],
+  "wanted.history.empty": [
+   "No releases have been taken yet.",
+   "Belum ada release yang diambil."
+  ],
+  "wanted.history.date": [
+   "Date",
+   "Tanggal"
+  ],
+  "acquisition.decision.Eligible": [
+   "Eligible",
+   "Memenuhi syarat"
+  ],
+  "acquisition.decision.ManualReview": [
+   "Review",
+   "Tinjau"
+  ],
+  "acquisition.decision.Rejected": [
+   "Rejected",
+   "Ditolak"
+  ],
+  "acquisition.release.Grabbed": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "acquisition.release.Imported": [
+   "Imported",
+   "Diimpor"
+  ],
+  "acquisition.release.Failed": [
+   "Failed",
+   "Gagal"
+  ],
+  "acquisition.release.Blocked": [
+   "Blocked",
+   "Diblokir"
+  ],
+  "acquisition.release.Allowed": [
+   "Allowed again",
+   "Diizinkan lagi"
+  ],
+  "acquisition.outcome.release_found": [
+   "Release found",
+   "Release ditemukan"
+  ],
+  "acquisition.outcome.release_delayed": [
+   "Waiting for a better release",
+   "Menunggu release yang lebih baik"
+  ],
+  "acquisition.outcome.grabbed": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "acquisition.outcome.imported": [
+   "Imported",
+   "Diimpor"
+  ],
+  "acquisition.outcome.manual_review": [
+   "Needs review",
+   "Perlu ditinjau"
+  ],
+  "acquisition.outcome.profile_rejected": [
+   "No release fits the profile",
+   "Tidak ada release yang sesuai profil"
+  ],
+  "acquisition.outcome.identity_invalid": [
+   "No matching release",
+   "Tidak ada release yang cocok"
+  ],
+  "acquisition.outcome.no_candidates": [
+   "Nothing found",
+   "Tidak ada yang ditemukan"
+  ],
+  "acquisition.outcome.indexers_unavailable": [
+   "Indexers unavailable",
+   "Indexer tidak tersedia"
+  ],
+  "acquisition.outcome.profile_missing": [
+   "No acquisition profile",
+   "Tidak ada profil perolehan"
+  ],
+  "acquisition.outcome.download_failed": [
+   "Download failed",
+   "Unduhan gagal"
+  ],
+  "acquisition.outcome.download_interrupted": [
+   "Download interrupted",
+   "Unduhan terhenti"
+  ],
+  "acquisition.outcome.acquisition_unavailable": [
+   "Download client unavailable",
+   "Klien unduhan tidak tersedia"
+  ],
+  "acquisition.outcome.acquisition_no_download_client": [
+   "No download client",
+   "Tidak ada klien unduhan"
+  ],
+  "acquisition.outcome.acquisition_grab_failed": [
+   "Download client refused",
+   "Klien unduhan menolak"
+  ],
+  "acquisition.outcome.acquisition_limit_reached": [
+   "Indexer grab limit reached",
+   "Batas grab indexer tercapai"
+  ],
+  "acquisition.outcome.import_path_unmapped": [
+   "Download folder is not mapped to storage",
+   "Folder unduhan belum dipetakan ke penyimpanan"
+  ],
+  "acquisition.outcome.import_no_library": [
+   "No library path for this media type",
+   "Tidak ada path pustaka untuk jenis media ini"
+  ],
+  "acquisition.outcome.import_source_unavailable": [
+   "Download folder is unreachable",
+   "Folder unduhan tidak dapat dijangkau"
+  ],
+  "acquisition.outcome.import_library_unavailable": [
+   "Library storage is unreachable",
+   "Penyimpanan pustaka tidak dapat dijangkau"
+  ],
+  "acquisition.reason.Eligible": [
+   "Eligible",
+   "Memenuhi syarat"
+  ],
+  "acquisition.reason.Blocked": [
+   "Failed or blocked before",
+   "Pernah gagal atau diblokir"
+  ],
+  "acquisition.reason.NoDownload": [
+   "No download link",
+   "Tidak ada tautan unduhan"
+  ],
+  "acquisition.reason.Unparseable": [
+   "Name not recognized",
+   "Nama tidak dikenali"
+  ],
+  "acquisition.reason.Matches": [
+   "Matches",
+   "Cocok"
+  ],
+  "acquisition.reason.MatchesTitleAndAuthor": [
+   "Matches title and author",
+   "Judul dan penulis cocok"
+  ],
+  "acquisition.reason.AuthorMissing": [
+   "Author not named",
+   "Penulis tidak disebutkan"
+  ],
+  "acquisition.reason.MatchesById": [
+   "Matches by provider ID",
+   "Cocok menurut ID penyedia"
+  ],
+  "acquisition.reason.MatchesTitleAndYear": [
+   "Matches title and year",
+   "Judul dan tahun cocok"
+  ],
+  "acquisition.reason.WrongTitle": [
+   "Different title",
+   "Judul berbeda"
+  ],
+  "acquisition.reason.WrongYear": [
+   "Different year",
+   "Tahun berbeda"
+  ],
+  "acquisition.reason.AmbiguousTitle": [
+   "Title is ambiguous",
+   "Judul ambigu"
+  ],
+  "acquisition.reason.ExtraTitleWords": [
+   "Title has extra words",
+   "Judul memiliki kata tambahan"
+  ],
+  "acquisition.reason.WrongSeason": [
+   "Wrong season",
+   "Musim salah"
+  ],
+  "acquisition.reason.WrongEpisode": [
+   "Wrong episode",
+   "Episode salah"
+  ],
+  "acquisition.reason.ContainsTarget": [
+   "Contains the target",
+   "Memuat target"
+  ],
+  "acquisition.reason.QualityNotAllowed": [
+   "Quality not allowed",
+   "Kualitas tidak diizinkan"
+  ],
+  "acquisition.reason.NotAnUpgrade": [
+   "No upgrade of the present quality",
+   "Bukan peningkatan dari kualitas yang ada"
+  ],
+  "acquisition.reason.SizeUnknown": [
+   "Size unknown",
+   "Ukuran tidak diketahui"
+  ],
+  "acquisition.reason.SizeBelowMinimum": [
+   "Smaller than allowed",
+   "Lebih kecil dari yang diizinkan"
+  ],
+  "acquisition.reason.SizeAboveMaximum": [
+   "Larger than allowed",
+   "Lebih besar dari yang diizinkan"
+  ],
+  "acquisition.reason.MissingRequiredTerm": [
+   "Required term missing",
+   "Kata wajib tidak ada"
+  ],
+  "acquisition.reason.ContainsRejectedTerm": [
+   "Contains a rejected term",
+   "Mengandung kata yang ditolak"
+  ],
+  "acquisition.reason.MissingRequiredPattern": [
+   "Required pattern missing",
+   "Pola wajib tidak ada"
+  ],
+  "acquisition.reason.MatchesRejectedPattern": [
+   "Matches a rejected pattern",
+   "Cocok dengan pola yang ditolak"
+  ],
+  "acquisition.reason.MissingRequiredRule": [
+   "Required rule not met",
+   "Aturan wajib tidak terpenuhi"
+  ],
+  "acquisition.reason.MatchesRejectRule": [
+   "Matches a reject rule",
+   "Cocok dengan aturan penolakan"
+  ],
+  "acquisition.reason.RuleScore": [
+   "Rule score",
+   "Skor aturan"
+  ],
+  "acquisition.reason.FallbackQuality": [
+   "Fallback quality",
+   "Kualitas cadangan"
+  ],
+  "acquisition.reason.OnlyCandidate": [
+   "Only eligible release",
+   "Satu-satunya release yang memenuhi syarat"
+  ],
+  "acquisition.reason.HigherQuality": [
+   "Best quality",
+   "Kualitas terbaik"
+  ],
+  "acquisition.reason.PreferredLanguage": [
+   "Preferred language",
+   "Bahasa pilihan"
+  ],
+  "acquisition.reason.HigherPreference": [
+   "Highest score",
+   "Skor tertinggi"
+  ],
+  "acquisition.reason.BetterCoverage": [
+   "Covers more",
+   "Mencakup lebih banyak"
+  ],
+  "acquisition.reason.BetterReliability": [
+   "More reliable source",
+   "Sumber lebih andal"
+  ],
+  "acquisition.reason.IndexerPriority": [
+   "Indexer priority",
+   "Prioritas indexer"
+  ],
+  "acquisition.reason.PostedLater": [
+   "Newer post",
+   "Unggahan lebih baru"
+  ],
+  "acquisition.reason.StableOrder": [
+   "Equal candidates",
+   "Kandidat setara"
+  ],
+  "acquisition.reason.MatchesTitle": [
+   "Matches the title",
+   "Judul cocok"
+  ],
+  "acquisition.reason.MatchesArtistAndAlbum": [
+   "Matches artist and album",
+   "Artis dan album cocok"
+  ],
+  "acquisition.reason.MatchesTitleAndPlatform": [
+   "Matches title and platform",
+   "Judul dan platform cocok"
+  ],
+  "acquisition.reason.ArtistMissing": [
+   "Album has no artist",
+   "Album tidak memiliki artis"
+  ],
+  "acquisition.reason.PlatformMissing": [
+   "Platform not named",
+   "Platform tidak disebutkan"
+  ],
+  "acquisition.reason.WrongArtist": [
+   "Not the wanted artist",
+   "Bukan artis yang dicari"
+  ],
+  "acquisition.reason.WrongVolume": [
+   "Wrong volume",
+   "Volume salah"
+  ],
+  "acquisition.reason.WrongPlatform": [
+   "Different platform",
+   "Platform berbeda"
+  ],
+  "acquisition.reason.OtherEdition": [
+   "Other part or edition",
+   "Bagian atau edisi lain"
+  ],
+  "acquisition.reason.ChaptersOnly": [
+   "Chapters only",
+   "Hanya bab"
+  ],
+  "acquisition.reason.VolumesUnknown": [
+   "Series volumes unknown",
+   "Volume seri tidak diketahui"
+  ],
+  "acquisition.reason.PartOfGame": [
+   "Part of a game",
+   "Bagian dari sebuah game"
+  ],
+  "acquisition.reason.BestQuality": [
+   "Best quality present",
+   "Kualitas terbaik sudah ada"
+  ],
+  "acquisition.reason.BelowCutoff": [
+   "Below the quality goal",
+   "Di bawah kualitas target"
+  ],
+  "acquisition.reason.CutoffMet": [
+   "Quality goal reached",
+   "Kualitas target tercapai"
+  ],
+  "acquisition.reason.UpgradesDisabled": [
+   "Upgrades off",
+   "Peningkatan nonaktif"
+  ],
+  "acquisition.reason.InstalledQualityUnknown": [
+   "Installed quality unknown",
+   "Kualitas terpasang tidak diketahui"
+  ],
+  "watchlist.title": [
+   "Watchlist",
+   "Daftar tontonan"
+  ],
+  "storage.title": [
+   "Storage",
+   "Penyimpanan"
+  ],
+  "setup.storage.title": [
+   "Setup · Storage",
+   "Penyiapan · Penyimpanan"
+  ],
+  "storage.name": [
+   "Name",
+   "Nama"
+  ],
+  "storage.host": [
+   "Server hostname or IPv4 address",
+   "Hostname server atau alamat IPv4"
+  ],
+  "storage.sharePath": [
+   "Share or export path",
+   "Path share atau ekspor"
+  ],
+  "storage.protocolVersion": [
+   "Protocol version",
+   "Versi protokol"
+  ],
+  "storage.username": [
+   "Username",
+   "Nama pengguna"
+  ],
+  "storage.domain": [
+   "Domain",
+   "Domain"
+  ],
+  "storage.password": [
+   "Password",
+   "Kata sandi"
+  ],
+  "storage.access": [
+   "Access",
+   "Akses"
+  ],
+  "storage.readOnly": [
+   "Read only",
+   "Hanya baca"
+  ],
+  "storage.readWrite": [
+   "Read and write",
+   "Baca dan tulis"
+  ],
+  "storage.protocol.Smb": [
+   "SMB",
+   "SMB"
+  ],
+  "storage.protocol.Nfs": [
+   "NFS",
+   "NFS"
+  ],
+  "storage.add.Smb": [
+   "Add SMB connection",
+   "Tambah koneksi SMB"
+  ],
+  "storage.add.Nfs": [
+   "Add NFS connection",
+   "Tambah koneksi NFS"
+  ],
+  "storage.credentialsHint": [
+   "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
+   "Kata sandi dilindungi di penyimpanan dan tidak pernah ditampilkan. Izin NFS memakai ekspor server dan identitas sistem file."
+  ],
+  "storage.applyHint": [
+   "Saving changes does not interrupt a mount. Disconnect and reconnect explicitly to apply changed settings.",
+   "Menyimpan perubahan tidak mengganggu mount yang berjalan. Putuskan dan sambungkan kembali secara eksplisit untuk menerapkan pengaturan yang diubah."
+  ],
+  "storage.operation.ReadStatus": [
+   "Check mount status",
+   "Periksa status mount"
+  ],
+  "storage.operation.Connect": [
+   "Connect",
+   "Sambungkan"
+  ],
+  "storage.operation.Disconnect": [
+   "Disconnect",
+   "Putuskan"
+  ],
+  "admin.backup.title": [
+   "Backups",
+   "Cadangan"
+  ],
+  "admin.backup.notConfigured": [
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Cadangan memerlukan pg_dump dan pg_restore, yang tidak tersedia di server ini."
+  ],
+  "admin.backup.running": [
+   "A backup is being made.",
+   "Cadangan sedang dibuat."
+  ],
+  "admin.backup.failed": [
+   "The last backup failed.",
+   "Cadangan terakhir gagal."
+  ],
+  "admin.backup.restored": [
+   "The backup was restored. Restart Jularr, then sign in with an account of the restored instance.",
+   "Cadangan dipulihkan. Mulai ulang Jularr, lalu masuk dengan akun dari instans yang dipulihkan."
+  ],
+  "admin.backup.create": [
+   "Back up now",
+   "Cadangkan sekarang"
+  ],
+  "admin.backup.createdAt": [
+   "Made",
+   "Dibuat"
+  ],
+  "admin.backup.empty": [
+   "No backups yet.",
+   "Belum ada cadangan."
+  ],
+  "admin.backup.compatible": [
+   "This version",
+   "Versi ini"
+  ],
+  "admin.backup.otherVersion": [
+   "Other version",
+   "Versi lain"
+  ],
+  "admin.backup.restore": [
+   "Restore",
+   "Pulihkan"
+  ],
+  "admin.backup.passphrase": [
+   "Backup passphrase",
+   "Frasa sandi cadangan"
+  ],
+  "admin.backup.delete": [
+   "Delete",
+   "Hapus"
+  ],
+  "setup.restore": [
+   "Restore a backup instead",
+   "Pulihkan cadangan saja"
+  ],
+  "storage.synology.title": [
+   "Synology",
+   "Synology"
+  ],
+  "storage.synology.hint": [
+   "Reads the NAS's health and can shut it down or restart it. Needs a DSM administrator account without two-step verification; an empty address removes the access.",
+   "Membaca kesehatan NAS serta dapat mematikan atau memulai ulangnya. Memerlukan akun administrator DSM tanpa verifikasi dua langkah; alamat kosong menghapus akses tersebut."
+  ],
+  "storage.synology.url": [
+   "DSM address",
+   "Alamat DSM"
+  ],
+  "storage.synology.username": [
+   "DSM account",
+   "Akun DSM"
+  ],
+  "storage.synology.password": [
+   "DSM password",
+   "Kata sandi DSM"
+  ],
+  "storage.synology.status": [
+   "Read NAS health",
+   "Baca kesehatan NAS"
+  ],
+  "storage.synology.certificate": [
+   "Check certificate",
+   "Periksa sertifikat"
+  ],
+  "storage.synology.certificate.valid": [
+   "Certificate confirmed by a public authority:",
+   "Sertifikat dikonfirmasi oleh otoritas publik:"
+  ],
+  "storage.synology.certificate.trusted": [
+   "Certificate you trusted:",
+   "Sertifikat yang Anda percayai:"
+  ],
+  "storage.synology.certificate.untrusted": [
+   "Unknown certificate; compare its fingerprint with the one DSM shows before you trust it:",
+   "Sertifikat tidak dikenal; bandingkan sidik jarinya dengan yang ditampilkan DSM sebelum Anda mempercayainya:"
+  ],
+  "storage.synology.certificate.trust": [
+   "Trust this certificate",
+   "Percayai sertifikat ini"
+  ],
+  "storage.synology.certificate.none": [
+   "Plain HTTP uses no certificate.",
+   "HTTP biasa tidak memakai sertifikat."
+  ],
+  "storage.synology.power.Shutdown": [
+   "Shut down NAS",
+   "Matikan NAS"
+  ],
+  "storage.synology.power.Restart": [
+   "Restart NAS",
+   "Mulai ulang NAS"
+  ],
+  "storage.synology.confirm.Shutdown": [
+   "Shut down the NAS now? Playback, downloads and scans on it stop until it is started again.",
+   "Matikan NAS sekarang? Pemutaran, unduhan, dan pemindaian di dalamnya berhenti sampai NAS dinyalakan lagi."
+  ],
+  "storage.synology.confirm.Restart": [
+   "Restart the NAS now? Playback, downloads and scans on it stop for a few minutes.",
+   "Mulai ulang NAS sekarang? Pemutaran, unduhan, dan pemindaian di dalamnya berhenti selama beberapa menit."
+  ],
+  "storage.synology.sent": [
+   "The NAS accepted the command.",
+   "NAS menerima perintah."
+  ],
+  "storage.synology.keepRunning": [
+   "Keep it running",
+   "Biarkan tetap menyala"
+  ],
+  "storage.synology.used": [
+   "{0} of {1} used",
+   "{0} dari {1} terpakai"
+  ],
+  "storage.synology.temperature": [
+   "{0} °C",
+   "{0} °C"
+  ],
+  "statistics.title": [
+   "Statistics",
+   "Statistik"
+  ],
+  "statistics.periods": [
+   "Period",
+   "Periode"
+  ],
+  "statistics.period.7": [
+   "7 days",
+   "7 hari"
+  ],
+  "statistics.period.30": [
+   "30 days",
+   "30 hari"
+  ],
+  "statistics.period.365": [
+   "One year",
+   "Satu tahun"
+  ],
+  "statistics.period.0": [
+   "All time",
+   "Sepanjang waktu"
+  ],
+  "statistics.watched": [
+   "Time in the player",
+   "Waktu di pemutar"
+  ],
+  "statistics.sessions": [
+   "Playback sessions",
+   "Sesi pemutaran"
+  ],
+  "statistics.games": [
+   "Retro games, all time",
+   "Game retro, sepanjang waktu"
+  ],
+  "statistics.completed.Movie": [
+   "Movies finished",
+   "Film selesai ditonton"
+  ],
+  "statistics.completed.Series": [
+   "Episodes finished",
+   "Episode selesai ditonton"
+  ],
+  "statistics.completed.Book": [
+   "Books and volumes finished",
+   "Buku dan volume selesai dibaca"
+  ],
+  "statistics.completed.Music": [
+   "Albums and tracks finished",
+   "Album dan trek selesai didengar"
+  ],
+  "statistics.completed.Game": [
+   "Games finished",
+   "Game selesai dimainkan"
+  ],
+  "statistics.top": [
+   "Most played",
+   "Paling sering diputar"
+  ],
+  "statistics.hours": [
+   "{0} h {1} min",
+   "{0} j {1} mnt"
+  ],
+  "instance.module.Statistics": [
+   "Statistics",
+   "Statistik"
+  ],
+  "system.title": [
+   "System",
+   "Sistem"
+  ],
+  "system.database": [
+   "Database size",
+   "Ukuran database"
+  ],
+  "system.profiles": [
+   "Profiles",
+   "Profil"
+  ],
+  "system.queued": [
+   "Queued operations",
+   "Operasi dalam antrean"
+  ],
+  "system.failed": [
+   "Failures to look at",
+   "Kegagalan yang perlu diperiksa"
+  ],
+  "system.storageOffline": [
+   "Storage connections offline",
+   "Koneksi penyimpanan offline"
+  ],
+  "system.lastBackup": [
+   "Last backup",
+   "Cadangan terakhir"
+  ],
+  "system.never": [
+   "Never",
+   "Tidak pernah"
+  ],
+  "system.tools": [
+   "Server tools",
+   "Alat server"
+  ],
+  "system.tool": [
+   "Tool",
+   "Alat"
+  ],
+  "system.tool.ffprobe": [
+   "ffprobe (stream analysis)",
+   "ffprobe (analisis stream)"
+  ],
+  "system.tool.ffmpeg": [
+   "FFmpeg (conversion)",
+   "FFmpeg (konversi)"
+  ],
+  "system.tool.par2": [
+   "par2 (download repair)",
+   "par2 (perbaikan unduhan)"
+  ],
+  "system.tool.sevenZip": [
+   "7-Zip (unpacking, CBR/CB7)",
+   "7-Zip (ekstraksi, CBR/CB7)"
+  ],
+  "system.tool.mountHelper": [
+   "Mount helper (SMB/NFS)",
+   "Pembantu mount (SMB/NFS)"
+  ],
+  "system.tool.pgDump": [
+   "pg_dump (backups)",
+   "pg_dump (cadangan)"
+  ],
+  "system.configured": [
+   "Configured",
+   "Terkonfigurasi"
+  ],
+  "system.missing": [
+   "Not configured",
+   "Belum dikonfigurasi"
+  ],
+  "person.title": [
+   "Person",
+   "Orang"
+  ],
+  "franchise.title": [
+   "Series",
+   "Seri"
+  ],
+  "admin.history.title": [
+   "History",
+   "Riwayat"
+  ],
+  "history.when": [
+   "When",
+   "Kapan"
+  ],
+  "history.event": [
+   "What",
+   "Apa"
+  ],
+  "history.release": [
+   "Release",
+   "Release"
+  ],
+  "history.source": [
+   "Indexer and client",
+   "Indexer dan klien"
+  ],
+  "history.file": [
+   "File",
+   "File"
+  ],
+  "history.by": [
+   "By",
+   "Oleh"
+  ],
+  "history.byJularr": [
+   "Jularr",
+   "Jularr"
+  ],
+  "history.empty": [
+   "Nothing has happened yet.",
+   "Belum ada kejadian."
+  ],
+  "history.event.Grabbed": [
+   "Grabbed",
+   "Diambil"
+  ],
+  "history.event.DownloadFailed": [
+   "Download failed",
+   "Unduhan gagal"
+  ],
+  "history.event.Imported": [
+   "Imported",
+   "Diimpor"
+  ],
+  "history.event.Upgraded": [
+   "Replaced by a better release",
+   "Diganti dengan release yang lebih baik"
+  ],
+  "history.event.FileRenamed": [
+   "Renamed",
+   "Diganti namanya"
+  ],
+  "history.event.FileDeleted": [
+   "Deleted",
+   "Dihapus"
+  ],
+  "history.event.ManualImport": [
+   "Assigned by hand",
+   "Ditetapkan manual"
+  ],
+  "history.event.Blocked": [
+   "Blocked",
+   "Diblokir"
+  ],
+  "history.event.SubtitleDownloaded": [
+   "Subtitle added",
+   "Subtitle ditambahkan"
+  ],
+  "request.step.Grabbed": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "request.step.DownloadFailed": [
+   "Download failed, searching again",
+   "Unduhan gagal, mencari lagi"
+  ],
+  "request.step.Imported": [
+   "Added",
+   "Ditambahkan"
+  ],
+  "request.step.Upgraded": [
+   "Better version added",
+   "Versi yang lebih baik ditambahkan"
+  ],
+  "admin.work.series": [
+   "Series",
+   "Seri"
+  ],
+  "admin.work.seriesName": [
+   "Series name",
+   "Nama seri"
+  ],
+  "admin.work.seriesPosition": [
+   "Place in the series",
+   "Urutan dalam seri"
+  ],
+  "details.franchise": [
+   "Series:",
+   "Seri:"
+  ],
+  "person.empty": [
+   "None of their titles are in your library.",
+   "Tidak ada judul mereka di pustaka Anda."
+  ],
+  "home.layout": [
+   "Home page",
+   "Beranda"
+  ],
+  "home.shelf": [
+   "Shelf",
+   "Rak"
+  ],
+  "home.shown": [
+   "Shown",
+   "Ditampilkan"
+  ],
+  "home.hidden": [
+   "Hidden",
+   "Disembunyikan"
+  ],
+  "home.shelf.ContinueWatching": [
+   "Continue watching",
+   "Lanjutkan menonton"
+  ],
+  "home.shelf.ContinueListening": [
+   "Continue listening",
+   "Lanjutkan mendengarkan"
+  ],
+  "home.shelf.ContinueReading": [
+   "Continue reading",
+   "Lanjutkan membaca"
+  ],
+  "home.shelf.RecentlyAdded": [
+   "Recently added",
+   "Baru ditambahkan"
+  ],
+  "home.shelf.Recommendations": [
+   "Recommendations",
+   "Rekomendasi"
+  ],
+  "home.moveUp": [
+   "Up",
+   "Naik"
+  ],
+  "home.moveDown": [
+   "Down",
+   "Turun"
+  ],
+  "home.hide": [
+   "Hide",
+   "Sembunyikan"
+  ],
+  "home.show": [
+   "Show",
+   "Tampilkan"
+  ],
+  "instance.module.HomeLayout": [
+   "Personal home page order",
+   "Urutan beranda pribadi"
+  ],
+  "instance.module.Trickplay": [
+   "Thumbnails while seeking",
+   "Thumbnail saat menggeser"
+  ],
+  "instance.module.Translation": [
+   "Translate books in the reader",
+   "Terjemahkan buku di pembaca"
+  ],
+  "instance.module.Ocr": [
+   "Recognize the text of scanned books",
+   "Kenali teks buku hasil pindai"
+  ],
+  "instance.module.Diagnostics": [
+   "Diagnostics in memory",
+   "Diagnostik di memori"
+  ],
+  "instance.module.Subtitles": [
+   "Subtitles from providers",
+   "Subtitle dari penyedia"
+  ],
+  "instance.module.Uploads": [
+   "Upload manga volumes",
+   "Unggah volume manga"
+  ],
+  "work.upload": [
+   "Upload a volume",
+   "Unggah volume"
+  ],
+  "work.upload.file": [
+   "Volume file",
+   "File volume"
+  ],
+  "work.upload.volume": [
+   "Volume number (empty: the whole series)",
+   "Nomor volume (kosong: seluruh seri)"
+  ],
+  "work.upload.submit": [
+   "Upload",
+   "Unggah"
+  ],
+  "work.upload.done": [
+   "The volume is in the library.",
+   "Volume sudah ada di pustaka."
+  ],
+  "instance.module.Franchises": [
+   "Series",
+   "Seri"
+  ],
+  "system.performance": [
+   "Performance",
+   "Kinerja"
+  ],
+  "system.performance.processor": [
+   "Processor",
+   "Prosesor"
+  ],
+  "system.performance.memory": [
+   "Memory",
+   "Memori"
+  ],
+  "system.performance.processorHistory": [
+   "Processor use over the last six hours",
+   "Penggunaan prosesor selama enam jam terakhir"
+  ],
+  "system.performance.memoryHistory": [
+   "Memory use over the last six hours",
+   "Penggunaan memori selama enam jam terakhir"
+  ],
+  "system.performance.service": [
+   "Service",
+   "Layanan"
+  ],
+  "system.performance.calls": [
+   "Calls",
+   "Panggilan"
+  ],
+  "system.performance.errors": [
+   "Errors",
+   "Kesalahan"
+  ],
+  "system.performance.average": [
+   "Average",
+   "Rata-rata"
+  ],
+  "system.performance.maximum": [
+   "Longest",
+   "Terlama"
+  ],
+  "system.performance.empty": [
+   "No calls in the last hour.",
+   "Tidak ada panggilan dalam satu jam terakhir."
+  ],
+  "system.logs": [
+   "Recent warnings and errors",
+   "Peringatan dan kesalahan terbaru"
+  ],
+  "system.logs.empty": [
+   "Nothing went wrong since Jularr started.",
+   "Tidak ada masalah sejak Jularr dimulai."
+  ],
+  "system.logs.at": [
+   "Time",
+   "Waktu"
+  ],
+  "system.logs.level": [
+   "Level",
+   "Tingkat"
+  ],
+  "system.logs.area": [
+   "Area",
+   "Area"
+  ],
+  "system.logs.message": [
+   "Message",
+   "Pesan"
+  ],
+  "system.logs.level.Warning": [
+   "Warning",
+   "Peringatan"
+  ],
+  "system.logs.level.Error": [
+   "Error",
+   "Kesalahan"
+  ],
+  "system.logs.level.Critical": [
+   "Critical",
+   "Kritis"
+  ],
+  "calendar.view.month": [
+   "Month",
+   "Bulan"
+  ],
+  "calendar.view.agenda": [
+   "Agenda",
+   "Agenda"
+  ],
+  "calendar.more": [
+   "+{0} more",
+   "+{0} lagi"
+  ],
+  "calendar.title": [
+   "Calendar",
+   "Kalender"
+  ],
+  "calendar.earlier": [
+   "Earlier",
+   "Sebelumnya"
+  ],
+  "calendar.today": [
+   "From today",
+   "Mulai hari ini"
+  ],
+  "calendar.later": [
+   "Later",
+   "Nanti"
+  ],
+  "calendar.pages": [
+   "Calendar weeks",
+   "Minggu kalender"
+  ],
+  "calendar.empty": [
+   "Nothing is released in these two weeks for your watchlist, requests or library.",
+   "Tidak ada rilis dalam dua minggu ini untuk daftar tontonan, permintaan, atau pustaka Anda."
+  ],
+  "instance.module.Calendar": [
+   "Release calendar",
+   "Kalender rilis"
+  ],
+  "collections.title": [
+   "Collections",
+   "Koleksi"
+  ],
+  "collections.name": [
+   "Name",
+   "Nama"
+  ],
+  "collections.kind": [
+   "Kind",
+   "Jenis"
+  ],
+  "collections.smartToggle": [
+   "Smart filter instead of hand-picked titles",
+   "Filter cerdas, bukan judul pilihan sendiri"
+  ],
+  "collections.manual": [
+   "Hand-picked",
+   "Pilihan sendiri"
+  ],
+  "collections.smart": [
+   "Smart filter",
+   "Filter cerdas"
+  ],
+  "collections.empty": [
+   "No collections yet.",
+   "Belum ada koleksi."
+  ],
+  "collections.new": [
+   "New collection",
+   "Koleksi baru"
+  ],
+  "collections.create": [
+   "Create",
+   "Buat"
+  ],
+  "collections.edit": [
+   "Edit collection",
+   "Ubah koleksi"
+  ],
+  "collections.delete": [
+   "Delete collection",
+   "Hapus koleksi"
+  ],
+  "collections.noWorks": [
+   "Add titles from their details page.",
+   "Tambahkan judul dari halaman detailnya."
+  ],
+  "collections.noMatch": [
+   "Nothing matches this filter yet.",
+   "Belum ada yang cocok dengan filter ini."
+  ],
+  "collections.type": [
+   "Media type",
+   "Jenis media"
+  ],
+  "collections.subtype": [
+   "Subtype",
+   "Subjenis"
+  ],
+  "collections.anyType": [
+   "Any type",
+   "Jenis apa saja"
+  ],
+  "collections.anySubtype": [
+   "Any subtype",
+   "Subjenis apa saja"
+  ],
+  "collections.yearFrom": [
+   "Released from",
+   "Dirilis sejak"
+  ],
+  "collections.yearTo": [
+   "Released until",
+   "Dirilis hingga"
+  ],
+  "collections.onlyAvailable": [
+   "Only what is in the library",
+   "Hanya yang ada di pustaka"
+  ],
+  "collections.onlyUnfinished": [
+   "Only what is not finished",
+   "Hanya yang belum selesai"
+  ],
+  "collections.addTo": [
+   "Add",
+   "Tambah"
+  ],
+  "collections.removeFrom": [
+   "Remove",
+   "Hapus"
+  ],
+  "instance.module.Collections": [
+   "Collections",
+   "Koleksi"
+  ],
+  "notifications.title": [
+   "Notifications",
+   "Notifikasi"
+  ],
+  "notifications.unread": [
+   "Notifications, {0} unread",
+   "Notifikasi, {0} belum dibaca"
+  ],
+  "notifications.markRead": [
+   "Mark all as read",
+   "Tandai semua sudah dibaca"
+  ],
+  "notifications.empty": [
+   "Nothing new.",
+   "Tidak ada yang baru."
+  ],
+  "notifications.pages": [
+   "Notification pages",
+   "Halaman notifikasi"
+  ],
+  "notifications.times": [
+   "({0}×)",
+   "({0}×)"
+  ],
+  "notifications.settings": [
+   "What to notify about",
+   "Hal yang diberitahukan"
+  ],
+  "notifications.on": [
+   "Notify",
+   "Beri tahu"
+  ],
+  "notifications.off": [
+   "Don't notify",
+   "Jangan beri tahu"
+  ],
+  "notifications.message.RequestApproved": [
+   "Your request for {0} was approved.",
+   "Permintaan Anda untuk {0} disetujui."
+  ],
+  "notifications.message.RequestRejected": [
+   "Your request for {0} was declined.",
+   "Permintaan Anda untuk {0} ditolak."
+  ],
+  "notifications.message.MediaAvailable": [
+   "{0} is available.",
+   "{0} tersedia."
+  ],
+  "notifications.message.DownloadFailed": [
+   "A download of {0} failed.",
+   "Unduhan {0} gagal."
+  ],
+  "notifications.message.StorageOffline": [
+   "The storage connection {0} stays offline.",
+   "Koneksi penyimpanan {0} tetap offline."
+  ],
+  "notifications.type.RequestApproved": [
+   "Approved requests",
+   "Permintaan yang disetujui"
+  ],
+  "notifications.type.RequestRejected": [
+   "Declined requests",
+   "Permintaan yang ditolak"
+  ],
+  "notifications.type.MediaAvailable": [
+   "New media from requests",
+   "Media baru dari permintaan"
+  ],
+  "notifications.type.DownloadFailed": [
+   "Failed downloads",
+   "Unduhan yang gagal"
+  ],
+  "notifications.type.StorageOffline": [
+   "Offline storage",
+   "Penyimpanan offline"
+  ],
+  "instance.module.Notifications": [
+   "Notifications",
+   "Notifikasi"
+  ],
+  "storage.health": [
+   "State",
+   "Status"
+  ],
+  "storage.health.Unknown": [
+   "Not checked yet",
+   "Belum diperiksa"
+  ],
+  "storage.health.Online": [
+   "Online",
+   "Online"
+  ],
+  "storage.health.Sleeping": [
+   "Asleep",
+   "Tidur"
+  ],
+  "storage.health.Offline": [
+   "Offline",
+   "Offline"
+  ],
+  "storage.health.Error": [
+   "No access",
+   "Tanpa akses"
+  ],
+  "storage.space": [
+   "{0} free of {1}",
+   "{0} bebas dari {1}"
+  ],
+  "storage.checkedAt": [
+   "checked {0}",
+   "diperiksa {0}"
+  ],
+  "storage.problem.permission_denied": [
+   "Jularr may not read this share",
+   "Jularr tidak diizinkan membaca share ini"
+  ],
+  "storage.problem.probe_timeout": [
+   "The share does not answer",
+   "Share tidak menjawab"
+  ],
+  "storage.problem.storage_unavailable": [
+   "Not reachable or not mounted",
+   "Tidak dapat dijangkau atau belum di-mount"
+  ],
+  "storage.stale": [
+   "The mount uses older settings. Disconnect and reconnect to apply the saved configuration.",
+   "Mount memakai pengaturan lama. Putuskan dan sambungkan kembali untuk menerapkan konfigurasi tersimpan."
+  ],
+  "storage.saved": [
+   "Connection saved.",
+   "Koneksi disimpan."
+  ],
+  "storage.add.Local": [
+   "Add local path",
+   "Tambah path lokal"
+  ],
+  "storage.protocol": [
+   "Protocol",
+   "Protokol"
+  ],
+  "storage.protocol.Local": [
+   "Local path",
+   "Path lokal"
+  ],
+  "storage.location": [
+   "Location",
+   "Lokasi"
+  ],
+  "storage.localPath": [
+   "Permitted container path",
+   "Path container yang diizinkan"
+  ],
+  "storage.wake.macAddress": [
+   "Wake-on-LAN MAC address",
+   "Alamat MAC Wake-on-LAN"
+  ],
+  "storage.wake.broadcastAddress": [
+   "Wake-on-LAN broadcast address",
+   "Alamat broadcast Wake-on-LAN"
+  ],
+  "storage.wake.policy": [
+   "Wake-on-LAN",
+   "Wake-on-LAN"
+  ],
+  "storage.wake.ownerOnly": [
+   "Only the Owner wakes this device",
+   "Hanya Pemilik yang membangunkan perangkat ini"
+  ],
+  "storage.wake.onDemand": [
+   "Wake automatically when someone opens media",
+   "Bangunkan otomatis saat seseorang membuka media"
+  ],
+  "storage.wake.send": [
+   "Wake device",
+   "Bangunkan perangkat"
+  ],
+  "storage.wake.sent": [
+   "Wake-on-LAN packet sent.",
+   "Paket Wake-on-LAN terkirim."
+  ],
+  "storage.remove": [
+   "Remove connection",
+   "Hapus koneksi"
+  ],
+  "storage.paths": [
+   "Paths on this connection",
+   "Path pada koneksi ini"
+  ],
+  "storage.paths.path": [
+   "Path",
+   "Path"
+  ],
+  "storage.paths.files": [
+   "Files",
+   "File"
+  ],
+  "storage.paths.scan": [
+   "Scan",
+   "Pindai"
+  ],
+  "storage.paths.scanQueued": [
+   "Scan queued. Progress appears under Admin library.",
+   "Pemindaian diantrekan. Progres muncul di Pustaka admin."
+  ],
+  "storage.paths.remove": [
+   "Remove path",
+   "Hapus path"
+  ],
+  "storage.paths.removeHint": [
+   "Removing a path forgets its file inventory. Works and media files remain untouched.",
+   "Menghapus path membuang inventaris filenya. Karya dan file media tidak tersentuh."
+  ],
+  "storage.paths.connectionRoot": [
+   "Connection root",
+   "Root koneksi"
+  ],
+  "storage.paths.selected": [
+   "Selected folder",
+   "Folder terpilih"
+  ],
+  "storage.paths.noFolders": [
+   "This folder has no subfolders.",
+   "Folder ini tidak memiliki subfolder."
+  ],
+  "storage.paths.browse": [
+   "Browse folders",
+   "Telusuri folder"
+  ],
+  "storage.paths.add": [
+   "Add library path",
+   "Tambah path pustaka"
+  ],
+  "library.tab.Overview": [
+   "Libraries",
+   "Pustaka"
+  ],
+  "library.tab.Unmatched": [
+   "Unidentified",
+   "Belum dikenali"
+  ],
+  "library.tab.Files": [
+   "All files",
+   "Semua file"
+  ],
+  "library.tab.Rename": [
+   "Rename",
+   "Ganti nama"
+  ],
+  "library.tab.Naming": [
+   "Naming",
+   "Penamaan"
+  ],
+  "library.tab.Versions": [
+   "Files & versions",
+   "File & versi"
+  ],
+  "library.naming.Movie": [
+   "Movie files",
+   "File film"
+  ],
+  "library.naming.Series": [
+   "Episode files",
+   "File episode"
+  ],
+  "library.naming.folder": [
+   "Folders",
+   "Folder"
+  ],
+  "library.naming.file": [
+   "File name",
+   "Nama file"
+  ],
+  "library.naming.example": [
+   "Example:",
+   "Contoh:"
+  ],
+  "library.naming.placeholders": [
+   "Placeholders",
+   "Placeholder"
+  ],
+  "library.naming.rules": [
+   "Empty placeholders leave with their brackets; the file name always names the film or the episode.",
+   "Placeholder kosong dibuang beserta tanda kurungnya; nama file selalu menyebut film atau episodenya."
+  ],
+  "library.naming.token.Title": [
+   "The title",
+   "Judul"
+  ],
+  "library.naming.token.Year": [
+   "The year of release",
+   "Tahun rilis"
+  ],
+  "library.naming.token.Season": [
+   "The season number, with :00 two digits",
+   "Nomor musim, dengan :00 dua digit"
+  ],
+  "library.naming.token.Episode": [
+   "The episode number, with :00 two digits",
+   "Nomor episode, dengan :00 dua digit"
+  ],
+  "library.naming.token.EpisodeTitle": [
+   "The episode title",
+   "Judul episode"
+  ],
+  "library.naming.token.Quality": [
+   "The quality, such as WEB-1080p",
+   "Kualitas, misalnya WEB-1080p"
+  ],
+  "library.naming.token.ReleaseGroup": [
+   "The release group",
+   "Grup release"
+  ],
+  "library.naming.token.Edition": [
+   "The edition, such as Director's Cut",
+   "Edisi, misalnya Director's Cut"
+  ],
+  "library.naming.token.Proper": [
+   "Proper or Repack for a corrected release",
+   "Proper atau Repack untuk release yang diperbaiki"
+  ],
+  "library.overview.empty": [
+   "No libraries yet. Add one with its storage.",
+   "Belum ada pustaka. Tambahkan satu bersama penyimpanannya."
+  ],
+  "library.overview.place": [
+   "Storage and folder",
+   "Penyimpanan dan folder"
+  ],
+  "library.overview.attention": [
+   "Needs attention",
+   "Perlu perhatian"
+  ],
+  "library.overview.fine": [
+   "Nothing",
+   "Tidak ada"
+  ],
+  "library.overview.scanned": [
+   "Last scan",
+   "Pemindaian terakhir"
+  ],
+  "library.overview.scanning": [
+   "Scanning now",
+   "Sedang memindai"
+  ],
+  "library.overview.never": [
+   "Not yet",
+   "Belum"
+  ],
+  "library.overview.manage": [
+   "Manage storage and libraries",
+   "Kelola penyimpanan dan pustaka"
+  ],
+  "nav.group.library": [
+   "Library",
+   "Pustaka"
+  ],
+  "library.replacement.keepsReleases": [
+   "Keep several releases",
+   "Simpan beberapa release"
+  ],
+  "library.replacement.mode": [
+   "Replaced files",
+   "File yang diganti"
+  ],
+  "library.replacement.mode.Delete": [
+   "Delete",
+   "Hapus"
+  ],
+  "library.replacement.mode.LibraryFolder": [
+   "Recycle bin in the library",
+   "Tempat sampah di pustaka"
+  ],
+  "library.replacement.mode.OwnFolder": [
+   "Own recycle bin",
+   "Tempat sampah sendiri"
+  ],
+  "library.replacement.mount": [
+   "Own recycle bin: connection",
+   "Tempat sampah sendiri: koneksi"
+  ],
+  "library.replacement.path": [
+   "Own recycle bin: folder",
+   "Tempat sampah sendiri: folder"
+  ],
+  "library.replacement.days": [
+   "Days in the recycle bin",
+   "Hari di tempat sampah"
+  ],
+  "library.keepOnly": [
+   "Keep only this version",
+   "Simpan hanya versi ini"
+  ],
+  "library.protect": [
+   "Protect from automatic upgrades",
+   "Lindungi dari peningkatan otomatis"
+  ],
+  "library.unprotect": [
+   "Allow automatic upgrades",
+   "Izinkan peningkatan otomatis"
+  ],
+  "devices.link.title": [
+   "Connect this device",
+   "Hubungkan perangkat ini"
+  ],
+  "devices.link.hint": [
+   "On a phone signed in to Jularr, scan the code or open Settings, Pair a device, and enter these digits.",
+   "Di ponsel yang sudah masuk ke Jularr, pindai kode atau buka Pengaturan, Pasangkan perangkat, lalu masukkan digit ini."
+  ],
+  "devices.link.qr": [
+   "QR code to pair this device",
+   "Kode QR untuk memasangkan perangkat ini"
+  ],
+  "devices.name.browser": [
+   "Browser",
+   "Browser"
+  ],
+  "devices.rename": [
+   "Device name",
+   "Nama perangkat"
+  ],
+  "devices.pair.title": [
+   "Pair a device",
+   "Pasangkan perangkat"
+  ],
+  "devices.pair.code": [
+   "Code shown on the device",
+   "Kode yang tampil di perangkat"
+  ],
+  "devices.pair.submit": [
+   "Pair with this profile",
+   "Pasangkan dengan profil ini"
+  ],
+  "devices.pair.show": [
+   "Show the device",
+   "Tampilkan perangkat"
+  ],
+  "devices.pair.device": [
+   "{0} ({1}) asks to be paired with this profile with this code:",
+   "{0} ({1}) meminta dipasangkan dengan profil ini dengan kode berikut:"
+  ],
+  "devices.pair.warning": [
+   "Confirm only if your own device shows exactly this code; whoever holds it signs in as you.",
+   "Konfirmasi hanya jika perangkat Anda sendiri menampilkan kode yang persis sama; siapa pun yang memegangnya masuk sebagai Anda."
+  ],
+  "devices.link.start": [
+   "Show a pairing code",
+   "Tampilkan kode pemasangan"
+  ],
+  "devices.pair.done": [
+   "The device is paired; it signs in by itself.",
+   "Perangkat sudah dipasangkan; ia masuk dengan sendirinya."
+  ],
+  "instance.module.Devices": [
+   "Pair TVs, phones and apps by code",
+   "Pasangkan TV, ponsel, dan aplikasi dengan kode"
+  ],
+  "instance.module.Registration": [
+   "Let visitors ask for an account an administrator enables",
+   "Izinkan pengunjung meminta akun yang diaktifkan administrator"
+  ],
+  "account.register.title": [
+   "Create an account",
+   "Buat akun"
+  ],
+  "account.register.submit": [
+   "Ask for an account",
+   "Minta akun"
+  ],
+  "account.register.pending": [
+   "Your account waits until an administrator enables it.",
+   "Akun Anda menunggu sampai administrator mengaktifkannya."
+  ],
+  "admin.instance.trustedProxies": [
+   "Trusted reverse proxies",
+   "Reverse proxy tepercaya"
+  ],
+  "admin.instance.publicUrl": [
+   "Public address for QR codes",
+   "Alamat publik untuk kode QR"
+  ],
+  "library.renameTarget": [
+   "New name",
+   "Nama baru"
+  ],
+  "library.renameApply": [
+   "Rename these files",
+   "Ganti nama file ini"
+  ],
+  "library.renameEmpty": [
+   "All identified files follow the library layout.",
+   "Semua file yang dikenali sudah mengikuti tata letak pustaka."
+  ],
+  "library.renamed": [
+   "Files renamed: {0}. Skipped: {1}.",
+   "File diganti namanya: {0}. Dilewati: {1}."
+  ],
+  "library.file": [
+   "File",
+   "File"
+  ],
+  "library.root": [
+   "Library path",
+   "Path pustaka"
+  ],
+  "library.present": [
+   "Available",
+   "Tersedia"
+  ],
+  "library.missing": [
+   "Missing",
+   "Belum ada"
+  ],
+  "library.assign": [
+   "Identify",
+   "Kenali"
+  ],
+  "library.unmatched": [
+   "Not identified",
+   "Belum dikenali"
+  ],
+  "library.empty": [
+   "No files have been scanned yet.",
+   "Belum ada file yang dipindai."
+  ],
+  "library.emptyUnmatched": [
+   "All scanned files are identified.",
+   "Semua file yang dipindai sudah dikenali."
+  ],
+  "library.newWork": [
+   "New work title",
+   "Judul karya baru"
+  ],
+  "library.unitType": [
+   "Unit",
+   "Unit"
+  ],
+  "library.unit.None": [
+   "Whole work",
+   "Seluruh karya"
+  ],
+  "library.unit.Season": [
+   "Season",
+   "Musim"
+  ],
+  "library.unit.Episode": [
+   "Episode",
+   "Episode"
+  ],
+  "library.unit.Volume": [
+   "Volume",
+   "Volume"
+  ],
+  "library.unit.Chapter": [
+   "Chapter",
+   "Bab"
+  ],
+  "library.unit.Track": [
+   "Track",
+   "Trek"
+  ],
+  "library.unitNumber": [
+   "Number",
+   "Nomor"
+  ],
+  "library.parentNumber.Series": [
+   "Season",
+   "Musim"
+  ],
+  "library.parentNumber.Book": [
+   "Volume",
+   "Volume"
+  ],
+  "library.parentNumber.Manga": [
+   "Volume",
+   "Volume"
+  ],
+  "library.parentNumber.LightNovel": [
+   "Volume",
+   "Volume"
+  ],
+  "library.createAndAssign": [
+   "Create work and identify",
+   "Buat karya dan kenali"
+  ],
+  "library.assignExisting": [
+   "Identify as existing work",
+   "Kenali sebagai karya yang ada"
+  ],
+  "library.unassign": [
+   "Remove identification",
+   "Hapus pengenalan"
+  ],
+  "operation.type.LibraryScan": [
+   "Library scan",
+   "Pemindaian pustaka"
+  ],
+  "operation.type.Download": [
+   "Download",
+   "Unduh"
+  ],
+  "operation.type.Backup": [
+   "Backup",
+   "Cadangan"
+  ],
+  "operation.status.Queued": [
+   "Queued",
+   "Dalam antrean"
+  ],
+  "operation.status.Running": [
+   "Running",
+   "Berjalan"
+  ],
+  "operation.status.Completed": [
+   "Completed",
+   "Selesai"
+  ],
+  "operation.status.Failed": [
+   "Failed",
+   "Gagal"
+  ],
+  "operation.created": [
+   "Queued at",
+   "Diantrekan pada"
+  ],
+  "activity.tab.Activity": [
+   "Activity",
+   "Aktivitas"
+  ],
+  "activity.tab.ToDo": [
+   "To-Do",
+   "Tugas"
+  ],
+  "activity.tab.History": [
+   "History",
+   "Riwayat"
+  ],
+  "activity.item": [
+   "Item",
+   "Item"
+  ],
+  "activity.progress": [
+   "Progress",
+   "Progres"
+  ],
+  "activity.reason": [
+   "Reason",
+   "Alasan"
+  ],
+  "activity.client": [
+   "Client",
+   "Klien"
+  ],
+  "activity.eta": [
+   "Time left",
+   "Sisa waktu"
+  ],
+  "activity.size": [
+   "Size",
+   "Ukuran"
+  ],
+  "activity.state.Queued": [
+   "Queued",
+   "Dalam antrean"
+  ],
+  "activity.state.Downloading": [
+   "Downloading",
+   "Mengunduh"
+  ],
+  "activity.state.Paused": [
+   "Paused",
+   "Dijeda"
+  ],
+  "activity.state.PostProcessing": [
+   "Unpacking",
+   "Mengekstrak"
+  ],
+  "activity.retry": [
+   "Retry",
+   "Coba lagi"
+  ],
+  "activity.dismiss": [
+   "Dismiss",
+   "Tutup"
+  ],
+  "activity.openSource": [
+   "Open the source and confirm",
+   "Buka sumber dan konfirmasi"
+  ],
+  "activity.fileLink": [
+   "File link from the source",
+   "Tautan file dari sumber"
+  ],
+  "activity.continueDownload": [
+   "Continue download",
+   "Lanjutkan unduhan"
+  ],
+  "activity.empty.Activity": [
+   "Nothing is running.",
+   "Tidak ada yang berjalan."
+  ],
+  "activity.empty.ToDo": [
+   "Nothing needs attention.",
+   "Tidak ada yang perlu diperhatikan."
+  ],
+  "activity.empty.History": [
+   "Nothing has finished yet.",
+   "Belum ada yang selesai."
+  ],
+  "details.availability": [
+   "Available media",
+   "Media yang tersedia"
+  ],
+  "details.unit": [
+   "Unit",
+   "Unit"
+  ],
+  "details.quality": [
+   "Quality",
+   "Kualitas"
+  ],
+  "details.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "details.subtitles": [
+   "Subtitles",
+   "Subtitle"
+  ],
+  "subtitles.present": [
+   "Present:",
+   "Ada:"
+  ],
+  "subtitles.language": [
+   "Language",
+   "Bahasa"
+  ],
+  "subtitles.search": [
+   "Search subtitles",
+   "Cari subtitle"
+  ],
+  "subtitles.none": [
+   "No subtitles found in this language.",
+   "Tidak ada subtitle dalam bahasa ini."
+  ],
+  "subtitles.provider": [
+   "Provider",
+   "Penyedia"
+  ],
+  "subtitles.release": [
+   "Release",
+   "Release"
+  ],
+  "subtitles.hearingImpaired": [
+   "For the hearing impaired",
+   "Untuk tunarungu"
+  ],
+  "subtitles.downloads": [
+   "Downloads",
+   "Unduhan"
+  ],
+  "subtitles.download": [
+   "Use this subtitle",
+   "Gunakan subtitle ini"
+  ],
+  "subtitles.saved": [
+   "The subtitle was saved beside the video.",
+   "Subtitle disimpan di samping video."
+  ],
+  "subtitles.exists": [
+   "A subtitle of this language is already beside the video.",
+   "Subtitle dalam bahasa ini sudah ada di samping video."
+  ],
+  "details.duration": [
+   "Duration",
+   "Durasi"
+  ],
+  "details.wholeWork": [
+   "Whole work",
+   "Seluruh karya"
+  ],
+  "details.pages": [
+   "Version pages",
+   "Halaman versi"
+  ],
+  "media.asset.Video": [
+   "Video",
+   "Video"
+  ],
+  "media.asset.Audio": [
+   "Audio",
+   "Audio"
+  ],
+  "media.asset.Ebook": [
+   "E-book",
+   "E-book"
+  ],
+  "media.asset.Comic": [
+   "Comic",
+   "Komik"
+  ],
+  "media.asset.Game": [
+   "Game",
+   "Game"
+  ],
+  "instance.module.Playback": [
+   "Playback",
+   "Pemutaran"
+  ],
+  "instance.module.Reading": [
+   "Book processing and reader",
+   "Pemrosesan buku dan pembaca"
+  ],
+  "instance.module.Profiles": [
+   "Several profiles per account",
+   "Beberapa profil per akun"
+  ],
+  "instance.module.Emulation": [
+   "Retro games in the browser",
+   "Game retro di browser"
+  ],
+  "instance.module.UnitGroups": [
+   "Named sections for episodes and volumes",
+   "Bagian bernama untuk episode dan volume"
+  ],
+  "instance.module.ProgressSync": [
+   "Share watch progress with Jellyfin and Emby",
+   "Bagikan progres tontonan dengan Jellyfin dan Emby"
+  ],
+  "unitGroups.title": [
+   "Sections",
+   "Bagian"
+  ],
+  "unitGroups.name": [
+   "Name",
+   "Nama"
+  ],
+  "unitGroups.delete": [
+   "Delete",
+   "Hapus"
+  ],
+  "unitGroups.from": [
+   "From",
+   "Dari"
+  ],
+  "unitGroups.to": [
+   "To",
+   "Sampai"
+  ],
+  "unitGroups.fromParent": [
+   "From season",
+   "Dari musim"
+  ],
+  "unitGroups.toParent": [
+   "To season",
+   "Sampai musim"
+  ],
+  "unitGroups.add": [
+   "Add section",
+   "Tambah bagian"
+  ],
+  "game.title": [
+   "Play",
+   "Main"
+  ],
+  "game.notFound": [
+   "This game is not available.",
+   "Game ini tidak tersedia."
+  ],
+  "game.unsupported": [
+   "This game's platform does not play in the browser.",
+   "Platform game ini tidak dapat dimainkan di browser."
+  ],
+  "game.saveFailed": [
+   "The save could not be stored on the server; it stays in this browser for now.",
+   "Simpanan tidak dapat disimpan di server; untuk sementara tetap ada di browser ini."
+  ],
+  "game.stateSaved": [
+   "State saved to your profile",
+   "Status disimpan ke profil Anda"
+  ],
+  "game.stateMissing": [
+   "No saved state yet",
+   "Belum ada status tersimpan"
+  ],
+  "game.playedMinutes": [
+   "Played {0} min",
+   "Dimainkan {0} mnt"
+  ],
+  "game.playedHours": [
+   "Played {0} h {1} min",
+   "Dimainkan {0} j {1} mnt"
+  ],
+  "player.play": [
+   "Play",
+   "Putar"
+  ],
+  "player.pause": [
+   "Pause",
+   "Jeda"
+  ],
+  "player.back10": [
+   "Back 10 seconds",
+   "Mundur 10 detik"
+  ],
+  "player.previous": [
+   "Previous",
+   "Sebelumnya"
+  ],
+  "player.next": [
+   "Next",
+   "Berikutnya"
+  ],
+  "player.forward30": [
+   "Forward 30 seconds",
+   "Maju 30 detik"
+  ],
+  "player.timeline": [
+   "Playback position",
+   "Posisi pemutaran"
+  ],
+  "player.mute": [
+   "Mute",
+   "Bisukan"
+  ],
+  "player.volume": [
+   "Volume",
+   "Volume"
+  ],
+  "player.speed": [
+   "Playback speed",
+   "Kecepatan pemutaran"
+  ],
+  "player.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "player.minimize": [
+   "Minimize",
+   "Perkecil"
+  ],
+  "player.expand": [
+   "Open full player",
+   "Buka pemutar penuh"
+  ],
+  "player.stop": [
+   "Stop playback",
+   "Hentikan pemutaran"
+  ],
+  "player.subtitles": [
+   "Subtitles",
+   "Subtitle"
+  ],
+  "player.subtitles.off": [
+   "Off",
+   "Mati"
+  ],
+  "player.subtitles.forced": [
+   "forced",
+   "paksa"
+  ],
+  "player.track.unknown": [
+   "Track",
+   "Trek"
+  ],
+  "player.channels.mono": [
+   "Mono",
+   "Mono"
+  ],
+  "player.channels.stereo": [
+   "Stereo",
+   "Stereo"
+  ],
+  "player.channels.count": [
+   "{0} channels",
+   "{0} kanal"
+  ],
+  "player.track.unsupported": [
+   "Not available in the browser yet",
+   "Belum tersedia di browser"
+  ],
+  "player.pip": [
+   "Picture in picture",
+   "Picture in picture"
+  ],
+  "player.fullscreen": [
+   "Fullscreen",
+   "Layar penuh"
+  ],
+  "player.more": [
+   "More",
+   "Lainnya"
+  ],
+  "player.delivery": [
+   "Delivery",
+   "Pengiriman"
+  ],
+  "player.mode.DirectPlay": [
+   "Direct Play",
+   "Putar langsung"
+  ],
+  "player.mode.Remux": [
+   "Direct Stream",
+   "Stream langsung"
+  ],
+  "player.mode.Transcode": [
+   "Transcode",
+   "Transkode"
+  ],
+  "player.status.storage_waking": [
+   "The storage device is waking up. Playback starts automatically when it is ready.",
+   "Perangkat penyimpanan sedang bangun. Pemutaran dimulai otomatis setelah siap."
+  ],
+  "player.status.storage_unavailable": [
+   "The storage holding this file is unavailable.",
+   "Penyimpanan yang menyimpan file ini tidak tersedia."
+  ],
+  "player.status.playback_conversion_unavailable": [
+   "This browser cannot play the file directly, and conversion is not available yet.",
+   "Browser ini tidak dapat memutar file secara langsung, dan konversi belum tersedia."
+  ],
+  "player.status.not_found": [
+   "This media is no longer available.",
+   "Media ini sudah tidak tersedia."
+  ],
+  "player.status.failed": [
+   "Playback could not be started.",
+   "Pemutaran tidak dapat dimulai."
+  ],
+  "details.play": [
+   "Play",
+   "Putar"
+  ],
+  "details.playAgain": [
+   "Play again",
+   "Putar lagi"
+  ],
+  "details.resume": [
+   "Continue at",
+   "Lanjutkan dari"
+  ],
+  "common.back": [
+   "Back",
+   "Kembali"
+  ],
+  "media.author": [
+   "Author",
+   "Penulis"
+  ],
+  "media.title": [
+   "Title",
+   "Judul"
+  ],
+  "common.open": [
+   "Open",
+   "Buka"
+  ],
+  "media.type": [
+   "Media type",
+   "Jenis media"
+  ],
+  "media.year": [
+   "Year",
+   "Tahun"
+  ],
+  "admin.works.searchMetadata": [
+   "Search metadata",
+   "Cari metadata"
+  ],
+  "admin.works.noMetadata": [
+   "No match found.",
+   "Tidak ada yang cocok."
+  ],
+  "admin.works.originalTitle": [
+   "Original title",
+   "Judul asli"
+  ],
+  "admin.works.import": [
+   "Add",
+   "Tambah"
+  ],
+  "admin.work.refreshMetadata": [
+   "Update from the provider",
+   "Perbarui dari penyedia"
+  ],
+  "admin.work.match": [
+   "Wrong match",
+   "Kecocokan salah"
+  ],
+  "admin.work.useMatch": [
+   "Use this match",
+   "Gunakan kecocokan ini"
+  ],
+  "admin.work.currentMatch": [
+   "Current match",
+   "Kecocokan saat ini"
+  ],
+  "admin.providers.secret": [
+   "API key or read access token",
+   "Kunci API atau token akses baca"
+  ],
+  "admin.providers.clientId": [
+   "Twitch application client ID",
+   "Client ID aplikasi Twitch"
+  ],
+  "admin.providers.clientSecret": [
+   "Twitch application client secret",
+   "Client secret aplikasi Twitch"
+  ],
+  "admin.providers.secretSet": [
+   "A key is stored.",
+   "Kunci tersimpan."
+  ],
+  "admin.providers.secretMissing": [
+   "No key is stored.",
+   "Tidak ada kunci tersimpan."
+  ],
+  "media.create": [
+   "Create work",
+   "Buat karya"
+  ],
+  "media.empty": [
+   "No works have been added yet.",
+   "Belum ada karya yang ditambahkan."
+  ],
+  "media.type.Movie": [
+   "Movie",
+   "Film"
+  ],
+  "media.type.Series": [
+   "Series",
+   "Serial TV"
+  ],
+  "media.type.Book": [
+   "Book",
+   "Buku"
+  ],
+  "media.subtype": [
+   "Subtype",
+   "Subjenis"
+  ],
+  "media.subtype.none": [
+   "None",
+   "Tidak ada"
+  ],
+  "media.subtype.Anime": [
+   "Anime",
+   "Anime"
+  ],
+  "media.subtype.Manga": [
+   "Manga",
+   "Manga"
+  ],
+  "media.subtype.LightNovel": [
+   "Light novel",
+   "Novel ringan"
+  ],
+  "media.type.Music": [
+   "Music",
+   "Musik"
+  ],
+  "media.type.Game": [
+   "Game",
+   "Game"
+  ],
+  "media.watchlist.add": [
+   "Add to watchlist",
+   "Tambah ke daftar tontonan"
+  ],
+  "media.watchlist.manage": [
+   "Manage watchlist in Details",
+   "Kelola daftar tontonan di Detail"
+  ],
+  "media.watchlist.remove": [
+   "Remove from watchlist",
+   "Hapus dari daftar tontonan"
+  ],
+  "media.watchlist.empty": [
+   "Your watchlist is empty.",
+   "Daftar tontonan Anda kosong."
+  ],
+  "errors.invalid_data": [
+   "Please check the supplied values.",
+   "Periksa kembali nilai yang dimasukkan."
+  ],
+  "errors.authentication_required": [
+   "Please sign in to continue.",
+   "Masuk untuk melanjutkan."
+  ],
+  "errors.permission_denied": [
+   "You do not have permission to perform this action.",
+   "Anda tidak memiliki izin untuk melakukan tindakan ini."
+  ],
+  "errors.not_found": [
+   "The requested resource was not found.",
+   "Sumber daya yang diminta tidak ditemukan."
+  ],
+  "errors.invalid_antiforgery_token": [
+   "Please reload the page and try again.",
+   "Muat ulang halaman lalu coba lagi."
+  ],
+  "errors.invalid_request": [
+   "The request could not be processed.",
+   "Permintaan tidak dapat diproses."
+  ],
+  "errors.provider_unavailable": [
+   "The external provider is currently unavailable.",
+   "Penyedia eksternal sedang tidak tersedia."
+  ],
+  "errors.storage_helper_unavailable": [
+   "The mount helper is unavailable. Check its configuration and runtime permissions.",
+   "Pembantu mount tidak tersedia. Periksa konfigurasi dan izin runtime-nya."
+  ],
+  "errors.storage_unavailable": [
+   "The NAS connection could not be mounted. Check the server, export and credentials.",
+   "Koneksi NAS tidak dapat di-mount. Periksa server, ekspor, dan kredensialnya."
+  ],
+  "errors.storage_busy": [
+   "This mount is in use. Stop dependent operations before disconnecting it.",
+   "Mount ini sedang dipakai. Hentikan operasi yang bergantung padanya sebelum memutuskannya."
+  ],
+  "errors.storage_configuration_changed": [
+   "The mounted connection uses different settings. Disconnect it before applying the saved configuration.",
+   "Koneksi yang di-mount memakai pengaturan berbeda. Putuskan sebelum menerapkan konfigurasi tersimpan."
+  ],
+  "errors.storage_waking": [
+   "The storage device is waking up. Please try again shortly.",
+   "Perangkat penyimpanan sedang bangun. Coba lagi sebentar lagi."
+  ],
+  "errors.playback_conversion_unavailable": [
+   "This file cannot be played directly, and conversion is not available yet.",
+   "File ini tidak dapat diputar langsung, dan konversi belum tersedia."
+  ],
+  "errors.playback_conversion_failed": [
+   "The media conversion failed. Please try again.",
+   "Konversi media gagal. Coba lagi."
+  ],
+  "errors.playback_subtitle_unavailable": [
+   "This subtitle cannot be shown.",
+   "Subtitle ini tidak dapat ditampilkan."
+  ],
+  "errors.playback_capacity_exhausted": [
+   "The server is converting as many streams as it allows. Please try again shortly.",
+   "Server sedang mengonversi stream sebanyak batas yang diizinkan. Coba lagi sebentar lagi."
+  ],
+  "errors.storage_wake_failed": [
+   "The Wake-on-LAN packet could not be sent.",
+   "Paket Wake-on-LAN tidak dapat dikirim."
+  ],
+  "errors.scan_incomplete": [
+   "Some folders could not be read. Nothing was marked as missing.",
+   "Beberapa folder tidak dapat dibaca. Tidak ada yang ditandai sebagai hilang."
+  ],
+  "errors.synology_unavailable": [
+   "The Synology NAS could not be reached at its DSM address.",
+   "NAS Synology tidak dapat dijangkau di alamat DSM-nya."
+  ],
+  "errors.synology_certificate_untrusted": [
+   "The NAS presents a certificate nobody vouches for.",
+   "NAS menyajikan sertifikat yang tidak dijamin siapa pun."
+  ],
+  "errors.synology_login_failed": [
+   "DSM rejected the account or password.",
+   "DSM menolak akun atau kata sandi."
+  ],
+  "errors.synology_two_factor": [
+   "This DSM account uses two-step verification; use an administrator account without it.",
+   "Akun DSM ini memakai verifikasi dua langkah; gunakan akun administrator tanpa itu."
+  ],
+  "errors.synology_not_admin": [
+   "This DSM account may not read health or change power; use an administrator account.",
+   "Akun DSM ini tidak boleh membaca kesehatan atau mengubah daya; gunakan akun administrator."
+  ],
+  "errors.synology_blocked": [
+   "DSM blocks Jularr's address after failed logins; unblock it in DSM.",
+   "DSM memblokir alamat Jularr setelah login gagal; buka blokirnya di DSM."
+  ],
+  "errors.backup_unavailable": [
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Cadangan memerlukan pg_dump dan pg_restore, yang tidak tersedia di server ini."
+  ],
+  "errors.backup_failed": [
+   "The backup tool did not finish. The server log has its message.",
+   "Alat pencadangan tidak selesai. Log server memuat pesannya."
+  ],
+  "errors.backup_tool_missing": [
+   "pg_dump or pg_restore was not found at the configured path.",
+   "pg_dump atau pg_restore tidak ditemukan di path yang dikonfigurasi."
+  ],
+  "errors.backup_auth_failed": [
+   "PostgreSQL refused the database login of the backup tool.",
+   "PostgreSQL menolak login database dari alat pencadangan."
+  ],
+  "errors.backup_version_mismatch": [
+   "pg_dump or pg_restore is older than the PostgreSQL server.",
+   "pg_dump atau pg_restore lebih lama daripada server PostgreSQL."
+  ],
+  "errors.backup_disk_full": [
+   "The backup folder is full.",
+   "Folder cadangan penuh."
+  ],
+  "errors.backup_timeout": [
+   "The backup tool ran too long and was stopped.",
+   "Alat pencadangan berjalan terlalu lama dan dihentikan."
+  ],
+  "errors.backup_running": [
+   "A restore is already running.",
+   "Pemulihan sedang berjalan."
+  ],
+  "errors.metadata_unavailable": [
+   "The metadata source is not configured or cannot be reached.",
+   "Sumber metadata belum dikonfigurasi atau tidak dapat dijangkau."
+  ],
+  "errors.metadata_authentication_failed": [
+   "TMDB rejected the stored key.",
+   "TMDB menolak kunci yang tersimpan."
+  ],
+  "errors.metadata_rate_limited": [
+   "TMDB limits requests right now. Please try again shortly.",
+   "TMDB sedang membatasi permintaan. Coba lagi sebentar lagi."
+  ],
+  "errors.reading_unavailable": [
+   "This book is not saved for reading while its storage is offline.",
+   "Buku ini tidak tersimpan untuk dibaca selagi penyimpanannya offline."
+  ],
+  "errors.reading_invalid_file": [
+   "This book file cannot be opened.",
+   "File buku ini tidak dapat dibuka."
+  ],
+  "errors.translation_unavailable": [
+   "Translation files cannot be fetched right now; the book stays in its language.",
+   "File terjemahan tidak dapat diambil saat ini; buku tetap dalam bahasanya."
+  ],
+  "errors.reading_pdf_without_text": [
+   "This PDF holds scanned pages without text; it opens as a PDF.",
+   "PDF ini berisi halaman hasil pindai tanpa teks; dibuka sebagai PDF."
+  ],
+  "errors.reading_translation_incomplete": [
+   "This book is not translated into that language in every section yet.",
+   "Buku ini belum diterjemahkan ke bahasa tersebut di setiap bagiannya."
+  ],
+  "errors.reading_pdf_recognizing": [
+   "The scanned pages are being turned into text; until then the book opens as a PDF.",
+   "Halaman hasil pindai sedang diubah menjadi teks; sampai selesai, buku dibuka sebagai PDF."
+  ],
+  "errors.ocr_unavailable": [
+   "The text recognition models cannot be fetched right now.",
+   "Model pengenalan teks tidak dapat diambil saat ini."
+  ],
+  "errors.reading_unsupported": [
+   "This comic needs 7-Zip, which is not configured on the server.",
+   "Komik ini memerlukan 7-Zip, yang belum dikonfigurasi di server."
+  ],
+  "errors.plex_unavailable": [
+   "The Plex server could not be reached.",
+   "Server Plex tidak dapat dijangkau."
+  ],
+  "errors.plex_authentication_failed": [
+   "The Plex server rejected the token.",
+   "Server Plex menolak token."
+  ],
+  "errors.plex_invalid_response": [
+   "The Plex server returned an invalid response.",
+   "Server Plex mengembalikan respons yang tidak valid."
+  ],
+  "errors.media_server_unavailable": [
+   "The media server could not be reached.",
+   "Server media tidak dapat dijangkau."
+  ],
+  "errors.media_server_authentication_failed": [
+   "The media server refused the API key.",
+   "Server media menolak kunci API."
+  ],
+  "errors.media_server_invalid_response": [
+   "The media server returned an invalid response.",
+   "Server media mengembalikan respons yang tidak valid."
+  ],
+  "errors.media_server_outdated": [
+   "Jellyfin 10.9 or newer is needed.",
+   "Diperlukan Jellyfin 10.9 atau lebih baru."
+  ],
+  "errors.device_pairing_busy": [
+   "No pairing code is free right now; try again in a minute.",
+   "Saat ini tidak ada kode pemasangan yang bebas; coba lagi dalam semenit."
+  ],
+  "errors.device_pairing_attempts": [
+   "Too many wrong codes; try again in ten minutes.",
+   "Terlalu banyak kode yang salah; coba lagi dalam sepuluh menit."
+  ],
+  "errors.validation.invalid_code": [
+   "This code is unknown or has expired.",
+   "Kode ini tidak dikenal atau sudah kedaluwarsa."
+  ],
+  "errors.validation.translation_mismatch": [
+   "The translation does not fit this section.",
+   "Terjemahan tidak sesuai dengan bagian ini."
+  ],
+  "errors.validation.indexer_removed": [
+   "The indexer of this release was removed; search again.",
+   "Indexer untuk release ini sudah dihapus; cari lagi."
+  ],
+  "errors.validation.invalid_network": [
+   "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
+   "Masukkan alamat IP atau jaringan seperti 192.168.1.10 atau 10.0.0.0/8."
+  ],
+  "errors.validation.pairing_expired": [
+   "This code has expired; show a new code on the device.",
+   "Kode ini sudah kedaluwarsa; tampilkan kode baru di perangkat."
+  ],
+  "errors.acquisition_unavailable": [
+   "The indexer or download client could not be reached.",
+   "Indexer atau klien unduhan tidak dapat dijangkau."
+  ],
+  "errors.acquisition_authentication_failed": [
+   "The indexer or download client rejected the API key.",
+   "Indexer atau klien unduhan menolak kunci API."
+  ],
+  "errors.acquisition_rate_limited": [
+   "The indexer limits requests right now. Please try again later.",
+   "Indexer sedang membatasi permintaan. Coba lagi nanti."
+  ],
+  "errors.acquisition_limit_reached": [
+   "The indexer's daily grab limit is reached.",
+   "Batas grab harian indexer tercapai."
+  ],
+  "errors.acquisition_query_limit_reached": [
+   "The indexer's daily query limit is reached.",
+   "Batas kueri harian indexer tercapai."
+  ],
+  "errors.acquisition_invalid_response": [
+   "The indexer or download client returned an invalid response.",
+   "Indexer atau klien unduhan mengembalikan respons yang tidak valid."
+  ],
+  "errors.acquisition_no_download_client": [
+   "No enabled download client is configured.",
+   "Tidak ada klien unduhan aktif yang dikonfigurasi."
+  ],
+  "errors.acquisition_grab_failed": [
+   "The download client did not accept the release.",
+   "Klien unduhan tidak menerima release tersebut."
+  ],
+  "errors.concurrent_change": [
+   "Another change was made at the same time. Please reload and try again.",
+   "Perubahan lain dilakukan pada saat yang sama. Muat ulang lalu coba lagi."
+  ],
+  "errors.internal_error": [
+   "An unknown error occurred.",
+   "Terjadi kesalahan yang tidak diketahui."
+  ],
+  "errors.import_no_library": [
+   "No writable library of this kind exists.",
+   "Tidak ada pustaka yang dapat ditulisi untuk jenis ini."
+  ],
+  "errors.rate_limit_exceeded": [
+   "Too many requests. Please try again later.",
+   "Terlalu banyak permintaan. Coba lagi nanti."
+  ],
+  "errors.validation.required": [
+   "A value is required.",
+   "Nilai wajib diisi."
+  ],
+  "errors.validation.invalid_type": [
+   "The value has an invalid type.",
+   "Nilai memiliki tipe yang tidak valid."
+  ],
+  "errors.validation.out_of_range": [
+   "The value is outside the allowed range.",
+   "Nilai berada di luar rentang yang diizinkan."
+  ],
+  "errors.validation.invalid_uuid": [
+   "The identifier is invalid.",
+   "Pengenal tidak valid."
+  ],
+  "errors.validation.invalid_text": [
+   "The text contains invalid characters.",
+   "Teks mengandung karakter yang tidak valid."
+  ],
+  "errors.validation.too_short": [
+   "The value is too short.",
+   "Nilai terlalu pendek."
+  ],
+  "errors.validation.password_mismatch": [
+   "The passwords do not match.",
+   "Kata sandi tidak cocok."
+  ],
+  "errors.validation.too_long": [
+   "The value is too long.",
+   "Nilai terlalu panjang."
+  ],
+  "errors.validation.invalid_email": [
+   "Please enter a valid email address.",
+   "Masukkan alamat email yang valid."
+  ],
+  "errors.validation.invalid_locale": [
+   "Please enter a language code supported by this server.",
+   "Masukkan kode bahasa yang didukung server ini."
+  ],
+  "errors.validation.invalid_url": [
+   "Please enter an HTTP or HTTPS address.",
+   "Masukkan alamat HTTP atau HTTPS."
+  ],
+  "errors.validation.invalid_host": [
+   "Please enter a hostname or IPv4 address without a scheme or path.",
+   "Masukkan hostname atau alamat IPv4 tanpa skema atau path."
+  ],
+  "errors.validation.invalid_path": [
+   "Please enter a path without traversal segments.",
+   "Masukkan path tanpa segmen traversal."
+  ],
+  "errors.validation.invalid_mac_address": [
+   "Please enter a MAC address such as 00:11:22:AA:BB:CC.",
+   "Masukkan alamat MAC seperti 00:11:22:AA:BB:CC."
+  ],
+  "errors.validation.overlapping_path": [
+   "This path overlaps another library path on the same connection.",
+   "Path ini tumpang tindih dengan path pustaka lain pada koneksi yang sama."
+  ],
+  "errors.validation.in_use": [
+   "This item is still in use.",
+   "Item ini masih digunakan."
+  ],
+  "errors.validation.invalid_pin": [
+   "The PIN is incorrect.",
+   "PIN salah."
+  ],
+  "errors.validation.request_limit": [
+   "You have reached your request limit for now.",
+   "Anda telah mencapai batas permintaan untuk saat ini."
+  ],
+  "errors.validation.request_media_blocked": [
+   "Your request rule does not allow this kind of media.",
+   "Aturan permintaan Anda tidak mengizinkan jenis media ini."
+  ],
+  "errors.validation.profile_limit": [
+   "An account can own up to ten profiles.",
+   "Satu akun dapat memiliki hingga sepuluh profil."
+  ],
+  "errors.validation.invalid_pin_format": [
+   "The PIN must have three to six digits.",
+   "PIN harus terdiri dari tiga sampai enam digit."
+  ],
+  "errors.validation.pin_locked": [
+   "Too many incorrect PINs. Please try again in a minute.",
+   "Terlalu banyak PIN yang salah. Coba lagi dalam semenit."
+  ],
+  "errors.validation.duplicate_value": [
+   "This value is already in use.",
+   "Nilai ini sudah digunakan."
+  ],
+  "errors.validation.collection_limit": [
+   "This profile has as many collections as the Admin allows.",
+   "Profil ini sudah memiliki koleksi sebanyak yang diizinkan Admin."
+  ],
+  "errors.validation.annotation_limit": [
+   "A profile keeps at most 1000 highlights per book.",
+   "Satu profil menyimpan paling banyak 1000 sorotan per buku."
+  ],
+  "errors.validation.overlapping_group": [
+   "These units already belong to another section.",
+   "Unit ini sudah termasuk dalam bagian lain."
+  ],
+  "errors.validation.group_limit": [
+   "This title has as many sections as the Admin allows.",
+   "Judul ini sudah memiliki bagian sebanyak yang diizinkan Admin."
+  ],
+  "errors.validation.utc_required": [
+   "The timestamp must use UTC.",
+   "Stempel waktu harus memakai UTC."
+  ],
+  "errors.validation.unknown_catalog_value": [
+   "The selection is invalid.",
+   "Pilihan tidak valid."
+  ],
+  "errors.validation.unknown_reference": [
+   "The referenced resource is unavailable.",
+   "Sumber daya yang dirujuk tidak tersedia."
+  ],
+  "errors.validation.outdated_version": [
+   "The data has changed. Please reload and try again.",
+   "Data telah berubah. Muat ulang lalu coba lagi."
+  ],
+  "errors.validation.invalid_transition": [
+   "This change is not available.",
+   "Perubahan ini tidak tersedia."
+  ],
+  "errors.validation.invalid_file_type": [
+   "This kind of file is not accepted here.",
+   "Jenis file ini tidak diterima di sini."
+  ],
+  "errors.validation.invalid_value": [
+   "This value cannot be used here.",
+   "Nilai ini tidak dapat digunakan di sini."
+  ],
+  "errors.validation.unknown_language": [
+   "Use two-letter language codes such as de or en.",
+   "Gunakan kode bahasa dua huruf seperti de atau en."
+  ],
+  "errors.validation.backup_passphrase": [
+   "The passphrase does not open this backup's key ring.",
+   "Frasa sandi tidak dapat membuka gantungan kunci cadangan ini."
+  ],
+  "errors.validation.naming_unknown_token": [
+   "The pattern uses an unknown placeholder.",
+   "Pola memakai placeholder yang tidak dikenal."
+  ],
+  "errors.validation.naming_incomplete": [
+   "The pattern needs the title, and for episodes the season and episode.",
+   "Pola memerlukan judul, dan untuk episode juga musim dan episode."
+  ],
+  "errors.validation.naming_needs_release_token": [
+   "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
+   "Beberapa release memerlukan {Quality}, {Release Group}, atau {Edition} di setiap nama file."
+  ],
+  "errors.validation.naming_invalid_path": [
+   "Each folder of the pattern needs a name.",
+   "Setiap folder dalam pola memerlukan nama."
+  ],
+  "errors.validation.setup_completed": [
+   "Only an instance that has not finished setup can be replaced by a backup.",
+   "Hanya instans yang belum menyelesaikan penyiapan yang dapat diganti dengan cadangan."
+  ],
+  "errors.validation.backup_incompatible": [
+   "This backup belongs to another Jularr version.",
+   "Cadangan ini berasal dari versi Jularr lain."
+  ],
+  "errors.validation.library_rename_changed": [
+   "The library changed since the preview. Please check the new preview.",
+   "Pustaka berubah sejak pratinjau. Periksa pratinjau yang baru."
+  ],
+  "errors.validation.invalid_placeholders": [
+   "The translation must preserve its placeholders.",
+   "Terjemahan harus mempertahankan placeholder-nya."
+  ],
+  "errors.validation.unknown_id": [
+   "The referenced item is unavailable.",
+   "Item yang dirujuk tidak tersedia."
+  ],
+  "errors.validation.duplicate_id": [
+   "The item was supplied more than once.",
+   "Item dikirim lebih dari sekali."
+  ],
+  "errors.validation.unknown_or_duplicate_id": [
+   "The item is unavailable or was supplied more than once.",
+   "Item tidak tersedia atau dikirim lebih dari sekali."
+  ]
+ }
+}

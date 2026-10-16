@@ -118,8 +118,6 @@ namespace Jularr.Backend.Tests
         {
             public int Pages;
 
-            public bool IsAvailable => true;
-
             public Task<Func<byte[], OcrPage>> RecognizerAsync(string? language, CancellationToken ct) => Task.FromResult<Func<byte[], OcrPage>>(_ =>
             {
                 var number = Interlocked.Increment(ref Pages);

@@ -24,11 +24,6 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            if (!_files.IsAvailable)
-            {
-                throw new ServiceUnavailableException("translation_unavailable");
-            }
-
             var (sources, targets) = await _files.LanguagesAsync(CancellationToken);
             return new TranslationLanguagesV1(sources, targets);
         }
@@ -51,11 +46,6 @@ namespace Jularr.Backend.Service.User.Translation.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // The browser translates with these files; English bridges two other languages.
-            if (!_files.IsAvailable)
-            {
-                throw new ServiceUnavailableException("translation_unavailable");
-            }
-
             var route = await _files.RouteAsync(Parameters.SourceLanguage, Parameters.TargetLanguage, CancellationToken);
             return new BaseDataList<TranslationFileV1>([.. route.Select(entry => new TranslationFileV1(entry.Step, entry.File.FileType ?? "engine",
                 "/api/v1/translation/files/" + TranslationModels.FileName(entry.File), entry.Precision))]);

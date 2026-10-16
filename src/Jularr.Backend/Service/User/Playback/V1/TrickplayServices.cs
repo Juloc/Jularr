@@ -93,7 +93,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
             var file = await Context.ReadSql.ReadOptionalAsync<TrickplaySheetFileData>(sql, CancellationToken);
-            var path = file?.TrickplayFrames is not null && _options.TrickplayPath is { } root ? Trickplay.Sheet(Trickplay.Folder(root, file.Id), Parameters.Sheet) : null;
+            var path = file?.TrickplayFrames is not null ? Trickplay.Sheet(Trickplay.Folder(_options.TrickplayPath, file.Id), Parameters.Sheet) : null;
             return path is not null && File.Exists(path) ? new PlaybackStreamV1(path, "image/jpeg") : throw new KeyNotFoundException("The sheet was not found.");
         }
     }

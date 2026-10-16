@@ -5,18 +5,20 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Logic.Instance;
 using Jularr.Backend.Service.Core;
-using Microsoft.Extensions.Options;
+using Jularr.Integrations.Logic.Media;
 
 namespace Jularr.Backend.Service.Admin.Instance.V1
 {
     [ServiceEndpoint("GET", "/api/v1/admin/setup")]
     public sealed class ReadSetupProgressV1 : AdminService<SetupProgressParametersV1>
     {
-        private readonly MediaOptions _media;
+        private readonly MediaTranscoder _transcoder;
+        private readonly MediaProbeClient _probe;
 
-        internal ReadSetupProgressV1(IOptions<MediaOptions> media)
+        internal ReadSetupProgressV1(MediaTranscoder transcoder, MediaProbeClient probe)
         {
-            _media = media.Value;
+            _transcoder = transcoder;
+            _probe = probe;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<SetupProgressV1>()];
@@ -30,7 +32,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
 
             // Without FFmpeg files play only as they are.
             var warnings = checks.Where(check => !check.IsBlocking).Select(check => check.CheckKey).ToList();
-            if (string.IsNullOrWhiteSpace(_media.FfmpegPath) || string.IsNullOrWhiteSpace(_media.FfprobePath))
+            if (!_transcoder.IsAvailable || !_probe.IsAvailable)
             {
                 warnings.Add("ffmpeg");
             }

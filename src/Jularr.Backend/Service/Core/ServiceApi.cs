@@ -96,45 +96,58 @@ namespace Jularr.Backend.Service.Core
             }
 
             services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
+            services.AddHostedService(_ => new DatabaseBaseline(connectionString));
 
-            // Keep keys outside releases.
-            if (configuration["DataProtection:KeyDirectory"] is { Length: > 0 } keyDirectory)
+            // Persistent state lives under one folder, /data in the image; every feature works without further settings.
+            var data = configuration["DataPath"] is { Length: > 0 } dataPath ? dataPath
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jularr");
+            string Folder(string? configured, string name) => configured is { Length: > 0 } ? configured : Path.Combine(data, name);
+            var keyDirectory = Folder(configuration["DataProtection:KeyDirectory"], "keys");
+            if (!Path.IsPathFullyQualified(data) || !Path.IsPathFullyQualified(keyDirectory))
             {
-                if (!Path.IsPathFullyQualified(keyDirectory))
-                {
-                    throw new InvalidOperationException("DataProtection:KeyDirectory must be an absolute persistent path.");
-                }
+                throw new InvalidOperationException("DataPath and DataProtection:KeyDirectory must be absolute persistent paths.");
+            }
 
-                var protection = services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
-                if (OperatingSystem.IsWindows())
-                {
-                    protection.ProtectKeysWithDpapi();
-                }
+            var protection = services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
+            if (OperatingSystem.IsWindows())
+            {
+                protection.ProtectKeysWithDpapi();
             }
 
             services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
             services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
-            services.Configure<MediaOptions>(configuration.GetSection("Media"));
+            services.Configure<MediaOptions>(options =>
+            {
+                configuration.GetSection("Media").Bind(options);
+                options.TrickplayPath = Folder(options.TrickplayPath, "trickplay");
+                options.TranslationPath = Folder(options.TranslationPath, "translation");
+                options.OcrPath = Folder(options.OcrPath, "ocr");
+            });
 
             // Metadata mirrors.
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
-            services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
-            services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
-            services.AddSingleton(new AudioFingerprinter { ExecutablePath = configuration["Media:FpcalcPath"] });
-            services.AddSingleton(new ArchiveTools { Par2Path = configuration["Usenet:Par2Path"], SevenZipPath = configuration["Usenet:SevenZipPath"] });
+            services.AddSingleton(new MediaProbeClient { ExecutablePath = Executables.Resolve(configuration["Media:FfprobePath"], "ffprobe") });
+            services.AddSingleton(new MediaTranscoder { ExecutablePath = Executables.Resolve(configuration["Media:FfmpegPath"], "ffmpeg") });
+            services.AddSingleton(new AudioFingerprinter { ExecutablePath = Executables.Resolve(configuration["Media:FpcalcPath"], "fpcalc") });
+            services.AddSingleton(new ArchiveTools
+            {
+                Par2Path = Executables.Resolve(configuration["Usenet:Par2Path"], "par2"),
+                SevenZipPath = Executables.Resolve(configuration["Usenet:SevenZipPath"], "7zz", "7z")
+            });
 
             // Backups reach the same database.
             var target = new NpgsqlConnectionStringBuilder(connectionString);
             services.Configure<BackupOptions>(options =>
             {
                 configuration.GetSection("Backup").Bind(options);
-                options.KeyDirectory = configuration["DataProtection:KeyDirectory"];
+                options.Path = Folder(options.Path, "backups");
+                options.KeyDirectory = keyDirectory;
             });
             services.AddSingleton(new PostgresBackupTools
             {
-                PgDumpPath = configuration["Backup:PgDumpPath"],
-                PgRestorePath = configuration["Backup:PgRestorePath"],
+                PgDumpPath = Executables.Resolve(configuration["Backup:PgDumpPath"], "pg_dump"),
+                PgRestorePath = Executables.Resolve(configuration["Backup:PgRestorePath"], "pg_restore"),
                 Connection = new PostgresConnection(target.Host ?? "localhost", target.Port, target.Database ?? "", target.Username ?? "", target.Password)
             });
             return RegisterServices(services, [typeof(Service).Assembly], providers);
@@ -251,12 +264,6 @@ namespace Jularr.Backend.Service.Core
             // Validate trusted auth configuration.
             services.AddOptions<AuthenticationOptions>()
                 .Validate(options => options.SessionLifetimeHours is >= 1 and <= 720, "Session lifetime must be 1-720 hours.")
-                .Validate(options => !options.PlexRegistrationEnabled || options.PlexLoginEnabled
-                    && options.PlexUiLocaleId > 0 && options.PlexRegistrationLibraryKeys.Length > 0
-                    && options.PlexRegistrationLibraryKeys.All(key => key.Length > 0 && key.All(char.IsAsciiDigit))
-                    && options.PlexServerIdentifier.Length > 0 && options.PlexServerUri is { IsAbsoluteUri: true } uri
-                    && uri.Scheme == "https" && uri.AbsolutePath == "/" && uri.UserInfo.Length == 0
-                    && uri.Query.Length == 0 && uri.Fragment.Length == 0, "Plex registration requires a configured HTTPS server and libraries.")
                 .ValidateOnStart();
 
             // Harden session cookies.

@@ -692,6 +692,38 @@
    "Sync availability now",
    "Verfügbarkeit jetzt abgleichen"
   ],
+  "admin.plex.signIn": [
+   "Sign in with Plex",
+   "Mit Plex anmelden"
+  ],
+  "admin.plex.registration": [
+   "Plex users may register",
+   "Plex-Nutzer dürfen sich registrieren"
+  ],
+  "admin.plex.registrationApproval": [
+   "New accounts wait for approval",
+   "Neue Konten warten auf Freigabe"
+  ],
+  "admin.plex.registrationSections": [
+   "Libraries whose users may register",
+   "Bibliotheken, deren Nutzer sich registrieren dürfen"
+  ],
+  "hint.PlexFields.SignIn.info": [
+   "Accounts linked to Plex sign in through Plex.",
+   "Mit Plex verknüpfte Konten melden sich über Plex an."
+  ],
+  "hint.PlexFields.Registration.info": [
+   "Someone with access to the connected server can ask for an account by signing in with Plex.",
+   "Wer Zugriff auf den verbundenen Server hat, kann per Plex-Anmeldung ein Konto beantragen."
+  ],
+  "hint.PlexFields.RegistrationApproval.info": [
+   "An administrator enables each new account first.",
+   "Ein Administrator schaltet jedes neue Konto zuerst frei."
+  ],
+  "hint.PlexFields.SectionKeys.info": [
+   "None chosen: users of any library may register.",
+   "Keine gewählt: Nutzer jeder Bibliothek dürfen sich registrieren."
+  ],
   "admin.plex.disconnect": [
    "Disconnect Plex server",
    "Plex-Server trennen"
@@ -4373,8 +4405,8 @@
    "Backups"
   ],
   "admin.backup.notConfigured": [
-   "Backups need a backup folder and pg_dump in the server configuration.",
-   "Backups brauchen einen Backup-Ordner und pg_dump in der Serverkonfiguration."
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Backups brauchen pg_dump und pg_restore, die auf diesem Server fehlen."
   ],
   "admin.backup.running": [
    "A backup is being made.",
@@ -6357,8 +6389,8 @@
    "DSM sperrt die Adresse von Jularr nach fehlgeschlagenen Anmeldungen; hebe die Sperre in DSM auf."
   ],
   "errors.backup_unavailable": [
-   "Backups need a backup folder and pg_dump in the server configuration.",
-   "Backups brauchen einen Backup-Ordner und pg_dump in der Serverkonfiguration."
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Backups brauchen pg_dump und pg_restore, die auf diesem Server fehlen."
   ],
   "errors.backup_failed": [
    "The backup tool did not finish. The server log has its message.",

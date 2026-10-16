@@ -28,11 +28,6 @@ namespace Jularr.Backend.Service.System.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (!_recognizer.IsAvailable)
-            {
-                return new UpdateResult(false);
-            }
-
             // The oldest waiting scan on storage that is not known to be missing.
             var queued = await Context.ExecuteBatchAsync((ctx, ct) =>
             {

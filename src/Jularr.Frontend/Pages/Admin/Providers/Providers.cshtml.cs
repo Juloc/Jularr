@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Providers
 {
     public sealed class ProvidersModel(ReadProvidersV1 providers, UpdateProviderV1 update, SaveProviderSecretV1 saveSecret, ReadPlexServerV1 readPlex, SavePlexServerV1 savePlex,
-        SyncPlexServerV1 syncPlex, DisconnectPlexServerV1 disconnectPlex, ReadMediaServerV1 readServer, SaveMediaServerV1 saveServer, SyncMediaServerV1 syncServer,
+        SyncPlexServerV1 syncPlex, DisconnectPlexServerV1 disconnectPlex, ReadPlexSignInV1 readSignIn, UpdatePlexSignInV1 updateSignIn, ReadMediaServerV1 readServer, SaveMediaServerV1 saveServer, SyncMediaServerV1 syncServer,
         DisconnectMediaServerV1 disconnectServer, ReadMediaServerLinksV1 readLinks, SaveMediaServerLinkV1 saveLink, ReadProfileChoicesV1 readProfiles, IAntiforgery antiforgery,
         UiText texts) : JularrPage
     {
@@ -26,6 +26,8 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         private PageResult<ProviderDetailsV1>? _providers;
         private PlexServerDetailsV1? _plex;
         private SavePlexServerDataV1? _plexInput;
+        private PlexSignInV1? _signIn;
+        private SavePlexSignInDataV1? _signInInput;
         private UpdateProviderDataV1? _input;
         private long? _providerId;
 
@@ -105,6 +107,25 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             {
                 page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), Home + "?handler=PlexSync", csrf, new PlexServerParametersV1()));
                 page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.disconnect"), Home + "?handler=PlexDisconnect", csrf, new PlexServerParametersV1()));
+
+                // Who signs in and registers with Plex; the libraries come from the connected server.
+                if (_signIn is { } signIn)
+                {
+                    page.Content.Add(new Form<SavePlexSignInDataV1>(form =>
+                    {
+                        form.Toggle(item => item.SignIn, "admin.plex.signIn");
+                        form.Toggle(item => item.Registration, "admin.plex.registration");
+                        form.Toggle(item => item.RegistrationApproval, "admin.plex.registrationApproval");
+                        if (signIn.SectionKeys.Length > 0)
+                        {
+                            form.Choices(item => item.RegistrationSections, "admin.plex.registrationSections",
+                                signIn.SectionKeys.Zip(signIn.SectionTitles, (key, title) => new SelectOption(key, title)));
+                        }
+
+                        form.Submit("common.save");
+                    }, Home + "?handler=PlexSignIn", csrf, _signInInput ?? new SavePlexSignInDataV1(signIn.SignIn, signIn.Registration, signIn.RegistrationApproval, signIn.RegistrationSections),
+                        _signInInput is null ? null : FormError));
+                }
             }
         }
 
@@ -177,6 +198,13 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             return LocalRedirect(Home);
         }
 
+        public async Task<IActionResult> OnPostPlexSignInAsync(bool signIn, bool registration, bool registrationApproval, string[]? registrationSections)
+        {
+            _signInInput = new SavePlexSignInDataV1(signIn, registration, registrationApproval, registrationSections);
+            await updateSignIn.ExecuteAsync<UpdateResult>(new PlexServerParametersV1(), _signInInput, HttpContext.RequestAborted);
+            return LocalRedirect(Home);
+        }
+
         public async Task<IActionResult> OnPostPlexSyncAsync()
         {
             var sync = await syncPlex.ExecuteAsync<PlexSyncResultV1>(new PlexServerParametersV1(), default, HttpContext.RequestAborted);
@@ -222,6 +250,10 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         {
             _providers = await providers.ExecuteAsync<PageResult<ProviderDetailsV1>>(new ReadProvidersParametersV1(PageNumber), HttpContext.RequestAborted);
             _plex = await readPlex.ExecuteAsync<PlexServerDetailsV1>(new PlexServerParametersV1(), HttpContext.RequestAborted);
+            if (_plex.ExternalId is not null)
+            {
+                _signIn = await readSignIn.ExecuteAsync<PlexSignInV1>(new PlexServerParametersV1(), HttpContext.RequestAborted);
+            }
             if (!texts.Can(null, "ProgressSync", "Library"))
             {
                 return;

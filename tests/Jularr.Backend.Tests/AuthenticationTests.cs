@@ -411,6 +411,13 @@ namespace Jularr.Backend.Tests
                 // The fixtures have several profiles per account; the default-off state has its own test.
                 await fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Profiles'");
 
+                // Plex sign-in as the Owner sets it on a connected server.
+                if (plexEnabled)
+                {
+                    await fixture.RunSqlAsync("UPDATE \"Providers\" SET \"BaseUrl\" = 'https://plex-server.example.test/', \"ExternalId\" = 'connected-server' WHERE \"Key\" = 'plex'");
+                    await fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"PlexSignIn\" = TRUE, \"PlexRegistration\" = TRUE, \"PlexRegistrationSections\" = '{7}'");
+                }
+
                 if (media)
                 {
                     // Install the requested baseline.
@@ -458,6 +465,14 @@ namespace Jularr.Backend.Tests
                 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
                 builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
                 builder.Configuration["Storage:RequireMountPoint"] = "false";
+
+                // Each host keeps its state apart; native tools stay off unless a test names them.
+                builder.Configuration["DataPath"] = Path.Combine(Path.GetTempPath(), "jularr-tests", Guid.NewGuid().ToString("N"));
+                foreach (var tool in new[] { "Media:FfprobePath", "Media:FfmpegPath", "Media:FpcalcPath", "Usenet:Par2Path", "Usenet:SevenZipPath", "Backup:PgDumpPath", "Backup:PgRestorePath" })
+                {
+                    builder.Configuration[tool] = "";
+                }
+
                 foreach (var (key, value) in settings ?? new Dictionary<string, string>())
                 {
                     builder.Configuration[key] = value;
@@ -473,14 +488,6 @@ namespace Jularr.Backend.Tests
                     builder.Services.AddSingleton<FrontendAssets>();
                     builder.Services.AddSingleton<ShellNavigation>();
                 }
-                builder.Services.Configure<AuthenticationOptions>(options =>
-                {
-                    options.PlexLoginEnabled = plexEnabled;
-                    options.PlexRegistrationEnabled = plexEnabled;
-                    options.PlexServerUri = new Uri("https://plex-server.example.test/");
-                    options.PlexServerIdentifier = "connected-server";
-                    options.PlexRegistrationLibraryKeys = ["7"];
-                });
                 var plex = new PlexHandler();
                 builder.Services.AddHttpClient<PlexClient>().ConfigurePrimaryHttpMessageHandler(() => plex);
                 services?.Invoke(builder.Services);
@@ -570,8 +577,13 @@ namespace Jularr.Backend.Tests
             public async ValueTask DisposeAsync()
             {
                 _client.Dispose();
+                var data = _app.Configuration["DataPath"];
                 await _app.DisposeAsync();
                 await Fixture.DisposeAsync();
+                if (data is not null && Directory.Exists(data))
+                {
+                    Directory.Delete(data, true);
+                }
             }
         }
 

@@ -692,6 +692,38 @@
    "Sync availability now",
    "入手状況を今すぐ同期"
   ],
+  "admin.plex.signIn": [
+   "Sign in with Plex",
+   "Plexでサインイン"
+  ],
+  "admin.plex.registration": [
+   "Plex users may register",
+   "Plexユーザーの登録を許可"
+  ],
+  "admin.plex.registrationApproval": [
+   "New accounts wait for approval",
+   "新しいアカウントは承認待ちにする"
+  ],
+  "admin.plex.registrationSections": [
+   "Libraries whose users may register",
+   "登録を許可するライブラリ"
+  ],
+  "hint.PlexFields.SignIn.info": [
+   "Accounts linked to Plex sign in through Plex.",
+   "Plexと連携したアカウントはPlexでサインインします。"
+  ],
+  "hint.PlexFields.Registration.info": [
+   "Someone with access to the connected server can ask for an account by signing in with Plex.",
+   "接続済みサーバーにアクセスできるユーザーは、Plexでサインインしてアカウントを申請できます。"
+  ],
+  "hint.PlexFields.RegistrationApproval.info": [
+   "An administrator enables each new account first.",
+   "新しいアカウントは管理者が先に有効にします。"
+  ],
+  "hint.PlexFields.SectionKeys.info": [
+   "None chosen: users of any library may register.",
+   "未選択の場合、どのライブラリのユーザーも登録できます。"
+  ],
   "admin.plex.disconnect": [
    "Disconnect Plex server",
    "Plex サーバーを切断"
@@ -4373,8 +4405,8 @@
    "バックアップ"
   ],
   "admin.backup.notConfigured": [
-   "Backups need a backup folder and pg_dump in the server configuration.",
-   "バックアップにはサーバー設定でのバックアップフォルダーと pg_dump が必要です。"
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "バックアップにはpg_dumpとpg_restoreが必要ですが、このサーバーにはありません。"
   ],
   "admin.backup.running": [
    "A backup is being made.",
@@ -6357,8 +6389,8 @@
    "ログインの失敗により、DSM が Jularr のアドレスをブロックしています。DSM でブロックを解除してください。"
   ],
   "errors.backup_unavailable": [
-   "Backups need a backup folder and pg_dump in the server configuration.",
-   "バックアップにはサーバー設定でのバックアップフォルダーと pg_dump が必要です。"
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "バックアップにはpg_dumpとpg_restoreが必要ですが、このサーバーにはありません。"
   ],
   "errors.backup_failed": [
    "The backup tool did not finish. The server log has its message.",

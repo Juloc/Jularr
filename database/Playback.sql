@@ -148,8 +148,6 @@ CREATE TABLE "ReadingAnnotations" (
 );
 CREATE INDEX "IX_ReadingAnnotations_Asset" ON "ReadingAnnotations" ("ProfileId", "MediaAssetId", "SectionIndex", "StartBlock");
 
-COMMIT;
-
 -- The language a profile reads a book in: "original" or a language code; a book without a row follows the profile's language.
 CREATE TABLE "ReadingLanguages" (
     "ProfileId" bigint NOT NULL REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
@@ -167,3 +165,5 @@ CREATE TABLE "ReadingRecognitions" (
     "RequestedAt" timestamptz NOT NULL DEFAULT now(),
     "FailedAt" timestamptz
 );
+
+COMMIT;

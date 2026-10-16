@@ -2,8 +2,8 @@ namespace Jularr.Backend.Service.Core
 {
     public sealed class BackupOptions
     {
-        // Absolute folder for backups; unset disables them.
-        public string? Path { get; set; }
+        // Absolute folder for backups; by default under the data folder.
+        public string Path { get; set; } = "";
 
         // Automatic backups; 0 turns them off.
         public int IntervalHours { get; set; } = 24;

@@ -33,7 +33,8 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (_media.TrickplayPath is not { } root || !_transcoder.IsAvailable)
+            var root = _media.TrickplayPath;
+            if (!_transcoder.IsAvailable)
             {
                 return new UpdateResult(false);
             }

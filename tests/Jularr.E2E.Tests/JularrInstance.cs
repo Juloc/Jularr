@@ -5,17 +5,15 @@ using Npgsql;
 
 namespace Jularr.E2E.Tests
 {
-    // A fresh Jularr on loopback: its own database from the baselines and the built web host as a separate process.
+    // A fresh Jularr on loopback: its own empty database, which the built web host fills with its baselines when it starts, as a new installation does.
     internal sealed class JularrInstance : IAsyncDisposable
     {
-        // Applied in the order of a new installation.
-        private static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback"];
         private readonly string _adminConnection;
         private readonly string _database = "jularr_e2e_" + Guid.NewGuid().ToString("N");
         private readonly string _storage = Directory.CreateTempSubdirectory("jularr-e2e-").FullName;
 
         // Keys outlive a restart, so sign-ins do too.
-        private readonly string _keys = Directory.CreateTempSubdirectory("jularr-e2e-keys-").FullName;
+        private readonly string _data = Directory.CreateTempSubdirectory("jularr-e2e-data-").FullName;
         private Process? _process;
         private bool _created;
 
@@ -88,7 +86,7 @@ namespace Jularr.E2E.Tests
             }
             finally
             {
-                foreach (var folder in new[] { _storage, _keys })
+                foreach (var folder in new[] { _storage, _data })
                 {
                     try
                     {
@@ -163,14 +161,6 @@ namespace Jularr.E2E.Tests
                 await create.ExecuteNonQueryAsync();
                 _created = true;
             }
-
-            await using var database = new NpgsqlConnection(ConnectionString);
-            await database.OpenAsync();
-            foreach (var name in Baselines)
-            {
-                await using var command = new NpgsqlCommand(await File.ReadAllTextAsync(Path.Combine(Repository, "database", name + ".sql")), database);
-                await command.ExecuteNonQueryAsync();
-            }
         }
 
         // The host is the build next to this project's, in the same configuration.
@@ -189,7 +179,7 @@ namespace Jularr.E2E.Tests
             start.Environment["JULARR_DB"] = HostConnectionString;
             start.Environment["Storage__MountRoot"] = _storage;
             start.Environment["Storage__RequireMountPoint"] = "false";
-            start.Environment["DataProtection__KeyDirectory"] = _keys;
+            start.Environment["DataPath"] = _data;
             foreach (var (key, value) in _settings)
             {
                 start.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;

@@ -103,7 +103,7 @@ namespace Jularr.Backend.Logic.Reading
         // The scan's lines in page points, grouped by baseline like a text page's words.
         private static List<PdfLine>? Recognized(UglyToad.PdfPig.Content.Page page, Func<byte[], OcrPage> recognize)
         {
-            var scan = page.GetImages().Where(image => image.Bounds.Width * image.Bounds.Height >= page.Width * page.Height * ScanCoverage).MaxBy(image => image.Bounds.Width * image.Bounds.Height);
+            var scan = page.GetImages().Where(image => image.BoundingBox.Width * image.BoundingBox.Height >= page.Width * page.Height * ScanCoverage).MaxBy(image => image.BoundingBox.Width * image.BoundingBox.Height);
             var bytes = scan is null ? null : scan.TryGetPng(out var png) ? png : scan.RawMemory.Span is [0xFF, 0xD8, ..] ? scan.RawMemory.ToArray() : null;
             if (scan is null || bytes is null || bytes.Length > MaximumImageBytes * 4)
             {
@@ -120,18 +120,18 @@ namespace Jularr.Backend.Logic.Reading
                 return null;
             }
 
-            var (scaleX, scaleY) = (scan.Bounds.Width / read.Width, scan.Bounds.Height / read.Height);
+            var (scaleX, scaleY) = (scan.BoundingBox.Width / read.Width, scan.BoundingBox.Height / read.Height);
             var lines = new List<PdfLine>();
             foreach (var box in read.Lines.Where(line => line.Confidence >= MinimumConfidence).OrderByDescending(line => line.Bottom))
             {
-                var (bottom, size) = (scan.Bounds.Top - box.Bottom * scaleY, (box.Bottom - box.Top) * scaleY * 0.7);
+                var (bottom, size) = (scan.BoundingBox.Top - box.Bottom * scaleY, (box.Bottom - box.Top) * scaleY * 0.7);
                 var line = lines.LastOrDefault(candidate => Math.Abs(candidate.Bottom - bottom) < Math.Max(size, 1) * 0.4);
                 if (line is null)
                 {
                     lines.Add(line = new PdfLine(bottom, size, page.Height));
                 }
 
-                line.Words.Add((scan.Bounds.Left + box.Left * scaleX, scan.Bounds.Left + box.Right * scaleX, box.Text));
+                line.Words.Add((scan.BoundingBox.Left + box.Left * scaleX, scan.BoundingBox.Left + box.Right * scaleX, box.Text));
             }
 
             return lines;

@@ -1,0 +1,35 @@
+# Jularr with PostgreSQL: image, port and volumes; every feature works without further settings.
+# Copy .env.example to .env, set the release and a long database password, then `docker compose up -d`.
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jularr
+      POSTGRES_USER: jularr
+      POSTGRES_PASSWORD: ${JULARR_DB_PASSWORD:?Set JULARR_DB_PASSWORD in .env}
+    volumes:
+      - jularr-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jularr -d jularr"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  jularr:
+    image: ghcr.io/juloc/jularr:${JULARR_VERSION:?Set JULARR_VERSION in .env}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      JULARR_DB: Host=postgres;Database=jularr;Username=jularr;Password=${JULARR_DB_PASSWORD}
+    ports:
+      - "8097:8080"
+    volumes:
+      - jularr-data:/data
+      - ${JULARR_MEDIA:-./media}:/media
+
+volumes:
+  jularr-data:
+  jularr-postgres:

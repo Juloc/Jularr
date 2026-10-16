@@ -9,8 +9,6 @@ namespace Jularr.Backend.Service.Core
     // Reads the text of scanned pages; the models come from the OCR folder.
     internal interface IPageRecognizer
     {
-        bool IsAvailable { get; }
-
         Task<Func<byte[], OcrPage>> RecognizerAsync(string? language, CancellationToken ct);
     }
 
@@ -20,11 +18,9 @@ namespace Jularr.Backend.Service.Core
         private static readonly SemaphoreSlim Downloads = new(1, 1);
         private readonly ConcurrentDictionary<string, OcrEngine> _engines = new(StringComparer.Ordinal);
 
-        public bool IsAvailable => options.Value.OcrPath is not null;
-
         public async Task<Func<byte[], OcrPage>> RecognizerAsync(string? language, CancellationToken ct)
         {
-            var root = options.Value.OcrPath ?? throw new ServiceUnavailableException("ocr_unavailable");
+            var root = options.Value.OcrPath;
             var recognition = OcrModels.Recognition(language);
             if (_engines.TryGetValue(recognition.FileName, out var loaded))
             {

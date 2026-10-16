@@ -18,6 +18,17 @@ Nächste fachliche Schritte: [Backend-Slices](docs/BACKEND_NEXT.md) (Plan, keine
 Instanz-Einrichtung: [Wizard-Ablauf und Owner](docs/INSTANCE_SETUP.md) (Vorschlag).
 Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
+## Docker Compose
+
+[compose.yaml](compose.yaml) braucht nur Image, Port und Volumes; `.env.example` nach `.env`
+kopieren, Release und Datenbankpasswort setzen, `docker compose up -d`, dann `http://<host>:8097`
+öffnen und den Owner anlegen. Jede Funktion arbeitet ohne weitere Einstellungen: Das
+[Image](Dockerfile) bringt FFmpeg/ffprobe, fpcalc, 7-Zip, par2 und den PostgreSQL-18-Client mit
+(auf dem `PATH` gefunden; ein gesetzter Pfad gewinnt, ein leerer schaltet das Programm ab), aller
+Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`, `translation`, `ocr`),
+Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
+alle frischen Baselines in einer Transaktion; eine bestehende wird nie verändert oder migriert.
+
 ## Backend im gemeinsamen Host
 
 Das Frontend braucht ProjectReferences auf `../Jularr.Backend/Jularr.Backend.csproj`
@@ -57,15 +68,14 @@ Seitenaufrufe schreiben nichts. Widerruf, Logout und abgelaufene Sessions bleibe
 Die unabhängige Cookie-Sliding-Expiration ist deaktiviert, damit Cookie und DB zusammen verlängert werden.
 
 Data Protection verwendet den stabilen Anwendungskontext `Jularr`, unabhängig vom
-Release-Verzeichnis. Ohne `DataProtection:KeyDirectory` gelten die ASP.NET-Plattformdefaults;
-unter Windows werden Schlüssel im Benutzerprofil gespeichert und durch DPAPI geschützt.
-Für Container `DataProtection__KeyDirectory` auf einen absoluten Pfad in einem persistenten,
-nur dieser Instanz zugänglichen Volume setzen. Unter Linux zusätzlich den Schlüsselordner
+Release-Verzeichnis. Die Schlüssel liegen in `DataPath/keys` (im Image `/data/keys`,
+sonst im lokalen Anwendungsdatenordner), abweichend in `DataProtection:KeyDirectory`;
+unter Windows schützt sie zusätzlich DPAPI. Unter Linux den Schlüsselordner
 durch restriktive Dateirechte und gegebenenfalls Volume-Verschlüsselung schützen; das
 Verzeichnis enthält vertrauliches Schlüsselmaterial. Schlüssel und DB müssen Updates überleben.
 Cookies und Provider-Secrets aus dem bisherigen pfadabhängigen Schutzkontext müssen beim
 einmaligen Wechsel neu ausgestellt beziehungsweise neu hinterlegt werden.
-Keine automatische Schema-Installation oder Migration; [Baseline](database/README.md).
+Keine Migration; nur eine leere Datenbank erhält beim Start die [Baselines](database/README.md).
 
 Razor ruft per DI dieselben Services direkt auf, beispielsweise
 `await login.ExecuteAsync<LoginResultV1>(new LoginDataV1(email, password))`.
@@ -165,7 +175,7 @@ der Verbindung und werden über einen sicheren Ordner-Browser gewählt. Scans la
 im Hintergrund-Worker, automatisch nach dem in `/Admin/Instance` eingestellten Intervall (Standard 24 Stunden, 0 aus; schlafende NAS bleiben unberührt), `/Admin/Library` zeigt Inventar und Zuordnung, `/Admin/Activity` die Scans, die
 Detailseite die gespeicherte Verfügbarkeit. Dafür sind die frischen
 [Storage-](database/Storage.sql) und [Library-Baselines](database/Library.sql)
-erforderlich; `Media:FfprobePath` aktiviert die Stream-Analyse, `Media:FpcalcPath` mit einem AcoustID-Schlüssel die Musikerkennung per Fingerabdruck. Deployment, Rechte und
+erforderlich; ffprobe analysiert die Streams, fpcalc mit einem AcoustID-Schlüssel erkennt Musik per Fingerabdruck. Deployment, Rechte und
 offene Integration stehen in [Storage Runtime](docs/STORAGE_RUNTIME.md).
 Den tatsächlichen Umfang gegenüber dem Originalmodell zeigt der
 [Schema-Abgleich](docs/SCHEMA_SNAPSHOT_ALIGNMENT.md).
@@ -196,23 +206,18 @@ gemeinsame Komponenten und Styles, keine nachgebauten Controls je Seite.
 `/Admin/Providers` verwendet `ReadProvidersV1` und `UpdateProviderV1` zum Aktivieren
 vorhandener Provider. API: `GET /api/v1/admin/providers`,
 `PUT /api/v1/admin/providers/{providerId}`. Deaktiviertes Plex verschwindet aus dem
-Anmeldeangebot. Verbindungsdaten, Fähigkeiten und Gesundheitstests bleiben offen;
-die Oberfläche behauptet keinen erfolgreichen Verbindungstest.
+Anmeldeangebot.
 
-## Plex-Konfiguration
+## Plex-Anmeldung
 
-Plex ist standardmäßig aus. Konfiguration unter `Authentication`:
+Plex-Anmeldung und -Registrierung stellt der Owner unter `/Admin/Providers` beim verbundenen
+Plex-Server ein (`ReadPlexSignInV1`, `UpdatePlexSignInV1`; standardmäßig aus): Anmeldung,
+Registrierung, Freigabe neuer Konten (standardmäßig an) und die Bibliotheken, deren Nutzer sich
+registrieren dürfen (keine gewählt: jede). Neue Plex-Konten starten in der Instanzsprache.
+`Authentication:SessionLifetimeHours` bleibt 720 (30 Tage), zulässig 1–720.
 
-- `SessionLifetimeHours`: 720 (30 Tage), zulässig 1–720; gilt auch ohne Plex.
-- `PlexLoginEnabled`, `PlexRegistrationEnabled`: jeweils false.
-- `PlexRequireApproval`: true; neue Plex-Accounts bleiben bis zur Freigabe deaktiviert.
-- `PlexUiLocaleId`: 1, muss auf einen aktivierten Locale-Eintrag zeigen.
-- `PlexServerUri`: ausdrücklich konfigurierte HTTPS-Basisadresse des verbundenen Servers.
-- `PlexServerIdentifier`: dessen tatsächliche machineIdentifier.
-- `PlexRegistrationLibraryKeys`: erlaubte Library-Section-IDs, z. B. `["7"]`.
-
-Plex-Neuregistrierung braucht eine bestätigte E-Mail und Zugriff auf mindestens eine
-dieser Libraries mit dem **Token des anmeldenden Plex-Nutzers**. Server-Identität wird
+Plex-Neuregistrierung braucht eine bestätigte E-Mail und Zugriff auf eine dieser Libraries
+des verbundenen Servers mit dem **Token des anmeldenden Plex-Nutzers**. Server-Identität wird
 abgeglichen; URLs aus Plex-Ressourcen werden nicht als Ziel übernommen.
 Verknüpfungen werden ausschließlich anhand Provider + bestätigter externer ID gefunden,
 niemals anhand einer gleichen E-Mail. Registrierung erstellt keinen ersten Owner.
@@ -340,11 +345,10 @@ Services. Der Player spielt kompatible Dateien direkt (Direct Play mit HTTP-Rang
 setzt pro Profil exakt fort und markiert nur ein echtes Ende als gesehen. Andere
 Dateien laufen als HLS: FFmpeg kopiert passende Spuren (Remux) oder wandelt nach
 H.264/AAC (Transcode), erzeugt Segmente erst bei Bedarf und begrenzt Vorlauf und
-parallele Jobs. Konfiguration: `Media:FfmpegPath`, `Media:TranscodeCachePath`,
-`Media:MaxTranscodes`, optional `Media:VideoEncoderArguments` und
-`Media:HardwareAccelerationArguments` mit Software-Fallback. Vorschaubilder beim Spulen
-(Modul „Trickplay“, standardmäßig aus) rendert ein Hintergrund-Worker mit FFmpeg nach
-`Media:TrickplayPath`; ohne diesen Ordner gibt es keine.
+parallele Jobs. Konfiguration: `Media:TranscodeCachePath`, `Media:MaxTranscodes`, optional
+`Media:VideoEncoderArguments` und `Media:HardwareAccelerationArguments` mit Software-Fallback.
+Vorschaubilder beim Spulen (Modul „Trickplay“, standardmäßig aus) rendert ein Hintergrund-Worker
+mit FFmpeg nach `DataPath/trickplay`.
 Metadaten-Spiegel ersetzen die Adressen von TMDB, MusicBrainz, AniList und Open Library über
 `Providers:Tmdb`, `Providers:MusicBrainz`, `Providers:AniList` und `Providers:OpenLibrary` (HTTPS, auf dem eigenen Rechner auch HTTP).
 Filme nennen ihre TMDB-Filmreihe (Modul „Franchises“, eigene Seite `/Franchise/{id}`). Jede Datei
@@ -360,16 +364,16 @@ und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste
 Arr+ betreibt Jularr vollständig selbst. Nativer Downloader und optionale externe
 Downloader wie SABnzbd verwenden dieselbe Pipeline. Der native Downloader nutzt
 News-Server (`nntp://` oder `nntps://`, Login, Verbindungen) unter `/Admin/Acquisition`;
-Reparatur und Entpacken übernehmen `Usenet:Par2Path` (par2) und `Usenet:SevenZipPath`
-(7-Zip). Ohne diese Programme warten beschädigte oder gepackte Downloads mit Hinweis. Sonarr/Radarr/Prowlarr dienen
+Reparatur und Entpacken übernehmen par2 und 7-Zip aus dem Image. Ohne diese Programme warten
+beschädigte oder gepackte Downloads mit Hinweis. Sonarr/Radarr/Prowlarr dienen
 nur einer ausdrücklich gewählten einmaligen Übernahme (`/Admin/Acquisition/Takeover`:
 Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
 
-Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` (`Backup:PgDumpPath`) samt
-Schlüsselbund (`DataProtection:KeyDirectory`) in `Backup:Path`; automatisch alle
+Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
+Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch alle
 `Backup:IntervalHours` (Standard 24, 0 aus), die neuesten `Backup:Keep` (Standard 7, mindestens 1) bleiben.
-Ein Backup derselben Jularr-Version stellt `pg_restore` (`Backup:PgRestorePath`) nur in der
+Ein Backup derselben Jularr-Version stellt `pg_restore` nur in der
 Einrichtung wieder her (`/Setup/Backup`); danach Jularr neu starten. Mit `Backup:Passphrase` liegt der
 Schlüsselbund nur verschlüsselt im Backup (AES-GCM, Schlüssel per PBKDF2) und die Wiederherstellung fragt
 nach der Passphrase; ohne sie enthält der Backup-Ordner die Schlüssel für gespeicherte Zugangsdaten offen

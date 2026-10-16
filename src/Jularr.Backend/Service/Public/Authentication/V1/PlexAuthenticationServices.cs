@@ -1,6 +1,7 @@
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
+using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Authentication;
@@ -22,13 +23,11 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
     {
         private readonly PlexClient _plex;
         private readonly IDataProtector _protector;
-        private readonly AuthenticationOptions _options;
 
-        internal StartPlexV1(PlexClient plex, IDataProtectionProvider protection, IOptions<AuthenticationOptions> options)
+        internal StartPlexV1(PlexClient plex, IDataProtectionProvider protection)
         {
             _plex = plex;
             _protector = protection.CreateProtector("Jularr.Plex.DeviceKey.V1");
-            _options = options.Value;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -37,7 +36,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (!_options.PlexLoginEnabled)
+            if (!(await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadPlexSignInAsync(ct), CancellationToken)).SignIn)
             {
                 throw new SecurityException("Plex sign-in is disabled.");
             }
@@ -99,7 +98,8 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (!_options.PlexLoginEnabled)
+            var settings = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadPlexSignInAsync(ct), CancellationToken);
+            if (!settings.SignIn)
             {
                 throw new SecurityException("Plex sign-in is disabled.");
             }
@@ -155,13 +155,12 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 return (bool)(await context.ReadSql.ExecuteScalarAsync(sql, token))!;
             }, CancellationToken);
 
-            // Check the configured library.
+            // Users of the connected server's chosen libraries may register.
             var hasAccess = needsRegistration
-                && _options.PlexRegistrationEnabled
+                && settings.CanRegister
                 && await _plex.HasLibraryAccessAsync(flow.ClientIdentifier, identity.AccessToken,
-                    _options.PlexServerUri!, _options.PlexServerIdentifier,
-                    _options.PlexRegistrationLibraryKeys, CancellationToken);
-            var registration = new PlexRegistrationData(hasAccess, _options.PlexRequireApproval, _options.PlexUiLocaleId);
+                    new Uri(settings.BaseUrl!), settings.ServerIdentifier!, settings.RegistrationSections, CancellationToken);
+            var registration = new PlexRegistrationData(hasAccess, settings.RegistrationApproval, settings.UiLocaleId);
 
             // Validate the database identity.
             var identityData = new PlexIdentityData(identity.ExternalAccountId, identity.Email, identity.DisplayName, identity.EmailVerified);

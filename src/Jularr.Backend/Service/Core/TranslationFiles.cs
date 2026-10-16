@@ -15,7 +15,6 @@ namespace Jularr.Backend.Service.Core
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> Downloads = new(StringComparer.Ordinal);
         private static readonly TimeSpan ListLifetime = TimeSpan.FromHours(12);
 
-        public bool IsAvailable => options.Value.TranslationPath is not null;
 
         // The engine, then the parts of each model on the way from source to target.
         public async Task<IReadOnlyList<(int Step, TranslationFile File, string? Precision)>> RouteAsync(string source, string target, CancellationToken ct)
@@ -40,7 +39,7 @@ namespace Jularr.Backend.Service.Core
         // Only files Mozilla lists are served; each is downloaded once and kept under its hash.
         public async Task<string> PathAsync(string name, CancellationToken ct)
         {
-            var root = options.Value.TranslationPath ?? throw new ServiceUnavailableException("translation_unavailable");
+            var root = options.Value.TranslationPath;
             var (engines, models) = await ListsAsync(ct);
             var file = engines.Concat(models).FirstOrDefault(candidate => TranslationModels.FileName(candidate) == name) ?? throw new KeyNotFoundException("Unknown translation file.");
             var path = Path.Combine(root, name);

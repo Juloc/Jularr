@@ -121,4 +121,55 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
             return new PlexSyncResultV1(result.LinkedCount, result.CreatedCount);
         }
     }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/providers/plex/sign-in")]
+    public sealed class ReadPlexSignInV1 : AdminService<PlexServerParametersV1>
+    {
+        private readonly PlexServer _plex;
+
+        internal ReadPlexSignInV1(PlexServer plex)
+        {
+            _plex = plex;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlexSignInV1>()];
+        protected override ModuleRequirement GetInstanceModules(PlexServerParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(PlexServerParametersV1 parameters, Type resultType) => new("providers.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var settings = await Context.ReadPlexSignInAsync(CancellationToken);
+
+            // The libraries come from the server while it answers; the chosen keys stay either way.
+            IReadOnlyList<PlexSection> sections = [];
+            if (_plex.Connect(await Context.ReadPlexServerAsync(CancellationToken)) is { } connection)
+            {
+                try
+                {
+                    sections = (await _plex.ReadServerAsync(connection, CancellationToken)).Sections;
+                }
+                catch (ServiceUnavailableException)
+                {
+                }
+            }
+
+            return new PlexSignInV1(settings.SignIn, settings.Registration, settings.RegistrationApproval, settings.RegistrationSections,
+                [.. sections.Select(section => section.Key)], [.. sections.Select(section => section.Title)]);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/providers/plex/sign-in")]
+    public sealed class UpdatePlexSignInV1 : AdminService<PlexServerParametersV1, SavePlexSignInDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(PlexServerParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(PlexServerParametersV1 parameters, Type resultType) => new("providers.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SavePlexSignInAsync(new PlexSignInSaveData(Data.SignIn, Data.Registration && Data.SignIn, Data.RegistrationApproval, Data.RegistrationSections), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
 }

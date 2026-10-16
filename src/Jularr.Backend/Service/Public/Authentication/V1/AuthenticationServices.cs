@@ -1,3 +1,4 @@
+using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Account;
@@ -14,13 +15,11 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
     [ServiceEndpoint("GET", "/api/v1/auth")]
     public sealed class ReadAuthenticationV1 : PublicService<AuthenticationParametersV1>
     {
-        private readonly AuthenticationOptions _options;
         private readonly SessionAuthentication _sessions;
         private readonly IHttpContextAccessor _http;
 
-        internal ReadAuthenticationV1(IOptions<AuthenticationOptions> options, SessionAuthentication sessions, IHttpContextAccessor http)
+        internal ReadAuthenticationV1(SessionAuthentication sessions, IHttpContextAccessor http)
         {
-            _options = options.Value;
             _sessions = sessions;
             _http = http;
         }
@@ -48,24 +47,8 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
             }
 
             // Expose available login methods.
-            var plexEnabled = false;
-            if (_options.PlexLoginEnabled)
-            {
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM "Providers" AS provider
-                        WHERE provider."Key" = 'plex'
-                            AND provider."IsEnabled" = TRUE
-                    );
-                    """;
-                plexEnabled = (bool)(await Context.ReadSql.ExecuteScalarAsync(sql, CancellationToken))!;
-            }
-
-            return new AuthenticationResultV1(plexEnabled,
-                plexEnabled && _options.PlexRegistrationEnabled, accountId, profileId, uiLocaleId, permissions);
+            var plex = await Context.ReadPlexSignInAsync(CancellationToken);
+            return new AuthenticationResultV1(plex.SignIn, plex.CanRegister, accountId, profileId, uiLocaleId, permissions);
         }
     }
 

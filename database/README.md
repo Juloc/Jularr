@@ -1,12 +1,14 @@
 # Fresh PostgreSQL baselines
 
 `Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
-embedded as `Jularr.Database.Account.sql` for isolated tests. The host never applies it.
+embedded as `Jularr.Database.Account.sql`. The host applies all baselines in installation order
+in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs));
+it never changes or migrates a database that has one.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
 its initial language. It is embedded as `Jularr.Database.Instance.sql` for focused
-isolated tests; it is never installed automatically on an existing database.
+isolated tests; it is never installed on an existing database.
 Owner services provide version-checked settings/module edits. InstanceSettings also say
 whether several releases of a film or episode are kept and what happens to a replaced
 file (deleted, moved to a recycle folder inside its library or to one folder on a storage

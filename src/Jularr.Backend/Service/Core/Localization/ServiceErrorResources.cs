@@ -32,7 +32,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.synology_two_factor", "This DSM account uses two-step verification; use an administrator account without it."),
             new("errors.synology_not_admin", "This DSM account may not read health or change power; use an administrator account."),
             new("errors.synology_blocked", "DSM blocks Jularr's address after failed logins; unblock it in DSM."),
-            new("errors.backup_unavailable", "Backups need a backup folder and pg_dump in the server configuration."),
+            new("errors.backup_unavailable", "Backups need pg_dump and pg_restore, which this server does not have."),
             new("errors.backup_failed", "The backup tool did not finish. The server log has its message."),
             new("errors.backup_tool_missing", "pg_dump or pg_restore was not found at the configured path."),
             new("errors.backup_auth_failed", "PostgreSQL refused the database login of the backup tool."),

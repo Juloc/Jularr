@@ -27,6 +27,12 @@ namespace Jularr.Backend.Data.Fields.Provider
         public static readonly StringField SectionKind = new() { MaximumLength = 16 };
         public static readonly StringField Version = new() { MaximumLength = 64, Required = false };
         public static readonly StringField Url = new() { MaximumLength = 1000, Required = false };
+
+        // Sign-in with Plex and who may register through it.
+        public static readonly BoolField SignIn = new();
+        public static readonly BoolField Registration = new();
+        public static readonly BoolField RegistrationApproval = new();
+        public static readonly StringArrayField SectionKeys = new() { ItemMaximumLength = 32, Required = false };
     }
 
     // Write-only credential input and its presence.

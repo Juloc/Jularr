@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
@@ -23,6 +24,60 @@ namespace Jularr.Backend.Logic.Provider
                     provider."Key" = 'plex';
                 """;
             return ctx.ReadSql.ReadOptionalAsync<PlexServerStateData>(sql, ct);
+        }
+
+        // Sign-in counts only while the Plex provider is on.
+        public static Task<PlexSignInData> ReadPlexSignInAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    settings."PlexSignIn" AND coalesce(provider."IsEnabled", FALSE) AS "SignIn",
+                    settings."PlexRegistration" AS "Registration",
+                    settings."PlexRegistrationApproval" AS "RegistrationApproval",
+                    settings."PlexRegistrationSections" AS "RegistrationSections",
+                    settings."UiLocaleId",
+                    provider."BaseUrl",
+                    provider."ExternalId" AS "ServerIdentifier"
+                FROM
+                    "InstanceSettings" AS settings
+                    LEFT JOIN "Providers" AS provider ON provider."Key" = 'plex'
+                WHERE
+                    settings."Id" = 1;
+                """;
+            return ctx.ReadSql.ReadRequiredAsync<PlexSignInData>(sql, ct);
+        }
+
+        // Registration only with sign-in; libraries by their Plex keys.
+        public static async Task SavePlexSignInAsync(this LogicContext ctx, PlexSignInSaveData data, CancellationToken ct)
+        {
+            if (data.Registration && !data.SignIn)
+            {
+                throw new DataValidationException(nameof(data.Registration), "invalid_value");
+            }
+
+            if (data.RegistrationSections.Any(key => key.Length == 0 || !key.All(char.IsAsciiDigit)))
+            {
+                throw new DataValidationException(nameof(data.RegistrationSections), "invalid_value");
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "InstanceSettings"
+                SET
+                    "PlexSignIn" = @SignIn,
+                    "PlexRegistration" = @Registration,
+                    "PlexRegistrationApproval" = @RegistrationApproval,
+                    "PlexRegistrationSections" = @RegistrationSections,
+                    "Version" = "Version" + 1
+                WHERE
+                    "Id" = 1;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task SavePlexServerAsync(this LogicContext ctx, PlexServerSaveData data, CancellationToken ct)

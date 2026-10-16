@@ -29,6 +29,12 @@ CREATE TABLE "InstanceSettings" (
     "RecyclePath" varchar(500) NULL CHECK ("RecyclePath" IS NULL OR length("RecyclePath") > 0 AND "RecyclePath" NOT LIKE '/%'),
     "RecycleDays" smallint NOT NULL DEFAULT 7 CHECK ("RecycleDays" BETWEEN 0 AND 3650),
     CHECK (("RecycleModeId" = 3) = ("RecycleStorageMountId" IS NOT NULL) AND ("RecycleStorageMountId" IS NULL) = ("RecyclePath" IS NULL)),
+    -- Plex sign-in for linked accounts; registration lets users of the connected server's chosen libraries (any, when none is chosen) ask for an account.
+    "PlexSignIn" boolean NOT NULL DEFAULT FALSE,
+    "PlexRegistration" boolean NOT NULL DEFAULT FALSE,
+    "PlexRegistrationApproval" boolean NOT NULL DEFAULT TRUE,
+    "PlexRegistrationSections" varchar(32)[] NOT NULL DEFAULT '{}' CHECK (cardinality("PlexRegistrationSections") <= 100),
+    CHECK (NOT "PlexRegistration" OR "PlexSignIn"),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
 );
 

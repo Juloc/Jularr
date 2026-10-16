@@ -160,7 +160,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
             catch (PdfWithoutTextException)
             {
                 var recognition = new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt);
-                throw new ServiceUnavailableException(recognize is null && _recognizer.IsAvailable
+                throw new ServiceUnavailableException(recognize is null
                     && await context.ExecuteBatchAsync((ctx, token) => ctx.RequestReadingRecognitionAsync(recognition, token), ct)
                     ? "reading_pdf_recognizing" : "reading_pdf_without_text");
             }

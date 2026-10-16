@@ -85,4 +85,66 @@ namespace Jularr.Backend.Data.Logic.Provider
         [DataField(typeof(PlexFields), nameof(PlexFields.CreatedCount))]
         public int CreatedCount { get; }
     }
+
+    // Plex sign-in as the Owner set it, on the connected server; new accounts start in the instance's language.
+    internal sealed class PlexSignInData : BaseData
+    {
+        public PlexSignInData(bool signIn, bool registration, bool registrationApproval, string[] registrationSections, long uiLocaleId, string? baseUrl, string? serverIdentifier)
+        {
+            SignIn = signIn;
+            Registration = registration;
+            RegistrationApproval = registrationApproval;
+            RegistrationSections = registrationSections;
+            UiLocaleId = uiLocaleId;
+            BaseUrl = baseUrl;
+            ServerIdentifier = serverIdentifier;
+        }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.SignIn))]
+        public bool SignIn { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.Registration))]
+        public bool Registration { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.RegistrationApproval))]
+        public bool RegistrationApproval { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.SectionKeys))]
+        public string[] RegistrationSections { get; }
+
+        [DataField(typeof(Fields.Instance.InstanceSettingsFields), nameof(Fields.Instance.InstanceSettingsFields.UiLocaleId))]
+        public long UiLocaleId { get; }
+
+        [DataField(typeof(ProviderFields), nameof(ProviderFields.BaseUrl))]
+        public string? BaseUrl { get; }
+
+        [DataField(typeof(ProviderFields), nameof(ProviderFields.ExternalId))]
+        public string? ServerIdentifier { get; }
+
+        // Registration needs a connected server to ask about libraries.
+        public bool CanRegister => SignIn && Registration && BaseUrl is not null && ServerIdentifier is not null;
+    }
+
+    internal sealed class PlexSignInSaveData : BaseData
+    {
+        public PlexSignInSaveData(bool signIn, bool registration, bool registrationApproval, string[] registrationSections)
+        {
+            SignIn = signIn;
+            Registration = registration;
+            RegistrationApproval = registrationApproval;
+            RegistrationSections = registrationSections;
+        }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.SignIn))]
+        public bool SignIn { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.Registration))]
+        public bool Registration { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.RegistrationApproval))]
+        public bool RegistrationApproval { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.SectionKeys))]
+        public string[] RegistrationSections { get; }
+    }
 }

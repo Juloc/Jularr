@@ -692,6 +692,38 @@
    "Sync availability now",
    "Synchronizuj dostępność teraz"
   ],
+  "admin.plex.signIn": [
+   "Sign in with Plex",
+   "Zaloguj przez Plex"
+  ],
+  "admin.plex.registration": [
+   "Plex users may register",
+   "Użytkownicy Plex mogą się rejestrować"
+  ],
+  "admin.plex.registrationApproval": [
+   "New accounts wait for approval",
+   "Nowe konta czekają na zatwierdzenie"
+  ],
+  "admin.plex.registrationSections": [
+   "Libraries whose users may register",
+   "Biblioteki, których użytkownicy mogą się rejestrować"
+  ],
+  "hint.PlexFields.SignIn.info": [
+   "Accounts linked to Plex sign in through Plex.",
+   "Konta połączone z Plex logują się przez Plex."
+  ],
+  "hint.PlexFields.Registration.info": [
+   "Someone with access to the connected server can ask for an account by signing in with Plex.",
+   "Każdy z dostępem do połączonego serwera może poprosić o konto, logując się przez Plex."
+  ],
+  "hint.PlexFields.RegistrationApproval.info": [
+   "An administrator enables each new account first.",
+   "Administrator najpierw włącza każde nowe konto."
+  ],
+  "hint.PlexFields.SectionKeys.info": [
+   "None chosen: users of any library may register.",
+   "Brak wyboru: rejestrować się mogą użytkownicy dowolnej biblioteki."
+  ],
   "admin.plex.disconnect": [
    "Disconnect Plex server",
    "Rozłącz serwer Plex"
@@ -4373,8 +4405,8 @@
    "Kopie zapasowe"
   ],
   "admin.backup.notConfigured": [
-   "Backups need a backup folder and pg_dump in the server configuration.",
-   "Kopie zapasowe wymagają folderu kopii zapasowych i pg_dump w konfiguracji serwera."
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Kopie zapasowe wymagają pg_dump i pg_restore, których ten serwer nie ma."
   ],
   "admin.backup.running": [
    "A backup is being made.",
@@ -6357,8 +6389,8 @@
    "DSM blokuje adres Jularr po nieudanych logowaniach; odblokuj go w DSM."
   ],
   "errors.backup_unavailable": [
-   "Backups need a backup folder and pg_dump in the server configuration.",
-   "Kopie zapasowe wymagają folderu kopii zapasowych i pg_dump w konfiguracji serwera."
+   "Backups need pg_dump and pg_restore, which this server does not have.",
+   "Kopie zapasowe wymagają pg_dump i pg_restore, których ten serwer nie ma."
   ],
   "errors.backup_failed": [
    "The backup tool did not finish. The server log has its message.",
