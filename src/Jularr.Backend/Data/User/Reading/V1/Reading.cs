@@ -105,8 +105,9 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null)
+            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null)
         {
+            TranslatedLanguages = translatedLanguages ?? [];
             ReadingLanguage = readingLanguage;
             OriginalLanguage = originalLanguage;
             Language = language;
@@ -160,6 +161,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.OriginalLanguage))]
         public string? OriginalLanguage { get; }
+
+        // Languages every section has a shared translation in, so the book downloads translated.
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Languages))]
+        public string[] TranslatedLanguages { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse
@@ -220,6 +225,40 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionCount))]
         public int Blocks { get; }
+    }
+
+    public sealed class ReadingEbookParametersV1 : BaseParameters
+    {
+        public ReadingEbookParametersV1(long documentId, string? language)
+        {
+            DocumentId = documentId;
+            Language = language;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        // Empty is the book as prepared; a language takes its finished translation.
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language), false)]
+        public string? Language { get; }
+    }
+
+    public sealed class ReadingEbookV1 : BaseResponse, IDownloadOutput
+    {
+        public ReadingEbookV1(byte[] bytes, string fileName)
+        {
+            Bytes = bytes;
+            FileName = fileName;
+        }
+
+        [JsonIgnore]
+        public byte[] Bytes { get; }
+
+        [JsonIgnore]
+        public string FileName { get; }
+
+        [JsonIgnore]
+        public string ContentType => "application/epub+zip";
     }
 
     public sealed class ReadingResourceV1 : BaseResponse, IBinaryOutput

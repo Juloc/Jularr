@@ -89,10 +89,24 @@ namespace Jularr.Frontend.Pages.User.Reader
                     ? new Button(new ValueText(LanguageName(Chosen(document)))).Class("button").Attribute("data-action", "language").Attribute("aria-expanded", "false")
                         .Attribute("aria-label", texts["reader.language"])
                     : new Span(),
-                _source?.ReadingFormatTypeId == ReadingFormatType.Pdf
-                    ? new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener")
+                _source?.ReadingFormatTypeId == ReadingFormatType.Pdf || document.TranslatedLanguages.Length > 0
+                    ? new Button(new Text("reader.download")).Class("button").Attribute("data-action", "download").Attribute("aria-expanded", "false")
                     : new Span()
             ).Class("reader__top");
+
+            // A converted PDF downloads as EPUB beside the original; a finished translation as its own EPUB.
+            var ebook = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/ebook";
+            IUiComponent[] converted = _source?.ReadingFormatTypeId == ReadingFormatType.Pdf
+                ? [
+                    new A(new Text("reader.download.epub")).Class("button").Attribute("href", ebook).Attribute("download", ""),
+                    new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener")
+                ]
+                : [];
+            var downloads = new Div([
+                .. converted,
+                .. document.TranslatedLanguages.Select(code => new A(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["reader.download.translated"], LanguageName(code)))).Class("button")
+                    .Attribute("href", ebook + "?language=" + Uri.EscapeDataString(code)).Attribute("download", ""))
+            ]).Class("reader__panel reader__choices").Attribute("data-panel", "download").Attribute("hidden", "hidden");
 
             // Contents and settings share one panel area.
             var contents = new Nav([.. _toc.Select(entry => new A(new ValueText(entry.Title)).Class("reader__toc-entry" + (entry.SectionIndex == index ? " is-current" : ""))
@@ -126,6 +140,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 searching,
                 settings,
                 languages,
+                downloads,
                 new ReaderSection(current),
                 Toolbar(),
                 Popover(),

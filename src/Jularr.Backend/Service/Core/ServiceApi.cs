@@ -478,6 +478,12 @@ namespace Jularr.Backend.Service.Core
                     return (IResult)Results.File(file.FilePath, file.ContentType, enableRangeProcessing: true);
                 }
 
+                if (result is IDownloadOutput download)
+                {
+                    http.Response.Headers.CacheControl = "private,no-store";
+                    return Results.File(download.Bytes, download.ContentType, download.FileName);
+                }
+
                 if (result is IBinaryOutput binary)
                 {
                     http.Response.Headers.CacheControl = "private,max-age=3600";

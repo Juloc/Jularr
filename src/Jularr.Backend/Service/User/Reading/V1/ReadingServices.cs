@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
@@ -115,7 +118,22 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         coalesce(visible."MediaSubtypeId" = 2, FALSE) AS "IsRightToLeft",
                         document."Language",
                         chosen."Language" AS "ReadingLanguage",
-                        work."OriginalLanguage"
+                        work."OriginalLanguage",
+                        ARRAY(
+                            SELECT
+                                split_part(translation."Path", '/', 2)
+                            FROM
+                                "ReadingResources" AS translation
+                            WHERE
+                                translation."ReadingDocumentId" = document."Id"
+                                AND translation."Path" LIKE ':translation/%'
+                            GROUP BY
+                                1
+                            HAVING
+                                count(*) >= (SELECT count(*) FROM jsonb_array_elements(document."Structure" -> 'Sections') AS section WHERE (section ->> 'Blocks')::int > 0)
+                            ORDER BY
+                                1
+                        ) AS "TranslatedLanguages"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "MediaAssets" AS asset ON asset."Id" = @MediaAssetId
@@ -450,6 +468,91 @@ namespace Jularr.Backend.Service.User.Reading.V1
         {
             await Context.SaveReadingLanguageAsync(new ReadingLanguageData(Auth.ProfileId!.Value, Parameters.MediaAssetId, Data.ReadingLanguage), CancellationToken);
             return new UpdateResult(true);
+        }
+    }
+
+    // A prepared book as EPUB: a converted PDF beside its original, or any book once its shared translation covers every section.
+    [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/ebook")]
+    public sealed class ReadReadingEbookV1 : UserService<ReadingEbookParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingEbookV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadingEbookParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
+        protected override ServicePermission GetPermission(ReadingEbookParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    document."Id" AS "DocumentId",
+                    coalesce(visible."Title", document."Title") AS "Title",
+                    document."Structure",
+                    coalesce(document."Language", work."OriginalLanguage") AS "Language",
+                    document."CacheCompletedAt",
+                    coalesce(visible."MediaSubtypeId" = 2, FALSE) AS "IsRightToLeft"
+                FROM
+                    "ReadingDocuments" AS document
+                    JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                    JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                WHERE
+                    document."Id" = @DocumentId
+                    AND document."CacheCompletedAt" IS NOT NULL
+                    AND (document."ReadingFormatTypeId" = 2 OR (document."ReadingFormatTypeId" = 1 AND @Language IS NOT NULL));
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            var document = await Context.ReadSql.ReadOptionalAsync<ReadingEbookDocumentData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
+
+            var resources = new SqlStatement();
+            resources.Statement =
+                """
+                SELECT
+                    resource."Path",
+                    resource."MediaType",
+                    resource."Bytes"
+                FROM
+                    "ReadingResources" AS resource
+                WHERE
+                    resource."ReadingDocumentId" = @DocumentId
+                    AND (resource."Path" LIKE ':section/%' OR resource."MediaType" LIKE 'image/%' OR resource."Path" LIKE ':translation/' || @Language || '/%');
+                """;
+            resources.Parameters.Add(Parameters);
+            var stored = (await Context.ReadSql.ReadListAsync<ReadingEbookResourceData>(resources, CancellationToken)).ToDictionary(resource => resource.Path, StringComparer.Ordinal);
+            var structure = JsonSerializer.Deserialize<ReadingStructure>(document.Structure)!;
+            var sections = structure.Sections.Select((_, index) => stored.TryGetValue(ReadingContent.SectionPath(index), out var section) ? Encoding.UTF8.GetString(section.Bytes) : "").ToArray();
+
+            // Only a finished translation downloads; a section without blocks has nothing to translate.
+            IReadOnlyList<IReadOnlyList<string>>? translations = null;
+            if (Parameters.Language is { } language)
+            {
+                var translated = structure.Sections.Select((section, index) => stored.TryGetValue(ReadingTranslations.Path(index, language), out var translation)
+                    ? ReadingTranslations.Parse(Encoding.UTF8.GetString(translation.Bytes))
+                    : section.Blocks == 0 ? [] : null).ToArray();
+                if (translated.Any(blocks => blocks is null))
+                {
+                    throw new ServiceUnavailableException("reading_translation_incomplete");
+                }
+
+                translations = translated!;
+            }
+
+            var original = document.Language ?? "und";
+            var bytes = ReadingEbook.Build(new ReadingEbookContent(document.DocumentId, "urn:jularr:reading:" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + (Parameters.Language is null ? "" : ":" + Parameters.Language),
+                document.Title, Parameters.Language ?? original, Parameters.Language is null ? null : original, document.CacheCompletedAt, document.IsRightToLeft,
+                sections, [.. structure.Sections.Select(section => section.Title)], translations, structure.Toc, [.. stored.Values.Where(resource => resource.MediaType.StartsWith("image/", StringComparison.Ordinal))]));
+            return new ReadingEbookV1(bytes, FileName(document.Title, Parameters.Language));
+        }
+
+        // The title without characters file systems refuse, and the language of a translation.
+        private static string FileName(string title, string? language)
+        {
+            var refused = Path.GetInvalidFileNameChars().Concat(['"', '\\', '/', ':', '*', '?', '<', '>', '|']).ToHashSet();
+            var name = string.Concat(title.Select(character => refused.Contains(character) || char.IsControl(character) ? '_' : character)).Trim();
+            name = name.Length > 120 ? name[..120].Trim() : name;
+            return (name.Length == 0 ? "book" : name) + (language is null ? "" : " (" + language + ")") + ".epub";
         }
     }
 

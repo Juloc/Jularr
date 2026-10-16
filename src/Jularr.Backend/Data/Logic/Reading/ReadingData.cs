@@ -231,6 +231,58 @@ namespace Jularr.Backend.Data.Logic.Reading
         public string Path { get; }
     }
 
+    // A prepared book the profile may read, for its EPUB.
+    internal sealed class ReadingEbookDocumentData : BaseData
+    {
+        public ReadingEbookDocumentData(long documentId, string title, string structure, string? language, DateTime cacheCompletedAt, bool isRightToLeft)
+        {
+            DocumentId = documentId;
+            Title = title;
+            Structure = structure;
+            Language = language;
+            CacheCompletedAt = cacheCompletedAt;
+            IsRightToLeft = isRightToLeft;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Structure))]
+        public string Structure { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Language))]
+        public string? Language { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.CacheCompletedAt))]
+        public DateTime CacheCompletedAt { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsRightToLeft))]
+        public bool IsRightToLeft { get; }
+    }
+
+    internal sealed class ReadingEbookResourceData : BaseData
+    {
+        public ReadingEbookResourceData(string path, string mediaType, byte[] bytes)
+        {
+            Path = path;
+            MediaType = mediaType;
+            Bytes = bytes;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Path))]
+        public string Path { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.MediaType))]
+        public string MediaType { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Bytes))]
+        public byte[] Bytes { get; }
+    }
+
     // How many blocks a prepared section has.
     internal sealed class ReadingSectionBlocksData : BaseData
     {

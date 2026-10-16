@@ -225,7 +225,37 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, reader);
             StringAssert.Contains(reader, "href=\"/api/v1/reading/assets/" + second + "/file\"");
             Assert.IsFalse(reader.Contains("<iframe", StringComparison.Ordinal));
+
+            // It downloads as an EPUB beside the original: the chapters as XHTML with the picture where it stood, and its contents.
+            StringAssert.Contains(reader, "href=\"/api/v1/reading/documents/" + document.DocumentId + "/ebook\"");
+            using var ebook = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/ebook");
+            Assert.AreEqual(HttpStatusCode.OK, ebook.StatusCode, await ebook.Content.ReadAsStringAsync());
+            Assert.AreEqual("application/epub+zip", ebook.Content.Headers.ContentType?.MediaType);
+            Assert.AreEqual("Second Book.epub", ebook.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+            var bytes = await ebook.Content.ReadAsByteArrayAsync();
+            Assert.AreEqual("mimetype", Encoding.ASCII.GetString(bytes, 30, 8));
+            Assert.AreEqual(0, BitConverter.ToUInt16(bytes, 8));
+            using var epub = new ZipArchive(new MemoryStream(bytes));
+            var package = Xml(Entry(epub, "OEBPS/content.opf"));
+            Assert.AreEqual("Second Book", package.Descendants().Single(element => element.Name.LocalName == "title").Value);
+            Assert.AreEqual(2, package.Descendants().Count(element => element.Name.LocalName == "itemref"));
+            var converted = Entry(epub, "OEBPS/s00001.xhtml");
+            Xml(converted);
+            StringAssert.Contains(converted, "ends with this sentence.");
+            StringAssert.Contains(converted, "src=\"images/00000.png\"");
+            Assert.IsNotNull(epub.GetEntry("OEBPS/images/00000.png"));
+            StringAssert.Contains(Entry(epub, "OEBPS/nav.xhtml"), "href=\"s00001.xhtml\"");
         }
+
+        internal static string Entry(ZipArchive archive, string name)
+        {
+            using var stream = new StreamReader(archive.GetEntry(name)!.Open());
+            return stream.ReadToEnd();
+        }
+
+        // EPUB files are XML; their doctype is the HTML5 one.
+        internal static System.Xml.Linq.XDocument Xml(string text) =>
+            System.Xml.Linq.XDocument.Load(System.Xml.XmlReader.Create(new StringReader(text), new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Ignore }));
 
         // The same pages with a picture on one of them, below the given height.
         private static byte[] WithPicture(byte[] pdf, int page, double top)
