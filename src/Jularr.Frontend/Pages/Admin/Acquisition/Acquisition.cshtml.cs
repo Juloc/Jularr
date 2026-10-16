@@ -172,10 +172,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit)
+            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl)
         {
-            _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", apiKey, isEnabled, priority, Categories(categories),
-                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit);
+            _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, isEnabled, priority, Categories(categories),
+                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -236,15 +236,25 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
                     selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit)
-                : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, SuggestedUrl ?? "", null, true, type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [],
-                    null, null, null));
+                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl)
+                : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
+                    type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
             return new Form<SaveAcquisitionConnectionDataV1>(form =>
             {
                 form.Hidden(item => item.AcquisitionConnectionTypeId);
                 form.Text(item => item.Name, "acquisition.connection.name");
-                form.Text(item => item.BaseUrl, "acquisition.connection.baseUrl");
+                // A news server is entered as in SABnzbd: server, port and SSL; every other connection by its web address.
+                if (type == AcquisitionConnectionType.Usenet)
+                {
+                    form.Text(item => item.Host, "acquisition.connection.host");
+                    form.Number(item => item.Port, "acquisition.connection.port");
+                    form.Select(item => item.UseSsl, "acquisition.connection.ssl", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
+                }
+                else
+                {
+                    form.Text(item => item.BaseUrl, "acquisition.connection.baseUrl", help: new FieldHelp($"hint.acquisition.{type}.placeholder", $"hint.acquisition.{type}.info"));
+                }
                 // Catalog logins belong to the instance; keys and passwords are never shown again.
                 if (type is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet)
                 {

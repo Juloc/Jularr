@@ -54,11 +54,15 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class AcquisitionConnectionDetailsV1 : BaseResponse
     {
-        public AcquisitionConnectionDetailsV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, bool hasApiKey, bool isEnabled, int priority,
+        public AcquisitionConnectionDetailsV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, bool hasApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
-            DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search)
+            DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search, string? host = null,
+            int? port = null, bool? useSsl = null)
         {
+            Host = host;
+            Port = port;
+            UseSsl = useSsl;
             AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
             IsBackedOff = isBackedOff;
             MediaTypeIds = mediaTypeIds ?? [];
@@ -99,8 +103,18 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
         public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
 
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
-        public string BaseUrl { get; }
+        // Every connection but a news server has an HTTP address; a news server has a host, an optional port and SSL.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl), false)]
+        public string? BaseUrl { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Host))]
+        public string? Host { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Port))]
+        public int? Port { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.UseSsl), false)]
+        public bool? UseSsl { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.HasApiKey))]
         public bool HasApiKey { get; }
@@ -167,10 +181,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class SaveAcquisitionConnectionDataV1 : BaseData
     {
-        public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
+        public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
             string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
-            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null)
+            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null)
         {
+            Host = host;
+            Port = port;
+            UseSsl = useSsl;
             MediaTypeIds = mediaTypeIds ?? [];
             SearchesAutomatically = searchesAutomatically;
             QueryLimit = queryLimit;
@@ -196,8 +213,18 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
         public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
 
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
-        public string BaseUrl { get; }
+        // Every connection but a news server has an HTTP address; a news server has a host, an optional port and SSL.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl), false)]
+        public string? BaseUrl { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Host))]
+        public string? Host { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Port))]
+        public int? Port { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.UseSsl), false)]
+        public bool? UseSsl { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ApiKey))]
         public string? ApiKey { get; }

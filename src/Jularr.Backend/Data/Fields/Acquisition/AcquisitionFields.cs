@@ -9,7 +9,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly EnumField AcquisitionConnectionTypeId = new(typeof(AcquisitionConnectionType));
-        public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, TrimsTrailingSlash = true, Format = StringFormat.ServiceUrl };
+        public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, TrimsTrailingSlash = true, Format = StringFormat.HttpUrl };
+        public static readonly StringField Host = new(NpgsqlDbType.Varchar) { MaximumLength = 253, Required = false, AllowBlank = false, Trim = true, Format = StringFormat.HostName };
+        public static readonly IntField Port = new() { Minimum = 1, Maximum = 65535, Required = false };
+        public static readonly BoolField UseSsl = new();
         public static readonly StringField ApiKey = new() { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
         public static readonly StringField Username = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly ByteArrayField ProtectedApiKey = new();

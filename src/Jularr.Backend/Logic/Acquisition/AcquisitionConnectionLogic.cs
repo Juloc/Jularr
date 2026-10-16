@@ -19,6 +19,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Name",
                     connection."AcquisitionConnectionTypeId",
                     connection."BaseUrl",
+                    connection."Host",
+                    connection."Port",
+                    connection."UseSsl",
                     connection."ProtectedApiKey",
                     connection."IsEnabled",
                     connection."Priority",
@@ -58,6 +61,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Name",
                     connection."AcquisitionConnectionTypeId",
                     connection."BaseUrl",
+                    connection."Host",
+                    connection."Port",
+                    connection."UseSsl",
                     connection."ProtectedApiKey",
                     connection."IsEnabled",
                     connection."Priority",
@@ -183,17 +189,36 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // News servers are reached over NNTP, everything else over HTTP; the Anna's Archive member key travels in the address and only over HTTPS.
+        // A news server is a host with SSL and an optional port; everything else an HTTP address. The Anna's Archive member key travels in the address and only over HTTPS.
         private static void ValidateAddress(AcquisitionConnectionSaveData data)
         {
-            var address = new Uri(data.BaseUrl);
-            var valid = data.AcquisitionConnectionTypeId switch
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                AcquisitionConnectionType.Usenet => address.Scheme is "nntp" or "nntps" && address.AbsolutePath == "/",
-                AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl => address.Scheme == "https",
-                _ => address.Scheme is "http" or "https"
-            };
-            if (!valid)
+                if (data.Host is null)
+                {
+                    throw new DataValidationException(nameof(data.Host), "required");
+                }
+
+                if (data.BaseUrl is not null || data.UseSsl is null)
+                {
+                    throw new DataValidationException(nameof(data.BaseUrl), "invalid_transition");
+                }
+
+                return;
+            }
+
+            if (data.BaseUrl is not { } baseUrl)
+            {
+                throw new DataValidationException(nameof(data.BaseUrl), "required");
+            }
+
+            if (data.Host is not null || data.Port is not null || data.UseSsl is not null)
+            {
+                throw new DataValidationException(nameof(data.Host), "invalid_transition");
+            }
+
+            var secure = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl;
+            if (secure && new Uri(baseUrl).Scheme != "https")
             {
                 throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
             }
@@ -216,11 +241,11 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Statement =
                 """
                 INSERT INTO
-                    "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories", "DownloadCategory",
-                        "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
+                    "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "Host", "Port", "UseSsl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories",
+                        "DownloadCategory", "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
                 VALUES
-                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath, @Username,
-                        @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
+                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath,
+                        @LocalPath, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
                 RETURNING
                     "Id";
                 """;
@@ -249,6 +274,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     "Name" = @Name,
                     "AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId,
                     "BaseUrl" = @BaseUrl,
+                    "Host" = @Host,
+                    "Port" = @Port,
+                    "UseSsl" = @UseSsl,
                     "ProtectedApiKey" = CASE
                         WHEN connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId THEN COALESCE(@ProtectedApiKey, connection."ProtectedApiKey")
                         ELSE @ProtectedApiKey
@@ -269,7 +297,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     "RetryAt" = NULL,
                     "ProtectedPassword" = CASE WHEN @AcquisitionConnectionTypeId = 7 THEN COALESCE(@ProtectedPassword, connection."ProtectedPassword") END,
                     "Capabilities" = CASE
-                        WHEN connection."BaseUrl" = @BaseUrl AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL
+                        WHEN connection."BaseUrl" IS NOT DISTINCT FROM @BaseUrl AND connection."Host" IS NOT DISTINCT FROM @Host
+                            AND connection."Port" IS NOT DISTINCT FROM @Port AND connection."UseSsl" IS NOT DISTINCT FROM @UseSsl
+                            AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL
                             THEN connection."Capabilities"
                     END,
                     "Version" = connection."Version" + 1,

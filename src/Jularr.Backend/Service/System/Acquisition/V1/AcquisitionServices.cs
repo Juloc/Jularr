@@ -450,7 +450,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                var client = new SabnzbdConnection(connection.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey));
+                var client = new SabnzbdConnection(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey));
                 SabnzbdQueueSnapshot queue;
                 SabnzbdHistorySnapshot history;
                 try

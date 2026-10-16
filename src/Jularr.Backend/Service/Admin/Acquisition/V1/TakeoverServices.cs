@@ -92,7 +92,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     SELECT
                         connection."BaseUrl"
                     FROM
-                        "AcquisitionConnections" AS connection;
+                        "AcquisitionConnections" AS connection
+                    WHERE
+                        connection."BaseUrl" IS NOT NULL;
                     """;
                 var profileSql = new SqlStatement();
                 profileSql.Statement =

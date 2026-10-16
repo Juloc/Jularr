@@ -40,6 +40,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Name",
                     connection."AcquisitionConnectionTypeId",
                     connection."BaseUrl",
+                    connection."Host",
+                    connection."Port",
+                    connection."UseSsl",
                     connection."ProtectedApiKey" IS NOT NULL AS "HasApiKey",
                     connection."IsEnabled",
                     connection."Priority",
@@ -97,6 +100,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Name",
                     connection."AcquisitionConnectionTypeId",
                     connection."BaseUrl",
+                    connection."Host",
+                    connection."Port",
+                    connection."UseSsl",
                     connection."ProtectedApiKey" IS NOT NULL AS "HasApiKey",
                     connection."IsEnabled",
                     connection."Priority",
@@ -268,7 +274,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 try
                 {
-                    var caps = await _newznab.ReadCapabilitiesAsync(new NewznabConnection(connection.BaseUrl, apiKey), CancellationToken);
+                    var caps = await _newznab.ReadCapabilitiesAsync(new NewznabConnection(connection.HttpAddress, apiKey), CancellationToken);
                     capabilities = JsonSerializer.Serialize(caps);
                     result = new AcquisitionConnectionTestV1(true, null, caps.Version, caps.Modes.Keys.Order().Select(mode => mode.ToString()).ToArray());
                 }
@@ -279,7 +285,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             }
             else
             {
-                var test = await _sabnzbd.TestAsync(new SabnzbdConnection(connection.BaseUrl, apiKey), CancellationToken);
+                var test = await _sabnzbd.TestAsync(new SabnzbdConnection(connection.HttpAddress, apiKey), CancellationToken);
                 var errorKey = test.IsAvailable ? null : test.Version is null ? "acquisition_unavailable" : "acquisition_authentication_failed";
                 result = new AcquisitionConnectionTestV1(test.IsAvailable, errorKey, test.Version, []);
             }
@@ -329,7 +335,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             string? failure = null;
             try
             {
-                items = await _newznab.SearchAsync(new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey)),
+                items = await _newznab.SearchAsync(new NewznabConnection(indexer.HttpAddress, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey)),
                     new NewznabQuery(NewznabSearchMode.Search, Data.Query, [], indexer.Categories, Limit), CancellationToken);
             }
             catch (NewznabException exception)
@@ -361,7 +367,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 data.Categories, data.DownloadCategory, data.RemotePath, data.LocalPath,
                 data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
-                data.SearchesAutomatically, data.QueryLimit, data.GrabLimit);
+                data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl);
         }
 
         // Keyless indexers send no key.

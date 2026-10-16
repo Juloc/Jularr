@@ -10,10 +10,14 @@ namespace Jularr.Backend.Data.Common
         public bool Required { get; }
         public int? MaximumLength { get; }
 
+        // The field's identity, such as "AcquisitionConnectionFields.BaseUrl"; forms find its example and explanation by it.
+        public string Key { get; }
+
         public DataFieldAttribute(Type fieldsType, string fieldName)
         {
             Field = Resolve(fieldsType, fieldName);
             Required = Field.Required;
+            Key = fieldsType.Name + "." + fieldName;
         }
 
         public DataFieldAttribute(Type fieldsType, string fieldName, bool required) : this(fieldsType, fieldName)

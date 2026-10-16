@@ -81,6 +81,12 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   classes into each page. Do not activate submission, provider buttons,
   session persistence or password reveal actions without a real, authorized
   backend operation and antiforgery handling.
+- Field examples and explanations belong to the Backend field: `hint.<Fields>.<Field>.placeholder`
+  is the placeholder of typed fields (not names or passwords; an optional field shows what
+  happens when it stays empty, such as its default), `hint.<Fields>.<Field>.info` the text behind
+  the label's (i), shown on hover, focus and tap ([FieldInfo](../src/Jularr.Frontend/Framework/Components/FieldInfo.cs)).
+  A page passes `FieldHelp` only where the field means something special there; an empty key shows
+  none. Labels stay short: units belong in the label, explanations in the (i).
 - `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
 - Form transport values are invariant, independently of the display language.
   `Form<TData>` emits ASP.NET's `__Invariant` field markers; use normal framework

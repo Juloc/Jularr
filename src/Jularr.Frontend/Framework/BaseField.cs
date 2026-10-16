@@ -39,6 +39,10 @@ namespace Jularr.Frontend.Framework
 
         // An address is typed with the address keyboard, without spelling or capitals.
         public bool IsAddress { get; init; }
+
+        // The example shown in the empty field and the explanation behind the label's (i): the field's own unless a form names others.
+        public string PlaceholderKey { get; init; } = "";
+        public string InfoKey { get; init; } = "";
         internal Func<BaseData, object?> ReadValue { get; init; } = _ => throw new InvalidOperationException("Field access requires property metadata.");
 
         public static BaseField From<TData, TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string? labelKey = null)
@@ -89,7 +93,9 @@ namespace Jularr.Frontend.Framework
                 MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null,
                 Scale = field.Field is DecimalField fraction ? fraction.Scale : null,
                 Accept = field.Field is FileField file ? string.Join(',', file.Extensions) : null,
-                IsAddress = field.Field is StringField { Format: StringFormat.HttpUrl or StringFormat.ServiceUrl }
+                IsAddress = field.Field is StringField { Format: StringFormat.HttpUrl or StringFormat.ServiceUrl },
+                PlaceholderKey = "hint." + field.Key + ".placeholder",
+                InfoKey = "hint." + field.Key + ".info"
             };
         }
     }

@@ -32,6 +32,8 @@ namespace Jularr.Frontend.Framework
             && (permission is null || capabilities.Permissions.Contains(permission, StringComparer.Ordinal))
             && modules.All(module => capabilities.Modules.Contains(module, StringComparer.Ordinal));
 
+        public bool Has(string key) => Catalog.Texts.ContainsKey(key);
+
         public string this[string key] => Catalog.Texts.TryGetValue(key, out var value)
             ? value
             : throw new InvalidOperationException($"The UI text resource '{key}' was not registered.");

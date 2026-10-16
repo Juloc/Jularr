@@ -218,7 +218,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 SabnzbdGrabResult? result = null;
                 try
                 {
-                    var connection = new SabnzbdConnection(client.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
+                    var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
                     result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
                 }
                 catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
@@ -266,7 +266,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var capabilities = ReadCapabilities(indexer);
             var categories = AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities, igdbPlatform);
             var limit = Math.Min(PageLimit, capabilities?.MaximumLimit ?? PageLimit);
-            var connection = new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey));
+            var connection = new NewznabConnection(indexer.HttpAddress, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey));
             try
             {
                 foreach (var query in queries)

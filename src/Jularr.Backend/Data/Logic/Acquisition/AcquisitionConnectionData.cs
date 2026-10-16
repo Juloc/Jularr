@@ -7,10 +7,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionConnectionData : BaseData
     {
-        public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
+        public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
-            int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt)
+            int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt,
+            string? host, int? port, bool? useSsl)
         {
+            Host = host;
+            Port = port;
+            UseSsl = useSsl;
             MediaTypeIds = mediaTypeIds;
             SearchesAutomatically = searchesAutomatically;
             QueryLimit = queryLimit;
@@ -45,8 +49,20 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
         public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
 
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
-        public string BaseUrl { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl), false)]
+        public string? BaseUrl { get; }
+
+        // The HTTP address of every connection but a news server.
+        public string HttpAddress => BaseUrl ?? throw new InvalidOperationException("A news server has no HTTP address.");
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Host))]
+        public string? Host { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Port))]
+        public int? Port { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.UseSsl), false)]
+        public bool? UseSsl { get; }
 
         [JsonIgnore]
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
@@ -112,10 +128,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionConnectionSaveData : BaseData
     {
-        public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
+        public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit)
+            int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, string? host = null, int? port = null,
+            bool? useSsl = null)
         {
+            Host = host;
+            Port = port;
+            UseSsl = useSsl;
             MediaTypeIds = mediaTypeIds;
             SearchesAutomatically = searchesAutomatically;
             QueryLimit = queryLimit;
@@ -145,8 +165,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
         public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
 
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
-        public string BaseUrl { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl), false)]
+        public string? BaseUrl { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Host))]
+        public string? Host { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Port))]
+        public int? Port { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.UseSsl), false)]
+        public bool? UseSsl { get; }
 
         [JsonIgnore]
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
@@ -276,7 +305,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class SourceConnectionData : BaseData
     {
-        public SourceConnectionData(AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl)
+        public SourceConnectionData(AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl)
         {
             AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
             BaseUrl = baseUrl;
@@ -285,8 +314,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
         public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
 
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
-        public string BaseUrl { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl), false)]
+        public string? BaseUrl { get; }
     }
 
     internal sealed class SourceProviderData : BaseData

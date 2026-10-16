@@ -78,7 +78,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             _ => false
         };
 
-        private static bool Points(SourceConnectionData connection, string baseUrl) => connection.BaseUrl.StartsWith(baseUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+        private static bool Points(SourceConnectionData connection, string baseUrl) => connection.BaseUrl?.StartsWith(baseUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) == true;
 
         public static async Task<SourceCatalogState> ReadAsync(SqlContext.SqlReadCommands sql, CancellationToken ct)
         {

@@ -157,11 +157,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public Task TestAsync(AcquisitionConnectionData server, CancellationToken ct) => _downloader.TestAsync(Server(server), ct);
 
+        // Without a port a news server answers on 563 with SSL and on 119 without.
         private UsenetServer Server(AcquisitionConnectionData connection)
         {
-            var address = new Uri(connection.BaseUrl);
-            var tls = address.Scheme == "nntps";
-            return new UsenetServer(address.Host, address.IsDefaultPort || address.Port <= 0 ? tls ? 563 : 119 : address.Port, tls, connection.Username,
+            var tls = connection.UseSsl ?? true;
+            return new UsenetServer(connection.Host!, connection.Port ?? (tls ? 563 : 119), tls, connection.Username,
                 connection.ProtectedApiKey is null ? null : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey), connection.MaxConnections ?? 8);
         }
 

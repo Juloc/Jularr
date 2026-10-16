@@ -9,6 +9,7 @@ namespace Jularr.Frontend.Framework
         private readonly string _tag;
         private readonly IUiComponent[] _children;
         private readonly List<(string Name, string Value)> _attributes = [];
+        private readonly List<(string Name, string Key)> _textAttributes = [];
 
         protected HtmlElement(string tag, params IUiComponent[] children)
         {
@@ -23,13 +24,7 @@ namespace Jularr.Frontend.Framework
 
         public HtmlElement Attribute(string name, string value)
         {
-            if (string.IsNullOrEmpty(name) || !(char.IsAsciiLetterLower(name[0]) || name[0] == '_')
-                || name.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
-                || name.StartsWith("on", StringComparison.OrdinalIgnoreCase) || name == "style")
-            {
-                throw new ArgumentException("Unsafe HTML attribute.", nameof(name));
-            }
-
+            CheckName(name);
             if (name is "href" or "src" or "action" or "formaction" or "poster" && !IsSafeUrl(value))
             {
                 throw new ArgumentException("Unsafe URL.", nameof(value));
@@ -42,6 +37,30 @@ namespace Jularr.Frontend.Framework
         }
 
         public HtmlElement Class(string value) => Attribute("class", value);
+
+        // A translated attribute such as a placeholder; left out when the text is not defined.
+        public HtmlElement TextAttribute(string name, string key)
+        {
+            CheckName(name);
+            if (name is "href" or "src" or "action" or "formaction" or "poster")
+            {
+                throw new ArgumentException("URLs are never translated.", nameof(name));
+            }
+
+            _textAttributes.RemoveAll(attribute => attribute.Name == name);
+            _textAttributes.Add((name, key));
+            return this;
+        }
+
+        private static void CheckName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || !(char.IsAsciiLetterLower(name[0]) || name[0] == '_')
+                || name.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
+                || name.StartsWith("on", StringComparison.OrdinalIgnoreCase) || name == "style")
+            {
+                throw new ArgumentException("Unsafe HTML attribute.", nameof(name));
+            }
+        }
 
         // Browsers ignore control characters and spaces in schemes; only web and mail schemes or relative URLs pass.
         private static bool IsSafeUrl(string value)
@@ -61,7 +80,7 @@ namespace Jularr.Frontend.Framework
         {
             writer.Write('<');
             writer.Write(_tag);
-            foreach (var (name, value) in _attributes)
+            foreach (var (name, value) in _attributes.Concat(_textAttributes.Where(attribute => texts.Has(attribute.Key)).Select(attribute => (attribute.Name, texts[attribute.Key]))))
             {
                 writer.Write(' ');
                 writer.Write(name);

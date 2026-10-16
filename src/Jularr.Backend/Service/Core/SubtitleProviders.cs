@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.Core
             _ => throw new InvalidOperationException("The connection provides no subtitles.")
         };
 
-        private SubtitleAccess Access(AcquisitionConnectionData connection) => new(connection.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey),
+        private SubtitleAccess Access(AcquisitionConnectionData connection) => new(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey),
             connection.Username, connection.ProtectedPassword is null ? null : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedPassword));
     }
 }

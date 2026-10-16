@@ -165,9 +165,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         private OpdsConnection Opds(AcquisitionConnectionData source) =>
-            new(new Uri(source.BaseUrl), source.Username, source.ProtectedApiKey is null ? null : AcquisitionConnectionInput.Unprotect(_protector, source.ProtectedApiKey));
+            new(new Uri(source.HttpAddress), source.Username, source.ProtectedApiKey is null ? null : AcquisitionConnectionInput.Unprotect(_protector, source.ProtectedApiKey));
 
-        private static Uri Catalog(AcquisitionConnectionData source) => new(source.BaseUrl.TrimEnd('/') + "/");
+        private static Uri Catalog(AcquisitionConnectionData source) => new(source.HttpAddress.TrimEnd('/') + "/");
 
         private static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
 

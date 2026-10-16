@@ -43,9 +43,12 @@ namespace Jularr.Frontend.Framework
             define(this);
         }
 
-        public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Text, labelKey, autocomplete);
-        public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Password, labelKey, autocomplete);
-        public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Number, labelKey, "off");
+        // A form may name another example or explanation than the field's own where the field means something special there.
+        public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null) =>
+            Add(field, FieldControl.Text, labelKey, autocomplete, help);
+        public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null) =>
+            Add(field, FieldControl.Password, labelKey, autocomplete, help);
+        public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
 
         // A file field makes the form a multipart upload.
         public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
@@ -76,18 +79,18 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        public Form<TData> Multiline<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
+        public Form<TData> Multiline<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
         {
-            var field = Declare(selector, FieldControl.Text, labelKey);
+            var field = Declare(selector, FieldControl.Text, labelKey, help);
             var input = new HtmlTextarea(new ValueText(Value(field) ?? "")).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
             Configure(field, input);
             AddField(field, input, wide: true);
             return this;
         }
 
-        public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options)
+        public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null)
         {
-            var field = Declare(selector, FieldControl.Select, labelKey);
+            var field = Declare(selector, FieldControl.Select, labelKey, help);
             var value = Value(field);
             var choices = options.ToArray();
 
@@ -123,10 +126,10 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        public Form<TData> Choices<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options)
+        public Form<TData> Choices<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null)
         {
             // Several values under one name.
-            var field = Declare(selector, FieldControl.MultiSelect, labelKey);
+            var field = Declare(selector, FieldControl.MultiSelect, labelKey, help);
             var selected = (_data is null ? null : field.ReadValue(_data) as System.Collections.IEnumerable)?.Cast<object>()
                 .Select(item => Convert.ToString(item, CultureInfo.InvariantCulture)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
             var choices = options.Select(option =>
@@ -136,7 +139,7 @@ namespace Jularr.Frontend.Framework
                 if (_action is null) input.Attribute("disabled", "disabled");
                 return new HtmlLabel(input, new Span(new ValueText(option.Label))).Class("ui-checkbox");
             }).ToArray<IUiComponent>();
-            var content = new List<IUiComponent> { new HtmlLegend(new Text(field.LabelKey)), new Div(choices).Class("ui-choices") };
+            var content = new List<IUiComponent> { new HtmlLegend(new Text(field.LabelKey), new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info")), new Div(choices).Class("ui-choices") };
             if (_error?.Field == field.Name)
             {
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
@@ -220,10 +223,10 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        public Form<TData> Toggle(Expression<Func<TData, bool>> selector, string labelKey)
+        public Form<TData> Toggle(Expression<Func<TData, bool>> selector, string labelKey, FieldHelp? help = null)
         {
             // Bind a canonical Boolean field.
-            var field = Declare(selector, FieldControl.Checkbox, labelKey);
+            var field = Declare(selector, FieldControl.Checkbox, labelKey, help);
             var toggle = new Toggle(labelKey, _data is not null && field.ReadValue(_data) is true);
             toggle.Control.Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
             Configure(field, toggle.Control);
@@ -281,9 +284,9 @@ namespace Jularr.Frontend.Framework
             form.WriteTo(writer, encoder, texts);
         }
 
-        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete)
+        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete, FieldHelp? help)
         {
-            var field = Declare(selector, control, labelKey);
+            var field = Declare(selector, control, labelKey, help);
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name)
                 .Attribute("type", control == FieldControl.Password ? "password" : control == FieldControl.Number ? "number" : "text").Attribute("autocomplete", autocomplete);
 
@@ -298,9 +301,10 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        private BaseField Declare<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey)
+        private BaseField Declare<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, FieldHelp? help = null)
         {
             var field = BaseField.From(selector, control, labelKey);
+            field = field with { PlaceholderKey = help?.Placeholder ?? field.PlaceholderKey, InfoKey = help?.Info ?? field.InfoKey };
             if (!_fields.Add(field.Name))
             {
                 throw new InvalidOperationException("A form field cannot be declared twice.");
@@ -342,6 +346,9 @@ namespace Jularr.Frontend.Framework
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
             if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));
             if (field.IsAddress) input.Attribute("inputmode", "url").Attribute("spellcheck", "false").Attribute("autocapitalize", "off");
+
+            // Typed fields show an example of their form, an optional one what happens when it stays empty; passwords show nothing.
+            if (field.Control is FieldControl.Text or FieldControl.Number) input.TextAttribute("placeholder", field.PlaceholderKey);
             if (field.Scale is { } scale) input.Attribute("step", (1m / (decimal)Math.Pow(10, scale)).ToString(CultureInfo.InvariantCulture));
             if (_error?.Field == field.Name)
             {
@@ -361,9 +368,11 @@ namespace Jularr.Frontend.Framework
             {
                 field.Control == FieldControl.Checkbox ? input : new HtmlFieldset(
                     new HtmlLegend(segmented ? new Span(new Text(field.LabelKey)).Class("ui-field__label")
-                        : new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name)),
+                        : new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name),
+                        new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info")),
                     input).Class(segmented ? "ui-field__control ui-field__control--segmented" : "ui-field__control")
             };
+            if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
             if (_error?.Field == field.Name)
             {
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("id", _id + "-" + field.Name + "-error").Attribute("role", "alert"));

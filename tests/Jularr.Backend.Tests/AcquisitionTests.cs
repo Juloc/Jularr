@@ -1365,6 +1365,17 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "Add download client");
             Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
 
+            // A news server is entered as server, port and SSL; the fields show their form and explain themselves behind the (i).
+            using var newsForm = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Usenet");
+            var news = await newsForm.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, newsForm.StatusCode, news);
+            StringAssert.Contains(news, "placeholder=\"news.newshosting.com\"");
+            StringAssert.Contains(news, "placeholder=\"563 with SSL, 119 without\"");
+            StringAssert.Contains(news, "role=\"tooltip\"");
+            StringAssert.Contains(news, "Empty uses 563 with SSL and 119 without.");
+            Assert.IsFalse(news.Contains("name=\"BaseUrl\"", StringComparison.Ordinal));
+            Assert.IsFalse(news.Contains("placeholder=\"\"", StringComparison.Ordinal));
+
             // A test search lists what the indexer returns and uses one of its daily queries.
             var indexerId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1 ORDER BY \"Id\" LIMIT 1"))!;
             using var searched = await host.SendAsync(HttpMethod.Post, Connections + "/" + indexerId + "/search", new SearchAcquisitionConnectionDataV1("Example"));

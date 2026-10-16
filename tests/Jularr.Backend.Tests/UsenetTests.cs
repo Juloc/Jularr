@@ -132,11 +132,20 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");
             Directory.CreateDirectory(Path.Combine(storage, mountId.ToString(CultureInfo.InvariantCulture), "Movies"));
             await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+
+            // A news server is a host with SSL; a web address belongs to the other connections.
+            using var web = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("News", AcquisitionConnectionType.Usenet, "https://news.example.test", null, true, 10, [], null, null, null, "reader", 2, host: "news.example.test",
+                    useSsl: true));
+            Assert.AreEqual(HttpStatusCode.BadRequest, web.StatusCode, await web.Content.ReadAsStringAsync());
+            using var hostless = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "https://indexer.example.test/", null, true, 10, [], null, null, null, host: "news.example.test"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, hostless.StatusCode, await hostless.Content.ReadAsStringAsync());
             foreach (var data in new[]
             {
                 new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "https://indexer.example.test/", "indexer-key", true, 10, [], null, null, null),
-                new SaveAcquisitionConnectionDataV1("News", AcquisitionConnectionType.Usenet, "nntp://127.0.0.1:" + newsPort.ToString(CultureInfo.InvariantCulture), "news-secret", true, 10, [],
-                    null, null, null, "reader", 2)
+                new SaveAcquisitionConnectionDataV1("News", AcquisitionConnectionType.Usenet, null, "news-secret", true, 10, [], null, null, null, "reader", 2, host: "127.0.0.1",
+                    port: newsPort, useSsl: false)
             })
             {
                 using var created = await host.SendAsync(HttpMethod.Post, Connections, data);

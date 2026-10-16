@@ -63,6 +63,49 @@
     &__control:focus-within > legend { color: var(--accent-text); }
     &__control:has([aria-invalid="true"]) { border-color: var(--danger); }
     &__control:has([aria-invalid="true"]) > legend { color: var(--danger); }
+
+    &__control > :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
+
+    // The (i) beside a label; its explanation opens on hover, focus and a tap.
+    &__help { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    &__info {
+        display: inline-grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: 1px solid var(--accent);
+        border-radius: 50%;
+        background: transparent;
+        color: var(--accent-text);
+        font: italic 700 11px/1 serif;
+        cursor: help;
+
+        // A larger touch target than the visible circle.
+        &::before { content: ""; position: absolute; inset: -13px; }
+        &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    }
+    &__tip {
+        display: none;
+        position: absolute;
+        z-index: 5;
+        top: calc(100% + 6px);
+        left: -8px;
+        width: max-content;
+        max-width: min(320px, 80vw);
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: normal;
+        box-shadow: var(--shadow);
+    }
+    &__help:hover > &__tip,
+    &__help:focus-within > &__tip { display: block; }
 }
 .ui-field__control--segmented { padding: 2px 4px 4px; }
 .ui-field__control--segmented > legend { margin-left: 10px; }

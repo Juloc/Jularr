@@ -119,7 +119,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             if (TempData["MediaServerResult" + type] is string result) page.Content.Add(new P(new ValueText(result)).Attribute("role", "status"));
             page.Content.Add(new Form<SaveMediaServerDataV1>(form =>
             {
-                form.Text(item => item.BaseUrl, "admin.mediaServer.baseUrl");
+                form.Text(item => item.BaseUrl, "admin.mediaServer.baseUrl", help: new FieldHelp(Placeholder: "hint.mediaServer.baseUrl.placeholder"));
                 form.Password(item => item.ApiKey, "admin.mediaServer.apiKey", "new-password");
                 form.Submit(server.ExternalId is null ? "admin.plex.connect" : "common.save");
             }, action + "MediaServer", csrf, _serverInput == type ? _serverData : new SaveMediaServerDataV1(server.BaseUrl ?? "", null), _serverInput == type ? FormError : null));

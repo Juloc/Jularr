@@ -38,7 +38,7 @@ namespace Jularr.Frontend.Pages.Account.Register
                         form.Text(x => x.Email, "account.field.email", "email");
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Password(x => x.Password, "account.field.password", "new-password");
-                        form.Password(x => x.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password");
+                        form.Password(x => x.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password", new FieldHelp(Info: ""));
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Submit("account.register.submit");
                     }, Url.Page("/Account/Register/Register")!, antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError),

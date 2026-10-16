@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
                 form.Text(item => item.Email, "account.field.email", "username");
                 form.Text(item => item.DisplayName, "admin.accounts.name", "nickname");
                 form.Password(item => item.Password, "account.field.password", "new-password");
-                form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password");
+                form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password", new FieldHelp(Info: ""));
                 form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                 form.Submit("setup.owner.create");
             }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError)]));
