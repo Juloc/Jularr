@@ -1,7 +1,9 @@
 # Player design decisions
 
-Owner interview, 15 October 2026. These decisions supersede conflicting historical
-mockups, including centered over-video Desktop transport. This is a target contract,
+Owner interviews, 15–16 October 2026. Only choices confirmed by the owner are
+decisions; the supplied external audit is inspiration, not an approved specification.
+These decisions supersede conflicting historical mockups, centered over-video
+Desktop transport and the earlier changed-defaults Save button. This is a target contract,
 **not a statement that the features below are implemented**. Older functional context:
 [Player spec](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/player/SPEC.md),
 [subtitles #899](https://github.com/Juloc/Jularr/issues/899),
@@ -17,6 +19,11 @@ mockups, including centered over-video Desktop transport. This is a target contr
   subtitle On/Off, Settings, Normal/Theater and Fullscreen right. Cast is top-right.
 - The subtitle button switches the configured tracks together. Their settings
   live under Subtitles, not in another track-selection popup.
+- Hide controls after three seconds without interaction; keep them visible during
+  interaction, keyboard focus or an open settings popover.
+- Episode rows remain compact: slightly larger, consistent preview images on the
+  left, episode number/title/duration beside them and a thin progress bar. Keep the
+  current episode-selection treatment; its Play icon becomes filled with rounded corners.
 - Chapters have a collapsible thumbnail strip below video, a panel in Wide/Fullscreen,
   and timeline dots. Real scene markers may add dots; preview frames are not scenes.
 - The seek handle moves continuously across the full duration. Hover and drag show
@@ -32,32 +39,103 @@ mockups, including centered over-video Desktop transport. This is a target contr
 - TV: Previous, Play/Pause, Next; seeking through a focusable timeline with previews,
   not duplicate seek buttons. Settings remain accessible by remote.
 
-## Settings and defaults
+## Compact settings popover
 
-- Settings popover: Audio, Subtitles, Playback, Info. Opening it preserves Play/Pause.
-- Explicit user changes are remembered for the Work. Fallback priority is Work,
-  media-type preferences, general profile preferences. A changed-defaults button
-  saves only conscious changes across tabs for that media type; automatic selection
-  and runtime recovery never rewrite preferences. Track IDs/offsets need valid file/track scope.
+- Basic opens first; the tabs are Basic, Audio, Subtitles, Playback and Info.
+  The scope selector sits at the top, the content in the middle, tabs at the bottom.
+  Tabs meet the rounded popover frame directly, with a subtle background and no
+  separately bordered capsule. No repeated Player settings heading.
+- Keep a compact, stable outer size across tabs, including Info. The header and
+  tab bar remain fixed; only content may scroll, never nested content and outer scrollbars.
+  Keep useful Audio options without routine scrolling. If space is insufficient,
+  switch to a screen-filling settings view instead of shrinking controls; playback
+  continues behind it and closing returns directly to the same running Player.
+- Close and Expand sit together; Close matches the tab height. Expand opens the
+  complete settings page, not browser/video fullscreen. The bottom-right Player
+  controls retain their white circular surfaces. Opening settings preserves Play/Pause.
+
+| Tab | Compact content |
+| --- | --- |
+| Basic | Three compact selects: audio, subtitle 1, subtitle 2 (subtitles include Off); speed and quality. |
+| Audio | Track and offset, plus useful everyday Audio options where they fit. The exact additional subset is not yet fixed; advanced processing stays on the full page. |
+| Subtitles | Both tracks with independent offsets; shared font size and bottom distance. Detailed styling and drift correction stay on the full page. |
+| Playback | Quality, speed, next-episode behavior, intro/recap/outro skipping; a segmented picture-format control. Sleep and other advanced options stay on the full page. |
+| Info | Actual resolution, video/audio codecs, FPS, HDR, bitrate and Direct Play/Remux/Transcode, with a concise conversion reason when applicable. Full diagnostics stay on the full page. |
+
+- Speed uses a fine slider from 0.25× to 4× in 0.05 increments, clickable preset
+  points at 0.25/0.5/0.75/1/1.25/1.5/2/3/4×, and an editable numeric value beside it.
+- Quality remains one select: Automatic, Original and actual available presets
+  labeled with resolution and bitrate.
+- Picture format is three direct segments: Fit, Fill, Original format. Exact
+  rendering semantics must be distinguished from the separate advanced Zoom control
+  before implementation; do not invent different behavior for equivalent labels.
+
+## Scope, inheritance and saving
+
+- Scope choices: Current playback, This series (for a series/anime), This media
+  type (labels such as Movies/Series/Anime), My profile, and authorized Admin file
+  corrections. Final UI labels must use semantic localized resources.
+- Changes apply immediately and save automatically in the explicitly selected
+  scope; Current playback is temporary. No Save button. Automatic track selection
+  and recovery never rewrite preferences. Report save failures, not successful saves.
+- Remember the chosen personal scope while staying on the Player page, including
+  closing/reopening its popover. Leaving and reopening the page resets to Current
+  playback. Never automatically restore Admin scope.
+- Switching scope loads its values; it does not copy or save the previous scope's
+  values. Subsequent user edits affect the selected scope only.
+- Personal fallback: Current playback → This series where applicable → Media type
+  → Profile. Show inherited versus overridden values unobtrusively. Reset per field
+  removes that override, so later upstream changes are inherited; it is not a copy.
+- The popover has per-field Reset but no copy/import menu. The full settings page
+  offers explicit Take values from another scope for the current tab, all personal
+  settings, or selected groups. Never copy incompatible file-bound track IDs or
+  Admin corrections as personal preferences. Track IDs/offsets need valid file/track scope.
+- Admin is limited to permanent corrections for the specific file shared by its
+  users, for example audio/subtitle timing. It is not a personal-preference scope,
+  an instance-wide default or a way to overwrite everyone's playback preferences.
+
+## Complete Player settings page
+
+- Give settings the wider main column, with a smaller preview on the right that
+  stays visible while scrolling. On narrow screens put the preview above settings;
+  do not squeeze controls into two unusably narrow columns.
+- One tab bar: Audio, Subtitles, Playback, Picture, Info. Within a tab use collapsible
+  coherent groups, such as Appearance and Synchronization, not nested tab bars.
+- Use the current playback as the embedded preview: the same media element/session
+  moves from the mini-player into this surface without restarting. Normal navigation
+  keeps playback alive in the mini-player. With no active playback, use a clearly
+  labeled example instead. No duplicate stream/decoder just for the settings preview.
+- Advanced controls belong here, not in extra popover submenus: detailed subtitle
+  styling/drift correction, audio processing, frame stepping, A–B repeat, zoom,
+  picture adjustment, sleep timer and detailed diagnostics.
+- Frame stepping and A–B repeat live under Playback → Advanced.
+- Audio output is automatic by default, with optional volume amplification and
+  downmix under Audio → Advanced.
+- Subtitle synchronization offers fixed offset and speed/drift correction
+  independently for each track. The compact popover retains fixed offset only.
+- Picture adjustment offers brightness, contrast and saturation, neutral by default
+  and resettable. It does not mean changing system display brightness.
+
+## Selection and playback behavior
+
 - Audio uses ordered preferred languages, then original language, then file default;
-  a saved Work choice wins. Quality offers Automatic, Original and valid server
+  an applicable explicit saved choice wins. Quality offers Automatic, Original and valid server
   presets labeled with resolution/bitrate. PlaybackPlan still owns delivery decisions.
-- Multiple cuts/versions are selectable before start and under Playback; changes
+- Multiple cuts/versions are selectable before start and on the full settings page; changes
   preserve logical position and compatible tracks where possible.
-- Speed has common presets and a fine slider; preserve pitch where supported.
+- Preserve pitch when adjusting speed where supported.
 - Audio and each subtitle offset have earlier/later millisecond steps, numeric input
   and reset to zero. Seeking must not accumulate an offset again.
 - Autoplay defaults On with a cancellable 10-second countdown; immediate or Off are
   options. Intro/recap/outro default to a Skip button; automatic skipping is optional
   per category and depends on authoritative segment markers.
 - Sleep timer defaults Off: 15/30/60 minutes, custom duration or end of item/chapter.
-- Info contains concise actual playback facts and expandable reasons/diagnostics,
-  not permanent technical overlays or user-facing forced-transcode switches.
+- Do not add permanent technical overlays or user-facing forced-transcode switches.
 
 ## Subtitles
 
-- Two independent tracks, selected by ordered profile language preferences; Work
-  changes override them. Default behavior is Forced matching audio language, otherwise Off;
+- Two independent tracks, selected by ordered profile language preferences; applicable
+  explicit scoped choices override them. Default behavior is Forced matching audio language, otherwise Off;
   full subtitles can be saved as the media-type default.
 - Both tracks stay grouped, primary above secondary at the bottom by default.
   Authored positions/signs remain positioned; background dialogue can use the top.
@@ -84,6 +162,9 @@ mockups, including centered over-video Desktop transport. This is a target contr
 
 ## Current prototype boundary
 
+The 16 October interview update is documentation only. It does not change the
+running workshop or implement the new target layout, scopes or complete settings page.
+
 `/Design?pane=player` on the isolated design branch demonstrates Desktop Normal,
 shared controls, four settings tabs, sample caption styling, local changed-defaults,
 sidebar and seeking. All sample values are clearly labeled. No playback/profile/
@@ -93,3 +174,16 @@ a persisted profile preference. Controls are local presentation examples, not se
 Actual preference persistence, cue/ASS rendering and synchronization, translation,
 handoff, waveform generation, runtime recovery, automatic background/PiP and the
 complete Wide/Fullscreen/Mobile/TV/mini-player designs remain implementation work.
+The new Basic tab, scoped autosave/reset/copy behavior, bottom-integrated tabs,
+screen-filling fallback, embedded settings page and newly approved advanced tools
+also remain unimplemented. The current sample-defaults button is not the target design.
+
+## Remaining precision before implementation
+
+- Exact everyday Audio options beyond track/offset must fit the compact layout;
+  the owner approved the space/advanced-page boundary, not a fixed extra field list.
+- Define Fit versus Original format and the technical limits of speed, stepping,
+  drift correction, downmix and amplification against actual playback capabilities.
+  Unsupported actions must not be presented as functional or patched with workarounds.
+- Scope/track compatibility and storage lifetime need real typed service contracts;
+  this interview defines product behavior, not new schema or database authorization.
