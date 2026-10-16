@@ -18,6 +18,13 @@
             ? LogLevelLabel(parsed)
             : level;
 }
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/ui-popover.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-select.js" asp-append-version="true" defer></script>
+}
 
 <header class="page-header">
     <div>
@@ -33,16 +40,16 @@
     {
         <input type="hidden" name="operationId" value="@operationId" />
     }
-    <select name="level">
+    <span class="ui-select-control"><select name="level" aria-label="@ui["admin.logs.filter.allLevels"]" data-ui-select>
         <option value="">@ui["admin.logs.filter.allLevels"]</option>
         @foreach (var level in Enum.GetNames<OperationLogLevel>())
         {
             <option value="@level" selected="@(Model.Level == level)">@LogLevelLabelForName(level)</option>
         }
-    </select>
+    </select></span>
     <input name="module" value="@Model.Module" placeholder="@ui["admin.logs.filter.modulePlaceholder"]" />
     <input name="search" value="@Model.Search" placeholder="@ui["admin.logs.filter.searchPlaceholder"]" />
-    <button class="button" type="submit">@ui["admin.filter.apply"]</button>
+    <button class="button ui-pill-button ui-action-button" type="submit"><partial name="_AdminIcon" model='"filter"' /><span>@ui["admin.filter.apply"]</span></button>
 </form>
 
 <section class="panel">
@@ -59,9 +66,9 @@
                    asp-page="/Admin/Operation"
                    asp-route-id="@entry.OperationId">
                     <time>@entry.CreatedAtUtc.ToLocalTime().ToString("G")</time>
-                    <span>@LogLevelLabel(entry.Level)</span>
+                    <partial name="_UiStatusTag" model='new UiStatusTagModel(LogLevelLabel(entry.Level), entry.Level == OperationLogLevel.Error ? UiTone.Danger : entry.Level == OperationLogLevel.Warning ? UiTone.Warning : UiTone.Info)' />
                     <strong>@entry.Module</strong>
-                    <p>@entry.Message</p>
+                    <partial name="_UiTextCell" model="new UiTextCellModel(entry.Message)" />
                 </a>
             }
         </div>

@@ -14,9 +14,9 @@
     var resolved = Model.UserId is { } userId ? configuration.Resolve(userId, Model.Settings.AutoApprovalRules) : null;
     var overrides = resolved?.Overrides;
 }
-<section class="panel rre-editor" data-rre-editor data-default-id="@configuration.DefaultId" data-user="@(isUser ? "true" : "false")" data-revision="@Model.Settings.Revision"
+<section class="panel ui-split-editor rre-editor" data-rre-editor data-default-id="@configuration.DefaultId" data-user="@(isUser ? "true" : "false")" data-revision="@Model.Settings.Revision"
          data-unsaved="@ui["requestRules.unsaved"]" data-based="@ui["requestRules.based"]" data-custom="@ui["requestRules.custom"]" data-inherited="@ui["requestRules.inherited"]">
-    <button type="button" class="button button-secondary rre-mobile-back" data-rre-back><partial name="_AppIcon" model="@("chevronLeft")" /> @ui["common.back"]</button>
+    <button type="button" class="button button-secondary ui-split-back rre-mobile-back" data-rre-back><partial name="_AppIcon" model="@("chevronLeft")" /> @ui["common.back"]</button>
     @if (isUser) { <div class="rre-editor-user"><partial name="/Pages/Admin/_RequestRequester.cshtml" model="Model.UserName!" /></div> }
     <form method="post" asp-page-handler="@(isUser ? "SaveUser" : "SaveRule")" data-rre-form>
         <input asp-for="Editor.Id" type="hidden" />
@@ -25,57 +25,57 @@
         {
             <input type="hidden" name="userId" value="@Model.UserId" />
             <input asp-for="Editor.Name" type="hidden" />
-            <label class="rre-field"><span>@ui["requestRules.profile"]</span>
-                <span class="admreq-select-control"><select asp-for="Editor.RuleId" data-rre-assignment data-admreq-custom-select aria-label="@ui["requestRules.profile"]">
+            <label class="ui-field rre-field"><span>@ui["requestRules.profile"]</span>
+                <span class="ui-select-control"><select asp-for="Editor.RuleId" data-rre-assignment data-ui-select aria-label="@ui["requestRules.profile"]">
                     <option value="">@ui.Format("requestRules.inheritDefault", ("name", defaultProfile.Name))</option>
                     @foreach (var profile in configuration.Profiles) { <option value="@profile.Id">@profile.Name @(profile.Id == configuration.DefaultId ? "· " + ui["requestRules.default"] : "")</option> }
                 </select></span>
             </label>
-            <label class="rre-check rre-override"><input asp-for="Editor.UseOverrides" data-rre-overrides /> @ui["requestRules.override"]</label>
+            <label class="ui-check rre-check rre-override"><input asp-for="Editor.UseOverrides" data-rre-overrides /> @ui["requestRules.override"]</label>
             <p class="muted" data-rre-state aria-live="polite">@ui.Format("requestRules.based", ("name", Model.Editor.Name))</p>
         }
         else
         {
-            <label class="rre-field"><span>@ui["requestRules.name"]</span><input asp-for="Editor.Name" maxlength="60" required data-rre-name /></label>
-            <label class="rre-field"><span>@ui["requestRules.description"]</span><textarea asp-for="Editor.Description" maxlength="500" rows="2" data-rre-description></textarea></label>
+            <label class="ui-field rre-field"><span>@ui["requestRules.name"]</span><input asp-for="Editor.Name" maxlength="60" required data-rre-name /></label>
+            <label class="ui-field rre-field"><span>@ui["requestRules.description"]</span><textarea asp-for="Editor.Description" maxlength="500" rows="2" data-rre-description></textarea></label>
         }
-        <fieldset class="rre-fields" disabled="@(isUser && !Model.Editor.UseOverrides)" data-rre-fields>
+        <fieldset class="ui-fields rre-fields" disabled="@(isUser && !Model.Editor.UseOverrides)" data-rre-fields>
             <legend class="sr-only">@ui["requestRules.fields"]</legend>
-            <div class="rre-field"><label for="Editor_Limit">@ui["requestRules.limit"] <span class="rre-inheritance" data-rre-inheritance="limit"></span></label>
+            <div class="ui-field rre-field"><label for="Editor_Limit">@ui["requestRules.limit"] <span class="rre-inheritance" data-rre-inheritance="limit"></span></label>
                 <input asp-for="Editor.Limit" type="number" min="1" max="10000" required disabled="@Model.Editor.Unlimited" data-rre-limit />
-                <label class="rre-check"><input asp-for="Editor.Unlimited" data-rre-unlimited /> @ui["requestRules.unlimited"]</label>
+                <label class="ui-check rre-check"><input asp-for="Editor.Unlimited" data-rre-unlimited /> @ui["requestRules.unlimited"]</label>
             </div>
-            <label class="rre-field"><span>@ui["requestRules.period"] <span class="rre-inheritance" data-rre-inheritance="periodDays"></span></span><input asp-for="Editor.PeriodDays" type="number" min="1" max="365" required data-rre-period /></label>
-            <div class="rre-field rre-field-wide"><label for="Editor_Approval">@ui["requestRules.configuredApproval"] <span class="rre-inheritance" data-rre-inheritance="approval"></span></label>
-                <span class="admreq-select-control"><select asp-for="Editor.Approval" data-rre-approval data-admreq-custom-select aria-label="@ui["requestRules.configuredApproval"]" aria-describedby="rre-approval-help"><option value="Manual">@ui["requestRules.manual"]</option><option value="Automatic">@ui["requestRules.automatic"]</option></select></span>
+            <label class="ui-field rre-field"><span>@ui["requestRules.period"] <span class="rre-inheritance" data-rre-inheritance="periodDays"></span></span><input asp-for="Editor.PeriodDays" type="number" min="1" max="365" required data-rre-period /></label>
+            <div class="ui-field rre-field ui-field-wide rre-field-wide"><label for="Editor_Approval">@ui["requestRules.configuredApproval"] <span class="rre-inheritance" data-rre-inheritance="approval"></span></label>
+                <span class="ui-select-control"><select asp-for="Editor.Approval" data-rre-approval data-ui-select aria-label="@ui["requestRules.configuredApproval"]" aria-describedby="rre-approval-help"><option value="Manual">@ui["requestRules.manual"]</option><option value="Automatic">@ui["requestRules.automatic"]</option></select></span>
                 <p id="rre-approval-help" class="rre-approval-help">@ui["requestRules.effectiveApprovalHelp"]</p>
             </div>
-            <fieldset class="rre-media rre-field-wide"><legend>@ui["requestRules.media"] <span class="rre-inheritance" data-rre-inheritance="kinds"></span></legend>
-                <div class="rre-tags">
+            <fieldset class="rre-media ui-field-wide rre-field-wide"><legend>@ui["requestRules.media"] <span class="rre-inheritance" data-rre-inheritance="kinds"></span></legend>
+                <div class="ui-chip-group rre-tags">
                     @foreach (var kind in Model.EnabledKinds)
                     {
                         var value = AcquisitionAccessNames.Kind(kind);
-                        <label class="rre-check" title="@(!Model.EditableKinds.Contains(kind) ? ui["requestRules.forbidden"] : "")">
-                            <input type="checkbox" name="Editor.Kinds" value="@value" checked="@Model.Editor.Kinds.Contains(value)" disabled="@(!Model.EditableKinds.Contains(kind))" data-rre-kind />
+                        <label class="ui-check rre-check" title="@(!Model.EditableKinds.Contains(kind) ? ui["requestRules.forbidden"] : "")">
+                            <input class="ui-checkbox" type="checkbox" name="Editor.Kinds" value="@value" checked="@Model.Editor.Kinds.Contains(value)" disabled="@(!Model.EditableKinds.Contains(kind))" data-rre-kind />
                             <partial name="/Pages/Admin/_RequestTypeTag.cshtml" model="kind" />
                         </label>
                     }
                 </div>
             </fieldset>
-            <fieldset class="rre-media rre-field-wide"><legend>@ui["admin.requests.profilesHeading"] <span class="rre-inheritance" data-rre-inheritance="qualityProfileIds"></span></legend>
+            <fieldset class="rre-media ui-field-wide rre-field-wide"><legend>@ui["admin.requests.profilesHeading"] <span class="rre-inheritance" data-rre-inheritance="qualityProfileIds"></span></legend>
                 <p class="muted rre-quality-help">@ui["requestRules.qualityHelp"]</p>
                 @if (Model.QualityProfiles.Count == 0) { <p class="muted">@ui["requestRules.noQualityProfiles"]</p> }
-                <div class="rre-tags rre-quality-options">
+                <div class="ui-chip-group rre-tags rre-quality-options">
                     @foreach (var profile in Model.QualityProfiles)
                     {
-                        <label class="rre-check"><input type="checkbox" name="Editor.QualityProfileIds" value="@profile.Id" checked="@Model.Editor.QualityProfileIds.Contains(profile.Id)" data-rre-quality /><span class="admreq-badge admreq-type rre-quality-chip">@profile.Name</span></label>
+                        <label class="ui-check rre-check"><input class="ui-checkbox" type="checkbox" name="Editor.QualityProfileIds" value="@profile.Id" checked="@Model.Editor.QualityProfileIds.Contains(profile.Id)" data-rre-quality /><span class="admin-tag admin-tag-soft admreq-type rre-quality-chip">@profile.Name</span></label>
                     }
                 </div>
             </fieldset>
         </fieldset>
         <a class="rre-quality-manage" href="/Admin/AcquisitionProfiles" data-rre-navigation>@ui["requestRules.manageQualityProfiles"]</a>
         <p class="muted rre-help">@ui["requestRules.help"]</p>
-        <div class="rre-editor-actions"><button class="button button-primary" type="submit">@ui["common.save"]</button><button class="button button-secondary" type="button" data-rre-cancel>@ui["common.cancel"]</button></div>
+        <div class="rre-editor-actions"><button class="button button-primary ui-pill-button" type="submit">@ui["common.save"]</button><button class="button button-secondary ui-pill-button" type="button" data-rre-cancel>@ui["common.cancel"]</button></div>
     </form>
     <script type="application/json" data-rre-profiles>@Html.Raw(JsonSerializer.Serialize(profileData))</script>
     <script type="application/json" data-rre-custom-fields>@Html.Raw(JsonSerializer.Serialize(new { limit = overrides?.HasLimit is true, periodDays = overrides?.PeriodDays is not null, approval = overrides?.Approval is not null, kinds = overrides?.Kinds is not null, qualityProfileIds = overrides?.QualityProfileIds is not null }))</script>

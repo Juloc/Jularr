@@ -8,17 +8,19 @@
     ViewData["AdminSectionRoot"] = "/Admin/Requests";
 }
 @section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/request-rule-editor.css" asp-append-version="true" />
 }
 @section Scripts {
-    <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-popover.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-select.js" asp-append-version="true" defer></script>
     <script src="~/js/request-rule-editor.js" asp-append-version="true" defer></script>
 }
 <partial name="_AdminSectionLinks" />
 <div asp-validation-summary="All" class="validation"></div>
-<div class="admreq rre-workspace @(Model.Request.Query.ContainsKey("id") ? "rre-mobile-editor" : "")" data-rre-workspace>
-    <section class="panel rre-list" aria-label="@ui["requestRules.profiles"]">
+<div class="admreq ui-split rre-workspace @(Model.Request.Query.ContainsKey("id") ? "ui-split-editing" : "")" data-rre-workspace>
+    <section class="panel ui-split-list rre-list" aria-label="@ui["requestRules.profiles"]">
         <div class="rre-list-head"><strong>@ui["requestRules.profiles"]</strong><button type="button" class="button button-primary" data-rre-new>@ui["requestRules.add"]</button></div>
         @foreach (var rule in settings.Rules.Profiles)
         {
@@ -67,7 +69,7 @@
         </ul>
         <form method="post" asp-page-handler="FinishTransition" data-rre-mutation>
             <input type="hidden" name="revision" value="@settings.Revision" />
-            <label class="rre-check"><input type="checkbox" name="confirmed" value="true" required /> @ui["requestRules.transitionConfirm"]</label>
+            <label class="ui-check rre-check"><input type="checkbox" name="confirmed" value="true" required /> @ui["requestRules.transitionConfirm"]</label>
             <button class="button button-secondary" type="submit">@ui["requestRules.finishTransition"]</button>
         </form>
     </section>

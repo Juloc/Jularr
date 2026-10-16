@@ -5,9 +5,11 @@
     ViewData["AdminSectionRoot"] = "/Admin/Requests";
 }
 @section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/request-rule-editor.css" asp-append-version="true" />
 }
-@section Scripts { <script src="~/js/admin-requests.js" asp-append-version="true" defer></script><script src="~/js/request-rule-editor.js" asp-append-version="true" defer></script> }
+@section Scripts { <script src="~/js/ui-popover.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-select.js" asp-append-version="true" defer></script><script src="~/js/request-rule-editor.js" asp-append-version="true" defer></script> }
 <partial name="_AdminSectionLinks" />
 <partial name="_RequestUsersPage" />

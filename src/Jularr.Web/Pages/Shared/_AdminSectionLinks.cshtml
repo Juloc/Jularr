@@ -16,13 +16,20 @@
 }
 @if (links.Count > 1)
 {
-    <nav class="admin-section-links @(sectionRoot is null ? "" : "library-type-tabs admreq-section-tabs")" aria-label="@ui[links[0].LabelKey]">
-        @foreach (var link in links)
-        {
-            <a class="@(sectionRoot is null ? "button button-secondary" : "library-type-tab") @(link.IsActive ? "active" : "")" href="@link.Href" aria-current="@(link.IsActive ? "page" : null)">
-                <partial name="_AppIcon" model="link.Icon" />
-                <span>@ui[link.LabelKey]</span>
-            </a>
-        }
-    </nav>
+    @if (sectionRoot is not null)
+    {
+        <partial name="_UiTabs" model='new UiTabsModel(ui[links[0].LabelKey], links.Select(link => new UiTabModel(ui[link.LabelKey], link.Href, link.IsActive, link.Icon)).ToArray(), "admin-section-links admreq-section-tabs")' />
+    }
+    else
+    {
+        <nav class="admin-section-links" aria-label="@ui[links[0].LabelKey]">
+            @foreach (var link in links)
+            {
+                <a class="button button-secondary @(link.IsActive ? "active" : "")" href="@link.Href" aria-current="@(link.IsActive ? "page" : null)">
+                    <partial name="_AppIcon" model="link.Icon" />
+                    <span>@ui[link.LabelKey]</span>
+                </a>
+            }
+        </nav>
+    }
 }

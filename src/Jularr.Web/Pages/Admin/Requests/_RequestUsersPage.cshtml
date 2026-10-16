@@ -10,11 +10,11 @@
 {
     <nav class="rre-user-context" aria-label="@ui["requestRules.userSettings"]"><a class="button button-secondary" href="/Admin/User/@Uri.EscapeDataString(selected.Id)">@selected.UserName</a><span>@ui["requestRules.userSettings"] / @ui["admin.nav.requests"]</span></nav>
 }
-<div class="admreq rre-users-workspace @(Model.SelectedUser is not null ? "rre-has-user rre-mobile-editor" : "")" data-rre-workspace>
+<div class="admreq ui-split ui-split-wide rre-users-workspace @(Model.SelectedUser is not null ? "rre-has-user ui-split-editing" : "")" data-rre-workspace>
     @if (!Model.IsUserSettings)
     {
-        <section class="panel rre-list rre-users-list" aria-label="@ui["admin.users.accounts"]">
-            <form method="get" class="rre-user-search" data-rre-navigation><input type="search" name="q" maxlength="80" value="@Model.Query" aria-label="@ui["requestRules.searchUsers"]" placeholder="@ui["requestRules.searchUsers"]" /><button class="button button-secondary" type="submit"><partial name="_AppIcon" model="@("search")" /><span class="sr-only">@ui["common.search"]</span></button></form>
+        <section class="panel ui-split-list rre-list rre-users-list" aria-label="@ui["admin.users.accounts"]">
+            <form method="get" class="rre-user-search" data-rre-navigation><input class="ui-input" type="search" name="q" maxlength="80" value="@Model.Query" aria-label="@ui["requestRules.searchUsers"]" placeholder="@ui["requestRules.searchUsers"]" /><button class="button button-secondary" type="submit"><partial name="_AppIcon" model="@("search")" /><span class="sr-only">@ui["common.search"]</span></button></form>
             <p class="muted rre-user-count">@ui["admin.users.accounts"] · @Model.Directory.TotalCount</p>
             @if (Model.Directory.Items.Count == 0) { <div class="empty-state"><strong>@ui[Model.Query.Length > 0 ? "requestRules.noMatchingUsers" : "admin.users.noAccounts"]</strong></div> }
             @if (Model.Directory.Items.Count > 0)
@@ -38,7 +38,7 @@
                                             <span class="rre-user-role">@roleLabel</span>
                                         </a>
                                     </td>
-                                    <td><span class="rre-user-profile" title="@resolved.Profile.Name">@resolved.Profile.Name</span><span class="rre-user-assignment">@assignment</span></td>
+                                    <td><partial name="_UiTextCell" model="new UiTextCellModel(resolved.Profile.Name, assignment)" /></td>
                                     <td><span class="rre-user-value" title="@quota">@quota</span></td>
                                     <td><span class="rre-user-value" title="@approval · @ui["requestRules.effectiveApprovalHelp"]">@approval</span></td>
                                 </tr>

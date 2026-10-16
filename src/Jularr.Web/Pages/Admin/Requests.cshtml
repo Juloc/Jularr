@@ -14,8 +14,11 @@
     <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
 }
 @section Scripts {
+    <script src="~/js/ui-popover.js" asp-append-version="true" defer></script>
     <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
     <script src="~/js/local-time.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-select.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-table.js" asp-append-version="true" defer></script>
     <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
 }
 
@@ -40,13 +43,7 @@
 
 <div class="admreq-navigation-row">
     <partial name="_AdminSectionLinks" />
-    <nav class="library-type-tabs admreq-tabs" aria-label="@ui["admin.requests.tabsAria"]">
-        @foreach (var (tab, label) in tabs)
-        {
-            var active = tab == filter.Tab;
-            <a class="library-type-tab @(active ? "active" : "")" href="@RequestsModel.Href(filter with { Tab = tab, Page = 1 })" aria-current="@(active ? "page" : null)">@label <span class="admreq-count">@queue.TabCounts[tab]</span></a>
-        }
-    </nav>
+    <partial name="_UiTabs" model='new UiTabsModel(ui["admin.requests.tabsAria"], tabs.Select(item => new UiTabModel(item.Label, RequestsModel.Href(filter with { Tab = item.Tab, Page = 1 }), item.Tab == filter.Tab, Count: queue.TabCounts[item.Tab])).ToArray(), "admreq-tabs")' />
 </div>
 
 @if (TempData["RequestActionResults"] is string resultJson)
@@ -80,7 +77,7 @@
             }
             <div class="admreq-filter-row">
                 <div class="admreq-search">
-                    <input type="search" name="q" value="@filter.Search" maxlength="120" placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
+                    <input class="ui-input" type="search" name="q" value="@filter.Search" maxlength="120" placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
                     <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
                 </div>
                 <button class="admreq-mobile-filter-trigger" type="button" data-admreq-open-filters aria-haspopup="dialog" aria-controls="admreq-filter-dialog" aria-expanded="false">
@@ -88,9 +85,9 @@
                     <span>@ui["admin.requests.filters.open"]</span>
                 </button>
                 <div class="admreq-selects">
-                <div class="admreq-select-control">
-                    <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"stack"' /></span>
-                    <select name="type" multiple aria-label="@ui["admin.requests.filter.type"]" data-admreq-custom-select>
+                <div class="ui-select-control">
+                    <span class="ui-select-icon" aria-hidden="true"><partial name="_AdminIcon" model='"stack"' /></span>
+                    <select name="type" multiple aria-label="@ui["admin.requests.filter.type"]" data-ui-select>
                     <option value="">@ui["admin.requests.filter.type"]</option>
                     @foreach (var kind in Model.EnabledKinds)
                     {
@@ -99,9 +96,9 @@
                     }
                     </select>
                 </div>
-                <div class="admreq-select-control">
-                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"globe"' /></span>
-                <select name="lang" multiple aria-label="@ui["admin.requests.filter.language"]" data-admreq-custom-select>
+                <div class="ui-select-control">
+                <span class="ui-select-icon" aria-hidden="true"><partial name="_AdminIcon" model='"globe"' /></span>
+                <select name="lang" multiple aria-label="@ui["admin.requests.filter.language"]" data-ui-select>
                     <option value="">@ui["admin.requests.filter.language"]</option>
                     @foreach (var tag in queue.Languages)
                     {
@@ -109,9 +106,9 @@
                     }
                 </select>
                 </div>
-                <div class="admreq-select-control">
-                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AppIcon" model='"users"' /></span>
-                <select name="by" multiple aria-label="@ui["admin.requests.filter.requester"]" data-admreq-custom-select>
+                <div class="ui-select-control">
+                <span class="ui-select-icon" aria-hidden="true"><partial name="_AppIcon" model='"users"' /></span>
+                <select name="by" multiple aria-label="@ui["admin.requests.filter.requester"]" data-ui-select>
                     <option value="">@ui["admin.requests.filter.requester"]</option>
                     @foreach (var (requesterId, requesterName) in Model.Requesters)
                     {
@@ -120,9 +117,9 @@
                 </select>
                 </div>
                 </div>
-                <div class="admreq-select-control admreq-sort-control">
-                    <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"arrow-down"' /></span>
-                    <select name="sort" aria-label="@ui["admin.requests.sort"]" data-admreq-custom-select>
+                <div class="ui-select-control admreq-sort-control">
+                    <span class="ui-select-icon" aria-hidden="true"><partial name="_AdminIcon" model='"arrow-down"' /></span>
+                    <select name="sort" aria-label="@ui["admin.requests.sort"]" data-ui-select>
                         @foreach (var (value, labelKey) in new[]
                         {
                             ("newest", "admin.requests.sort.newest"),
@@ -139,19 +136,19 @@
             </div>
             @foreach (var kind in Model.EnabledKinds)
             {
-                <template data-admreq-option-select="type" data-value="@AcquisitionAccessNames.Kind(kind)"><partial name="_RequestTypeTag" model="kind" /></template>
+                <template data-ui-select-option="type" data-value="@AcquisitionAccessNames.Kind(kind)"><partial name="_RequestTypeTag" model="kind" /></template>
             }
             @foreach (var tag in queue.Languages)
             {
-                <template data-admreq-option-select="lang" data-value="@tag"><partial name="_RequestLanguage" model="tag" /></template>
+                <template data-ui-select-option="lang" data-value="@tag"><partial name="_RequestLanguage" model="tag" /></template>
             }
             @foreach (var (id, name) in Model.Requesters)
             {
-                <template data-admreq-option-select="by" data-value="@id"><partial name="_RequestRequester" model="name" /></template>
+                <template data-ui-select-option="by" data-value="@id"><partial name="_RequestRequester" model="name" /></template>
             }
             @foreach (var value in new[] { "newest", "oldest", "modified", "title", "requester" })
             {
-                <template data-admreq-option-select="sort" data-value="@value"><span class="admreq-sort-option"><partial name="_AdminIcon" model='@(value is "newest" or "modified" ? "arrow-down" : "arrow-up")' /><span>@ui["admin.requests.sort." + value]</span></span></template>
+                <template data-ui-select-option="sort" data-value="@value"><span class="admreq-sort-option"><partial name="_AdminIcon" model='@(value is "newest" or "modified" ? "arrow-down" : "arrow-up")' /><span>@ui["admin.requests.sort." + value]</span></span></template>
             }
             @if (filter.HasNarrowing)
             {
@@ -195,7 +192,7 @@
                 <thead>
                     <tr>
                         <th class="admreq-cell-selection" scope="col">
-                            <input type="checkbox" aria-label="@ui["admin.requests.title"]" data-admreq-select-all />
+                            <input class="ui-checkbox" type="checkbox" aria-label="@ui["admin.requests.title"]" data-ui-select-all />
                         </th>
                         <th class="admreq-cell-title" scope="col">@ui["admin.requests.col.title"]</th>
                         <th class="admreq-cell-type" scope="col">@ui["admin.requests.col.type"]</th>
@@ -238,9 +235,9 @@
                             AcquisitionRequestStatus.Failed => "failed",
                             _ => null
                         };
-                        <tr class="admreq-row" data-admreq-row data-request-id="@request.Id" data-request-status="@AcquisitionAccessNames.Status(request.Status)" data-request-operation="@request.OperationId" tabindex="0">
+                        <tr class="admreq-row" data-ui-row data-request-id="@request.Id" data-request-status="@AcquisitionAccessNames.Status(request.Status)" data-request-operation="@request.OperationId" tabindex="0">
                             <td class="admreq-cell-selection">
-                                <input type="checkbox" value="@request.Id" aria-labelledby="@titleId" data-admreq-select />
+                                <input class="ui-checkbox" type="checkbox" value="@request.Id" aria-labelledby="@titleId" data-ui-select-row />
                             </td>
                             <td class="admreq-cell-title">
                               <div class="admreq-title-wrap">
@@ -290,7 +287,7 @@
                                 <div class="admreq-stack"><span>@profileName</span><small>@(language is not null ? RequestLanguages.Name(language) : ui["requests.new.anyLanguage"])</small></div>
                             </td>
                             <td class="admreq-cell-approval" data-label="@ui["admin.requests.col.status"]">
-                                <span class="admreq-badge admreq-approval admreq-approval-@approvalStatus" data-approval-status="@approvalStatus" title="@(request.WasAutoApproved ? ui["requests.autoApproved"] : null)">
+                                <span class="admin-tag admin-tag-soft admreq-approval admreq-approval-@approvalStatus" data-approval-status="@approvalStatus" title="@(request.WasAutoApproved ? ui["requests.autoApproved"] : null)">
                                     <partial name="_RequestStatusIcon" model="@(request.Status == AcquisitionRequestStatus.Pending ? "pending" : request.Status == AcquisitionRequestStatus.Rejected ? "rejected" : "completed")" />
                                     @(request.Status == AcquisitionRequestStatus.Pending ? ui["requests.status.pending"] : request.Status == AcquisitionRequestStatus.Rejected ? ui["requests.status.rejected"] : ui["requests.status.approved"])
                                 </span>
@@ -298,7 +295,7 @@
                             <td class="admreq-cell-media" data-label="@ui["admin.requests.col.mediaStatus"]">
                                 @if (mediaStatus is not null)
                                 {
-                                    <span class="admreq-badge admreq-media admreq-media-@mediaStatus" data-media-status="@status" title="@request.StatusMessage">
+                                    <span class="admin-tag admin-tag-soft admreq-media admreq-media-@mediaStatus" data-media-status="@status" title="@request.StatusMessage">
                                         <partial name="_RequestStatusIcon" model='@(mediaStatus == "failed" ? "rejected" : mediaStatus == "completed" ? "completed" : "pending")' />
                                         @ui["requests.status." + mediaStatus]
                                     </span>
@@ -347,19 +344,19 @@
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button button-primary admreq-action" type="submit" data-admreq-action="@(request.Status == AcquisitionRequestStatus.Failed ? "retry" : "approve")"><span class="admreq-action-icon"><partial name="_AdminIcon" model='@(request.Status == AcquisitionRequestStatus.Failed ? "refresh" : "check")' /></span><span>@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</span></button>
+                                            <button class="button button-primary ui-pill-button ui-action-button admreq-action" type="submit" data-admreq-action="@(request.Status == AcquisitionRequestStatus.Failed ? "retry" : "approve")"><span class="admreq-action-icon"><partial name="_AdminIcon" model='@(request.Status == AcquisitionRequestStatus.Failed ? "refresh" : "check")' /></span><span>@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</span></button>
                                         </form>
                                     }
                                     @if (request.Status == AcquisitionRequestStatus.Rejected)
                                     {
                                         <form method="post" asp-page-handler="Reopen" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button admreq-action" type="submit"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.reopen"]</span></button>
+                                            <button class="button ui-pill-button ui-action-button admreq-action" type="submit"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.reopen"]</span></button>
                                         </form>
                                     }
                                     @if (viewIsPrimary)
                                     {
-                                        <a class="button admreq-action" href="@viewUrl"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"eye"' /></span><span>@ui["admin.requests.viewMedia"]</span></a>
+                                        <a class="button ui-pill-button ui-action-button admreq-action" href="@viewUrl"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"eye"' /></span><span>@ui["admin.requests.viewMedia"]</span></a>
                                     }
                                     <button class="button admin-icon-button admreq-details-button" type="button" data-admreq-details
                                             data-title="@request.Title" data-requester="@requester" data-requested="@Iso(request.CreatedAt)"
@@ -370,7 +367,7 @@
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button admreq-action" type="submit" title="@ui["admin.requests.searchNow"]"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.searchNow"]</span></button>
+                                            <button class="button ui-pill-button ui-action-button admreq-action" type="submit" title="@ui["admin.requests.searchNow"]"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.searchNow"]</span></button>
                                         </form>
                                     }
                                     <details class="admin-menu">
@@ -437,13 +434,13 @@
             <span class="admreq-bulk-count"><strong data-admreq-selected-count>0</strong> @ui["admin.requests.selected"]</span>
             <button class="button admin-icon-button admreq-clear-selection" type="button" data-admreq-clear-selection aria-label="@ui["admin.requests.selectionClear"]" title="@ui["admin.requests.selectionClear"]"><partial name="_AdminIcon" model='"close"' /></button>
 <div class="admreq-bulk-actions">
-                <button class="button admreq-action button-primary" type="button" data-admreq-command="Approve"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span>@ui["admin.requests.approve"]</span></button>
-                <button class="button admreq-action" type="button" data-admreq-command="Reject"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"close"' /></span><span>@ui["admin.requests.reject"]</span></button>
-                <button class="button admreq-action" type="button" data-admreq-command="Retry"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.retry"]</span></button>
-                <button class="button admreq-action" type="button" data-admreq-command="Cancel"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"close"' /></span><span>@ui["admin.requests.cancel"]</span></button>
-                <button class="button admreq-action" type="button" data-admreq-command="Complete"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span>@ui["admin.requests.markDone"]</span></button>
-                <button class="button admreq-action" type="button" data-admreq-command="Profile"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"columns"' /></span><span>@ui["admin.requests.changeProfile"]</span></button>
-                <button class="button admreq-action admreq-bulk-delete" type="button" data-admreq-command="Delete"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"trash"' /></span><span>@ui["admin.requests.delete"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action button-primary" type="button" data-admreq-command="Approve"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span>@ui["admin.requests.approve"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action" type="button" data-admreq-command="Reject"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"close"' /></span><span>@ui["admin.requests.reject"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action" type="button" data-admreq-command="Retry"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.retry"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action" type="button" data-admreq-command="Cancel"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"close"' /></span><span>@ui["admin.requests.cancel"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action" type="button" data-admreq-command="Complete"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span>@ui["admin.requests.markDone"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action" type="button" data-admreq-command="Profile"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"columns"' /></span><span>@ui["admin.requests.changeProfile"]</span></button>
+                <button class="button ui-pill-button ui-action-button admreq-action admreq-bulk-delete" type="button" data-admreq-command="Delete"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"trash"' /></span><span>@ui["admin.requests.delete"]</span></button>
             </div>
         </aside>
 
@@ -481,12 +478,12 @@
                     <label for="admreq-page-size">@ui["admin.requests.pageSize"]</label>
                     <span class="admreq-page-size-combobox">
                         <input id="admreq-page-size" type="number" name="size" value="@filter.PageSize" min="1" max="500" required inputmode="numeric" autocomplete="off" aria-controls="admreq-page-size-options" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-input />
-                        <button class="admreq-page-size-trigger" type="button" aria-label="@ui["admin.requests.pageSize"]" aria-haspopup="listbox" aria-controls="admreq-page-size-options" aria-expanded="false" data-admreq-page-size-trigger><span class="admreq-select-chevron" aria-hidden="true"></span></button>
+                        <button class="admreq-page-size-trigger" type="button" aria-label="@ui["admin.requests.pageSize"]" aria-haspopup="listbox" aria-controls="admreq-page-size-options" aria-expanded="false" data-admreq-page-size-trigger><span class="ui-select-chevron" aria-hidden="true"></span></button>
                     </span>
-                    <div id="admreq-page-size-options" class="admreq-dropdown-panel" popover="auto" role="listbox" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-options>
+                    <div id="admreq-page-size-options" class="ui-select-panel" popover="auto" role="listbox" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-options>
                         @foreach (var size in AdminRequestQuery.StandardPageSizes)
                         {
-                            <button type="button" class="admreq-dropdown-option @(filter.PageSize == size ? "is-selected" : "")" role="option" aria-selected="@(filter.PageSize == size ? "true" : "false")" data-admreq-page-size-option="@size">@size</button>
+                            <button type="button" class="ui-select-option @(filter.PageSize == size ? "is-selected" : "")" role="option" aria-selected="@(filter.PageSize == size ? "true" : "false")" data-admreq-page-size-option="@size">@size</button>
                         }
                     </div>
                 </form>
@@ -544,9 +541,9 @@
         </label>
         <label data-admreq-command-profile hidden>
             <span>@ui["admin.requests.approveProfile"]</span>
-            <span class="admreq-select-control">
-                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AppIcon" model='"settings"' /></span>
-                <select name="profileId" aria-label="@ui["admin.requests.approveProfile"]" data-admreq-custom-select>
+            <span class="ui-select-control">
+                <span class="ui-select-icon" aria-hidden="true"><partial name="_AppIcon" model='"settings"' /></span>
+                <select name="profileId" aria-label="@ui["admin.requests.approveProfile"]" data-ui-select>
                     <option value="">@ui["admin.requests.keepProfile"]</option>
                     @foreach (var profile in Model.QualityProfiles)
                     {
@@ -558,7 +555,7 @@
         <p class="muted">@ui["admin.requests.bulkLimit"]</p>
         <div class="admreq-command-footer">
             <button class="button" type="button" data-admreq-command-close>@ui["common.cancel"]</button>
-            <button class="button button-primary admreq-action" type="submit" data-admreq-command-submit><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span data-admreq-command-label></span></button>
+            <button class="button button-primary ui-pill-button ui-action-button admreq-action" type="submit" data-admreq-command-submit><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span data-admreq-command-label></span></button>
         </div>
     </form>
 </dialog>

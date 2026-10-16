@@ -1,0 +1,10 @@
+.ui-playground form { display: grid; gap: 20px; }
+.ui-playground-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.ui-playground-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-block: 18px; font-size: 12px; }
+.ui-playground-table th, .ui-playground-table td { padding: 12px 8px; text-align: start; border-bottom: 1px solid var(--border); }
+.ui-playground-table th:first-child { width: 32px; }
+.ui-playground-table th:last-child { width: 48px; }
+.ui-playground-table tr.is-selected { background: var(--accent-soft); }
+.ui-playground-table tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ui-playground-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); max-width: 180px; }
+@media (max-width: 480px) { .ui-playground > .panel { padding: 16px; } }

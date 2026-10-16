@@ -41,7 +41,7 @@
         mobileFilterTrigger.addEventListener('click', () => {
             filterDialog.showModal();
             mobileFilterTrigger.setAttribute('aria-expanded', 'true');
-            filterDialog.querySelector('[data-admreq-select-trigger]')?.focus();
+            filterDialog.querySelector('[data-ui-select-trigger]')?.focus();
         });
         filterDialog.querySelectorAll('[data-admreq-close-filters]').forEach(button => {
             button.addEventListener('click', () => filterDialog.close());
@@ -77,257 +77,14 @@
     });
     filterForm?.querySelectorAll('select').forEach(select => {
         select.addEventListener('change', () => {
-            if (!select.multiple || select.closest('[data-admreq-enhanced]')?.dataset.admreqEnhanced === undefined) submitForm(filterForm);
+            if (!select.multiple || select.closest('[data-ui-select-enhanced]')?.dataset.uiSelectEnhanced === undefined) submitForm(filterForm);
         });
     });
 
-    const customSelects = [...document.querySelectorAll('select[data-admreq-custom-select]')];
-    const closeCustomSelects = except => {
-        for (const select of customSelects) {
-            const control = select.closest('[data-admreq-enhanced]');
-            const trigger = control?.querySelector('[data-admreq-select-trigger]');
-            const panel = control?.querySelector('[data-admreq-select-panel]');
-            if (!control || control === except || !panel?.hasAttribute('popover')) {
-                continue;
-            }
-
-            panel.hidePopover();
-            trigger?.setAttribute('aria-expanded', 'false');
-        }
-    };
-
-    for (const select of customSelects) {
-        if (!select.closest('.admreq-select-control')) {
-            continue;
-        }
-
-        const control = select.closest('.admreq-select-control');
-        const trigger = document.createElement('button');
-        trigger.type = 'button';
-        trigger.className = 'admreq-select-trigger';
-        trigger.setAttribute('role', 'combobox');
-        trigger.setAttribute('aria-haspopup', 'listbox');
-        trigger.setAttribute('aria-expanded', 'false');
-        trigger.setAttribute('aria-label', select.getAttribute('aria-label') || '');
-        trigger.dataset.admreqSelectTrigger = '';
-        const triggerText = document.createElement('span');
-        triggerText.dataset.admreqSelectValue = '';
-        const chevron = document.createElement('span');
-        chevron.className = 'admreq-select-chevron';
-        chevron.setAttribute('aria-hidden', 'true');
-        const filterIcon = control.querySelector('.admreq-filter-icon');
-        if (filterIcon) {
-            trigger.append(filterIcon);
-        }
-        trigger.append(triggerText, chevron);
-
-        const panel = document.createElement('div');
-        panel.className = 'admreq-dropdown-panel';
-        if (select.multiple) panel.classList.add('admreq-dropdown-multiple');
-        panel.setAttribute('popover', 'auto');
-        panel.id = `admreq-options-${select.name}`;
-        panel.dataset.admreqSelectPanel = '';
-        const listbox = document.createElement('div');
-        listbox.id = `${panel.id}-listbox`;
-        listbox.setAttribute('role', 'listbox');
-        listbox.setAttribute('aria-label', select.getAttribute('aria-label') || '');
-        if (select.multiple) listbox.setAttribute('aria-multiselectable', 'true');
-        trigger.setAttribute('aria-controls', listbox.id);
-        const options = [...select.options];
-        const initialValues = options.filter(option => option.selected && option.value).map(option => option.value);
-        const templates = [...control.closest('form').querySelectorAll('template[data-admreq-option-select]')]
-            .filter(template => template.dataset.admreqOptionSelect === select.name);
-        const renderOption = (option, target) => {
-            const template = templates.find(candidate => candidate.dataset.value === option?.value);
-            target.replaceChildren();
-            if (template) target.append(template.content.cloneNode(true));
-            else target.textContent = option?.textContent.trim() || '';
-            return Boolean(template);
-        };
-        if (options.length > 8) {
-            const searchBox = document.createElement('input');
-            searchBox.type = 'search';
-            searchBox.className = 'admreq-dropdown-search';
-            searchBox.placeholder = select.getAttribute('aria-label') || '';
-            searchBox.setAttribute('aria-label', searchBox.placeholder);
-            searchBox.addEventListener('input', () => {
-                const query = searchBox.value.trim().toLocaleLowerCase();
-                for (const optionButton of panel.querySelectorAll('[role="option"]')) {
-                    optionButton.hidden = !optionButton.textContent.toLocaleLowerCase().includes(query);
-                }
-            });
-            panel.append(searchBox);
-        }
-
-        panel.append(listbox);
-        const optionButtons = options.map(option => {
-            const optionButton = document.createElement('button');
-            optionButton.type = 'button';
-            optionButton.className = 'admreq-dropdown-option';
-            optionButton.setAttribute('role', 'option');
-            optionButton.setAttribute('aria-label', option.textContent.trim());
-            optionButton.dataset.value = option.value;
-            optionButton.tabIndex = -1;
-            const optionText = document.createElement('span');
-            optionText.className = 'admreq-dropdown-option-text';
-            renderOption(option, optionText);
-            if (select.multiple) {
-                const checkbox = document.createElement('span');
-                checkbox.className = 'admreq-dropdown-checkbox';
-                checkbox.setAttribute('aria-hidden', 'true');
-                optionButton.append(checkbox);
-            }
-            optionButton.append(optionText);
-            optionButton.addEventListener('click', () => {
-                if (select.multiple) {
-                    if (!option.value) options.forEach(candidate => { candidate.selected = false; });
-                    else {
-                        option.selected = !option.selected;
-                        options.filter(candidate => !candidate.value).forEach(candidate => { candidate.selected = false; });
-                    }
-                }
-                else select.value = option.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                if (select.multiple) return;
-                panel.hidePopover();
-                trigger.setAttribute('aria-expanded', 'false');
-                trigger.focus();
-            });
-            optionButton.addEventListener('keydown', event => {
-                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                    event.preventDefault();
-                    const direction = event.key === 'ArrowDown' ? 1 : -1;
-                    const visible = optionButtons.filter(button => !button.hidden);
-                    const current = visible.indexOf(optionButton);
-                    visible[(current + direction + visible.length) % visible.length]?.focus();
-                }
-                else if (event.key === 'Home' || event.key === 'End') {
-                    event.preventDefault();
-                    const visible = optionButtons.filter(button => !button.hidden);
-                    (event.key === 'Home' ? visible[0] : visible.at(-1))?.focus();
-                }
-            });
-            listbox.append(optionButton);
-            return optionButton;
-        });
-
-        const syncSelect = () => {
-            const selectedOptions = [...select.selectedOptions].filter(option => option.value);
-            const selectedOption = selectedOptions[0] || options[0];
-            const rich = renderOption(selectedOption, triggerText);
-            if (select.multiple && selectedOptions.length > 1) {
-                const count = document.createElement('span');
-                count.className = 'admreq-select-extra';
-                count.textContent = `+${selectedOptions.length - 1}`;
-                triggerText.append(count);
-            }
-            trigger.title = selectedOptions.map(option => option.textContent.trim()).join(', ');
-            trigger.classList.toggle('admreq-select-rich', rich);
-            if (filterIcon) filterIcon.hidden = rich;
-            for (const optionButton of optionButtons) {
-                const selected = select.multiple
-                    ? selectedOptions.some(option => option.value === optionButton.dataset.value) || (!selectedOptions.length && !optionButton.dataset.value)
-                    : optionButton.dataset.value === select.value;
-                optionButton.setAttribute('aria-selected', String(selected));
-                optionButton.classList.toggle('is-selected', selected);
-            }
-        };
-        if (select.multiple) {
-            const footer = document.createElement('div');
-            footer.className = 'admreq-dropdown-foot';
-            const cancel = document.createElement('button');
-            cancel.type = 'button';
-            cancel.className = 'button button-secondary';
-            cancel.textContent = filterForm.dataset.cancelLabel;
-            cancel.addEventListener('click', () => {
-                options.forEach(option => { option.selected = initialValues.includes(option.value); });
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                panel.hidePopover();
-                trigger.focus();
-            });
-            const apply = document.createElement('button');
-            apply.type = 'button';
-            apply.className = 'button button-primary';
-            apply.textContent = filterForm.dataset.applyLabel;
-            apply.addEventListener('click', () => {
-                panel.hidePopover();
-                applyChangedFilters();
-            });
-            footer.append(cancel, apply);
-            panel.append(footer);
-        }
-        const positionPanel = () => {
-            if (!panel.matches(':popover-open')) return;
-            const triggerBounds = trigger.getBoundingClientRect();
-            const viewportWidth = document.documentElement.clientWidth;
-            const viewportHeight = document.documentElement.clientHeight;
-            panel.style.minWidth = `${Math.min(triggerBounds.width, viewportWidth - 16)}px`;
-            panel.style.maxWidth = `${viewportWidth - 16}px`;
-            const panelWidth = panel.offsetWidth;
-            const panelHeight = panel.offsetHeight;
-            const left = Math.max(8, Math.min(triggerBounds.left, viewportWidth - panelWidth - 8));
-            const top = triggerBounds.bottom + panelHeight <= viewportHeight - 8
-                ? triggerBounds.bottom + 6
-                : Math.max(8, triggerBounds.top - panelHeight - 6);
-            panel.style.left = `${left}px`;
-            panel.style.top = `${top}px`;
-        };
-        trigger.addEventListener('click', () => {
-            const isOpen = trigger.getAttribute('aria-expanded') === 'true';
-            closeCustomSelects(control);
-            if (isOpen) {
-                panel.hidePopover();
-                trigger.setAttribute('aria-expanded', 'false');
-                return;
-            }
-
-            panel.showPopover();
-            trigger.setAttribute('aria-expanded', 'true');
-            positionPanel();
-            const selectedIndex = options.findIndex(option => option.value === select.value);
-            (optionButtons[selectedIndex] || optionButtons[0])?.focus();
-        });
-        document.addEventListener('scroll', event => {
-            if (!event.target.closest?.('[data-admreq-select-panel]')) positionPanel();
-        }, true);
-        trigger.addEventListener('keydown', event => {
-            if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                trigger.click();
-            }
-        });
-        panel.addEventListener('keydown', event => {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                panel.hidePopover();
-                trigger.focus();
-            }
-        });
-        panel.addEventListener('toggle', () => {
-            const open = panel.matches(':popover-open');
-            trigger.setAttribute('aria-expanded', String(open));
-            if (select.multiple && !open) applyChangedFilters();
-        });
-        select.addEventListener('change', syncSelect);
-        select.form?.addEventListener('reset', () => queueMicrotask(syncSelect));
-        select.tabIndex = -1;
-        select.setAttribute('aria-hidden', 'true');
-        control.dataset.admreqEnhanced = '';
-        control.append(trigger, panel);
-        syncSelect();
-    }
-
-    document.addEventListener('click', event => {
-        if (!event.target.closest('[data-admreq-enhanced], [data-admreq-select-panel]')) {
-            closeCustomSelects();
-        }
+    const closeCustomSelects = () => filterForm?.querySelectorAll('[data-ui-select-panel]').forEach(panel => {
+        if (panel.matches(':popover-open')) panel.hidePopover();
     });
-    document.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {
-            closeCustomSelects();
-        }
-    });
-    window.addEventListener('resize', () => closeCustomSelects());
+    filterForm?.addEventListener('ui:select-commit', applyChangedFilters);
 
     const pageSizeForm = document.querySelector('[data-admreq-page-size]');
     const pageSizeInput = pageSizeForm?.querySelector('[data-admreq-page-size-input]');
@@ -363,12 +120,8 @@
 
         closeCustomSelects();
         pageSizePanel.showPopover();
-        const bounds = pageSizeTrigger.closest('.admreq-page-size-combobox').getBoundingClientRect();
-        const panelWidth = Math.max(pageSizePanel.offsetWidth, bounds.width);
-        const panelHeight = pageSizePanel.offsetHeight;
-        pageSizePanel.style.left = `${Math.max(8, Math.min(bounds.right - panelWidth, window.innerWidth - panelWidth - 8))}px`;
         const bottomInset = window.matchMedia('(max-width: 820px)').matches ? 82 : 8;
-        pageSizePanel.style.top = `${bounds.bottom + panelHeight <= window.innerHeight - bottomInset ? bounds.bottom + 6 : Math.max(8, bounds.top - panelHeight - 6)}px`;
+        window.JularrPopover.place(pageSizePanel, pageSizeTrigger.closest('.admreq-page-size-combobox'), bottomInset);
         pageSizeOptions.find(option => option.getAttribute('aria-selected') === 'true')?.focus();
     });
     pageSizePanel?.addEventListener('toggle', () => pageSizeTrigger?.setAttribute('aria-expanded', String(pageSizePanel.matches(':popover-open'))));
@@ -405,8 +158,7 @@
         return;
     }
 
-    const selection = [...table.querySelectorAll('[data-admreq-select]')];
-    const selectAll = table.querySelector('[data-admreq-select-all]');
+    const selection = [...table.querySelectorAll('[data-ui-select-row]')];
     const bulk = document.querySelector('[data-admreq-bulk]');
     const selectedCount = document.querySelector('[data-admreq-selected-count]');
     const clearSelection = document.querySelector('[data-admreq-clear-selection]');
@@ -444,14 +196,14 @@
         const button = event.target.closest('button[data-admreq-command]');
         if (!button) return;
         event.preventDefault();
-        const row = button.closest('[data-admreq-row]');
+        const row = button.closest('[data-ui-row]');
         openCommand(button, button.dataset.admreqCommand, row ? [row.dataset.requestId] : selection.filter(input => input.checked).map(input => input.value));
     });
     table.addEventListener('submit', event => {
         const button = event.submitter;
         if (!button?.matches('[data-admreq-action]')) return;
         event.preventDefault();
-        const row = button.closest('[data-admreq-row]');
+        const row = button.closest('[data-ui-row]');
         openCommand(button, button.dataset.admreqAction === 'retry' ? 'Retry' : 'Approve', [row.dataset.requestId]);
     });
     commandDialog?.querySelectorAll('[data-admreq-command-close]').forEach(button => {
@@ -470,22 +222,8 @@
             commandForm.querySelector('[data-admreq-command-submit]').disabled = !event.target.value;
         }
     });
-    let lastSelectedIndex = -1;
-    let extendsSelection = false;
-
     const syncSelection = () => {
         const selected = selection.filter(input => input.checked);
-        for (const input of selection) {
-            const row = input.closest('[data-admreq-row]');
-            row?.classList.toggle('is-selected', input.checked);
-            row?.setAttribute('aria-selected', input.checked ? 'true' : 'false');
-        }
-
-        if (selectAll) {
-            selectAll.checked = selected.length === selection.length && selection.length > 0;
-            selectAll.indeterminate = selected.length > 0 && selected.length < selection.length;
-        }
-
         if (selectedCount) {
             selectedCount.textContent = String(selected.length);
         }
@@ -495,7 +233,7 @@
             bulk.querySelectorAll('[data-admreq-command]').forEach(button => {
                 const action = button.dataset.admreqCommand;
                 const eligible = selected.some(input => {
-                    const row = input.closest('[data-admreq-row]');
+                    const row = input.closest('[data-ui-row]');
                     const status = row.dataset.requestStatus;
                     if (['Approve', 'Reject', 'Cancel'].includes(action)) return status === 'pending';
                     if (action === 'Retry') return ['approved', 'failed'].includes(status);
@@ -508,80 +246,8 @@
         }
     };
 
-    for (const [index, input] of selection.entries()) {
-        input.addEventListener('click', event => {
-            extendsSelection = event.shiftKey;
-        });
-        input.addEventListener('keydown', event => {
-            extendsSelection = event.shiftKey;
-        });
-        input.addEventListener('change', () => {
-            const nextState = input.checked;
-            if (extendsSelection && lastSelectedIndex >= 0) {
-                const first = Math.min(lastSelectedIndex, index);
-                const last = Math.max(lastSelectedIndex, index);
-                for (let selectedIndex = first; selectedIndex <= last; selectedIndex += 1) {
-                    selection[selectedIndex].checked = nextState;
-                }
-            }
-
-            extendsSelection = false;
-            lastSelectedIndex = index;
-            syncSelection();
-        });
-    }
-
-    selectAll?.addEventListener('change', () => {
-        for (const input of selection) {
-            input.checked = selectAll.checked;
-        }
-
-        syncSelection();
-    });
-
-    clearSelection?.addEventListener('click', () => {
-        for (const input of selection) {
-            input.checked = false;
-        }
-
-        syncSelection();
-        selection[0]?.focus();
-    });
-
-    table.addEventListener('click', event => {
-        if (event.target.closest('a, button, input, select, summary, label')) {
-            return;
-        }
-
-        const row = event.target.closest('[data-admreq-row]');
-        const input = row?.querySelector('[data-admreq-select]');
-        if (!input) {
-            return;
-        }
-
-        input.checked = !input.checked;
-        extendsSelection = event.shiftKey;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    table.addEventListener('keydown', event => {
-        if (event.key !== ' ' && event.key !== 'Enter') {
-            return;
-        }
-
-        const row = event.target.closest('[data-admreq-row]');
-        const input = row?.querySelector('[data-admreq-select]');
-        if (!input || event.target !== row) {
-            return;
-        }
-
-        event.preventDefault();
-        input.checked = !input.checked;
-        extendsSelection = event.shiftKey;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    syncSelection();
+    const tableSelection = window.JularrTableSelection.init(table, syncSelection);
+    clearSelection?.addEventListener('click', () => tableSelection.clear());
 })();
 
 (() => {
