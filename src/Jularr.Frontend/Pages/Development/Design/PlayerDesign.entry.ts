@@ -1,4 +1,6 @@
-// Presentation state only. Never call playback, profile or translation APIs here.
+import { initializeSettings } from "./PlayerSettings";
+
+// Presentation state only, never playback APIs.
 const workshop = document.querySelector<HTMLElement>("[data-player-workshop]");
 if (workshop) initializePreview(workshop);
 
@@ -11,7 +13,7 @@ function initializePreview(root: HTMLElement): void {
     const duration = 1450;
     let position = 754;
 
-    // Seek commits on release, playback state stays unchanged.
+    // Seek commits on release.
     timeline.max = String(duration);
     player.querySelector("[data-role=duration]")!.textContent = "24:10";
     player.querySelector<HTMLElement>("[data-action=minimize]")!.hidden = false;
@@ -19,7 +21,10 @@ function initializePreview(root: HTMLElement): void {
     volume.style.setProperty("--played", "100%");
     timeline.addEventListener("change", () => updatePosition(Number(timeline.value)));
     volume.addEventListener("input", () => volume.style.setProperty("--played", `${Number(volume.value) * 100}%`));
-    if (panel) initializeSettings(root, player, panel);
+    if (panel) {
+        initializeSettings(root, player, panel);
+        initializeAutoHide(root, player);
+    }
     initializeTimeline(root, timeline, duration);
     initializeTabs(root, "[data-sidebar-tabs]", ["player-episodes", "player-details"]);
 
@@ -61,7 +66,7 @@ function initializePreview(root: HTMLElement): void {
             void (document.fullscreenElement ? document.exitFullscreen() : stage.requestFullscreen()).catch(() => undefined);
         }
 
-        // Episode and chapter samples.
+        // Local episode and chapter selection.
         const episodes = Array.from(root.querySelectorAll<HTMLElement>("[data-episode]"));
         let episode = button.dataset.episode;
         if (action === "previous" || action === "next") {
@@ -82,109 +87,17 @@ function initializePreview(root: HTMLElement): void {
     });
 }
 
-function initializeSettings(root: HTMLElement, player: HTMLElement, panel: HTMLElement): void {
-    const fields = Array.from(panel.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-preview-setting]"));
-    const defaults = new Map(fields.map(field => [field.name, fieldValue(field)]));
-    const changed = new Map<string, string>();
-    const save = panel.querySelector<HTMLButtonElement>('[data-action="save-defaults"]')!;
-    const captions = root.querySelector<HTMLElement>(".player-workshop__captions")!;
-    const subtitle = player.querySelector<HTMLElement>('[data-action="subtitle-toggle"]')!;
-    const feedback = panel.querySelector<HTMLElement>("[data-settings-feedback]")!;
-    const field = (name: string) => fields.find(item => item.name === name)!;
-    const value = (name: string) => fieldValue(field(name));
-    defaults.set("subtitleEnabled", subtitle.getAttribute("aria-pressed") ?? "false");
-
-    function remember(name: string, current: string): void {
-        if (defaults.get(name) === current) changed.delete(name);
-        else changed.set(name, current);
-        save.disabled = changed.size === 0;
-        save.dataset.dirtyCount = String(changed.size);
+function initializeAutoHide(root: HTMLElement, player: HTMLElement): void {
+    let timer: ReturnType<typeof setTimeout>;
+    function awake(): void {
+        clearTimeout(timer);
+        player.classList.remove("player--idle");
+        timer = setTimeout(() => {
+            if (player.classList.contains("player--playing") && !root.querySelector(":popover-open") && !player.querySelector(":focus-visible")) player.classList.add("player--idle");
+        }, 3000);
     }
-
-    // Both tracks remain one caption group.
-    function appearance(): void {
-        captions.hidden = subtitle.getAttribute("aria-pressed") !== "true";
-        captions.style.bottom = `max(100px, ${value("bottomOffset")}%)`;
-        captions.style.maxWidth = `${value("maxWidth")}%`;
-        captions.style.fontFamily = value("font") === "system" ? "inherit" : value("font");
-        captions.style.setProperty("--caption-size", `${value("fontSize")}px`);
-        captions.style.setProperty("--caption-color", value("textColor"));
-        captions.style.setProperty("--caption-background", String(Number(value("backgroundOpacity")) / 100));
-        captions.style.setProperty("--caption-opacity", String(Number(value("textOpacity")) / 100));
-        captions.style.setProperty("--caption-outline", `${value("outline")}px`);
-        captions.style.setProperty("--caption-shadow", value("shadow") === "true" ? "0 2px 4px #000" : "none");
-        captions.querySelector<HTMLElement>('[data-caption="primary"]')!.hidden = value("primarySubtitle") === "";
-        const secondary = captions.querySelector<HTMLElement>('[data-caption="secondary"]')!;
-        secondary.hidden = value("secondarySubtitle") === "";
-        secondary.style.fontSize = value("separateStyle") === "true" ? `${value("secondaryFontSize")}px` : "inherit";
-        secondary.style.color = value("separateStyle") === "true" ? value("secondaryColor") : "inherit";
-        fields.filter(item => item.type === "range").forEach(item => {
-            item.setAttribute("aria-valuetext", item.value);
-            panel.querySelector(`[data-range-value="${item.name}"]`)!.textContent = item.value;
-        });
-    }
-
-    function change(input: HTMLInputElement | HTMLSelectElement): void {
-        remember(input.name, fieldValue(input));
-        if (input.name === "subtitlePolicy") {
-            subtitle.setAttribute("aria-pressed", String(input.value !== "off"));
-            remember("subtitleEnabled", String(input.value !== "off"));
-        }
-        const video = player.querySelector<HTMLVideoElement>("video")!;
-        video.style.objectFit = value("fit") === "zoom" ? "cover" : value("fit");
-        video.style.transform = value("fit") === "zoom" ? "scale(1.15)" : "none";
-        panel.querySelectorAll<HTMLElement>("[data-speed]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.speed === value("speed"))));
-        field("sleepMinutes").disabled = value("sleep") !== "custom";
-        appearance();
-    }
-    fields.forEach(input => input.addEventListener("input", () => change(input)));
-    appearance();
-    field("sleepMinutes").disabled = true;
-    initializeTabs(panel, "[data-settings-tabs]", ["settings-audio", "settings-subtitles", "settings-playback", "settings-info"]);
-
-    // Native popovers own outside-click, Escape and focus return.
-    root.querySelectorAll<HTMLElement>("[popover]").forEach(popover => popover.addEventListener("toggle", event => {
-        if ((event as ToggleEvent).newState !== "open") return;
-        const anchor = root.querySelector<HTMLElement>(`[popovertarget="${popover.id}"]`)!.getBoundingClientRect();
-        const bounds = popover.getBoundingClientRect();
-        popover.style.left = `${Math.max(8, Math.min(innerWidth - bounds.width - 8, anchor.right - bounds.width))}px`;
-        popover.style.top = `${Math.max(8, Math.min(innerHeight - bounds.height - 8, anchor.top - bounds.height - 8))}px`;
-    }));
-
-    root.addEventListener("click", event => {
-        const button = (event.target as Element).closest<HTMLElement>("button");
-        if (!button) return;
-        if (button.dataset.speed) {
-            field("speed").value = button.dataset.speed;
-            change(field("speed"));
-        }
-        if (button.dataset.offset) {
-            const input = field(button.dataset.offset);
-            input.value = button.dataset.delta === "0" ? "0" : String(Number(input.value) + Number(button.dataset.delta));
-            change(input);
-        }
-        const action = button.dataset.action;
-        if (action === "subtitle-toggle") {
-            const enabled = subtitle.getAttribute("aria-pressed") !== "true";
-            subtitle.setAttribute("aria-pressed", String(enabled));
-            remember("subtitleEnabled", String(enabled));
-            appearance();
-        }
-        if (action === "save-defaults") {
-            changed.forEach((current, name) => defaults.set(name, current));
-            changed.clear();
-            save.disabled = true;
-            save.dataset.dirtyCount = "0";
-            feedback.textContent = root.querySelector('[data-message="saved"]')!.textContent;
-        }
-        if (action === "translate-preview" || action === "cast-preview") feedback.textContent = root.querySelector('[data-message="local"]')!.textContent;
-        if (action === "lock-preview" || action === "unlock-preview") {
-            const locked = action === "lock-preview";
-            root.classList.toggle("player-workshop--locked", locked);
-            root.querySelector<HTMLElement>('[data-action="unlock-preview"]')!.hidden = !locked;
-            if (panel.matches(":popover-open")) panel.hidePopover();
-        }
-    });
+    ["pointermove", "pointerdown", "keydown", "focusin", "click"].forEach(name => root.addEventListener(name, awake));
+    root.querySelectorAll("[popover]").forEach(item => item.addEventListener("toggle", awake));
 }
 
 function initializeTabs(root: HTMLElement, selector: string, panes: string[]): void {
@@ -242,10 +155,6 @@ function initializeTimeline(root: HTMLElement, timeline: HTMLInputElement, durat
     });
 }
 
-function fieldValue(field: HTMLInputElement | HTMLSelectElement): string {
-    return field.type === "checkbox" ? String((field as HTMLInputElement).checked) : field.value;
-}
-
 function clock(seconds: number): string {
-    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 }

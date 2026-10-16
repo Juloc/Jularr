@@ -7,78 +7,117 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [Timeout(180_000)]
-        public async Task DesktopPreview_SettingsAndSeeking_KeepStateLocal()
+        public async Task DesktopPreview_ScopesAndExpandedSettings_KeepOneLocalPlayer()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var session = await BrowserSession.StartAsync(jularr);
             var page = session.Page;
             var writes = new List<string>();
             page.Request += (_, request) => { if (request.Method is not ("GET" or "HEAD")) writes.Add(request.Url); };
-            await page.SetViewportSizeAsync(1440, 1000);
+            await page.SetViewportSizeAsync(1600, 1000);
             await page.GotoAsync("/Design?pane=player#player-preview");
-
-            // No playback client or stream.
-            await Assertions.Expect(page.Locator(".player")).ToHaveAttributeAsync("data-start-url", "");
-            Assert.IsNull(await page.Locator("video").GetAttributeAsync("src"));
+            var video = (await page.Locator("video").ElementHandleAsync())!;
+            Assert.IsNull(await video.GetAttributeAsync("src"));
             await page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
-            await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
-            var settings = page.Locator("#player-settings");
-            await Assertions.Expect(settings).ToBeVisibleAsync();
-            var initialDialog = (await settings.BoundingBoxAsync())!;
             await page.Mouse.MoveAsync(0, 0);
-            foreach (var button in await page.Locator(".player__options > button").AllAsync())
-            {
-                var bounds = (await button.BoundingBoxAsync())!;
-                Assert.AreEqual(bounds.Width, bounds.Height, 1);
-                await Assertions.Expect(button).ToHaveCSSAsync("border-radius", "50%");
-                await Assertions.Expect(button).ToHaveCSSAsync("background-color", "rgb(255, 255, 255)");
-            }
-            await Assertions.Expect(settings.Locator("h2")).ToHaveCountAsync(0);
-            var tabs = (await settings.Locator("header .navigation-tabs").BoundingBoxAsync())!;
-            var close = (await settings.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).BoundingBoxAsync())!;
-            Assert.AreEqual(tabs.Y, close.Y, 1);
-            Assert.AreEqual(tabs.Height, close.Height, 1);
-            Assert.AreEqual(close.Width, close.Height, 1);
+            await Assertions.Expect(page.Locator(".player")).ToHaveClassAsync(new System.Text.RegularExpressions.Regex(".*player--idle.*"), new() { Timeout = 5000 });
+            await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
+            var panel = page.Locator("#player-settings");
+            var basic = panel.Locator("#settings-basic");
+            var scope = panel.Locator("[data-setting-scope]");
+            await Assertions.Expect(basic).ToBeVisibleAsync();
+            await Assertions.Expect(panel.GetByRole(AriaRole.Link)).ToHaveCountAsync(5);
+            await Assertions.Expect(panel.Locator("h2, [data-action=save-defaults], [data-copy]")).ToHaveCountAsync(0);
+            var initialDialog = (await panel.BoundingBoxAsync())!;
 
-            // Native picker keeps keyboard selection.
-            var audio = settings.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true });
+            // Inherit, override, reset, never copy on scope change.
+            await scope.SelectOptionAsync("profile");
+            var speed = basic.GetByLabel("Speed (×)", new() { Exact = true });
+            await speed.FillAsync("1.5");
+            await scope.SelectOptionAsync("current");
+            await Assertions.Expect(speed).ToHaveValueAsync("1.5");
+            await speed.FillAsync("2");
+            await basic.Locator("[data-reset-setting=speed]").First.ClickAsync();
+            await Assertions.Expect(speed).ToHaveValueAsync("1.5");
+            await scope.SelectOptionAsync("series");
+            await speed.FillAsync("3");
+            await scope.SelectOptionAsync("profile");
+            await Assertions.Expect(speed).ToHaveValueAsync("1.5");
+            await scope.SelectOptionAsync("series");
+
+            // Stable dialog, shared compact controls.
+            await panel.GetByRole(AriaRole.Link, new() { Name = "Audio", Exact = true }).ClickAsync();
+            var audio = panel.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true });
             await Assertions.Expect(audio).ToHaveCSSAsync("appearance", "base-select");
-            await Assertions.Expect(audio).ToHaveCSSAsync("min-height", "36px");
-            await audio.FocusAsync();
-            await page.Keyboard.PressAsync("Space");
-            await Assertions.Expect(audio).ToHaveJSPropertyAsync("value", "0");
-            await page.Keyboard.PressAsync("ArrowDown");
-            await page.Keyboard.PressAsync("Enter");
-            await Assertions.Expect(audio).ToHaveValueAsync("1");
-            await audio.SelectOptionAsync("0");
-            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToBeVisibleAsync();
-
-            // Only changed sample defaults.
-            var save = settings.Locator("[data-action=save-defaults]");
-            await Assertions.Expect(save).ToBeDisabledAsync();
-            await settings.GetByRole(AriaRole.Link, new() { Name = "Subtitles", Exact = true }).ClickAsync();
-            await settings.GetByLabel("Subtitle behavior", new() { Exact = true }).SelectOptionAsync("full");
-            await Assertions.Expect(save).ToBeEnabledAsync();
-            await Assertions.Expect(page.Locator("[data-action=subtitle-toggle]")).ToHaveAttributeAsync("aria-pressed", "true");
-            await settings.GetByLabel("Second subtitle track", new() { Exact = true }).SelectOptionAsync("german");
-            await Assertions.Expect(page.Locator("[data-caption=secondary]")).ToBeVisibleAsync();
-            await save.ClickAsync();
-            await Assertions.Expect(save).ToBeDisabledAsync();
-            await Assertions.Expect(settings.Locator("[data-settings-feedback]")).ToContainTextAsync("no profile was updated");
-
-            // Settings and seek preserve Play/Pause.
-            await settings.GetByRole(AriaRole.Link, new() { Name = "Playback", Exact = true }).ClickAsync();
-            await settings.GetByLabel("Next episode", new() { Exact = true }).SelectOptionAsync("instant");
-            await settings.GetByRole(AriaRole.Link, new() { Name = "Info", Exact = true }).ClickAsync();
-            await Assertions.Expect(settings.Locator("#settings-info")).ToBeVisibleAsync();
-            var infoDialog = (await settings.BoundingBoxAsync())!;
+            await audio.SelectOptionAsync("1");
+            await panel.GetByRole(AriaRole.Link, new() { Name = "Info", Exact = true }).ClickAsync();
+            var infoDialog = (await panel.BoundingBoxAsync())!;
             Assert.AreEqual(initialDialog.Width, infoDialog.Width, 1);
             Assert.AreEqual(initialDialog.Height, infoDialog.Height, 1);
-            await settings.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).ClickAsync();
+            await panel.GetByRole(AriaRole.Button, new() { Name = "All Player settings", Exact = true }).ClickAsync();
+
+            // Move the original media element into the expanded preview.
+            var full = page.Locator("[data-settings-page]");
+            var controls = full.Locator(".player-preferences__controls");
+            await Assertions.Expect(full).ToBeVisibleAsync();
+            await Assertions.Expect(full.Locator("video")).ToHaveCountAsync(1);
+            Assert.IsTrue(await video.EvaluateAsync<bool>("element => element === document.querySelector('video')"));
+            await Assertions.Expect(full.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true })).ToHaveValueAsync("1");
+            await Assertions.Expect(full.Locator(":scope > header [data-setting-scope]")).ToHaveValueAsync("series");
+            var fullScope = full.Locator(":scope > header [data-setting-scope]");
+            await fullScope.SelectOptionAsync("admin");
+            await Assertions.Expect(controls.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true })).ToBeDisabledAsync();
+            await controls.GetByLabel("Audio offset (ms)", new() { Exact = true }).FillAsync("150");
+            await fullScope.SelectOptionAsync("series");
+            await Assertions.Expect(controls.GetByLabel("Audio offset (ms)", new() { Exact = true })).ToHaveValueAsync("0");
+            await full.GetByText("Take values from…", new() { Exact = true }).ClickAsync();
+            await full.Locator("[data-copy-source]").SelectOptionAsync("profile");
+            await full.GetByRole(AriaRole.Button, new() { Name = "Current tab", Exact = true }).ClickAsync();
+            await Assertions.Expect(controls.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true })).ToHaveValueAsync("1");
+            await full.GetByRole(AriaRole.Link, new() { Name = "Subtitles", Exact = true }).ClickAsync();
+            await controls.GetByLabel("Second subtitle track", new() { Exact = true }).SelectOptionAsync("german");
+            await Assertions.Expect(page.Locator("[data-caption=secondary]")).ToBeVisibleAsync();
+            await full.GetByRole(AriaRole.Link, new() { Name = "Picture", Exact = true }).ClickAsync();
+            await full.GetByRole(AriaRole.Button, new() { Name = "Original size", Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator("video")).ToHaveCSSAsync("object-fit", "scale-down");
+
+            await full.GetByRole(AriaRole.Button, new() { Name = "Back to Player", Exact = true }).ClickAsync();
+            await Assertions.Expect(full).ToBeHiddenAsync();
+            Assert.IsTrue(await video.EvaluateAsync<bool>("element => element === document.querySelector('video')"));
+            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
+            await Assertions.Expect(scope).ToHaveValueAsync("series");
+            await panel.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Button, new() { Name = "Forward 30 seconds", Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator("[data-role=time]")).ToHaveTextAsync("13:04");
-            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToBeVisibleAsync();
+            await page.ReloadAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
+            await Assertions.Expect(scope).ToHaveValueAsync("current");
             Assert.AreEqual(0, writes.Count, string.Join(Environment.NewLine, writes));
+            Assert.AreEqual(0, session.Problems.Count, string.Join(Environment.NewLine, session.Problems));
+        }
+
+        [TestMethod]
+        [Timeout(180_000)]
+        public async Task NarrowPreview_SettingsFillScreen_KeepOneContentScrollArea()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            await page.SetViewportSizeAsync(390, 844);
+            await page.GotoAsync("/Design?pane=player#player-preview");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
+            var panel = page.Locator("#player-settings");
+            await Assertions.Expect(panel).ToHaveCSSAsync("overflow", "hidden");
+            await Assertions.Expect(panel).ToHaveCSSAsync("width", "390px");
+            await Assertions.Expect(panel).ToHaveCSSAsync("height", "844px");
+            await Assertions.Expect(panel.Locator(".player-settings__body")).ToHaveCSSAsync("overflow", "auto");
+            await panel.GetByRole(AriaRole.Link, new() { Name = "Audio", Exact = true }).ClickAsync();
+            var fits = await panel.Locator(".player-settings__body").EvaluateAsync<bool>("element => element.scrollHeight <= element.clientHeight + 1");
+            Assert.IsTrue(fits, "Everyday Audio controls must fit without scrolling.");
+            await panel.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).ClickAsync();
+            await Assertions.Expect(panel).ToBeHiddenAsync();
+            await Assertions.Expect(page.Locator("video")).ToHaveCountAsync(1);
         }
     }
 }

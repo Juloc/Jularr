@@ -21,7 +21,8 @@ namespace Jularr.Frontend.Pages.Development.Design
             var episodes = Enumerable.Range(1, 6).Select(number => (IUiComponent)new Button(
                 new MediaImage(image, "", 160, 90),
                 new Div(new Span(new ValueText("E" + number.ToString(CultureInfo.InvariantCulture))),
-                    new Span(new Text("design.player.episode" + number.ToString(CultureInfo.InvariantCulture))), new Small(new ValueText("24:10"))),
+                    new Span(new Text("design.player.episode" + number.ToString(CultureInfo.InvariantCulture))), new Small(new ValueText("24:10")),
+                    new Progress().Attribute("max", "100").Attribute("value", number < 4 ? "100" : number == 4 ? "52" : "0").Attribute("aria-label", texts["media.progress"])),
                 new Icon(number < 4 ? "check" : "player-play", assets))
                 .Attribute("data-episode", number.ToString(CultureInfo.InvariantCulture))
                 .Attribute("aria-pressed", number == 4 ? "true" : "false")
@@ -63,6 +64,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                 ).Class("player-workshop__layout"),
                 new Details(new Summary(new Text("design.player.chapters")), new Div(chapters).Class("player-workshop__chapters"))
                     .Class("player-workshop__chapter-section"),
+                DefineFullPlayerSettings(source),
                 new P(new Text("design.player.previewState")).Class("player-workshop__feedback").Attribute("role", "status").Attribute("data-demo-feedback", "")
             ).Class("player-workshop").Attribute("data-player-workshop", "").Attribute("id", "player-preview"));
         }

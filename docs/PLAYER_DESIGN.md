@@ -57,7 +57,7 @@ Desktop transport and the earlier changed-defaults Save button. This is a target
 | Tab | Compact content |
 | --- | --- |
 | Basic | Three compact selects: audio, subtitle 1, subtitle 2 (subtitles include Off); speed and quality. |
-| Audio | Track and offset, plus useful everyday Audio options where they fit. The exact additional subset is not yet fixed; advanced processing stays on the full page. |
+| Audio | Track, offset, language mode (preferred or original), audio-description preference. Edit the language order and advanced processing on the full settings page. |
 | Subtitles | Both tracks with independent offsets; shared font size and bottom distance. Detailed styling and drift correction stay on the full page. |
 | Playback | Quality, speed, next-episode behavior, intro/recap/outro skipping; a segmented picture-format control. Sleep and other advanced options stay on the full page. |
 | Info | Actual resolution, video/audio codecs, FPS, HDR, bitrate and Direct Play/Remux/Transcode, with a concise conversion reason when applicable. Full diagnostics stay on the full page. |
@@ -66,9 +66,9 @@ Desktop transport and the earlier changed-defaults Save button. This is a target
   points at 0.25/0.5/0.75/1/1.25/1.5/2/3/4×, and an editable numeric value beside it.
 - Quality remains one select: Automatic, Original and actual available presets
   labeled with resolution and bitrate.
-- Picture format is three direct segments: Fit, Fill, Original format. Exact
-  rendering semantics must be distinguished from the separate advanced Zoom control
-  before implementation; do not invent different behavior for equivalent labels.
+- Picture format is three direct segments: Fit (whole image, bars when needed),
+  Fill (crop edges when needed), Original size (downscale to fit but never upscale
+  beyond source dimensions). Advanced Zoom is separate.
 
 ## Scope, inheritance and saving
 
@@ -162,27 +162,26 @@ Desktop transport and the earlier changed-defaults Save button. This is a target
 
 ## Current prototype boundary
 
-The 16 October interview update is documentation only. It does not change the
-running workshop or implement the new target layout, scopes or complete settings page.
-
 `/Design?pane=player` on the isolated design branch demonstrates Desktop Normal,
-shared controls, four settings tabs, sample caption styling, local changed-defaults,
-sidebar and seeking. All sample values are clearly labeled. No playback/profile/
+shared controls, Basic/Audio/Subtitles/Playback/Info, a compact bottom-tab popover,
+viewport-filling fallback and an expanded settings surface with the same video element.
+Scope inheritance, per-field Reset, copy operations and mirrored fields are local,
+in-memory presentation examples. The expanded surface is a Development hash view,
+not a connected production settings route. No playback/profile/
 translation/casting API is called and no browser-stored preference is claimed as
 a persisted profile preference. Controls are local presentation examples, not service forms.
 
 Actual preference persistence, cue/ASS rendering and synchronization, translation,
 handoff, waveform generation, runtime recovery, automatic background/PiP and the
 complete Wide/Fullscreen/Mobile/TV/mini-player designs remain implementation work.
-The new Basic tab, scoped autosave/reset/copy behavior, bottom-integrated tabs,
-screen-filling fallback, embedded settings page and newly approved advanced tools
-also remain unimplemented. The current sample-defaults button is not the target design.
+Real scoped persistence/authorization, production page navigation/preview transfer,
+cue timing/drift correction, audio processing, frame stepping and A–B execution
+remain unimplemented. Unsupported frame actions are inactive with an explanatory
+notice; other advanced values demonstrate configuration, not processing.
 
 ## Remaining precision before implementation
 
-- Exact everyday Audio options beyond track/offset must fit the compact layout;
-  the owner approved the space/advanced-page boundary, not a fixed extra field list.
-- Define Fit versus Original format and the technical limits of speed, stepping,
+- Verify the technical limits of speed, stepping,
   drift correction, downmix and amplification against actual playback capabilities.
   Unsupported actions must not be presented as functional or patched with workarounds.
 - Scope/track compatibility and storage lifetime need real typed service contracts;

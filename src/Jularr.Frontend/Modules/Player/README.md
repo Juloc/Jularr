@@ -16,11 +16,14 @@ has not supplied this slot yet and retains its existing track/speed menus.
 The Development-only `/Design?pane=player` workshop composes this same control
 with illustrative episodes and chapters. Its own entry demonstrates local UI
 states without loading the playback client, making API calls or starting a
-stream/session. Its Audio/Subtitles/Playback/Info popover uses shared fields,
+stream/session. Its Basic/Audio/Subtitles/Playback/Info popover uses shared fields,
 toggles, buttons and navigation styles. Caption text, defaults and technical facts
 are explicit samples; none imply working persistence or processing.
-The settings capsule starts with its tabs and a matching-height Close button.
-Its size stays stable across tabs, bounded by the viewport; only the content scrolls.
+The settings capsule has scope selection above and integrated tabs below. Its size
+stays stable across tabs; only content scrolls. Small viewports use a full-screen
+surface without stopping playback. Expand opens a Development-only settings view
+with shared fields and the same video element in a preview; it is not a separate
+production route. Scope, Reset and copy behavior are in-memory examples, not saves.
 The four bottom-right controls use white circular surfaces.
 Select popups use the shared native `base-select` styling where supported;
 other browsers retain their native picker without a JavaScript replacement.

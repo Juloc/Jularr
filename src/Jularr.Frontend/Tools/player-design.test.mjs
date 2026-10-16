@@ -36,6 +36,7 @@ function preview() {
         addEventListener: (name, action) => events[name] = action
     };
     runInNewContext(code, {
+        exports: {}, require: () => ({ initializeSettings() {} }),
         document: { querySelector: () => root },
         fetch: () => assert.fail('Design samples must not call playback APIs')
     });

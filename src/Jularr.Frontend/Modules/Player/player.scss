@@ -36,7 +36,7 @@
     }
 
     &--idle &__chrome { opacity: 0; }
-    &:focus-within &__chrome { opacity: 1; }
+    &:has(:focus-visible) &__chrome { opacity: 1; }
     &--idle { cursor: none; }
 
     &__top {
