@@ -95,6 +95,11 @@ namespace Jularr.E2E.Tests
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(Film).ToString(), fakes.NzbAddress(LowerFilm).ToString() }, fakes.Grabbed.ToArray());
+                // Taken between the check and the click, the page answers that it is already downloading.
+                if (session.Problems.All(problem => problem.Contains("409", StringComparison.Ordinal)))
+                {
+                    session.Problems.Clear();
+                }
 
                 // The library folder disappears: its state says so, browsing goes on, nothing plays.
                 var offline = folders.Library + ".offline";

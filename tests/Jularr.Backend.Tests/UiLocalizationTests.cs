@@ -145,11 +145,43 @@ namespace Jularr.Backend.Tests
                 [new UiTextResource("same.key", "First"), new UiTextResource("same.key", "Conflicting")]));
         }
 
-        private static async Task SynchronizeAsync(Fixture fixture, params UiTextResource[] resources)
+        [TestMethod]
+        public async Task ShippedLanguages_FillMissingAndMachineTexts_ButNeverWhatSomeoneWrote()
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            UiTextResource[] resources = [new("greet", "Hello {name}"), new("bye", "Bye"), new("count", "{0} titles")];
+            UiTextCatalog Catalog(string locale, bool reviewed, string greeting) => new(locale, "Shipped " + locale, false, reviewed, true, new Dictionary<string, (string, string)>
+            {
+                ["greet"] = ("Hello {name}", greeting), ["bye"] = ("Goodbye", "Tschüss"), ["count"] = ("{0} titles", "Titel"), ["gone"] = ("Gone", "Weg")
+            });
+
+            // A reviewed language arrives with the texts made for the current English and with its placeholders; the rest stays missing.
+            await SynchronizeAsync(fixture, [Catalog("xx", true, "Hallo {name}")], resources);
+            var locale = await ScalarAsync<long>(fixture, "SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'xx'");
+            Assert.AreEqual("greet=Hallo {name}:3", await ScalarAsync<string>(fixture, $"""
+                SELECT string_agg(message."Key" || '=' || translation."Text" || ':' || translation."UiTranslationStatusTypeId", ',')
+                FROM "UiTranslations" AS translation JOIN "UiTranslationMessages" AS message ON message."Id" = translation."UiTranslationMessageId"
+                WHERE translation."UiLocaleId" = {locale}
+                """));
+
+            // What someone wrote stays; a machine-made text follows the next shipped one.
+            await fixture.RunSqlAsync($"UPDATE \"UiTranslations\" SET \"Text\" = 'Servus {{name}}', \"UiTranslationStatusTypeId\" = 4 WHERE \"UiLocaleId\" = {locale}");
+            await SynchronizeAsync(fixture, [Catalog("xx", true, "Grüß dich {name}"), Catalog("yy", false, "Hei {name}")], resources);
+            await SynchronizeAsync(fixture, [Catalog("yy", false, "Hej {name}")], resources);
+            Assert.AreEqual("xx:Servus {name}:4,yy:Hej {name}:2", await ScalarAsync<string>(fixture, """
+                SELECT string_agg(locale."Locale" || ':' || translation."Text" || ':' || translation."UiTranslationStatusTypeId", ',' ORDER BY locale."Locale")
+                FROM "UiTranslations" AS translation JOIN "UiLocales" AS locale ON locale."Id" = translation."UiLocaleId"
+                JOIN "UiTranslationMessages" AS message ON message."Id" = translation."UiTranslationMessageId" WHERE message."Key" = 'greet'
+                """));
+        }
+
+        private static Task SynchronizeAsync(Fixture fixture, params UiTextResource[] resources) => SynchronizeAsync(fixture, [], resources);
+
+        private static async Task SynchronizeAsync(Fixture fixture, UiTextCatalog[] catalogs, params UiTextResource[] resources)
         {
             var services = new ServiceCollection();
             services.AddSingleton(new SqlDatabase(fixture.Database));
-            services.AddJularrLocalization(resources);
+            services.AddJularrLocalization(resources, catalogs);
             // The fixture retains ownership of its data source; this provider is registration-only.
             using var provider = services.BuildServiceProvider();
             foreach (var hosted in provider.GetServices<IHostedService>())

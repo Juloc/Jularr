@@ -6,7 +6,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 ## Host and framework
 
 - [Program.cs](Program.cs): single host, service registration, authorization, request culture and Razor/API routing.
-- [UiText.cs](Framework/UiText.cs), [UiResources.cs](Localization/UiResources.cs): service-backed request language pack and English registration inputs.
+- [UiText.cs](Framework/UiText.cs), [UiResources.cs](Localization/UiResources.cs): service-backed request language pack and English registration inputs; [Catalogs](Localization/Catalogs) hold the shipped languages (`{key: [English, text]}`).
 - [Page.cs](Framework/Page.cs): page definitions, shared read errors and mutation redisplay.
 - [Elements.cs](Framework/Elements.cs), [UiComponent.cs](Framework/UiComponent.cs): encoded HTML primitives and Razor boundary.
 - [Form.cs](Framework/Components/Form.cs), [BaseField.cs](Framework/BaseField.cs): canonical Backend metadata, invariant form binding, antiforgery and field/form errors; placeholders and the label's (i) ([FieldInfo.cs](Framework/Components/FieldInfo.cs)) come from `hint.<Fields>.<Field>` texts in [UiResources.cs](Localization/UiResources.cs).

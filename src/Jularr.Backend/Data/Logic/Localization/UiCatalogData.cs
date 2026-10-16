@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Localization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Localization;
 
@@ -28,5 +29,28 @@ namespace Jularr.Backend.Data.Logic.Localization
 
         public string[] Keys { get; }
         public string[] EnglishTexts { get; }
+    }
+
+    // A shipped language and its texts for the current English.
+    internal sealed class UiShippedCatalogData : BaseData
+    {
+        public UiShippedCatalogData(string locale, string name, bool isRightToLeft, bool isEnabled, UiTranslationStatusType uiTranslationStatusTypeId, string[] keys, string[] texts)
+        {
+            Locale = locale;
+            Name = name;
+            IsRightToLeft = isRightToLeft;
+            IsEnabled = isEnabled;
+            UiTranslationStatusTypeId = uiTranslationStatusTypeId;
+            Keys = keys;
+            Texts = texts;
+        }
+
+        public string Locale { get; }
+        public string Name { get; }
+        public bool IsRightToLeft { get; }
+        public bool IsEnabled { get; }
+        public UiTranslationStatusType UiTranslationStatusTypeId { get; }
+        public string[] Keys { get; }
+        public string[] Texts { get; }
     }
 }

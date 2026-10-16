@@ -1,0 +1,6716 @@
+{
+ "locale": "nl",
+ "name": "Nederlands",
+ "reviewed": false,
+ "enabled": false,
+ "texts": {
+  "progress.saveFailed": [
+   "Progress could not be saved. Jularr will retry temporary failures.",
+   "De voortgang kon niet worden opgeslagen. Jularr probeert tijdelijke fouten opnieuw."
+  ],
+  "discover.loadRecommendations": [
+   "Load recommendations",
+   "Aanbevelingen laden"
+  ],
+  "design.art.washi": [
+   "Washi paper",
+   "Washi-papier"
+  ],
+  "design.art.blossom": [
+   "Blossom branch",
+   "Bloesemtak"
+  ],
+  "design.art.fuji": [
+   "Fuji landscape",
+   "Fuji-landschap"
+  ],
+  "design.art.torii": [
+   "Torii landscape",
+   "Torii-landschap"
+  ],
+  "design.art.mascot": [
+   "Jularr mascot",
+   "Jularr-mascotte"
+  ],
+  "appearance.accent": [
+   "Accent color",
+   "Accentkleur"
+  ],
+  "appearance.jularrRed": [
+   "Jularr red",
+   "Jularr-rood"
+  ],
+  "appearance.jularrPurple": [
+   "Jularr purple",
+   "Jularr-paars"
+  ],
+  "appearance.accentDefault": [
+   "Use style default",
+   "Standaard van de stijl gebruiken"
+  ],
+  "appearance.devicePreference": [
+   "Appearance choices are stored in this browser.",
+   "Weergavekeuzes worden in deze browser opgeslagen."
+  ],
+  "design.title": [
+   "Design lab",
+   "Designlab"
+  ],
+  "design.cards.title": [
+   "Approved cover card states",
+   "Goedgekeurde statussen van omslagkaarten"
+  ],
+  "design.cards.notice": [
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "Alleen designvoorbeelden; bladwijzers schakelen lokaal en acties openen een voorbeeld, zonder bibliotheekweergave, verzoeken of accountwijzigingen. Groen: compleet in de audiotaal van het profiel. Geel: compleet in andere audiotalen. Oranje: gedeeltelijk in de taal van het profiel. Geeloranje: gedeeltelijk in andere audiotalen. Ondertitels veranderen deze status niet. Houd langer de muisaanwijzer erop voor de officiële trailer zonder geluid."
+  ],
+  "design.introduction": [
+   "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages.",
+   "Een componentenwerkplaats alleen voor ontwikkeling. Dit zijn gelabelde voorbeelden, geen bibliotheekitems of werkende accountacties. Wijzigingen aan gedeelde componenten werken door op de echte pagina's."
+  ],
+  "design.controls": [
+   "Buttons and icons",
+   "Knoppen en pictogrammen"
+  ],
+  "design.icons": [
+   "Original Jularr icon catalog",
+   "Originele Jularr-pictogrammen"
+  ],
+  "design.tagGenre": [
+   "Fantasy",
+   "Fantasy"
+  ],
+  "design.tagSubtitles": [
+   "Subtitles",
+   "Ondertitels"
+  ],
+  "design.toggleOff": [
+   "Off example",
+   "Voorbeeld uit"
+  ],
+  "design.toggleOn": [
+   "On example",
+   "Voorbeeld aan"
+  ],
+  "design.toggleNotice": [
+   "These switches demonstrate local control states only. They do not save settings.",
+   "Deze schakelaars tonen alleen lokale besturingsstatussen. Ze slaan geen instellingen op."
+  ],
+  "design.imageCredit": [
+   "Development artwork examples from TMDB. Poster and film artwork rights belong to their respective owners.",
+   "Ontwikkelingsvoorbeelden van artwork van TMDB. De rechten op posters en filmartwork liggen bij hun respectieve eigenaren."
+  ],
+  "design.trailerCredit": [
+   "Official Your Name trailer from TOHO. Playback connects to YouTube after Play or a sustained hover on cards with a trailer.",
+   "Officiële trailer van Your Name van TOHO. Het afspelen maakt verbinding met YouTube na Afspelen of langdurig aanwijzen van kaarten met een trailer."
+  ],
+  "media.preview.title": [
+   "Title preview",
+   "Titelvoorbeeld"
+  ],
+  "media.preview.close": [
+   "Close preview",
+   "Voorbeeld sluiten"
+  ],
+  "media.preview.playTrailer": [
+   "Play trailer",
+   "Trailer afspelen"
+  ],
+  "media.preview.noTrailer": [
+   "No trailer available",
+   "Geen trailer beschikbaar"
+  ],
+  "media.preview.externalTrailer": [
+   "Trailer unavailable here? Open it on YouTube.",
+   "Trailer hier niet beschikbaar? Open hem op YouTube."
+  ],
+  "media.preview.seriesStatus": [
+   "Series status",
+   "Status van de serie"
+  ],
+  "media.preview.availability": [
+   "Library availability",
+   "Beschikbaarheid in de bibliotheek"
+  ],
+  "media.preview.requestStatus": [
+   "Request status",
+   "Status van het verzoek"
+  ],
+  "media.preview.downloadStatus": [
+   "Download status",
+   "Status van de download"
+  ],
+  "media.preview.noDownload": [
+   "No active download",
+   "Geen actieve download"
+  ],
+  "design.branding": [
+   "Branding and Original artwork",
+   "Branding en origineel artwork"
+  ],
+  "design.forms": [
+   "Forms and validation",
+   "Formulieren en validatie"
+  ],
+  "design.layouts": [
+   "Layouts and navigation",
+   "Indelingen en navigatie"
+  ],
+  "design.media": [
+   "Media components",
+   "Mediacomponenten"
+  ],
+  "design.player": [
+   "Player controls",
+   "Spelerbediening"
+  ],
+  "design.playerNotice": [
+   "Layout preview only. No playback session or stream is started here.",
+   "Alleen een voorbeeld van de indeling. Hier wordt geen afspeelsessie of stream gestart."
+  ],
+  "design.primary": [
+   "Primary",
+   "Primair"
+  ],
+  "design.secondary": [
+   "Secondary",
+   "Secundair"
+  ],
+  "design.disabled": [
+   "Disabled",
+   "Uitgeschakeld"
+  ],
+  "design.selected": [
+   "Selected",
+   "Geselecteerd"
+  ],
+  "design.exampleTitle": [
+   "Example work",
+   "Voorbeeldwerk"
+  ],
+  "design.exampleOtherTitle": [
+   "Another example work",
+   "Een ander voorbeeldwerk"
+  ],
+  "design.exampleContext": [
+   "Component example",
+   "Componentvoorbeeld"
+  ],
+  "design.exampleOverview": [
+   "Artwork, title, context and actions use the same media components as Library and Discover.",
+   "Artwork, titel, context en acties gebruiken dezelfde mediacomponenten als Bibliotheek en Ontdekken."
+  ],
+  "design.exampleStatus": [
+   "Preview only",
+   "Alleen voorbeeld"
+  ],
+  "design.primaryArea": [
+   "Primary area",
+   "Primair gebied"
+  ],
+  "design.secondaryArea": [
+   "Secondary area",
+   "Secundair gebied"
+  ],
+  "design.validationExample": [
+   "Validation example",
+   "Validatievoorbeeld"
+  ],
+  "design.search": [
+   "Search component examples",
+   "Voorbeelden van zoekcomponenten"
+  ],
+  "setup.start.title": [
+   "Start and system",
+   "Start en systeem"
+  ],
+  "setup.owner.title": [
+   "Create the first Owner",
+   "Eerste Eigenaar aanmaken"
+  ],
+  "setup.owner.passwordConfirmation": [
+   "Confirm password",
+   "Wachtwoord bevestigen"
+  ],
+  "setup.owner.create": [
+   "Create Owner",
+   "Eigenaar aanmaken"
+  ],
+  "setup.owner.closed": [
+   "Initial Owner creation is no longer available.",
+   "Het aanmaken van de eerste Eigenaar is niet meer beschikbaar."
+  ],
+  "account.field.email": [
+   "Email",
+   "E-mail"
+  ],
+  "account.field.password": [
+   "Password",
+   "Wachtwoord"
+  ],
+  "account.field.userName": [
+   "Username or email",
+   "Gebruikersnaam of e-mail"
+  ],
+  "account.login.hidePassword": [
+   "Hide password",
+   "Wachtwoord verbergen"
+  ],
+  "account.login.options": [
+   "Other sign-in options",
+   "Andere inlogopties"
+  ],
+  "account.login.remember": [
+   "Stay signed in",
+   "Ingelogd blijven"
+  ],
+  "account.login.showPassword": [
+   "Show password",
+   "Wachtwoord tonen"
+  ],
+  "account.login.submit": [
+   "Sign in",
+   "Inloggen"
+  ],
+  "account.login.title": [
+   "Sign in",
+   "Inloggen"
+  ],
+  "account.logout.title": [
+   "Sign out",
+   "Uitloggen"
+  ],
+  "account.logout.submit": [
+   "Sign out",
+   "Uitloggen"
+  ],
+  "account.plex.start": [
+   "Sign in with Plex",
+   "Inloggen met Plex"
+  ],
+  "account.plex.authorize": [
+   "Open Plex sign-in",
+   "Plex-inlog openen"
+  ],
+  "account.plex.pending": [
+   "Confirm sign-in in Plex, then continue here. Wait at least five seconds before checking again.",
+   "Bevestig het inloggen in Plex en ga dan hier verder. Wacht minstens vijf seconden voordat je opnieuw controleert."
+  ],
+  "account.plex.complete": [
+   "Check Plex confirmation",
+   "Plex-bevestiging controleren"
+  ],
+  "account.plex.approval": [
+   "Your registration request is awaiting administrator approval.",
+   "Je registratieverzoek wacht op goedkeuring van een beheerder."
+  ],
+  "account.profile.required": [
+   "Choose a profile before changing profile settings.",
+   "Kies een profiel voordat je profielinstellingen wijzigt."
+  ],
+  "account.profile.title": [
+   "Choose a profile",
+   "Kies een profiel"
+  ],
+  "account.profile.choose": [
+   "Use profile: ",
+   "Profiel gebruiken: "
+  ],
+  "account.profile.locked": [
+   "PIN protected",
+   "Beveiligd met pincode"
+  ],
+  "account.profile.pin": [
+   "PIN",
+   "Pincode"
+  ],
+  "account.profile.pin.submit": [
+   "Unlock",
+   "Ontgrendelen"
+  ],
+  "profile.pin.save": [
+   "Save PIN",
+   "Pincode opslaan"
+  ],
+  "account.profile.add": [
+   "Add profile",
+   "Profiel toevoegen"
+  ],
+  "request.quality": [
+   "Quality",
+   "Kwaliteit"
+  ],
+  "reader.comic.page": [
+   "Page",
+   "Pagina"
+  ],
+  "reader.comic.direction": [
+   "Reading direction",
+   "Leesrichting"
+  ],
+  "reader.comic.spread": [
+   "Two pages",
+   "Twee pagina's"
+  ],
+  "request.quality.default": [
+   "Default quality",
+   "Standaardkwaliteit"
+  ],
+  "request.rule.add": [
+   "Add rule",
+   "Regel toevoegen"
+  ],
+  "request.rule.name": [
+   "Rule name",
+   "Naam van de regel"
+  ],
+  "request.rule.description": [
+   "Description",
+   "Beschrijving"
+  ],
+  "request.rule.limit": [
+   "Requests per period",
+   "Verzoeken per periode"
+  ],
+  "request.rule.limitColumn": [
+   "Request limit",
+   "Verzoeklimiet"
+  ],
+  "request.rule.period": [
+   "Rolling period (days)",
+   "Voortschrijdende periode (dagen)"
+  ],
+  "request.rule.approval": [
+   "Approval",
+   "Goedkeuring"
+  ],
+  "request.rule.manual": [
+   "Manual approval",
+   "Handmatige goedkeuring"
+  ],
+  "request.rule.automatic": [
+   "Automatic approval",
+   "Automatische goedkeuring"
+  ],
+  "request.rule.media": [
+   "Allowed request media",
+   "Toegestane media voor verzoeken"
+  ],
+  "request.rule.profiles": [
+   "Qualities requesters may choose",
+   "Kwaliteiten die aanvragers mogen kiezen"
+  ],
+  "request.rule.isDefault": [
+   "Default",
+   "Standaard"
+  ],
+  "request.rule.delete": [
+   "Delete rule",
+   "Regel verwijderen"
+  ],
+  "request.rule.summary": [
+   "{0} requests / {1} days",
+   "{0} verzoeken / {1} dagen"
+  ],
+  "request.rule.unlimited": [
+   "Unlimited",
+   "Onbeperkt"
+  ],
+  "request.rule.profile": [
+   "Request rule",
+   "Verzoekregel"
+  ],
+  "request.rule.inherited": [
+   "inherited",
+   "overgenomen"
+  ],
+  "request.rule.overridden": [
+   "adjusted",
+   "aangepast"
+  ],
+  "request.rule.override": [
+   "Override the rule's values",
+   "Waarden van de regel overschrijven"
+  ],
+  "request.rule.inheritDefault": [
+   "Default ({0})",
+   "Standaard ({0})"
+  ],
+  "account.profile.create": [
+   "Create profile",
+   "Profiel aanmaken"
+  ],
+  "profile.delete.warning": [
+   "Deleting removes this profile's progress and lists and cancels its open requests. This cannot be undone.",
+   "Verwijderen wist de voortgang en lijsten van dit profiel en annuleert de openstaande verzoeken. Dit kan niet ongedaan worden gemaakt."
+  ],
+  "profile.delete.confirm": [
+   "Delete permanently",
+   "Definitief verwijderen"
+  ],
+  "profile.pin.remove": [
+   "Remove PIN",
+   "Pincode verwijderen"
+  ],
+  "admin.accounts.profilePinReset": [
+   "Reset PIN",
+   "Pincode resetten"
+  ],
+  "account.profile.empty": [
+   "No profiles are assigned to this account.",
+   "Aan dit account zijn geen profielen toegewezen."
+  ],
+  "session.current": [
+   "Current session",
+   "Huidige sessie"
+  ],
+  "session.other": [
+   "Other session",
+   "Andere sessie"
+  ],
+  "session.created": [
+   "Signed in: ",
+   "Ingelogd: "
+  ],
+  "session.expires": [
+   "Expires: ",
+   "Verloopt: "
+  ],
+  "session.revoke": [
+   "End session",
+   "Sessie beëindigen"
+  ],
+  "common.next": [
+   "Next",
+   "Volgende"
+  ],
+  "common.previous": [
+   "Previous",
+   "Vorige"
+  ],
+  "common.actions": [
+   "Actions",
+   "Acties"
+  ],
+  "common.edit": [
+   "Edit",
+   "Bewerken"
+  ],
+  "common.save": [
+   "Save changes",
+   "Wijzigingen opslaan"
+  ],
+  "common.yes": [
+   "Yes",
+   "Ja"
+  ],
+  "common.no": [
+   "No",
+   "Nee"
+  ],
+  "admin.localization.title": [
+   "UI translations",
+   "Vertalingen van de interface"
+  ],
+  "admin.languages.title": [
+   "Languages",
+   "Talen"
+  ],
+  "admin.languages.code": [
+   "Language code",
+   "Taalcode"
+  ],
+  "admin.languages.name": [
+   "Language name",
+   "Taalnaam"
+  ],
+  "admin.languages.state": [
+   "Language status",
+   "Taalstatus"
+  ],
+  "admin.languages.enabled": [
+   "Enabled",
+   "Ingeschakeld"
+  ],
+  "admin.languages.disabled": [
+   "Disabled",
+   "Uitgeschakeld"
+  ],
+  "admin.languages.direction": [
+   "Text direction",
+   "Tekstrichting"
+  ],
+  "admin.languages.leftToRight": [
+   "Left to right",
+   "Van links naar rechts"
+  ],
+  "admin.languages.rightToLeft": [
+   "Right to left",
+   "Van rechts naar links"
+  ],
+  "admin.languages.add": [
+   "Add language",
+   "Taal toevoegen"
+  ],
+  "admin.localization.key": [
+   "Resource key",
+   "Resourcesleutel"
+  ],
+  "admin.localization.english": [
+   "English source",
+   "Engelse bron"
+  ],
+  "admin.localization.description": [
+   "Translation context",
+   "Context van de vertaling"
+  ],
+  "admin.localization.translation": [
+   "Translation",
+   "Vertaling"
+  ],
+  "admin.localization.version": [
+   "Source version",
+   "Bronversie"
+  ],
+  "admin.localization.status": [
+   "Translation status",
+   "Vertaalstatus"
+  ],
+  "admin.localization.status.missing": [
+   "Missing",
+   "Ontbrekend"
+  ],
+  "admin.localization.status.generated": [
+   "Generated",
+   "Gegenereerd"
+  ],
+  "admin.localization.status.reviewed": [
+   "Reviewed",
+   "Gecontroleerd"
+  ],
+  "admin.localization.status.manual": [
+   "Manual",
+   "Handmatig"
+  ],
+  "admin.localization.status.outdated": [
+   "Outdated",
+   "Verouderd"
+  ],
+  "admin.accounts.title": [
+   "Accounts",
+   "Accounts"
+  ],
+  "admin.accounts.name": [
+   "Account name",
+   "Accountnaam"
+  ],
+  "admin.accounts.role": [
+   "Role",
+   "Rol"
+  ],
+  "admin.accounts.role.owner": [
+   "Owner",
+   "Eigenaar"
+  ],
+  "admin.accounts.role.user": [
+   "User",
+   "Gebruiker"
+  ],
+  "admin.accounts.role.mediamanager": [
+   "Media manager",
+   "Mediabeheerder"
+  ],
+  "admin.accounts.status": [
+   "Account status",
+   "Accountstatus"
+  ],
+  "admin.accounts.mayConfirmSources": [
+   "May confirm source checks for own requests",
+   "Mag bronnencontroles voor eigen verzoeken bevestigen"
+  ],
+  "admin.accounts.enabled": [
+   "Enabled",
+   "Ingeschakeld"
+  ],
+  "admin.accounts.disabled": [
+   "Disabled / awaiting approval",
+   "Uitgeschakeld / wacht op goedkeuring"
+  ],
+  "admin.accounts.sessionWarning": [
+   "Role or status changes end this account's existing sessions. Enabling an account does not verify its email address.",
+   "Wijzigingen van rol of status beëindigen de bestaande sessies van dit account. Een account inschakelen controleert het e-mailadres niet."
+  ],
+  "admin.accounts.profileId": [
+   "Existing profile ID",
+   "Bestaande profiel-ID"
+  ],
+  "admin.accounts.profiles": [
+   "Assigned profiles",
+   "Toegewezen profielen"
+  ],
+  "admin.accounts.profileAdd": [
+   "Assign profile access",
+   "Profieltoegang toewijzen"
+  ],
+  "admin.accounts.profileRemove": [
+   "Remove profile access and end affected sessions",
+   "Profieltoegang verwijderen en betrokken sessies beëindigen"
+  ],
+  "admin.accounts.profileOwned": [
+   "Owned profile: its ownership link cannot be removed here.",
+   "Eigen profiel: de eigenaarskoppeling kan hier niet worden verwijderd."
+  ],
+  "admin.providers.title": [
+   "Providers",
+   "Providers"
+  ],
+  "admin.plex.notConnected": [
+   "Plex server: not connected",
+   "Plex-server: niet verbonden"
+  ],
+  "admin.plex.connected": [
+   "Plex server connected · {0} titles linked · last sync {1}",
+   "Plex-server verbonden · {0} titels gekoppeld · laatste synchronisatie {1}"
+  ],
+  "admin.plex.notSynced": [
+   "not synced yet",
+   "nog niet gesynchroniseerd"
+  ],
+  "admin.plex.baseUrl": [
+   "Plex server address",
+   "Adres van de Plex-server"
+  ],
+  "admin.plex.token": [
+   "Plex token",
+   "Plex-token"
+  ],
+  "admin.plex.connect": [
+   "Connect and test",
+   "Verbinden en testen"
+  ],
+  "admin.plex.sync": [
+   "Sync availability now",
+   "Beschikbaarheid nu synchroniseren"
+  ],
+  "admin.plex.disconnect": [
+   "Disconnect Plex server",
+   "Plex-server loskoppelen"
+  ],
+  "admin.plex.tested": [
+   "Plex {0} answered; libraries: {1}",
+   "Plex {0} reageerde; bibliotheken: {1}"
+  ],
+  "admin.plex.synced": [
+   "{0} titles linked, {1} new titles added",
+   "{0} titels gekoppeld, {1} nieuwe titels toegevoegd"
+  ],
+  "admin.mediaServer.notConnected": [
+   "Not connected",
+   "Niet verbonden"
+  ],
+  "admin.mediaServer.connected": [
+   "Connected · last progress sync {0}",
+   "Verbonden · laatste voortgangssynchronisatie {0}"
+  ],
+  "admin.mediaServer.baseUrl": [
+   "Server address",
+   "Serveradres"
+  ],
+  "admin.mediaServer.apiKey": [
+   "API key",
+   "API-sleutel"
+  ],
+  "admin.mediaServer.tested": [
+   "{0} {1} answered; {2} users",
+   "{0} {1} reageerde; {2} gebruikers"
+  ],
+  "admin.mediaServer.sync": [
+   "Sync progress now",
+   "Voortgang nu synchroniseren"
+  ],
+  "admin.mediaServer.synced": [
+   "{0} positions taken over, {1} sent to the server",
+   "{0} posities overgenomen, {1} naar de server gestuurd"
+  ],
+  "admin.mediaServer.disconnect": [
+   "Disconnect server",
+   "Server loskoppelen"
+  ],
+  "admin.mediaServer.linked": [
+   "{0} shares progress with {1}",
+   "{0} deelt voortgang met {1}"
+  ],
+  "admin.mediaServer.proposed": [
+   "{0}: proposed profile {1}, not confirmed",
+   "{0}: voorgesteld profiel {1}, niet bevestigd"
+  ],
+  "admin.mediaServer.unlinked": [
+   "{0} shares no progress",
+   "{0} deelt geen voortgang"
+  ],
+  "admin.mediaServer.profile": [
+   "Profile",
+   "Profiel"
+  ],
+  "admin.mediaServer.noProfile": [
+   "None",
+   "Geen"
+  ],
+  "admin.mediaServer.confirm": [
+   "Confirm",
+   "Bevestigen"
+  ],
+  "media.openInPlex": [
+   "Open in Plex",
+   "Openen in Plex"
+  ],
+  "reader.title": [
+   "Reader",
+   "Lezer"
+  ],
+  "reader.notFound": [
+   "This book cannot be opened.",
+   "Dit boek kan niet worden geopend."
+  ],
+  "reader.contents": [
+   "Contents",
+   "Inhoud"
+  ],
+  "reader.notes": [
+   "Notes",
+   "Notities"
+  ],
+  "reader.openPdf": [
+   "Open in a new tab",
+   "Openen in een nieuw tabblad"
+  ],
+  "reader.originalPdf": [
+   "Original PDF",
+   "Originele PDF"
+  ],
+  "reader.download": [
+   "Download",
+   "Downloaden"
+  ],
+  "reader.download.epub": [
+   "EPUB",
+   "EPUB"
+  ],
+  "reader.download.translated": [
+   "EPUB in {0}, machine-translated",
+   "EPUB, {0}, machinaal vertaald"
+  ],
+  "reader.translate.original": [
+   "Original",
+   "Origineel"
+  ],
+  "reader.language": [
+   "Language of this book",
+   "Taal van dit boek"
+  ],
+  "reader.translating": [
+   "Translating",
+   "Bezig met vertalen"
+  ],
+  "reader.translationFailed": [
+   "Translation is unavailable right now; the text stays in its language.",
+   "Vertalen is nu niet beschikbaar; de tekst blijft in zijn taal."
+  ],
+  "reader.search": [
+   "Search in this book",
+   "Zoeken in dit boek"
+  ],
+  "reader.searchEmpty": [
+   "The words do not appear in this book.",
+   "De woorden komen niet voor in dit boek."
+  ],
+  "reader.searchMore": [
+   "Only the first 50 sections with the words are listed.",
+   "Alleen de eerste 50 secties met de woorden worden getoond."
+  ],
+  "reader.notesEmpty": [
+   "Select text to highlight it or add a note.",
+   "Selecteer tekst om die te markeren of een notitie toe te voegen."
+  ],
+  "reader.notesPages": [
+   "Note pages",
+   "Notitiepagina's"
+  ],
+  "reader.note": [
+   "Note",
+   "Notitie"
+  ],
+  "reader.deleteNote": [
+   "Delete",
+   "Verwijderen"
+  ],
+  "reader.highlight.Yellow": [
+   "Yellow",
+   "Geel"
+  ],
+  "reader.highlight.Green": [
+   "Green",
+   "Groen"
+  ],
+  "reader.highlight.Blue": [
+   "Blue",
+   "Blauw"
+  ],
+  "reader.highlight.Pink": [
+   "Pink",
+   "Roze"
+  ],
+  "reader.saveNote": [
+   "Save note",
+   "Notitie opslaan"
+  ],
+  "reader.settings": [
+   "Settings",
+   "Instellingen"
+  ],
+  "reader.previous": [
+   "Previous",
+   "Vorige"
+  ],
+  "reader.next": [
+   "Next",
+   "Volgende"
+  ],
+  "reader.end": [
+   "The end",
+   "Het einde"
+  ],
+  "reader.fontSize": [
+   "Text size",
+   "Tekstgrootte"
+  ],
+  "reader.smaller": [
+   "Smaller",
+   "Kleiner"
+  ],
+  "reader.larger": [
+   "Larger",
+   "Groter"
+  ],
+  "reader.theme": [
+   "Theme",
+   "Thema"
+  ],
+  "reader.theme.light": [
+   "Light",
+   "Licht"
+  ],
+  "reader.theme.sepia": [
+   "Sepia",
+   "Sepia"
+  ],
+  "reader.theme.dark": [
+   "Dark",
+   "Donker"
+  ],
+  "reader.mode": [
+   "Layout",
+   "Indeling"
+  ],
+  "reader.mode.scroll": [
+   "Scroll",
+   "Scrollen"
+  ],
+  "reader.mode.paged": [
+   "Pages",
+   "Pagina's"
+  ],
+  "reader.notCached": [
+   "This book is still being saved for reading without the storage.",
+   "Dit boek wordt nog opgeslagen om zonder de opslag te kunnen lezen."
+  ],
+  "details.read": [
+   "Read",
+   "Lezen"
+  ],
+  "admin.instance.title": [
+   "Instance settings",
+   "Instantie-instellingen"
+  ],
+  "admin.instance.name": [
+   "Instance name",
+   "Naam van de instantie"
+  ],
+  "admin.instance.readingCacheMegabytes": [
+   "Reading cache for offline storage (MB)",
+   "Leescache voor offline opslag (MB)"
+  ],
+  "admin.instance.readingCacheWorks": [
+   "Reading cache: most recently read books",
+   "Leescache: laatst gelezen boeken"
+  ],
+  "admin.instance.libraryScanIntervalHours": [
+   "Library scan interval (hours)",
+   "Scaninterval van de bibliotheek (uren)"
+  ],
+  "admin.instance.historyRetentionDays": [
+   "Keep finished activity for days",
+   "Voltooide activiteit bewaren (dagen)"
+  ],
+  "admin.instance.historyMegabytes": [
+   "Activity history size in MB",
+   "Grootte van de activiteitengeschiedenis in MB"
+  ],
+  "admin.instance.collectionLimit": [
+   "Collections per profile",
+   "Collecties per profiel"
+  ],
+  "admin.instance.unitGroupLimit": [
+   "Sections per title",
+   "Secties per titel"
+  ],
+  "admin.instance.subtitleLanguages": [
+   "Wanted subtitle languages",
+   "Gezochte ondertiteltalen"
+  ],
+  "admin.instance.usersConfirmSources": [
+   "Users may confirm source checks",
+   "Gebruikers mogen bronnencontroles bevestigen"
+  ],
+  "admin.instance.saved": [
+   "Instance settings were saved.",
+   "De instantie-instellingen zijn opgeslagen."
+  ],
+  "admin.providers.scope": [
+   "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
+   "Schakel geregistreerde integraties in of uit. Voor verbindings- en inlogmogelijkheden is nog steeds de bestaande hostconfiguratie nodig."
+  ],
+  "admin.providers.state": [
+   "Provider status",
+   "Providerstatus"
+  ],
+  "admin.providers.enabled": [
+   "Enabled",
+   "Ingeschakeld"
+  ],
+  "admin.providers.disabled": [
+   "Disabled",
+   "Uitgeschakeld"
+  ],
+  "profile.field.displayName": [
+   "Profile name",
+   "Profielnaam"
+  ],
+  "profile.field.uiLocale": [
+   "Language",
+   "Taal"
+  ],
+  "profile.settings.title": [
+   "Profile settings",
+   "Profielinstellingen"
+  ],
+  "profile.settings.save": [
+   "Save changes",
+   "Wijzigingen opslaan"
+  ],
+  "profile.settings.saved": [
+   "Your changes were saved.",
+   "Je wijzigingen zijn opgeslagen."
+  ],
+  "admin.library.description": [
+   "Imported media and file availability",
+   "Geïmporteerde media en beschikbaarheid van bestanden"
+  ],
+  "admin.activity.title": [
+   "Activity",
+   "Activiteit"
+  ],
+  "admin.requests.title": [
+   "Requests",
+   "Verzoeken"
+  ],
+  "admin.rules.description": [
+   "Approval and request rules",
+   "Goedkeurings- en verzoekregels"
+  ],
+  "admin.rules.title": [
+   "Rules",
+   "Regels"
+  ],
+  "admin.users.description": [
+   "Account assignments and request permissions",
+   "Accounttoewijzingen en verzoekrechten"
+  ],
+  "admin.users.title": [
+   "Users",
+   "Gebruikers"
+  ],
+  "admin.wanted.description": [
+   "Acquisition needs after request approval",
+   "Wat er na goedkeuring van een verzoek moet worden binnengehaald"
+  ],
+  "admin.wanted.title": [
+   "Wanted",
+   "Gezocht"
+  ],
+  "admin.acquisition.title": [
+   "Indexers & download clients",
+   "Indexers en downloadclients"
+  ],
+  "admin.profiles.title": [
+   "Quality profiles",
+   "Kwaliteitsprofielen"
+  ],
+  "admin.sources.title": [
+   "Sources",
+   "Bronnen"
+  ],
+  "sources.setUpAll": [
+   "Set up all available sources",
+   "Alle beschikbare bronnen instellen"
+  ],
+  "sources.setUpResult": [
+   "Added: {0}. Waiting for a login or key: {1}.",
+   "Toegevoegd: {0}. Wachten op een login of sleutel: {1}."
+  ],
+  "sources.name": [
+   "Source",
+   "Bron"
+  ],
+  "sources.capabilities": [
+   "Can",
+   "Kan"
+  ],
+  "sources.configured": [
+   "Set up",
+   "Ingesteld"
+  ],
+  "sources.add": [
+   "Add",
+   "Toevoegen"
+  ],
+  "sources.group.Books": [
+   "Books",
+   "Boeken"
+  ],
+  "sources.group.Novels": [
+   "Light novels, web novels and fanfiction",
+   "Light novels, webnovels en fanfictie"
+  ],
+  "sources.group.Manga": [
+   "Manga",
+   "Manga"
+  ],
+  "sources.group.Audiobooks": [
+   "Audiobooks",
+   "Luisterboeken"
+  ],
+  "sources.group.Acquisition": [
+   "Usenet",
+   "Usenet"
+  ],
+  "sources.group.Music": [
+   "Music",
+   "Muziek"
+  ],
+  "sources.group.Games": [
+   "Games",
+   "Games"
+  ],
+  "sources.group.Subtitles": [
+   "Subtitles",
+   "Ondertitels"
+  ],
+  "request.platform": [
+   "Platform",
+   "Platform"
+  ],
+  "admin.takeover.title": [
+   "Take over",
+   "Importeren"
+  ],
+  "takeover.source": [
+   "Application",
+   "Applicatie"
+  ],
+  "takeover.source.Prowlarr": [
+   "Prowlarr (indexers)",
+   "Prowlarr (indexers)"
+  ],
+  "takeover.source.Sonarr": [
+   "Sonarr (indexers, client, missing series)",
+   "Sonarr (indexers, client, ontbrekende series)"
+  ],
+  "takeover.source.Radarr": [
+   "Radarr (indexers, client, missing movies)",
+   "Radarr (indexers, client, ontbrekende films)"
+  ],
+  "takeover.source.Lidarr": [
+   "Lidarr (indexers, client, missing albums)",
+   "Lidarr (indexers, client, ontbrekende albums)"
+  ],
+  "takeover.source.Readarr": [
+   "Readarr (indexers, client, missing books)",
+   "Readarr (indexers, client, ontbrekende boeken)"
+  ],
+  "takeover.mode": [
+   "Mode",
+   "Modus"
+  ],
+  "takeover.preview": [
+   "Preview",
+   "Voorbeeld"
+  ],
+  "takeover.apply": [
+   "Take over now",
+   "Nu importeren"
+  ],
+  "takeover.run": [
+   "Read",
+   "Inlezen"
+  ],
+  "takeover.empty": [
+   "Nothing to take over.",
+   "Er is niets om te importeren."
+  ],
+  "takeover.kind": [
+   "Kind",
+   "Soort"
+  ],
+  "takeover.kind.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "takeover.kind.Client": [
+   "Download client",
+   "Downloadclient"
+  ],
+  "takeover.kind.Movie": [
+   "Movie",
+   "Film"
+  ],
+  "takeover.kind.Series": [
+   "Series",
+   "Serie"
+  ],
+  "takeover.kind.Album": [
+   "Album",
+   "Album"
+  ],
+  "takeover.kind.Book": [
+   "Book",
+   "Boek"
+  ],
+  "takeover.kind.Profile": [
+   "Quality profile",
+   "Kwaliteitsprofiel"
+  ],
+  "takeover.kind.Format": [
+   "Custom format",
+   "Aangepast formaat"
+  ],
+  "takeover.kind.RootFolder": [
+   "Root folder",
+   "Hoofdmap"
+  ],
+  "session.audioQuality": [
+   "Music on this device",
+   "Muziek op dit apparaat"
+  ],
+  "session.audioQuality.Original": [
+   "Original",
+   "Origineel"
+  ],
+  "session.audioQuality.High": [
+   "High (256 kbit/s)",
+   "Hoog (256 kbit/s)"
+  ],
+  "session.audioQuality.Small": [
+   "Small (128 kbit/s)",
+   "Klein (128 kbit/s)"
+  ],
+  "takeover.rootFolders": [
+   "Root folders",
+   "Hoofdmappen"
+  ],
+  "takeover.assign": [
+   "Take into this library",
+   "In deze bibliotheek importeren"
+  ],
+  "takeover.outcome.takeover_no_library": [
+   "No library of this type",
+   "Geen bibliotheek van dit type"
+  ],
+  "takeover.outcome.takeover_not_monitored": [
+   "Release type not monitored there",
+   "Releasetype wordt daar niet gevolgd"
+  ],
+  "takeover.outcome.takeover_exists": [
+   "Already set up",
+   "Al ingesteld"
+  ],
+  "takeover.outcome.takeover_needs_key": [
+   "Key needed",
+   "Sleutel nodig"
+  ],
+  "takeover.outcome.takeover_will_add": [
+   "Will be added",
+   "Wordt toegevoegd"
+  ],
+  "takeover.outcome.takeover_added": [
+   "Added",
+   "Toegevoegd"
+  ],
+  "takeover.outcome.takeover_no_id": [
+   "No provider id",
+   "Geen provider-id"
+  ],
+  "takeover.outcome.takeover_no_match": [
+   "No clear match",
+   "Geen duidelijke overeenkomst"
+  ],
+  "takeover.outcome.takeover_will_want": [
+   "Will be wanted",
+   "Wordt gezocht"
+  ],
+  "takeover.outcome.takeover_wanted": [
+   "Wanted",
+   "Gezocht"
+  ],
+  "takeover.outcome.takeover_next_run": [
+   "Next run",
+   "Volgende run"
+  ],
+  "takeover.outcome.takeover_no_qualities": [
+   "No quality Jularr knows",
+   "Geen kwaliteit die Jularr kent"
+  ],
+  "takeover.outcome.takeover_minimum_score": [
+   "Its minimum format score is not taken over",
+   "De minimale formatscore wordt niet geïmporteerd"
+  ],
+  "takeover.outcome.takeover_format_skipped": [
+   "Not taken over: conditions Jularr does not support",
+   "Niet geïmporteerd: voorwaarden die Jularr niet ondersteunt"
+  ],
+  "profile.monitoring": [
+   "Monitoring",
+   "Volgen"
+  ],
+  "profile.monitoring.types": [
+   "Release types and statuses",
+   "Releasetypen en statussen"
+  ],
+  "profile.monitoring.languages": [
+   "Languages",
+   "Talen"
+  ],
+  "profile.monitoring.pages": [
+   "At least pages",
+   "Minstens pagina's"
+  ],
+  "sources.capability.Metadata": [
+   "metadata",
+   "metadata"
+  ],
+  "sources.capability.Search": [
+   "search",
+   "zoeken"
+  ],
+  "sources.capability.Download": [
+   "download",
+   "downloaden"
+  ],
+  "sources.capability.Monitoring": [
+   "chapter monitoring",
+   "hoofdstukken volgen"
+  ],
+  "sources.capability.Link": [
+   "link",
+   "koppelen"
+  ],
+  "sources.capability.Subtitles": [
+   "Subtitles",
+   "Ondertitels"
+  ],
+  "sources.availability.Ready": [
+   "Ready",
+   "Gereed"
+  ],
+  "sources.availability.Account": [
+   "Needs a login or key",
+   "Login of sleutel nodig"
+  ],
+  "sources.availability.Planned": [
+   "Planned",
+   "Gepland"
+  ],
+  "sources.availability.ReferenceOnly": [
+   "Reference only",
+   "Alleen referentie"
+  ],
+  "profile.delay": [
+   "Wait for a better release (minutes)",
+   "Wachten op een betere release (minuten)"
+  ],
+  "profile.fallbackQualities": [
+   "Fallback qualities",
+   "Terugvalkwaliteiten"
+  ],
+  "profile.fallbackAfter": [
+   "Accept the fallback after (hours)",
+   "Terugval accepteren na (uren)"
+  ],
+  "profile.rules": [
+   "Release rules",
+   "Releaseregels"
+  ],
+  "profile.rule.name": [
+   "Rule",
+   "Regel"
+  ],
+  "profile.rule.condition": [
+   "Condition",
+   "Voorwaarde"
+  ],
+  "profile.rule.field": [
+   "Field",
+   "Veld"
+  ],
+  "profile.rule.match": [
+   "Match",
+   "Overeenkomst"
+  ],
+  "profile.rule.value": [
+   "Value",
+   "Waarde"
+  ],
+  "profile.rule.effect": [
+   "Effect",
+   "Effect"
+  ],
+  "profile.rule.remove": [
+   "Remove",
+   "Verwijderen"
+  ],
+  "profile.rule.match.Equals": [
+   "is",
+   "is"
+  ],
+  "profile.rule.match.Contains": [
+   "contains",
+   "bevat"
+  ],
+  "profile.rule.match.Regex": [
+   "matches the pattern",
+   "komt overeen met het patroon"
+  ],
+  "profile.rule.effect.Require": [
+   "Require",
+   "Vereisen"
+  ],
+  "profile.rule.effect.Prefer": [
+   "Prefer",
+   "Voorkeur geven"
+  ],
+  "profile.rule.effect.Avoid": [
+   "Avoid",
+   "Vermijden"
+  ],
+  "profile.rule.effect.Reject": [
+   "Reject",
+   "Afwijzen"
+  ],
+  "profile.rule.effect.Info": [
+   "Note only",
+   "Alleen notitie"
+  ],
+  "profile.rule.field.RawTitle": [
+   "Release name",
+   "Releasenaam"
+  ],
+  "profile.rule.field.ReleaseGroup": [
+   "Release group",
+   "Releasegroep"
+  ],
+  "profile.rule.field.Source": [
+   "Source",
+   "Bron"
+  ],
+  "profile.rule.field.Resolution": [
+   "Resolution",
+   "Resolutie"
+  ],
+  "profile.rule.field.VideoCodec": [
+   "Video codec",
+   "Videocodec"
+  ],
+  "profile.rule.field.BitDepth": [
+   "Bit depth",
+   "Bitdiepte"
+  ],
+  "profile.rule.field.HdrFormat": [
+   "HDR format",
+   "HDR-formaat"
+  ],
+  "profile.rule.field.AudioCodec": [
+   "Audio codec",
+   "Audiocodec"
+  ],
+  "profile.rule.field.AudioLanguage": [
+   "Audio language",
+   "Audiotaal"
+  ],
+  "profile.rule.field.SubtitleLanguage": [
+   "Subtitle language",
+   "Ondertiteltaal"
+  ],
+  "profile.rule.field.DualAudio": [
+   "Dual audio",
+   "Dual audio"
+  ],
+  "profile.rule.field.MultiAudio": [
+   "Multiple audio tracks",
+   "Meerdere audiosporen"
+  ],
+  "profile.rule.field.Proper": [
+   "Proper",
+   "Proper"
+  ],
+  "profile.rule.field.Repack": [
+   "Repack",
+   "Repack"
+  ],
+  "profile.rule.field.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "profile.name": [
+   "Name",
+   "Naam"
+  ],
+  "profile.qualities": [
+   "Allowed qualities",
+   "Toegestane kwaliteiten"
+  ],
+  "profile.usage": [
+   "Used by",
+   "Gebruikt door"
+  ],
+  "profile.default": [
+   "Default",
+   "Standaard"
+  ],
+  "profile.add.Movie": [
+   "Add movie profile",
+   "Filmprofiel toevoegen"
+  ],
+  "profile.add.Series": [
+   "Add series profile",
+   "Serieprofiel toevoegen"
+  ],
+  "profile.add.Book": [
+   "Add book profile",
+   "Boekprofiel toevoegen"
+  ],
+  "profile.add.LightNovel": [
+   "Add light novel profile",
+   "Light novel-profiel toevoegen"
+  ],
+  "profile.delete": [
+   "Delete profile",
+   "Profiel verwijderen"
+  ],
+  "profile.isDefault": [
+   "Default for its media type",
+   "Standaard voor dit mediatype"
+  ],
+  "profile.upgradeAllowed": [
+   "Upgrade to better releases",
+   "Upgraden naar betere releases"
+  ],
+  "profile.cutoff": [
+   "Stop upgrading at",
+   "Stoppen met upgraden bij"
+  ],
+  "profile.noCutoff": [
+   "No upgrades",
+   "Geen upgrades"
+  ],
+  "profile.section.general": [
+   "General",
+   "Algemeen"
+  ],
+  "profile.section.qualities": [
+   "Qualities",
+   "Kwaliteiten"
+  ],
+  "profile.section.size": [
+   "Size and terms",
+   "Grootte en voorwaarden"
+  ],
+  "profile.allowed": [
+   "Allowed",
+   "Toegestaan"
+  ],
+  "profile.rule.none": [
+   "No release rules yet.",
+   "Nog geen releaseregels."
+  ],
+  "profile.rule.edit": [
+   "Edit rule",
+   "Regel bewerken"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this profile? Titles using it fall back to the default profile.",
+   "Dit profiel verwijderen? Titels die het gebruiken vallen terug op het standaardprofiel."
+  ],
+  "profile.minimumSize": [
+   "Minimum size (MB)",
+   "Minimale grootte (MB)"
+  ],
+  "profile.maximumSize": [
+   "Maximum size (MB)",
+   "Maximale grootte (MB)"
+  ],
+  "profile.mustContain": [
+   "Must contain",
+   "Moet bevatten"
+  ],
+  "profile.mustNotContain": [
+   "Must not contain",
+   "Mag niet bevatten"
+  ],
+  "wanted.profile": [
+   "Quality profile",
+   "Kwaliteitsprofiel"
+  ],
+  "wanted.library": [
+   "Library",
+   "Bibliotheek"
+  ],
+  "setup.title": [
+   "Setup",
+   "Installatie"
+  ],
+  "setup.steps": [
+   "Setup steps",
+   "Installatiestappen"
+  ],
+  "setup.step.Instance": [
+   "Instance",
+   "Instantie"
+  ],
+  "setup.step.Storage": [
+   "Storage",
+   "Opslag"
+  ],
+  "setup.step.Indexers": [
+   "Indexers",
+   "Indexers"
+  ],
+  "setup.step.Downloads": [
+   "Download clients",
+   "Downloadclients"
+  ],
+  "setup.step.Providers": [
+   "Providers",
+   "Providers"
+  ],
+  "setup.step.Profiles": [
+   "Profiles",
+   "Profielen"
+  ],
+  "setup.step.Media": [
+   "Existing media",
+   "Bestaande media"
+  ],
+  "setup.step.Finish": [
+   "Finish",
+   "Afronden"
+  ],
+  "setup.next": [
+   "Continue",
+   "Doorgaan"
+  ],
+  "setup.finish": [
+   "Finish setup",
+   "Installatie afronden"
+  ],
+  "setup.blockers": [
+   "Before finishing",
+   "Voordat je afrondt"
+  ],
+  "setup.warnings": [
+   "Worth a look",
+   "Het bekijken waard"
+  ],
+  "setup.check.library": [
+   "no library yet",
+   "nog geen bibliotheek"
+  ],
+  "setup.check.tmdb": [
+   "Movies and series need a TMDB key.",
+   "Films en series hebben een TMDB-sleutel nodig."
+  ],
+  "setup.check.indexer": [
+   "Arr+ has no indexer yet.",
+   "Arr+ heeft nog geen indexer."
+  ],
+  "setup.check.downloader": [
+   "Arr+ has no download client yet.",
+   "Arr+ heeft nog geen downloadclient."
+  ],
+  "setup.check.ffmpeg": [
+   "FFmpeg is not configured; files play only as they are.",
+   "FFmpeg is niet ingesteld; bestanden worden alleen afgespeeld zoals ze zijn."
+  ],
+  "admin.works.source": [
+   "Source",
+   "Bron"
+  ],
+  "admin.works.source.tmdb_movie": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.tmdb_tv": [
+   "TMDB",
+   "TMDB"
+  ],
+  "admin.works.source.openlibrary": [
+   "Open Library",
+   "Open Library"
+  ],
+  "admin.works.source.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "admin.works.source.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
+  ],
+  "admin.works.source.igdb": [
+   "IGDB",
+   "IGDB"
+  ],
+  "admin.matches.title": [
+   "AniList matches",
+   "AniList-overeenkomsten"
+  ],
+  "admin.matches.empty": [
+   "No match waits for a decision.",
+   "Er wacht geen overeenkomst op een beslissing."
+  ],
+  "admin.matches.hint": [
+   "For a series, choose the entry of its first season.",
+   "Kies bij een serie het item van het eerste seizoen."
+  ],
+  "admin.matches.accept": [
+   "Use this entry",
+   "Dit item gebruiken"
+  ],
+  "admin.matches.aniListId": [
+   "AniList entry number",
+   "AniList-itemnummer"
+  ],
+  "admin.matches.dismiss": [
+   "No AniList entry",
+   "Geen AniList-item"
+  ],
+  "admin.instance.media": [
+   "Media types",
+   "Mediatypen"
+  ],
+  "admin.instance.media.state": [
+   "Availability",
+   "Beschikbaarheid"
+  ],
+  "admin.instance.media.noLibrary": [
+   "No library yet; nothing is downloaded for it.",
+   "Nog geen bibliotheek; hiervoor wordt niets gedownload."
+  ],
+  "profile.media.hidden": [
+   "Hidden media types",
+   "Verborgen mediatypen"
+  ],
+  "admin.accounts.profileMediaBlocked": [
+   "Blocked media types",
+   "Geblokkeerde mediatypen"
+  ],
+  "wanted.library.default": [
+   "Default library",
+   "Standaardbibliotheek"
+  ],
+  "wanted.profile.default": [
+   "Default for this media type",
+   "Standaard voor dit mediatype"
+  ],
+  "wanted.release.block": [
+   "Block",
+   "Blokkeren"
+  ],
+  "wanted.release.unblock": [
+   "Allow again",
+   "Weer toestaan"
+  ],
+  "acquisition.connection.name": [
+   "Name",
+   "Naam"
+  ],
+  "acquisition.connection.type": [
+   "Type",
+   "Type"
+  ],
+  "acquisition.connection.type.Newznab": [
+   "Newznab indexer",
+   "Newznab-indexer"
+  ],
+  "acquisition.connection.type.Sabnzbd": [
+   "SABnzbd",
+   "SABnzbd"
+  ],
+  "acquisition.connection.baseUrl": [
+   "Address",
+   "Adres"
+  ],
+  "acquisition.connection.host": [
+   "Server",
+   "Server"
+  ],
+  "acquisition.connection.port": [
+   "Port",
+   "Poort"
+  ],
+  "acquisition.connection.ssl": [
+   "SSL",
+   "SSL"
+  ],
+  "form.info": [
+   "More about this field",
+   "Meer over dit veld"
+  ],
+  "request.readsTranslated": [
+   "Not published in it; read translated",
+   "Niet daarin gepubliceerd; vertaald gelezen"
+  ],
+  "hint.AccountFields.Email.placeholder": [
+   "name@example.com",
+   "naam@voorbeeld.nl"
+  ],
+  "hint.AccountFields.Email.info": [
+   "Used to sign in and for password resets.",
+   "Wordt gebruikt om in te loggen en voor het resetten van wachtwoorden."
+  ],
+  "hint.AccountFields.DisplayName.info": [
+   "Shown to other users, for example on requests.",
+   "Wordt aan andere gebruikers getoond, bijvoorbeeld bij verzoeken."
+  ],
+  "hint.AccountFields.AccountRoleTypeId.info": [
+   "Owner: everything. Media manager: titles, requests and wanted lists. User: watch, read and request.",
+   "Eigenaar: alles. Mediabeheerder: titels, verzoeken en lijsten met gezochte titels. Gebruiker: kijken, lezen en aanvragen."
+  ],
+  "hint.AccountFields.IsEnabled.info": [
+   "A disabled account cannot sign in; its profiles and history stay.",
+   "Een uitgeschakeld account kan niet inloggen; de profielen en geschiedenis blijven bestaan."
+  ],
+  "hint.AccountFields.MayConfirmSources.info": [
+   "Lets this account confirm a found source itself instead of waiting for an administrator.",
+   "Laat dit account een gevonden bron zelf bevestigen in plaats van op een beheerder te wachten."
+  ],
+  "hint.AccountSessionFields.DeviceName.placeholder": [
+   "Living room TV",
+   "Tv in de woonkamer"
+  ],
+  "hint.AccountSessionFields.DeviceName.info": [
+   "Empty shows the device's platform as its name.",
+   "Leeg toont het platform van het apparaat als naam."
+  ],
+  "hint.AccountSessionFields.AudioQuality.info": [
+   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
+   "Origineel speelt het bestand af zoals het is. Hoog en Klein converteren grotere muziekbestanden direct, wat onderweg data bespaart."
+  ],
+  "hint.ProfileFields.DisplayName.info": [
+   "The name shown when choosing a profile.",
+   "De naam die wordt getoond bij het kiezen van een profiel."
+  ],
+  "hint.ProfileFields.UiLocaleId.info": [
+   "Language of the interface and of titles and summaries where a translation exists.",
+   "Taal van de interface en van titels en samenvattingen waar een vertaling bestaat."
+  ],
+  "hint.ProfilePinFields.Pin.info": [
+   "Three to six digits asked when switching to this profile.",
+   "Drie tot zes cijfers die worden gevraagd bij het overschakelen naar dit profiel."
+  ],
+  "hint.AuthenticationFields.NewPassword.info": [
+   "At least 12 characters; a passphrase of several words is easiest to remember.",
+   "Minstens 12 tekens; een wachtzin van meerdere woorden onthoud je het makkelijkst."
+  ],
+  "hint.DevicePairingFields.Code.placeholder": [
+   "123456",
+   "123456"
+  ],
+  "hint.DevicePairingFields.Code.info": [
+   "The six-digit code the TV, phone or app shows.",
+   "De zescijferige code die de tv, telefoon of app toont."
+  ],
+  "hint.AcquisitionConnectionFields.Host.placeholder": [
+   "news.newshosting.com",
+   "news.newshosting.com"
+  ],
+  "hint.AcquisitionConnectionFields.Host.info": [
+   "The server name from your Usenet provider, without nntp:// or https://.",
+   "De servernaam van je Usenet-provider, zonder nntp:// of https://."
+  ],
+  "hint.AcquisitionConnectionFields.Port.placeholder": [
+   "563 with SSL, 119 without",
+   "563 met SSL, 119 zonder"
+  ],
+  "hint.AcquisitionConnectionFields.Port.info": [
+   "Empty uses 563 with SSL and 119 without. Some providers also offer 443 or 80.",
+   "Leeg gebruikt 563 met SSL en 119 zonder. Sommige providers bieden ook 443 of 80."
+  ],
+  "hint.AcquisitionConnectionFields.UseSsl.info": [
+   "Encrypts the connection to the news server. Leave it on unless your provider has no SSL.",
+   "Versleutelt de verbinding met de newsserver. Laat dit aan, tenzij je provider geen SSL heeft."
+  ],
+  "hint.AcquisitionConnectionFields.Username.info": [
+   "The login from your provider; leave empty for open servers.",
+   "De login van je provider; laat leeg voor open servers."
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.placeholder": [
+   "8",
+   "8"
+  ],
+  "hint.AcquisitionConnectionFields.MaxConnections.info": [
+   "Parallel connections Jularr opens. Use at most what your plan allows; more is faster.",
+   "Parallelle verbindingen die Jularr opent. Gebruik hooguit wat je abonnement toestaat; meer is sneller."
+  ],
+  "hint.AcquisitionConnectionFields.Priority.placeholder": [
+   "1 to 100",
+   "1 tot 100"
+  ],
+  "hint.AcquisitionConnectionFields.Priority.info": [
+   "1 comes first.",
+   "1 komt eerst."
+  ],
+  "hint.AcquisitionConnectionFields.IsEnabled.info": [
+   "A switched-off connection keeps its settings but is not used.",
+   "Een uitgeschakelde verbinding behoudt haar instellingen maar wordt niet gebruikt."
+  ],
+  "hint.AcquisitionConnectionFields.Categories.placeholder": [
+   "2000, 5000",
+   "2000, 5000"
+  ],
+  "hint.AcquisitionConnectionFields.Categories.info": [
+   "Newznab category numbers, separated by commas. Empty uses the usual ranges of each media type.",
+   "Newznab-categorienummers, gescheiden door komma's. Leeg gebruikt de gebruikelijke bereiken van elk mediatype."
+  ],
+  "hint.AcquisitionConnectionFields.MediaTypeIds.info": [
+   "None chosen: the indexer is asked for every media type.",
+   "Niets gekozen: de indexer wordt voor elk mediatype bevraagd."
+  ],
+  "hint.AcquisitionConnectionFields.SearchesAutomatically.info": [
+   "Manual only: the indexer is asked only when you search by hand.",
+   "Alleen handmatig: de indexer wordt alleen bevraagd als je zelf zoekt."
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.placeholder": [
+   "No limit",
+   "Geen limiet"
+  ],
+  "hint.AcquisitionConnectionFields.QueryLimit.info": [
+   "Searches per day, as your indexer plan allows; once reached it rests until midnight.",
+   "Zoekopdrachten per dag, zoals je indexerabonnement toestaat; als de limiet is bereikt, rust hij tot middernacht."
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.placeholder": [
+   "No limit",
+   "Geen limiet"
+  ],
+  "hint.AcquisitionConnectionFields.GrabLimit.info": [
+   "Downloads per day, as your indexer plan allows.",
+   "Downloads per dag, zoals je indexerabonnement toestaat."
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.placeholder": [
+   "movies",
+   "movies"
+  ],
+  "hint.AcquisitionConnectionFields.DownloadCategory.info": [
+   "The SABnzbd category Jularr gives its downloads; empty uses SABnzbd's default.",
+   "De SABnzbd-categorie die Jularr aan zijn downloads geeft; leeg gebruikt de standaard van SABnzbd."
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.placeholder": [
+   "/downloads/complete",
+   "/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.RemotePath.info": [
+   "Where SABnzbd says it stores finished downloads. Only needed when SABnzbd sees them under another path than Jularr.",
+   "Waar SABnzbd zegt voltooide downloads op te slaan. Alleen nodig als SABnzbd ze onder een ander pad ziet dan Jularr."
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.placeholder": [
+   "/mnt/downloads/complete",
+   "/mnt/downloads/complete"
+  ],
+  "hint.AcquisitionConnectionFields.LocalPath.info": [
+   "The same folder as Jularr sees it.",
+   "Dezelfde map zoals Jularr die ziet."
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.placeholder": [
+   "The Matrix 1999",
+   "The Matrix 1999"
+  ],
+  "hint.AcquisitionConnectionFields.SearchQuery.info": [
+   "A test search; it counts towards the indexer's daily limit.",
+   "Een testzoekopdracht; die telt mee voor de daglimiet van de indexer."
+  ],
+  "hint.acquisition.Newznab.placeholder": [
+   "https://indexer.example.com",
+   "https://indexer.example.com"
+  ],
+  "hint.acquisition.Newznab.info": [
+   "The indexer's address as in Prowlarr or Sonarr, without /api.",
+   "Het adres van de indexer zoals in Prowlarr of Sonarr, zonder /api."
+  ],
+  "hint.acquisition.Sabnzbd.placeholder": [
+   "http://192.168.1.10:8080",
+   "http://192.168.1.10:8080"
+  ],
+  "hint.acquisition.Sabnzbd.info": [
+   "SABnzbd's web address with its port.",
+   "Het webadres van SABnzbd met poort."
+  ],
+  "hint.acquisition.Opds.placeholder": [
+   "https://example.com/opds",
+   "https://example.com/opds"
+  ],
+  "hint.acquisition.Opds.info": [
+   "The address of the OPDS catalog feed.",
+   "Het adres van de OPDS-catalogusfeed."
+  ],
+  "hint.acquisition.Gutenberg.placeholder": [
+   "https://gutendex.com",
+   "https://gutendex.com"
+  ],
+  "hint.acquisition.AnnasArchive.placeholder": [
+   "https://annas-archive.org",
+   "https://annas-archive.org"
+  ],
+  "hint.acquisition.AnnasArchive.info": [
+   "Only HTTPS; the member key travels in the address.",
+   "Alleen HTTPS; de lidsleutel gaat mee in het adres."
+  ],
+  "hint.acquisition.OpenSubtitles.placeholder": [
+   "https://api.opensubtitles.com",
+   "https://api.opensubtitles.com"
+  ],
+  "hint.acquisition.OpenSubtitles.info": [
+   "Only HTTPS.",
+   "Alleen HTTPS."
+  ],
+  "hint.acquisition.SubDl.placeholder": [
+   "https://api.subdl.com",
+   "https://api.subdl.com"
+  ],
+  "hint.acquisition.SubDl.info": [
+   "Only HTTPS.",
+   "Alleen HTTPS."
+  ],
+  "hint.AcquisitionProfileFields.IsDefault.info": [
+   "New requests of this media type use the default profile.",
+   "Nieuwe verzoeken van dit mediatype gebruiken het standaardprofiel."
+  ],
+  "hint.AcquisitionProfileFields.DelayMinutes.placeholder": [
+   "0",
+   "0"
+  ],
+  "hint.AcquisitionProfileFields.DelayMinutes.info": [
+   "After a good release is published, waits this long for a better one; 0 takes it at once.",
+   "Wacht na het verschijnen van een goede release zo lang op een betere; 0 neemt hem meteen."
+  ],
+  "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
+   "Replaces a present file with a better quality until the cutoff is reached.",
+   "Vervangt een aanwezig bestand door een betere kwaliteit tot het kwaliteitsdoel is bereikt."
+  ],
+  "hint.AcquisitionProfileFields.FallbackAfterHours.placeholder": [
+   "Never",
+   "Nooit"
+  ],
+  "hint.AcquisitionProfileFields.FallbackAfterHours.info": [
+   "Once the title has been wanted this many hours, the fallback qualities are also taken.",
+   "Zodra de titel zo veel uren gezocht is, worden ook de terugvalkwaliteiten genomen."
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
+   "No minimum",
+   "Geen minimum"
+  ],
+  "hint.AcquisitionProfileFields.MinimumSizeMb.info": [
+   "Smaller releases are skipped, often fakes or samples.",
+   "Kleinere releases worden overgeslagen, vaak nepbestanden of samples."
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.placeholder": [
+   "No maximum",
+   "Geen maximum"
+  ],
+  "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
+   "Larger releases are skipped.",
+   "Grotere releases worden overgeslagen."
+  ],
+  "hint.AcquisitionProfileFields.MustContain.placeholder": [
+   "German, DL",
+   "German, DL"
+  ],
+  "hint.AcquisitionProfileFields.MustContain.info": [
+   "Words a release name must contain, separated by commas.",
+   "Woorden die een releasenaam moet bevatten, gescheiden door komma's."
+  ],
+  "hint.AcquisitionProfileFields.MustNotContain.placeholder": [
+   "CAM, TS",
+   "CAM, TS"
+  ],
+  "hint.AcquisitionProfileFields.MustNotContain.info": [
+   "Words that rule a release out, separated by commas.",
+   "Woorden die een release uitsluiten, gescheiden door komma's."
+  ],
+  "hint.AcquisitionProfileFields.RuleName.info": [
+   "Shown in the search results when the rule matches.",
+   "Wordt in de zoekresultaten getoond als de regel overeenkomt."
+  ],
+  "hint.AcquisitionProfileFields.RuleField.info": [
+   "Which part of the release the rule looks at.",
+   "Naar welk deel van de release de regel kijkt."
+  ],
+  "hint.AcquisitionProfileFields.RuleMatch.info": [
+   "Contains finds the text anywhere; a regular expression allows patterns such as [xh]\\.?265.",
+   "Bevat vindt de tekst overal; een reguliere expressie staat patronen toe zoals [xh]\\.?265."
+  ],
+  "hint.AcquisitionProfileFields.RuleValue.placeholder": [
+   "x265",
+   "x265"
+  ],
+  "hint.AcquisitionProfileFields.RuleValue.info": [
+   "The text or pattern to look for.",
+   "De tekst of het patroon waarnaar wordt gezocht."
+  ],
+  "hint.AcquisitionProfileFields.RuleEffect.info": [
+   "Require and Reject decide; Prefer and Avoid add or subtract the score; Info only names the match.",
+   "Vereisen en Afwijzen beslissen; Voorkeur geven en Vermijden tellen de score erbij of trekken die af; Alleen notitie benoemt alleen de overeenkomst."
+  ],
+  "hint.AcquisitionProfileFields.RuleScore.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.AcquisitionProfileFields.RuleScore.info": [
+   "From -1000 to 1000, added to the release's score.",
+   "Van -1000 tot 1000, opgeteld bij de score van de release."
+  ],
+  "hint.RequestRuleFields.Description.info": [
+   "Shown to users the rule applies to.",
+   "Wordt getoond aan gebruikers op wie de regel van toepassing is."
+  ],
+  "hint.RequestRuleFields.MediaKeys.info": [
+   "The media types users of this rule may request.",
+   "De mediatypen die gebruikers van deze regel mogen aanvragen."
+  ],
+  "hint.RequestRuleFields.PeriodDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.RequestRuleFields.PeriodDays.info": [
+   "The limit counts requests of this many days.",
+   "De limiet telt de verzoeken van zoveel dagen."
+  ],
+  "hint.RequestRuleFields.RequestLimit.placeholder": [
+   "No limit",
+   "Geen limiet"
+  ],
+  "hint.RequestRuleFields.RequestLimit.info": [
+   "Requests allowed within the period.",
+   "Toegestane verzoeken binnen de periode."
+  ],
+  "hint.RequestRuleFields.IsAutomaticApproval.info": [
+   "Requests within the limit are approved without an administrator.",
+   "Verzoeken binnen de limiet worden zonder beheerder goedgekeurd."
+  ],
+  "hint.RequestRuleFields.AcquisitionProfileIds.info": [
+   "Quality profiles users of this rule may choose.",
+   "Kwaliteitsprofielen die gebruikers van deze regel mogen kiezen."
+  ],
+  "hint.RequestRuleFields.IsDefault.info": [
+   "Applies to every account without its own rule.",
+   "Geldt voor elk account zonder eigen regel."
+  ],
+  "hint.RequestRuleFields.IsOverridden.info": [
+   "This account uses its own limits instead of the default rule.",
+   "Dit account gebruikt eigen limieten in plaats van de standaardregel."
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.ParentUnitNumber.info": [
+   "Season or volume to search; empty searches the whole title.",
+   "Seizoen of deel om te zoeken; leeg zoekt de hele titel."
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.AcquisitionReleaseFields.UnitStart.info": [
+   "Episode or chapter to search; empty searches the whole season.",
+   "Aflevering of hoofdstuk om te zoeken; leeg zoekt het hele seizoen."
+  ],
+  "hint.InstanceSettingsFields.Name.info": [
+   "Shown in the browser tab and on paired devices.",
+   "Wordt getoond op het browsertabblad en op gekoppelde apparaten."
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.placeholder": [
+   "https://media.example.com/",
+   "https://media.example.com/"
+  ],
+  "hint.InstanceSettingsFields.PublicUrl.info": [
+   "The address Jularr is reached at from outside; the pairing QR code for TVs and apps points to it.",
+   "Het adres waarop Jularr van buitenaf bereikbaar is; de koppel-QR-code voor tv's en apps verwijst ernaar."
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.placeholder": [
+   "192.168.1.2, 172.16.0.0/12",
+   "192.168.1.2, 172.16.0.0/12"
+  ],
+  "hint.InstanceSettingsFields.TrustedProxies.info": [
+   "Reverse proxies whose forwarded client address Jularr believes, as addresses or ranges separated by commas. Empty without a proxy.",
+   "Reverse proxies wier doorgegeven clientadres Jularr vertrouwt, als adressen of bereiken gescheiden door komma's. Leeg zonder proxy."
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
+   "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
+   "Uren tussen automatische bibliotheekscans; 0 schakelt ze uit. Slapende NAS-systemen worden niet gewekt."
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.HistoryRetentionDays.info": [
+   "History and finished operations older than this are removed.",
+   "Geschiedenis en voltooide bewerkingen die ouder zijn dan dit, worden verwijderd."
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.placeholder": [
+   "10",
+   "10"
+  ],
+  "hint.InstanceSettingsFields.HistoryMegabytes.info": [
+   "The oldest history is removed once it is larger than this.",
+   "De oudste geschiedenis wordt verwijderd zodra die groter is dan dit."
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.CollectionLimit.info": [
+   "Most collections a profile may keep.",
+   "Maximaal aantal collecties dat een profiel mag bewaren."
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.UnitGroupLimit.info": [
+   "Most episode or chapter groups a profile may keep.",
+   "Maximaal aantal aflevering- of hoofdstukgroepen dat een profiel mag bewaren."
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.placeholder": [
+   "2048",
+   "2048"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
+   "Space for prepared books and comics; the oldest are removed first.",
+   "Ruimte voor voorbereide boeken en strips; de oudste worden het eerst verwijderd."
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
+   "100",
+   "100"
+  ],
+  "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
+   "Most books and comics kept prepared at once.",
+   "Maximaal aantal boeken en strips dat tegelijk voorbereid blijft."
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
+   "de, en",
+   "nl, en"
+  ],
+  "hint.InstanceSettingsFields.SubtitleLanguages.info": [
+   "Two-letter languages searched automatically, in this order.",
+   "Talen met twee letters die automatisch worden gezocht, in deze volgorde."
+  ],
+  "hint.InstanceSettingsFields.UsersConfirmSources.info": [
+   "Lets users confirm found sources for their own requests.",
+   "Laat gebruikers gevonden bronnen voor hun eigen verzoeken bevestigen."
+  ],
+  "hint.InstanceSettingsFields.KeepsReleases.info": [
+   "Keeps the earlier file when a new release of the same film, episode or volume is imported, instead of replacing it.",
+   "Bewaart het eerdere bestand wanneer een nieuwe release van dezelfde film, aflevering of hetzelfde deel wordt geïmporteerd, in plaats van het te vervangen."
+  ],
+  "hint.InstanceSettingsFields.RecycleModeId.info": [
+   "Delete removes files for good. A recycle folder keeps them for the days below.",
+   "Verwijderen wist bestanden definitief. Een prullenbakmap bewaart ze zo veel dagen als hieronder staat."
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.RecycleDays.info": [
+   "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
+   "Dagen dat een verwijderd bestand in de prullenbakmap blijft; 0 bewaart het tot je het zelf verwijdert."
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.placeholder": [
+   "Recycle",
+   "Recycle"
+  ],
+  "hint.InstanceSettingsFields.RecyclePath.info": [
+   "A folder on the chosen storage, relative to its share.",
+   "Een map op de gekozen opslag, relatief ten opzichte van de share."
+  ],
+  "hint.InstanceModuleFields.IsEnabled.info": [
+   "Switched-off modules disappear from menus and pages; their data stays.",
+   "Uitgeschakelde modules verdwijnen uit menu's en pagina's; hun gegevens blijven bestaan."
+  ],
+  "hint.UiLocaleFields.Locale.placeholder": [
+   "de-DE",
+   "nl-NL"
+  ],
+  "hint.UiLocaleFields.Locale.info": [
+   "Language and region code, such as de-DE or pt-BR.",
+   "Taal- en regiocode, zoals nl-NL of pt-BR."
+  ],
+  "hint.UiLocaleFields.IsRightToLeft.info": [
+   "For Arabic, Hebrew and other right-to-left scripts.",
+   "Voor Arabisch, Hebreeuws en andere schriften die van rechts naar links gaan."
+  ],
+  "hint.UiTranslationFields.Text.info": [
+   "Placeholders in braces, such as {0}, must stay.",
+   "Plaatsaanduidingen tussen accolades, zoals {0}, moeten blijven staan."
+  ],
+  "hint.StorageMountFields.Host.placeholder": [
+   "nas.local",
+   "nas.local"
+  ],
+  "hint.StorageMountFields.Host.info": [
+   "The NAS name or IP address, without smb:// or nfs://.",
+   "De naam of het IP-adres van de NAS, zonder smb:// of nfs://."
+  ],
+  "hint.StorageMountFields.SharePath.placeholder": [
+   "/media",
+   "/media"
+  ],
+  "hint.StorageMountFields.SharePath.info": [
+   "The share or exported path on the NAS.",
+   "De share of het geëxporteerde pad op de NAS."
+  ],
+  "hint.StorageMountFields.Username.info": [
+   "An account of the NAS with access to the share.",
+   "Een account van de NAS met toegang tot de share."
+  ],
+  "hint.StorageMountFields.Domain.placeholder": [
+   "WORKGROUP",
+   "WORKGROUP"
+  ],
+  "hint.StorageMountFields.Password.info": [
+   "Leave empty to keep the saved one.",
+   "Laat leeg om het opgeslagen wachtwoord te behouden."
+  ],
+  "hint.mediaServer.baseUrl.placeholder": [
+   "http://192.168.1.10:8096",
+   "http://192.168.1.10:8096"
+  ],
+  "hint.StorageMountFields.Domain.info": [
+   "Only for Windows domains; usually empty.",
+   "Alleen voor Windows-domeinen; meestal leeg."
+  ],
+  "hint.StorageMountFields.IsReadOnly.info": [
+   "Read-only storage is played and scanned, but downloads are never placed on it.",
+   "Alleen-lezen opslag wordt afgespeeld en gescand, maar er worden nooit downloads op geplaatst."
+  ],
+  "hint.StorageMountFields.WakeMacAddress.placeholder": [
+   "00:11:22:AA:BB:CC",
+   "00:11:22:AA:BB:CC"
+  ],
+  "hint.StorageMountFields.WakeMacAddress.info": [
+   "The NAS network card, for Wake-on-LAN.",
+   "De netwerkkaart van de NAS, voor Wake-on-LAN."
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.placeholder": [
+   "192.168.1.255",
+   "192.168.1.255"
+  ],
+  "hint.StorageMountFields.WakeBroadcastAddress.info": [
+   "The broadcast address of the NAS network; empty uses 255.255.255.255.",
+   "Het broadcastadres van het NAS-netwerk; leeg gebruikt 255.255.255.255."
+  ],
+  "hint.StorageMountFields.WakeOnDemand.info": [
+   "Wakes the NAS when something is played from it.",
+   "Wekt de NAS wanneer er iets vanaf wordt afgespeeld."
+  ],
+  "hint.SynologyFields.SynologyUrl.placeholder": [
+   "https://nas.local:5001",
+   "https://nas.local:5001"
+  ],
+  "hint.SynologyFields.SynologyUrl.info": [
+   "DSM's address, to show the NAS state and switch it on and off.",
+   "Het adres van DSM, om de status van de NAS te tonen en hem aan en uit te zetten."
+  ],
+  "hint.LibraryRootFields.RelativePath.placeholder": [
+   "Movies",
+   "Movies"
+  ],
+  "hint.LibraryRootFields.RelativePath.info": [
+   "The folder below the storage's share.",
+   "De map onder de share van de opslag."
+  ],
+  "hint.LibraryRootFields.MediaTypeId.info": [
+   "What the library holds; it decides naming, matching and downloads.",
+   "Wat de bibliotheek bevat; dit bepaalt naamgeving, matching en downloads."
+  ],
+  "hint.NamingPatternFields.Folder.placeholder": [
+   "{Title} ({Year})",
+   "{Title} ({Year})"
+  ],
+  "hint.NamingPatternFields.Folder.info": [
+   "Folder for each title, below the library; a slash starts the next folder.",
+   "Map voor elke titel, onder de bibliotheek; een slash begint de volgende map."
+  ],
+  "hint.NamingPatternFields.File.placeholder": [
+   "{Title} ({Year}) {Quality}",
+   "{Title} ({Year}) {Quality}"
+  ],
+  "hint.NamingPatternFields.File.info": [
+   "The placeholders below are filled for every file; the extension is added.",
+   "De onderstaande plaatsaanduidingen worden voor elk bestand ingevuld; de extensie wordt toegevoegd."
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.placeholder": [
+   "de",
+   "nl"
+  ],
+  "hint.StoredFileFields.SubtitleLanguage.info": [
+   "Two-letter language of the subtitle.",
+   "Taal van de ondertitel met twee letters."
+  ],
+  "hint.WorkFields.CanonicalTitle.info": [
+   "The title shown everywhere; providers' titles stay as alternatives.",
+   "De titel die overal wordt getoond; de titels van providers blijven als alternatieven bestaan."
+  ],
+  "hint.WorkFields.ReleaseYear.placeholder": [
+   "1999",
+   "1999"
+  ],
+  "hint.WorkFields.ReleaseYear.info": [
+   "Helps tell titles of the same name apart when searching.",
+   "Helpt titels met dezelfde naam bij het zoeken uit elkaar te houden."
+  ],
+  "hint.WorkMetadataFields.Query.placeholder": [
+   "The Matrix",
+   "The Matrix"
+  ],
+  "hint.WorkMetadataFields.Query.info": [
+   "A title, optionally with its year.",
+   "Een titel, eventueel met het jaar."
+  ],
+  "hint.CollectionFields.IsSmart.info": [
+   "A smart collection fills itself from the filters below.",
+   "Een slimme collectie vult zichzelf aan de hand van de onderstaande filters."
+  ],
+  "hint.CollectionFields.ReleaseYear.placeholder": [
+   "Any year",
+   "Elk jaar"
+  ],
+  "hint.CollectionFields.OnlyAvailable.info": [
+   "Only titles that can be played or read now.",
+   "Alleen titels die nu kunnen worden afgespeeld of gelezen."
+  ],
+  "hint.CollectionFields.OnlyUnfinished.info": [
+   "Hides titles this profile has finished.",
+   "Verbergt titels die dit profiel heeft voltooid."
+  ],
+  "hint.FranchiseFields.Name.placeholder": [
+   "The Lord of the Rings",
+   "The Lord of the Rings"
+  ],
+  "hint.FranchiseFields.Name.info": [
+   "Empty lets the providers decide the series again.",
+   "Leeg laat de providers de reeks opnieuw bepalen."
+  ],
+  "hint.FranchiseFields.Position.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.FranchiseFields.Position.info": [
+   "The title's place in the series; 1.5 sits between 1 and 2.",
+   "De plaats van de titel in de reeks; 1,5 staat tussen 1 en 2."
+  ],
+  "hint.IdentityMatchFields.ProviderId.placeholder": [
+   "21",
+   "21"
+  ],
+  "hint.IdentityMatchFields.ProviderId.info": [
+   "The provider's number for the title, from its address.",
+   "Het nummer dat de provider aan de titel geeft, te vinden in het adres."
+  ],
+  "hint.MediaAssetFields.UnitNumber.placeholder": [
+   "1",
+   "1"
+  ],
+  "hint.MediaAssetFields.UnitNumber.info": [
+   "Episode, track or chapter number.",
+   "Nummer van de aflevering, het nummer of het hoofdstuk."
+  ],
+  "hint.ProviderCredentialFields.Secret.info": [
+   "Stored encrypted and never shown again; leave empty to keep the saved one.",
+   "Versleuteld opgeslagen en nooit meer getoond; laat leeg om de opgeslagen waarde te behouden."
+  ],
+  "hint.ProviderFields.BaseUrl.placeholder": [
+   "http://192.168.1.10:32400",
+   "http://192.168.1.10:32400"
+  ],
+  "hint.ProviderFields.BaseUrl.info": [
+   "The server's address with its port.",
+   "Het adres van de server met poort."
+  ],
+  "hint.ProviderFields.ExternalId.info": [
+   "The application id from the provider's developer settings.",
+   "De applicatie-ID uit de ontwikkelaarsinstellingen van de provider."
+  ],
+  "hint.ProviderFields.IsEnabled.info": [
+   "A switched-off provider is not asked; its key stays saved.",
+   "Een uitgeschakelde provider wordt niet bevraagd; zijn sleutel blijft opgeslagen."
+  ],
+  "hint.TakeoverFields.TakeoverSourceTypeId.info": [
+   "The program whose settings and missing titles are taken over once.",
+   "Het programma waarvan de instellingen en ontbrekende titels eenmalig worden geïmporteerd."
+  ],
+  "hint.TakeoverFields.Apply.info": [
+   "A preview shows what would happen and changes nothing.",
+   "Een voorbeeld toont wat er zou gebeuren en wijzigt niets."
+  ],
+  "hint.BackupFields.Name.placeholder": [
+   "before-update",
+   "before-update"
+  ],
+  "acquisition.connection.apiKey": [
+   "API key",
+   "API-sleutel"
+  ],
+  "acquisition.connection.priority": [
+   "Priority",
+   "Prioriteit"
+  ],
+  "acquisition.connection.enabled": [
+   "State",
+   "Status"
+  ],
+  "acquisition.connection.on": [
+   "Enabled",
+   "Ingeschakeld"
+  ],
+  "acquisition.connection.off": [
+   "Disabled",
+   "Uitgeschakeld"
+  ],
+  "acquisition.connection.category": [
+   "Download category",
+   "Downloadcategorie"
+  ],
+  "acquisition.connection.type.Gutenberg": [
+   "Project Gutenberg (public-domain books)",
+   "Project Gutenberg (boeken in het publiek domein)"
+  ],
+  "acquisition.connection.type.Opds": [
+   "OPDS catalog",
+   "OPDS-catalogus"
+  ],
+  "acquisition.connection.type.AnnasArchive": [
+   "Anna's Archive",
+   "Anna's Archive"
+  ],
+  "acquisition.connection.type.Usenet": [
+   "News server",
+   "Newsserver"
+  ],
+  "acquisition.connection.type.OpenSubtitles": [
+   "OpenSubtitles.com",
+   "OpenSubtitles.com"
+  ],
+  "acquisition.connection.type.SubDl": [
+   "SubDL",
+   "SubDL"
+  ],
+  "acquisition.connection.username": [
+   "User name",
+   "Gebruikersnaam"
+  ],
+  "acquisition.connection.password": [
+   "Password",
+   "Wachtwoord"
+  ],
+  "acquisition.connection.memberKey": [
+   "Member key",
+   "Lidsleutel"
+  ],
+  "acquisition.outcome.source_manual_link": [
+   "Confirm at the source, then paste the file link",
+   "Bevestig bij de bron en plak dan de bestandslink"
+  ],
+  "acquisition.outcome.source_gate": [
+   "The source asks for a manual login or confirmation",
+   "De bron vraagt om handmatig inloggen of bevestigen"
+  ],
+  "acquisition.connection.categories": [
+   "Categories",
+   "Categorieën"
+  ],
+  "acquisition.connection.remotePath": [
+   "Path reported by the client",
+   "Pad gemeld door de client"
+  ],
+  "acquisition.connection.localPath": [
+   "Same path for Jularr",
+   "Hetzelfde pad voor Jularr"
+  ],
+  "acquisition.connection.addIndexer": [
+   "Add indexer",
+   "Indexer toevoegen"
+  ],
+  "acquisition.connection.addClient": [
+   "Add download client",
+   "Downloadclient toevoegen"
+  ],
+  "acquisition.connection.addUsenet": [
+   "Add news server",
+   "Newsserver toevoegen"
+  ],
+  "nav.group.media": [
+   "Media",
+   "Media"
+  ],
+  "nav.group.requests": [
+   "Requests",
+   "Verzoeken"
+  ],
+  "nav.group.acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "acquisition.role.Search": [
+   "Indexers",
+   "Indexers"
+  ],
+  "acquisition.role.Download": [
+   "Download clients",
+   "Downloadclients"
+  ],
+  "acquisition.role.Subtitles": [
+   "Subtitles",
+   "Ondertitels"
+  ],
+  "acquisition.connection.none.Search": [
+   "No indexers yet.",
+   "Nog geen indexers."
+  ],
+  "acquisition.connection.none.Download": [
+   "No download clients yet.",
+   "Nog geen downloadclients."
+  ],
+  "acquisition.connection.none.Subtitles": [
+   "No subtitle providers yet.",
+   "Nog geen ondertitelproviders."
+  ],
+  "acquisition.connection.addSubtitles": [
+   "Add subtitle provider",
+   "Ondertitelprovider toevoegen"
+  ],
+  "acquisition.connection.importProwlarr": [
+   "Import from Prowlarr",
+   "Importeren uit Prowlarr"
+  ],
+  "acquisition.connection.deleteConfirm": [
+   "Delete this connection? Searches and downloads stop using it.",
+   "Deze verbinding verwijderen? Zoekopdrachten en downloads gebruiken haar niet meer."
+  ],
+  "acquisition.connection.searchTitle": [
+   "Test search",
+   "Testzoekopdracht"
+  ],
+  "acquisition.connection.searchQuery": [
+   "Search text",
+   "Zoektekst"
+  ],
+  "acquisition.connection.search": [
+   "Search",
+   "Zoeken"
+  ],
+  "acquisition.connection.searchModes": [
+   "Search modes",
+   "Zoekmodi"
+  ],
+  "acquisition.connection.maxConnections": [
+   "Connections",
+   "Verbindingen"
+  ],
+  "acquisition.connection.test": [
+   "Test connection",
+   "Verbinding testen"
+  ],
+  "acquisition.connection.delete": [
+   "Delete",
+   "Verwijderen"
+  ],
+  "acquisition.connection.unchecked": [
+   "Not tested",
+   "Niet getest"
+  ],
+  "acquisition.connection.today": [
+   "Used today",
+   "Vandaag gebruikt"
+  ],
+  "acquisition.connection.queries": [
+   "queries",
+   "zoekopdrachten"
+  ],
+  "acquisition.connection.grabs": [
+   "grabs",
+   "grabs"
+  ],
+  "acquisition.connection.backoff": [
+   "Failing, paused until",
+   "Mislukt, gepauzeerd tot"
+  ],
+  "acquisition.connection.mediaTypes": [
+   "Media types",
+   "Mediatypen"
+  ],
+  "acquisition.connection.searches": [
+   "Searches",
+   "Zoekopdrachten"
+  ],
+  "acquisition.connection.automatic": [
+   "Automatic and manual",
+   "Automatisch en handmatig"
+  ],
+  "acquisition.connection.manualOnly": [
+   "Manual only",
+   "Alleen handmatig"
+  ],
+  "acquisition.connection.queryLimit": [
+   "Queries per day",
+   "Zoekopdrachten per dag"
+  ],
+  "acquisition.connection.grabLimit": [
+   "Grabs per day",
+   "Grabs per dag"
+  ],
+  "acquisition.connection.healthy": [
+   "Reachable",
+   "Bereikbaar"
+  ],
+  "admin.work.description": [
+   "Canonical Work details, versions and monitoring",
+   "Canonieke Werkdetails, versies en volgen"
+  ],
+  "admin.work.files": [
+   "Local files and versions",
+   "Lokale bestanden en versies"
+  ],
+  "admin.work.hierarchy": [
+   "Work → Structure → Edition → Version → Asset → File",
+   "Werk → Structuur → Editie → Versie → Asset → Bestand"
+  ],
+  "admin.work.structure": [
+   "Structure and monitoring",
+   "Structuur en volgen"
+  ],
+  "admin.work.title": [
+   "Work",
+   "Werk"
+  ],
+  "admin.works.description": [
+   "Canonical media and monitoring",
+   "Canonieke media en volgen"
+  ],
+  "admin.works.title": [
+   "Works",
+   "Werken"
+  ],
+  "app.name": [
+   "Jularr",
+   "Jularr"
+  ],
+  "app.byJularr": [
+   "by Jularr",
+   "door Jularr"
+  ],
+  "instance.module.Library": [
+   "Library",
+   "Bibliotheek"
+  ],
+  "instance.module.Requests": [
+   "Requests",
+   "Verzoeken"
+  ],
+  "instance.module.Acquisition": [
+   "Arr+",
+   "Arr+"
+  ],
+  "requests.title": [
+   "My requests",
+   "Mijn verzoeken"
+  ],
+  "request.language": [
+   "Requested language",
+   "Gevraagde taal"
+  ],
+  "request.create": [
+   "Request this work",
+   "Dit werk aanvragen"
+  ],
+  "request.approve": [
+   "Approve",
+   "Goedkeuren"
+  ],
+  "request.reject": [
+   "Reject",
+   "Afwijzen"
+  ],
+  "request.empty": [
+   "No requests on this page.",
+   "Geen verzoeken op deze pagina."
+  ],
+  "request.tab.All": [
+   "All",
+   "Alle"
+  ],
+  "request.tab.Open": [
+   "Open",
+   "Open"
+  ],
+  "request.tab.Approved": [
+   "Approved",
+   "Goedgekeurd"
+  ],
+  "request.tab.InProgress": [
+   "In progress",
+   "Bezig"
+  ],
+  "request.tab.Done": [
+   "Done",
+   "Klaar"
+  ],
+  "request.tab.Rejected": [
+   "Rejected",
+   "Afgewezen"
+  ],
+  "request.status.Open": [
+   "Open",
+   "Open"
+  ],
+  "request.status.Approved": [
+   "Approved",
+   "Goedgekeurd"
+  ],
+  "request.status.Searching": [
+   "Searching",
+   "Zoeken"
+  ],
+  "request.status.Downloading": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "request.status.Importing": [
+   "Importing",
+   "Importeren"
+  ],
+  "request.status.Completed": [
+   "Completed",
+   "Voltooid"
+  ],
+  "request.status.Rejected": [
+   "Rejected",
+   "Afgewezen"
+  ],
+  "request.status.Failed": [
+   "Failed",
+   "Mislukt"
+  ],
+  "request.status.Cancelled": [
+   "Cancelled",
+   "Geannuleerd"
+  ],
+  "request.state.Open": [
+   "Waiting for approval",
+   "Wacht op goedkeuring"
+  ],
+  "request.state.Approved": [
+   "Looking for media",
+   "Media zoeken"
+  ],
+  "request.state.Searching": [
+   "Looking for media",
+   "Media zoeken"
+  ],
+  "request.state.Downloading": [
+   "Getting media",
+   "Media binnenhalen"
+  ],
+  "request.state.Importing": [
+   "Preparing",
+   "Voorbereiden"
+  ],
+  "request.state.Completed": [
+   "Available",
+   "Beschikbaar"
+  ],
+  "request.state.Rejected": [
+   "Declined",
+   "Geweigerd"
+  ],
+  "request.state.Failed": [
+   "Could not complete the request",
+   "Het verzoek kon niet worden voltooid"
+  ],
+  "request.state.Cancelled": [
+   "Request cancelled",
+   "Verzoek geannuleerd"
+  ],
+  "media.notForProfile": [
+   "Media is not available for this profile.",
+   "Media is niet beschikbaar voor dit profiel."
+  ],
+  "media.remove": [
+   "Remove",
+   "Verwijderen"
+  ],
+  "collections.deleteConfirm": [
+   "Delete this collection? The titles themselves stay.",
+   "Deze collectie verwijderen? De titels zelf blijven bestaan."
+  ],
+  "collections.addMedia": [
+   "Add media",
+   "Media toevoegen"
+  ],
+  "collections.find": [
+   "Find in the library",
+   "Zoeken in de bibliotheek"
+  ],
+  "collections.add": [
+   "Add",
+   "Toevoegen"
+  ],
+  "collections.inside": [
+   "In this collection",
+   "In deze collectie"
+  ],
+  "wanted.empty": [
+   "No wanted works on this page.",
+   "Geen gezochte werken op deze pagina."
+  ],
+  "wanted.paused": [
+   "Paused",
+   "Gepauzeerd"
+  ],
+  "wanted.pause": [
+   "Pause",
+   "Pauzeren"
+  ],
+  "wanted.resume": [
+   "Resume",
+   "Hervatten"
+  ],
+  "admin.instance.modules": [
+   "Modules",
+   "Modules"
+  ],
+  "admin.instance.module.state": [
+   "Module status",
+   "Modulestatus"
+  ],
+  "admin.instance.module.retained": [
+   "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
+   "Als je Bibliotheek uitschakelt, worden mediaservices geblokkeerd en hun navigatie verborgen. Bestaande media en kijklijsten blijven behouden."
+  ],
+  "common.all": [
+   "All",
+   "Alle"
+  ],
+  "common.seeAll": [
+   "See all",
+   "Alles bekijken"
+  ],
+  "details.heroDescription": [
+   "Title, artwork and availability will come from the canonical Work.",
+   "Titel, artwork en beschikbaarheid komen uit het canonieke Werk."
+  ],
+  "details.recommendations": [
+   "More like this",
+   "Meer zoals dit"
+  ],
+  "details.related": [
+   "Related works",
+   "Verwante werken"
+  ],
+  "details.structure": [
+   "Seasons / structure",
+   "Seizoenen / structuur"
+  ],
+  "details.title": [
+   "Media details",
+   "Mediadetails"
+  ],
+  "details.units": [
+   "Episodes / editions",
+   "Afleveringen / edities"
+  ],
+  "details.versions": [
+   "Versions & languages",
+   "Versies en talen"
+  ],
+  "details.seasons": [
+   "Seasons",
+   "Seizoenen"
+  ],
+  "details.episodes": [
+   "Episodes",
+   "Afleveringen"
+  ],
+  "details.episodeCount": [
+   "{0} episodes",
+   "{0} afleveringen"
+  ],
+  "details.specials": [
+   "Specials",
+   "Specials"
+  ],
+  "details.upcoming": [
+   "Upcoming",
+   "Binnenkort"
+  ],
+  "details.noEpisodes": [
+   "No episodes known for this season yet.",
+   "Voor dit seizoen zijn nog geen afleveringen bekend."
+  ],
+  "details.minutes": [
+   "{0} min",
+   "{0} min"
+  ],
+  "details.watchTrailer": [
+   "Watch the trailer on YouTube",
+   "Bekijk de trailer op YouTube"
+  ],
+  "details.cast": [
+   "Cast & crew",
+   "Cast en crew"
+  ],
+  "discover.mediaTypes": [
+   "Media types",
+   "Mediatypen"
+  ],
+  "discover.continueWatching": [
+   "Continue watching",
+   "Verder kijken"
+  ],
+  "discover.continueListening": [
+   "Continue listening",
+   "Verder luisteren"
+  ],
+  "media.continueReading": [
+   "Continue reading",
+   "Verder lezen"
+  ],
+  "continueReading.dismiss": [
+   "Hide this bar; your reading position stays",
+   "Deze balk verbergen; je leespositie blijft bewaard"
+  ],
+  "discover.title": [
+   "Discover",
+   "Ontdekken"
+  ],
+  "discover.all": [
+   "All",
+   "Alle"
+  ],
+  "discover.type.movies": [
+   "Movies",
+   "Films"
+  ],
+  "discover.type.series": [
+   "Series",
+   "Series"
+  ],
+  "discover.type.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "discover.type.lightnovels": [
+   "Light novels",
+   "Light novels"
+  ],
+  "discover.type.books": [
+   "Books",
+   "Boeken"
+  ],
+  "discover.type.manga": [
+   "Manga",
+   "Manga"
+  ],
+  "discover.type.music": [
+   "Music",
+   "Muziek"
+  ],
+  "discover.type.games": [
+   "Games",
+   "Games"
+  ],
+  "discover.known": [
+   "In Jularr",
+   "In Jularr"
+  ],
+  "discover.feed.Trending": [
+   "Trending",
+   "Trending"
+  ],
+  "discover.feed.Top": [
+   "Top rated",
+   "Best beoordeeld"
+  ],
+  "discover.feed.New": [
+   "New releases",
+   "Nieuwe releases"
+  ],
+  "discover.feed.Upcoming": [
+   "Upcoming",
+   "Binnenkort"
+  ],
+  "discover.providerUnavailable": [
+   "Discovery is unavailable right now; your library still works.",
+   "Ontdekken is nu niet beschikbaar; je bibliotheek werkt nog."
+  ],
+  "discover.empty": [
+   "Nothing to show here yet.",
+   "Hier is nog niets te zien."
+  ],
+  "discover.noResults": [
+   "Nothing matches this search.",
+   "Niets komt overeen met deze zoekopdracht."
+  ],
+  "discover.recentlyAdded": [
+   "Recently added",
+   "Onlangs toegevoegd"
+  ],
+  "discover.pages": [
+   "Result pages",
+   "Resultaatpagina's"
+  ],
+  "discover.loadFailed": [
+   "Results could not be loaded. Try again or open the next page.",
+   "De resultaten konden niet worden geladen. Probeer het opnieuw of open de volgende pagina."
+  ],
+  "media.state.NotRequested": [
+   "Not requested",
+   "Niet aangevraagd"
+  ],
+  "media.state.Requested": [
+   "Requested",
+   "Aangevraagd"
+  ],
+  "media.state.Available": [
+   "Available",
+   "Beschikbaar"
+  ],
+  "media.state.InProgress": [
+   "In progress",
+   "Bezig"
+  ],
+  "media.continue": [
+   "Continue",
+   "Verder"
+  ],
+  "media.progress": [
+   "Playback progress",
+   "Afspeelvoortgang"
+  ],
+  "media.minutesLeft": [
+   "{0} min left",
+   "{0} min over"
+  ],
+  "media.readProgress": [
+   "Read progress",
+   "Leesvoortgang"
+  ],
+  "media.percentRead": [
+   "{0}% read",
+   "{0}% gelezen"
+  ],
+  "media.dubs": [
+   "Dubs",
+   "Nasynchronisaties"
+  ],
+  "media.subs": [
+   "Subs",
+   "Ondertitels"
+  ],
+  "media.languageCount": [
+   "{0}: {1} languages",
+   "{0}: {1} talen"
+  ],
+  "media.languagePreferred": [
+   "{0}: {1}",
+   "{0}: {1}"
+  ],
+  "media.shelfPrevious": [
+   "Previous titles",
+   "Vorige titels"
+  ],
+  "media.shelfNext": [
+   "Next titles",
+   "Volgende titels"
+  ],
+  "media.availability.Available": [
+   "All monitored episodes or units are available.",
+   "Alle gevolgde afleveringen of onderdelen zijn beschikbaar."
+  ],
+  "media.rating": [
+   "Rating",
+   "Beoordeling"
+  ],
+  "media.request": [
+   "Request",
+   "Aanvragen"
+  ],
+  "media.availability.ProfileAudio": [
+   "Local audio is available in the profile language.",
+   "Lokale audio is beschikbaar in de taal van het profiel."
+  ],
+  "media.availability.OtherAudio": [
+   "Available locally, but only in other audio languages.",
+   "Lokaal beschikbaar, maar alleen in andere audiotalen."
+  ],
+  "media.availability.PartialOtherAudio": [
+   "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
+   "{0} van {1} gevolgde afleveringen of onderdelen zijn beschikbaar, maar alleen in andere audiotalen."
+  ],
+  "media.availability.Requested": [
+   "Requested",
+   "Aangevraagd"
+  ],
+  "media.availability.badge.Available": [
+   "Available locally",
+   "Lokaal beschikbaar"
+  ],
+  "media.availability.badge.ProfileAudio": [
+   "Profile audio available",
+   "Profielaudio beschikbaar"
+  ],
+  "media.availability.badge.OtherAudio": [
+   "Other audio languages",
+   "Andere audiotalen"
+  ],
+  "media.availability.badge.PartialOtherAudio": [
+   "{0}/{1} · Other audio",
+   "{0}/{1} · Andere audio"
+  ],
+  "media.availability.badge.Partial": [
+   "{0}/{1} available",
+   "{0}/{1} beschikbaar"
+  ],
+  "media.availability.badge.Downloading": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "media.availability.badge.Searching": [
+   "Searching",
+   "Zoeken"
+  ],
+  "media.availability.badge.Requested": [
+   "Requested",
+   "Aangevraagd"
+  ],
+  "media.availability.Partial": [
+   "{0} of {1} monitored episodes or units are available.",
+   "{0} van {1} gevolgde afleveringen of onderdelen zijn beschikbaar."
+  ],
+  "media.availability.Missing": [
+   "No monitored episodes or units are available.",
+   "Geen gevolgde afleveringen of onderdelen zijn beschikbaar."
+  ],
+  "media.availability.Downloading": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "media.availability.Searching": [
+   "Searching or queued for another search",
+   "Zoeken of in de wachtrij voor een nieuwe zoekopdracht"
+  ],
+  "media.series.Continuing": [
+   "Continuing",
+   "Doorlopend"
+  ],
+  "media.series.Releasing": [
+   "Releasing",
+   "Verschijnt"
+  ],
+  "media.series.Ended": [
+   "Ended",
+   "Afgelopen"
+  ],
+  "media.series.Canceled": [
+   "Canceled",
+   "Geannuleerd"
+  ],
+  "media.series.Announced": [
+   "Announced",
+   "Aangekondigd"
+  ],
+  "design.languageGerman": [
+   "German",
+   "Duits"
+  ],
+  "design.genreDrama": [
+   "Drama",
+   "Drama"
+  ],
+  "design.genreRomance": [
+   "Romance",
+   "Romantiek"
+  ],
+  "design.genreAdventure": [
+   "Adventure",
+   "Avontuur"
+  ],
+  "design.mediaNotice": [
+   "Sample cards and previews only. Statuses and languages are illustrative; request and library playback actions are disabled. The official trailer is available on Play.",
+   "Alleen voorbeeldkaarten en -voorbeelden. Statussen en talen zijn ter illustratie; acties voor aanvragen en afspelen vanuit de bibliotheek zijn uitgeschakeld. De officiële trailer is beschikbaar via Afspelen."
+  ],
+  "design.mediaLibrary": [
+   "Library cards",
+   "Bibliotheekkaarten"
+  ],
+  "design.mediaDiscover": [
+   "Discover cards",
+   "Ontdekkaarten"
+  ],
+  "media.watch": [
+   "Watch",
+   "Kijken"
+  ],
+  "media.details": [
+   "Details",
+   "Details"
+  ],
+  "search.global": [
+   "Search movies and series",
+   "Zoek films en series"
+  ],
+  "library.scope.all": [
+   "All",
+   "Alle"
+  ],
+  "library.scope.movies": [
+   "Movies",
+   "Films"
+  ],
+  "library.scope.series": [
+   "Series",
+   "Series"
+  ],
+  "library.scope.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "library.scope.books": [
+   "Books",
+   "Boeken"
+  ],
+  "library.scope.manga": [
+   "Manga",
+   "Manga"
+  ],
+  "library.scope.lightnovels": [
+   "Light novels",
+   "Light novels"
+  ],
+  "library.scope.music": [
+   "Music",
+   "Muziek"
+  ],
+  "library.scope.games": [
+   "Games",
+   "Games"
+  ],
+  "library.search": [
+   "Search your library",
+   "Zoek in je bibliotheek"
+  ],
+  "library.sort": [
+   "Sort",
+   "Sorteren"
+  ],
+  "library.sort.RecentlyAdded": [
+   "Recently added",
+   "Onlangs toegevoegd"
+  ],
+  "library.sort.Title": [
+   "Title",
+   "Titel"
+  ],
+  "library.sort.Year": [
+   "Year",
+   "Jaar"
+  ],
+  "library.paging": [
+   "Pages",
+   "Pagina's"
+  ],
+  "library.userEmpty": [
+   "Your library is empty. Discover finds something to watch.",
+   "Je bibliotheek is leeg. Via Ontdekken vind je iets om te kijken."
+  ],
+  "form.error": [
+   "Something went wrong.",
+   "Er ging iets mis."
+  ],
+  "form.invalid_type": [
+   "Invalid value.",
+   "Ongeldige waarde."
+  ],
+  "form.out_of_range": [
+   "The value is outside the allowed range.",
+   "De waarde valt buiten het toegestane bereik."
+  ],
+  "form.required": [
+   "This field is required.",
+   "Dit veld is verplicht."
+  ],
+  "form.too_long": [
+   "The value is too long.",
+   "De waarde is te lang."
+  ],
+  "media.all": [
+   "All",
+   "Alle"
+  ],
+  "media.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "media.books": [
+   "Books",
+   "Boeken"
+  ],
+  "media.lightNovels": [
+   "Light novels",
+   "Light novels"
+  ],
+  "media.manga": [
+   "Manga",
+   "Manga"
+  ],
+  "media.movies": [
+   "Movies",
+   "Films"
+  ],
+  "media.series": [
+   "Series",
+   "Series"
+  ],
+  "nav.breadcrumb": [
+   "Breadcrumb",
+   "Kruimelpad"
+  ],
+  "nav.admin": [
+   "Admin",
+   "Beheer"
+  ],
+  "nav.back": [
+   "Back",
+   "Terug"
+  ],
+  "nav.home": [
+   "Home",
+   "Start"
+  ],
+  "nav.library": [
+   "Library",
+   "Bibliotheek"
+  ],
+  "nav.mobile": [
+   "Mobile navigation",
+   "Mobiele navigatie"
+  ],
+  "nav.primary": [
+   "Main navigation",
+   "Hoofdnavigatie"
+  ],
+  "nav.secondary": [
+   "Secondary navigation",
+   "Secundaire navigatie"
+  ],
+  "nav.tabs": [
+   "Tabs",
+   "Tabbladen"
+  ],
+  "nav.profile": [
+   "Profile",
+   "Profiel"
+  ],
+  "nav.settings": [
+   "Settings",
+   "Instellingen"
+  ],
+  "nav.watchlist": [
+   "Watchlist",
+   "Kijklijst"
+  ],
+  "player.title": [
+   "Player",
+   "Speler"
+  ],
+  "player.unavailable": [
+   "Playback is not connected yet.",
+   "Afspelen is nog niet verbonden."
+  ],
+  "preview.admin-library": [
+   "Admin library",
+   "Beheer: bibliotheek"
+  ],
+  "preview.admin-requests": [
+   "Admin requests",
+   "Beheer: verzoeken"
+  ],
+  "preview.admin-rules": [
+   "Admin rules",
+   "Beheer: regels"
+  ],
+  "preview.admin-users": [
+   "Admin users",
+   "Beheer: gebruikers"
+  ],
+  "preview.admin-wanted": [
+   "Admin wanted",
+   "Beheer: gezocht"
+  ],
+  "preview.admin-work": [
+   "Admin work",
+   "Beheer: werk"
+  ],
+  "preview.admin-works": [
+   "Admin works",
+   "Beheer: werken"
+  ],
+  "appearance.title": [
+   "Appearance",
+   "Weergave"
+  ],
+  "appearance.style": [
+   "Style",
+   "Stijl"
+  ],
+  "appearance.brightness": [
+   "Brightness",
+   "Helderheid"
+  ],
+  "appearance.original": [
+   "Original",
+   "Origineel"
+  ],
+  "appearance.clean": [
+   "Clean",
+   "Strak"
+  ],
+  "appearance.system": [
+   "System",
+   "Systeem"
+  ],
+  "appearance.light": [
+   "Light",
+   "Licht"
+  ],
+  "appearance.dark": [
+   "Dark",
+   "Donker"
+  ],
+  "preview.details": [
+   "Details",
+   "Details"
+  ],
+  "preview.discover": [
+   "Discover",
+   "Ontdekken"
+  ],
+  "preview.player": [
+   "Player",
+   "Speler"
+  ],
+  "preview.settings": [
+   "Settings",
+   "Instellingen"
+  ],
+  "preview.shell": [
+   "Shell",
+   "Shell"
+  ],
+  "preview.watchlist": [
+   "Watchlist",
+   "Kijklijst"
+  ],
+  "requests.approved": [
+   "Approved",
+   "Goedgekeurd"
+  ],
+  "requests.done": [
+   "Done",
+   "Klaar"
+  ],
+  "requests.inProgress": [
+   "In progress",
+   "Bezig"
+  ],
+  "requests.open": [
+   "Open",
+   "Open"
+  ],
+  "requests.rejected": [
+   "Rejected",
+   "Afgewezen"
+  ],
+  "settings.accessibility": [
+   "Accessibility",
+   "Toegankelijkheid"
+  ],
+  "settings.account": [
+   "Account",
+   "Account"
+  ],
+  "settings.appearance": [
+   "Appearance",
+   "Weergave"
+  ],
+  "settings.audioSubtitles": [
+   "Audio & subtitles",
+   "Audio en ondertitels"
+  ],
+  "settings.connections": [
+   "Connections",
+   "Verbindingen"
+  ],
+  "settings.general": [
+   "General",
+   "Algemeen"
+  ],
+  "settings.language": [
+   "Language & region",
+   "Taal en regio"
+  ],
+  "settings.library": [
+   "Library & display",
+   "Bibliotheek en weergave"
+  ],
+  "settings.media": [
+   "Media",
+   "Media"
+  ],
+  "settings.modules": [
+   "Modules & features",
+   "Modules en functies"
+  ],
+  "settings.personal": [
+   "Personal features",
+   "Persoonlijke functies"
+  ],
+  "settings.playback": [
+   "Playback",
+   "Afspelen"
+  ],
+  "settings.privacy": [
+   "Profile & privacy",
+   "Profiel en privacy"
+  ],
+  "settings.profileNotice": [
+   "This will be the Settings tab of your profile.",
+   "Dit wordt het tabblad Instellingen van je profiel."
+  ],
+  "settings.ratings": [
+   "Ratings",
+   "Beoordelingen"
+  ],
+  "settings.reader": [
+   "Reader",
+   "Lezer"
+  ],
+  "settings.security": [
+   "Account & security",
+   "Account en beveiliging"
+  ],
+  "settings.sessions": [
+   "Devices & sessions",
+   "Apparaten en sessies"
+  ],
+  "settings.title": [
+   "Settings",
+   "Instellingen"
+  ],
+  "shell.preview": [
+   "Shell preview",
+   "Shell-voorbeeld"
+  ],
+  "shell.previewInfo": [
+   "Presentation preview only. No account or profile data is loaded.",
+   "Alleen een presentatievoorbeeld. Er worden geen account- of profielgegevens geladen."
+  ],
+  "shell.search": [
+   "Search",
+   "Zoeken"
+  ],
+  "shell.skip": [
+   "Skip to content",
+   "Naar de inhoud springen"
+  ],
+  "skeleton.unconnected": [
+   "This view will show live data when its backend service is available.",
+   "Deze weergave toont live gegevens zodra de bijbehorende backendservice beschikbaar is."
+  ],
+  "table.actions": [
+   "Actions",
+   "Acties"
+  ],
+  "table.titles": [
+   "Titles",
+   "Titels"
+  ],
+  "table.availability": [
+   "Availability",
+   "Beschikbaarheid"
+  ],
+  "table.language": [
+   "Language / version",
+   "Taal / versie"
+  ],
+  "table.lastSearch": [
+   "Last search",
+   "Laatste zoekopdracht"
+  ],
+  "table.limit": [
+   "Limit",
+   "Limiet"
+  ],
+  "table.monitored": [
+   "Monitoring",
+   "Volgen"
+  ],
+  "table.profile": [
+   "Profile",
+   "Profiel"
+  ],
+  "table.requestedAt": [
+   "Requested at",
+   "Aangevraagd op"
+  ],
+  "table.requester": [
+   "Requester",
+   "Aanvrager"
+  ],
+  "table.role": [
+   "Role",
+   "Rol"
+  ],
+  "table.rule": [
+   "Rule",
+   "Regel"
+  ],
+  "table.size": [
+   "Storage used",
+   "Gebruikte opslag"
+  ],
+  "table.status": [
+   "Status",
+   "Status"
+  ],
+  "table.type": [
+   "Type",
+   "Type"
+  ],
+  "table.user": [
+   "User",
+   "Gebruiker"
+  ],
+  "table.version": [
+   "Version",
+   "Versie"
+  ],
+  "table.work": [
+   "Work / unit",
+   "Werk / onderdeel"
+  ],
+  "toolbar.filter": [
+   "Filter",
+   "Filteren"
+  ],
+  "toolbar.label": [
+   "List controls",
+   "Lijstbediening"
+  ],
+  "toolbar.search": [
+   "Search",
+   "Zoeken"
+  ],
+  "toolbar.sort": [
+   "Sort",
+   "Sorteren"
+  ],
+  "toolbar.view": [
+   "View",
+   "Weergave"
+  ],
+  "wanted.requested": [
+   "Requested",
+   "Aangevraagd"
+  ],
+  "wanted.available": [
+   "Available",
+   "Beschikbaar"
+  ],
+  "wanted.downloading": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "wanted.lastSearch": [
+   "Last search",
+   "Laatste zoekopdracht"
+  ],
+  "wanted.open": [
+   "Open",
+   "Open"
+  ],
+  "wanted.openWork": [
+   "Edit title",
+   "Titel bewerken"
+  ],
+  "wanted.section.status": [
+   "Status",
+   "Status"
+  ],
+  "wanted.section.choice": [
+   "Profile and library",
+   "Profiel en bibliotheek"
+  ],
+  "wanted.section.episodes": [
+   "Seasons and episodes",
+   "Seizoenen en afleveringen"
+  ],
+  "wanted.section.volumes": [
+   "Volumes",
+   "Delen"
+  ],
+  "wanted.searchAutomatic": [
+   "Search automatically",
+   "Automatisch zoeken"
+  ],
+  "wanted.searchManual": [
+   "Search manually",
+   "Handmatig zoeken"
+  ],
+  "admin.work.wanted": [
+   "Search and downloads",
+   "Zoeken en downloads"
+  ],
+  "wanted.monitoring": [
+   "Monitoring",
+   "Volgen"
+  ],
+  "wanted.progress": [
+   "Progress (%)",
+   "Voortgang (%)"
+  ],
+  "wanted.grabQueued": [
+   "The release was sent to the download client.",
+   "De release is naar de downloadclient gestuurd."
+  ],
+  "wanted.tab.search": [
+   "Search",
+   "Zoeken"
+  ],
+  "wanted.tab.history": [
+   "History",
+   "Geschiedenis"
+  ],
+  "wanted.search.start": [
+   "Start search",
+   "Zoeken starten"
+  ],
+  "wanted.view.All": [
+   "All",
+   "Alle"
+  ],
+  "wanted.view.Missing": [
+   "Missing",
+   "Ontbrekend"
+  ],
+  "wanted.view.CutoffUnmet": [
+   "Cutoff unmet",
+   "Kwaliteitsdoel niet bereikt"
+  ],
+  "wanted.belowCutoff": [
+   "Below cutoff",
+   "Onder het kwaliteitsdoel"
+  ],
+  "wanted.monitorsNewUnits": [
+   "New episodes and volumes",
+   "Nieuwe afleveringen en delen"
+  ],
+  "wanted.unit": [
+   "Season, episode or volume",
+   "Seizoen, aflevering of deel"
+  ],
+  "wanted.unit.releasedOn": [
+   "Released",
+   "Verschenen"
+  ],
+  "wanted.unit.present": [
+   "Present",
+   "Aanwezig"
+  ],
+  "wanted.unit.monitored": [
+   "Monitored",
+   "Gevolgd"
+  ],
+  "wanted.unit.unmonitored": [
+   "Not monitored",
+   "Niet gevolgd"
+  ],
+  "wanted.unit.partly": [
+   "Partly monitored",
+   "Deels gevolgd"
+  ],
+  "wanted.unit.start": [
+   "Monitor",
+   "Volgen"
+  ],
+  "wanted.unit.stop": [
+   "Stop monitoring",
+   "Niet meer volgen"
+  ],
+  "wanted.search.season": [
+   "Season",
+   "Seizoen"
+  ],
+  "wanted.search.episode": [
+   "Episode",
+   "Aflevering"
+  ],
+  "wanted.search.volume": [
+   "Volume",
+   "Deel"
+  ],
+  "wanted.search.empty": [
+   "No releases were found.",
+   "Er zijn geen releases gevonden."
+  ],
+  "wanted.search.decision": [
+   "Decision",
+   "Beslissing"
+  ],
+  "wanted.search.score": [
+   "Score",
+   "Score"
+  ],
+  "wanted.search.release": [
+   "Release",
+   "Release"
+  ],
+  "wanted.search.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "wanted.search.age": [
+   "Age (days)",
+   "Leeftijd (dagen)"
+  ],
+  "wanted.search.size": [
+   "Size",
+   "Grootte"
+  ],
+  "wanted.search.quality": [
+   "Quality",
+   "Kwaliteit"
+  ],
+  "wanted.search.reason": [
+   "Reason",
+   "Reden"
+  ],
+  "wanted.search.grab": [
+   "Select and download",
+   "Selecteren en downloaden"
+  ],
+  "wanted.history.empty": [
+   "No releases have been taken yet.",
+   "Er zijn nog geen releases binnengehaald."
+  ],
+  "wanted.history.date": [
+   "Date",
+   "Datum"
+  ],
+  "acquisition.decision.Eligible": [
+   "Eligible",
+   "Geschikt"
+  ],
+  "acquisition.decision.ManualReview": [
+   "Review",
+   "Controleren"
+  ],
+  "acquisition.decision.Rejected": [
+   "Rejected",
+   "Afgewezen"
+  ],
+  "acquisition.release.Grabbed": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "acquisition.release.Imported": [
+   "Imported",
+   "Geïmporteerd"
+  ],
+  "acquisition.release.Failed": [
+   "Failed",
+   "Mislukt"
+  ],
+  "acquisition.release.Blocked": [
+   "Blocked",
+   "Geblokkeerd"
+  ],
+  "acquisition.release.Allowed": [
+   "Allowed again",
+   "Weer toegestaan"
+  ],
+  "acquisition.outcome.release_found": [
+   "Release found",
+   "Release gevonden"
+  ],
+  "acquisition.outcome.release_delayed": [
+   "Waiting for a better release",
+   "Wachten op een betere release"
+  ],
+  "acquisition.outcome.grabbed": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "acquisition.outcome.imported": [
+   "Imported",
+   "Geïmporteerd"
+  ],
+  "acquisition.outcome.manual_review": [
+   "Needs review",
+   "Controle nodig"
+  ],
+  "acquisition.outcome.profile_rejected": [
+   "No release fits the profile",
+   "Geen release past bij het profiel"
+  ],
+  "acquisition.outcome.identity_invalid": [
+   "No matching release",
+   "Geen overeenkomende release"
+  ],
+  "acquisition.outcome.no_candidates": [
+   "Nothing found",
+   "Niets gevonden"
+  ],
+  "acquisition.outcome.indexers_unavailable": [
+   "Indexers unavailable",
+   "Indexers niet beschikbaar"
+  ],
+  "acquisition.outcome.profile_missing": [
+   "No acquisition profile",
+   "Geen binnenhaalprofiel"
+  ],
+  "acquisition.outcome.download_failed": [
+   "Download failed",
+   "Download mislukt"
+  ],
+  "acquisition.outcome.download_interrupted": [
+   "Download interrupted",
+   "Download onderbroken"
+  ],
+  "acquisition.outcome.acquisition_unavailable": [
+   "Download client unavailable",
+   "Downloadclient niet beschikbaar"
+  ],
+  "acquisition.outcome.acquisition_no_download_client": [
+   "No download client",
+   "Geen downloadclient"
+  ],
+  "acquisition.outcome.acquisition_grab_failed": [
+   "Download client refused",
+   "Downloadclient weigerde"
+  ],
+  "acquisition.outcome.acquisition_limit_reached": [
+   "Indexer grab limit reached",
+   "Grablimiet van de indexer bereikt"
+  ],
+  "acquisition.outcome.import_path_unmapped": [
+   "Download folder is not mapped to storage",
+   "Downloadmap is niet gekoppeld aan opslag"
+  ],
+  "acquisition.outcome.import_no_library": [
+   "No library path for this media type",
+   "Geen bibliotheekpad voor dit mediatype"
+  ],
+  "acquisition.outcome.import_source_unavailable": [
+   "Download folder is unreachable",
+   "Downloadmap is onbereikbaar"
+  ],
+  "acquisition.outcome.import_library_unavailable": [
+   "Library storage is unreachable",
+   "Bibliotheekopslag is onbereikbaar"
+  ],
+  "acquisition.reason.Eligible": [
+   "Eligible",
+   "Geschikt"
+  ],
+  "acquisition.reason.Blocked": [
+   "Failed or blocked before",
+   "Eerder mislukt of geblokkeerd"
+  ],
+  "acquisition.reason.NoDownload": [
+   "No download link",
+   "Geen downloadlink"
+  ],
+  "acquisition.reason.Unparseable": [
+   "Name not recognized",
+   "Naam niet herkend"
+  ],
+  "acquisition.reason.Matches": [
+   "Matches",
+   "Komt overeen"
+  ],
+  "acquisition.reason.MatchesTitleAndAuthor": [
+   "Matches title and author",
+   "Komt overeen met titel en auteur"
+  ],
+  "acquisition.reason.AuthorMissing": [
+   "Author not named",
+   "Auteur niet genoemd"
+  ],
+  "acquisition.reason.MatchesById": [
+   "Matches by provider ID",
+   "Komt overeen via provider-ID"
+  ],
+  "acquisition.reason.MatchesTitleAndYear": [
+   "Matches title and year",
+   "Komt overeen met titel en jaar"
+  ],
+  "acquisition.reason.WrongTitle": [
+   "Different title",
+   "Andere titel"
+  ],
+  "acquisition.reason.WrongYear": [
+   "Different year",
+   "Ander jaar"
+  ],
+  "acquisition.reason.AmbiguousTitle": [
+   "Title is ambiguous",
+   "Titel is dubbelzinnig"
+  ],
+  "acquisition.reason.ExtraTitleWords": [
+   "Title has extra words",
+   "Titel heeft extra woorden"
+  ],
+  "acquisition.reason.WrongSeason": [
+   "Wrong season",
+   "Verkeerd seizoen"
+  ],
+  "acquisition.reason.WrongEpisode": [
+   "Wrong episode",
+   "Verkeerde aflevering"
+  ],
+  "acquisition.reason.ContainsTarget": [
+   "Contains the target",
+   "Bevat het doel"
+  ],
+  "acquisition.reason.QualityNotAllowed": [
+   "Quality not allowed",
+   "Kwaliteit niet toegestaan"
+  ],
+  "acquisition.reason.NotAnUpgrade": [
+   "No upgrade of the present quality",
+   "Geen upgrade van de aanwezige kwaliteit"
+  ],
+  "acquisition.reason.SizeUnknown": [
+   "Size unknown",
+   "Grootte onbekend"
+  ],
+  "acquisition.reason.SizeBelowMinimum": [
+   "Smaller than allowed",
+   "Kleiner dan toegestaan"
+  ],
+  "acquisition.reason.SizeAboveMaximum": [
+   "Larger than allowed",
+   "Groter dan toegestaan"
+  ],
+  "acquisition.reason.MissingRequiredTerm": [
+   "Required term missing",
+   "Vereiste term ontbreekt"
+  ],
+  "acquisition.reason.ContainsRejectedTerm": [
+   "Contains a rejected term",
+   "Bevat een afgewezen term"
+  ],
+  "acquisition.reason.MissingRequiredPattern": [
+   "Required pattern missing",
+   "Vereist patroon ontbreekt"
+  ],
+  "acquisition.reason.MatchesRejectedPattern": [
+   "Matches a rejected pattern",
+   "Komt overeen met een afgewezen patroon"
+  ],
+  "acquisition.reason.MissingRequiredRule": [
+   "Required rule not met",
+   "Vereiste regel niet voldaan"
+  ],
+  "acquisition.reason.MatchesRejectRule": [
+   "Matches a reject rule",
+   "Komt overeen met een afwijsregel"
+  ],
+  "acquisition.reason.RuleScore": [
+   "Rule score",
+   "Regelscore"
+  ],
+  "acquisition.reason.FallbackQuality": [
+   "Fallback quality",
+   "Terugvalkwaliteit"
+  ],
+  "acquisition.reason.OnlyCandidate": [
+   "Only eligible release",
+   "Enige geschikte release"
+  ],
+  "acquisition.reason.HigherQuality": [
+   "Best quality",
+   "Beste kwaliteit"
+  ],
+  "acquisition.reason.PreferredLanguage": [
+   "Preferred language",
+   "Voorkeurstaal"
+  ],
+  "acquisition.reason.HigherPreference": [
+   "Highest score",
+   "Hoogste score"
+  ],
+  "acquisition.reason.BetterCoverage": [
+   "Covers more",
+   "Dekt meer"
+  ],
+  "acquisition.reason.BetterReliability": [
+   "More reliable source",
+   "Betrouwbaardere bron"
+  ],
+  "acquisition.reason.IndexerPriority": [
+   "Indexer priority",
+   "Prioriteit van de indexer"
+  ],
+  "acquisition.reason.PostedLater": [
+   "Newer post",
+   "Nieuwere post"
+  ],
+  "acquisition.reason.StableOrder": [
+   "Equal candidates",
+   "Gelijkwaardige kandidaten"
+  ],
+  "acquisition.reason.MatchesTitle": [
+   "Matches the title",
+   "Komt overeen met de titel"
+  ],
+  "acquisition.reason.MatchesArtistAndAlbum": [
+   "Matches artist and album",
+   "Komt overeen met artiest en album"
+  ],
+  "acquisition.reason.MatchesTitleAndPlatform": [
+   "Matches title and platform",
+   "Komt overeen met titel en platform"
+  ],
+  "acquisition.reason.ArtistMissing": [
+   "Album has no artist",
+   "Album heeft geen artiest"
+  ],
+  "acquisition.reason.PlatformMissing": [
+   "Platform not named",
+   "Platform niet genoemd"
+  ],
+  "acquisition.reason.WrongArtist": [
+   "Not the wanted artist",
+   "Niet de gezochte artiest"
+  ],
+  "acquisition.reason.WrongVolume": [
+   "Wrong volume",
+   "Verkeerd deel"
+  ],
+  "acquisition.reason.WrongPlatform": [
+   "Different platform",
+   "Ander platform"
+  ],
+  "acquisition.reason.OtherEdition": [
+   "Other part or edition",
+   "Ander deel of andere editie"
+  ],
+  "acquisition.reason.ChaptersOnly": [
+   "Chapters only",
+   "Alleen hoofdstukken"
+  ],
+  "acquisition.reason.VolumesUnknown": [
+   "Series volumes unknown",
+   "Delen van de reeks onbekend"
+  ],
+  "acquisition.reason.PartOfGame": [
+   "Part of a game",
+   "Onderdeel van een game"
+  ],
+  "acquisition.reason.BestQuality": [
+   "Best quality present",
+   "Beste kwaliteit aanwezig"
+  ],
+  "acquisition.reason.BelowCutoff": [
+   "Below the quality goal",
+   "Onder het kwaliteitsdoel"
+  ],
+  "acquisition.reason.CutoffMet": [
+   "Quality goal reached",
+   "Kwaliteitsdoel bereikt"
+  ],
+  "acquisition.reason.UpgradesDisabled": [
+   "Upgrades off",
+   "Upgrades uit"
+  ],
+  "acquisition.reason.InstalledQualityUnknown": [
+   "Installed quality unknown",
+   "Geïnstalleerde kwaliteit onbekend"
+  ],
+  "watchlist.title": [
+   "Watchlist",
+   "Kijklijst"
+  ],
+  "storage.title": [
+   "Storage",
+   "Opslag"
+  ],
+  "setup.storage.title": [
+   "Setup · Storage",
+   "Installatie · Opslag"
+  ],
+  "storage.name": [
+   "Name",
+   "Naam"
+  ],
+  "storage.host": [
+   "Server hostname or IPv4 address",
+   "Hostnaam of IPv4-adres van de server"
+  ],
+  "storage.sharePath": [
+   "Share or export path",
+   "Share of exportpad"
+  ],
+  "storage.protocolVersion": [
+   "Protocol version",
+   "Protocolversie"
+  ],
+  "storage.username": [
+   "Username",
+   "Gebruikersnaam"
+  ],
+  "storage.domain": [
+   "Domain",
+   "Domein"
+  ],
+  "storage.password": [
+   "Password",
+   "Wachtwoord"
+  ],
+  "storage.access": [
+   "Access",
+   "Toegang"
+  ],
+  "storage.readOnly": [
+   "Read only",
+   "Alleen lezen"
+  ],
+  "storage.readWrite": [
+   "Read and write",
+   "Lezen en schrijven"
+  ],
+  "storage.protocol.Smb": [
+   "SMB",
+   "SMB"
+  ],
+  "storage.protocol.Nfs": [
+   "NFS",
+   "NFS"
+  ],
+  "storage.add.Smb": [
+   "Add SMB connection",
+   "SMB-verbinding toevoegen"
+  ],
+  "storage.add.Nfs": [
+   "Add NFS connection",
+   "NFS-verbinding toevoegen"
+  ],
+  "storage.credentialsHint": [
+   "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
+   "Wachtwoorden worden beschermd opgeslagen en nooit getoond. NFS-rechten gebruiken de serverexport en de identiteiten van het bestandssysteem."
+  ],
+  "storage.applyHint": [
+   "Saving changes does not interrupt a mount. Disconnect and reconnect explicitly to apply changed settings.",
+   "Het opslaan van wijzigingen onderbreekt geen mount. Koppel expliciet los en weer aan om gewijzigde instellingen toe te passen."
+  ],
+  "storage.operation.ReadStatus": [
+   "Check mount status",
+   "Mountstatus controleren"
+  ],
+  "storage.operation.Connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "storage.operation.Disconnect": [
+   "Disconnect",
+   "Loskoppelen"
+  ],
+  "admin.backup.title": [
+   "Backups",
+   "Back-ups"
+  ],
+  "admin.backup.notConfigured": [
+   "Backups need a backup folder and pg_dump in the server configuration.",
+   "Back-ups hebben een back-upmap en pg_dump in de serverconfiguratie nodig."
+  ],
+  "admin.backup.running": [
+   "A backup is being made.",
+   "Er wordt een back-up gemaakt."
+  ],
+  "admin.backup.failed": [
+   "The last backup failed.",
+   "De laatste back-up is mislukt."
+  ],
+  "admin.backup.restored": [
+   "The backup was restored. Restart Jularr, then sign in with an account of the restored instance.",
+   "De back-up is hersteld. Start Jularr opnieuw op en log dan in met een account van de herstelde instantie."
+  ],
+  "admin.backup.create": [
+   "Back up now",
+   "Nu een back-up maken"
+  ],
+  "admin.backup.createdAt": [
+   "Made",
+   "Gemaakt"
+  ],
+  "admin.backup.empty": [
+   "No backups yet.",
+   "Nog geen back-ups."
+  ],
+  "admin.backup.compatible": [
+   "This version",
+   "Deze versie"
+  ],
+  "admin.backup.otherVersion": [
+   "Other version",
+   "Andere versie"
+  ],
+  "admin.backup.restore": [
+   "Restore",
+   "Herstellen"
+  ],
+  "admin.backup.passphrase": [
+   "Backup passphrase",
+   "Wachtzin van de back-up"
+  ],
+  "admin.backup.delete": [
+   "Delete",
+   "Verwijderen"
+  ],
+  "setup.restore": [
+   "Restore a backup instead",
+   "In plaats daarvan een back-up herstellen"
+  ],
+  "storage.synology.title": [
+   "Synology",
+   "Synology"
+  ],
+  "storage.synology.hint": [
+   "Reads the NAS's health and can shut it down or restart it. Needs a DSM administrator account without two-step verification; an empty address removes the access.",
+   "Leest de gezondheid van de NAS uit en kan hem afsluiten of opnieuw starten. Vereist een DSM-beheerdersaccount zonder verificatie in twee stappen; een leeg adres verwijdert de toegang."
+  ],
+  "storage.synology.url": [
+   "DSM address",
+   "DSM-adres"
+  ],
+  "storage.synology.username": [
+   "DSM account",
+   "DSM-account"
+  ],
+  "storage.synology.password": [
+   "DSM password",
+   "DSM-wachtwoord"
+  ],
+  "storage.synology.status": [
+   "Read NAS health",
+   "NAS-gezondheid uitlezen"
+  ],
+  "storage.synology.certificate": [
+   "Check certificate",
+   "Certificaat controleren"
+  ],
+  "storage.synology.certificate.valid": [
+   "Certificate confirmed by a public authority:",
+   "Certificaat bevestigd door een publieke autoriteit:"
+  ],
+  "storage.synology.certificate.trusted": [
+   "Certificate you trusted:",
+   "Certificaat dat je hebt vertrouwd:"
+  ],
+  "storage.synology.certificate.untrusted": [
+   "Unknown certificate; compare its fingerprint with the one DSM shows before you trust it:",
+   "Onbekend certificaat; vergelijk de vingerafdruk met die van DSM voordat je het vertrouwt:"
+  ],
+  "storage.synology.certificate.trust": [
+   "Trust this certificate",
+   "Dit certificaat vertrouwen"
+  ],
+  "storage.synology.certificate.none": [
+   "Plain HTTP uses no certificate.",
+   "Gewoon HTTP gebruikt geen certificaat."
+  ],
+  "storage.synology.power.Shutdown": [
+   "Shut down NAS",
+   "NAS afsluiten"
+  ],
+  "storage.synology.power.Restart": [
+   "Restart NAS",
+   "NAS opnieuw starten"
+  ],
+  "storage.synology.confirm.Shutdown": [
+   "Shut down the NAS now? Playback, downloads and scans on it stop until it is started again.",
+   "De NAS nu afsluiten? Afspelen, downloads en scans erop stoppen tot hij weer wordt gestart."
+  ],
+  "storage.synology.confirm.Restart": [
+   "Restart the NAS now? Playback, downloads and scans on it stop for a few minutes.",
+   "De NAS nu opnieuw starten? Afspelen, downloads en scans erop stoppen een paar minuten."
+  ],
+  "storage.synology.sent": [
+   "The NAS accepted the command.",
+   "De NAS heeft de opdracht geaccepteerd."
+  ],
+  "storage.synology.keepRunning": [
+   "Keep it running",
+   "Laten draaien"
+  ],
+  "storage.synology.used": [
+   "{0} of {1} used",
+   "{0} van {1} gebruikt"
+  ],
+  "storage.synology.temperature": [
+   "{0} °C",
+   "{0} °C"
+  ],
+  "statistics.title": [
+   "Statistics",
+   "Statistieken"
+  ],
+  "statistics.periods": [
+   "Period",
+   "Periode"
+  ],
+  "statistics.period.7": [
+   "7 days",
+   "7 dagen"
+  ],
+  "statistics.period.30": [
+   "30 days",
+   "30 dagen"
+  ],
+  "statistics.period.365": [
+   "One year",
+   "Eén jaar"
+  ],
+  "statistics.period.0": [
+   "All time",
+   "Altijd"
+  ],
+  "statistics.watched": [
+   "Time in the player",
+   "Tijd in de speler"
+  ],
+  "statistics.sessions": [
+   "Playback sessions",
+   "Afspeelsessies"
+  ],
+  "statistics.games": [
+   "Retro games, all time",
+   "Retrogames, altijd"
+  ],
+  "statistics.completed.Movie": [
+   "Movies finished",
+   "Films uitgekeken"
+  ],
+  "statistics.completed.Series": [
+   "Episodes finished",
+   "Afleveringen uitgekeken"
+  ],
+  "statistics.completed.Book": [
+   "Books and volumes finished",
+   "Boeken en delen uitgelezen"
+  ],
+  "statistics.completed.Music": [
+   "Albums and tracks finished",
+   "Albums en nummers uitgeluisterd"
+  ],
+  "statistics.completed.Game": [
+   "Games finished",
+   "Games uitgespeeld"
+  ],
+  "statistics.top": [
+   "Most played",
+   "Meest afgespeeld"
+  ],
+  "statistics.hours": [
+   "{0} h {1} min",
+   "{0} u {1} min"
+  ],
+  "instance.module.Statistics": [
+   "Statistics",
+   "Statistieken"
+  ],
+  "system.title": [
+   "System",
+   "Systeem"
+  ],
+  "system.database": [
+   "Database size",
+   "Grootte van de database"
+  ],
+  "system.profiles": [
+   "Profiles",
+   "Profielen"
+  ],
+  "system.queued": [
+   "Queued operations",
+   "Bewerkingen in de wachtrij"
+  ],
+  "system.failed": [
+   "Failures to look at",
+   "Fouten om naar te kijken"
+  ],
+  "system.storageOffline": [
+   "Storage connections offline",
+   "Opslagverbindingen offline"
+  ],
+  "system.lastBackup": [
+   "Last backup",
+   "Laatste back-up"
+  ],
+  "system.never": [
+   "Never",
+   "Nooit"
+  ],
+  "system.tools": [
+   "Server tools",
+   "Servertools"
+  ],
+  "system.tool": [
+   "Tool",
+   "Tool"
+  ],
+  "system.tool.ffprobe": [
+   "ffprobe (stream analysis)",
+   "ffprobe (streamanalyse)"
+  ],
+  "system.tool.ffmpeg": [
+   "FFmpeg (conversion)",
+   "FFmpeg (conversie)"
+  ],
+  "system.tool.par2": [
+   "par2 (download repair)",
+   "par2 (downloadherstel)"
+  ],
+  "system.tool.sevenZip": [
+   "7-Zip (unpacking, CBR/CB7)",
+   "7-Zip (uitpakken, CBR/CB7)"
+  ],
+  "system.tool.mountHelper": [
+   "Mount helper (SMB/NFS)",
+   "Mounthulp (SMB/NFS)"
+  ],
+  "system.tool.pgDump": [
+   "pg_dump (backups)",
+   "pg_dump (back-ups)"
+  ],
+  "system.configured": [
+   "Configured",
+   "Ingesteld"
+  ],
+  "system.missing": [
+   "Not configured",
+   "Niet ingesteld"
+  ],
+  "person.title": [
+   "Person",
+   "Persoon"
+  ],
+  "franchise.title": [
+   "Series",
+   "Reeks"
+  ],
+  "admin.history.title": [
+   "History",
+   "Geschiedenis"
+  ],
+  "history.when": [
+   "When",
+   "Wanneer"
+  ],
+  "history.event": [
+   "What",
+   "Wat"
+  ],
+  "history.release": [
+   "Release",
+   "Release"
+  ],
+  "history.source": [
+   "Indexer and client",
+   "Indexer en client"
+  ],
+  "history.file": [
+   "File",
+   "Bestand"
+  ],
+  "history.by": [
+   "By",
+   "Door"
+  ],
+  "history.byJularr": [
+   "Jularr",
+   "Jularr"
+  ],
+  "history.empty": [
+   "Nothing has happened yet.",
+   "Er is nog niets gebeurd."
+  ],
+  "history.event.Grabbed": [
+   "Grabbed",
+   "Binnengehaald"
+  ],
+  "history.event.DownloadFailed": [
+   "Download failed",
+   "Download mislukt"
+  ],
+  "history.event.Imported": [
+   "Imported",
+   "Geïmporteerd"
+  ],
+  "history.event.Upgraded": [
+   "Replaced by a better release",
+   "Vervangen door een betere release"
+  ],
+  "history.event.FileRenamed": [
+   "Renamed",
+   "Hernoemd"
+  ],
+  "history.event.FileDeleted": [
+   "Deleted",
+   "Verwijderd"
+  ],
+  "history.event.ManualImport": [
+   "Assigned by hand",
+   "Handmatig toegewezen"
+  ],
+  "history.event.Blocked": [
+   "Blocked",
+   "Geblokkeerd"
+  ],
+  "history.event.SubtitleDownloaded": [
+   "Subtitle added",
+   "Ondertitel toegevoegd"
+  ],
+  "request.step.Grabbed": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "request.step.DownloadFailed": [
+   "Download failed, searching again",
+   "Download mislukt, opnieuw zoeken"
+  ],
+  "request.step.Imported": [
+   "Added",
+   "Toegevoegd"
+  ],
+  "request.step.Upgraded": [
+   "Better version added",
+   "Betere versie toegevoegd"
+  ],
+  "admin.work.series": [
+   "Series",
+   "Reeks"
+  ],
+  "admin.work.seriesName": [
+   "Series name",
+   "Naam van de reeks"
+  ],
+  "admin.work.seriesPosition": [
+   "Place in the series",
+   "Plaats in de reeks"
+  ],
+  "details.franchise": [
+   "Series:",
+   "Reeks:"
+  ],
+  "person.empty": [
+   "None of their titles are in your library.",
+   "Geen van hun titels staat in je bibliotheek."
+  ],
+  "home.layout": [
+   "Home page",
+   "Startpagina"
+  ],
+  "home.shelf": [
+   "Shelf",
+   "Rij"
+  ],
+  "home.shown": [
+   "Shown",
+   "Getoond"
+  ],
+  "home.hidden": [
+   "Hidden",
+   "Verborgen"
+  ],
+  "home.shelf.ContinueWatching": [
+   "Continue watching",
+   "Verder kijken"
+  ],
+  "home.shelf.ContinueListening": [
+   "Continue listening",
+   "Verder luisteren"
+  ],
+  "home.shelf.ContinueReading": [
+   "Continue reading",
+   "Verder lezen"
+  ],
+  "home.shelf.RecentlyAdded": [
+   "Recently added",
+   "Onlangs toegevoegd"
+  ],
+  "home.shelf.Recommendations": [
+   "Recommendations",
+   "Aanbevelingen"
+  ],
+  "home.moveUp": [
+   "Up",
+   "Omhoog"
+  ],
+  "home.moveDown": [
+   "Down",
+   "Omlaag"
+  ],
+  "home.hide": [
+   "Hide",
+   "Verbergen"
+  ],
+  "home.show": [
+   "Show",
+   "Tonen"
+  ],
+  "instance.module.HomeLayout": [
+   "Personal home page order",
+   "Persoonlijke volgorde van de startpagina"
+  ],
+  "instance.module.Trickplay": [
+   "Thumbnails while seeking",
+   "Miniaturen tijdens het spoelen"
+  ],
+  "instance.module.Translation": [
+   "Translate books in the reader",
+   "Boeken vertalen in de lezer"
+  ],
+  "instance.module.Diagnostics": [
+   "Diagnostics in memory",
+   "Diagnostiek in het geheugen"
+  ],
+  "instance.module.Subtitles": [
+   "Subtitles from providers",
+   "Ondertitels van providers"
+  ],
+  "instance.module.Uploads": [
+   "Upload manga volumes",
+   "Mangadelen uploaden"
+  ],
+  "work.upload": [
+   "Upload a volume",
+   "Een deel uploaden"
+  ],
+  "work.upload.file": [
+   "Volume file",
+   "Deelbestand"
+  ],
+  "work.upload.volume": [
+   "Volume number (empty: the whole series)",
+   "Deelnummer (leeg: de hele reeks)"
+  ],
+  "work.upload.submit": [
+   "Upload",
+   "Uploaden"
+  ],
+  "work.upload.done": [
+   "The volume is in the library.",
+   "Het deel staat in de bibliotheek."
+  ],
+  "instance.module.Franchises": [
+   "Series",
+   "Reeksen"
+  ],
+  "system.performance": [
+   "Performance",
+   "Prestaties"
+  ],
+  "system.performance.processor": [
+   "Processor",
+   "Processor"
+  ],
+  "system.performance.memory": [
+   "Memory",
+   "Geheugen"
+  ],
+  "system.performance.processorHistory": [
+   "Processor use over the last six hours",
+   "Processorgebruik over de laatste zes uur"
+  ],
+  "system.performance.memoryHistory": [
+   "Memory use over the last six hours",
+   "Geheugengebruik over de laatste zes uur"
+  ],
+  "system.performance.service": [
+   "Service",
+   "Service"
+  ],
+  "system.performance.calls": [
+   "Calls",
+   "Aanroepen"
+  ],
+  "system.performance.errors": [
+   "Errors",
+   "Fouten"
+  ],
+  "system.performance.average": [
+   "Average",
+   "Gemiddeld"
+  ],
+  "system.performance.maximum": [
+   "Longest",
+   "Langste"
+  ],
+  "system.performance.empty": [
+   "No calls in the last hour.",
+   "Geen aanroepen in het laatste uur."
+  ],
+  "system.logs": [
+   "Recent warnings and errors",
+   "Recente waarschuwingen en fouten"
+  ],
+  "system.logs.empty": [
+   "Nothing went wrong since Jularr started.",
+   "Er is niets misgegaan sinds Jularr is gestart."
+  ],
+  "system.logs.at": [
+   "Time",
+   "Tijd"
+  ],
+  "system.logs.level": [
+   "Level",
+   "Niveau"
+  ],
+  "system.logs.area": [
+   "Area",
+   "Gebied"
+  ],
+  "system.logs.message": [
+   "Message",
+   "Bericht"
+  ],
+  "system.logs.level.Warning": [
+   "Warning",
+   "Waarschuwing"
+  ],
+  "system.logs.level.Error": [
+   "Error",
+   "Fout"
+  ],
+  "system.logs.level.Critical": [
+   "Critical",
+   "Kritiek"
+  ],
+  "calendar.view.month": [
+   "Month",
+   "Maand"
+  ],
+  "calendar.view.agenda": [
+   "Agenda",
+   "Agenda"
+  ],
+  "calendar.more": [
+   "+{0} more",
+   "+{0} meer"
+  ],
+  "calendar.title": [
+   "Calendar",
+   "Kalender"
+  ],
+  "calendar.earlier": [
+   "Earlier",
+   "Eerder"
+  ],
+  "calendar.today": [
+   "From today",
+   "Vanaf vandaag"
+  ],
+  "calendar.later": [
+   "Later",
+   "Later"
+  ],
+  "calendar.pages": [
+   "Calendar weeks",
+   "Kalenderweken"
+  ],
+  "calendar.empty": [
+   "Nothing is released in these two weeks for your watchlist, requests or library.",
+   "In deze twee weken verschijnt er niets voor je kijklijst, verzoeken of bibliotheek."
+  ],
+  "instance.module.Calendar": [
+   "Release calendar",
+   "Releasekalender"
+  ],
+  "collections.title": [
+   "Collections",
+   "Collecties"
+  ],
+  "collections.name": [
+   "Name",
+   "Naam"
+  ],
+  "collections.kind": [
+   "Kind",
+   "Soort"
+  ],
+  "collections.smartToggle": [
+   "Smart filter instead of hand-picked titles",
+   "Slim filter in plaats van handmatig gekozen titels"
+  ],
+  "collections.manual": [
+   "Hand-picked",
+   "Handmatig gekozen"
+  ],
+  "collections.smart": [
+   "Smart filter",
+   "Slim filter"
+  ],
+  "collections.empty": [
+   "No collections yet.",
+   "Nog geen collecties."
+  ],
+  "collections.new": [
+   "New collection",
+   "Nieuwe collectie"
+  ],
+  "collections.create": [
+   "Create",
+   "Aanmaken"
+  ],
+  "collections.edit": [
+   "Edit collection",
+   "Collectie bewerken"
+  ],
+  "collections.delete": [
+   "Delete collection",
+   "Collectie verwijderen"
+  ],
+  "collections.noWorks": [
+   "Add titles from their details page.",
+   "Voeg titels toe vanaf hun detailpagina."
+  ],
+  "collections.noMatch": [
+   "Nothing matches this filter yet.",
+   "Niets komt nog overeen met dit filter."
+  ],
+  "collections.type": [
+   "Media type",
+   "Mediatype"
+  ],
+  "collections.subtype": [
+   "Subtype",
+   "Subtype"
+  ],
+  "collections.anyType": [
+   "Any type",
+   "Elk type"
+  ],
+  "collections.anySubtype": [
+   "Any subtype",
+   "Elk subtype"
+  ],
+  "collections.yearFrom": [
+   "Released from",
+   "Verschenen vanaf"
+  ],
+  "collections.yearTo": [
+   "Released until",
+   "Verschenen tot"
+  ],
+  "collections.onlyAvailable": [
+   "Only what is in the library",
+   "Alleen wat in de bibliotheek staat"
+  ],
+  "collections.onlyUnfinished": [
+   "Only what is not finished",
+   "Alleen wat niet voltooid is"
+  ],
+  "collections.addTo": [
+   "Add",
+   "Toevoegen"
+  ],
+  "collections.removeFrom": [
+   "Remove",
+   "Verwijderen"
+  ],
+  "instance.module.Collections": [
+   "Collections",
+   "Collecties"
+  ],
+  "notifications.title": [
+   "Notifications",
+   "Meldingen"
+  ],
+  "notifications.unread": [
+   "Notifications, {0} unread",
+   "Meldingen, {0} ongelezen"
+  ],
+  "notifications.markRead": [
+   "Mark all as read",
+   "Alles als gelezen markeren"
+  ],
+  "notifications.empty": [
+   "Nothing new.",
+   "Niets nieuws."
+  ],
+  "notifications.pages": [
+   "Notification pages",
+   "Meldingspagina's"
+  ],
+  "notifications.times": [
+   "({0}×)",
+   "({0}×)"
+  ],
+  "notifications.settings": [
+   "What to notify about",
+   "Waarover je meldingen krijgt"
+  ],
+  "notifications.on": [
+   "Notify",
+   "Melden"
+  ],
+  "notifications.off": [
+   "Don't notify",
+   "Niet melden"
+  ],
+  "notifications.message.RequestApproved": [
+   "Your request for {0} was approved.",
+   "Je verzoek voor {0} is goedgekeurd."
+  ],
+  "notifications.message.RequestRejected": [
+   "Your request for {0} was declined.",
+   "Je verzoek voor {0} is geweigerd."
+  ],
+  "notifications.message.MediaAvailable": [
+   "{0} is available.",
+   "{0} is beschikbaar."
+  ],
+  "notifications.message.DownloadFailed": [
+   "A download of {0} failed.",
+   "Een download van {0} is mislukt."
+  ],
+  "notifications.message.StorageOffline": [
+   "The storage connection {0} stays offline.",
+   "De opslagverbinding {0} blijft offline."
+  ],
+  "notifications.type.RequestApproved": [
+   "Approved requests",
+   "Goedgekeurde verzoeken"
+  ],
+  "notifications.type.RequestRejected": [
+   "Declined requests",
+   "Geweigerde verzoeken"
+  ],
+  "notifications.type.MediaAvailable": [
+   "New media from requests",
+   "Nieuwe media uit verzoeken"
+  ],
+  "notifications.type.DownloadFailed": [
+   "Failed downloads",
+   "Mislukte downloads"
+  ],
+  "notifications.type.StorageOffline": [
+   "Offline storage",
+   "Offline opslag"
+  ],
+  "instance.module.Notifications": [
+   "Notifications",
+   "Meldingen"
+  ],
+  "storage.health": [
+   "State",
+   "Status"
+  ],
+  "storage.health.Unknown": [
+   "Not checked yet",
+   "Nog niet gecontroleerd"
+  ],
+  "storage.health.Online": [
+   "Online",
+   "Online"
+  ],
+  "storage.health.Sleeping": [
+   "Asleep",
+   "In slaapstand"
+  ],
+  "storage.health.Offline": [
+   "Offline",
+   "Offline"
+  ],
+  "storage.health.Error": [
+   "No access",
+   "Geen toegang"
+  ],
+  "storage.space": [
+   "{0} free of {1}",
+   "{0} vrij van {1}"
+  ],
+  "storage.checkedAt": [
+   "checked {0}",
+   "gecontroleerd {0}"
+  ],
+  "storage.problem.permission_denied": [
+   "Jularr may not read this share",
+   "Jularr mag deze share niet lezen"
+  ],
+  "storage.problem.probe_timeout": [
+   "The share does not answer",
+   "De share antwoordt niet"
+  ],
+  "storage.problem.storage_unavailable": [
+   "Not reachable or not mounted",
+   "Niet bereikbaar of niet gemount"
+  ],
+  "storage.stale": [
+   "The mount uses older settings. Disconnect and reconnect to apply the saved configuration.",
+   "De mount gebruikt oudere instellingen. Koppel los en weer aan om de opgeslagen configuratie toe te passen."
+  ],
+  "storage.saved": [
+   "Connection saved.",
+   "Verbinding opgeslagen."
+  ],
+  "storage.add.Local": [
+   "Add local path",
+   "Lokaal pad toevoegen"
+  ],
+  "storage.protocol": [
+   "Protocol",
+   "Protocol"
+  ],
+  "storage.protocol.Local": [
+   "Local path",
+   "Lokaal pad"
+  ],
+  "storage.location": [
+   "Location",
+   "Locatie"
+  ],
+  "storage.localPath": [
+   "Permitted container path",
+   "Toegestaan containerpad"
+  ],
+  "storage.wake.macAddress": [
+   "Wake-on-LAN MAC address",
+   "Wake-on-LAN MAC-adres"
+  ],
+  "storage.wake.broadcastAddress": [
+   "Wake-on-LAN broadcast address",
+   "Wake-on-LAN broadcastadres"
+  ],
+  "storage.wake.policy": [
+   "Wake-on-LAN",
+   "Wake-on-LAN"
+  ],
+  "storage.wake.ownerOnly": [
+   "Only the Owner wakes this device",
+   "Alleen de Eigenaar wekt dit apparaat"
+  ],
+  "storage.wake.onDemand": [
+   "Wake automatically when someone opens media",
+   "Automatisch wekken wanneer iemand media opent"
+  ],
+  "storage.wake.send": [
+   "Wake device",
+   "Apparaat wekken"
+  ],
+  "storage.wake.sent": [
+   "Wake-on-LAN packet sent.",
+   "Wake-on-LAN-pakket verzonden."
+  ],
+  "storage.remove": [
+   "Remove connection",
+   "Verbinding verwijderen"
+  ],
+  "storage.paths": [
+   "Paths on this connection",
+   "Paden op deze verbinding"
+  ],
+  "storage.paths.path": [
+   "Path",
+   "Pad"
+  ],
+  "storage.paths.files": [
+   "Files",
+   "Bestanden"
+  ],
+  "storage.paths.scan": [
+   "Scan",
+   "Scannen"
+  ],
+  "storage.paths.scanQueued": [
+   "Scan queued. Progress appears under Admin library.",
+   "Scan in de wachtrij. De voortgang verschijnt onder Beheer: bibliotheek."
+  ],
+  "storage.paths.remove": [
+   "Remove path",
+   "Pad verwijderen"
+  ],
+  "storage.paths.removeHint": [
+   "Removing a path forgets its file inventory. Works and media files remain untouched.",
+   "Een pad verwijderen wist de bestandsinventaris ervan. Werken en mediabestanden blijven ongemoeid."
+  ],
+  "storage.paths.connectionRoot": [
+   "Connection root",
+   "Hoofdmap van de verbinding"
+  ],
+  "storage.paths.selected": [
+   "Selected folder",
+   "Geselecteerde map"
+  ],
+  "storage.paths.noFolders": [
+   "This folder has no subfolders.",
+   "Deze map heeft geen submappen."
+  ],
+  "storage.paths.browse": [
+   "Browse folders",
+   "Mappen doorbladeren"
+  ],
+  "storage.paths.add": [
+   "Add library path",
+   "Bibliotheekpad toevoegen"
+  ],
+  "library.tab.Overview": [
+   "Libraries",
+   "Bibliotheken"
+  ],
+  "library.tab.Unmatched": [
+   "Unidentified",
+   "Niet herkend"
+  ],
+  "library.tab.Files": [
+   "All files",
+   "Alle bestanden"
+  ],
+  "library.tab.Rename": [
+   "Rename",
+   "Hernoemen"
+  ],
+  "library.tab.Naming": [
+   "Naming",
+   "Naamgeving"
+  ],
+  "library.tab.Versions": [
+   "Files & versions",
+   "Bestanden en versies"
+  ],
+  "library.naming.Movie": [
+   "Movie files",
+   "Filmbestanden"
+  ],
+  "library.naming.Series": [
+   "Episode files",
+   "Afleveringsbestanden"
+  ],
+  "library.naming.folder": [
+   "Folders",
+   "Mappen"
+  ],
+  "library.naming.file": [
+   "File name",
+   "Bestandsnaam"
+  ],
+  "library.naming.example": [
+   "Example:",
+   "Voorbeeld:"
+  ],
+  "library.naming.placeholders": [
+   "Placeholders",
+   "Plaatsaanduidingen"
+  ],
+  "library.naming.rules": [
+   "Empty placeholders leave with their brackets; the file name always names the film or the episode.",
+   "Lege plaatsaanduidingen verdwijnen met hun haakjes; de bestandsnaam noemt altijd de film of de aflevering."
+  ],
+  "library.naming.token.Title": [
+   "The title",
+   "De titel"
+  ],
+  "library.naming.token.Year": [
+   "The year of release",
+   "Het jaar van uitgave"
+  ],
+  "library.naming.token.Season": [
+   "The season number, with :00 two digits",
+   "Het seizoensnummer, met :00 twee cijfers"
+  ],
+  "library.naming.token.Episode": [
+   "The episode number, with :00 two digits",
+   "Het afleveringsnummer, met :00 twee cijfers"
+  ],
+  "library.naming.token.EpisodeTitle": [
+   "The episode title",
+   "De afleveringstitel"
+  ],
+  "library.naming.token.Quality": [
+   "The quality, such as WEB-1080p",
+   "De kwaliteit, zoals WEB-1080p"
+  ],
+  "library.naming.token.ReleaseGroup": [
+   "The release group",
+   "De releasegroep"
+  ],
+  "library.naming.token.Edition": [
+   "The edition, such as Director's Cut",
+   "De editie, zoals Director's Cut"
+  ],
+  "library.naming.token.Proper": [
+   "Proper or Repack for a corrected release",
+   "Proper of Repack voor een gecorrigeerde release"
+  ],
+  "library.overview.empty": [
+   "No libraries yet. Add one with its storage.",
+   "Nog geen bibliotheken. Voeg er een toe met zijn opslag."
+  ],
+  "library.overview.place": [
+   "Storage and folder",
+   "Opslag en map"
+  ],
+  "library.overview.attention": [
+   "Needs attention",
+   "Aandacht nodig"
+  ],
+  "library.overview.fine": [
+   "Nothing",
+   "Niets"
+  ],
+  "library.overview.scanned": [
+   "Last scan",
+   "Laatste scan"
+  ],
+  "library.overview.scanning": [
+   "Scanning now",
+   "Wordt nu gescand"
+  ],
+  "library.overview.never": [
+   "Not yet",
+   "Nog niet"
+  ],
+  "library.overview.manage": [
+   "Manage storage and libraries",
+   "Opslag en bibliotheken beheren"
+  ],
+  "nav.group.library": [
+   "Library",
+   "Bibliotheek"
+  ],
+  "library.replacement.keepsReleases": [
+   "Keep several releases",
+   "Meerdere releases bewaren"
+  ],
+  "library.replacement.mode": [
+   "Replaced files",
+   "Vervangen bestanden"
+  ],
+  "library.replacement.mode.Delete": [
+   "Delete",
+   "Verwijderen"
+  ],
+  "library.replacement.mode.LibraryFolder": [
+   "Recycle bin in the library",
+   "Prullenbak in de bibliotheek"
+  ],
+  "library.replacement.mode.OwnFolder": [
+   "Own recycle bin",
+   "Eigen prullenbak"
+  ],
+  "library.replacement.mount": [
+   "Own recycle bin: connection",
+   "Eigen prullenbak: verbinding"
+  ],
+  "library.replacement.path": [
+   "Own recycle bin: folder",
+   "Eigen prullenbak: map"
+  ],
+  "library.replacement.days": [
+   "Days in the recycle bin",
+   "Dagen in de prullenbak"
+  ],
+  "library.keepOnly": [
+   "Keep only this version",
+   "Alleen deze versie bewaren"
+  ],
+  "library.protect": [
+   "Protect from automatic upgrades",
+   "Beschermen tegen automatische upgrades"
+  ],
+  "library.unprotect": [
+   "Allow automatic upgrades",
+   "Automatische upgrades toestaan"
+  ],
+  "devices.link.title": [
+   "Connect this device",
+   "Dit apparaat verbinden"
+  ],
+  "devices.link.hint": [
+   "On a phone signed in to Jularr, scan the code or open Settings, Pair a device, and enter these digits.",
+   "Scan de code op een telefoon waarop je bent ingelogd bij Jularr, of open Instellingen, Apparaat koppelen, en voer deze cijfers in."
+  ],
+  "devices.link.qr": [
+   "QR code to pair this device",
+   "QR-code om dit apparaat te koppelen"
+  ],
+  "devices.name.browser": [
+   "Browser",
+   "Browser"
+  ],
+  "devices.rename": [
+   "Device name",
+   "Apparaatnaam"
+  ],
+  "devices.pair.title": [
+   "Pair a device",
+   "Apparaat koppelen"
+  ],
+  "devices.pair.code": [
+   "Code shown on the device",
+   "Code die op het apparaat staat"
+  ],
+  "devices.pair.submit": [
+   "Pair with this profile",
+   "Koppelen met dit profiel"
+  ],
+  "devices.pair.show": [
+   "Show the device",
+   "Het apparaat tonen"
+  ],
+  "devices.pair.device": [
+   "{0} ({1}) asks to be paired with this profile with this code:",
+   "{0} ({1}) vraagt om met deze code aan dit profiel te worden gekoppeld:"
+  ],
+  "devices.pair.warning": [
+   "Confirm only if your own device shows exactly this code; whoever holds it signs in as you.",
+   "Bevestig alleen als je eigen apparaat precies deze code toont; wie hem heeft, logt in als jij."
+  ],
+  "devices.link.start": [
+   "Show a pairing code",
+   "Een koppelcode tonen"
+  ],
+  "devices.pair.done": [
+   "The device is paired; it signs in by itself.",
+   "Het apparaat is gekoppeld; het logt zelf in."
+  ],
+  "instance.module.Devices": [
+   "Pair TVs, phones and apps by code",
+   "Tv's, telefoons en apps koppelen met een code"
+  ],
+  "instance.module.Registration": [
+   "Let visitors ask for an account an administrator enables",
+   "Bezoekers een account laten aanvragen dat een beheerder inschakelt"
+  ],
+  "account.register.title": [
+   "Create an account",
+   "Account aanmaken"
+  ],
+  "account.register.submit": [
+   "Ask for an account",
+   "Account aanvragen"
+  ],
+  "account.register.pending": [
+   "Your account waits until an administrator enables it.",
+   "Je account wacht tot een beheerder het inschakelt."
+  ],
+  "admin.instance.trustedProxies": [
+   "Trusted reverse proxies",
+   "Vertrouwde reverse proxies"
+  ],
+  "admin.instance.publicUrl": [
+   "Public address for QR codes",
+   "Openbaar adres voor QR-codes"
+  ],
+  "library.renameTarget": [
+   "New name",
+   "Nieuwe naam"
+  ],
+  "library.renameApply": [
+   "Rename these files",
+   "Deze bestanden hernoemen"
+  ],
+  "library.renameEmpty": [
+   "All identified files follow the library layout.",
+   "Alle herkende bestanden volgen de indeling van de bibliotheek."
+  ],
+  "library.renamed": [
+   "Files renamed: {0}. Skipped: {1}.",
+   "Hernoemde bestanden: {0}. Overgeslagen: {1}."
+  ],
+  "library.file": [
+   "File",
+   "Bestand"
+  ],
+  "library.root": [
+   "Library path",
+   "Bibliotheekpad"
+  ],
+  "library.present": [
+   "Available",
+   "Beschikbaar"
+  ],
+  "library.missing": [
+   "Missing",
+   "Ontbrekend"
+  ],
+  "library.assign": [
+   "Identify",
+   "Herkennen"
+  ],
+  "library.unmatched": [
+   "Not identified",
+   "Niet herkend"
+  ],
+  "library.empty": [
+   "No files have been scanned yet.",
+   "Er zijn nog geen bestanden gescand."
+  ],
+  "library.emptyUnmatched": [
+   "All scanned files are identified.",
+   "Alle gescande bestanden zijn herkend."
+  ],
+  "library.newWork": [
+   "New work title",
+   "Titel van het nieuwe werk"
+  ],
+  "library.unitType": [
+   "Unit",
+   "Onderdeel"
+  ],
+  "library.unit.None": [
+   "Whole work",
+   "Heel werk"
+  ],
+  "library.unit.Season": [
+   "Season",
+   "Seizoen"
+  ],
+  "library.unit.Episode": [
+   "Episode",
+   "Aflevering"
+  ],
+  "library.unit.Volume": [
+   "Volume",
+   "Deel"
+  ],
+  "library.unit.Chapter": [
+   "Chapter",
+   "Hoofdstuk"
+  ],
+  "library.unit.Track": [
+   "Track",
+   "Nummer"
+  ],
+  "library.unitNumber": [
+   "Number",
+   "Nummer"
+  ],
+  "library.parentNumber.Series": [
+   "Season",
+   "Seizoen"
+  ],
+  "library.parentNumber.Book": [
+   "Volume",
+   "Deel"
+  ],
+  "library.parentNumber.Manga": [
+   "Volume",
+   "Deel"
+  ],
+  "library.parentNumber.LightNovel": [
+   "Volume",
+   "Deel"
+  ],
+  "library.createAndAssign": [
+   "Create work and identify",
+   "Werk aanmaken en herkennen"
+  ],
+  "library.assignExisting": [
+   "Identify as existing work",
+   "Herkennen als bestaand werk"
+  ],
+  "library.unassign": [
+   "Remove identification",
+   "Herkenning verwijderen"
+  ],
+  "operation.type.LibraryScan": [
+   "Library scan",
+   "Bibliotheekscan"
+  ],
+  "operation.type.Download": [
+   "Download",
+   "Download"
+  ],
+  "operation.type.Backup": [
+   "Backup",
+   "Back-up"
+  ],
+  "operation.status.Queued": [
+   "Queued",
+   "In de wachtrij"
+  ],
+  "operation.status.Running": [
+   "Running",
+   "Bezig"
+  ],
+  "operation.status.Completed": [
+   "Completed",
+   "Voltooid"
+  ],
+  "operation.status.Failed": [
+   "Failed",
+   "Mislukt"
+  ],
+  "operation.created": [
+   "Queued at",
+   "In de wachtrij gezet om"
+  ],
+  "activity.tab.Activity": [
+   "Activity",
+   "Activiteit"
+  ],
+  "activity.tab.ToDo": [
+   "To-Do",
+   "Te doen"
+  ],
+  "activity.tab.History": [
+   "History",
+   "Geschiedenis"
+  ],
+  "activity.item": [
+   "Item",
+   "Item"
+  ],
+  "activity.progress": [
+   "Progress",
+   "Voortgang"
+  ],
+  "activity.reason": [
+   "Reason",
+   "Reden"
+  ],
+  "activity.client": [
+   "Client",
+   "Client"
+  ],
+  "activity.eta": [
+   "Time left",
+   "Resterende tijd"
+  ],
+  "activity.size": [
+   "Size",
+   "Grootte"
+  ],
+  "activity.state.Queued": [
+   "Queued",
+   "In de wachtrij"
+  ],
+  "activity.state.Downloading": [
+   "Downloading",
+   "Downloaden"
+  ],
+  "activity.state.Paused": [
+   "Paused",
+   "Gepauzeerd"
+  ],
+  "activity.state.PostProcessing": [
+   "Unpacking",
+   "Uitpakken"
+  ],
+  "activity.retry": [
+   "Retry",
+   "Opnieuw proberen"
+  ],
+  "activity.dismiss": [
+   "Dismiss",
+   "Sluiten"
+  ],
+  "activity.openSource": [
+   "Open the source and confirm",
+   "De bron openen en bevestigen"
+  ],
+  "activity.fileLink": [
+   "File link from the source",
+   "Bestandslink van de bron"
+  ],
+  "activity.continueDownload": [
+   "Continue download",
+   "Download voortzetten"
+  ],
+  "activity.empty.Activity": [
+   "Nothing is running.",
+   "Er loopt niets."
+  ],
+  "activity.empty.ToDo": [
+   "Nothing needs attention.",
+   "Niets heeft aandacht nodig."
+  ],
+  "activity.empty.History": [
+   "Nothing has finished yet.",
+   "Er is nog niets voltooid."
+  ],
+  "details.availability": [
+   "Available media",
+   "Beschikbare media"
+  ],
+  "details.unit": [
+   "Unit",
+   "Onderdeel"
+  ],
+  "details.quality": [
+   "Quality",
+   "Kwaliteit"
+  ],
+  "details.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "details.subtitles": [
+   "Subtitles",
+   "Ondertitels"
+  ],
+  "subtitles.present": [
+   "Present:",
+   "Aanwezig:"
+  ],
+  "subtitles.language": [
+   "Language",
+   "Taal"
+  ],
+  "subtitles.search": [
+   "Search subtitles",
+   "Ondertitels zoeken"
+  ],
+  "subtitles.none": [
+   "No subtitles found in this language.",
+   "Geen ondertitels gevonden in deze taal."
+  ],
+  "subtitles.provider": [
+   "Provider",
+   "Provider"
+  ],
+  "subtitles.release": [
+   "Release",
+   "Release"
+  ],
+  "subtitles.hearingImpaired": [
+   "For the hearing impaired",
+   "Voor slechthorenden"
+  ],
+  "subtitles.downloads": [
+   "Downloads",
+   "Downloads"
+  ],
+  "subtitles.download": [
+   "Use this subtitle",
+   "Deze ondertitel gebruiken"
+  ],
+  "subtitles.saved": [
+   "The subtitle was saved beside the video.",
+   "De ondertitel is naast de video opgeslagen."
+  ],
+  "subtitles.exists": [
+   "A subtitle of this language is already beside the video.",
+   "Er staat al een ondertitel in deze taal naast de video."
+  ],
+  "details.duration": [
+   "Duration",
+   "Duur"
+  ],
+  "details.wholeWork": [
+   "Whole work",
+   "Heel werk"
+  ],
+  "details.pages": [
+   "Version pages",
+   "Versiepagina's"
+  ],
+  "media.asset.Video": [
+   "Video",
+   "Video"
+  ],
+  "media.asset.Audio": [
+   "Audio",
+   "Audio"
+  ],
+  "media.asset.Ebook": [
+   "E-book",
+   "E-book"
+  ],
+  "media.asset.Comic": [
+   "Comic",
+   "Strip"
+  ],
+  "media.asset.Game": [
+   "Game",
+   "Game"
+  ],
+  "instance.module.Playback": [
+   "Playback",
+   "Afspelen"
+  ],
+  "instance.module.Reading": [
+   "Book processing and reader",
+   "Boekverwerking en lezer"
+  ],
+  "instance.module.Profiles": [
+   "Several profiles per account",
+   "Meerdere profielen per account"
+  ],
+  "instance.module.Emulation": [
+   "Retro games in the browser",
+   "Retrogames in de browser"
+  ],
+  "instance.module.UnitGroups": [
+   "Named sections for episodes and volumes",
+   "Benoemde secties voor afleveringen en delen"
+  ],
+  "instance.module.ProgressSync": [
+   "Share watch progress with Jellyfin and Emby",
+   "Kijkvoortgang delen met Jellyfin en Emby"
+  ],
+  "unitGroups.title": [
+   "Sections",
+   "Secties"
+  ],
+  "unitGroups.name": [
+   "Name",
+   "Naam"
+  ],
+  "unitGroups.delete": [
+   "Delete",
+   "Verwijderen"
+  ],
+  "unitGroups.from": [
+   "From",
+   "Van"
+  ],
+  "unitGroups.to": [
+   "To",
+   "Tot"
+  ],
+  "unitGroups.fromParent": [
+   "From season",
+   "Vanaf seizoen"
+  ],
+  "unitGroups.toParent": [
+   "To season",
+   "Tot seizoen"
+  ],
+  "unitGroups.add": [
+   "Add section",
+   "Sectie toevoegen"
+  ],
+  "game.title": [
+   "Play",
+   "Spelen"
+  ],
+  "game.notFound": [
+   "This game is not available.",
+   "Deze game is niet beschikbaar."
+  ],
+  "game.unsupported": [
+   "This game's platform does not play in the browser.",
+   "Het platform van deze game speelt niet af in de browser."
+  ],
+  "game.saveFailed": [
+   "The save could not be stored on the server; it stays in this browser for now.",
+   "De save kon niet op de server worden opgeslagen; hij blijft voorlopig in deze browser."
+  ],
+  "game.stateSaved": [
+   "State saved to your profile",
+   "Status opgeslagen in je profiel"
+  ],
+  "game.stateMissing": [
+   "No saved state yet",
+   "Nog geen opgeslagen status"
+  ],
+  "game.playedMinutes": [
+   "Played {0} min",
+   "{0} min gespeeld"
+  ],
+  "game.playedHours": [
+   "Played {0} h {1} min",
+   "{0} u {1} min gespeeld"
+  ],
+  "player.play": [
+   "Play",
+   "Afspelen"
+  ],
+  "player.pause": [
+   "Pause",
+   "Pauzeren"
+  ],
+  "player.back10": [
+   "Back 10 seconds",
+   "10 seconden terug"
+  ],
+  "player.previous": [
+   "Previous",
+   "Vorige"
+  ],
+  "player.next": [
+   "Next",
+   "Volgende"
+  ],
+  "player.forward30": [
+   "Forward 30 seconds",
+   "30 seconden vooruit"
+  ],
+  "player.timeline": [
+   "Playback position",
+   "Afspeelpositie"
+  ],
+  "player.mute": [
+   "Mute",
+   "Dempen"
+  ],
+  "player.volume": [
+   "Volume",
+   "Volume"
+  ],
+  "player.speed": [
+   "Playback speed",
+   "Afspeelsnelheid"
+  ],
+  "player.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "player.minimize": [
+   "Minimize",
+   "Minimaliseren"
+  ],
+  "player.expand": [
+   "Open full player",
+   "Volledige speler openen"
+  ],
+  "player.stop": [
+   "Stop playback",
+   "Afspelen stoppen"
+  ],
+  "player.subtitles": [
+   "Subtitles",
+   "Ondertitels"
+  ],
+  "player.subtitles.off": [
+   "Off",
+   "Uit"
+  ],
+  "player.subtitles.forced": [
+   "forced",
+   "geforceerd"
+  ],
+  "player.track.unknown": [
+   "Track",
+   "Spoor"
+  ],
+  "player.channels.mono": [
+   "Mono",
+   "Mono"
+  ],
+  "player.channels.stereo": [
+   "Stereo",
+   "Stereo"
+  ],
+  "player.channels.count": [
+   "{0} channels",
+   "{0} kanalen"
+  ],
+  "player.track.unsupported": [
+   "Not available in the browser yet",
+   "Nog niet beschikbaar in de browser"
+  ],
+  "player.pip": [
+   "Picture in picture",
+   "Beeld-in-beeld"
+  ],
+  "player.fullscreen": [
+   "Fullscreen",
+   "Volledig scherm"
+  ],
+  "player.more": [
+   "More",
+   "Meer"
+  ],
+  "player.delivery": [
+   "Delivery",
+   "Levering"
+  ],
+  "player.mode.DirectPlay": [
+   "Direct Play",
+   "Direct afspelen"
+  ],
+  "player.mode.Remux": [
+   "Direct Stream",
+   "Direct streamen"
+  ],
+  "player.mode.Transcode": [
+   "Transcode",
+   "Transcoderen"
+  ],
+  "player.status.storage_waking": [
+   "The storage device is waking up. Playback starts automatically when it is ready.",
+   "Het opslagapparaat wordt gewekt. Het afspelen start automatisch zodra het klaar is."
+  ],
+  "player.status.storage_unavailable": [
+   "The storage holding this file is unavailable.",
+   "De opslag met dit bestand is niet beschikbaar."
+  ],
+  "player.status.playback_conversion_unavailable": [
+   "This browser cannot play the file directly, and conversion is not available yet.",
+   "Deze browser kan het bestand niet direct afspelen en conversie is nog niet beschikbaar."
+  ],
+  "player.status.not_found": [
+   "This media is no longer available.",
+   "Deze media is niet meer beschikbaar."
+  ],
+  "player.status.failed": [
+   "Playback could not be started.",
+   "Het afspelen kon niet worden gestart."
+  ],
+  "details.play": [
+   "Play",
+   "Afspelen"
+  ],
+  "details.playAgain": [
+   "Play again",
+   "Opnieuw afspelen"
+  ],
+  "details.resume": [
+   "Continue at",
+   "Verder vanaf"
+  ],
+  "common.back": [
+   "Back",
+   "Terug"
+  ],
+  "media.author": [
+   "Author",
+   "Auteur"
+  ],
+  "media.title": [
+   "Title",
+   "Titel"
+  ],
+  "common.open": [
+   "Open",
+   "Openen"
+  ],
+  "media.type": [
+   "Media type",
+   "Mediatype"
+  ],
+  "media.year": [
+   "Year",
+   "Jaar"
+  ],
+  "admin.works.searchMetadata": [
+   "Search metadata",
+   "Metadata zoeken"
+  ],
+  "admin.works.noMetadata": [
+   "No match found.",
+   "Geen overeenkomst gevonden."
+  ],
+  "admin.works.originalTitle": [
+   "Original title",
+   "Originele titel"
+  ],
+  "admin.works.import": [
+   "Add",
+   "Toevoegen"
+  ],
+  "admin.work.refreshMetadata": [
+   "Update from the provider",
+   "Bijwerken vanuit de provider"
+  ],
+  "admin.work.match": [
+   "Wrong match",
+   "Verkeerde overeenkomst"
+  ],
+  "admin.work.useMatch": [
+   "Use this match",
+   "Deze overeenkomst gebruiken"
+  ],
+  "admin.work.currentMatch": [
+   "Current match",
+   "Huidige overeenkomst"
+  ],
+  "admin.providers.secret": [
+   "API key or read access token",
+   "API-sleutel of leestoegangstoken"
+  ],
+  "admin.providers.clientId": [
+   "Twitch application client ID",
+   "Client-ID van de Twitch-applicatie"
+  ],
+  "admin.providers.clientSecret": [
+   "Twitch application client secret",
+   "Client secret van de Twitch-applicatie"
+  ],
+  "admin.providers.secretSet": [
+   "A key is stored.",
+   "Er is een sleutel opgeslagen."
+  ],
+  "admin.providers.secretMissing": [
+   "No key is stored.",
+   "Er is geen sleutel opgeslagen."
+  ],
+  "media.create": [
+   "Create work",
+   "Werk aanmaken"
+  ],
+  "media.empty": [
+   "No works have been added yet.",
+   "Er zijn nog geen werken toegevoegd."
+  ],
+  "media.type.Movie": [
+   "Movie",
+   "Film"
+  ],
+  "media.type.Series": [
+   "Series",
+   "Serie"
+  ],
+  "media.type.Book": [
+   "Book",
+   "Boek"
+  ],
+  "media.subtype": [
+   "Subtype",
+   "Subtype"
+  ],
+  "media.subtype.none": [
+   "None",
+   "Geen"
+  ],
+  "media.subtype.Anime": [
+   "Anime",
+   "Anime"
+  ],
+  "media.subtype.Manga": [
+   "Manga",
+   "Manga"
+  ],
+  "media.subtype.LightNovel": [
+   "Light novel",
+   "Light novel"
+  ],
+  "media.type.Music": [
+   "Music",
+   "Muziek"
+  ],
+  "media.type.Game": [
+   "Game",
+   "Game"
+  ],
+  "media.watchlist.add": [
+   "Add to watchlist",
+   "Aan kijklijst toevoegen"
+  ],
+  "media.watchlist.manage": [
+   "Manage watchlist in Details",
+   "Kijklijst beheren in Details"
+  ],
+  "media.watchlist.remove": [
+   "Remove from watchlist",
+   "Van kijklijst verwijderen"
+  ],
+  "media.watchlist.empty": [
+   "Your watchlist is empty.",
+   "Je kijklijst is leeg."
+  ],
+  "errors.invalid_data": [
+   "Please check the supplied values.",
+   "Controleer de ingevoerde waarden."
+  ],
+  "errors.authentication_required": [
+   "Please sign in to continue.",
+   "Log in om verder te gaan."
+  ],
+  "errors.permission_denied": [
+   "You do not have permission to perform this action.",
+   "Je hebt geen toestemming voor deze actie."
+  ],
+  "errors.not_found": [
+   "The requested resource was not found.",
+   "De gevraagde resource is niet gevonden."
+  ],
+  "errors.invalid_antiforgery_token": [
+   "Please reload the page and try again.",
+   "Laad de pagina opnieuw en probeer het nog eens."
+  ],
+  "errors.invalid_request": [
+   "The request could not be processed.",
+   "Het verzoek kon niet worden verwerkt."
+  ],
+  "errors.provider_unavailable": [
+   "The external provider is currently unavailable.",
+   "De externe provider is momenteel niet beschikbaar."
+  ],
+  "errors.storage_helper_unavailable": [
+   "The mount helper is unavailable. Check its configuration and runtime permissions.",
+   "De mounthulp is niet beschikbaar. Controleer de configuratie en runtimerechten ervan."
+  ],
+  "errors.storage_unavailable": [
+   "The NAS connection could not be mounted. Check the server, export and credentials.",
+   "De NAS-verbinding kon niet worden gemount. Controleer de server, de export en de inloggegevens."
+  ],
+  "errors.storage_busy": [
+   "This mount is in use. Stop dependent operations before disconnecting it.",
+   "Deze mount is in gebruik. Stop afhankelijke bewerkingen voordat je hem loskoppelt."
+  ],
+  "errors.storage_configuration_changed": [
+   "The mounted connection uses different settings. Disconnect it before applying the saved configuration.",
+   "De gemounte verbinding gebruikt andere instellingen. Koppel hem los voordat je de opgeslagen configuratie toepast."
+  ],
+  "errors.storage_waking": [
+   "The storage device is waking up. Please try again shortly.",
+   "Het opslagapparaat wordt gewekt. Probeer het zo meteen opnieuw."
+  ],
+  "errors.playback_conversion_unavailable": [
+   "This file cannot be played directly, and conversion is not available yet.",
+   "Dit bestand kan niet direct worden afgespeeld en conversie is nog niet beschikbaar."
+  ],
+  "errors.playback_conversion_failed": [
+   "The media conversion failed. Please try again.",
+   "De mediaconversie is mislukt. Probeer het opnieuw."
+  ],
+  "errors.playback_subtitle_unavailable": [
+   "This subtitle cannot be shown.",
+   "Deze ondertitel kan niet worden getoond."
+  ],
+  "errors.playback_capacity_exhausted": [
+   "The server is converting as many streams as it allows. Please try again shortly.",
+   "De server converteert zoveel streams als hij toestaat. Probeer het zo meteen opnieuw."
+  ],
+  "errors.storage_wake_failed": [
+   "The Wake-on-LAN packet could not be sent.",
+   "Het Wake-on-LAN-pakket kon niet worden verzonden."
+  ],
+  "errors.scan_incomplete": [
+   "Some folders could not be read. Nothing was marked as missing.",
+   "Sommige mappen konden niet worden gelezen. Er is niets als ontbrekend gemarkeerd."
+  ],
+  "errors.synology_unavailable": [
+   "The Synology NAS could not be reached at its DSM address.",
+   "De Synology NAS was niet bereikbaar op het DSM-adres."
+  ],
+  "errors.synology_certificate_untrusted": [
+   "The NAS presents a certificate nobody vouches for.",
+   "De NAS toont een certificaat waar niemand voor instaat."
+  ],
+  "errors.synology_login_failed": [
+   "DSM rejected the account or password.",
+   "DSM heeft het account of wachtwoord geweigerd."
+  ],
+  "errors.synology_two_factor": [
+   "This DSM account uses two-step verification; use an administrator account without it.",
+   "Dit DSM-account gebruikt verificatie in twee stappen; gebruik een beheerdersaccount zonder."
+  ],
+  "errors.synology_not_admin": [
+   "This DSM account may not read health or change power; use an administrator account.",
+   "Dit DSM-account mag de gezondheid niet uitlezen of de stroom niet wijzigen; gebruik een beheerdersaccount."
+  ],
+  "errors.synology_blocked": [
+   "DSM blocks Jularr's address after failed logins; unblock it in DSM.",
+   "DSM blokkeert het adres van Jularr na mislukte logins; deblokkeer het in DSM."
+  ],
+  "errors.backup_unavailable": [
+   "Backups need a backup folder and pg_dump in the server configuration.",
+   "Back-ups hebben een back-upmap en pg_dump in de serverconfiguratie nodig."
+  ],
+  "errors.backup_failed": [
+   "The backup tool did not finish. The server log has its message.",
+   "De back-uptool is niet voltooid. Het serverlogboek bevat de melding."
+  ],
+  "errors.backup_tool_missing": [
+   "pg_dump or pg_restore was not found at the configured path.",
+   "pg_dump of pg_restore is niet gevonden op het ingestelde pad."
+  ],
+  "errors.backup_auth_failed": [
+   "PostgreSQL refused the database login of the backup tool.",
+   "PostgreSQL heeft de databaselogin van de back-uptool geweigerd."
+  ],
+  "errors.backup_version_mismatch": [
+   "pg_dump or pg_restore is older than the PostgreSQL server.",
+   "pg_dump of pg_restore is ouder dan de PostgreSQL-server."
+  ],
+  "errors.backup_disk_full": [
+   "The backup folder is full.",
+   "De back-upmap is vol."
+  ],
+  "errors.backup_timeout": [
+   "The backup tool ran too long and was stopped.",
+   "De back-uptool liep te lang en is gestopt."
+  ],
+  "errors.backup_running": [
+   "A restore is already running.",
+   "Er loopt al een herstelbewerking."
+  ],
+  "errors.metadata_unavailable": [
+   "The metadata source is not configured or cannot be reached.",
+   "De metadatabron is niet ingesteld of kan niet worden bereikt."
+  ],
+  "errors.metadata_authentication_failed": [
+   "TMDB rejected the stored key.",
+   "TMDB heeft de opgeslagen sleutel geweigerd."
+  ],
+  "errors.metadata_rate_limited": [
+   "TMDB limits requests right now. Please try again shortly.",
+   "TMDB beperkt momenteel het aantal verzoeken. Probeer het zo meteen opnieuw."
+  ],
+  "errors.reading_unavailable": [
+   "This book is not saved for reading while its storage is offline.",
+   "Dit boek is niet opgeslagen om te lezen terwijl de opslag offline is."
+  ],
+  "errors.reading_invalid_file": [
+   "This book file cannot be opened.",
+   "Dit boekbestand kan niet worden geopend."
+  ],
+  "errors.translation_unavailable": [
+   "Translation files cannot be fetched right now; the book stays in its language.",
+   "Vertaalbestanden kunnen nu niet worden opgehaald; het boek blijft in zijn taal."
+  ],
+  "errors.reading_pdf_without_text": [
+   "This PDF holds scanned pages without text; it opens as a PDF.",
+   "Deze PDF bevat gescande pagina's zonder tekst; hij wordt als PDF geopend."
+  ],
+  "errors.reading_translation_incomplete": [
+   "This book is not translated into that language in every section yet.",
+   "Dit boek is nog niet in elke sectie naar die taal vertaald."
+  ],
+  "errors.reading_unsupported": [
+   "This comic needs 7-Zip, which is not configured on the server.",
+   "Voor deze strip is 7-Zip nodig, dat op de server niet is ingesteld."
+  ],
+  "errors.plex_unavailable": [
+   "The Plex server could not be reached.",
+   "De Plex-server was niet bereikbaar."
+  ],
+  "errors.plex_authentication_failed": [
+   "The Plex server rejected the token.",
+   "De Plex-server heeft het token geweigerd."
+  ],
+  "errors.plex_invalid_response": [
+   "The Plex server returned an invalid response.",
+   "De Plex-server gaf een ongeldig antwoord."
+  ],
+  "errors.media_server_unavailable": [
+   "The media server could not be reached.",
+   "De mediaserver was niet bereikbaar."
+  ],
+  "errors.media_server_authentication_failed": [
+   "The media server refused the API key.",
+   "De mediaserver heeft de API-sleutel geweigerd."
+  ],
+  "errors.media_server_invalid_response": [
+   "The media server returned an invalid response.",
+   "De mediaserver gaf een ongeldig antwoord."
+  ],
+  "errors.media_server_outdated": [
+   "Jellyfin 10.9 or newer is needed.",
+   "Jellyfin 10.9 of nieuwer is nodig."
+  ],
+  "errors.device_pairing_busy": [
+   "No pairing code is free right now; try again in a minute.",
+   "Er is nu geen koppelcode vrij; probeer het over een minuut opnieuw."
+  ],
+  "errors.device_pairing_attempts": [
+   "Too many wrong codes; try again in ten minutes.",
+   "Te veel foute codes; probeer het over tien minuten opnieuw."
+  ],
+  "errors.validation.invalid_code": [
+   "This code is unknown or has expired.",
+   "Deze code is onbekend of verlopen."
+  ],
+  "errors.validation.translation_mismatch": [
+   "The translation does not fit this section.",
+   "De vertaling past niet bij deze sectie."
+  ],
+  "errors.validation.indexer_removed": [
+   "The indexer of this release was removed; search again.",
+   "De indexer van deze release is verwijderd; zoek opnieuw."
+  ],
+  "errors.validation.invalid_network": [
+   "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
+   "Voer IP-adressen of netwerken in, zoals 192.168.1.10 of 10.0.0.0/8."
+  ],
+  "errors.validation.pairing_expired": [
+   "This code has expired; show a new code on the device.",
+   "Deze code is verlopen; toon een nieuwe code op het apparaat."
+  ],
+  "errors.acquisition_unavailable": [
+   "The indexer or download client could not be reached.",
+   "De indexer of downloadclient was niet bereikbaar."
+  ],
+  "errors.acquisition_authentication_failed": [
+   "The indexer or download client rejected the API key.",
+   "De indexer of downloadclient heeft de API-sleutel geweigerd."
+  ],
+  "errors.acquisition_rate_limited": [
+   "The indexer limits requests right now. Please try again later.",
+   "De indexer beperkt momenteel het aantal verzoeken. Probeer het later opnieuw."
+  ],
+  "errors.acquisition_limit_reached": [
+   "The indexer's daily grab limit is reached.",
+   "De daglimiet voor grabs van de indexer is bereikt."
+  ],
+  "errors.acquisition_query_limit_reached": [
+   "The indexer's daily query limit is reached.",
+   "De daglimiet voor zoekopdrachten van de indexer is bereikt."
+  ],
+  "errors.acquisition_invalid_response": [
+   "The indexer or download client returned an invalid response.",
+   "De indexer of downloadclient gaf een ongeldig antwoord."
+  ],
+  "errors.acquisition_no_download_client": [
+   "No enabled download client is configured.",
+   "Er is geen ingeschakelde downloadclient ingesteld."
+  ],
+  "errors.acquisition_grab_failed": [
+   "The download client did not accept the release.",
+   "De downloadclient heeft de release niet geaccepteerd."
+  ],
+  "errors.concurrent_change": [
+   "Another change was made at the same time. Please reload and try again.",
+   "Er is tegelijkertijd een andere wijziging gedaan. Laad de pagina opnieuw en probeer het nog eens."
+  ],
+  "errors.internal_error": [
+   "An unknown error occurred.",
+   "Er is een onbekende fout opgetreden."
+  ],
+  "errors.import_no_library": [
+   "No writable library of this kind exists.",
+   "Er bestaat geen beschrijfbare bibliotheek van dit soort."
+  ],
+  "errors.rate_limit_exceeded": [
+   "Too many requests. Please try again later.",
+   "Te veel verzoeken. Probeer het later opnieuw."
+  ],
+  "errors.validation.required": [
+   "A value is required.",
+   "Een waarde is verplicht."
+  ],
+  "errors.validation.invalid_type": [
+   "The value has an invalid type.",
+   "De waarde heeft een ongeldig type."
+  ],
+  "errors.validation.out_of_range": [
+   "The value is outside the allowed range.",
+   "De waarde valt buiten het toegestane bereik."
+  ],
+  "errors.validation.invalid_uuid": [
+   "The identifier is invalid.",
+   "De identificatie is ongeldig."
+  ],
+  "errors.validation.invalid_text": [
+   "The text contains invalid characters.",
+   "De tekst bevat ongeldige tekens."
+  ],
+  "errors.validation.too_short": [
+   "The value is too short.",
+   "De waarde is te kort."
+  ],
+  "errors.validation.password_mismatch": [
+   "The passwords do not match.",
+   "De wachtwoorden komen niet overeen."
+  ],
+  "errors.validation.too_long": [
+   "The value is too long.",
+   "De waarde is te lang."
+  ],
+  "errors.validation.invalid_email": [
+   "Please enter a valid email address.",
+   "Voer een geldig e-mailadres in."
+  ],
+  "errors.validation.invalid_locale": [
+   "Please enter a language code supported by this server.",
+   "Voer een taalcode in die door deze server wordt ondersteund."
+  ],
+  "errors.validation.invalid_url": [
+   "Please enter an HTTP or HTTPS address.",
+   "Voer een HTTP- of HTTPS-adres in."
+  ],
+  "errors.validation.invalid_host": [
+   "Please enter a hostname or IPv4 address without a scheme or path.",
+   "Voer een hostnaam of IPv4-adres in zonder schema of pad."
+  ],
+  "errors.validation.invalid_path": [
+   "Please enter a path without traversal segments.",
+   "Voer een pad in zonder traversal-segmenten."
+  ],
+  "errors.validation.invalid_mac_address": [
+   "Please enter a MAC address such as 00:11:22:AA:BB:CC.",
+   "Voer een MAC-adres in zoals 00:11:22:AA:BB:CC."
+  ],
+  "errors.validation.overlapping_path": [
+   "This path overlaps another library path on the same connection.",
+   "Dit pad overlapt een ander bibliotheekpad op dezelfde verbinding."
+  ],
+  "errors.validation.in_use": [
+   "This item is still in use.",
+   "Dit item is nog in gebruik."
+  ],
+  "errors.validation.invalid_pin": [
+   "The PIN is incorrect.",
+   "De pincode is onjuist."
+  ],
+  "errors.validation.request_limit": [
+   "You have reached your request limit for now.",
+   "Je hebt je verzoeklimiet voorlopig bereikt."
+  ],
+  "errors.validation.request_media_blocked": [
+   "Your request rule does not allow this kind of media.",
+   "Je verzoekregel staat dit soort media niet toe."
+  ],
+  "errors.validation.profile_limit": [
+   "An account can own up to ten profiles.",
+   "Een account kan maximaal tien profielen bezitten."
+  ],
+  "errors.validation.invalid_pin_format": [
+   "The PIN must have three to six digits.",
+   "De pincode moet uit drie tot zes cijfers bestaan."
+  ],
+  "errors.validation.pin_locked": [
+   "Too many incorrect PINs. Please try again in a minute.",
+   "Te veel onjuiste pincodes. Probeer het over een minuut opnieuw."
+  ],
+  "errors.validation.duplicate_value": [
+   "This value is already in use.",
+   "Deze waarde is al in gebruik."
+  ],
+  "errors.validation.collection_limit": [
+   "This profile has as many collections as the Admin allows.",
+   "Dit profiel heeft zoveel collecties als de beheerder toestaat."
+  ],
+  "errors.validation.annotation_limit": [
+   "A profile keeps at most 1000 highlights per book.",
+   "Een profiel bewaart maximaal 1000 markeringen per boek."
+  ],
+  "errors.validation.overlapping_group": [
+   "These units already belong to another section.",
+   "Deze onderdelen horen al bij een andere sectie."
+  ],
+  "errors.validation.group_limit": [
+   "This title has as many sections as the Admin allows.",
+   "Deze titel heeft zoveel secties als de beheerder toestaat."
+  ],
+  "errors.validation.utc_required": [
+   "The timestamp must use UTC.",
+   "Het tijdstempel moet UTC gebruiken."
+  ],
+  "errors.validation.unknown_catalog_value": [
+   "The selection is invalid.",
+   "De selectie is ongeldig."
+  ],
+  "errors.validation.unknown_reference": [
+   "The referenced resource is unavailable.",
+   "De bijbehorende resource is niet beschikbaar."
+  ],
+  "errors.validation.outdated_version": [
+   "The data has changed. Please reload and try again.",
+   "De gegevens zijn gewijzigd. Laad de pagina opnieuw en probeer het nog eens."
+  ],
+  "errors.validation.invalid_transition": [
+   "This change is not available.",
+   "Deze wijziging is niet beschikbaar."
+  ],
+  "errors.validation.invalid_file_type": [
+   "This kind of file is not accepted here.",
+   "Dit soort bestand wordt hier niet geaccepteerd."
+  ],
+  "errors.validation.invalid_value": [
+   "This value cannot be used here.",
+   "Deze waarde kan hier niet worden gebruikt."
+  ],
+  "errors.validation.unknown_language": [
+   "Use two-letter language codes such as de or en.",
+   "Gebruik taalcodes met twee letters, zoals nl of en."
+  ],
+  "errors.validation.backup_passphrase": [
+   "The passphrase does not open this backup's key ring.",
+   "De wachtzin opent de sleutelring van deze back-up niet."
+  ],
+  "errors.validation.naming_unknown_token": [
+   "The pattern uses an unknown placeholder.",
+   "Het patroon gebruikt een onbekende plaatsaanduiding."
+  ],
+  "errors.validation.naming_incomplete": [
+   "The pattern needs the title, and for episodes the season and episode.",
+   "Het patroon heeft de titel nodig, en bij afleveringen het seizoen en de aflevering."
+  ],
+  "errors.validation.naming_needs_release_token": [
+   "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
+   "Meerdere releases hebben {Quality}, {Release Group} of {Edition} in elke bestandsnaam nodig."
+  ],
+  "errors.validation.naming_invalid_path": [
+   "Each folder of the pattern needs a name.",
+   "Elke map van het patroon heeft een naam nodig."
+  ],
+  "errors.validation.setup_completed": [
+   "Only an instance that has not finished setup can be replaced by a backup.",
+   "Alleen een instantie waarvan de installatie niet is afgerond, kan door een back-up worden vervangen."
+  ],
+  "errors.validation.backup_incompatible": [
+   "This backup belongs to another Jularr version.",
+   "Deze back-up hoort bij een andere Jularr-versie."
+  ],
+  "errors.validation.library_rename_changed": [
+   "The library changed since the preview. Please check the new preview.",
+   "De bibliotheek is gewijzigd sinds het voorbeeld. Controleer het nieuwe voorbeeld."
+  ],
+  "errors.validation.invalid_placeholders": [
+   "The translation must preserve its placeholders.",
+   "De vertaling moet de plaatsaanduidingen behouden."
+  ],
+  "errors.validation.unknown_id": [
+   "The referenced item is unavailable.",
+   "Het bijbehorende item is niet beschikbaar."
+  ],
+  "errors.validation.duplicate_id": [
+   "The item was supplied more than once.",
+   "Het item is meer dan eens opgegeven."
+  ],
+  "errors.validation.unknown_or_duplicate_id": [
+   "The item is unavailable or was supplied more than once.",
+   "Het item is niet beschikbaar of is meer dan eens opgegeven."
+  ]
+ }
+}

@@ -118,6 +118,61 @@ namespace Jularr.Backend.Logic.Localization
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        // A shipped language is added once, as it ships; its texts fill missing, machine-made and outdated ones and never replace what someone reviewed or wrote.
+        public static async Task SynchronizeShippedTranslationsAsync(this LogicContext ctx, UiShippedCatalogData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH locale AS (
+                    INSERT INTO
+                        "UiLocales" AS existing ("Locale", "Name", "IsRightToLeft", "IsEnabled")
+                    VALUES
+                        (@Locale, @Name, @IsRightToLeft, @IsEnabled)
+                    ON CONFLICT ("Locale") DO UPDATE
+                    SET
+                        "Name" = existing."Name"
+                    RETURNING
+                        existing."Id"
+                ), changed AS (
+                    INSERT INTO
+                        "UiTranslations" AS translation ("UiLocaleId", "UiTranslationMessageId", "Text", "UiTranslationStatusTypeId", "MessageVersion")
+                    SELECT
+                        locale."Id",
+                        message."Id",
+                        shipped."Text",
+                        @UiTranslationStatusTypeId,
+                        message."Version"
+                    FROM
+                        unnest(@Keys, @Texts) AS shipped ("Key", "Text")
+                        JOIN "UiTranslationMessages" AS message ON message."Key" = shipped."Key"
+                        CROSS JOIN locale
+                    ON CONFLICT ("UiLocaleId", "UiTranslationMessageId") DO UPDATE
+                    SET
+                        "Text" = EXCLUDED."Text",
+                        "UiTranslationStatusTypeId" = EXCLUDED."UiTranslationStatusTypeId",
+                        "MessageVersion" = EXCLUDED."MessageVersion",
+                        "Version" = translation."Version" + 1,
+                        "UpdatedAt" = now()
+                    WHERE
+                        translation."UiTranslationStatusTypeId" IN (1, 2, 5)
+                        AND (translation."Text" IS DISTINCT FROM EXCLUDED."Text" OR translation."UiTranslationStatusTypeId" <> EXCLUDED."UiTranslationStatusTypeId"
+                            OR translation."MessageVersion" <> EXCLUDED."MessageVersion")
+                    RETURNING
+                        translation."Id"
+                )
+                UPDATE
+                    "UiLocales"
+                SET
+                    "CatalogVersion" = "CatalogVersion" + 1
+                WHERE
+                    "Id" IN (SELECT "Id" FROM locale)
+                    AND EXISTS (SELECT 1 FROM changed);
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task UpdateUiDescriptionAsync(this LogicContext ctx, UiDescriptionUpdateData data, CancellationToken ct)
         {
             var sql = new SqlStatement();

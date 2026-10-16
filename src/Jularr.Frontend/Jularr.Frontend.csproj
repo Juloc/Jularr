@@ -21,4 +21,7 @@
     <Error Condition="!Exists('$(MSBuildProjectDirectory)/Assets/Generated/icons.json')"
            Text="Missing fingerprinted SVG sprite. Run npm run build before dotnet publish." />
   </Target>
+  <ItemGroup>
+    <EmbeddedResource Include="Localization/Catalogs/*.json" />
+  </ItemGroup>
 </Project>
