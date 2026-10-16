@@ -10,7 +10,21 @@ namespace Jularr.Integrations.Logic.Media
         {
             try
             {
-                using var file = TagLib.File.Create(path, TagLib.ReadStyle.None);
+                using var stream = File.OpenRead(path);
+                return Read(Path.GetFileName(path), stream);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        // The name's extension tells TagLib the format; the stream must seek.
+        public static AudioTags? Read(string name, Stream stream)
+        {
+            try
+            {
+                using var file = TagLib.File.Create(new StreamFile(name, stream), TagLib.ReadStyle.None);
                 var tag = file.Tag;
                 var title = tag.Title?.Trim() is { Length: > 0 and <= 500 } value ? value : null;
                 var releaseGroup = tag.MusicBrainzReleaseGroupId?.Trim().ToLowerInvariant() is { } id && Mbid().IsMatch(id) ? id : null;
@@ -20,6 +34,18 @@ namespace Jularr.Integrations.Logic.Media
             catch (Exception exception) when (exception is TagLib.CorruptFileException or TagLib.UnsupportedFormatException or IOException or UnauthorizedAccessException)
             {
                 return null;
+            }
+        }
+
+        private sealed class StreamFile(string name, Stream stream) : TagLib.File.IFileAbstraction
+        {
+            public string Name => name;
+            public Stream ReadStream => stream;
+            public Stream WriteStream => throw new NotSupportedException();
+
+            // The caller owns the stream.
+            public void CloseStream(Stream closed)
+            {
             }
         }
 

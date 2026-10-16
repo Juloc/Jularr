@@ -61,7 +61,7 @@ namespace Jularr.Backend.Service.System.Media.V1
         // Whether every provider answered; unreachable storage waits for the next day.
         private async Task<bool> FetchAsync(SubtitleSourceData source, List<string> missing, IReadOnlyList<AcquisitionConnectionData> providers)
         {
-            if (_files.Directory(source) is not { } directory)
+            if (await _files.FolderAsync(Context, source, CancellationToken) is not { } folder)
             {
                 return true;
             }
@@ -98,7 +98,7 @@ namespace Jularr.Backend.Service.System.Media.V1
 
                         try
                         {
-                            await SubtitleFiles.SaveAsync(Context, source, directory, SubtitleFiles.FileName(source, language), bytes, CancellationToken);
+                            await SubtitleFiles.SaveAsync(Context, source, folder, SubtitleFiles.FileName(source, language), bytes, CancellationToken);
                         }
                         catch (IOException exception)
                         {

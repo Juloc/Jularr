@@ -8,18 +8,16 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Subtitles;
 using Jularr.Integrations.Logic.Storage;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Core
 {
     // The subtitles of one video file for the automatic fetch and the search by hand: what it has, what is asked and the file written beside it.
-    internal sealed class SubtitleFiles(IOptions<StorageOptions> storage)
+    internal sealed class SubtitleFiles(StorageAccess storage)
     {
-        private readonly StorageOptions _storage = storage.Value;
-
         // Languages the file already has: embedded streams and files beside it, forced ones excepted.
         public static HashSet<string> Present(SubtitleSourceData source) => source.TrackLanguages.Select(LanguageCodes.ToTwoLetter)
             .Concat(source.SiblingPaths.Where(LibraryFileTypes.IsSubtitle).Select(PlaybackTracks.Describe).Where(sibling => !sibling.IsForced).Select(sibling => LanguageCodes.ToTwoLetter(sibling.Language)))
@@ -33,25 +31,27 @@ namespace Jularr.Backend.Service.Core
 
         public static string FileName(SubtitleSourceData source, string language) => source.RelativePath[..^Path.GetExtension(source.RelativePath).Length] + "." + language + ".srt";
 
-        // The folder of the video; null while its storage cannot be reached.
-        public string? Directory(SubtitleSourceData source)
+        // The library folder of the video; null while its storage cannot be reached.
+        public async Task<SubtitleFolder?> FolderAsync(LogicContext context, SubtitleSourceData source, CancellationToken ct)
         {
             try
             {
-                return StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(source.StorageMountId, token), ct);
+                var files = storage.Open(mount);
+                return await files.GetAsync(source.RootRelativePath, ct) is { IsDirectory: true } ? new SubtitleFolder(files, source.RootRelativePath) : null;
             }
-            catch (NasMountException)
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
                 return null;
             }
         }
 
         // An existing file of that name stays and false is returned; the new one belongs to the video's asset.
-        public static async Task<bool> SaveAsync(LogicContext context, SubtitleSourceData source, string directory, string relativePath, byte[] bytes, CancellationToken ct,
+        public static async Task<bool> SaveAsync(LogicContext context, SubtitleSourceData source, SubtitleFolder folder, string relativePath, byte[] bytes, CancellationToken ct,
             long? accountId = null)
         {
             using var content = new MemoryStream(bytes);
-            if (await LibraryFileWriter.WriteAsync(directory, relativePath, content, ct) is not var (length, modifiedAt))
+            if (await LibraryFileWriter.WriteAsync(folder.Files, folder.Directory, relativePath, content, ct) is not var (length, modifiedAt))
             {
                 return false;
             }
@@ -117,8 +117,6 @@ namespace Jularr.Backend.Service.Core
                     file."MediaAssetId",
                     root."RelativePath" AS "RootRelativePath",
                     mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     work."MediaTypeId",
                     unit."Number" AS "UnitNumber",
                     parent."Number" AS "ParentUnitNumber",
@@ -198,4 +196,7 @@ namespace Jularr.Backend.Service.Core
             return ctx.ReadSql.ReadOptionalAsync<SubtitleSourceData>(sql, ct);
         }
     }
+
+    // A video's library folder on its connection.
+    internal sealed record SubtitleFolder(StorageFiles Files, string Directory);
 }

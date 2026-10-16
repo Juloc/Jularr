@@ -9,12 +9,12 @@ using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Ocr;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Usenet;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Reading.V1
 {
@@ -22,14 +22,14 @@ namespace Jularr.Backend.Service.User.Reading.V1
     internal sealed class ReadingContent
     {
         private const long BatchBytes = 8L * 1024 * 1024;
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
         private readonly ArchiveTools _archives;
         private readonly TimeProvider _time;
         private readonly IPageRecognizer _recognizer;
 
-        public ReadingContent(IOptions<StorageOptions> options, ArchiveTools archives, TimeProvider time, IPageRecognizer recognizer)
+        public ReadingContent(StorageAccess storage, ArchiveTools archives, TimeProvider time, IPageRecognizer recognizer)
         {
-            _options = options.Value;
+            _storage = storage;
             _archives = archives;
             _time = time;
             _recognizer = recognizer;
@@ -56,12 +56,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 throw new ServiceUnavailableException("reading_unavailable");
             }
 
-            FileStream file;
+            Stream file;
             try
             {
-                var connection = _options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath ?? "");
-                var directory = StorageFileSystem.ResolveDirectory(connection, source.RootRelativePath);
-                file = new FileStream(StorageFileSystem.ResolveFile(directory, source.RelativePath), FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(source.StorageMountId, token), ct);
+                file = await _storage.Open(mount).OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), ct);
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
@@ -146,7 +145,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
         }
 
         // A PDF reads like an EPUB once its text is reflowed; one without text stays for the browser's own viewer.
-        private async Task<long> OpenPdfAsync(LogicContext context, ReadingSourceData source, FileStream file, Func<byte[], OcrPage>? recognize, CancellationToken ct)
+        private async Task<long> OpenPdfAsync(LogicContext context, ReadingSourceData source, Stream file, Func<byte[], OcrPage>? recognize, CancellationToken ct)
         {
             var hash = await SHA256.HashDataAsync(file, ct);
             file.Position = 0;
@@ -224,7 +223,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
             return state.DocumentId;
         }
 
-        private async Task<long> OpenComicAsync(LogicContext context, ReadingSourceData source, FileStream file, CancellationToken ct)
+        private async Task<long> OpenComicAsync(LogicContext context, ReadingSourceData source, Stream file, CancellationToken ct)
         {
             var hash = await SHA256.HashDataAsync(file, ct);
             file.Position = 0;
@@ -266,10 +265,18 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 throw new ServiceUnavailableException("reading_unsupported");
             }
 
+            // 7-Zip reads a file on this host; an archive on a direct share is copied aside first.
             var folder = Directory.CreateTempSubdirectory("jularr-comic-").FullName;
+            var copy = file is FileStream ? null : folder + Path.GetExtension(source.RelativePath);
             try
             {
-                if (!await _archives.ExtractAsync(file.Name, folder, ct))
+                if (copy is not null)
+                {
+                    await using var target = File.Create(copy);
+                    await file.CopyToAsync(target, ct);
+                }
+
+                if (!await _archives.ExtractAsync(copy ?? ((FileStream)file).Name, folder, ct))
                 {
                     throw new ServiceUnavailableException("reading_invalid_file");
                 }
@@ -286,6 +293,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 try
                 {
                     Directory.Delete(folder, true);
+                    if (copy is not null) File.Delete(copy);
                 }
                 catch (IOException)
                 {

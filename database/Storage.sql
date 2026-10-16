@@ -27,6 +27,8 @@ CREATE TABLE "StorageMounts" (
     "Domain" varchar(256) NULL,
     "ProtectedPassword" bytea NULL,
     "IsReadOnly" boolean NOT NULL,
+    -- SMB is reached by Jularr itself or mounted by Docker as a volume; NFS is always a volume.
+    "IsVolume" boolean NOT NULL DEFAULT FALSE,
     "WakeMacAddress" varchar(17) NULL CHECK ("WakeMacAddress" ~ '^([0-9A-F]{2}:){5}[0-9A-F]{2}$'),
     "WakeBroadcastAddress" varchar(15) NULL,
     "WakeOnDemand" boolean NOT NULL DEFAULT FALSE,
@@ -45,6 +47,7 @@ CREATE TABLE "StorageMounts" (
         OR ("StorageProtocolTypeId" = 3 AND "Host" IS NULL AND "ProtocolVersion" IS NULL AND "Username" IS NULL AND "Domain" IS NULL AND "ProtectedPassword" IS NULL)
     ),
     CHECK ("WakeMacAddress" IS NOT NULL OR ("WakeBroadcastAddress" IS NULL AND NOT "WakeOnDemand")),
+    CHECK ("StorageProtocolTypeId" = 1 OR "IsVolume" = ("StorageProtocolTypeId" = 2)),
     CHECK (("SynologyUrl" IS NULL) = ("SynologyUsername" IS NULL) AND ("SynologyUrl" IS NULL) = ("SynologyProtectedPassword" IS NULL))
 );
 CREATE UNIQUE INDEX "UX_StorageMounts_LocalPath" ON "StorageMounts" ("SharePath") WHERE "StorageProtocolTypeId" = 3;

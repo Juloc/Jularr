@@ -4,10 +4,10 @@ using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Core
 {
@@ -15,12 +15,12 @@ namespace Jularr.Backend.Service.Core
     // or when an administrator keeps only one version. Several kept releases stay.
     internal sealed class LibraryReplacements
     {
-        private readonly StorageOptions _storage;
+        private readonly StorageAccess _storage;
         private readonly ILogger<LibraryReplacements> _logger;
 
-        public LibraryReplacements(IOptions<StorageOptions> storage, ILogger<LibraryReplacements> logger)
+        public LibraryReplacements(StorageAccess storage, ILogger<LibraryReplacements> logger)
         {
-            _storage = storage.Value;
+            _storage = storage;
             _logger = logger;
         }
 
@@ -54,16 +54,28 @@ namespace Jularr.Backend.Service.Core
         {
             var retired = new List<object>();
             var gone = new List<long>();
+            var connections = new Dictionary<long, StorageFiles>();
+            async Task<StorageFiles> OpenAsync(long storageMountId)
+            {
+                if (!connections.TryGetValue(storageMountId, out var files))
+                {
+                    var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(storageMountId, token), ct);
+                    connections[storageMountId] = files = _storage.Open(mount);
+                }
+
+                return files;
+            }
+
             foreach (var file in files.DistinctBy(file => file.StoredFileId))
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    var library = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(file.StorageProtocolTypeId, file.StorageMountId, file.SharePath), file.RootPath);
-                    var source = StorageFileSystem.ResolveFile(library, file.RelativePath);
-                    var folder = LibraryRecycleBin.Folder(_storage, settings, file);
-                    var target = settings.RecycleModeId == RecycleMode.OwnFolder && file.RootPath.Length > 0 ? file.RootPath + "/" + file.RelativePath : file.RelativePath;
-                    if (await Task.Run(() => LibraryRecycleBin.Recycle(source, folder, target), ct) is not { } recycled)
+                    var library = await OpenAsync(file.StorageMountId);
+                    var source = StoragePath.Combine(file.RootPath, file.RelativePath);
+                    var folder = await LibraryRecycleBin.FolderAsync(OpenAsync, settings, file, ct);
+                    var target = settings.RecycleModeId == RecycleMode.OwnFolder ? source : file.RelativePath;
+                    if (await LibraryRecycleBin.RecycleAsync(library, file.StorageMountId, source, folder, target, ct) is not { } recycled)
                     {
                         _logger.LogWarning("{Path} stays as a further version; it could not be moved or deleted.", file.RelativePath);
                     }

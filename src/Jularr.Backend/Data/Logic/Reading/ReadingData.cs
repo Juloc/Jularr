@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
-using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Playback;
@@ -15,7 +14,7 @@ namespace Jularr.Backend.Data.Logic.Reading
     internal sealed class ReadingSourceData : BaseData
     {
         public ReadingSourceData(long workId, string title, long storedFileId, string relativePath, long sizeBytes, DateTime modifiedAt, bool isMissing, string rootRelativePath,
-            long storageMountId, StorageProtocolType storageProtocolTypeId, string? sharePath, long? documentId, bool isCached)
+            long storageMountId, long? documentId, bool isCached)
         {
             WorkId = workId;
             Title = title;
@@ -26,8 +25,6 @@ namespace Jularr.Backend.Data.Logic.Reading
             IsMissing = isMissing;
             RootRelativePath = rootRelativePath;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             DocumentId = documentId;
             IsCached = isCached;
         }
@@ -58,12 +55,6 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string? SharePath { get; }
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId), false)]
         public long? DocumentId { get; }

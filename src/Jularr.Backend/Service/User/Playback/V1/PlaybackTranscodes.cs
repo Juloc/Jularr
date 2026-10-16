@@ -6,11 +6,13 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Playback.V1
 {
-    internal sealed record PlaybackTranscodeSource(Guid SessionId, long ProfileId, string InputPath, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio,
+    // The input stays readable for FFmpeg until the session's job stops.
+    internal sealed record PlaybackTranscodeSource(Guid SessionId, long ProfileId, StorageInput Input, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio,
         long DurationMs, int? AudioKilobits = null)
     {
         public int SegmentCount => (int)Math.Ceiling(DurationMs / (PlaybackTranscodes.SegmentSeconds * 1000d));
@@ -117,6 +119,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 }
 
                 TryDelete(job.Directory);
+                job.Source.Input.Dispose();
             }
         }
 
@@ -138,7 +141,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             Kill(job);
 
             var software = job.SoftwareFallback || _options.VideoEncoderArguments.Length == 0;
-            var request = new TranscodeRequest(job.Source.InputPath, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
+            var request = new TranscodeRequest(job.Source.Input.Location, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
                 job.Source.CopyVideo, job.Source.CopyAudio, software ? MediaOptions.SoftwareEncoderArguments : _options.VideoEncoderArguments,
                 software ? [] : _options.HardwareAccelerationArguments) { AudioKilobits = job.Source.AudioKilobits ?? 192 };
 

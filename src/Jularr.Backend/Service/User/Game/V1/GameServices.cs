@@ -6,6 +6,7 @@ using Jularr.Backend.Data.User.Game.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
@@ -67,11 +68,11 @@ namespace Jularr.Backend.Service.User.Game.V1
     [ServiceEndpoint("GET", "/api/v1/games/assets/{mediaAssetId:long}/files/{fileName}")]
     public sealed class ReadGameFileV1 : UserService<GameFileParametersV1>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal ReadGameFileV1(IOptions<StorageOptions> options)
+        internal ReadGameFileV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<GameFileV1>()];
@@ -87,9 +88,7 @@ namespace Jularr.Backend.Service.User.Game.V1
                 SELECT
                     file."RelativePath",
                     root."RelativePath" AS "RootRelativePath",
-                    mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath"
+                    mount."Id" AS "StorageMountId"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "GameReleases" AS release ON release."WorkVersionId" = asset."WorkVersionId"
@@ -114,14 +113,8 @@ namespace Jularr.Backend.Service.User.Game.V1
                 throw new KeyNotFoundException("The game file was not found.");
             }
 
-            var connection = Path.TrimEndingDirectorySeparator(_options.GetConnectionPath(stream.StorageProtocolTypeId, stream.StorageMountId, stream.SharePath));
-            var path = Path.GetFullPath(Path.Combine(connection, stream.RootRelativePath, stream.RelativePath));
-            if (!path.StartsWith(connection + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            {
-                throw new KeyNotFoundException("The game file was not found.");
-            }
-
-            return new GameFileV1(path);
+            var files = _storage.Open(await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken));
+            return new GameFileV1(await files.OpenReadAsync(StoragePath.Combine(stream.RootRelativePath, stream.RelativePath), CancellationToken));
         }
     }
 

@@ -20,8 +20,6 @@ namespace Jularr.Backend.Logic.Library
                     settings."KeepsReleases",
                     settings."RecycleModeId",
                     settings."RecycleStorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     mount."IsReadOnly",
                     settings."RecyclePath",
                     settings."RecycleDays"
@@ -119,8 +117,6 @@ namespace Jularr.Backend.Logic.Library
                     replacing."Id" AS "NewMediaAssetId",
                     file."Id" AS "StoredFileId",
                     mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     root."RelativePath" AS "RootPath",
                     file."RelativePath",
                     earlierMedia."QualityKey" AS "EarlierQualityKey",
@@ -312,8 +308,6 @@ namespace Jularr.Backend.Logic.Library
                 SELECT
                     recycled."Id",
                     mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     recycled."FolderPath",
                     recycled."RelativePath"
                 FROM

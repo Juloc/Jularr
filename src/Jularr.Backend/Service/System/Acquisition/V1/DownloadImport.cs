@@ -11,18 +11,18 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
-using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
-    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, IOptions<StorageOptions> options, TimeProvider time)
+    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time)
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
@@ -59,12 +59,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // Link or copy outside transactions; an existing library file is never taken over.
             // An offline library keeps the download waiting instead of writing elsewhere.
-            string directory;
+            var directory = root.RelativePath;
+            StorageFiles library;
             try
             {
-                directory = StorageFileSystem.ResolveDirectory(options.Value.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(root.StorageMountId, token), ct);
+                library = storage.Open(mount);
+                if (await library.GetAsync(directory, ct) is not { IsDirectory: true })
+                {
+                    throw new NasMountException("storage_unavailable");
+                }
             }
-            catch (NasMountException)
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
                 await AttentionAsync(context, download.OperationId, "import_library_unavailable", null, ct);
                 return;
@@ -74,19 +80,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             foreach (var group in placements.GroupBy(placement => placement.Group))
             {
-                var stem = Enumerable.Range(1, 99).Select(attempt => LibraryNaming.Alternative(group.First().TargetStem, attempt))
-                    .First(candidate => group.All(placement => !File.Exists(Path.Combine(directory, (candidate + placement.Extension).Replace('/', Path.DirectorySeparatorChar)))));
+                var stem = await FreeStemAsync(library, directory, group.First().TargetStem, group.Select(placement => placement.Extension).ToArray(), ct);
                 foreach (var placement in group)
                 {
                     var relativePath = stem + placement.Extension;
-                    var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
-                    Directory.CreateDirectory(Path.Combine(directory, folder));
-                    var destination = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
-                    var sourceFile = StorageFileSystem.ResolveFile(source, placement.SourcePath);
-                    await Task.Run(() => StorageFileTransfer.HardlinkOrCopy(sourceFile, destination), ct);
-
-                    var info = new FileInfo(destination);
-                    imported.Add(new ImportedFile(relativePath, info.Length, StoredFileLogic.StoredTime(info.LastWriteTimeUtc), facts));
+                    var placed = await StorageFileTransfer.PlaceAsync(StorageFileSystem.ResolveFile(source, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct);
+                    imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), facts));
                     if (placement.IsMedia)
                     {
                         media.Add((relativePath, placement));
@@ -118,6 +117,25 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, download.MediaTypeId, ct);
+        }
+
+        // The first numbered alternative whose files are all free.
+        private static async Task<string> FreeStemAsync(StorageFiles library, string directory, string stem, IReadOnlyList<string> extensions, CancellationToken ct)
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var candidate = LibraryNaming.Alternative(stem, attempt);
+                var free = true;
+                foreach (var extension in extensions)
+                {
+                    free &= !await library.ExistsAsync(StoragePath.Combine(directory, candidate + extension), ct);
+                }
+
+                if (free || attempt == 99)
+                {
+                    return candidate;
+                }
+            }
         }
 
         private static bool IsDocument(string source, ImportPlacementData placement)

@@ -4,20 +4,20 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.System.Library.V1;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.System.Library.V1
 {
     public sealed class CleanRecycleBinsV1 : SystemService<CleanRecycleBinsParametersV1, NoData>
     {
-        private readonly StorageOptions _storage;
+        private readonly StorageAccess _storage;
 
-        internal CleanRecycleBinsV1(IOptions<StorageOptions> storage)
+        internal CleanRecycleBinsV1(StorageAccess storage)
         {
-            _storage = storage.Value;
+            _storage = storage;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -34,13 +34,13 @@ namespace Jularr.Backend.Service.System.Library.V1
             {
                 try
                 {
-                    var folder = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(file.StorageProtocolTypeId, file.StorageMountId, file.SharePath), file.FolderPath);
-                    if (LibraryRecycleBin.Delete(folder, file.RelativePath))
+                    var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(file.StorageMountId, ct), CancellationToken);
+                    if (await LibraryRecycleBin.DeleteAsync(_storage.Open(mount), file.FolderPath, file.RelativePath, CancellationToken))
                     {
                         gone.Add(file.Id);
                     }
                 }
-                catch (NasMountException)
+                catch (Exception exception) when (exception is NasMountException or KeyNotFoundException)
                 {
                     // Cleaned on a later pass.
                 }

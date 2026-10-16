@@ -15,6 +15,7 @@ using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Backend.Service.User.Playback.V1;
+using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -277,7 +278,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Playlist_FixedGrid_CoversWholeDuration()
         {
-            var playlist = PlaybackTranscodes.BuildPlaylist(new PlaybackTranscodeSource(Guid.NewGuid(), 1, "film.mkv", 0, 1, true, true, 13_500));
+            var playlist = PlaybackTranscodes.BuildPlaylist(new PlaybackTranscodeSource(Guid.NewGuid(), 1, new StorageInput("film.mkv", null), 0, 1, true, true, 13_500));
             StringAssert.Contains(playlist, "#EXT-X-PLAYLIST-TYPE:VOD");
             StringAssert.Contains(playlist, "#EXTINF:1.500000,\nsegments/2.ts\n#EXT-X-ENDLIST");
             Assert.AreEqual(3, playlist.Split("#EXTINF").Length - 1);
@@ -352,7 +353,7 @@ namespace Jularr.Backend.Tests
             using var transcodes = new PlaybackTranscodes(new MediaTranscoder { ExecutablePath = ffmpeg },
                 Microsoft.Extensions.Options.Options.Create(new Jularr.Backend.Service.Core.MediaOptions { TranscodeCachePath = cache.Path, MaxTranscodes = 1 }));
             var session = Guid.NewGuid();
-            transcodes.Register(new PlaybackTranscodeSource(session, 7, input, 0, 1, false, false, 300_000));
+            transcodes.Register(new PlaybackTranscodeSource(session, 7, new StorageInput(input, null), 0, 1, false, false, 300_000));
 
             // First segment, then a seek that restarts the job.
             var first = await transcodes.GetSegmentAsync(session, 7, 0, CancellationToken.None);
@@ -362,7 +363,7 @@ namespace Jularr.Backend.Tests
 
             // A second conversion exceeds the budget of one.
             var other = Guid.NewGuid();
-            transcodes.Register(new PlaybackTranscodeSource(other, 7, input, 0, 1, false, false, 300_000));
+            transcodes.Register(new PlaybackTranscodeSource(other, 7, new StorageInput(input, null), 0, 1, false, false, 300_000));
             var busy = await Assert.ThrowsExactlyAsync<Jularr.Backend.Data.Common.ServiceUnavailableException>(() => transcodes.GetSegmentAsync(other, 7, 0, CancellationToken.None));
             Assert.AreEqual("playback_capacity_exhausted", busy.Code);
 

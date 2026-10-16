@@ -14,6 +14,7 @@ using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Media;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.AcoustId;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
@@ -29,7 +30,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private const int ImportsPerScan = 50;
         private const int FingerprintsPerScan = 200;
 
-        public async Task IdentifyAsync(LogicContext context, long libraryRootId, string directory, CancellationToken ct)
+        public async Task IdentifyAsync(LogicContext context, long libraryRootId, StorageFiles storage, string directory, CancellationToken ct)
         {
             var albums = new Dictionary<string, List<(long StoredFileId, string RelativePath, AudioTags? Tags)>>(StringComparer.Ordinal);
             var untagged = new List<(long StoredFileId, string RelativePath)>();
@@ -49,7 +50,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         continue;
                     }
 
-                    if (await Task.Run(() => AudioTagReader.Read(StorageFileSystem.ResolveFile(directory, file.RelativePath)), ct) is { ReleaseGroupId: { } album } tags)
+                    if (await ReadTagsAsync(storage, StoragePath.Combine(directory, file.RelativePath), ct) is { ReleaseGroupId: { } album } tags)
                     {
                         Add(albums, album, (file.Id, file.RelativePath, tags));
                     }
@@ -62,7 +63,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
             if (untagged.Count > 0 && fingerprinter.IsAvailable && await AcoustIdKeyAsync(context, ct) is { } key)
             {
-                await FingerprintAsync(untagged, directory, key, albums, ct);
+                await FingerprintAsync(untagged, storage, directory, key, albums, ct);
             }
 
             if (albums.Count == 0)
@@ -120,8 +121,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
+        // An unreachable file reads as untagged.
+        private static async Task<AudioTags?> ReadTagsAsync(StorageFiles storage, string path, CancellationToken ct)
+        {
+            try
+            {
+                await using var stream = await storage.OpenReadAsync(path, ct);
+                return await Task.Run(() => AudioTagReader.Read(StoragePath.Name(path), stream), ct);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NasMountException)
+            {
+                return null;
+            }
+        }
+
         // A folder belongs to the album every one of its files matches.
-        private async Task FingerprintAsync(List<(long StoredFileId, string RelativePath)> untagged, string directory, string key,
+        private async Task FingerprintAsync(List<(long StoredFileId, string RelativePath)> untagged, StorageFiles storage, string directory, string key,
             Dictionary<string, List<(long StoredFileId, string RelativePath, AudioTags? Tags)>> albums, CancellationToken ct)
         {
             var budget = FingerprintsPerScan;
@@ -138,10 +153,20 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 {
                     try
                     {
-                        var fingerprint = await fingerprinter.FingerprintAsync(StorageFileSystem.ResolveFile(directory, file.RelativePath), ct);
+                        var path = StoragePath.Combine(directory, file.RelativePath);
+                        AudioFingerprint fingerprint;
+                        if (storage is LocalStorageFiles local)
+                        {
+                            fingerprint = await fingerprinter.FingerprintAsync(local.ResolveFile(path), ct);
+                        }
+                        else
+                        {
+                            await using var audio = await storage.OpenReadAsync(path, ct);
+                            fingerprint = await fingerprinter.FingerprintAsync(audio, ct);
+                        }
                         matches.Add(await acoustId.ReadReleaseGroupsAsync(key, fingerprint.DurationSeconds, fingerprint.Value, ct));
                     }
-                    catch (Exception exception) when (exception is InvalidDataException or ProviderUnavailableException or IOException or UnauthorizedAccessException)
+                    catch (Exception exception) when (exception is InvalidDataException or ProviderUnavailableException or IOException or UnauthorizedAccessException or NasMountException)
                     {
                         matches.Add([]);
                     }

@@ -19,6 +19,7 @@ namespace Jularr.Backend.Data.Fields.Storage
         public static readonly ByteArrayField ProtectedPassword = new() { Required = false };
         public static readonly BoolField HasPassword = new();
         public static readonly BoolField IsReadOnly = new();
+        public static readonly BoolField IsVolume = new();
         public static readonly StringField WakeMacAddress = new(NpgsqlDbType.Varchar) { MaximumLength = 17, Required = false, Trim = true, Format = StringFormat.MacAddress };
         public static readonly StringField WakeBroadcastAddress = new(NpgsqlDbType.Varchar) { MaximumLength = 15, Required = false, Trim = true, Format = StringFormat.IPv4Address };
         public static readonly BoolField WakeOnDemand = new();

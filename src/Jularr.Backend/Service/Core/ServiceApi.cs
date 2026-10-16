@@ -28,6 +28,7 @@ using Jularr.Integrations.Logic.MediaServer;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
+using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Servarr;
@@ -177,6 +178,9 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton(TimeProvider.System);
             services.TryAddSingleton<MediaProbeClient>();
             services.TryAddSingleton<WakeOnLanClient>();
+            services.TryAddSingleton<SmbShares>();
+            services.TryAddSingleton<StorageStreamServer>();
+            services.TryAddSingleton<StorageAccess>();
             services.TryAddSingleton<MediaTranscoder>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
@@ -484,7 +488,7 @@ namespace Jularr.Backend.Service.Core
                 if (result is IFileOutput file)
                 {
                     http.Response.Headers.CacheControl = file is IImmutableFileOutput ? "private,max-age=31536000,immutable" : "private,no-store";
-                    return (IResult)Results.File(file.FilePath, file.ContentType, enableRangeProcessing: true);
+                    return (IResult)Results.Stream(file.Content, file.ContentType, enableRangeProcessing: true);
                 }
 
                 if (result is IDownloadOutput download)

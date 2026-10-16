@@ -85,8 +85,6 @@ namespace Jularr.Backend.Logic.Library
                     root."MediaTypeId",
                     root."MediaSubtypeId",
                     root."StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     root."RelativePath"
                 FROM
                     "LibraryRoots" AS root

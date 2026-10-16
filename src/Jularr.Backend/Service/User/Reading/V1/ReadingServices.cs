@@ -10,6 +10,7 @@ using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
@@ -50,8 +51,6 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         file."MissingSince" IS NOT NULL AS "IsMissing",
                         root."RelativePath" AS "RootRelativePath",
                         mount."Id" AS "StorageMountId",
-                        mount."StorageProtocolTypeId",
-                        mount."SharePath",
                         document."Id" AS "DocumentId",
                         coalesce(document."CacheCompletedAt" IS NOT NULL, FALSE) AS "IsCached"
                     FROM
@@ -196,11 +195,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
     [ServiceEndpoint("GET", "/api/v1/reading/assets/{mediaAssetId:long}/file")]
     public sealed class ReadReadingFileV1 : UserService<ReadingAssetParametersV1>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal ReadReadingFileV1(IOptions<StorageOptions> options)
+        internal ReadReadingFileV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingFileV1>()];
@@ -216,9 +215,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 SELECT
                     file."RelativePath",
                     root."RelativePath" AS "RootRelativePath",
-                    mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath"
+                    mount."Id" AS "StorageMountId"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
@@ -240,8 +237,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var source = await Context.ReadSql.ReadOptionalAsync<PlaybackStreamData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
             try
             {
-                var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
-                return new ReadingFileV1(StorageFileSystem.ResolveFile(directory, source.RelativePath));
+                var files = _storage.Open(await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken));
+                return new ReadingFileV1(await files.OpenReadAsync(StoragePath.Combine(source.RootRelativePath, source.RelativePath), CancellationToken));
             }
             catch (NasMountException)
             {

@@ -98,14 +98,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
     {
         private const int BatchSize = 500;
         private const int CandidateBatchSize = 100;
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
         private readonly MediaProbeClient _probe;
         private readonly GameRomIdentification _roms;
         private readonly MusicTagIdentification _music;
 
-        internal ExecuteLibraryScanV1(IOptions<StorageOptions> options, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music)
         {
-            _options = options.Value;
+            _storage = storage;
             _probe = probe;
             _roms = roms;
             _music = music;
@@ -129,8 +129,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         root."MediaTypeId",
                         root."MediaSubtypeId",
                         root."StorageMountId",
-                        mount."StorageProtocolTypeId",
-                        mount."SharePath",
                         root."RelativePath"
                     FROM
                         "Operations" AS operation
@@ -145,17 +143,19 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }, CancellationToken);
 
             // Record health; unreachable storage never marks media missing.
-            var probe = await _options.ProbeAsync(root.StorageMountId, root.StorageProtocolTypeId, root.SharePath, CancellationToken);
+            var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(root.StorageMountId, ct), CancellationToken);
+            var probe = await _storage.ProbeAsync(mount, CancellationToken);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveStorageMountProbeAsync(probe, ct);
                 return true;
             }, CancellationToken);
-            var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
+            var storage = _storage.Open(mount);
+            var directory = StoragePath.Check(root.RelativePath);
             var processed = 0L;
             var batch = new List<ScannedFile>(BatchSize);
             var state = new StorageScanState();
-            foreach (var file in StorageFileSystem.EnumerateFiles(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId, root.MediaSubtypeId), state, CancellationToken))
+            await foreach (var file in storage.EnumerateFilesAsync(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId, root.MediaSubtypeId), state, CancellationToken))
             {
                 if (MediaPathParser.IsSample(file.RelativePath) || !IsStorablePath(file.RelativePath))
                 {
@@ -189,19 +189,19 @@ namespace Jularr.Backend.Service.System.Operation.V1
             // Analyse new and changed media.
             if (_probe.IsAvailable)
             {
-                await ProbeAsync(root.Id, directory);
+                await ProbeAsync(root.Id, storage, directory);
             }
 
             // Verified game dumps name their game.
             if (root.MediaTypeId == MediaType.Game)
             {
-                await _roms.IdentifyAsync(Context, root.Id, directory, CancellationToken);
+                await _roms.IdentifyAsync(Context, root.Id, storage, directory, CancellationToken);
             }
 
             // Albums tagged with their MusicBrainz release group name their album.
             if (root.MediaTypeId == MediaType.Music)
             {
-                await _music.IdentifyAsync(Context, root.Id, directory, CancellationToken);
+                await _music.IdentifyAsync(Context, root.Id, storage, directory, CancellationToken);
             }
 
             // Folders already identified keep growing.
@@ -232,7 +232,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             return count;
         }
 
-        private async Task ProbeAsync(long libraryRootId, string directory)
+        private async Task ProbeAsync(long libraryRootId, StorageFiles storage, string directory)
         {
             for (var afterId = 0L; ;)
             {
@@ -277,7 +277,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     long? bitRate = null;
                     try
                     {
-                        var probe = await _probe.ProbeAsync(Path.Combine(directory, file.RelativePath), CancellationToken);
+                        using var input = _storage.Input(storage, StoragePath.Combine(directory, file.RelativePath));
+                        var probe = await _probe.ProbeAsync(input.Location, CancellationToken);
                         container = probe.Container is { Length: <= 64 } name ? name : null;
                         durationMs = probe.DurationMs is >= 0 ? probe.DurationMs : null;
                         bitRate = probe.BitRate is >= 0 ? probe.BitRate : null;
@@ -285,7 +286,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             stream.CodecType switch { "video" => MediaTrackType.Video, "audio" => MediaTrackType.Audio, _ => MediaTrackType.Subtitle },
                             TextLimit.Cut(stream.Codec, 64), TextLimit.Cut(stream.Language, 16), TextLimit.Cut(stream.Title, 256), stream.Width, stream.Height, stream.Channels, stream.IsDefault, stream.IsForced)));
                     }
-                    catch (InvalidDataException)
+                    catch (Exception exception) when (exception is InvalidDataException or Integrations.Data.Nas.NasMountException)
                     {
                     }
 

@@ -42,6 +42,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
                     mount."StorageProtocolTypeId" <> 3 AS "IsNetwork",
+                    mount."IsVolume",
                     mount."Version",
                     health."StorageHealthTypeId",
                     health."DiagnosticCode",
@@ -125,7 +126,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             // Protect before persistence.
             var password = data.Password is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.Password));
             return new StorageMountSaveData(id, data.Name, data.StorageProtocolTypeId, data.Host, data.SharePath, data.ProtocolVersion, data.Username, data.Domain, data.IsReadOnly, password,
-                data.WakeMacAddress, data.WakeBroadcastAddress, data.WakeOnDemand);
+                data.WakeMacAddress, data.WakeBroadcastAddress, data.WakeOnDemand, data.IsVolume);
         }
     }
 }

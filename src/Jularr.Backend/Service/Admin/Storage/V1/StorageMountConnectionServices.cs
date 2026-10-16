@@ -7,7 +7,6 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Nas;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.Storage.V1
 {
@@ -15,11 +14,11 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
     [ServiceEndpoint("POST", "/api/v1/admin/storage/mounts/{storageMountId:long}/check")]
     public sealed class CheckStorageMountV1 : AdminService<StorageMountParametersV1, NoData>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal CheckStorageMountV1(IOptions<StorageOptions> options)
+        internal CheckStorageMountV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -32,7 +31,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(Parameters.StorageMountId, ct), CancellationToken);
 
             // Storage I/O stays outside transactions.
-            var probe = await _options.ProbeAsync(mount.Id, mount.StorageProtocolTypeId, mount.SharePath, CancellationToken);
+            var probe = await _storage.ProbeAsync(mount, CancellationToken);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveStorageMountProbeAsync(probe, ct);

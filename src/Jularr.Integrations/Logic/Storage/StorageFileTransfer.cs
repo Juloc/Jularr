@@ -1,12 +1,54 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Jularr.Integrations.Data.Storage;
 
 namespace Jularr.Integrations.Logic.Storage
 {
     // Places completed downloads into a library: hardlink on the same filesystem, otherwise a verified copy.
     internal static class StorageFileTransfer
     {
+        // The placed file as the library shows it; a taken name fails.
+        public static async Task<StorageEntry> PlaceAsync(string sourcePath, StorageFiles target, string targetPath, CancellationToken ct)
+        {
+            if (target is LocalStorageFiles local)
+            {
+                await target.CreateDirectoryAsync(StoragePath.Parent(targetPath), ct);
+                var destination = Path.Combine(local.ResolveDirectory(StoragePath.Parent(targetPath)), StoragePath.Name(targetPath));
+                await Task.Run(() => HardlinkOrCopy(sourcePath, destination), ct);
+            }
+            else
+            {
+                // Written beside the target and published only when complete.
+                var partial = targetPath + ".jularr-partial";
+                if (await target.ExistsAsync(partial, ct)) await target.DeleteFileAsync(partial, ct);
+                try
+                {
+                    await using (var source = File.OpenRead(sourcePath))
+                    await using (var copy = await target.CreateAsync(partial, ct) ?? throw new IOException("The library already contains a file at the destination."))
+                    {
+                        await source.CopyToAsync(copy, 1024 * 1024, ct);
+                    }
+
+                    if ((await target.GetAsync(partial, ct))?.Length != new FileInfo(sourcePath).Length)
+                    {
+                        throw new IOException("The copied file is incomplete.");
+                    }
+
+                    if (!await target.MoveAsync(partial, targetPath, ct))
+                    {
+                        throw new IOException("The library already contains a file at the destination.");
+                    }
+                }
+                finally
+                {
+                    if (await target.ExistsAsync(partial, CancellationToken.None)) await target.DeleteFileAsync(partial, CancellationToken.None);
+                }
+            }
+
+            return await target.GetAsync(targetPath, ct) ?? throw new IOException("The placed file is missing.");
+        }
+
         public static void HardlinkOrCopy(string sourcePath, string destinationPath)
         {
             if (File.Exists(destinationPath))

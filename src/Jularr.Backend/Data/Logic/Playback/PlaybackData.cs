@@ -2,7 +2,6 @@ using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Playback;
-using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Playback;
@@ -33,7 +32,7 @@ namespace Jularr.Backend.Data.Logic.Playback
 
     internal sealed class PlaybackSourceData : BaseData
     {
-        public PlaybackSourceData(long storedFileId, string relativePath, string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath,
+        public PlaybackSourceData(long storedFileId, string relativePath, string rootRelativePath, long storageMountId,
             string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long? durationMs, long? resumePositionMs, long? bitRate, AudioQuality audioQuality)
         {
             BitRate = bitRate;
@@ -42,8 +41,6 @@ namespace Jularr.Backend.Data.Logic.Playback
             RelativePath = relativePath;
             RootRelativePath = rootRelativePath;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             WakeMacAddress = wakeMacAddress;
             WakeBroadcastAddress = wakeBroadcastAddress;
             WakeOnDemand = wakeOnDemand;
@@ -62,12 +59,6 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.WakeMacAddress))]
         public string? WakeMacAddress { get; }
@@ -170,13 +161,11 @@ namespace Jularr.Backend.Data.Logic.Playback
 
     internal sealed class PlaybackStreamData : BaseData
     {
-        public PlaybackStreamData(string relativePath, string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath)
+        public PlaybackStreamData(string relativePath, string rootRelativePath, long storageMountId)
         {
             RelativePath = relativePath;
             RootRelativePath = rootRelativePath;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
         }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
@@ -188,11 +177,6 @@ namespace Jularr.Backend.Data.Logic.Playback
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
     }
 
     internal sealed class PlaybackUpdateData : BaseData
@@ -278,16 +262,13 @@ namespace Jularr.Backend.Data.Logic.Playback
     // Where a subtitle comes from: a subtitle file, or a text stream of the media file.
     internal sealed class PlaybackSubtitleSourceData : BaseData
     {
-        public PlaybackSubtitleSourceData(long storedFileId, string relativePath, DateTime modifiedAt, string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId,
-            string sharePath, string? codec)
+        public PlaybackSubtitleSourceData(long storedFileId, string relativePath, DateTime modifiedAt, string rootRelativePath, long storageMountId, string? codec)
         {
             StoredFileId = storedFileId;
             RelativePath = relativePath;
             ModifiedAt = modifiedAt;
             RootRelativePath = rootRelativePath;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             Codec = codec;
         }
 
@@ -305,12 +286,6 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
         public string? Codec { get; }

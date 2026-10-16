@@ -11,15 +11,13 @@ namespace Jularr.Backend.Data.Logic.Library
     // Where replaced files go: inside their library, into one folder of a storage connection, or nowhere.
     internal sealed class ReplacementSettingsData : BaseData
     {
-        public ReplacementSettingsData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, StorageProtocolType? storageProtocolTypeId, string? sharePath,
+        public ReplacementSettingsData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId,
             bool? isReadOnly, string? recyclePath, int recycleDays)
         {
             IsReadOnly = isReadOnly;
             KeepsReleases = keepsReleases;
             RecycleModeId = recycleModeId;
             RecycleStorageMountId = recycleStorageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             RecyclePath = recyclePath;
             RecycleDays = recycleDays;
         }
@@ -35,9 +33,6 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId), false)]
         public StorageProtocolType? StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath), false)]
-        public string? SharePath { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsReadOnly), false)]
         public bool? IsReadOnly { get; }
@@ -100,7 +95,7 @@ namespace Jularr.Backend.Data.Logic.Library
     // A file of an earlier asset of the same film, episode or volume, with the library it lies in.
     internal sealed class ReplacedFileData : BaseData
     {
-        public ReplacedFileData(long newMediaAssetId, long storedFileId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string rootPath,
+        public ReplacedFileData(long newMediaAssetId, long storedFileId, long storageMountId, string rootPath,
             string relativePath, string? earlierQualityKey, int earlierRevision, string? newQualityKey, int newRevision)
         {
             EarlierQualityKey = earlierQualityKey;
@@ -110,8 +105,6 @@ namespace Jularr.Backend.Data.Logic.Library
             NewMediaAssetId = newMediaAssetId;
             StoredFileId = storedFileId;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             RootPath = rootPath;
             RelativePath = relativePath;
         }
@@ -124,12 +117,6 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
         public string RootPath { get; }
@@ -166,12 +153,10 @@ namespace Jularr.Backend.Data.Logic.Library
     // A file Jularr put into a recycle folder.
     internal sealed class RecycledFileData : BaseData
     {
-        public RecycledFileData(long id, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string folderPath, string relativePath)
+        public RecycledFileData(long id, long storageMountId, string folderPath, string relativePath)
         {
             Id = id;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             FolderPath = folderPath;
             RelativePath = relativePath;
         }
@@ -181,12 +166,6 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
 
         [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.FolderPath))]
         public string FolderPath { get; }

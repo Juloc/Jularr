@@ -6731,6 +6731,22 @@
   "storage.volume.info": [
    "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
    "Adicione estas linhas ao compose.yaml e reinicie o contêiner. Uma senha SMB vai no .env sob a variável indicada nelas, com cada vírgula escrita duas vezes. O Docker monta o compartilhamento quando o contêiner inicia, então o NAS precisa estar ligado nesse momento."
+  ],
+  "storage.reach": [
+   "Connected by",
+   "Conectado por"
+  ],
+  "storage.reach.direct": [
+   "Jularr",
+   "Jularr"
+  ],
+  "storage.reach.volume": [
+   "Docker volume",
+   "Volume do Docker"
+  ],
+  "hint.StorageMountFields.IsVolume.info": [
+   "Jularr opens the share only when needed, so a NAS may sleep. A Docker volume is mounted when the container starts and needs lines in compose.yaml.",
+   "O Jularr abre o compartilhamento só quando precisa, então o NAS pode hibernar. Um volume do Docker é montado quando o contêiner inicia e precisa de linhas no compose.yaml."
   ]
  }
 }

@@ -54,7 +54,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     public sealed class StorageMountDetailsV1 : BaseResponse
     {
         public StorageMountDetailsV1(long id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain, bool isReadOnly,
-            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool isNetwork, long version, StorageHealthType? storageHealthTypeId,
+            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool isNetwork, bool isVolume, long version, StorageHealthType? storageHealthTypeId,
             string? diagnosticCode, DateTime? checkedAt, long? freeBytes, long? totalBytes, string? synologyUrl, string? synologyUsername)
         {
             SynologyUrl = synologyUrl;
@@ -77,6 +77,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
             WakeMacAddress = wakeMacAddress;
             WakeBroadcastAddress = wakeBroadcastAddress;
             WakeOnDemand = wakeOnDemand;
+            IsVolume = isVolume;
             IsNetwork = isNetwork;
             Version = version;
         }
@@ -123,6 +124,9 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsNetwork))]
         public bool IsNetwork { get; }
 
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsVolume))]
+        public bool IsVolume { get; }
+
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Version))]
         public long Version { get; }
 
@@ -153,8 +157,9 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     public sealed class SaveStorageMountDataV1 : BaseData
     {
         public SaveStorageMountDataV1(string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain, bool isReadOnly, string? password,
-            string? wakeMacAddress = null, string? wakeBroadcastAddress = null, bool wakeOnDemand = false)
+            string? wakeMacAddress = null, string? wakeBroadcastAddress = null, bool wakeOnDemand = false, bool isVolume = false)
         {
+            IsVolume = isVolume;
             Name = name;
             StorageProtocolTypeId = storageProtocolTypeId;
             Host = host;
@@ -192,6 +197,10 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsReadOnly))]
         public bool IsReadOnly { get; }
+
+        // SMB only: Docker mounts the share instead of Jularr reaching it.
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsVolume))]
+        public bool IsVolume { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Password))]
         public string? Password { get; }

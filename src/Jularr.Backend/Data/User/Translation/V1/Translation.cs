@@ -78,14 +78,14 @@ namespace Jularr.Backend.Data.User.Translation.V1
     // A file named by its content: it never changes, browsers keep it.
     public sealed class TranslationFileContentV1 : BaseResponse, IImmutableFileOutput
     {
-        public TranslationFileContentV1(string filePath, string contentType)
+        public TranslationFileContentV1(Stream content, string contentType)
         {
-            FilePath = filePath;
+            Content = content;
             ContentType = contentType;
         }
 
         [JsonIgnore]
-        public string FilePath { get; }
+        public Stream Content { get; }
 
         [JsonIgnore]
         public string ContentType { get; }

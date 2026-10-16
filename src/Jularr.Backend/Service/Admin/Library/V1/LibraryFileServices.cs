@@ -9,6 +9,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
@@ -182,11 +183,11 @@ namespace Jularr.Backend.Service.Admin.Library.V1
     [ServiceEndpoint("POST", "/api/v1/admin/library/renames")]
     public sealed class ApplyLibraryRenamesV1 : AdminService<LibraryRenamesParametersV1, ApplyLibraryRenamesDataV1>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal ApplyLibraryRenamesV1(IOptions<StorageOptions> options)
+        internal ApplyLibraryRenamesV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -216,10 +217,10 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             }
 
             var renamed = 0;
-            var folders = new List<(string Directory, string Folder)>();
+            var folders = new List<(StorageFiles Files, string Root, string Folder)>();
             foreach (var root in roots)
             {
-                if (Resolve(root) is not { } directory)
+                if (await OpenAsync(root) is not { } files)
                 {
                     continue;
                 }
@@ -229,7 +230,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 {
                     foreach (var rename in group)
                     {
-                        if (!await MoveAsync(directory, rename, folders))
+                        if (!await MoveAsync(files, root.RelativePath, rename, folders))
                         {
                             break;
                         }
@@ -240,55 +241,49 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             }
 
             // Folders a rename emptied or created in vain go, never the library root.
-            foreach (var (directory, folder) in folders.OrderByDescending(item => item.Folder.Length))
+            foreach (var (files, root, folder) in folders.OrderByDescending(item => item.Folder.Length))
             {
-                var current = folder;
-                while (current.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal) && Directory.Exists(current)
-                    && !Directory.EnumerateFileSystemEntries(current).Any())
+                try
                 {
-                    Directory.Delete(current);
-                    current = Path.GetDirectoryName(current)!;
+                    await files.DeleteEmptyFoldersAsync(folder, root, CancellationToken);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NasMountException)
+                {
+                    // Left for the next rename.
                 }
             }
 
             return new ApplyLibraryRenamesResultV1(renamed, renames.Count - renamed);
         }
 
-        private string? Resolve(LibraryRootLocationData root)
+        // The library's connection; null while it cannot be reached.
+        private async Task<StorageFiles?> OpenAsync(LibraryRootLocationData root)
         {
             try
             {
-                return StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
+                var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(root.StorageMountId, ct), CancellationToken);
+                var files = _storage.Open(mount);
+                return await files.GetAsync(root.RelativePath, CancellationToken) is { IsDirectory: true } ? files : null;
             }
-            catch (NasMountException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NasMountException)
             {
                 return null;
             }
         }
 
         // Move first, then record; a file whose record fails moves back.
-        private async Task<bool> MoveAsync(string directory, LibraryRenameData rename, List<(string Directory, string Folder)> folders)
+        private async Task<bool> MoveAsync(StorageFiles files, string root, LibraryRenameData rename, List<(StorageFiles Files, string Root, string Folder)> folders)
         {
-            string source;
-            string destination;
-            var target = Path.Combine(directory, Path.GetDirectoryName(rename.TargetPath.Replace('/', Path.DirectorySeparatorChar)) ?? "");
+            var source = StoragePath.Combine(root, rename.RelativePath);
+            var destination = StoragePath.Combine(root, rename.TargetPath);
             try
             {
-                source = StorageFileSystem.ResolveFile(directory, rename.RelativePath);
-                folders.Add((directory, Path.GetDirectoryName(source)!));
-                folders.Add((directory, Path.GetFullPath(target)));
-
-                // New folders grow only from a checked one.
-                var existing = target;
-                while (!Directory.Exists(existing))
+                folders.Add((files, root, StoragePath.Parent(source)));
+                folders.Add((files, root, StoragePath.Parent(destination)));
+                if (!await files.MoveAsync(source, destination, CancellationToken))
                 {
-                    existing = Path.GetDirectoryName(existing)!;
+                    return false;
                 }
-
-                StorageFileSystem.ResolveDirectory(directory, existing);
-                Directory.CreateDirectory(target);
-                destination = Path.Combine(StorageFileSystem.ResolveDirectory(directory, target), Path.GetFileName(rename.TargetPath));
-                File.Move(source, destination, false);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NasMountException)
             {
@@ -314,13 +309,13 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             }
             catch
             {
-                File.Move(destination, source, false);
+                await files.MoveAsync(destination, source, CancellationToken.None);
                 throw;
             }
 
             if (!recorded)
             {
-                File.Move(destination, source, false);
+                await files.MoveAsync(destination, source, CancellationToken.None);
             }
 
             return recorded;

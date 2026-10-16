@@ -12,9 +12,9 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
-using Jularr.Integrations.Logic.Storage;
-using Microsoft.Extensions.Options;
+using Jularr.Integrations.Data.Nas;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
@@ -22,11 +22,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     [ServiceEndpoint("POST", "/api/v1/admin/works/{workId:long}/volumes")]
     public sealed class UploadVolumeV1 : AdminService<WorkParametersV1, UploadVolumeDataV1>
     {
-        private readonly StorageOptions _storage;
+        private readonly StorageAccess _storage;
 
-        internal UploadVolumeV1(IOptions<StorageOptions> storage)
+        internal UploadVolumeV1(StorageAccess storage)
         {
-            _storage = storage.Value;
+            _storage = storage;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -43,7 +43,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 throw new DataValidationException(nameof(WorkParametersV1.WorkId), "invalid_transition");
             }
 
-            if (target is not { LibraryRootId: { } rootId, StorageMountId: { } mountId, StorageProtocolTypeId: { } protocol, SharePath: { } share, RelativePath: { } rootPath })
+            if (target is not { LibraryRootId: { } rootId, StorageMountId: { } mountId, RelativePath: { } rootPath })
             {
                 throw new ServiceUnavailableException("import_no_library");
             }
@@ -68,9 +68,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             // An existing volume stays.
-            var directory = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(protocol, mountId, share), rootPath);
+            var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(mountId, ct), CancellationToken);
+            var library = _storage.Open(mount);
+            if (await library.GetAsync(rootPath, CancellationToken) is not { IsDirectory: true })
+            {
+                throw new NasMountException("storage_unavailable");
+            }
+
             await using var content = file.OpenRead();
-            var (length, modifiedAt) = await LibraryFileWriter.WriteAsync(directory, relativePath, content, CancellationToken)
+            var (length, modifiedAt) = await LibraryFileWriter.WriteAsync(library, rootPath, relativePath, content, CancellationToken)
                 ?? throw new DataValidationException(nameof(UploadVolumeDataV1.File), "duplicate_value");
 
             // Assigned at once; the scan reads it like an imported file.
@@ -99,8 +105,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     kind."MediaSubtypeId",
                     root."Id" AS "LibraryRootId",
                     root."StorageMountId",
-                    root."StorageProtocolTypeId",
-                    root."SharePath",
                     root."RelativePath"
                 FROM
                     "Works" AS work
@@ -113,8 +117,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         SELECT
                             candidate."Id",
                             mount."Id" AS "StorageMountId",
-                            mount."StorageProtocolTypeId",
-                            mount."SharePath",
                             candidate."RelativePath"
                         FROM
                             "LibraryRoots" AS candidate

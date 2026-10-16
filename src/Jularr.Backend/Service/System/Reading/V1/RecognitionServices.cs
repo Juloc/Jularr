@@ -72,8 +72,6 @@ namespace Jularr.Backend.Service.System.Reading.V1
                         file."MissingSince" IS NOT NULL AS "IsMissing",
                         root."RelativePath" AS "RootRelativePath",
                         mount."Id" AS "StorageMountId",
-                        mount."StorageProtocolTypeId",
-                        mount."SharePath",
                         NULL::bigint AS "DocumentId",
                         FALSE AS "IsCached"
                     FROM

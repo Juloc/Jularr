@@ -27,7 +27,8 @@ namespace Jularr.Backend.Logic.Storage
                     mount."WakeMacAddress",
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
-                    mount."Version"
+                    mount."Version",
+                    mount."IsVolume"
                 FROM
                     "StorageMounts" AS mount
                 WHERE
@@ -45,10 +46,10 @@ namespace Jularr.Backend.Logic.Storage
                 """
                 INSERT INTO
                     "StorageMounts" ("Name", "StorageProtocolTypeId", "Host", "SharePath", "ProtocolVersion", "Username", "Domain", "ProtectedPassword", "IsReadOnly",
-                        "WakeMacAddress", "WakeBroadcastAddress", "WakeOnDemand")
+                        "WakeMacAddress", "WakeBroadcastAddress", "WakeOnDemand", "IsVolume")
                 VALUES
                     (@Name, @StorageProtocolTypeId, @Host, @SharePath, @ProtocolVersion, @Username, @Domain, @ProtectedPassword, @IsReadOnly,
-                        @WakeMacAddress, @WakeBroadcastAddress, @WakeOnDemand)
+                        @WakeMacAddress, @WakeBroadcastAddress, @WakeOnDemand, CASE @StorageProtocolTypeId WHEN 1 THEN @IsVolume WHEN 2 THEN TRUE ELSE FALSE END)
                 RETURNING
                     "Id";
                 """;
@@ -77,6 +78,7 @@ namespace Jularr.Backend.Logic.Storage
                     "WakeMacAddress" = @WakeMacAddress,
                     "WakeBroadcastAddress" = @WakeBroadcastAddress,
                     "WakeOnDemand" = @WakeOnDemand,
+                    "IsVolume" = CASE @StorageProtocolTypeId WHEN 1 THEN @IsVolume WHEN 2 THEN TRUE ELSE FALSE END,
                     "Version" = mount."Version" + 1,
                     "UpdatedAt" = statement_timestamp()
                 WHERE

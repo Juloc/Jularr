@@ -112,7 +112,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 .Select(item => new SelectOption(item.ProtocolVersion, item.ProtocolVersion)).ToArray();
             var input = _input ?? (_mount is { } mount
                 ? new SaveStorageMountDataV1(mount.Name, mount.StorageProtocolTypeId, mount.Host, mount.SharePath, mount.ProtocolVersion, mount.Username, mount.Domain, mount.IsReadOnly, null,
-                    mount.WakeMacAddress, mount.WakeBroadcastAddress, mount.WakeOnDemand)
+                    mount.WakeMacAddress, mount.WakeBroadcastAddress, mount.WakeOnDemand, mount.IsVolume)
                 : new SaveStorageMountDataV1("", protocol, protocol == StorageProtocolType.Local ? null : "", "", versions.FirstOrDefault()?.Value, null, null, true, null));
 
             return new Form<SaveStorageMountDataV1>(form =>
@@ -135,6 +135,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                     form.Text(item => item.Username, "storage.username");
                     form.Text(item => item.Domain, "storage.domain");
                     form.Password(item => item.Password, "storage.password", "new-password");
+                    form.Select(item => item.IsVolume, "storage.reach", [
+                        new SelectOption("False", texts["storage.reach.direct"]), new SelectOption("True", texts["storage.reach.volume"])
+                    ]);
                 }
 
                 form.Select(item => item.IsReadOnly, "storage.access", [
@@ -355,11 +358,12 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         }
 
         public async Task<IActionResult> OnPostAsync(string? name, StorageProtocolType storageProtocolTypeId, string? host, string? sharePath, string? protocolVersion,
-            string? username, string? domain, string? password, [BindRequired] bool isReadOnly, string? wakeMacAddress, string? wakeBroadcastAddress, [BindRequired] bool wakeOnDemand)
+            string? username, string? domain, string? password, [BindRequired] bool isReadOnly, string? wakeMacAddress, string? wakeBroadcastAddress, [BindRequired] bool wakeOnDemand,
+            bool isVolume)
         {
             _failedSection = "Save";
             _input = new SaveStorageMountDataV1(name ?? "", storageProtocolTypeId, Blank(host), sharePath ?? "", Blank(protocolVersion), Blank(username), Blank(domain), isReadOnly, Blank(password),
-                Blank(wakeMacAddress)?.ToUpperInvariant(), Blank(wakeBroadcastAddress), wakeOnDemand);
+                Blank(wakeMacAddress)?.ToUpperInvariant(), Blank(wakeBroadcastAddress), wakeOnDemand, isVolume);
             if (StorageMountId is { } id)
             {
                 await update.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(id), _input, HttpContext.RequestAborted);
@@ -466,7 +470,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
 
             _mount = await readMount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), ct);
-            if (_mount.IsNetwork) _volume = await readVolume.ExecuteAsync<StorageMountVolumeV1>(new StorageMountParametersV1(id), ct);
+            if (_mount.IsVolume) _volume = await readVolume.ExecuteAsync<StorageMountVolumeV1>(new StorageMountParametersV1(id), ct);
             _roots = await readRoots.ExecuteAsync<PageResult<LibraryRootDetailsV1>>(new ReadLibraryRootsParametersV1(id, RootPageNumber), ct);
 
             // Storage I/O only on explicit browsing.

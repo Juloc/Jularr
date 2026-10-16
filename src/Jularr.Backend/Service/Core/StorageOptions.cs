@@ -1,6 +1,5 @@
 using System.Globalization;
 using Jularr.Backend.Data.Enums.Storage;
-using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
 
@@ -8,7 +7,7 @@ namespace Jularr.Backend.Service.Core
 {
     public sealed class StorageOptions
     {
-        // Linux helper destinations.
+        // Where Docker mounts NAS volumes, one folder per connection.
         public string MountRoot { get; set; } = "/mnt/jularr";
 
         // Staging for files Jularr downloads itself; never a library.
@@ -34,25 +33,6 @@ namespace Jularr.Backend.Service.Core
             }
 
             return path;
-        }
-
-        // Missing permission or an absent connection.
-        internal async Task<StorageMountProbeData> ProbeAsync(long storageMountId, StorageProtocolType protocol, string sharePath, CancellationToken ct)
-        {
-            string path;
-            try
-            {
-                path = GetConnectionPath(protocol, storageMountId, sharePath);
-            }
-            catch (NasMountException exception)
-            {
-                return new StorageMountProbeData(storageMountId, StorageAvailabilityType.Offline, exception.Code, null, null);
-            }
-
-            var probe = await StorageFileSystem.ProbeAsync(path, ct);
-            var availability = probe.IsReadable ? StorageAvailabilityType.Available
-                : probe.Code == "permission_denied" ? StorageAvailabilityType.AccessDenied : StorageAvailabilityType.Offline;
-            return new StorageMountProbeData(storageMountId, availability, probe.Code, probe.FreeBytes, probe.TotalBytes);
         }
     }
 }

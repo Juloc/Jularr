@@ -280,14 +280,14 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class PlaybackStreamV1 : BaseResponse, IFileOutput
     {
-        public PlaybackStreamV1(string filePath, string contentType)
+        public PlaybackStreamV1(Stream content, string contentType)
         {
-            FilePath = filePath;
+            Content = content;
             ContentType = contentType;
         }
 
         [JsonIgnore]
-        public string FilePath { get; }
+        public Stream Content { get; }
 
         [JsonIgnore]
         public string ContentType { get; }

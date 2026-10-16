@@ -367,13 +367,13 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
     public sealed class ReadingFileV1 : BaseResponse, IFileOutput
     {
-        public ReadingFileV1(string filePath)
+        public ReadingFileV1(Stream content)
         {
-            FilePath = filePath;
+            Content = content;
         }
 
         [JsonIgnore]
-        public string FilePath { get; }
+        public Stream Content { get; }
 
         [JsonIgnore]
         public string ContentType => "application/pdf";

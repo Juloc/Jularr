@@ -8,7 +8,7 @@ namespace Jularr.Backend.Data.Logic.Storage
     internal sealed class StorageMountData : BaseData
     {
         public StorageMountData(long id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion,
-            string? username, string? domain, bool isReadOnly, byte[]? protectedPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long version)
+            string? username, string? domain, bool isReadOnly, byte[]? protectedPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long version, bool isVolume = false)
         {
             Id = id;
             Name = name;
@@ -24,7 +24,11 @@ namespace Jularr.Backend.Data.Logic.Storage
             WakeBroadcastAddress = wakeBroadcastAddress;
             WakeOnDemand = wakeOnDemand;
             Version = version;
+            IsVolume = isVolume;
         }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsVolume))]
+        public bool IsVolume { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long Id { get; }
@@ -68,20 +72,5 @@ namespace Jularr.Backend.Data.Logic.Storage
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Version))]
         public long Version { get; }
-    }
-
-    internal sealed class StorageMountLocationData : BaseData
-    {
-        public StorageMountLocationData(StorageProtocolType storageProtocolTypeId, string sharePath)
-        {
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
-        }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
     }
 }

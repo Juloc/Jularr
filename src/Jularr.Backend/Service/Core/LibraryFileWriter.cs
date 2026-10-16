@@ -7,12 +7,10 @@ namespace Jularr.Backend.Service.Core
     internal static class LibraryFileWriter
     {
         // The relative path must already be a checked library path. Size and the modification time as stored files keep it; none when the name is taken.
-        public static async Task<(long Length, DateTime ModifiedAt)?> WriteAsync(string directory, string relativePath, Stream content, CancellationToken ct)
+        public static async Task<(long Length, DateTime ModifiedAt)?> WriteAsync(StorageFiles files, string directory, string relativePath, Stream content, CancellationToken ct)
         {
-            var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
-            Directory.CreateDirectory(Path.Combine(directory, folder));
-            var path = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
-            if (File.Exists(path))
+            var path = StoragePath.Combine(directory, relativePath);
+            if (await files.ExistsAsync(path, ct))
             {
                 return null;
             }
@@ -20,24 +18,23 @@ namespace Jularr.Backend.Service.Core
             var partial = path + "." + Guid.NewGuid().ToString("N") + ".partial";
             try
             {
-                await using (var stream = new FileStream(partial, FileMode.CreateNew, FileAccess.Write))
+                await using (var stream = await files.CreateAsync(partial, ct) ?? throw new IOException("The partial name is taken."))
                 {
                     await content.CopyToAsync(stream, ct);
                 }
 
-                File.Move(partial, path, false);
-            }
-            catch (IOException) when (File.Exists(path))
-            {
-                return null;
+                if (!await files.MoveAsync(partial, path, ct))
+                {
+                    return null;
+                }
             }
             finally
             {
-                if (File.Exists(partial)) File.Delete(partial);
+                if (await files.ExistsAsync(partial, CancellationToken.None)) await files.DeleteFileAsync(partial, CancellationToken.None);
             }
 
-            var info = new FileInfo(path);
-            return (info.Length, StoredFileLogic.StoredTime(info.LastWriteTimeUtc));
+            var entry = await files.GetAsync(path, ct) ?? throw new IOException("The written file is missing.");
+            return (entry.Length, StoredFileLogic.StoredTime(entry.ModifiedAt));
         }
     }
 }

@@ -8,9 +8,9 @@ Data und PostgreSQL-Zugriff. Kein alter Web-Bereich, kein EF.
 `Logic/Plex` enthält den Plex-Client, `Data/Plex` seine Protokollantworten
 und `Data/Common` gemeinsame Integrationsfehler. Backend-Services
 entscheiden weiterhin über Anmeldung, Bibliotheksfreigabe und Registrierung.
-Die bestehenden Host-Registrierungen bleiben unverändert. NAS-Freigaben (SMB,
-NFS) bindet Docker als Volume ein, dazu Synology API und per Docker Compose
-freigegebene Pfade. Konfiguration erfolgt über Services und Frontend.
+Die bestehenden Host-Registrierungen bleiben unverändert. SMB-Freigaben
+erreicht Jularr selbst oder Docker bindet sie als Volume ein, NFS immer als Volume;
+dazu Synology API und per Docker Compose freigegebene Pfade. Konfiguration erfolgt über Services und Frontend.
 
 Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
 Navigation: [CODEMAP.md](docs/CODEMAP.md).
@@ -167,8 +167,8 @@ automatische Suche, Downloads und Import sind noch nicht verbunden.
 
 Owner konfigurieren SMB/NFS unter `/Admin/Storage` und `/Setup/Storage` über
 dieselben Services. Passwörter werden geschützt gespeichert; normale Seiten
-kontaktieren das NAS nicht. Für SMB/NFS zeigt die Seite die Zeilen für
-`compose.yaml`, mit denen Docker die Freigabe als Volume einbindet; „Jetzt prüfen“
+kontaktieren das NAS nicht. Für Volumes zeigt die Seite die Zeilen für
+`compose.yaml`, mit denen Docker die Freigabe einbindet; „Jetzt prüfen“
 liest den Zustand, ausgefallene Freigaben prüft der Worker mit wachsender Pause erneut. Lokale Compose-Pfade sind nur aus
 `Storage:LocalPaths` wählbar; Wake-on-LAN ist pro Verbindung als „nur Owner“ oder
 „automatisch bei Abruf“ einstellbar. Library-Pfade liegen auf derselben Seite unter

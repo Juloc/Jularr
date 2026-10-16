@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Media;
@@ -16,13 +17,13 @@ namespace Jularr.Backend.Service.System.Media.V1
     public sealed class GenerateTrickplayV1 : SystemService<TrickplayParametersV1, NoData>
     {
         private readonly MediaOptions _media;
-        private readonly StorageOptions _storage;
+        private readonly StorageAccess _storage;
         private readonly MediaTranscoder _transcoder;
 
-        internal GenerateTrickplayV1(IOptions<MediaOptions> media, IOptions<StorageOptions> storage, MediaTranscoder transcoder)
+        internal GenerateTrickplayV1(IOptions<MediaOptions> media, StorageAccess storage, MediaTranscoder transcoder)
         {
             _media = media.Value;
-            _storage = storage.Value;
+            _storage = storage;
             _transcoder = transcoder;
         }
 
@@ -53,8 +54,6 @@ namespace Jularr.Backend.Service.System.Media.V1
                         file."RelativePath",
                         root."RelativePath" AS "RootRelativePath",
                         mount."Id" AS "StorageMountId",
-                        mount."StorageProtocolTypeId",
-                        mount."SharePath",
                         video."Width",
                         video."Height"
                     FROM
@@ -98,11 +97,11 @@ namespace Jularr.Backend.Service.System.Media.V1
                 return new UpdateResult(false);
             }
 
-            string input;
+            StorageInput input;
             try
             {
-                var directory = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
-                input = StorageFileSystem.ResolveFile(directory, source.RelativePath);
+                var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(source.StorageMountId, ct), CancellationToken);
+                input = _storage.Input(_storage.Open(mount), StoragePath.Combine(source.RootRelativePath, source.RelativePath));
             }
             catch (NasMountException)
             {
@@ -122,7 +121,8 @@ namespace Jularr.Backend.Service.System.Media.V1
 
             Directory.CreateDirectory(pending);
             int? frames = null;
-            if (await _transcoder.CreateTrickplayAsync(input, pending, Trickplay.IntervalSeconds, Trickplay.TileWidth, Trickplay.TileHeight(source.Width, source.Height),
+            using var _ = input;
+            if (await _transcoder.CreateTrickplayAsync(input.Location, pending, Trickplay.IntervalSeconds, Trickplay.TileWidth, Trickplay.TileHeight(source.Width, source.Height),
                     Trickplay.Columns, Trickplay.Rows, CancellationToken)
                 && Directory.GetFiles(pending, "*.jpg").Length is var sheets and > 0)
             {

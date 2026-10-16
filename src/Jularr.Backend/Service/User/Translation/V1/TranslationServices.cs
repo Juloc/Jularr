@@ -77,7 +77,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             }
 
             var path = await _files.PathAsync(Parameters.Name, CancellationToken);
-            return new TranslationFileContentV1(path, Parameters.Name.EndsWith(".wasm", StringComparison.Ordinal) ? "application/wasm" : "application/octet-stream");
+            return new TranslationFileContentV1(File.OpenRead(path), Parameters.Name.EndsWith(".wasm", StringComparison.Ordinal) ? "application/wasm" : "application/octet-stream");
         }
     }
 }

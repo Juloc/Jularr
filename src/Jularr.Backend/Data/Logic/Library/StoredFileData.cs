@@ -1,6 +1,5 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Instance;
 using Jularr.Backend.Data.Fields.Library;
@@ -347,8 +346,7 @@ namespace Jularr.Backend.Data.Logic.Library
     // A video file that has no seek thumbnails yet.
     internal sealed class TrickplaySourceData : BaseData
     {
-        public TrickplaySourceData(long id, long sizeBytes, DateTime modifiedAt, long durationMs, string relativePath, string rootRelativePath, long storageMountId,
-            StorageProtocolType storageProtocolTypeId, string sharePath, int width, int height)
+        public TrickplaySourceData(long id, long sizeBytes, DateTime modifiedAt, long durationMs, string relativePath, string rootRelativePath, long storageMountId, int width, int height)
         {
             Width = width;
             Height = height;
@@ -359,8 +357,6 @@ namespace Jularr.Backend.Data.Logic.Library
             RelativePath = relativePath;
             RootRelativePath = rootRelativePath;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
         }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
@@ -384,12 +380,6 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
-
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]
         public int Width { get; }
 
@@ -401,7 +391,7 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class SubtitleSourceData : BaseData
     {
         public SubtitleSourceData(long id, long libraryRootId, long sizeBytes, DateTime modifiedAt, string relativePath, string? releaseName, string? releaseGroup, long mediaAssetId,
-            string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, MediaType mediaTypeId, decimal? unitNumber, decimal? parentUnitNumber,
+            string rootRelativePath, long storageMountId, MediaType mediaTypeId, decimal? unitNumber, decimal? parentUnitNumber,
             string? imdbId, string? tmdbId, string[] trackLanguages, string[] siblingPaths)
         {
             Id = id;
@@ -414,8 +404,6 @@ namespace Jularr.Backend.Data.Logic.Library
             MediaAssetId = mediaAssetId;
             RootRelativePath = rootRelativePath;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             MediaTypeId = mediaTypeId;
             UnitNumber = unitNumber;
             ParentUnitNumber = parentUnitNumber;
@@ -454,12 +442,6 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }

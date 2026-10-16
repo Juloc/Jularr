@@ -82,13 +82,13 @@ namespace Jularr.Backend.Data.User.Game.V1
 
     public sealed class GameFileV1 : BaseResponse, IFileOutput
     {
-        public GameFileV1(string filePath)
+        public GameFileV1(Stream content)
         {
-            FilePath = filePath;
+            Content = content;
         }
 
         [JsonIgnore]
-        public string FilePath { get; }
+        public Stream Content { get; }
 
         [JsonIgnore]
         public string ContentType => "application/octet-stream";

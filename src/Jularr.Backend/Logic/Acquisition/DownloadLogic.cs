@@ -968,8 +968,6 @@ namespace Jularr.Backend.Logic.Acquisition
                     root."MediaTypeId",
                     root."MediaSubtypeId",
                     root."StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     root."RelativePath"
                 FROM
                     "WantedItems" AS wanted

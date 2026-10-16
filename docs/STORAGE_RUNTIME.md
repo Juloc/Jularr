@@ -1,4 +1,4 @@
-# Storage connections and NAS volumes
+# Storage connections, direct SMB and NAS volumes
 
 Owner settings at `/Admin/Storage` and the authenticated Setup page at
 `/Setup/Storage` use the same connection editor and Backend services. First-Owner
@@ -14,6 +14,9 @@ returns one connection and `ReadStorageProtocolsV1` provides supported versions.
 through Storage Logic. `CheckStorageMountV1` probes the connection now, outside
 database transactions, and records the result. `ReadStorageMountVolumeV1` returns
 the compose lines that mount an SMB or NFS connection as a Docker volume.
+Every feature reaches a connection's files through `StorageAccess`
+([StorageFiles.cs](../src/Jularr.Integrations/Logic/Storage/StorageFiles.cs)): paths inside the
+connection, a folder on this host for local paths and volumes, Jularr's own session for direct SMB.
 
 `ReadStorageLocalPathsV1` lists the `Storage:LocalPaths` deployment configuration;
 Local connections may only use one of those paths. They are host or
@@ -31,7 +34,8 @@ catalogs. Resource IDs remain long. These tables supplement the original media
 snapshot; LibraryRoots remains a separate logical owner. Connection settings are
 available independently of Library/Requests module switches.
 
-SMB supports 3.1.1 and 3.0, authenticated username/domain/password connections.
+SMB supports 3.1.1 and 3.0, authenticated username/domain/password connections, reached by Jularr
+itself (the default) or mounted by Docker as a volume (`IsVolume`).
 NFS supports 4.1 and 4.2 with server-export/UID/GID permissions. Server input is
 a hostname or IPv4 address, not a URL. Share/export paths are absolute paths;
 for example SMB `/bay4plex/media` or NFS `/volume1/media`. IPv6 and Kerberos/AD
@@ -83,6 +87,23 @@ recorded under its new path, keeping its identity, analysis and progress, or mov
 back. Offline libraries and names taken meanwhile are skipped, a video together with
 its subtitles, and folders a rename emptied are removed.
 
+## Direct SMB
+
+Without a volume Jularr speaks SMB itself through [SMBLibrary](https://github.com/TalAloni/SMBLibrary)
+(LGPL-3.0, owner-approved): nothing goes into `compose.yaml`, and the container starts while the NAS
+sleeps. [SmbShares.cs](../src/Jularr.Integrations/Logic/Storage/SmbShares.cs) keeps one signed-in session
+per connection and saved configuration; requests take turns on it, a lost session opens again on the
+next request, and a session without open files closes after 15 idle minutes so the NAS may sleep.
+The share path names the share and then a folder inside it (`/media/library` is the folder `library`
+of the share `media`). Hidden and system entries and links are left out like on a local folder.
+
+Playback, games and the PDF reader stream the file with ranges straight from the share. FFmpeg and
+ffprobe read it from an address on the loopback interface with a random token that lives as long as
+the tool runs ([StorageStreamServer.cs](../src/Jularr.Integrations/Logic/Storage/StorageStreamServer.cs));
+fpcalc, whose static build has no network input, reads it on its standard input, and 7-Zip gets a
+temporary copy of a CBR or CB7. Imports from the download folder are copied beside the target and
+published when complete; a hardlink needs a folder on the same host.
+
 ## Docker volumes
 
 Jularr mounts nothing itself and needs no helper container or extra capabilities.
@@ -113,7 +134,7 @@ Docker resolves the SMB server name and the NFS `addr` itself.
 
 Docker mounts volumes when the container starts: a NAS that is off at that moment
 keeps the container from starting, and a share that disappears later shows as
-offline until it is back. A NAS that sleeps needs a direct connection without a volume.
+offline until it is back. A NAS that sleeps is better reached directly.
 
 ## Health checks
 

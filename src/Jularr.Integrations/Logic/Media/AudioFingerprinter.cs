@@ -12,7 +12,12 @@ namespace Jularr.Integrations.Logic.Media
         public string? ExecutablePath { get; set; }
         public bool IsAvailable => !string.IsNullOrWhiteSpace(ExecutablePath);
 
-        public async Task<AudioFingerprint> FingerprintAsync(string path, CancellationToken ct)
+        public Task<AudioFingerprint> FingerprintAsync(string path, CancellationToken ct) => RunAsync(path, null, ct);
+
+        // A file fpcalc cannot open itself, such as one on a direct share, arrives on its standard input.
+        public Task<AudioFingerprint> FingerprintAsync(Stream audio, CancellationToken ct) => RunAsync("-", audio, ct);
+
+        private async Task<AudioFingerprint> RunAsync(string input, Stream? audio, CancellationToken ct)
         {
             if (!IsAvailable)
             {
@@ -20,8 +25,11 @@ namespace Jularr.Integrations.Logic.Media
             }
 
             // No shell and a bounded run time; library analysis yields to playback.
-            var start = new ProcessStartInfo(ExecutablePath!) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-            foreach (var argument in new[] { "-json", "-length", "120", path })
+            var start = new ProcessStartInfo(ExecutablePath!)
+            {
+                RedirectStandardInput = audio is not null, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true
+            };
+            foreach (var argument in new[] { "-json", "-length", "120", input })
             {
                 start.ArgumentList.Add(argument);
             }
@@ -51,7 +59,9 @@ namespace Jularr.Integrations.Logic.Media
             {
                 var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
                 var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                var feed = audio is null ? Task.CompletedTask : FeedAsync(audio, process.StandardInput.BaseStream, timeout.Token);
                 await process.WaitForExitAsync(timeout.Token);
+                await feed;
                 await errors;
                 return process.ExitCode == 0 ? Parse(await output) : throw new InvalidDataException("The audio file could not be fingerprinted.");
             }
@@ -60,6 +70,21 @@ namespace Jularr.Integrations.Logic.Media
                 process.Kill(true);
                 ct.ThrowIfCancellationRequested();
                 throw new InvalidDataException("Fingerprinting timed out.");
+            }
+        }
+
+        // fpcalc stops reading after two minutes of audio; the rest is not needed.
+        private static async Task FeedAsync(Stream audio, Stream input, CancellationToken ct)
+        {
+            try
+            {
+                await using (input)
+                {
+                    await audio.CopyToAsync(input, ct);
+                }
+            }
+            catch (IOException)
+            {
             }
         }
 

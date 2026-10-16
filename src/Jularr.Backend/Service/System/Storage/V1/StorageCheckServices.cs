@@ -5,18 +5,17 @@ using Jularr.Backend.Data.System.Storage.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.System.Storage.V1
 {
     // Looks again at mounts that failed once their pause is over.
     public sealed class CheckStorageMountsV1 : SystemService<StorageChecksParametersV1, NoData>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal CheckStorageMountsV1(IOptions<StorageOptions> options)
+        internal CheckStorageMountsV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -59,7 +58,7 @@ namespace Jularr.Backend.Service.System.Storage.V1
                 }
 
                 // Storage I/O stays outside transactions.
-                var probe = await _options.ProbeAsync(mount.Id, mount.StorageProtocolTypeId, mount.SharePath, CancellationToken);
+                var probe = await _storage.ProbeAsync(mount, CancellationToken);
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
                     await ctx.SaveStorageMountProbeAsync(probe, ct);

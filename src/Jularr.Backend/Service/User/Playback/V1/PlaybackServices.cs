@@ -9,6 +9,7 @@ using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Nas;
@@ -209,12 +210,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
     [ServiceEndpoint("GET", "/api/v1/playback/assets/{mediaAssetId:long}/subtitles/{key}")]
     public sealed class ReadPlaybackSubtitleV1 : UserService<PlaybackSubtitleParametersV1>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
         private readonly PlaybackSubtitles _subtitles;
 
-        internal ReadPlaybackSubtitleV1(IOptions<StorageOptions> options, PlaybackSubtitles subtitles)
+        internal ReadPlaybackSubtitleV1(StorageAccess storage, PlaybackSubtitles subtitles)
         {
-            _options = options.Value;
+            _storage = storage;
             _subtitles = subtitles;
         }
 
@@ -235,8 +236,6 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     file."ModifiedAt",
                     root."RelativePath" AS "RootRelativePath",
                     mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath",
                     track."Codec"
                 FROM
                     "MediaAssets" AS asset
@@ -270,33 +269,24 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 throw new KeyNotFoundException("The subtitle was not found.");
             }
 
-            string path;
-            try
-            {
-                var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
-                path = StorageFileSystem.ResolveFile(directory, source.RelativePath);
-            }
-            catch (NasMountException)
-            {
-                throw new ServiceUnavailableException("storage_unavailable");
-            }
-
+            var files = _storage.Open(await Context.ReadStorageMountAsync(source.StorageMountId, CancellationToken));
+            var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
             var cacheKey = source.StoredFileId.ToString(CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
                 + source.ModifiedAt.Ticks.ToString(CultureInfo.InvariantCulture);
-            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(path, streamIndex, cacheKey, CancellationToken));
+            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(files, path, streamIndex, cacheKey, CancellationToken));
         }
     }
 
     [ServiceEndpoint("POST", "/api/v1/playback/assets/{mediaAssetId:long}/sessions")]
     public sealed class StartPlaybackV1 : UserService<MediaAssetParametersV1, StartPlaybackDataV1>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
         private readonly WakeOnLanClient _wake;
         private readonly PlaybackTranscodes _transcodes;
 
-        internal StartPlaybackV1(IOptions<StorageOptions> options, WakeOnLanClient wake, PlaybackTranscodes transcodes)
+        internal StartPlaybackV1(StorageAccess storage, WakeOnLanClient wake, PlaybackTranscodes transcodes)
         {
-            _options = options.Value;
+            _storage = storage;
             _wake = wake;
             _transcodes = transcodes;
         }
@@ -320,8 +310,6 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         file."RelativePath",
                         root."RelativePath" AS "RootRelativePath",
                         mount."Id" AS "StorageMountId",
-                        mount."StorageProtocolTypeId",
-                        mount."SharePath",
                         mount."WakeMacAddress",
                         mount."WakeBroadcastAddress",
                         mount."WakeOnDemand",
@@ -397,11 +385,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
             }
 
             // Sleeping storage wakes only when the Owner allowed it.
-            string path;
+            var path = StoragePath.Combine(source.RootRelativePath, source.RelativePath);
+            StorageFiles files;
             try
             {
-                var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
-                path = StorageFileSystem.ResolveFile(directory, source.RelativePath);
+                var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(source.StorageMountId, ct), CancellationToken);
+                files = _storage.Open(mount);
+                if (await files.GetAsync(path, CancellationToken) is not { IsDirectory: false })
+                {
+                    throw new NasMountException("storage_unavailable");
+                }
             }
             catch (NasMountException) when (source is { WakeOnDemand: true, WakeMacAddress: { } macAddress })
             {
@@ -418,7 +411,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var url = "/api/v1/playback/sessions/" + sessionId.ToString("D");
             if (conversion is { } plan)
             {
-                _transcodes.Register(new PlaybackTranscodeSource(sessionId, lookup.ProfileId, path, plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
+                _transcodes.Register(new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
                     source.DurationMs!.Value, plan.AudioKilobits));
                 return new PlaybackPlanV1(sessionId, mode, url + "/playlist.m3u8", resume, source.DurationMs);
             }
@@ -430,11 +423,11 @@ namespace Jularr.Backend.Service.User.Playback.V1
     [ServiceEndpoint("GET", "/api/v1/playback/sessions/{playbackSessionId:guid}/stream")]
     public sealed class ReadPlaybackStreamV1 : UserService<PlaybackSessionParametersV1>
     {
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal ReadPlaybackStreamV1(IOptions<StorageOptions> options)
+        internal ReadPlaybackStreamV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackStreamV1>()];
@@ -450,9 +443,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 SELECT
                     file."RelativePath",
                     root."RelativePath" AS "RootRelativePath",
-                    mount."Id" AS "StorageMountId",
-                    mount."StorageProtocolTypeId",
-                    mount."SharePath"
+                    mount."Id" AS "StorageMountId"
                 FROM
                     "PlaybackSessions" AS session
                     JOIN "StoredFiles" AS file ON file."Id" = session."StoredFileId"
@@ -466,15 +457,10 @@ namespace Jularr.Backend.Service.User.Playback.V1
             sql.Parameters.Add(new PlaybackSessionLookupData(Parameters.PlaybackSessionId, Auth.ProfileId!.Value));
             var stream = await Context.ReadSql.ReadRequiredAsync<PlaybackStreamData>(sql, CancellationToken);
 
-            // The HTTP adapter opens the file after this read.
-            var connection = Path.TrimEndingDirectorySeparator(_options.GetConnectionPath(stream.StorageProtocolTypeId, stream.StorageMountId, stream.SharePath));
-            var path = Path.GetFullPath(Path.Combine(connection, stream.RootRelativePath, stream.RelativePath));
-            if (!path.StartsWith(connection + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            {
-                throw new KeyNotFoundException("The playback file is unavailable.");
-            }
-
-            return new PlaybackStreamV1(path, LibraryFileTypes.GetStream(stream.RelativePath).ContentType);
+            // The HTTP adapter streams it with ranges.
+            var files = _storage.Open(await Context.ReadStorageMountAsync(stream.StorageMountId, CancellationToken));
+            var content = await files.OpenReadAsync(StoragePath.Combine(stream.RootRelativePath, stream.RelativePath), CancellationToken);
+            return new PlaybackStreamV1(content, LibraryFileTypes.GetStream(stream.RelativePath).ContentType);
         }
     }
 
@@ -518,7 +504,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var path = await _transcodes.GetSegmentAsync(Parameters.PlaybackSessionId, Auth.ProfileId!.Value, Parameters.Index, CancellationToken);
-            return new PlaybackStreamV1(path, "video/mp2t");
+            return new PlaybackStreamV1(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous), "video/mp2t");
         }
     }
 

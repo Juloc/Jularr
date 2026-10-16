@@ -4,11 +4,9 @@ using Jularr.Integrations.Data.Storage;
 
 namespace Jularr.Integrations.Logic.Storage
 {
+    // Folders on this host that are no connection: download outputs and the mount check of Docker volumes.
     internal static class StorageFileSystem
     {
-        // Replaced files wait here inside their library; scans pass it by.
-        public const string RecycleFolder = ".jularr-recycle";
-
         private static readonly EnumerationOptions Options = new()
         {
             AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
@@ -71,55 +69,6 @@ namespace Jularr.Integrations.Logic.Storage
             return path;
         }
 
-        public static async Task<StorageProbe> ProbeAsync(string path, CancellationToken ct)
-        {
-            // Hanging mounts time out.
-            try
-            {
-                return await Task.Run(() => Probe(path), ct).WaitAsync(TimeSpan.FromSeconds(5), ct);
-            }
-            catch (TimeoutException)
-            {
-                return new StorageProbe(false, "probe_timeout", null, null);
-            }
-        }
-
-        private static StorageProbe Probe(string path)
-        {
-            try
-            {
-                if (!Directory.Exists(path))
-                {
-                    return new StorageProbe(false, "storage_unavailable", null, null);
-                }
-
-                // One entry proves an answer.
-                using (var entries = Directory.EnumerateFileSystemEntries(path).GetEnumerator())
-                {
-                    entries.MoveNext();
-                }
-
-                // Windows reports drive roots only.
-                try
-                {
-                    var drive = new DriveInfo(OperatingSystem.IsWindows() ? Path.GetPathRoot(Path.GetFullPath(path))! : path);
-                    return drive.IsReady ? new StorageProbe(true, null, drive.AvailableFreeSpace, drive.TotalSize) : new StorageProbe(true, null, null, null);
-                }
-                catch (ArgumentException)
-                {
-                    return new StorageProbe(true, null, null, null);
-                }
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return new StorageProbe(false, "permission_denied", null, null);
-            }
-            catch (IOException)
-            {
-                return new StorageProbe(false, "storage_unavailable", null, null);
-            }
-        }
-
         public static bool IsMountPoint(string path)
         {
             // Only Linux hosts mount connections; elsewhere the directory is the connection.
@@ -139,22 +88,6 @@ namespace Jularr.Integrations.Logic.Storage
             }
 
             return false;
-        }
-
-        public static IReadOnlyList<string> ListDirectories(string directory, int limit)
-        {
-            try
-            {
-                return new DirectoryInfo(directory).EnumerateDirectories("*", Options)
-                    .Select(item => item.Name)
-                    .Order(StringComparer.Ordinal)
-                    .Take(limit)
-                    .ToArray();
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                throw new NasMountException("storage_unavailable");
-            }
         }
 
         // Without extensions every file counts.
@@ -186,7 +119,7 @@ namespace Jularr.Integrations.Logic.Storage
                 foreach (var entry in entries)
                 {
                     var path = relative.Length == 0 ? entry.Name : relative + "/" + entry.Name;
-                    if (entry is DirectoryInfo && entry.Name != RecycleFolder)
+                    if (entry is DirectoryInfo && entry.Name != StorageFiles.RecycleFolder)
                     {
                         pending.Push(path);
                     }

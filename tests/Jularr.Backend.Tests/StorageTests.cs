@@ -87,7 +87,8 @@ namespace Jularr.Backend.Tests
             {
                 ["__RequestVerificationToken"] = csrf,
                 ["Name"] = "<NAS>", ["StorageProtocolTypeId"] = "Smb", ["Host"] = "nas.test", ["SharePath"] = "/media",
-                ["ProtocolVersion"] = "3.1.1", ["Username"] = "jularr", ["Password"] = Password, ["IsReadOnly"] = "True", ["WakeOnDemand"] = "False"
+                ["ProtocolVersion"] = "3.1.1", ["Username"] = "jularr", ["Password"] = Password, ["IsReadOnly"] = "True", ["WakeOnDemand"] = "False",
+                ["IsVolume"] = "True"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var settings = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=1");

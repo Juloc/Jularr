@@ -4,10 +4,10 @@ namespace Jularr.Backend.Data.Common
     {
     }
 
-    // Authorized file responses with HTTP range support.
+    // Authorized file responses with HTTP range support; the response disposes the seekable stream.
     public interface IFileOutput
     {
-        string FilePath { get; }
+        Stream Content { get; }
         string ContentType { get; }
     }
 

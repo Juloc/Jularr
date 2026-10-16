@@ -19,7 +19,7 @@ namespace Jularr.Backend.Data.Logic.Storage
     internal sealed class StorageMountSaveData : BaseData
     {
         public StorageMountSaveData(long? id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain,
-            bool isReadOnly, byte[]? protectedPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand)
+            bool isReadOnly, byte[]? protectedPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool isVolume)
         {
             Id = id;
             Name = name;
@@ -33,6 +33,7 @@ namespace Jularr.Backend.Data.Logic.Storage
             ProtectedPassword = protectedPassword;
             WakeMacAddress = wakeMacAddress;
             WakeBroadcastAddress = wakeBroadcastAddress;
+            IsVolume = isVolume;
             WakeOnDemand = wakeOnDemand;
         }
 
@@ -75,6 +76,9 @@ namespace Jularr.Backend.Data.Logic.Storage
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.WakeOnDemand))]
         public bool WakeOnDemand { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsVolume))]
+        public bool IsVolume { get; }
     }
 
     internal sealed class StorageMountParameters : BaseData

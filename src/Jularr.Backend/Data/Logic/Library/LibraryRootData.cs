@@ -73,14 +73,12 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class LibraryRootLocationData : BaseData
     {
-        public LibraryRootLocationData(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string relativePath)
+        public LibraryRootLocationData(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, string relativePath)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             RelativePath = relativePath;
         }
 
@@ -95,12 +93,6 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
         public string RelativePath { get; }
@@ -139,16 +131,13 @@ namespace Jularr.Backend.Data.Logic.Library
     // Where a Work's own files go: its title and the first writable library of its type and subtype.
     internal sealed class UploadTargetData : BaseData
     {
-        public UploadTargetData(string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long? libraryRootId, long? storageMountId, StorageProtocolType? storageProtocolTypeId,
-            string? sharePath, string? relativePath)
+        public UploadTargetData(string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long? libraryRootId, long? storageMountId, string? relativePath)
         {
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
             MediaSubtypeId = mediaSubtypeId;
             LibraryRootId = libraryRootId;
             StorageMountId = storageMountId;
-            StorageProtocolTypeId = storageProtocolTypeId;
-            SharePath = sharePath;
             RelativePath = relativePath;
         }
 
@@ -170,9 +159,6 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId), false)]
         public StorageProtocolType? StorageProtocolTypeId { get; }
-
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath), false)]
-        public string? SharePath { get; }
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath), false)]
         public string? RelativePath { get; }

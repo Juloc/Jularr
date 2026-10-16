@@ -8,6 +8,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.Libretro;
 using Jularr.Integrations.Logic.Libretro;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.System.Operation.V1
@@ -25,13 +26,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
             _time = time;
         }
 
-        public async Task IdentifyAsync(LogicContext context, long libraryRootId, string directory, CancellationToken ct)
+        public async Task IdentifyAsync(LogicContext context, long libraryRootId, StorageFiles storage, string directory, CancellationToken ct)
         {
-            await HashAsync(context, libraryRootId, directory, ct);
+            await HashAsync(context, libraryRootId, storage, directory, ct);
             await AssignAsync(context, libraryRootId, ct);
         }
 
-        private async Task HashAsync(LogicContext context, long libraryRootId, string directory, CancellationToken ct)
+        private async Task HashAsync(LogicContext context, long libraryRootId, StorageFiles storage, string directory, CancellationToken ct)
         {
             // A platform without its DAT keeps its files for the next scan.
             var catalogs = new Dictionary<string, bool>(StringComparer.Ordinal);
@@ -81,8 +82,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     string? sha1 = null;
                     try
                     {
-                        await using var stream = new FileStream(StorageFileSystem.ResolveFile(directory, file.RelativePath), FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
-                            FileOptions.SequentialScan);
+                        await using var stream = await storage.OpenReadAsync(StoragePath.Combine(directory, file.RelativePath), ct);
                         using var archive = isArchive ? new ZipArchive(stream, ZipArchiveMode.Read) : null;
                         var entry = archive?.Entries.Where(item => item.Name.Length > 0).ToArray() is [var single] ? single : null;
                         var system = GameRomMatching.System(archive is null ? file.RelativePath : entry?.Name ?? "");
@@ -102,7 +102,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     {
                         // Broken archives stay unidentified.
                     }
-                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NasMountException)
                     {
                         // Unreachable files retry on the next scan.
                         continue;

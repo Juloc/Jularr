@@ -493,7 +493,7 @@ namespace Jularr.Backend.Tests
         internal static async Task<long> CreateMountAsync(Host host)
         {
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
-                new SaveStorageMountDataV1("NAS", StorageProtocolType.Smb, "nas.test", "/media", "3.1.1", "jularr", null, true, "secret", "00:11:22:AA:BB:CC", "127.0.0.1", true));
+                new SaveStorageMountDataV1("NAS", StorageProtocolType.Smb, "nas.test", "/media", "3.1.1", "jularr", null, true, "secret", "00:11:22:AA:BB:CC", "127.0.0.1", true, isVolume: true));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             return (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
         }

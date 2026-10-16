@@ -39,6 +39,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
                     mount."StorageProtocolTypeId" <> 3 AS "IsNetwork",
+                    mount."IsVolume",
                     mount."Version",
                     health."StorageHealthTypeId",
                     health."DiagnosticCode",
@@ -76,7 +77,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var mount = await Context.ReadStorageMountAsync(Parameters.StorageMountId, CancellationToken);
-            if (mount.StorageProtocolTypeId == StorageProtocolType.Local)
+            if (!mount.IsVolume)
             {
                 throw new DataValidationException(nameof(StorageMountDetailsV1.StorageProtocolTypeId), "invalid_type");
             }
@@ -133,11 +134,11 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
     public sealed class ReadStorageDirectoriesV1 : AdminService<StorageMountParametersV1, ReadStorageDirectoriesDataV1>
     {
         private const int Limit = 500;
-        private readonly StorageOptions _options;
+        private readonly StorageAccess _storage;
 
-        internal ReadStorageDirectoriesV1(IOptions<StorageOptions> options)
+        internal ReadStorageDirectoriesV1(StorageAccess storage)
         {
-            _options = options.Value;
+            _storage = storage;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -147,27 +148,9 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Resolve the connection in an authorized batch.
-            var mount = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-            {
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT
-                        mount."StorageProtocolTypeId",
-                        mount."SharePath"
-                    FROM
-                        "StorageMounts" AS mount
-                    WHERE
-                        mount."Id" = @StorageMountId;
-                    """;
-                sql.Parameters.Add(new StorageMountParameters(Parameters.StorageMountId));
-                return await ctx.ReadSql.ReadRequiredAsync<StorageMountLocationData>(sql, ct);
-            }, CancellationToken);
-
             // Browse only below the connection.
-            var root = _options.GetConnectionPath(mount.StorageProtocolTypeId, Parameters.StorageMountId, mount.SharePath);
-            var names = await Task.Run(() => StorageFileSystem.ListDirectories(StorageFileSystem.ResolveDirectory(root, Data.RelativePath), Limit), CancellationToken);
+            var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(Parameters.StorageMountId, ct), CancellationToken);
+            var names = await _storage.Open(mount).ListDirectoriesAsync(Data.RelativePath, Limit, CancellationToken);
             return new BaseDataList<StorageDirectoryV1>(names.Select(name => new StorageDirectoryV1(name)).ToArray());
         }
     }
