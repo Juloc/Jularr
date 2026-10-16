@@ -134,7 +134,12 @@ namespace Jularr.E2E.Tests
                 // The reader reflows it by chapter, keeps the original at hand and continues where reading stopped.
                 await Steps.OpenReaderAsync(page, details);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "must be in want of a wife.");
+                var download = page.GetByRole(AriaRole.Button, new() { Name = "Download", Exact = true });
+                await download.ClickAsync();
                 Assert.AreEqual(1, await page.GetByRole(AriaRole.Link, new() { Name = "Original PDF" }).CountAsync());
+                var epub = await page.RunAndWaitForDownloadAsync(() => page.GetByRole(AriaRole.Link, new() { Name = "EPUB", Exact = true }).ClickAsync());
+                Assert.AreEqual(".epub", Path.GetExtension(epub.SuggestedFilename));
+                await download.ClickAsync();
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.SignOutAndInAsync(page);
                 await Steps.OpenReaderAsync(page, details);
