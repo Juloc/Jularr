@@ -40,6 +40,10 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [PlexClient.cs](../src/Jularr.Integrations/Logic/Plex/PlexClient.cs): bounded external protocol calls and user-scoped library access. [Data/Plex](../src/Jularr.Integrations/Data/Plex): explicit protocol results; [ProviderUnavailableException.cs](../src/Jularr.Integrations/Data/Common/ProviderUnavailableException.cs): shared integration error. [Integrations project](../src/Jularr.Integrations/Jularr.Integrations.csproj): Data/Logic class library without Backend dependencies or a host; [AuthenticationOptions.cs](../src/Jularr.Backend/Service/Core/AuthenticationOptions.cs): Backend-owned authentication policy/configuration.
 - [ProviderLogic.cs](../src/Jularr.Backend/Logic/Provider/ProviderLogic.cs): enabled-provider lookup and configuration lock; [ProviderData.cs](../src/Jularr.Backend/Data/Logic/Provider/ProviderData.cs): typed neutral lookup data.
 
+## External security audit tools
+
+- [Owned-instance CAPTCHA gate auditor](../tools/SOURCE_GATE_AUDIT.md): [real HTTP probe](../tools/source_gate_audit.py), optional [real-browser probe](../tools/source_gate_browser_audit.py) using Chromium/Firefox/WebKit JavaScript and cookies, and [focused HTTP](../tools/test_source_gate_audit.py) / [browser](../tools/test_source_gate_browser_audit.py) tests; standalone external tools, not Arr+ sources, no changes to production handlers.
+
 ## Contracts and persistence
 
 - [Storage services](../src/Jularr.Backend/Service/Admin/Storage/V1): bounded Owner configuration/catalog reads, protected connection saves, the Check action and the compose lines of a Docker volume. [Storage data](../src/Jularr.Backend/Data/Admin/Storage/V1) contains versioned inputs/results.
