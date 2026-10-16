@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 1,
+  "kind": "owner_approved_simplified_phase_a_domain_gate",
+  "source": "dev e6c3c77ac8f9f41d7b6324a06c29cb772bcc68ee; PR #945 live catalog proof",
+  "gate": "PASSED",
+  "contract": "Phase A signs off functional-domain coverage, not old table preservation or 1:1 code mapping. Schema columns/FK/indexes belong to B; exact authorized SQL caller checks to D/E.",
+  "evidence": {
+    "livePg": "2026-10-10T13:45:00Z READ ONLY catalog from prior Codex audit; no new connection",
+    "applicationTables": 152,
+    "liveMigrations": 56,
+    "catalogArtifact": "docs/_phase_a_raw_schema_0.json",
+    "sourceAudit": "docs/_phase_a_code_part_0.json",
+    "targetSpec": "docs/CLEAN_CUT_DATABASE.md",
+    "prDelta": "docs/DATABASE_CUTOVER_PR_DELTA.csv"
+  },
+  "domains": [
+    {
+      "key": "accounts_auth",
+      "functions": "Accounts, Login, Sessions, E-Mail, externe Anmeldung, PIN/2FA/Passkeys/Recovery",
+      "targetOwners": "Accounts; AccountSessions; AccountExternalLogins; Auth-Challenges",
+      "risk": "Auth-Verwechslungen, Plex-Login/Nonce, Session-Widerruf, CSRF",
+      "handoff": "B: Auth-Tabellen und Schlüssel; D/E: Rollen- und Session-Integration",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "profiles_permissions",
+      "functions": "Profiles, Profile-Zuordnung/-Transfer, PIN, Benutzer-/Admin-Ressourcenrechte",
+      "targetOwners": "Profiles; AccountProfiles; AccountPermissions (bedingt)",
+      "risk": "AccountId ungleich ProfileId; ProfileOwner vs Profile-Nutzung, SubtitlePolicy-ProfileId",
+      "handoff": "B: Eigentum und FK; D/E: Rechte-/Race-Tests",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "works_metadata",
+      "functions": "Gemeinsame Works, MediaTypes, Titel/Fakten/Provenienz, Relations, Franchises, ExternalIds",
+      "targetOwners": "Works; WorkTitles; WorkMetadataFacts; WorkRelations; Franchises; WorkExternalIdentities",
+      "risk": "Keine parallelen Roots oder Blindkonvertierung alter IDs",
+      "handoff": "B: canonical Work/External Identity; E: alle Content-Consumers",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "film_tv_anime",
+      "functions": "Movies, Serien, Staffeln/Episoden, Anime als Klassifikation",
+      "targetOwners": "Works; WorkSeasons; WorkEpisodes; WorkMediaClassifications",
+      "risk": "Keine separaten Movie/Anime/Series-Roots; Episoden-/Season-FK",
+      "handoff": "B: Einheiten/FK; D/E: Library/Player-Reads",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "reader_books",
+      "functions": "Books, Manga, Light Novels, Chapter/Volume/Edition, Reader, Bookmarks/Highlights",
+      "targetOwners": "Works; WorkVolumes; WorkChapters; WorkEditions; ReaderContent; ReaderPages",
+      "risk": "Reader-Anker/Edition-Sync, keine doppelten Reader-Identitäten",
+      "handoff": "B: Reader-Tabellen und FK; E: Client-/Import-Verträge",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "music_audio",
+      "functions": "Music-Alben, Artists, wiederverwendbare Recordings, Audiobooks/Narratoren",
+      "targetOwners": "Works; WorkTracks; WorkEditions; WorkCredits; Music-Extensions wenn nötig",
+      "risk": "Album ist schon Work-Extension; Artist/Recording echte separate Identitäten",
+      "handoff": "B: Spezial-Entities; E: Music/Audio/Reader-Integration",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "games",
+      "functions": "Games, Platforms, Releases, Discs, Launcher, Hashes",
+      "targetOwners": "Works; WorkVersions; GameReleases; GamePlatforms; GameReleaseStoredFiles; StoredFileHashes",
+      "risk": "GameRelease ist WorkVersion-Erweiterung; Dateihash nicht Release-Evidenz",
+      "handoff": "B: GameRelease/FileFK; E: Game-/Library-Consumers",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "library_storage",
+      "functions": "Library, Roots, NAS, Files/Assets/Tracks/Analyse, Scanner/Reconciliation",
+      "targetOwners": "LibraryRoots; WorkEditions; WorkVersions; MediaAssets; StoredFiles; MediaTechnicalAnalyses",
+      "risk": "UI-GET ohne NAS; Admin LibraryRoots-DML gehört zu Logic; NAS nicht zurücksetzen",
+      "handoff": "B: Asset-Chain; D/E: Scan/Import/Offline-Abgleiche",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "artwork_detection",
+      "functions": "Images, Target-Assignments, Image-Generierung, Kapitel/Segments/Detection Runs",
+      "targetOwners": "Images; ImageAssignments; MediaChapters; MediaSegments; MediaDetectionRuns",
+      "risk": "Ein Target-FK; Detektor NoMatch; keine Fake-Video-Erkennung",
+      "handoff": "B: Targets/Constraints; D/E: Scan/Playback-Tests",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "progress_offline",
+      "functions": "MediaProgress, Time/Reading/Game-Position, History, Offline-Sync",
+      "targetOwners": "MediaProgress; TimeProgressPositions; ReadingProgressPositions; GameProgressPositions; MediaPlaybackHistory",
+      "risk": "Cross-Work-Membership; keine Completion durch Seek; Offline-IDs nach Reset",
+      "handoff": "B: polymorphe FK/Unique; E/F: Idempotenz/Offline",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "watchlist_collections",
+      "functions": "Watchlist, Collection, Rating, Continue, Watch-/WorkCards",
+      "targetOwners": "WatchlistEntries; Collections; CollectionWorks; ProfileRatings; paginated WorkCard reads",
+      "risk": "Profilberechtigungen; ein SELECT mit begrenzten Kindern; ein WorkId",
+      "handoff": "B: Personal State; D/E: Watchlist/Continue-Screens",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "playback_devices",
+      "functions": "Player, HLS/WAN/Remux/Transcode, Tracks, Sessions, Cast/TV/Pairing",
+      "targetOwners": "PlaybackSessions; MediaAssets; StoredFiles; MediaSegments; device pairing",
+      "risk": "In-Memory Companion-Sessions sind nicht DB ActiveSessions; Playback-PR-Alternativen",
+      "handoff": "E: integrierte Playback-PR-Auswahl; F: Geräte/Stream-Sessions",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "requests_arr",
+      "functions": "Requests, Wanted/Rules, Monitoring, Arr, Acquisition/Downloads/Import",
+      "targetOwners": "AcquisitionRequests; Wanted/Rule-Fachowner; Operations; WorkRelations",
+      "risk": "Dynamische Handler; kein doppelter Job-/Acquisition-Weg",
+      "handoff": "B: Requests/Operations; E: Arr/Import-Regressions",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "external_integrations",
+      "functions": "Plex, Jellyfin, Provider-ID/Synchronisierung, externe Migration",
+      "targetOwners": "WorkExternalIdentities; AccountExternalLogins; service/provider connections",
+      "risk": "PlexLoginAttempts.Purpose; externe Migration bleibt Feature, keine interne Legacy Bridge",
+      "handoff": "B: externe Identities; E: Plex/Jellyfin/Sync-PRs",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "jobs_notifications",
+      "functions": "Operations, Logs, Queue/Direct/Force, Notifications, Events, Restart",
+      "targetOwners": "Operations; OperationLogs; Notifications; Outbox nur bei Bedarf",
+      "risk": "Keine 2. Queue; keine langen DB-Transaktionen über Provider/NAS",
+      "handoff": "B: Operations-Zustände; D/E: Claim/Retry/Module",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "locale_ai_learning",
+      "functions": "UiLocales/Translations, Reader-Translation, AI/Learning/Curriculum",
+      "targetOwners": "UiLocales; UiTranslationMessages; UiTranslations; Learning-/AI-Fachowner",
+      "risk": "Kein doppelter Error-Katalog; Curriculum/Capabilities-Funktionen erhalten",
+      "handoff": "B: notwendige Fachentitäten; E: Locale/AI-Learning",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "discovery_search",
+      "functions": "Search, Discovery, Calendar, Recommendation, Media-Listen",
+      "targetOwners": "Works/WorkTitles; WorkMetadataFacts; paginierte Projektionen; Kalender bei Bedarf",
+      "risk": "Lokalisierte Fallbacks/Sortierung; kein Live-Provider im UI GET",
+      "handoff": "B: Index/Readmodel-Budgets; D/E: Search/Discovery",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "web_admin_clients",
+      "functions": "Admin/Users/Settings/Rules/Logs, Razor/JS, Android Mobile/TV, Transport",
+      "targetOwners": "User/Admin/System V1 Services und DTOs; REST/Native-Verträge",
+      "risk": "Razor-DML, CSRF; Client ApiVersion=2 vs /api/client/v1; Native Sessions",
+      "handoff": "D/E: dünne Endpoints, UI-DataList und Native-Routen",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    },
+    {
+      "key": "setup_migrations",
+      "functions": "Setup/Owner-Bootstrap, EF-Startup, Schema-Epoch, Docker, externe Importfunktionen",
+      "targetOwners": "Eine neue Baseline; bereinigter Startup/Install; External Migration Center",
+      "risk": "Alte Migrationsbridge nicht in Target übernehmen, kein NAS/Secrets-Reset",
+      "handoff": "B/C: Baseline-Bootstrap; F/G: Dry Run/Reset",
+      "coverage": "GROUPED_FUNCTIONAL_OWNER_IDENTIFIED",
+      "evidence": "CLEAN_CUT_DATABASE.md §3 and PR #945 live catalog/source inventory; open technical details assigned to next phase"
+    }
+  ],
+  "deferred": [
+    {
+      "kind": "ddl",
+      "description": "Exact target columns, FK, constraints, enums, indexes, data representation",
+      "phase": "B"
+    },
+    {
+      "kind": "detail_dispositions",
+      "description": "61 provisional historical table actions: no 1:1 migration, preserve function rather than shape",
+      "phase": "B"
+    },
+    {
+      "kind": "technical_sql",
+      "description": "37 unresolved SQL/tracked source targets; review those with actual authorization, mutation, resource or hidden side effect risk",
+      "phase": "D/E"
+    },
+    {
+      "kind": "full_callgraph",
+      "description": "2,263 access sites and 1,027 relevant paths: targeted callchain and tests per migrated functional owner, not per-path Phase A signoff",
+      "phase": "D/E"
+    },
+    {
+      "kind": "integration_prs",
+      "description": "Proposed integrate/port/defer PR grouping is not merge authorization, final decisions at integration freeze",
+      "phase": "B/E"
+    },
+    {
+      "kind": "feature_delta",
+      "description": "PlexLoginAttempts purpose; Notification Channel preferences; AccountGroups optional feature and unpushed discovery changes",
+      "phase": "B/E"
+    },
+    {
+      "kind": "external_reset",
+      "description": "Existing test database, NAS/files, secrets and clients are untouched; destructive change only after user explicitly approves target in Phase G",
+      "phase": "G"
+    }
+  ]
+}

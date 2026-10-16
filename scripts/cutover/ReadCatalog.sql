@@ -1,0 +1,19 @@
+BEGIN READ ONLY;
+SET LOCAL statement_timeout = '30s';
+SET LOCAL lock_timeout = '3s';
+SELECT jsonb_build_object(
+ 'serverVersion', current_setting('server_version'),
+ 'readOnly', current_setting('transaction_read_only'),
+ 'database', current_database(),
+ 'relations', (SELECT coalesce(jsonb_agg(jsonb_build_object('schema',namespace.nspname,'name',relation.relname,'kind',relation.relkind) ORDER BY namespace.nspname,relation.relname),'[]') FROM pg_class relation JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace WHERE namespace.nspname NOT IN ('pg_catalog','information_schema') AND namespace.nspname NOT LIKE 'pg_toast%' AND relation.relkind IN ('r','p','v','m','f','S')),
+ 'columns', (SELECT coalesce(jsonb_agg(jsonb_build_object('schema',table_schema,'table',table_name,'column',column_name,'ordinal',ordinal_position,'type',udt_name,'pgType',data_type,'maximumLength',character_maximum_length,'numericPrecision',numeric_precision,'numericScale',numeric_scale,'datetimePrecision',datetime_precision,'nullable',is_nullable,'default',column_default,'identity',is_identity,'identityGeneration',identity_generation) ORDER BY table_schema,table_name,ordinal_position),'[]') FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog','information_schema')),
+ 'constraints', (SELECT coalesce(jsonb_agg(jsonb_build_object('table',relation.relname,'name',constraint_record.conname,'type',constraint_record.contype,'definition',pg_get_constraintdef(constraint_record.oid),'validated',constraint_record.convalidated) ORDER BY relation.relname,constraint_record.conname),'[]') FROM pg_constraint constraint_record JOIN pg_class relation ON relation.oid=constraint_record.conrelid JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace WHERE namespace.nspname='public'),
+ 'indexes', (SELECT coalesce(jsonb_agg(jsonb_build_object('schema',schemaname,'table',tablename,'name',indexname,'definition',indexdef) ORDER BY schemaname,tablename,indexname),'[]') FROM pg_indexes WHERE schemaname NOT IN ('pg_catalog','information_schema')),
+ 'views', (SELECT coalesce(jsonb_agg(jsonb_build_object('schema',schemaname,'name',viewname,'definition',definition) ORDER BY schemaname,viewname),'[]') FROM pg_views WHERE schemaname NOT IN ('pg_catalog','information_schema')),
+ 'enums', (SELECT coalesce(jsonb_agg(jsonb_build_object('name',type_record.typname,'label',enum_record.enumlabel,'order',enum_record.enumsortorder) ORDER BY type_record.typname,enum_record.enumsortorder),'[]') FROM pg_enum enum_record JOIN pg_type type_record ON type_record.oid=enum_record.enumtypid JOIN pg_namespace namespace ON namespace.oid=type_record.typnamespace WHERE namespace.nspname='public'),
+ 'extensions', (SELECT coalesce(jsonb_agg(jsonb_build_object('name',extname,'version',extversion) ORDER BY extname),'[]') FROM pg_extension),
+ 'functions', (SELECT coalesce(jsonb_agg(jsonb_build_object('name',procedure.proname,'arguments',pg_get_function_identity_arguments(procedure.oid),'returns',pg_get_function_result(procedure.oid),'kind',procedure.prokind,'volatility',procedure.provolatile) ORDER BY procedure.proname),'[]') FROM pg_proc procedure JOIN pg_namespace namespace ON namespace.oid=procedure.pronamespace WHERE namespace.nspname='public'),
+ 'triggers', (SELECT coalesce(jsonb_agg(jsonb_build_object('table',relation.relname,'name',trigger_record.tgname,'definition',pg_get_triggerdef(trigger_record.oid)) ORDER BY relation.relname,trigger_record.tgname),'[]') FROM pg_trigger trigger_record JOIN pg_class relation ON relation.oid=trigger_record.tgrelid JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace WHERE namespace.nspname='public' AND NOT trigger_record.tgisinternal),
+ 'migrationHistory', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',"MigrationId",'productVersion',"ProductVersion") ORDER BY "MigrationId"),'[]') FROM "__EFMigrationsHistory")
+);
+ROLLBACK;

@@ -1,0 +1,489 @@
+{
+  "capturedAt": "2026-10-10T14:31:28.296Z",
+  "sourceSha": "e6c3c77ac8f9f41d7b6324a06c29cb772bcc68ee",
+  "openPrHeads": [
+    {
+      "pr": 945,
+      "head": "b0e7e6f3b2fe9b75e89ed320d887e8ca522c7b0f",
+      "decision": "INTEGRATE_BEFORE_FREEZE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 944,
+      "head": "9147d6cd704f7a42ce14e57b4fcb882cef3c42e4",
+      "decision": "INTEGRATE_BEFORE_FREEZE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 943,
+      "head": "76b2ea875af05663094741e8cdd42f8cab02de30",
+      "decision": "INTEGRATE_BEFORE_FREEZE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 941,
+      "head": "19a2ff0ef6433f7c3223a17997459ced7e6b5d60",
+      "decision": "INTEGRATE_BEFORE_FREEZE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 937,
+      "head": "8e11f49387b87f59321d2da1f83239366d1bd568",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 929,
+      "head": "c548449abbb97ecd825ba1ef4cfecc15a1aed5b4",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 928,
+      "head": "5d63703bd1eb3a71d5e7098b0e339ef9b4cd1e53",
+      "decision": "DEFER_ALTERNATIVE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 923,
+      "head": "093bf30970623cc939430c11051a2b37fd6a73bd",
+      "decision": "DEFER_ALTERNATIVE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 921,
+      "head": "e11f8004ab442ba48173512132b1f9d407293c3d",
+      "decision": "DEFER_ALTERNATIVE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 920,
+      "head": "405eb1e8160aeb44a59ad4f09f41ce92ca2fd97c",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 919,
+      "head": "0b434f56c55695829a1fcf91a909c0db47ec970e",
+      "decision": "DEFER_ALTERNATIVE",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 918,
+      "head": "f0631504303ecc2e91ae43af30ed5e8af39975bb",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 917,
+      "head": "70ad4a6a179db921376242fd0bda9ce4c9506387",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 842,
+      "head": "282fb5a3706b942980c457079405ef53ba3a616d",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 768,
+      "head": "cad896f2466bf5aacf333e9cb608066fbb3726ec",
+      "decision": "PORT_TO_TARGET",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 761,
+      "head": "2a9a51140c8f2dbbfb116811f77185e80acc4935",
+      "decision": "DEFER_FEATURE_EXTENSION",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    },
+    {
+      "pr": 608,
+      "head": "032399e551916b3687ffa80a559dd063db89a2a5",
+      "decision": "DEFER_PRESENTATION_ONLY",
+      "agreement": "NO_NEW_OWNER_ACK_RECORDED"
+    }
+  ],
+  "schemaDeltas": [
+    {
+      "PR": 920,
+      "Title": "Plex server integration on current dev: grants, scoped media access, reconciliation (#886)",
+      "Head": "feat/plex-server-integration-dev-886",
+      "HeadSha": "405eb1e8160aeb44a59ad4f09f41ce92ca2fd97c",
+      "Base": "dev",
+      "Draft": true,
+      "ChangedFiles": 52,
+      "PageTruncated": false,
+      "MigrationOrModelPaths": "src/Jularr.Web/Data/AppDbContext.cs; src/Jularr.Web/Data/Migrations/20261009220000_PlexPinAttemptPurpose.cs; src/Jularr.Web/Data/Migrations/AppDbContextModelSnapshot.cs",
+      "NewTableCandidates": "",
+      "DatabaseSqlPaths": "src/Jularr.Web/Data/AppDbContext.cs; src/Jularr.Web/Data/Migrations/20261009220000_PlexPinAttemptPurpose.cs; src/Jularr.Web/Data/Migrations/AppDbContextModelSnapshot.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexCatalogCheckpointStore.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexProfileConnectionStore.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexServerGrantStore.cs; src/Jularr.Web/Features/Plex/PlexIdentitySettingsStore.cs",
+      "ApiOrClientPaths": "src/Jularr.Web/Pages/Account/Plex.cshtml; src/Jularr.Web/Pages/Account/Plex.cshtml.cs; src/Jularr.Web/Pages/Admin/Plex.cshtml; src/Jularr.Web/Pages/Admin/Plex.cshtml.cs; src/Jularr.Web/Pages/Library/Movie.cshtml.cs; src/Jularr.Web/Pages/Library/Series.cshtml.cs; src/Jularr.Web/Pages/Library/VideoDetailPageModel.cs; src/Jularr.Web/Pages/Library/_VideoDetailHero.cshtml; src/Jularr.Web/Pages/Requests/Details.cshtml.cs; src/Jularr.Web/Pages/Requests/_RequestStatusPanel.cshtml; src/Jularr.Web/Pages/Settings/Index.cshtml.cs; src/Jularr.Web/Pages/Shared/_ProviderDetail.cshtml",
+      "Decision": "PORT_TO_TARGET",
+      "Reason": "Plex grants/reconciliation/login-link Purpose and page/worker paths must survive fresh Account/Profile/Work; no old migration copy.",
+      "DecisionAuthority": "PHASE_A_RECOMMENDATION_NO_MERGE_AUTHORIZATION",
+      "Owner": "Juloc",
+      "OwnerAgreement": "NO_NEW_OWNER_ACK_RECORDED",
+      "UpdatedAt": "2026-10-10T07:47:51Z",
+      "FilePaths": "docs/implementation/plex-library-adapter.md; src/Jularr.Web/Data/AppDbContext.cs; src/Jularr.Web/Data/Migrations/20261009220000_PlexPinAttemptPurpose.cs; src/Jularr.Web/Data/Migrations/AppDbContextModelSnapshot.cs; src/Jularr.Web/Features/Auth/PlexLoginAttempt.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexCatalogCheckpointStore.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexCatalogReconciliationJobs.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexCatalogReconciliationService.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexExternalPlaybackAction.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexItemAccessService.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexLibraryClient.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexOnDemandTargetResolver.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexProfileConnectionService.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexProfileConnectionStore.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexResourceDiscoveryClient.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexServerCatalogScanService.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexServerGrantStore.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexServerSelectionService.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexWebDestinationService.cs; src/Jularr.Web/Features/ExternalPlayback/Plex/PlexWorkMatcher.cs; src/Jularr.Web/Features/Localization/UiTranslationResources.cs; src/Jularr.Web/Features/Plex/PlexIdentityProviderSettings.cs; src/Jularr.Web/Features/Plex/PlexIdentitySettingsStore.cs; src/Jularr.Web/Pages/Account/Plex.cshtml; src/Jularr.Web/Pages/Account/Plex.cshtml.cs; src/Jularr.Web/Pages/Admin/Plex.cshtml; src/Jularr.Web/Pages/Admin/Plex.cshtml.cs; src/Jularr.Web/Pages/Library/Movie.cshtml.cs; src/Jularr.Web/Pages/Library/Series.cshtml.cs; src/Jularr.Web/Pages/Library/VideoDetailPageModel.cs; src/Jularr.Web/Pages/Library/_VideoDetailHero.cshtml; src/Jularr.Web/Pages/Requests/Details.cshtml.cs; src/Jularr.Web/Pages/Requests/_RequestStatusPanel.cshtml; src/Jularr.Web/Pages/Settings/Index.cshtml.cs; src/Jularr.Web/Pages/Shared/_ProviderDetail.cshtml; src/Jularr.Web/Program.cs; tests/Jularr.Tests/PlexCatalogReconciliationJobTests.cs; tests/Jularr.Tests/PlexCatalogReconciliationTests.cs; tests/Jularr.Tests/PlexItemAccessTests.cs; tests/Jularr.Tests/PlexLibraryAdapterTests.cs; tests/Jularr.Tests/PlexMediaConsentHandlerTests.cs; tests/Jularr.Tests/PlexOnDemandHandoffTests.cs; tests/Jularr.Tests/PlexProfileAccessTests.cs; tests/Jularr.Tests/PlexProfileConnectionTests.cs; tests/Jularr.Tests/PlexProviderSettingsTests.cs; tests/Jularr.Tests/PlexResourceDiscoveryTests.cs; tests/Jularr.Tests/PlexServerCatalogScanTests.cs; tests/Jularr.Tests/PlexServerSelectionTests.cs; tests/Jularr.Tests/PlexWebDestinationTests.cs; tests/Jularr.Tests/PlexWorkMatcherTests.cs; tests/Jularr.Tests/RoleAuthorizationTests.cs; tests/Jularr.Tests/VideoDetailPageTestHost.cs",
+      "Evidence": "GitHub REST paginated files incl patches; fixed head SHA; ledger read"
+    },
+    {
+      "PR": 842,
+      "Title": "Notifications UX and canonical delivery model",
+      "Head": "planning/notifications-ux-20261004",
+      "HeadSha": "282fb5a3706b942980c457079405ef53ba3a616d",
+      "Base": "dev",
+      "Draft": true,
+      "ChangedFiles": 47,
+      "PageTruncated": false,
+      "MigrationOrModelPaths": "src/Jularr.Web/Data/Migrations/20261004140000_NotificationPreferencesTargetModel.cs",
+      "NewTableCandidates": "NotificationProfileChannels; NotificationSubscriptionChannels",
+      "DatabaseSqlPaths": "src/Jularr.Web/Data/Migrations/20261004140000_NotificationPreferencesTargetModel.cs; src/Jularr.Web/Data/SqliteImport/SqliteToPostgresImporter.cs; src/Jularr.Web/Features/Notifications/NotificationSubscriptionStore.cs; src/Jularr.Web/Features/Operations/OperationStore.cs",
+      "ApiOrClientPaths": "src/Jularr.Web/Pages/Profile/Notifications.cshtml; src/Jularr.Web/Pages/Profile/Notifications.cshtml.cs",
+      "Decision": "PORT_TO_TARGET",
+      "Reason": "Notification channel/preference policy -> target Profile/type lookup; no old importer/migration.",
+      "DecisionAuthority": "PHASE_A_RECOMMENDATION_NO_MERGE_AUTHORIZATION",
+      "Owner": "Juloc",
+      "OwnerAgreement": "NO_NEW_OWNER_ACK_RECORDED",
+      "UpdatedAt": "2026-10-04T18:27:17Z",
+      "FilePaths": "docs/CROSS-SPEC-CONSISTENCY-AUDIT.md; docs/INFORMATION_ARCHITECTURE.md; docs/NOTIFICATIONS.md; docs/UX.md; docs/implementation/notifications-target-model.md; docs/mockups/README.md; docs/mockups/admin-notifications/SPEC.md; docs/mockups/notifications-banner/.gitkeep; docs/mockups/notifications-banner/SPEC.md; docs/mockups/notifications-banner/image.png; docs/mockups/notifications-bell/SPEC.md; docs/mockups/notifications-bell/image.png; docs/mockups/notifications-center/.gitkeep; docs/mockups/notifications-center/Jularr BenachrichtigungsÃ¼bersicht auf Desktop und MobilgerÃ¤t.png; docs/mockups/notifications-center/SPEC.md; docs/mockups/notifications-digest/SPEC.md; docs/mockups/notifications-digest/file_0000000084988210844cf32ae291cd87.png; docs/mockups/notifications-quiet-hours/SPEC.md; docs/mockups/notifications-quiet-hours/file_0000000096608243ad8499afd0ece8c1.png; docs/mockups/notifications-settings/Jularr Benachrichtigungseinstellungen auf Desktop und Mobil.png; docs/mockups/notifications-settings/SPEC.md; docs/mockups/notifications-toast-popup/.gitkeep; docs/mockups/notifications-toast-popup/SPEC.md; docs/mockups/notifications-toast-popup/image.png; docs/mockups/notifications-topic-editor/SPEC.md; docs/mockups/notifications-topic-editor/file_00000000ce8482109d73e4c9975e3968.png; src/Jularr.Web/Data/Migrations/20261004140000_NotificationPreferencesTargetModel.cs; src/Jularr.Web/Data/SqliteImport/SqliteToPostgresImporter.cs; src/Jularr.Web/Features/Events/JularrEventModels.cs; src/Jularr.Web/Features/Events/JularrEventNotificationPolicy.cs; src/Jularr.Web/Features/Events/JularrEventPublisher.cs; src/Jularr.Web/Features/Notifications/INotificationSink.cs; src/Jularr.Web/Features/Notifications/NotificationDispatcher.cs; src/Jularr.Web/Features/Notifications/NotificationModels.cs; src/Jularr.Web/Features/Notifications/NotificationPreferenceResolver.cs; src/Jularr.Web/Features/Notifications/NotificationSubscriptionStore.cs; src/Jularr.Web/Features/Operations/OperationStore.cs; src/Jularr.Web/Pages/Profile/Notifications.cshtml; src/Jularr.Web/Pages/Profile/Notifications.cshtml.cs; src/Jularr.Web/wwwroot/css/notifications.css; tests/Jularr.Tests/EventNotificationPipelineTests.cs; tests/Jularr.Tests/NotificationEventPolicyTests.cs; tests/Jularr.Tests/NotificationPreferenceMigrationTests.cs; tests/Jularr.Tests/NotificationPreferenceResolverTests.cs; tests/Jularr.Tests/NotificationPreferenceStoreTests.cs; tests/Jularr.Tests/OperationNotificationAudienceTests.cs; tests/Jularr.Tests/ProfileNotificationSettingsTests.cs",
+      "Evidence": "GitHub REST paginated files incl patches; fixed head SHA; ledger read"
+    },
+    {
+      "PR": 761,
+      "Title": "Add account groups to Admin users and permissions",
+      "Head": "ui/admin-account-groups-v1",
+      "HeadSha": "2a9a51140c8f2dbbfb116811f77185e80acc4935",
+      "Base": "dev",
+      "Draft": true,
+      "ChangedFiles": 14,
+      "PageTruncated": false,
+      "MigrationOrModelPaths": "src/Jularr.Web/Data/Migrations/20261003124800_AddAccountGroups.cs",
+      "NewTableCandidates": "AccountGroupMembers; AccountGroups",
+      "DatabaseSqlPaths": "src/Jularr.Web/Data/Migrations/20261003124800_AddAccountGroups.cs; src/Jularr.Web/Features/Auth/AccountGroupStore.cs",
+      "ApiOrClientPaths": "src/Jularr.Web/Pages/Admin/Groups.cshtml; src/Jularr.Web/Pages/Admin/Groups.cshtml.cs; src/Jularr.Web/Pages/Admin/User.cshtml; src/Jularr.Web/Pages/Admin/User.cshtml.cs; src/Jularr.Web/Pages/Admin/Users.cshtml; src/Jularr.Web/Pages/Admin/_AdminNavigation.cshtml",
+      "Decision": "DEFER_FEATURE_EXTENSION",
+      "Reason": "Unmerged account groups extend product model; target built-in roles remain. Requires explicit group contract, no existing dev capability removal.",
+      "DecisionAuthority": "PHASE_A_RECOMMENDATION_NO_MERGE_AUTHORIZATION",
+      "Owner": "Juloc",
+      "OwnerAgreement": "NO_NEW_OWNER_ACK_RECORDED",
+      "UpdatedAt": "2026-10-09T22:48:16Z",
+      "FilePaths": "docs/implementation/admin-account-groups.md; src/Jularr.Web/Data/Migrations/20261003124800_AddAccountGroups.cs; src/Jularr.Web/Features/Auth/AccountGroupStore.cs; src/Jularr.Web/Features/Localization/UiTranslationResources.cs; src/Jularr.Web/Pages/Admin/Groups.cshtml; src/Jularr.Web/Pages/Admin/Groups.cshtml.cs; src/Jularr.Web/Pages/Admin/User.cshtml; src/Jularr.Web/Pages/Admin/User.cshtml.cs; src/Jularr.Web/Pages/Admin/Users.cshtml; src/Jularr.Web/Pages/Admin/_AdminNavigation.cshtml; src/Jularr.Web/Program.cs; src/Jularr.Web/wwwroot/css/site.css; tests/Jularr.Tests/AccountGroupStoreTests.cs; tests/Jularr.Tests/RoleAuthorizationTests.cs",
+      "Evidence": "GitHub REST paginated files incl patches; fixed head SHA; ledger read"
+    }
+  ],
+  "workspaces": {
+    "liveUi": {
+      "reference": "user-confirmed 127.0.0.1:5230 -> 127.0.0.1:5433 jularr_demo",
+      "status": [],
+      "head": "9147d6cd704f7a42ce14e57b4fcb882cef3c42e4"
+    },
+    "requestsUi": {
+      "head": "b06dc9f3028624e549fa820eeae92f0b01a993bf",
+      "status": []
+    },
+    "primary": {
+      "branch": "dev",
+      "head": "925467efb186971370a748a824cf602b7de0f465",
+      "changedPaths": [
+        " M docs/mockups/admin-requests/SPEC.md",
+        " D docs/mockups/admin-requests/file_00000000cbac82109835dfbdf46f1b06.png",
+        " M src/Jularr.Web/Features/Discovery/DiscoverCards.cs",
+        " M src/Jularr.Web/Features/Discovery/DiscoveryCoordinator.cs",
+        " M src/Jularr.Web/Features/Discovery/TmdbDiscoveryProvider.cs",
+        " M src/Jularr.Web/Features/Localization/UiTranslationResources.cs",
+        " M src/Jularr.Web/Pages/Index.Discover.cs",
+        " M src/Jularr.Web/Pages/Shared/_DiscoverCard.cshtml",
+        " M src/Jularr.Web/wwwroot/css/discover-browse.css",
+        " M src/Jularr.Web/wwwroot/js/discover.js",
+        " M tests/Jularr.Tests/DiscoverCompletionTests.cs",
+        "?? docs/mockups/admin-requests/LUNA_HANDOFF.md",
+        "?? docs/mockups/admin-requests/QA_CHECKLIST.md",
+        "?? docs/mockups/admin-requests/README.md",
+        "?? docs/mockups/admin-requests/app.js",
+        "?? docs/mockups/admin-requests/assets/",
+        "?? docs/mockups/admin-requests/index.html",
+        "?? docs/mockups/admin-requests/preview-desktop-1440-v2-dark.png",
+        "?? docs/mockups/admin-requests/preview-desktop-1440-v2.png",
+        "?? docs/mockups/admin-requests/preview-desktop-v2-dark.png",
+        "?? docs/mockups/admin-requests/preview-desktop-v2.png",
+        "?? docs/mockups/admin-requests/preview-dropdown-v2.png",
+        "?? docs/mockups/admin-requests/preview-mobile-320-v2.png",
+        "?? docs/mockups/admin-requests/preview-mobile-dropdown-v2.png",
+        "?? docs/mockups/admin-requests/preview-mobile-v2-dark.png",
+        "?? docs/mockups/admin-requests/preview-mobile-v2.png",
+        "?? docs/mockups/admin-requests/preview-single-file.html",
+        "?? docs/mockups/admin-requests/reference-approved.png",
+        "?? docs/mockups/admin-requests/reference-current-before.png",
+        "?? docs/mockups/admin-requests/styles.css"
+      ]
+    },
+    "pr945": {
+      "originalHead": "b0e7e6f3b2fe9b75e89ed320d887e8ca522c7b0f",
+      "branch": "docs/cutoff-phase-a-inventory-20261010"
+    },
+    "capturedAt": "2026-10-10T14:18:32.0307150Z"
+  },
+  "reviewedChains": [
+    {
+      "id": "ADMIN_STORAGE_ROOT",
+      "entry": "src/Jularr.Web/Pages/Admin/System.cshtml.cs:114",
+      "chain": "OnPostAddAsync -> db.LibraryRoots.Add/SaveChanges -> root content assignments/routing; edit/delete/wake handlers share admin boundary",
+      "scope": "[Authorize Policy=JularrPolicies.AdminSystem], root/name/path/type validation; current error rollback retained",
+      "targets": "Admin.Library.V1 -> Logic.Library",
+      "evidence": "Verified direct Razor mutation, never pure SELECT; provider/filesystem wake is Execute."
+    },
+    {
+      "id": "PLEX_LOGIN_LINK",
+      "entry": "src/Jularr.Web/Pages/Account/Plex.cshtml.cs:87",
+      "chain": "OnPostStartAsync -> provider PIN -> expired challenge delete/PlexLoginAttempts add/save -> poll/finish auth",
+      "scope": "Setup/owner presence; HTTPS or loopback, nonce hash and five-minute expiry; link requires current account/local password policy",
+      "targets": "User.Accounts.V1 restricted auth policy -> Logic.Accounts",
+      "evidence": "#920 Purpose delta: login/link preserved; AccountExternalLogins distinct from profile service connections; external I/O not inside SQL transaction."
+    },
+    {
+      "id": "PROFILE_PROGRESS",
+      "entry": "src/Jularr.Web/Features/ClientApi/ClientApiEndpoints.cs:153",
+      "chain": "GET/PUT progress -> EpisodeProgressService -> VideoProgressService -> MediaProgress/MediaPlaybackHistory",
+      "scope": "Authenticated group, CurrentAccountContext.ProfileId; ClientVideoAccessFilter/appShell visibility; target existence checked",
+      "targets": "User.Progress.V1 -> Logic.Progress",
+      "evidence": "VideoProgress.cs UpdateAsync:165 validates target and explicit completion; seek alone does not set completed. Legacy GUID resolution removed only with consumer switch."
+    },
+    {
+      "id": "WATCHLIST_PAGING",
+      "entry": "src/Jularr.Web/Features/ClientApi/ClientApiEndpoints.cs:234",
+      "chain": "GET watchlist -> PageRequest validation -> AppShell.GetMediaAccessAsync -> WatchlistStore.GetEffectivePageAsync -> WatchlistLibraryResolver",
+      "scope": "Current profile, visible media types, bounded page/pageSize; follow/ignore and franchise policy",
+      "targets": "User.Watchlist.V1; mutation Logic.Watchlist",
+      "evidence": "HttpJularrClientApi.kt:127 consumes totalCount/hasMore. Target read projects canonical Works/Profile; list query must not initiate NAS/provider work."
+    },
+    {
+      "id": "ACQUISITION_DYNAMIC_DI",
+      "entry": "src/Jularr.Web/Features/Acquisition/Wanted/WantedAcquisitionService.cs:137",
+      "chain": "ExecuteAsync -> ProcessOnceAsync -> IWantedSource + IWantedRequestHandler dispatch -> AccessStore/OperationStore -> provider/download/import",
+      "scope": "IInstanceModuleService Acquisition/media capability upper bound; source/job cancellation/time budgets",
+      "targets": "System.Acquisition.V1 -> Logic.Acquisition and Logic.Operations",
+      "evidence": "Program.cs:610-656 registers Anime/Movie/TV/Manga/LightNovel/Book/Music/Audiobook handlers; 631/635/686/694/780/784 sources. Source graph alone omits interface dispatch."
+    },
+    {
+      "id": "BOOTSTRAP_OLD_CHAIN",
+      "entry": "src/Jularr.Web/Program.cs:965",
+      "chain": "Startup scope -> DatabaseMigrationBridge.UpgradeAsync -> EF MigrateAsync -> WorkIdMigrationFollowUp.RunAsync",
+      "scope": "Startup internal caller, epoch 4/minimum 4; runs in existing installation, not executed by this audit",
+      "targets": "System.DatabaseInstallation.V1 -> installation Logic; one fresh baseline",
+      "evidence": "Old history and mapping are only inventory. Current bridge files remain until atomic cutoff, no old rows/history backfilled."
+    },
+    {
+      "id": "WORK_CHILD_GENERIC",
+      "entry": "src/Jularr.Web/Features/MediaCore/WorkService.cs:491",
+      "chain": "MoveStructureAsync -> RepointOrDropAsync<T> -> db.Set<T> -> per-Work unique key collision removal/repoint",
+      "scope": "sourceWorkId/targetWorkId; upstream merge authorization still to review",
+      "targets": "Logic.Works",
+      "evidence": "Six concrete T: WorkSeason/Episode/Volume/Chapter/Edition/Version. WorkId reflection and EF.Property are actual dynamic column use, not an unknown seventh table."
+    },
+    {
+      "id": "TV_COMPANION_SESSIONS",
+      "entry": "src/Jularr.Web/Features/PlaybackSessions/PlaybackSessionEndpoints.cs:17",
+      "chain": "Native PlaybackSessionClient -> HTTP/Hub -> PlaybackSessionStore dictionary -> state/command broadcasts",
+      "scope": "OwnerProfileId/revision; restricted short-lived pairing and participant-token access; revoke/end",
+      "targets": "User.PlaybackSessions.V1 -> Logic.PlaybackSessions",
+      "evidence": "Store.cs:16 is in-memory. Distinct from SQL ActiveSessions. Native/Hub permissions and complete command paths still require final review."
+    },
+    {
+      "id": "TV_DEVICE_PAIRING",
+      "entry": "src/Jularr.Web/Features/Pairing/DevicePairingEndpoints.cs:21",
+      "chain": "start -> DevicePairingStore; authenticated approve -> profile; poll -> OwnerAuth.GetEnabledAccountAsync -> cookie sign-in",
+      "scope": "Start/poll anonymous rate limits, approve authenticated rate limit, single-use expiring device code",
+      "targets": "User.Accounts.V1 restricted pairing caller policy -> Logic.Accounts",
+      "evidence": "Pairing store deliberately in-memory. New Account != Profile: approving profile cannot substitute AccountId in target login."
+    },
+    {
+      "id": "MUSIC_SPECIALTIES",
+      "entry": "src/Jularr.Web/Features/Music/MusicModels.cs:26",
+      "chain": "MusicQuery/MusicLibraryService/MusicWantedSource -> MusicArtists/MusicAlbums -> Works/WorkTracks/MusicRecordings/WorkMonitoring",
+      "scope": "Music capability and actor/source attribution; all individual auth callers not signed off",
+      "targets": "User/Admin/System.Music.V1 by entry -> Logic.Music/Works/Acquisition",
+      "evidence": "Album WorkId is already PK/FK extension. Recording may appear on multiple albums; artist is not a competing Work root. Keep specialty responsibility, rebuild IDs/DDL fresh."
+    },
+    {
+      "id": "SUBTITLE_POLICY",
+      "entry": "src/Jularr.Web/Features/Subtitles/SubtitleLanguageProfileModels.cs:11",
+      "chain": "SubtitleLanguageProfileService.ResolveAsync -> ordered items/cutoff, specific media/root -> global default -> subtitle acquisition/completeness",
+      "scope": "Owner-managed language policy; Item.ProfileId is subtitle policy FK, not personal ProfileId",
+      "targets": "Admin.Subtitles.V1 / System.Subtitles.V1 -> Logic.Subtitles",
+      "evidence": "Preserve forced/SDH/priority/cutoff and null-scope uniqueness. Technical streams do not replace cue content."
+    },
+    {
+      "id": "NON_DATABASE_ID_STORES",
+      "entry": "src/Jularr.Web/Features/Tracking/AniListAccountStore.cs:88",
+      "chain": "LoadAsync -> MigrateLegacyOwnerAccountUnsafe -> protected filesystem connection; Save/Disconnect/sync mode remain filesystem effects",
+      "scope": "Validated profile key, protected tokens; no values exported",
+      "targets": "User.Connections.V1 -> Logic.Connections",
+      "evidence": "MigrateLegacyOwnerAccountUnsafe is not a PostgreSQL migration. Old profile filenames/provider assignments need approved rebinding or explicit reconnect in E; credential files are protected."
+    }
+  ],
+  "startupRegistrations": [
+    {
+      "path": "src/Jularr.Web/Features/Calendar/ReleaseCalendarRegistration.cs",
+      "line": 36,
+      "registration": "services.AddHostedService<FranchiseRefreshService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Features/Calendar/ReleaseCalendarRegistration.cs",
+      "line": 40,
+      "registration": "services.AddHostedService<ReleaseCalendarRefreshService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Features/Playback/Decision/PlaybackDecisionRegistration.cs",
+      "line": 39,
+      "registration": "services.AddHostedService(provider => provider.GetRequiredService<PlaybackServerResourceService>());"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 148,
+      "registration": "builder.Services.AddHostedService(services => services.GetRequiredService<StackResourceTelemetrySampler>());"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 372,
+      "registration": "builder.Services.AddHostedService<MediaOptimizationRecoveryService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 374,
+      "registration": "builder.Services.AddHostedService<LibraryStartupScanService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 375,
+      "registration": "builder.Services.AddHostedService<LibraryWatchService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 489,
+      "registration": "builder.Services.AddHostedService<WorkMetadataRefreshService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 584,
+      "registration": "builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Access.LibraryWorkBackfillService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 610,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 625,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Acquisition.Access.MovieWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 626,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Acquisition.Access.TvWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 627,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 628,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.LightNovelWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 629,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Books.BookWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 630,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 631,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 635,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.UpgradeWantedSource>(services, upgradeKind));"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 656,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Audiobooks.AudiobookWantedRequestHandler>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 686,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.WantedRequestSource>("
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 694,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoWantedSource>(services, videoKind));"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 748,
+      "registration": "builder.Services.AddHostedService<AcquisitionHealthCheckService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 752,
+      "registration": "builder.Services.AddHostedService<SabnzbdOperationMonitorService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 754,
+      "registration": "builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 780,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 784,
+      "registration": "builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeEpisodesWantedSource>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 818,
+      "registration": "builder.Services.AddHostedService<AniListSyncBackgroundService>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 827,
+      "registration": "builder.Services.AddHostedService<AiUsagePersistenceWorker>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 853,
+      "registration": "builder.Services.AddHostedService<ChapterArtworkAutoGenerator>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 858,
+      "registration": "builder.Services.AddHostedService<BackgroundJobWorker>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 860,
+      "registration": "builder.Services.AddHostedService<PlaybackJobWorker>();"
+    },
+    {
+      "path": "src/Jularr.Web/Program.cs",
+      "line": 865,
+      "registration": "builder.Services.AddHostedService<DiscoveryBeaconService>();"
+    }
+  ],
+  "gateA": "PASSED"
+}
