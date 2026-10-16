@@ -59,6 +59,41 @@ The Player should provide:
 - robust repeated/rapid seek handling without queueing stale requests;
 - seek recovery that preserves the requested logical position when a delivery session/engine must restart.
 
+### Touch gestures and accidental-input protection
+
+Touch-first clients may add fast gestures, but every gesture must have a visible-control equivalent and must not conflict with Learning/subtitle interaction.
+
+Recommended behavior:
+- double-tap left/right seeks by the configured short seek interval with immediate on-screen feedback;
+- press-and-hold on an otherwise non-interactive video area may temporarily enter **2x playback** and returns to the prior speed immediately on release;
+- temporary 2x must never overwrite the user's persistent playback-speed preference;
+- scrubbing has deliberate drag/touch slop so ordinary taps do not move position;
+- gestures that collide with interactive Learning cues, menus or system-edge gestures are suppressed in those regions;
+- do not make brightness/volume swipe gestures mandatory because browser/platform control varies; native clients may offer them only when reliable and discoverable.
+
+Provide an optional **Gesture Lock** for phone/tablet playback:
+- while locked, incidental taps/swipes do not seek, pause, change tracks or expose destructive controls;
+- a deliberate long-press/hold unlock gesture remains available and is explained when lock is entered;
+- system-required actions and accessibility escape paths remain reachable;
+- lock state is presentation/session state, not a persistent global playback permission.
+
+### Accessibility quality bar
+
+Best-in-class Player quality includes accessibility, not only codec coverage.
+
+All Player surfaces must:
+- expose meaningful accessible names/roles/states for transport, timeline, quality, track, skip, fullscreen, PiP and Learning controls;
+- support keyboard/focus navigation on desktop/tablet keyboard contexts and Switch Control/focus traversal on supported mobile platforms;
+- remain usable with VoiceOver/TalkBack without relying on icon shape, color, hover or gesture-only discovery;
+- announce meaningful state changes such as Playing/Paused, buffering, selected audio/subtitle, speed and failed playback actions without repeatedly announcing normal progress ticks;
+- meet platform-appropriate minimum touch-target sizing and safe spacing;
+- respect reduced-motion and text-size/accessibility settings where the platform exposes them;
+- keep subtitles/captions visually separate from Player chrome and avoid hiding them when controls appear;
+- provide a non-gesture route for every essential action;
+- avoid auto-hiding focused controls while assistive technology is actively interacting with them.
+
+Accessibility regressions belong in the same real-device qualification as playback regressions.
+
 ### Audio quality and synchronization
 
 Best-in-class playback requires:
