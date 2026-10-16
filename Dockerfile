@@ -8,11 +8,13 @@ COPY src/Jularr.Frontend/ ./
 RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG TARGETARCH
 WORKDIR /src
 COPY . .
 COPY --from=frontend /src/src/Jularr.Frontend/wwwroot/ src/Jularr.Frontend/wwwroot/
 COPY --from=frontend /src/src/Jularr.Frontend/Assets/Generated/ src/Jularr.Frontend/Assets/Generated/
-RUN dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release --output /app
+# Native libraries only for the image's own platform, not for every system ONNX Runtime and SkiaSharp support.
+RUN dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release --output /app     --runtime linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) --self-contained false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # FFmpeg plays and converts, fpcalc fingerprints music, 7-Zip and par2 unpack and repair downloads,
