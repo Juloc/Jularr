@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Devices;
@@ -26,7 +27,8 @@ public sealed record PlaybackPlanInput(
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
     bool Wake = true,
-    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None);
+    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None,
+    bool HasUntrustedForwardedFor = false);
 
 /// <summary>
 /// The client's own view of its connection. Only measured values count as throughput;
@@ -53,7 +55,8 @@ public static class PlaybackNetworkClassifier
 {
     // Carrier-grade NAT (100.64/10) is also where overlay VPNs such as Tailscale live; such a
     // client may be anywhere, so it counts as remote.
-    public static PlaybackNetworkClass Classify(IPAddress? remote, PlaybackNetworkReport? report)
+    public static PlaybackNetworkClass Classify(
+        IPAddress? remote, PlaybackNetworkReport? report, bool hasUntrustedForwardedFor = false)
     {
         if (report is { } hints &&
             (hints.SaveData == true ||
@@ -63,7 +66,7 @@ public static class PlaybackNetworkClassifier
             return PlaybackNetworkClass.Metered;
         }
 
-        if (remote is null)
+        if (remote is null || hasUntrustedForwardedFor)
         {
             return PlaybackNetworkClass.Unknown;
         }
@@ -111,6 +114,8 @@ public sealed class PlaybackServerCapabilityProvider(
     PlaybackTranscodeSlots slots,
     PlaybackHardwareService hardware)
 {
+    public int WanUploadBudgetKbps => settings.Current.WanUploadBudgetKbps;
+
     /// <param name="tooSlow">Encoders that already failed to keep up with real time for the title being planned; see <see cref="PlaybackHardwareService.Choose"/>.</param>
     public PlaybackServerCapabilities Current(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)
     {
@@ -206,12 +211,122 @@ public sealed class PlaybackPlanService(
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(input);
 
-        var playable = canonicalStorage is not null
-            ? await canonicalStorage.ResolveVideoAsync(
+        IReadOnlyList<CanonicalPlayableFile> candidates = canonicalStorage is not null
+            ? await canonicalStorage.ResolveVideoCandidatesAsync(
                 target.WorkId,
                 target.WorkEpisodeId,
                 cancellationToken)
-            : await ResolveCanonicalVideoAsync(target, cancellationToken);
+            : [];
+
+        CanonicalPlayableFile? playable = candidates.Count > 0
+            ? candidates[0]
+            : canonicalStorage is null
+                ? await ResolveCanonicalVideoAsync(target, cancellationToken)
+                : null;
+
+        // A re-plan retains the same physical cut only while its provenance is still valid.
+        // Explicit Original (including LAN Auto) always requests the original, not a derivative.
+        var networkClassForSelection = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network, input.HasUntrustedForwardedFor);
+        var effectiveQuality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClassForSelection);
+        var current = input.ReplacesSessionId is { } replaced
+            ? sessions.Get(replaced, profileId)
+            : null;
+        if (effectiveQuality != PlaybackQualityPreset.Original &&
+            current?.Target == target &&
+            candidates.FirstOrDefault(candidate => candidate.StoredFileId == current.MediaFileId) is { } selected)
+        {
+            if (selected.StoredFileId == candidates[0].StoredFileId)
+            {
+                playable = selected;
+            }
+            else
+            {
+                var originalsAndSelected = await mediaInventory.GetManyAsync(
+                    [candidates[0].StoredFileId, selected.StoredFileId], cancellationToken);
+                if (originalsAndSelected.TryGetValue(candidates[0].StoredFileId, out var originAnalysis) &&
+                    originalsAndSelected.TryGetValue(selected.StoredFileId, out var renditionAnalysis) &&
+                    PlaybackPreparedRenditionEligibility.IsEligible(
+                        candidates[0], originAnalysis, selected, renditionAnalysis))
+                {
+                    playable = selected;
+                }
+                // A revoked/stale derivative cannot persist by being named in a previous session.
+            }
+        }
+        else if (candidates.Count > 1 &&
+                 input.AudioStreamIndex is null &&
+                 input.SubtitleStreamIndex is null &&
+                 effectiveQuality != PlaybackQualityPreset.Original)
+        {
+            var capabilities = input.Capabilities?.Normalize() ??
+                               ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
+            var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network, input.HasUntrustedForwardedFor);
+            var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
+            int? egressLimit = null;
+            if (networkClass != PlaybackNetworkClass.Local && serverCapabilities.WanUploadBudgetKbps > 0)
+            {
+                egressLimit = Math.Max(100,
+                    (int)(serverCapabilities.WanUploadBudgetKbps * 0.85 / (sessions.ActiveExternalDeliveries(current?.Id) + 1)));
+            }
+            var network = new PlaybackNetworkConditions(
+                networkClass,
+                input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null,
+                input.Network?.BufferSeconds,
+                Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100),
+                egressLimit);
+            var server = serverCapabilities.Current();
+            var analyses = await mediaInventory.GetManyAsync(
+                candidates.Select(candidate => candidate.StoredFileId).ToArray(), cancellationToken);
+            var source = candidates[0];
+            analyses.TryGetValue(source.StoredFileId, out var sourceAnalysis);
+            var bestCost = int.MaxValue;
+            var bestHeight = -1;
+            var bestBitrate = -1;
+
+            foreach (var candidate in candidates)
+            {
+                if (!analyses.TryGetValue(candidate.StoredFileId, out var analysis) ||
+                    analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical } ||
+                    (candidate.StoredFileId != source.StoredFileId &&
+                     !PlaybackPreparedRenditionEligibility.IsEligible(source, sourceAnalysis, candidate, analysis)))
+                {
+                    continue;
+                }
+
+                var profile = PlaybackMediaProfile.From(candidate.Path, candidate.SizeBytes, technical);
+                var plan = PlaybackDecisionEngine.Decide(new PlaybackDecisionRequest(
+                    profile,
+                    capabilities,
+                    server,
+                    input.AudioStreamIndex,
+                    input.SubtitleStreamIndex,
+                    input.BurnInSubtitle,
+                    quality,
+                    network,
+                    input.ModePreference,
+                    input.FailedModes));
+
+                var cost = plan.Mode switch
+                {
+                    PlaybackDeliveryMode.DirectPlay or PlaybackDeliveryMode.DirectStream => 0,
+                    PlaybackDeliveryMode.Transcode => 1,
+                    _ => 2
+                };
+                var height = plan.Video?.MaxOutputHeight ?? technical.Video?.Height ?? 0;
+                var bitrate = plan.Quality.DeliveredBitrateKbps ?? 0;
+                if (cost < bestCost ||
+                    (cost == bestCost && height > bestHeight) ||
+                    (cost == bestCost && height == bestHeight && bitrate > bestBitrate) ||
+                    (cost == bestCost && height == bestHeight && bitrate == bestBitrate &&
+                     plan.Mode == PlaybackDeliveryMode.DirectPlay))
+                {
+                    playable = candidate;
+                    bestCost = cost;
+                    bestHeight = height;
+                    bestBitrate = bitrate;
+                }
+            }
+        }
 
         if (playable is null)
         {
@@ -242,7 +357,7 @@ public sealed class PlaybackPlanService(
 
         var capabilities = input.Capabilities?.Normalize() ??
                            ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
-        var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
+        var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network, input.HasUntrustedForwardedFor);
         var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
 
         // What the replaced session's player reported (its buffer and the stalls of the last minute) is the evidence of how that
@@ -250,11 +365,19 @@ public sealed class PlaybackPlanService(
         // title's stalls say nothing about this one, and a stale or missing report leaves the request's own hints in charge.
         // Throughput stays the request's hint because a player cannot measure the link while the browser is not fetching.
         var evidence = previous is not null && previous.Target == target ? sessions.TelemetryEvidence(previous) : null;
+        int? egressLimit = null;
+        if (networkClass != PlaybackNetworkClass.Local && serverCapabilities.WanUploadBudgetKbps > 0)
+        {
+            var active = sessions.ActiveExternalDeliveries(previous?.Id);
+            egressLimit = Math.Max(100, (int)(serverCapabilities.WanUploadBudgetKbps * 0.85 / (active + 1)));
+        }
+
         var network = new PlaybackNetworkConditions(
             networkClass,
             input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null,
             evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
-            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
+            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100),
+            egressLimit);
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
 
         // The replaced session's advice and what the server learned about its own capacity for this title (a tier ceiling, encoders that could
@@ -447,4 +570,88 @@ public sealed class PlaybackPlanService(
                     Values: values.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal))
             ],
             PlaybackCapabilitySupport.Unknown);
+}
+
+internal static class PlaybackPreparedRenditionEligibility
+{
+    public const string PreparedVersionSource = "jularr-prepared:v1";
+
+    public static bool IsEligible(
+        CanonicalPlayableFile original,
+        MediaInventoryEntry? originalAnalysis,
+        CanonicalPlayableFile candidate,
+        MediaInventoryEntry candidateAnalysis)
+    {
+        if (candidate.VersionSource != PreparedVersionSource ||
+            candidate.VersionNotes is not { Length: > 0 and <= 1000 } notes ||
+            originalAnalysis is not { Technical: { } sourceTechnical } ||
+            candidateAnalysis.Technical is not { } preparedTechnical ||
+            !IsFresh(original, originalAnalysis) || !IsFresh(candidate, candidateAnalysis) ||
+            originalAnalysis.SourceFingerprint is not { Length: 64 } fingerprint)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(notes);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("sourceStoredFileId", out var sourceId) ||
+                !Guid.TryParse(sourceId.GetString(), out var claimedSource) ||
+                claimedSource != original.StoredFileId ||
+                !root.TryGetProperty("sourceFingerprint", out var storedFingerprint) ||
+                !string.Equals(storedFingerprint.GetString(), fingerprint, StringComparison.Ordinal) ||
+                !root.TryGetProperty("recipeVersion", out var recipe) ||
+                !recipe.TryGetInt32(out var recipeVersion) || recipeVersion != 1 ||
+                !root.TryGetProperty("verifiedOutput", out var verified) ||
+                verified.ValueKind != JsonValueKind.True)
+            {
+                return false;
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
+        {
+            return false;
+        }
+
+        // Two cuts of the same film are not interchangeable: an absolute resume/seek position
+        // and existing default/forced subtitle choices must retain their meaning.
+        if (sourceTechnical.DurationSeconds is not { } sourceDuration || sourceDuration <= 0 ||
+            preparedTechnical.DurationSeconds is not { } preparedDuration || preparedDuration <= 0 ||
+            Math.Abs(sourceDuration - preparedDuration) > 0.25 ||
+            sourceTechnical.Video is not { } sourceVideo ||
+            preparedTechnical.Video is not { } preparedVideo ||
+            !string.Equals(sourceVideo.DynamicRange, preparedVideo.DynamicRange, StringComparison.OrdinalIgnoreCase) ||
+            sourceVideo.Width is not > 0 || sourceVideo.Height is not > 0 ||
+            preparedVideo.Width is not > 0 || preparedVideo.Height is not > 0 ||
+            Math.Abs((double)sourceVideo.Width.Value / sourceVideo.Height.Value -
+                     (double)preparedVideo.Width.Value / preparedVideo.Height.Value) > 0.02)
+        {
+            return false;
+        }
+
+        var sourceTracks = sourceTechnical.Streams.Where(track =>
+            track.Kind is MediaTrackKind.Audio or MediaTrackKind.Subtitle).ToArray();
+        var preparedTracks = preparedTechnical.Streams.Where(track =>
+            track.Kind is MediaTrackKind.Audio or MediaTrackKind.Subtitle).ToArray();
+        return sourceTracks.Length == preparedTracks.Length &&
+               sourceTracks.Zip(preparedTracks).All(pair =>
+                   pair.First.Kind == pair.Second.Kind &&
+                   pair.First.Index == pair.Second.Index &&
+                   string.Equals(pair.First.Language, pair.Second.Language, StringComparison.OrdinalIgnoreCase) &&
+                   pair.First.IsDefault == pair.Second.IsDefault &&
+                   pair.First.IsForced == pair.Second.IsForced &&
+                   pair.First.Channels == pair.Second.Channels &&
+                   string.Equals(pair.First.Title, pair.Second.Title, StringComparison.Ordinal) &&
+                   (pair.First.Kind != MediaTrackKind.Subtitle ||
+                    string.Equals(pair.First.Codec, pair.Second.Codec, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool IsFresh(CanonicalPlayableFile file, MediaInventoryEntry analysis) =>
+        analysis.Status == MediaAnalysisStatus.Succeeded &&
+        analysis.ProbeVersion == MediaInventoryService.CurrentProbeVersion &&
+        analysis.SourceSizeBytes == file.SizeBytes &&
+        analysis.SourceLastWriteTimeUtc == file.LastWriteTimeUtc &&
+        analysis.SourceFingerprint is { Length: 64 };
 }

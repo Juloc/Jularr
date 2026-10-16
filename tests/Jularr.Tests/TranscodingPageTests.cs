@@ -4,6 +4,7 @@ using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Admin;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Playback.Decision;
@@ -94,6 +95,25 @@ public sealed class TranscodingPageTests
     }
 
     [TestMethod]
+    public async Task OwnerCanConfigureWanBudgetAndInvalidValuesAreRefused()
+    {
+        await using var host = await TranscodingPageHost.CreateAsync();
+        Assert.AreEqual(HttpStatusCode.Redirect,
+            await host.PostAsync(host.ValidForm(("WanUploadBudgetMbps", "10"))));
+        Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
+
+        var html = await host.GetHtmlAsync();
+        StringAssert.Contains(html, "name=\"WanUploadBudgetMbps\"");
+        StringAssert.Contains(html, "value=\"10\"");
+
+        var invalid = await host.PostForHtmlAsync(
+            host.ValidForm(("WanUploadBudgetMbps", "1001")));
+        Assert.AreEqual(HttpStatusCode.OK, invalid.Status);
+        Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
+        StringAssert.Contains(invalid.Html, "between 0 and 1000 Mbit/s");
+    }
+
+    [TestMethod]
     public async Task TheBufferPresetIsSavedShownAndOnlyOneOfTheOfferedPresetsIsAccepted()
     {
         await using var host = await TranscodingPageHost.CreateAsync();
@@ -136,6 +156,36 @@ public sealed class TranscodingPageTests
         Assert.AreEqual(PlaybackTranscodingSettings.Default, host.Kit.Settings.Current);
     }
 
+    [TestMethod]
+    public async Task OutboundRateShowsFreshContainerUsageButNeverClaimsAnIspSpeedTest()
+    {
+        var measuredAt = DateTimeOffset.UtcNow.AddSeconds(-2);
+        var sample = new StackResourceSample(
+            measuredAt,
+            new StackServiceResource(null, 0, SendBytesPerSecond: 1_250_000),
+            null);
+        await using var fresh = await TranscodingPageHost.CreateAsync(sample);
+        var html = await fresh.GetHtmlAsync();
+        StringAssert.Contains(html, "10.0 Mbit/s");
+        StringAssert.Contains(html, "not just video");
+        StringAssert.Contains(html, "router or ISP");
+
+        await using var stale = await TranscodingPageHost.CreateAsync(
+            sample with { AtUtc = measuredAt.AddMinutes(-2) });
+        var staleHtml = await stale.GetHtmlAsync();
+        StringAssert.Contains(staleHtml, "Measurement unavailable");
+        Assert.IsFalse(staleHtml.Contains("10.0 Mbit/s", StringComparison.Ordinal));
+
+        await using var empty = await TranscodingPageHost.CreateAsync();
+        StringAssert.Contains(await empty.GetHtmlAsync(), "Measurement unavailable");
+    }
+
+    private sealed class FakeResources(StackResourceSample? sample) : IStackResourceTelemetry
+    {
+        public StackResourceSnapshot GetSnapshot() =>
+            sample is null ? StackResourceSnapshot.Empty : new StackResourceSnapshot([sample]);
+    }
+
     /// <summary>The page in front of real routing, with per-request sign-in (owner header or a plain user) and real anti-forgery.</summary>
     private sealed class TranscodingPageHost : IAsyncDisposable
     {
@@ -156,7 +206,7 @@ public sealed class TranscodingPageTests
 
         public string CachePath => Path.Combine(Kit.DataRoot, "hls").Replace('\\', '/');
 
-        public static async Task<TranscodingPageHost> CreateAsync()
+        public static async Task<TranscodingPageHost> CreateAsync(StackResourceSample? outbound = null)
         {
             var kit = PlaybackServerTestKit.Create();
             Directory.CreateDirectory(kit.DataRoot);
@@ -185,6 +235,7 @@ public sealed class TranscodingPageTests
                         services.AddSingleton(TimeProvider.System);
                         services.AddSingleton(kit.Settings);
                         services.AddSingleton(kit.Slots);
+                        services.AddSingleton<IStackResourceTelemetry>(new FakeResources(outbound));
                     })
                     .Configure(app =>
                     {
@@ -221,7 +272,8 @@ public sealed class TranscodingPageTests
                 ["HlsCachePath"] = CachePath,
                 ["CacheBudgetGiB"] = "10",
                 ["FreeSpaceFloorGiB"] = "5",
-                ["BufferPreset"] = "Normal"
+                ["BufferPreset"] = "Normal",
+                ["WanUploadBudgetMbps"] = "0"
             };
             foreach (var (name, value) in overrides)
             {

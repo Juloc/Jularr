@@ -79,7 +79,12 @@ public static class PlaybackCostClasses
 /// when the session directory is created. A server whose running transcodes of the same kind already stay under real time refuses a
 /// new one at once (<see cref="PlaybackAdmissionCodes.TranscoderOverloaded"/>) instead of queueing it.
 /// </summary>
-public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore settings, PlaybackTranscodeSlots slots, PlaybackHardwareService hardware, PlaybackStreamSessionStore sessions)
+public sealed class PlaybackAdmissionService(
+    PlaybackTranscodingSettingsStore settings,
+    PlaybackTranscodeSlots slots,
+    PlaybackHardwareService hardware,
+    PlaybackStreamSessionStore sessions,
+    HlsPlaybackSessionManager? hls = null)
 {
     /// <param name="session">The session the delivery belongs to, when it has one: its own measurement is never a reason to refuse it, and a
     /// start that only replaces running work (a seek, a re-plan at the same or a lower bitrate) is never refused for overload.</param>
@@ -108,7 +113,15 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
         }
 
         var takesOver = session.TakesOverSlotOf(costClass);
-        return slots.CanAcquire(costClass, profileId, takesOver) ? null : SlotRefusal(profileId);
+        if (slots.CanAcquire(costClass, profileId, takesOver))
+        {
+            return null;
+        }
+
+        var ownSlotsFull = slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile;
+        return hls?.HasReclaimableStalePaused(costClass, profileId, ownSlotsFull) == true
+            ? null
+            : SlotRefusal(profileId);
     }
 
     /// <summary>An admission for a legacy delivery that has no plan: a software transcode or a remux.</summary>
@@ -186,7 +199,17 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
             return new PlaybackAdmission(costClass, encoder, null, policyRefusal);
         }
 
-        var lease = slots.TryAcquire(costClass, profileId, takesOverSlot: !isRetry && session?.TakesOverSlotOf(costClass) == true);
+        var takesOver = !isRetry && session?.TakesOverSlotOf(costClass) == true;
+        var lease = slots.TryAcquire(costClass, profileId, takesOverSlot: takesOver);
+        if (lease is null && hls is not null)
+        {
+            var ownSlotsFull = slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile;
+            if (hls.ReclaimStalePaused(costClass, profileId, ownSlotsFull))
+            {
+                lease = slots.TryAcquire(costClass, profileId, takesOverSlot: takesOver);
+            }
+        }
+
         return new PlaybackAdmission(costClass, encoder, lease, lease is null ? SlotRefusal(profileId) : null);
     }
 

@@ -38,7 +38,8 @@ public sealed record PlaybackNetworkConditions(
     PlaybackNetworkClass Class = PlaybackNetworkClass.Unknown,
     int? EstimatedThroughputKbps = null,
     double? BufferSeconds = null,
-    int RecentStalls = 0);
+    int RecentStalls = 0,
+    int? ServerEgressLimitKbps = null);
 
 public sealed record PlaybackQualityStep(
     PlaybackQualityPreset Preset,
@@ -170,7 +171,8 @@ public enum PlaybackLimitSource
     TranscodeSpeed,
 
     /// <summary>A step up the ladder: the measured delivery rate has had room for the next tier for a long stable window.</summary>
-    Headroom
+    Headroom,
+    ServerEgress
 }
 
 /// <summary>The bitrate a delivered stream must not exceed, and where that limit came from.</summary>
@@ -211,10 +213,18 @@ public static class PlaybackAutoQuality
                 ? new PlaybackBitrateLimit(step.BitrateKbps, PlaybackLimitSource.Preset, step.MaxHeight)
                 : ResolveAutomatic(network, currentTargetKbps, adaptation);
 
-        // What the server's encoder sustained is a capacity fact, not a preference: it caps every selection, a fixed tier included.
-        return adaptation?.CeilingKbps is { } ceiling && (limit.MaxKbps is null || ceiling < limit.MaxKbps)
-            ? new PlaybackBitrateLimit(ceiling, PlaybackLimitSource.TranscodeSpeed)
-            : limit;
+        if (adaptation?.CeilingKbps is { } ceiling && (limit.MaxKbps is null || ceiling < limit.MaxKbps))
+        {
+            limit = new PlaybackBitrateLimit(ceiling, PlaybackLimitSource.TranscodeSpeed, limit.MaxHeight);
+        }
+
+        if (network.ServerEgressLimitKbps is { } egress && egress > 0 &&
+            (limit.MaxKbps is null || egress < limit.MaxKbps))
+        {
+            limit = new PlaybackBitrateLimit(egress, PlaybackLimitSource.ServerEgress, limit.MaxHeight);
+        }
+
+        return limit;
     }
 
     private static PlaybackBitrateLimit ResolveAutomatic(PlaybackNetworkConditions network, int? currentTargetKbps, PlaybackAdaptationDirective? adaptation)

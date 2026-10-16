@@ -72,7 +72,9 @@ public sealed record CanonicalPlayableFile(
     Guid WorkVersionId,
     string Path,
     long SizeBytes,
-    DateTime LastWriteTimeUtc);
+    DateTime LastWriteTimeUtc,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? VersionSource = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? VersionNotes = null);
 
 /// <summary>
 /// Single application owner for canonical video Asset/StoredFile identity. Batch attachment is used by
@@ -444,10 +446,18 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         long workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
+        (await ResolveVideoCandidatesAsync(workId, workEpisodeId, cancellationToken)).FirstOrDefault();
+
+    public async Task<IReadOnlyList<CanonicalPlayableFile>> ResolveVideoCandidatesAsync(
+        long workId,
+        Guid? workEpisodeId,
+        CancellationToken cancellationToken) =>
         await (
             from asset in db.MediaAssets.AsNoTracking()
             join file in db.StoredFiles.AsNoTracking()
                 on (Guid?)asset.Id equals file.MediaAssetId
+            join version in db.WorkVersions.AsNoTracking()
+                on asset.WorkVersionId equals version.Id
             where asset.Kind == MediaAssetKind.Video &&
                   asset.WorkId == workId &&
                   asset.WorkEpisodeId == workEpisodeId
@@ -460,8 +470,11 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
                 asset.WorkVersionId,
                 file.Path,
                 file.SizeBytes,
-                file.LastWriteTimeUtc))
-        .FirstOrDefaultAsync(cancellationToken);
+                file.LastWriteTimeUtc,
+                version.Source,
+                version.Notes))
+        .Take(8)
+        .ToListAsync(cancellationToken);
 
     private static string BuildVersionKey(Guid storedFileId) =>
         $"{LocalVideoVersionPrefix}{storedFileId:N}";

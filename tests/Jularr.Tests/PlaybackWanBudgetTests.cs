@@ -1,0 +1,83 @@
+using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
+using static Jularr.Tests.PlaybackTestPlans;
+
+namespace Jularr.Tests;
+
+[TestClass]
+public sealed class PlaybackWanBudgetTests
+{
+    [TestMethod]
+    public async Task Settings_ManualUploadBudget_PersistsAndRejectsInvalidValues()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        try
+        {
+            Assert.AreEqual(0, PlaybackTranscodingSettings.Default.WanUploadBudgetKbps);
+            Assert.AreEqual(0, kit.Capabilities.WanUploadBudgetKbps);
+
+            var saved = await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
+                    WanUploadBudgetKbps = 10_000
+                });
+            Assert.IsTrue(saved.Succeeded);
+            Assert.AreEqual(10_000, kit.Capabilities.WanUploadBudgetKbps);
+
+            var restarted = new PlaybackTranscodingSettingsStore(kit.DataRoot);
+            Assert.AreEqual(10_000, (await restarted.LoadAsync()).WanUploadBudgetKbps);
+
+            var invalid = await kit.Settings.SaveAsync(
+                kit.Settings.Current with
+                {
+                    WanUploadBudgetKbps = PlaybackTranscodingSettings.MaxWanUploadBudgetKbps + 1
+                });
+            Assert.IsFalse(invalid.Succeeded);
+            Assert.AreEqual(PlaybackSettingsIssueCode.WanUploadBudgetInvalid, invalid.Issues.Single().Code);
+            Assert.AreEqual(10_000, kit.Settings.Current.WanUploadBudgetKbps);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public void ActiveExternalDeliveries_DoesNotCountLocalOrReplacedViewerTwice()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-09T12:00:00Z"));
+        var sessions = new PlaybackStreamSessionStore(clock);
+        var selections = new PlaybackStreamSelections(
+            null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
+        var remote = Transcode(Video()) with
+        {
+            Quality = new PlaybackQualityResolution(
+                PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote,
+                8_000, PlaybackLimitSource.Network, 12_000, 8_000)
+        };
+        var local = remote with
+        {
+            Quality = remote.Quality with { Network = PlaybackNetworkClass.Local }
+        };
+        var first = sessions.Create(
+            "viewer", PlaybackVideoTarget.Movie(1), Guid.NewGuid(),
+            "/media/a.mkv", 1400, remote, selections);
+        sessions.Create(
+            "local", PlaybackVideoTarget.Movie(1), Guid.NewGuid(),
+            "/media/a.mkv", 1400, local, selections);
+
+        Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
+        sessions.Create(
+            "viewer", PlaybackVideoTarget.Movie(1), Guid.NewGuid(),
+            "/media/a.mkv", 1400, remote, selections,
+            replaces: first.Id, deferRetirement: true);
+        Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
+
+        clock.Advance(TimeSpan.FromSeconds(31));
+        Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
+    }
+}

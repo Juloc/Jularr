@@ -86,6 +86,7 @@ public static class PlaybackReasonCodes
     public const string SubtitleStylingLost = "subtitle_styling_lost";
     public const string QualityLimit = "quality_limit";
     public const string BandwidthLimit = "bandwidth_limit";
+    public const string ServerEgressLimit = "server_egress_limit";
     public const string RemoteStartLimit = "remote_start_limit";
     public const string StallLimit = "stall_limit";
     public const string ClientPlaybackFailed = "client_playback_failed";
