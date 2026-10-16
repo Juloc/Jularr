@@ -57,11 +57,13 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime()
         {
+            var data = Path.Combine(Path.GetTempPath(), "jularr-tests", Guid.NewGuid().ToString("N"));
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["JULARR_DB"] = "Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1",
+                ["JULARR_DB"] = Infrastructure.TestPostgres.ResolveConnectionString(nameof(Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime)),
+                ["DataPath"] = data,
                 ["Authentication:SessionLifetimeHours"] = "21"
             });
             builder.Services.AddJularrServices(builder.Configuration);
@@ -69,7 +71,11 @@ namespace Jularr.Backend.Tests
             NpgsqlDataSource database;
             try
             {
-                // Resolve internal dependencies centrally.
+                // An empty database receives its baselines when the host starts; internal dependencies resolve centrally.
+                app.UseExceptionHandler();
+                app.UseRateLimiter();
+                app.MapJularrServices();
+                await app.StartAsync();
                 database = app.Services.GetRequiredService<SqlDatabase>().DataSource;
                 Assert.IsNull(app.Services.GetService<NpgsqlDataSource>());
                 await using var scope = app.Services.CreateAsyncScope();
@@ -80,10 +86,6 @@ namespace Jularr.Backend.Tests
                 Assert.IsFalse(result.IsAuthenticated);
 
                 // Verify the shared HTTP adapter.
-                app.UseExceptionHandler();
-                app.UseRateLimiter();
-                app.MapJularrServices();
-                await app.StartAsync();
                 using var client = app.GetTestClient();
                 using var response = await client.GetAsync("/api/v1/auth");
                 Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
@@ -92,6 +94,10 @@ namespace Jularr.Backend.Tests
             finally
             {
                 await app.DisposeAsync();
+                if (Directory.Exists(data))
+                {
+                    Directory.Delete(data, true);
+                }
             }
 
             // Host disposal closes its pool.
