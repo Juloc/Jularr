@@ -161,6 +161,72 @@ namespace Jularr.Backend.Logic.Reading
             return (await ctx.ReadRequiredAsync<ReadingEvictionData>(sql, ct)).Count;
         }
 
+        // With the Ocr module on, a scanned PDF waits for recognition; a changed file is tried again after a failure. Answers whether it waits.
+        public static async Task<bool> RequestReadingRecognitionAsync(this LogicContext ctx, ReadingRecognitionData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH enabled AS (
+                    SELECT
+                        1
+                    FROM
+                        "InstanceModules"
+                    WHERE
+                        "Key" = 'Ocr'
+                        AND "IsEnabled"
+                ), saved AS (
+                    INSERT INTO
+                        "ReadingRecognitions" ("StoredFileId", "SourceSizeBytes", "SourceModifiedAt")
+                    SELECT
+                        @StoredFileId,
+                        @SizeBytes,
+                        @ModifiedAt
+                    FROM
+                        enabled
+                    ON CONFLICT ("StoredFileId") DO UPDATE
+                    SET
+                        "SourceSizeBytes" = EXCLUDED."SourceSizeBytes",
+                        "SourceModifiedAt" = EXCLUDED."SourceModifiedAt",
+                        "RequestedAt" = now(),
+                        "FailedAt" = NULL
+                    WHERE
+                        "ReadingRecognitions"."SourceSizeBytes" <> EXCLUDED."SourceSizeBytes"
+                        OR "ReadingRecognitions"."SourceModifiedAt" <> EXCLUDED."SourceModifiedAt"
+                    RETURNING
+                        "FailedAt"
+                )
+                SELECT
+                    EXISTS (SELECT 1 FROM enabled)
+                    AND coalesce((SELECT "FailedAt" IS NULL FROM saved), (SELECT "FailedAt" IS NULL FROM "ReadingRecognitions" WHERE "StoredFileId" = @StoredFileId), FALSE) AS "IsPending";
+                """;
+            sql.Parameters.Add(data);
+            return (await ctx.Sql.ReadRequiredAsync<ReadingRecognitionStateData>(sql, ct)).IsPending;
+        }
+
+        // A recognized scan leaves the queue; a failed one stays until its file changes.
+        public static async Task FinishReadingRecognitionAsync(this LogicContext ctx, ReadingRecognitionResultData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement = data.IsFailed
+                ? """
+                  UPDATE
+                      "ReadingRecognitions"
+                  SET
+                      "FailedAt" = now()
+                  WHERE
+                      "StoredFileId" = @StoredFileId;
+                  """
+                : """
+                  DELETE FROM
+                      "ReadingRecognitions"
+                  WHERE
+                      "StoredFileId" = @StoredFileId;
+                  """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // The choice belongs to the book the asset is part of, if the profile may open it.
         public static async Task SaveReadingLanguageAsync(this LogicContext ctx, ReadingLanguageData data, CancellationToken ct)
         {

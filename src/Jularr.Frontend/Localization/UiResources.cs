@@ -1215,6 +1215,7 @@ namespace Jularr.Frontend.Localization
             new("instance.module.HomeLayout", "Personal home page order"),
             new("instance.module.Trickplay", "Thumbnails while seeking"),
             new("instance.module.Translation", "Translate books in the reader"),
+            new("instance.module.Ocr", "Recognize the text of scanned books"),
             new("instance.module.Diagnostics", "Diagnostics in memory"),
             new("instance.module.Subtitles", "Subtitles from providers"),
             new("instance.module.Uploads", "Upload manga volumes"),

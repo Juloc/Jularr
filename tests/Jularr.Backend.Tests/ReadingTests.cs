@@ -530,7 +530,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await opened.Content.ReadAsStringAsync(), "reading_invalid_file");
         }
 
-        private static async Task<ReadingDocumentV1> OpenAsync(Host host, long assetId)
+        internal static async Task<ReadingDocumentV1> OpenAsync(Host host, long assetId)
         {
             using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + assetId + "/open");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());

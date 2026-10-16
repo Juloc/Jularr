@@ -4824,6 +4824,10 @@
    "Translate books in the reader",
    "Bücher im Reader übersetzen"
   ],
+  "instance.module.Ocr": [
+   "Recognize the text of scanned books",
+   "Text gescannter Bücher erkennen"
+  ],
   "instance.module.Diagnostics": [
    "Diagnostics in memory",
    "Diagnose im Arbeitsspeicher"
@@ -6415,6 +6419,14 @@
   "errors.reading_translation_incomplete": [
    "This book is not translated into that language in every section yet.",
    "Dieses Buch ist noch nicht in jedem Abschnitt in diese Sprache übersetzt."
+  ],
+  "errors.reading_pdf_recognizing": [
+   "The scanned pages are being turned into text; until then the book opens as a PDF.",
+   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als PDF."
+  ],
+  "errors.ocr_unavailable": [
+   "The text recognition models cannot be fetched right now.",
+   "Die Modelle für die Texterkennung können gerade nicht geladen werden."
   ],
   "errors.reading_unsupported": [
    "This comic needs 7-Zip, which is not configured on the server.",

@@ -19,6 +19,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly DateTimeField ModifiedAt = new();
         public static readonly BoolField IsCached = new();
         public static readonly BoolField IsMissing = new();
+        public static readonly BoolField IsPending = new();
         public static readonly StringField Path = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, AllowBlank = false };
         public static readonly StringField MediaType = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false };
         public static readonly ByteArrayField Bytes = new();

@@ -48,6 +48,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.translation_unavailable", "Translation files cannot be fetched right now; the book stays in its language."),
             new("errors.reading_pdf_without_text", "This PDF holds scanned pages without text; it opens as a PDF."),
             new("errors.reading_translation_incomplete", "This book is not translated into that language in every section yet."),
+            new("errors.reading_pdf_recognizing", "The scanned pages are being turned into text; until then the book opens as a PDF."),
+            new("errors.ocr_unavailable", "The text recognition models cannot be fetched right now."),
             new("errors.reading_unsupported", "This comic needs 7-Zip, which is not configured on the server."),
             new("errors.plex_unavailable", "The Plex server could not be reached."),
             new("errors.plex_authentication_failed", "The Plex server rejected the token."),
