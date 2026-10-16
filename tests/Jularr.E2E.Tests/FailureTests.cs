@@ -202,7 +202,7 @@ namespace Jularr.E2E.Tests
         {
             await page.GotoAsync("/Admin/Storage");
             await page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
-            await Steps.SubmitAsync(page, Steps.FormWith(page, "Check mount status"));
+            await Steps.SubmitAsync(page, Steps.FormWith(page, "Check now"));
             return await page.Locator(".storage__health").InnerTextAsync();
         }
     }
