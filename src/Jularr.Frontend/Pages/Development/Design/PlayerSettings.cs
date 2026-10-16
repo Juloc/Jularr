@@ -77,7 +77,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                         SettingsPane("info", "design.player.info", [.. InfoControls(),
                             Group("design.player.diagnostics", new P(new Text("design.player.diagnosticsNotice")))], prefix: "full"), CopyControls()
                     ).Class("player-preferences__controls"));
-                    split.Secondary.Add(new Aside(new P(new Text("design.player.previewState")), new Div().Attribute("data-settings-preview", "")).Class("player-preferences__preview"));
+                    split.Secondary.Add(new Aside(new P(new Text("design.player.preview")), new Div().Attribute("data-settings-preview", "")).Class("player-preferences__preview"));
                 })
             ).Class("player-preferences").Attribute("data-settings-page", "").Attribute("id", "player-settings-page").Attribute("hidden", "hidden");
         }
@@ -136,12 +136,13 @@ namespace Jularr.Frontend.Pages.Development.Design
             new Div(new Toggle("player.audio", true), new Toggle("player.subtitles", true), new Toggle("design.player.playback", true), new Toggle("design.player.picture", true)).Attribute("data-copy-groups", ""));
 
         // Shared surfaces, unique label IDs.
-        private IUiComponent Field(string label, string name, HtmlElement control)
+        private IUiComponent Field(string label, string name, HtmlElement control, bool reset = true)
         {
             var id = "preview-" + name + "-" + (++_playerFieldIndex).ToString(CultureInfo.InvariantCulture);
             control.Attribute("id", id).Attribute("name", name).Attribute("data-preview-setting", "");
-            return new Div(new Fieldset(new Legend(new Label(new Text(label)).Attribute("for", id),
-                new Small(new Text("design.player.inherited")).Attribute("data-setting-origin", name).Class("player-settings__origin")), control).Class("ui-field__control"), Reset(name))
+            var legend = new List<IUiComponent> { new Label(new Text(label)).Attribute("for", id) };
+            if (reset) legend.Add(new Small(new Text("design.player.inherited")).Attribute("data-setting-origin", name).Class("player-settings__origin"));
+            return new Div([new Fieldset(new Legend([.. legend]), control).Class("ui-field__control"), .. reset ? new[] { Reset(name) } : []])
                 .Class("player-settings__field").Attribute("data-setting-row", name);
         }
 
@@ -172,7 +173,7 @@ namespace Jularr.Frontend.Pages.Development.Design
         private IUiComponent Speed()
         {
             var presets = new[] { .25, .5, .75, 1, 1.25, 1.5, 2, 3, 4 };
-            return new Div(Range("player.speed", "speed", 1, .25, 4, .05), Field("design.player.speedValue", "speed", Number(1, .25, 4, .05)),
+            return new Div(Range("player.speed", "speed", 1, .25, 4, .05), Field("design.player.speedValue", "speed", Number(1, .25, 4, .05), reset: false),
                 new Div(presets.Select(value => (IUiComponent)new Button(new ValueText(Invariant(value) + "×")).Compact().Attribute("data-speed", Invariant(value))
                     .Attribute("aria-pressed", value == 1 ? "true" : "false").Attribute("aria-label", texts["player.speed"] + " " + Invariant(value) + "×")).ToArray())
                     .Class("player-settings__speed-points")).Class("player-settings__speed");

@@ -165,6 +165,9 @@ Desktop transport and the earlier changed-defaults Save button. This is a target
 `/Design?pane=player` on the isolated design branch demonstrates Desktop Normal,
 shared controls, Basic/Audio/Subtitles/Playback/Info, a compact bottom-tab popover,
 viewport-filling fallback and an expanded settings surface with the same video element.
+The compact panel uses a fixed 480 × 540 surface; small viewports fill the screen
+and lock background scrolling. Expanded groups and speed controls remain compact,
+and subtitle sizing scales with the smaller preview while retaining track proportions.
 Scope inheritance, per-field Reset, copy operations and mirrored fields are local,
 in-memory presentation examples. The expanded surface is a Development hash view,
 not a connected production settings route. No playback/profile/

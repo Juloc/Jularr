@@ -64,7 +64,7 @@ export function initializeSettings(root: HTMLElement, player: HTMLElement, panel
         captions.querySelector<HTMLElement>('[data-caption="primary"]')!.hidden = inherited("primarySubtitle") === "";
         const secondary = captions.querySelector<HTMLElement>('[data-caption="secondary"]')!;
         secondary.hidden = inherited("secondarySubtitle") === "";
-        secondary.style.fontSize = inherited("separateStyle") === "true" ? `${inherited("secondaryFontSize")}px` : "inherit";
+        secondary.style.fontSize = inherited("separateStyle") === "true" ? `${Number(inherited("secondaryFontSize")) / Number(inherited("fontSize"))}em` : "inherit";
         secondary.style.color = inherited("separateStyle") === "true" ? inherited("secondaryColor") : "inherit";
         video.style.objectFit = inherited("fit");
         video.style.transform = inherited("zoom") === "100" ? "none" : `scale(${Number(inherited("zoom")) / 100})`;
@@ -113,7 +113,7 @@ export function initializeSettings(root: HTMLElement, player: HTMLElement, panel
         chapters.hidden = expanded;
         if (expanded) full.querySelector("[data-settings-preview]")!.append(stage);
         else stageHome.prepend(stage);
-        root.querySelectorAll<HTMLElement>("[data-sample-pane]").forEach(item => item.hidden = expanded);
+        document.querySelectorAll<HTMLElement>("[data-player-lab-only]").forEach(item => item.hidden = expanded);
         render();
     }
     window.addEventListener("hashchange", showFull);
@@ -121,9 +121,9 @@ export function initializeSettings(root: HTMLElement, player: HTMLElement, panel
     function positionPopover(popover: HTMLElement): void {
         if (!popover.matches(":popover-open")) return;
         const anchor = root.querySelector<HTMLElement>(`[popovertarget="${popover.id}"]`)!.getBoundingClientRect();
-        const bounds = popover.getBoundingClientRect();
         const fullscreen = popover === panel && (innerWidth < 620 || innerHeight < 650);
         popover.classList.toggle("player-settings--screen", fullscreen);
+        const bounds = popover.getBoundingClientRect();
         popover.style.left = fullscreen ? "0" : `${Math.max(12, Math.min(innerWidth - bounds.width - 12, anchor.right - bounds.width))}px`;
         popover.style.top = fullscreen ? "0" : `${Math.max(12, Math.min(innerHeight - bounds.height - 12, anchor.top - bounds.height - 8))}px`;
     }

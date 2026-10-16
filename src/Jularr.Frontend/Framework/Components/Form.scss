@@ -59,6 +59,7 @@
     }
 
     &__control > textarea { padding: 8px 6px; border-radius: 24px; resize: vertical; }
+    &__control > input[type=range] { accent-color: var(--accent); }
     &__control:has(textarea) { border-radius: 24px; }
     &__control:focus-within { border-color: var(--accent); }
     &__control:focus-within > legend { color: var(--accent-text); }

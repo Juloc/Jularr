@@ -50,6 +50,8 @@ namespace Jularr.Frontend.Localization
             new("design.player", "Player controls"),
             new("design.playerNotice", "Layout preview only. No playback session or stream is started here."),
             new("design.player.previewNotice", "Interactive design sample, not library playback. Buttons demonstrate presentation states only; there is no stream, saved progress or account change. Illustrative artwork: Your Name, TMDB."),
+            new("design.player.sampleNotice", "Design preview · nothing is saved"),
+            new("design.player.preview", "Preview"),
             new("design.player.previewState", "Preview only · sample position and buffer · no stream"),
             new("design.player.work", "The journey continues"),
             new("design.player.episodes", "Episodes"),

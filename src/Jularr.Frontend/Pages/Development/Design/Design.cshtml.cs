@@ -37,12 +37,13 @@ namespace Jularr.Frontend.Pages.Development.Design
                 items.Add(new Appearance());
             });
             page.Content.Add(_pane == "player"
-                ? new Details(new Summary(new Text("appearance.title")), appearance).Class("player-design-appearance")
+                ? new Details(new Summary(new Text("appearance.title")), appearance).Class("player-design-appearance").Attribute("data-player-lab-only", "")
                 : appearance);
-            page.Content.Add(new NavigationTabs([
+            var navigation = new NavigationTabs([
                 new("design.controls", "/Design#controls", false), new("design.forms", "/Design#forms", false),
                 new("design.media", "/Design#media", false), new("design.player", "/Design?pane=player", _pane == "player"), new("design.cards.title", "/Design?pane=cards", _pane == "cards")
-            ], "nav.tabs"));
+            ], "nav.tabs");
+            page.Content.Add(_pane == "player" ? new Div(navigation).Attribute("data-player-lab-only", "") : navigation);
 
             if (_pane == "player")
             {

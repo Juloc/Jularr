@@ -113,6 +113,8 @@
 }
 
 // Native top-layer surface; all controls reuse the shared design tokens.
+html:has(.player-settings--screen:popover-open) { overflow: hidden; }
+
 .player-settings {
     position: fixed;
     inset: auto;
@@ -130,7 +132,8 @@
 
     &:popover-open { display: grid; gap: 12px; }
     &--preferences {
-        height: 600px;
+        width: min(480px, calc(100vw - 24px));
+        height: 540px;
         padding: 0;
         overflow: hidden;
         grid-template-rows: auto minmax(0, 1fr) auto;
@@ -159,7 +162,7 @@
     &__body { min-height: 0; overflow: auto; padding: 2px; }
     &__pane { display: grid; align-content: start; gap: 10px; }
     &__pane[hidden] { display: none; }
-    &__details { display: grid; gap: 12px; > summary { cursor: pointer; font-weight: 650; color: var(--accent-text); margin-block: 6px; } }
+    &__details { > summary { cursor: pointer; font-weight: 650; color: var(--accent-text); line-height: 22px; } }
     &__details[open] > :not(summary) { margin-block: 10px; }
     &__presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     &__range { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; gap: 8px; > span { font-variant-numeric: tabular-nums; font-size: .85rem; } }
@@ -179,25 +182,28 @@
 }
 .player-settings__speed {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 100px;
+    grid-template-columns: minmax(0, 1fr) 120px;
+    align-items: start;
     gap: 0 8px;
     .player-settings__range { display: block; > [data-range-value] { display: none; } }
     &-points {
         position: relative;
         grid-column: 1;
-        height: 30px;
+        height: 20px;
         margin-inline: 12px;
         > button {
             position: absolute;
             transform: translateX(-50%);
-            width: 24px;
-            min-height: 28px;
-            padding: 8px 0 0;
+            width: 12px;
+            min-height: 20px;
+            padding: 0;
             border: 0;
             background: transparent;
             color: var(--muted);
-            font-size: 9px;
-            &::before { content: ""; position: absolute; top: 1px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+            font-size: 0;
+            &::before { content: ""; position: absolute; top: 6px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+            &::after { content: attr(data-speed) "×"; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: 8px; background: var(--surface); color: var(--text); font-size: 11px; opacity: 0; pointer-events: none; }
+            &:is(:hover, :focus-visible)::after { opacity: 1; }
             &[aria-pressed=true] { background: transparent; color: var(--accent-text); }
         }
     }
@@ -206,18 +212,24 @@
     > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-block: 16px; }
     > header .player-settings__scope { flex: 0 1 360px; }
     > .split { grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); align-items: start; gap: 24px; }
-    &__controls { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel); background: var(--surface); }
+    &__controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel); background: var(--surface); }
     .player-settings__origin { display: inline; }
     .split__secondary { position: sticky; top: 92px; }
     &__preview { min-width: 0; }
-    .player-settings__details { padding: 12px; border: 1px solid var(--accent-line); border-radius: 18px; }
+    .player-settings__details { padding: 8px 12px; border: 1px solid var(--accent-line); border-radius: 18px; }
     [hidden] { display: none; }
     @media (max-width: 1000px) {
         > .split { grid-template-columns: 1fr; }
         .split__secondary { grid-row: 1; position: static; }
     }
+    @media (max-width: 600px) {
+        > header { flex-direction: column; align-items: stretch; }
+        > header .button { align-self: start; }
+        > header .player-settings__scope { flex: auto; }
+    }
 }
 .player-workshop--settings {
+    .player-workshop__captions { font-size: calc(var(--caption-size, 24px) * .6); }
     .player__transport [data-action]:not([data-action=toggle]) { display: none; }
     .player__volume { display: none; }
     .player__options .player__button { width: 36px; min-width: 36px; min-height: 36px; }

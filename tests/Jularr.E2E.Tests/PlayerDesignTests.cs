@@ -34,6 +34,8 @@ namespace Jularr.E2E.Tests
             await scope.SelectOptionAsync("profile");
             var speed = basic.GetByLabel("Speed (×)", new() { Exact = true });
             await speed.FillAsync("1.5");
+            Assert.IsTrue((await speed.BoundingBoxAsync())!.Width >= 70, "The speed input must remain readable beside Reset.");
+            Assert.IsTrue((await basic.Locator(".player-settings__speed").BoundingBoxAsync())!.Height < 100, "Speed controls must not wrap into a tall column.");
             await scope.SelectOptionAsync("current");
             await Assertions.Expect(speed).ToHaveValueAsync("1.5");
             await speed.FillAsync("2");
@@ -65,6 +67,8 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(full.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true })).ToHaveValueAsync("1");
             await Assertions.Expect(full.Locator(":scope > header [data-setting-scope]")).ToHaveValueAsync("series");
             var fullScope = full.Locator(":scope > header [data-setting-scope]");
+            var advanced = controls.Locator(".player-settings__details").First;
+            Assert.IsTrue((await advanced.BoundingBoxAsync())!.Height < 50, "Closed groups must stay compact.");
             await fullScope.SelectOptionAsync("admin");
             await Assertions.Expect(controls.GetByRole(AriaRole.Combobox, new() { Name = "Audio", Exact = true })).ToBeDisabledAsync();
             await controls.GetByLabel("Audio offset (ms)", new() { Exact = true }).FillAsync("150");
@@ -112,12 +116,24 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(panel).ToHaveCSSAsync("width", "390px");
             await Assertions.Expect(panel).ToHaveCSSAsync("height", "844px");
             await Assertions.Expect(panel.Locator(".player-settings__body")).ToHaveCSSAsync("overflow", "auto");
+            await Assertions.Expect(page.Locator("html")).ToHaveCSSAsync("overflow", "hidden");
+            var speed = panel.Locator("#settings-basic").GetByLabel("Speed (×)", new() { Exact = true });
+            await speed.FillAsync("1.25");
+            Assert.IsTrue((await speed.BoundingBoxAsync())!.Width >= 70);
             await panel.GetByRole(AriaRole.Link, new() { Name = "Audio", Exact = true }).ClickAsync();
             var fits = await panel.Locator(".player-settings__body").EvaluateAsync<bool>("element => element.scrollHeight <= element.clientHeight + 1");
             Assert.IsTrue(fits, "Everyday Audio controls must fit without scrolling.");
             await panel.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).ClickAsync();
             await Assertions.Expect(panel).ToBeHiddenAsync();
+            await Assertions.Expect(page.Locator("html")).Not.ToHaveCSSAsync("overflow", "hidden");
             await Assertions.Expect(page.Locator("video")).ToHaveCountAsync(1);
+
+            // Expanded fields must not widen the document.
+            await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
+            await panel.GetByRole(AriaRole.Button, new() { Name = "All Player settings", Exact = true }).ClickAsync();
+            Assert.IsTrue(await page.Locator("html").EvaluateAsync<bool>("element => element.scrollWidth <= innerWidth"), "Expanded settings must fit a narrow viewport.");
+            var back = page.GetByRole(AriaRole.Button, new() { Name = "Back to Player", Exact = true });
+            Assert.IsTrue((await back.BoundingBoxAsync())!.Height < 60, "The Back label must not wrap into a tall button.");
         }
     }
 }

@@ -36,7 +36,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                 .Class("button player-workshop__chapter")).ToArray();
 
             page.Content.Add(new Div(
-                new P(new Text("design.player.previewNotice")).Class("player-workshop__notice"),
+                new Details(new Summary(new Text("design.player.sampleNotice")), new P(new Text("design.player.previewNotice"))).Class("player-workshop__notice"),
                 new Div(
                     new Div(
                         new UiPlayer(source, assets).Settings(DefinePlayerSettings(source)),
@@ -64,8 +64,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                 ).Class("player-workshop__layout"),
                 new Details(new Summary(new Text("design.player.chapters")), new Div(chapters).Class("player-workshop__chapters"))
                     .Class("player-workshop__chapter-section"),
-                DefineFullPlayerSettings(source),
-                new P(new Text("design.player.previewState")).Class("player-workshop__feedback").Attribute("role", "status").Attribute("data-demo-feedback", "")
+                DefineFullPlayerSettings(source)
             ).Class("player-workshop").Attribute("data-player-workshop", "").Attribute("id", "player-preview"));
         }
 
