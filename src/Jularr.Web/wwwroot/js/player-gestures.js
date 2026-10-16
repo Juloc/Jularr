@@ -64,31 +64,14 @@
     const createMouseClickDecider = (options = {}) => {
         const delayMs = options.delayMs ?? 280;
         const maxDistancePx = options.maxDistancePx ?? 18;
-        let pending = null;
+        let previous = null;
 
         return Object.freeze({
-            delayMs,
-
             click(x, y, now) {
-                const previous = pending;
-                pending = null;
-
-                if (previous && now - previous.at <= delayMs &&
-                    Math.hypot(x - previous.x, y - previous.y) <= maxDistancePx) {
-                    return { action: "fullscreen" };
-                }
-
-                pending = { x, y, at: now };
-                return { action: previous ? "playPauseAndWait" : "wait" };
-            },
-
-            settle(now) {
-                if (pending && now - pending.at >= delayMs) {
-                    pending = null;
-                    return { action: "playPause" };
-                }
-
-                return { action: "none" };
+                const isDoubleClick = previous && now - previous.at <= delayMs &&
+                    Math.hypot(x - previous.x, y - previous.y) <= maxDistancePx;
+                previous = isDoubleClick ? null : { x, y, at: now };
+                return { action: isDoubleClick ? "fullscreen" : "playPause" };
             }
         });
     };

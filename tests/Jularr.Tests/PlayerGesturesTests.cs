@@ -67,19 +67,22 @@ public sealed class PlayerGesturesTests
     }
 
     [TestMethod]
-    public void MouseSurfaceClickTogglesPlaybackAndDoubleClickOpensFullscreen()
+    public void MouseSurfaceClickTogglesPlaybackImmediatelyAndDoubleClickOpensFullscreen()
     {
         var result = Run("""
             const d = window.JularrPlayerGestures.createMouseClickDecider({ delayMs: 280, maxDistancePx: 18 });
             const out = [];
-            out.push(d.click(200, 100, 0).action, d.settle(200).action, d.settle(300).action);
-            out.push(d.click(200, 100, 1000).action, d.click(208, 105, 1150).action, d.settle(1500).action);
+            out.push(d.click(200, 100, 0).action);
+            out.push(d.click(200, 100, 1000).action, d.click(208, 105, 1150).action);
+            out.push(d.click(208, 105, 1200).action);
             out.push(d.click(0, 0, 2000).action, d.click(100, 0, 2100).action);
-            out.push(d.settle(2250).action, d.settle(2400).action);
+            out.push(d.click(0, 0, 3000).action, d.click(0, 0, 3300).action);
             out.join(",");
             """);
 
-        Assert.AreEqual("wait,none,playPause,wait,fullscreen,none,wait,playPauseAndWait,none,playPause", result);
+        Assert.AreEqual(
+            "playPause,playPause,fullscreen,playPause,playPause,playPause,playPause,playPause",
+            result);
     }
 
     [TestMethod]
@@ -142,7 +145,8 @@ public sealed class PlayerGesturesTests
             };
             var text = {};
             var presentation = { toggleFullscreen() { trace.push("fullscreen"); } };
-            var togglePlay = () => trace.push("playPause");
+            var playing = false;
+            var togglePlay = () => { playing = !playing; trace.push("playPause"); };
             var chromeHidden = () => false;
             var show = () => trace.push("show");
             var hide = () => trace.push("hide");
@@ -181,6 +185,7 @@ public sealed class PlayerGesturesTests
                 pointer("mouse", 500, 1000);
                 pointer("mouse", 505, 1150);
                 advance(1600);
+                trace.push(playing ? "playing" : "paused");
                 pointer("touch", 100, 2000);
                 pointer("touch", 100, 2150);
                 advance(2500);
@@ -214,7 +219,7 @@ public sealed class PlayerGesturesTests
             """).AsString();
 
         Assert.AreEqual(
-            "playPause|fullscreen|seekBack10|seekForward10|fullscreen|hide|seekBack10|seekForward10|cancelOK",
+            "playPause|playPause|playPause|fullscreen|playing|seekBack10|seekForward10|fullscreen|hide|seekBack10|seekForward10|cancelOK",
             result);
     }
 
