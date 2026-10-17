@@ -105,9 +105,9 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync(details);
                 await page.RouteAsync("**/api/v1/playback/sessions/*/stream", route => route.FulfillAsync(new()
                 {
-                    Status = 415,
-                    ContentType = "text/plain",
-                    Body = "Native decoder rejected stream"
+                    Status = 200,
+                    ContentType = "video/webm",
+                    Body = "Invalid test WebM bytes to exercise the native decoder fallback"
                 }));
                 var recovered = await page.RunAndWaitForResponseAsync(() => pilot.ClickAsync(),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"containers\":[\"hls\"]", StringComparison.Ordinal) == true,
