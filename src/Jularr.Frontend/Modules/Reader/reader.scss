@@ -59,6 +59,9 @@
     &--focused &__bottom,
     &--focused &__panel { display: none; }
     &__bottom { bottom: 0; justify-content: space-between; border-top: 1px solid var(--reader-line); }
+    &__page-turn[hidden] { display: none; }
+    &[data-mode="paged"] &__bottom [data-role="previous"],
+    &[data-mode="paged"] &__bottom [data-role="next"] { display: none; }
 
     &__heading { flex: 1; min-width: 0; }
     &__title { margin: 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
