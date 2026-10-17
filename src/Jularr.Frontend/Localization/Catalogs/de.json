@@ -5872,6 +5872,14 @@
    "Off",
    "Aus"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Untertitelversatz (Sekunden)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Versatz zurücksetzen"
+  ],
   "player.subtitles.forced": [
    "forced",
    "erzwungen"
