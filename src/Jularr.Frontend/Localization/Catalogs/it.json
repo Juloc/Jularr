@@ -1297,12 +1297,12 @@
    "Nessuna corrispondenza chiara"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Verrà cercato"
+   "Will be wanted (paused)",
+   "Verrà monitorato (in pausa)"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Cercato"
+   "Wanted (paused)",
+   "Monitoraggio in pausa"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

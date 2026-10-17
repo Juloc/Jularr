@@ -204,3 +204,14 @@ enabling acquisition.
 `proc` and other operating-system pseudo filesystems even if Docker reports
 a mount point. A separate bind mount can still target VM-local storage:
 verify its physical source explicitly before enabling downloads.
+
+## Space checks for native Usenet unpacking
+
+Before extracting archives, the native worker checks free space on the **actual
+filesystem containing the staging files** and reserves a rough 10% overhead
+above the compressed input size for the next extraction. Linux mount identity
+is read from `/proc/self/mountinfo`; if the filesystem cannot be resolved
+to a ready mount, extraction enters the existing `usenet_disk_full` wait state
+rather than using a misleading VM-root free-space number. This is a preflight
+safeguard, **not a hard quota**; capacity reservation across jobs and checks
+during extraction are still part of #1209.

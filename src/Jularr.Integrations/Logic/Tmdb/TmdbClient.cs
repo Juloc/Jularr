@@ -29,6 +29,27 @@ namespace Jularr.Integrations.Logic.Tmdb
                 : [];
         }
 
+        // An external identity must map to exactly one title of the requested media type.
+        public async Task<int?> FindExternalAsync(TmdbConnection connection, TmdbMediaKind kind, string @namespace, string externalId, CancellationToken ct)
+        {
+            var source = @namespace switch
+            {
+                "imdb" => "imdb_id",
+                "tvdb" when kind == TmdbMediaKind.Series => "tvdb_id",
+                _ => throw new ArgumentOutOfRangeException(nameof(@namespace))
+            };
+
+            using var document = await ReadAsync(connection, "find/" + Uri.EscapeDataString(externalId), [new("external_source", source)], ct);
+            var key = kind == TmdbMediaKind.Movie ? "movie_results" : "tv_results";
+            if (!document.RootElement.TryGetProperty(key, out var results) || results.ValueKind != JsonValueKind.Array)
+            {
+                throw new TmdbException(TmdbFailure.InvalidResponse, "TMDB did not provide external identity results.");
+            }
+
+            var ids = results.EnumerateArray().Select(item => Int(item, "id")).OfType<int>().Where(id => id > 0).Distinct().Take(2).ToArray();
+            return ids.Length == 1 ? ids[0] : null;
+        }
+
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, TmdbMediaKind kind, TmdbFeed feed, string? region, int page, CancellationToken ct)
         {
             var type = kind == TmdbMediaKind.Movie ? "movie" : "tv";

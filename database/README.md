@@ -77,6 +77,8 @@ check Version atomically and preserve other localized/provider title sources.
 Watchlist identity is the composite ProfileId/WorkId key; it never changes
 monitoring, acquisition, files or another profile's list.
 
+Media.sql also defines `MediaAssetAdditionalUnits` and its read-only `MediaAssetUnitCoverage` view, a same-Work association for several episodes represented by one media asset. This is a fresh-install-only structural foundation; automatic multi-episode assignment and the necessary player/progress/availability integration are not enabled, and an existing installation requires an explicit migration before using this schema.
+
 Media.sql also installs the shared logical chain: WorkUnits (seasons, episodes,
 volumes, chapters and tracks in one table with a same-Work parent; episodes and volumes
 are searched only while monitored, specials start unmonitored), WorkEditions,
