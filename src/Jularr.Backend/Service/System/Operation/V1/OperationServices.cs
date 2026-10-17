@@ -315,7 +315,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         private async Task AssignKnownFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
-            var hintFolders = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            var hintFolders = new Dictionary<string, bool>(StringComparer.Ordinal);
             for (var afterId = 0L; ;)
             {
                 // Top folders linked to exactly one Work.
@@ -375,7 +375,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         {
                             hasHints = await storage.GetAsync(StoragePath.Combine(directory, parent + "/tvshow.nfo"), CancellationToken) is not null
                                 || await storage.GetAsync(StoragePath.Combine(directory, parent + "/.plexmatch"), CancellationToken) is not null;
-                            if (hintFolders.Count >= 10_000)
+                            if (hintFolders.Count >= CandidateBatchSize)
                             {
                                 hintFolders.Clear();
                             }
@@ -389,7 +389,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             if (!hintFolders.TryGetValue(containing, out var seasonHints))
                             {
                                 seasonHints = await storage.GetAsync(StoragePath.Combine(directory, containing + "/.plexmatch"), CancellationToken) is not null;
-                                if (hintFolders.Count >= 10_000)
+                                if (hintFolders.Count >= CandidateBatchSize)
                                 {
                                     hintFolders.Clear();
                                 }
@@ -425,8 +425,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
             TmdbConnection? provider = null;
             var providerUnavailable = false;
             var externalLookups = 0;
-            var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.OrdinalIgnoreCase);
-            var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.OrdinalIgnoreCase);
+            var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.Ordinal);
+            var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.Ordinal);
             var emptyHints = MediaPathParser.ParsePlexMatch("");
             for (var afterId = 0L; ;)
             {
@@ -464,7 +464,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         if (!plexFolders.TryGetValue(rootFolder, out var rootHints))
                         {
                             rootHints = await ReadPlexMatchAsync(storage, directory, rootFolder);
-                            if (plexFolders.Count >= 10_000)
+                            if (plexFolders.Count >= CandidateBatchSize)
                             {
                                 plexFolders.Clear();
                             }
@@ -477,7 +477,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         if (parent != rootFolder && !plexFolders.TryGetValue(parent, out seasonHints))
                         {
                             seasonHints = await ReadPlexMatchAsync(storage, directory, parent);
-                            if (plexFolders.Count >= 10_000)
+                            if (plexFolders.Count >= CandidateBatchSize)
                             {
                                 plexFolders.Clear();
                             }
@@ -510,7 +510,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         if (!nfoFolders.TryGetValue(folder, out var nfo))
                         {
                             nfo = await ReadFolderNfoAsync(storage, directory, folder, mediaType);
-                            if (nfoFolders.Count >= 10_000)
+                            if (nfoFolders.Count >= CandidateBatchSize)
                             {
                                 nfoFolders.Clear();
                             }

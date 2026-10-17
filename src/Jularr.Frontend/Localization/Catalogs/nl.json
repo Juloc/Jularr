@@ -1297,12 +1297,12 @@
    "Geen duidelijke overeenkomst"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Wordt gezocht"
+   "Will be wanted (paused)",
+   "Wordt gevolgd (gepauzeerd)"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Gezocht"
+   "Wanted (paused)",
+   "Volgen gepauzeerd"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

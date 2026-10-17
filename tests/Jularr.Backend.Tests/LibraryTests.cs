@@ -374,7 +374,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(parent is null ? null : decimal.Parse(parent, System.Globalization.CultureInfo.InvariantCulture), parsed.ParentUnitNumber);
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("Series/Season 1/Series - S01E01-E02.mkv")]
         [DataRow("Series/Season 1/Series - S01E01E02.mkv")]
         [DataRow("Series/Season 1/Series - S01E01-02.mkv")]
@@ -427,17 +427,21 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Parser_PlexMatch_MismatchedEpisodeInstructionsAreRejected()
+        public void Parser_PlexMatch_ExplicitInstructionsOverrideFilenameAndSeasonDefaults()
         {
             var parsed = MediaPathParser.Parse("Example Show/Season 1/Example Show - S01E07.mkv", MediaType.Series);
             var wrong = MediaPathParser.ParsePlexMatch("episode: S01E08: Season 1/Example Show - S01E07.mkv");
             var matched = MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv", wrong, MediaPathParser.ParsePlexMatch(""));
-            Assert.IsNull(matched.WorkUnitTypeId);
+            Assert.AreEqual(WorkUnitType.Episode, matched.WorkUnitTypeId);
+            Assert.AreEqual((1m, 8m), (matched.ParentUnitNumber, matched.UnitNumber));
 
             var wrongSeason = MediaPathParser.ParsePlexMatch("Season: 2");
             var mismatchedSeason = MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv",
                 MediaPathParser.ParsePlexMatch(""), wrongSeason);
-            Assert.IsNull(mismatchedSeason.WorkUnitTypeId);
+            Assert.AreEqual((2m, 7m), (mismatchedSeason.ParentUnitNumber, mismatchedSeason.UnitNumber));
+
+            var conflicting = MediaPathParser.ParsePlexMatch("episode: S01E09: Example Show - S01E07.mkv");
+            Assert.IsNull(MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv", wrong, conflicting).WorkUnitTypeId);
         }
 
         [TestMethod]
@@ -629,7 +633,42 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
-        [DataTestMethod]
+        [TestMethod]
+        public async Task Scan_CaseDistinctFolders_KeepTheirOwnNfoIdentity()
+        {
+            using var storage = new TemporaryDirectory();
+            Directory.CreateDirectory(Path.Combine(storage.Path, "CaseProbe"));
+            if (Directory.Exists(Path.Combine(storage.Path, "caseprobe")))
+            {
+                Assert.Inconclusive("This regression needs a case-sensitive filesystem; Linux CI exercises it.");
+            }
+
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            foreach (var (folderName, imdb) in new[] { ("Film", "tt12345678"), ("film", "tt39551287") })
+            {
+                var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", folderName);
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, "movie.nfo"), "<movie><imdbid>" + imdb + "</imdbid></movie>");
+                File.WriteAllText(Path.Combine(folder, "Film.mkv"), "movie");
+            }
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'First Film'), (1, 'Second Film') RETURNING "Id", "CanonicalTitle"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', CASE "CanonicalTitle" WHEN 'First Film' THEN 'tt12345678' ELSE 'tt39551287' END FROM work;
+                """);
+            await ScanAsync(host, rootId);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(2L, await host.ScalarAsync("""
+                SELECT count(DISTINCT asset."WorkId") FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId";
+                """));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+        }
+
+        [TestMethod]
         [DataRow("Series/Season 1/Series - S01E01-E02.mkv", 1, 1, 2)]
         [DataRow("Series/Season 1/Series - S01E01E03.mkv", 1, 1, 3)]
         [DataRow("Series/Season 1/Series - S01E01-03.mkv", 1, 1, 3)]
@@ -644,7 +683,7 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(MediaPathParser.Parse(path, MediaType.Series).WorkUnitTypeId, path);
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("Series/Season 2/Series - S01E01-E02.mkv")]
         [DataRow("Series/Season 1/Series - S01E00-E02.mkv")]
         [DataRow("Series/Season 1/Series - S01E01-E02-E03.mkv")]

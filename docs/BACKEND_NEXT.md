@@ -120,6 +120,9 @@ and commit together. No migration, active-database installation or extra server.
   takeover sources only: preserve monitoring state, roots, naming and indexer
   settings where supported, preview unsupported mappings and require explicit
   selection. Never send acquisition/monitoring requests or run them as a dependency.
+  Inventory takeover creates missing monitored targets paused; only a separate,
+  explicit Owner resume enables automatic acquisition. Repeating the import keeps
+  an existing target's chosen pause/resume state.
   Legacy coexistence/parallel-manager and source-write behavior is superseded.
 - Playback is hosted by Jularr, not supplied by Plex. Dev implementation is a
   behavior/technical reference, not a structure to copy into the new framework.

@@ -165,13 +165,14 @@ namespace Jularr.Backend.Logic.Library
                     MaxCharactersInDocument = 65_536
                 });
                 var document = XDocument.Load(reader);
+                var root = document.Root;
                 var expected = mediaType == MediaType.Series ? "tvshow" : "movie";
-                if (!string.Equals(document.Root?.Name.LocalName, expected, StringComparison.OrdinalIgnoreCase))
+                if (root is null || !string.Equals(root.Name.LocalName, expected, StringComparison.OrdinalIgnoreCase))
                 {
                     return (identities, true);
                 }
 
-                foreach (var entry in document.Root.Elements())
+                foreach (var entry in root.Elements())
                 {
                     var field = entry.Name.LocalName.ToLowerInvariant();
                     var source = field == "uniqueid" ? entry.Attribute("type")?.Value.ToLowerInvariant() : field;
@@ -372,23 +373,12 @@ namespace Jularr.Backend.Logic.Library
             {
                 var explicitEpisode = hasSeasonEpisode ? local : root;
                 var resolvedSeason = explicitEpisode.Season ?? season.Season ?? series.Season ?? parsed.ParentUnitNumber ?? 1m;
-                if (parsed.WorkUnitTypeId == WorkUnitType.Episode
-                    && (parsed.UnitNumber != explicitEpisode.Episode || parsed.ParentUnitNumber != resolvedSeason)
-                    || explicitEpisode.Season is { } stated && season.Season is { } folderSeason && stated != folderSeason)
-                {
-                    return new MediaPathInfo(title, year, null, null, null);
-                }
-
+                // A .plexmatch entry deliberately overrides filename numbering; explicit SP/SxxEyy also overrides the season default.
                 episode = explicitEpisode.Episode;
                 episodeSeason = resolvedSeason;
             }
             else if (parsed.WorkUnitTypeId == WorkUnitType.Episode)
             {
-                if (season.Season is { } stated && parsed.ParentUnitNumber != stated)
-                {
-                    return new MediaPathInfo(title, year, null, null, null);
-                }
-
                 episodeSeason = season.Season ?? series.Season ?? parsed.ParentUnitNumber;
             }
 
