@@ -87,7 +87,24 @@
     &__timeline,
     &__volume { accent-color: var(--accent); }
 
-    &__timeline { width: 100%; }
+    &__timeline-wrap { position: relative; min-width: 0; width: 100%; display: flex; align-items: center; }
+    &__timeline-track { position: absolute; inset-inline: 0; height: 4px; border-radius: 99px; background: rgb(255 255 255 / .24); overflow: hidden; pointer-events: none; }
+    &__buffered { width: 0; height: 100%; border-radius: inherit; background: rgb(255 255 255 / .5); }
+    &__timeline {
+        position: relative;
+        appearance: none;
+        width: 100%;
+        height: 28px;
+        margin: 0;
+        background: transparent;
+        cursor: pointer;
+
+        &::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+        &::-moz-range-track { height: 4px; background: transparent; }
+        &::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; background: var(--accent); border-radius: 50%; border: 2px solid #fff; }
+        &::-moz-range-thumb { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; border: 2px solid #fff; }
+        &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 4px; }
+    }
 
     // A seek thumbnail floats above its place on the timeline.
     &__preview {

@@ -39,8 +39,12 @@ namespace Jularr.Frontend.Framework
                     new Div(
                         new Div(
                             new Span(new ValueText("0:00")).Attribute("data-role", "time"),
-                            new Input().Class("player__timeline").Attribute("type", "range").Attribute("min", "0").Attribute("max", "0").Attribute("step", "1")
-                                .Attribute("value", "0").Attribute("data-role", "timeline").Attribute("aria-label", texts["player.timeline"]),
+                            new Div(
+                                new Div(new Div().Class("player__buffered").Attribute("data-role", "buffered")).Class("player__timeline-track")
+                                    .Attribute("aria-hidden", "true"),
+                                new Input().Class("player__timeline").Attribute("type", "range").Attribute("min", "0").Attribute("max", "0").Attribute("step", "1")
+                                    .Attribute("value", "0").Attribute("data-role", "timeline").Attribute("aria-label", texts["player.timeline"])
+                            ).Class("player__timeline-wrap"),
                             new Div().Class("player__preview").Attribute("data-role", "preview").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                             new Span(new ValueText("0:00")).Attribute("data-role", "duration")
                         ).Class("player__progress"),

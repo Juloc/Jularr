@@ -217,6 +217,27 @@ async function start(player: HTMLElement): Promise<void> {
 
     video.addEventListener("error", () => show("failed"));
 
+    // The real decoded/buffered ranges are read from the media element; no client-side guessing.
+    const bufferBar = player.querySelector<HTMLElement>("[data-role=buffered]");
+    const updateBuffer = () => {
+        if (!bufferBar) return;
+        const duration = video.duration;
+        if (!Number.isFinite(duration) || duration <= 0) {
+            bufferBar.style.width = "0%";
+            return;
+        }
+        let end = 0;
+        for (let i = 0; i < video.buffered.length; i++) {
+            if (video.buffered.start(i) <= video.currentTime + 0.5 && video.buffered.end(i) >= video.currentTime) {
+                end = video.buffered.end(i);
+                break;
+            }
+        }
+        bufferBar.style.width = `${(Math.min(duration, end) / duration * 100).toFixed(2)}%`;
+    };
+    for (const name of ["progress", "durationchange", "loadedmetadata", "seeked", "timeupdate", "emptied"])
+        video.addEventListener(name, updateBuffer);
+
     // Transport state.
     video.addEventListener("play", () => { status.hidden = true; setPlaying(true); });
     video.addEventListener("pause", () => setPlaying(false));

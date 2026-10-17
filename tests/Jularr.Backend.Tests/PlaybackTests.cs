@@ -128,6 +128,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
             StringAssert.Contains(html, "data-start-url=\"/api/v1/playback/assets/" + assetId + "/sessions\"");
             StringAssert.Contains(html, "data-role=\"speed-control\"");
+            StringAssert.Contains(html, "data-role=\"buffered\"");
             StringAssert.Contains(html, "data-speed=\"0.25\"");
             StringAssert.Contains(html, "data-speed=\"4\"");
             StringAssert.Contains(html, "data-status=\"play_gesture_required\"");
