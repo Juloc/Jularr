@@ -1,6 +1,6 @@
 # Canonical Artwork (clean-start)
 
-This implements the **P1 persistence and naming foundation only**. It is not a claim that NAS scanning, JXL encoding, a browser image endpoint, or an Admin editor is already connected.
+**P1 is the persistence/naming foundation. P2 adds NAS sidecar discovery on canonical library scans** (stacked branch). Actual NAS export, JXL encoding, a browser image endpoint, and Admin editing remain separate packages.
 
 - Every artwork candidate belongs to an existing canonical `Work`, optionally a `WorkUnit`. Variants for multiple locales never create additional Works.
 - `WorkArtworks` stores manually pinned, NAS-sidecar, provider and embedded candidates with a stable source key. One pinned candidate is allowed per Work/unit/slot/locale.
@@ -12,11 +12,12 @@ This implements the **P1 persistence and naming foundation only**. It is not a c
 
 ## Remaining slices
 
-1. **P2:** inventory and identity-based NAS sidecar discovery; safe, atomic NAS export/recovery; real profile-scoped artwork reads.
-2. **P3:** vetted libjxl encoder/decoder dependency, WebP/JXL renditions, bounded workers, cache limits and invalidation.
-3. **P4:** authenticated image delivery, content negotiation, conditional caching, stable sizing, progressive JXL with browser fallback.
-4. **P5:** version-checked Admin settings and manual image selection/protection.
-5. **P6:** one Artwork resolver consumed by Home, Library, Discover, Detail, Reader, Player and all media types.
-6. **P7:** end-to-end NAS/Plex/Jellyfin coexistence, browser and failure tests, performance benchmarks.
+1. **P2 discovery (this branch):** after media inventory/identification, a bounded second filesystem walk recognizes conventional image names and matches each folder to exactly one existing Work via its assigned StoredFiles. Season-specific posters resolve through a canonical season WorkUnit. Accepted artwork is upserted by Work/WorkUnit/slot/source and reconciled only after a complete image scan. No image is stored as a playable StoredFile and no local file is modified. Ambiguous folders, invalid extensions, oversized paths and images over 20 MiB are not indexed. Images may need a rescan after manual media identification.
+2. **P2 export and image reads (next):** safe, atomic JPEG/PNG/JXL NAS export and profile-scoped original/cache reads; queued recovery after outages.
+3. **P3:** vetted libjxl encoder/decoder dependency, WebP/JXL renditions, bounded workers, cache limits and invalidation.
+4. **P4:** authenticated image delivery, content negotiation, conditional caching, stable sizing, progressive JXL with browser fallback.
+5. **P5:** version-checked Admin settings and manual image selection/protection.
+6. **P6:** one Artwork resolver consumed by Home, Library, Discover, Detail, Reader, Player and all media types.
+7. **P7:** end-to-end NAS/Plex/Jellyfin coexistence, browser and failure tests, performance benchmarks.
 
 `database/Artwork.sql` is installed **only on a fresh database**, after the Library baseline. Existing installations are never altered automatically. An explicit, non-destructive database upgrade path must be approved and implemented before enabling this feature on existing instances.
