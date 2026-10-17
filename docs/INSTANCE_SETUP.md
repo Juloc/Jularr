@@ -11,7 +11,7 @@ it adds neither its own settings store nor database migrations.
 | 1. Owner and language | /Setup | Public ReadSetupLocalesV1 lists all installed languages, marking generated translations. CreateOwnerV1 atomically enables the selected language, applies it to the instance and the first profile, creates the Owner and signs in. Bootstrap remains exactly once. |
 | 2. Instance and modules | /Setup/Instance | ReadSetupModulesV1 supplies the existing switches and preset membership. SaveSetupModulesV1 saves the instance name, all shown module rows and progress in one transaction, with ID/version checks. |
 | 3. Libraries | /Setup/Storage | The shared Storage editor creates, checks and browses connections and library roots. Its bottom Continue invokes SaveSetupLibrariesV1, disables types/subtypes without a library and advances to Sources atomically. A parent needed by a subtype root stays enabled. |
-| 4. Sources and finish | /Setup/Sources | TMDB key with an account link, indexers, downloaders, quality profiles, takeover and provider connections. Those detailed editors are auxiliary pages of this step with a return link. SaveSetupSourcesV1 preserves an empty key, saves a supplied key and completes setup only after the canonical checks pass in the same transaction. |
+| 4. Sources and finish | /Setup/Sources | Tabs for metadata, indexers, downloaders, native quality profiles, takeover and provider connections keep their canonical editors inside this step. SaveSetupSourcesV1 preserves an empty key and saves a supplied key. Save changes stays in Sources; Finish setup also completes setup after the canonical checks pass in the same transaction. |
 
 The three presets are Complete, Media server and Requests. Complete includes all
 implemented modules, including local Registration. Media server selects playback,
@@ -32,6 +32,11 @@ connected server. Both kinds of registration remain configurable.
 
 - New connections, library paths, tests and scans use their ordinary canonical
   operations. Continue saves each main step; it is placed below the content.
+- Sources has a shared tab row on every editor, including an individual profile.
+  Indexer and downloader tabs open a creation form immediately and keep their
+  connection list visible on mobile. Saving returns to that setup editor.
+  Arr+ tabs are hidden when the Acquisition module is disabled. The profile tab
+  embeds the native Arr+ settings; it adds no separate profile wrapper.
 - Provider editors use native disclosure panels and retain the selected provider
   after saving. A Plex token can be granted through plex.tv instead of copied by
   hand. The existing challenge/flow tables hold an ExternalLink attempt bound to
@@ -61,7 +66,8 @@ atomic module edits and rollback, progress, empty libraries and completion.
 AdminProviderTests cover Plex PIN completion, expiry, browser/account/purpose
 binding and replay. AuthenticationTests retain Plex registration access checks.
 SetupWizardTests drive all four steps at desktop and mobile sizes, including
-presets and resume. Existing film/series path tests use the provider disclosure.
+presets, source tabs, credential and connection saves without finishing, and
+resume. Existing film/series path tests use the provider disclosure.
 
 The [original wizard specification](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/setup-wizard/SPEC.md)
 remains a reference for unchanged behavior; the newer owner decisions above take

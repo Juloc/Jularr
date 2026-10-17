@@ -60,11 +60,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             page.Title("acquisition.role." + Role);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
+            var isSetup = SetupWizard.IsActive(Request);
+            if (isSetup) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             page.Navigation("nav.admin");
-            var type = _selected?.AcquisitionConnectionTypeId ?? Type;
+            var type = _selected?.AcquisitionConnectionTypeId ?? Type ?? (isSetup
+                ? Role == AcquisitionConnectionRole.Download ? AcquisitionConnectionType.Sabnzbd : AcquisitionConnectionType.Newznab
+                : (AcquisitionConnectionType?)null);
 
-            page.Content.Add(new Split(split =>
+            var layout = new Split(split =>
             {
                 if (_connections is { } list)
                 {
@@ -99,7 +102,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         if (current.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab) split.Secondary.Add(SearchSection(current, csrf));
                     }
                 }
-            }).MasterDetail(type is not null, Address()));
+            });
+            page.Content.Add(isSetup ? layout : layout.MasterDetail(type is not null, Address()));
 
             if (FormError is not null && _searchInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }

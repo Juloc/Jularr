@@ -40,7 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         protected override void Define(Page page)
         {
             page.Title("admin.providers.title");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Providers));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, acquisition: texts.Can(null, "Acquisition")));
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Providers/Providers.entry.scss");
 

@@ -9,7 +9,7 @@ namespace Jularr.E2E.Tests
         [DataRow(1440, 900)]
         [DataRow(390, 844)]
         [Timeout(300_000)]
-        public async Task FourSteps_PresetsAndNoLibraries_CompleteAndResumeAtEveryStep(int width, int height)
+        public async Task FourSteps_SourceTabsSaveInPlaceAndResumeAtEveryStep(int width, int height)
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -42,6 +42,29 @@ namespace Jularr.E2E.Tests
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Sources");
                 await CheckViewportAsync(page, "sources", width);
+                Assert.AreEqual(6, await page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a").CountAsync());
+                await page.FillAsync("[name=TmdbKey]", "setup-browser-key");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync("**/Setup/Sources");
+                await Assertions.Expect(page.Locator("[name=TmdbKey]")).ToHaveValueAsync("");
+
+                await OpenSourceTabAsync(page, "/Setup/Indexers");
+                await SaveConnectionAsync(page, "Setup indexer", "https://indexer.example.test");
+                await CheckViewportAsync(page, "indexers", width);
+                await OpenSourceTabAsync(page, "/Setup/Downloads");
+                await SaveConnectionAsync(page, "Setup downloader", "https://downloader.example.test");
+                await CheckViewportAsync(page, "downloads", width);
+                await OpenSourceTabAsync(page, "/Setup/Profiles");
+                await Assertions.Expect(page.Locator(".acquisition-settings")).ToBeVisibleAsync();
+                await CheckViewportAsync(page, "profiles", width);
+                await page.Locator("a[href^='/Setup/Profiles/']").Filter(new() { HasText = "Edit" }).First.ClickAsync();
+                await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", "/Setup/Profiles");
+                await Assertions.Expect(page.Locator("[name=Name]")).ToBeVisibleAsync();
+                await OpenSourceTabAsync(page, "/Setup/Takeover");
+                await Assertions.Expect(page.Locator("[name=BaseUrl]")).ToBeVisibleAsync();
+                await CheckViewportAsync(page, "takeover", width);
+                await OpenSourceTabAsync(page, "/Setup/Providers");
+                await CheckViewportAsync(page, "providers", width);
                 await page.GotoAsync("/Setup/Progress");
                 await page.WaitForURLAsync("**/Setup/Sources");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Finish setup", Exact = true }).ClickAsync();
@@ -56,6 +79,28 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "setup-wizard-" + width);
                 throw;
             }
+        }
+
+        private static async Task OpenSourceTabAsync(IPage page, string path)
+        {
+            await page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator($"a[href='{path}']").ClickAsync();
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == path);
+            await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").First.Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", "/Setup/Sources");
+            await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", path);
+        }
+
+        private static async Task SaveConnectionAsync(IPage page, string name, string address)
+        {
+            var form = page.Locator("form").Filter(new() { Has = page.Locator("[name=AcquisitionConnectionTypeId]") });
+            await form.Locator("[name=Name]").FillAsync(name);
+            await form.Locator("[name=BaseUrl]").FillAsync(address);
+            await form.Locator("[name=ApiKey]").FillAsync("browser-test-key");
+            await form.Locator("[name=IsEnabled][value=False]").CheckAsync();
+            await form.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator("[name=Name]")).ToHaveValueAsync(name);
+            await Assertions.Expect(page.Locator("[name=ApiKey]")).ToHaveValueAsync("");
+            await Assertions.Expect(page.GetByRole(AriaRole.Cell, new() { Name = name, Exact = true })).ToBeVisibleAsync();
+            Assert.IsTrue(new Uri(page.Url).AbsolutePath.StartsWith("/Setup/", StringComparison.Ordinal));
         }
 
         private static async Task CheckViewportAsync(IPage page, string step, int width)

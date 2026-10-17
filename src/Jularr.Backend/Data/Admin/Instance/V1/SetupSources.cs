@@ -18,10 +18,11 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
     public sealed class SaveSetupSourcesDataV1 : BaseData
     {
-        public SaveSetupSourcesDataV1(long version, string? tmdbKey)
+        public SaveSetupSourcesDataV1(long version, string? tmdbKey, bool completeSetup = true)
         {
             Version = version;
             TmdbKey = tmdbKey;
+            CompleteSetup = completeSetup;
         }
 
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.Version))]
@@ -30,5 +31,8 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)]
         [DataField(typeof(ProviderCredentialFields), nameof(ProviderCredentialFields.Secret))]
         public string? TmdbKey { get; }
+
+        [DataField(typeof(SetupProgressFields), nameof(SetupProgressFields.IsCompleted))]
+        public bool CompleteSetup { get; }
     }
 }

@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
@@ -54,7 +55,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
             page.Asset("Framework/Components/Form.entry.ts");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(new A(new Text("setup.sources.back")).Class("button").Attribute("href", "/Setup/Sources"));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
             page.Content.Add(AcquisitionSettingsNavigation.Frame(Request, Tab, MediaTypeId));
             switch (Tab)
             {

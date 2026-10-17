@@ -17,9 +17,8 @@ namespace Jularr.Frontend.Pages.Setup.Sources
         protected override void Define(Page page)
         {
             page.Title("setup.step.Sources");
-            page.Asset("Pages/Setup/Sources/Sources.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, showReturn: false));
+            page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, "metadata", texts.Can(null, "Acquisition")));
             if (_progress is not { } progress) return;
 
             page.Content.Add(new Form<SaveSetupSourcesDataV1>(form =>
@@ -32,18 +31,14 @@ namespace Jularr.Frontend.Pages.Setup.Sources
                     section.Content(new A(new Text("setup.sources.tmdbAccount")).Attribute("href", "https://www.themoviedb.org/settings/api").Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
                 });
 
-                if (texts.Can(null, "Acquisition"))
-                {
-                    form.Content(new UiSection("setup.sources.acquisition", [new Div(
-                        Link("setup.step.Indexers", "/Setup/Indexers"), Link("setup.step.Downloads", "/Setup/Downloads"),
-                        Link("setup.step.Profiles", "/Setup/Profiles"), Link("setup.step.Media", "/Setup/Takeover")
-                    ).Class("setup-sources__links")]));
-                }
-
-                form.Content(new UiSection("setup.sources.providers", [Link("setup.sources.plex", "/Setup/Providers")]));
                 if (progress.Blockers.Length > 0) form.Content(new UiSection("setup.blockers", [.. progress.Blockers.Select(Check)]));
                 if (progress.Warnings.Length > 0) form.Content(new UiSection("setup.warnings", [.. progress.Warnings.Select(Check)]));
-                form.Submit("setup.finish");
+                var saveButton = new Button(new Text("common.save"));
+                saveButton.Attribute("name", "completeSetup").Attribute("value", "false");
+                form.Submit(saveButton);
+                var finishButton = new Button(new Text("setup.finish")).Primary();
+                finishButton.Attribute("name", "completeSetup").Attribute("value", "true");
+                form.Submit(finishButton);
             }, "/Setup/Sources", csrf, new SaveSetupSourcesDataV1(progress.Version, null), FormError));
         }
 
@@ -55,10 +50,10 @@ namespace Jularr.Frontend.Pages.Setup.Sources
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(long version, string? tmdbKey)
+        public async Task<IActionResult> OnPostAsync(long version, string? tmdbKey, bool completeSetup = true)
         {
-            await save.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupSourcesDataV1(version, tmdbKey), HttpContext.RequestAborted);
-            return LocalRedirect("/");
+            await save.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupSourcesDataV1(version, tmdbKey, completeSetup), HttpContext.RequestAborted);
+            return LocalRedirect(completeSetup ? "/" : "/Setup/Sources");
         }
 
         protected override async Task LoadDataAsync()
@@ -67,8 +62,6 @@ namespace Jularr.Frontend.Pages.Setup.Sources
             _progress = await readProgress.ExecuteAsync<SetupProgressV1>(cancellationToken: ct);
             _sources = await readSources.ExecuteAsync<SetupSourcesDetailsV1>(cancellationToken: ct);
         }
-
-        private static IUiComponent Link(string key, string path) => new A(new Text(key)).Class("button").Attribute("href", path);
 
         private static IUiComponent Check(string key) => key.StartsWith("library.", StringComparison.Ordinal)
             ? new P(new Text("media." + key["library.".Length..]), new ValueText(": "), new Text("setup.check.library"))

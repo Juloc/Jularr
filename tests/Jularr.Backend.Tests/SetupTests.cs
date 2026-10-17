@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
             using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
             Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, await storage.Content.ReadAsStringAsync());
 
-            // The profile editor is a step of its own and keeps its links inside the wizard.
+            // Source editors remain inside the Sources step and keep their links inside the wizard.
             using var profiles = await host.SendAsync(HttpMethod.Get, "/Setup/Profiles");
             var profilesHtml = await profiles.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, profiles.StatusCode, profilesHtml);
@@ -90,6 +90,14 @@ namespace Jularr.Backend.Tests
             var readyHtml = await ready.Content.ReadAsStringAsync();
             StringAssert.Contains(readyHtml, "has no indexer yet.");
             var version = Regex.Match(readyHtml, "name=\"Version\" value=\"(\\d+)\"").Groups[1].Value;
+            using var savedKey = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(readyHtml, ("Version", version), ("TmdbKey", "setup-key"), ("CompleteSetup", "false")));
+            Assert.AreEqual("/Setup/Sources", savedKey.Headers.Location!.OriginalString, await savedKey.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CompletedAt\" IS NULL FROM \"InstanceSetupState\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
+            using var persisted = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
+            var persistedHtml = await persisted.Content.ReadAsStringAsync();
+            Assert.IsFalse(persistedHtml.Contains("setup-key", StringComparison.Ordinal));
+            StringAssert.Contains(persistedHtml, "aria-current=\"page\">Metadata");
             using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(readyHtml, ("Version", version)));
             Assert.AreEqual("/", finished.Headers.Location!.OriginalString);
             using var closed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");

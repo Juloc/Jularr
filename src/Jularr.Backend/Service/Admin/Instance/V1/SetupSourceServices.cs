@@ -62,9 +62,12 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                 await Context.EnableProviderAsync("tmdb", CancellationToken);
             }
 
-            // The new key and final checks commit together; blank credentials preserve the saved value.
-            await Context.CompleteSetupAsync(new SetupVersionData(Data.Version), CancellationToken);
-            return new UpdateResult(true);
+            // Saving a credential stays in this step; finishing still commits the key and final checks together.
+            if (Data.CompleteSetup)
+            {
+                await Context.CompleteSetupAsync(new SetupVersionData(Data.Version), CancellationToken);
+            }
+            return new UpdateResult(Data.CompleteSetup || Data.TmdbKey is not null);
         }
     }
 }
