@@ -5972,6 +5972,10 @@
    "This media is no longer available.",
    "このメディアは利用できなくなりました。"
   ],
+  "player.buffering": [
+   "Buffering…",
+   "バッファリング中…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "再生を開始できませんでした。"
