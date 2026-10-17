@@ -8,7 +8,7 @@ const code = readFileSync(new URL("../Modules/Player/PlayerSettings.ts", import.
 const script = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
 runInNewContext(script, { exports });
-const { normalizedSpeed, applyFit, selectSettingsPane } = exports;
+const { normalizedSpeed, applyFit, selectSettingsPane, shiftTextCues } = exports;
 
 test("speed is bounded, finite and rounded to the actual 0.05 step", () => {
     assert.equal(normalizedSpeed(0.1), 0.25);
@@ -39,4 +39,26 @@ test("settings tabs share one panel, preserving selected options and hiding inac
     assert.deepEqual(tabs.map(tab => tab["aria-pressed"]), ["false", "true", "false", "false"]);
     assert.equal(selectSettingsPane(dialog, "invalid"), false);
     assert.deepEqual(panes.map(pane => pane.hidden), [true, false, true, true]);
+});
+
+
+test("subtitle offset follows original cue times without accumulated drift", () => {
+    const cue = { startTime: 2, endTime: 4 };
+    const clipped = { startTime: 0, endTime: 0.5 };
+    const track = { cues: [cue, clipped] };
+    const originals = new WeakMap();
+    shiftTextCues(track, 1.25, originals);
+    assert.equal(cue.startTime, 3.25);
+    assert.equal(cue.endTime, 5.25);
+    shiftTextCues(track, -1, originals);
+    assert.equal(cue.startTime, 1);
+    assert.equal(cue.endTime, 3);
+    assert.equal(clipped.startTime, 0);
+    assert.equal(clipped.endTime, 0);
+    shiftTextCues(track, 0, originals);
+    assert.equal(cue.startTime, 2);
+    assert.equal(cue.endTime, 4);
+    assert.equal(clipped.endTime, 0.5);
+    shiftTextCues(track, Number.NaN, originals);
+    assert.equal(cue.startTime, 2);
 });
