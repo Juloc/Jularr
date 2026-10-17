@@ -5972,6 +5972,10 @@
    "This media is no longer available.",
    "Deze media is niet meer beschikbaar."
   ],
+  "player.buffering": [
+   "Buffering…",
+   "Bufferen…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "Het afspelen kon niet worden gestart."
