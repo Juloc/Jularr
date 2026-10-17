@@ -351,6 +351,11 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && !player.querySelector<HTMLElement>("[data-panel=settings]")?.hidden) {
+            event.preventDefault();
+            panel(null);
+            return;
+        }
         if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement &&
             event.target.closest('a, button, input, select, textarea, [contenteditable="true"]')) return;
         if (player.classList.contains("player--mini") && !player.contains(event.target as Node)) return;
