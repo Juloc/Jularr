@@ -68,6 +68,22 @@ namespace Jularr.E2E.Tests
                 // Reading on saves the position in each.
                 await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter One");
+
+                // Reader appearance works on the real EPUB and stays independent from progress.
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.Locator("[data-setting=preset][data-value=light-novel]").ClickAsync();
+                Assert.AreEqual("34rem", await page.Locator(".reader").EvaluateAsync<string>("element => element.style.getPropertyValue('--reader-width')"));
+                Assert.AreEqual("true", await page.Locator("[data-setting=preset][data-value=light-novel]").GetAttributeAsync("aria-pressed"));
+                await page.Locator("[data-setting=mode][data-value=paged]").ClickAsync();
+                Assert.AreEqual("paged", await page.Locator(".reader").GetAttributeAsync("data-mode"));
+                await Assertions.Expect(page.Locator("[data-page-step='1']")).ToBeVisibleAsync();
+                await page.Locator("[data-setting=mode][data-value=scroll]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-page-step='1']")).ToBeHiddenAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Focus on text" }).ClickAsync();
+                Assert.IsTrue(await page.Locator(".reader").EvaluateAsync<bool>("element => element.classList.contains('reader--focused')"));
+                await page.Keyboard.PressAsync("Escape");
+                Assert.IsFalse(await page.Locator(".reader").EvaluateAsync<bool>("element => element.classList.contains('reader--focused')"));
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.OpenReaderAsync(page, mangaDetails);
                 await Steps.TurnAsync(page);

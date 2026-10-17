@@ -88,6 +88,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new Button(new Text("reader.notes")).Class("button").Attribute("data-action", "notes").Attribute("aria-expanded", NotesPage > 1 ? "true" : "false"),
                 new Button(new Text("reader.search")).Class("button").Attribute("data-action", "search").Attribute("aria-expanded", _hits is null ? "false" : "true"),
                 new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false"),
+                new Button(new Text("reader.focus")).Class("button").Attribute("data-action", "focus"),
                 _languages.Length > 0
                     ? new Button(new ValueText(LanguageName(Chosen(document)))).Class("button").Attribute("data-action", "language").Attribute("aria-expanded", "false")
                         .Attribute("aria-label", texts["reader.language"])
@@ -119,7 +120,12 @@ namespace Jularr.Frontend.Pages.User.Reader
             var notes = Notes(index);
             var searching = Search(index);
             var settings = new Div(
+                Setting("reader.preset", [("book", "reader.preset.book"), ("light-novel", "reader.preset.lightNovel")], "preset"),
                 Setting("reader.fontSize", [("smaller", "reader.smaller"), ("larger", "reader.larger")], "size"),
+                Setting("reader.font", [("serif", "reader.font.serif"), ("sans", "reader.font.sans")], "font"),
+                Setting("reader.lineHeight", [("compact", "reader.lineHeight.compact"), ("normal", "reader.lineHeight.normal"),
+                    ("spacious", "reader.lineHeight.spacious")], "lineHeight"),
+                Setting("reader.width", [("narrow", "reader.width.narrow"), ("normal", "reader.width.normal"), ("wide", "reader.width.wide")], "width"),
                 Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
                 Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode")
             ).Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden");
@@ -131,13 +137,19 @@ namespace Jularr.Frontend.Pages.User.Reader
             navigation.Add(index > 0
                 ? new A(new Text("reader.previous")).Class("button").Attribute("href", "?s=" + (index - 1).ToString(CultureInfo.InvariantCulture)).Attribute("data-role", "previous")
                 : new Span());
+            navigation.Add(new Button(new Text("reader.previous")).Class("button reader__page-turn").Attribute("type", "button")
+                .Attribute("data-page-step", "-1").Attribute("hidden", "hidden"));
             navigation.Add(new Span(new ValueText(Percent(current.CharactersBefore, current.TotalCharacters))).Class("reader__position").Attribute("data-role", "position"));
+            navigation.Add(new Button(new Text("reader.next")).Class("button button--primary reader__page-turn").Attribute("type", "button")
+                .Attribute("data-page-step", "1").Attribute("hidden", "hidden"));
             navigation.Add(index + 1 < document.SectionCount
                 ? new A(new Text("reader.next")).Class("button button--primary").Attribute("href", "?s=" + (index + 1).ToString(CultureInfo.InvariantCulture)).Attribute("data-role", "next")
                 : new Span(new Text("reader.end")));
 
             var view = new Div(
                 top,
+                new Button(new Text("reader.restoreControls")).Class("button reader__focus-restore").Attribute("data-action", "restore-focus")
+                    .Attribute("hidden", "hidden"),
                 contents,
                 notes,
                 searching,
@@ -160,6 +172,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-characters", current.Characters.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-total", current.TotalCharacters.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-locator", document.Locator ?? "")
+                .Attribute("data-direction", document.IsRightToLeft ? "rtl" : "ltr")
                 .Attribute("data-annotations-url", "/api/v1/reading/assets/" + asset + "/annotations")
                 .Attribute("data-annotations", JsonSerializer.Serialize(_marks, Json))
                 .Attribute("data-note-label", texts["reader.note"])

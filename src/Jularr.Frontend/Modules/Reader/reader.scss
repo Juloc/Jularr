@@ -1,6 +1,9 @@
 // One reader for reflowable text; themes stay inside the reader.
 .reader {
     --reader-size: 1.1rem;
+    --reader-font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --reader-line-height: 1.65;
+    --reader-width: 42rem;
     --reader-paper: #fbfaf7;
     --reader-ink: #1d1c1a;
     --reader-muted: #6b6760;
@@ -39,7 +42,26 @@
     }
 
     &__top { top: 0; border-bottom: 1px solid var(--reader-line); }
+
+    &__focus-restore {
+        position: fixed;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        z-index: 6;
+        background: var(--reader-paper);
+        color: var(--reader-ink);
+        border: 1px solid var(--reader-line);
+
+        &[hidden] { display: none; }
+    }
+
+    &--focused &__top,
+    &--focused &__bottom,
+    &--focused &__panel { display: none; }
     &__bottom { bottom: 0; justify-content: space-between; border-top: 1px solid var(--reader-line); }
+    &__page-turn[hidden] { display: none; }
+    &[data-mode="paged"] &__bottom [data-role="previous"],
+    &[data-mode="paged"] &__bottom [data-role="next"] { display: none; }
 
     &__heading { flex: 1; min-width: 0; }
     &__title { margin: 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
@@ -119,16 +141,16 @@
     &__snippet::after { content: " …"; }
 
     &__setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    &__choices { display: flex; gap: 8px; }
+    &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
     &__choices [aria-pressed="true"] { outline: 2px solid currentColor; }
 
     &__content {
-        width: min(100% - 32px, 42rem);
+        width: min(100% - 32px, var(--reader-width));
         margin: 0 auto;
         padding: 32px 0 64px;
-        font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+        font-family: var(--reader-font-family);
         font-size: var(--reader-size);
-        line-height: 1.65;
+        line-height: var(--reader-line-height);
         overflow-wrap: break-word;
         hyphens: auto;
 
@@ -139,18 +161,23 @@
         td, th { border: 1px solid var(--reader-line); padding: 4px 8px; }
     }
 
-    // Paged mode lays the section out in screen-wide columns.
+    &[data-direction="rtl"] &__content { direction: rtl; }
+
+    // The requested page mode flows a section into one or two visible columns.
+    // Fixed content height and column-fill:auto prevent balancing whole chapters into a single spread.
     &[data-mode="paged"] { height: 100dvh; min-height: 0; }
     &[data-mode="paged"] &__content {
         width: 100%;
         flex: 1;
         min-height: 0;
-        padding: 32px 0;
-        columns: min(42rem, calc(100vw - 32px)) 1;
+        padding: 32px 16px;
+        box-sizing: border-box;
+        columns: var(--reader-width) 2;
+        column-fill: auto;
         column-gap: 32px;
         overflow-x: hidden;
         overflow-y: hidden;
-        scroll-snap-type: x mandatory;
+        touch-action: pan-y;
     }
 
     &__status,

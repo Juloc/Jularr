@@ -900,6 +900,14 @@
    "Settings",
    "Ustawienia"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Skup się na tekście"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Pokaż przyciski"
+  ],
   "reader.previous": [
    "Previous",
    "Wstecz"
@@ -951,6 +959,62 @@
   "reader.mode.paged": [
    "Pages",
    "Strony"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "Ustawienie czytania"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Książka"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Light novel"
+  ],
+  "reader.font": [
+   "Font",
+   "Czcionka"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Szeryfowa"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Bezszeryfowa"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Interlinia"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Zwarta"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Wygodna"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Duża"
+  ],
+  "reader.width": [
+   "Text width",
+   "Szerokość tekstu"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Wąska"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normalna"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Szeroka"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -5808,6 +5872,14 @@
    "Off",
    "Wyłączone"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Opóźnienie napisów (sekundy)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Zresetuj opóźnienie"
+  ],
   "player.subtitles.forced": [
    "forced",
    "wymuszone"
@@ -5844,6 +5916,30 @@
    "More",
    "Więcej"
   ],
+  "player.settings": [
+   "Player settings",
+   "Ustawienia odtwarzacza"
+  ],
+  "player.settings.close": [
+   "Close settings",
+   "Zamknij ustawienia"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Rozmiar obrazu"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Dopasuj"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Wypełnij"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Oryginał"
+  ],
   "player.delivery": [
    "Delivery",
    "Dostarczanie"
@@ -5876,9 +5972,17 @@
    "This media is no longer available.",
    "Te media nie są już dostępne."
   ],
+  "player.buffering": [
+   "Buffering…",
+   "Buforowanie…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "Nie udało się rozpocząć odtwarzania."
+  ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Naciśnij Odtwórz, aby rozpocząć."
   ],
   "details.play": [
    "Play",

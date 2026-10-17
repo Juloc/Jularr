@@ -9,11 +9,15 @@ interface ReaderSettings {
     size: number;
     theme: "light" | "sepia" | "dark";
     mode: "scroll" | "paged";
+    preset: "book" | "light-novel" | "custom";
+    font: "serif" | "sans";
+    lineHeight: "compact" | "normal" | "spacious";
+    width: "narrow" | "normal" | "wide";
 }
 
 const SettingsKey = "jularr.reader";
 const ReportDelay = 1500;
-const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll" };
+const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll", preset: "book", font: "serif", lineHeight: "normal", width: "normal" };
 
 // The PDF view shares only the reader's look.
 const reader = document.querySelector<HTMLElement>(".reader");
@@ -28,6 +32,7 @@ if (reader?.querySelector("[data-role=content]")) {
     const sections = Number(reader.dataset.sections);
     let settings = load();
     let timer = 0;
+    let anchorBlock = 0;
     const allBlocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         const feedback = reader.querySelector<HTMLElement>('[data-role=save-error]');
@@ -41,11 +46,12 @@ if (reader?.querySelector("[data-role=content]")) {
 
     // Translation where the instance offers it, in the language the profile chose for this book; the choice follows it to every device.
     const translate = reader.dataset.translationUrl
-        ? translator(reader, content, createTranslationWorker)
+        ? translator(reader, content, createTranslationWorker, () => { scrollToBlock(anchorBlock); updatePageButtons(); })
         : undefined;
     let reading = reader.dataset.readingLanguage ?? "original";
     if (translate) void translate(reading === "original" ? "" : reading);
     reader.querySelectorAll<HTMLButtonElement>("[data-language-choice]").forEach(button => button.addEventListener("click", () => {
+        anchorBlock = current();
         reading = button.dataset.languageChoice!;
         reader!.querySelectorAll<HTMLButtonElement>("[data-language-choice]").forEach(choice => choice.setAttribute("aria-pressed", String(choice === button)));
         const opener = reader!.querySelector<HTMLButtonElement>("[data-action=language]");
@@ -61,27 +67,78 @@ if (reader?.querySelector("[data-role=content]")) {
     // Panels and settings.
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
     reader.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => button.addEventListener("click", () => {
+        const visibleBlock = current();
         const value = button.dataset.value!;
+        if (button.dataset.setting === "preset") {
+            settings.preset = value as ReaderSettings["preset"];
+            settings.font = "serif";
+            settings.lineHeight = value === "light-novel" ? "spacious" : "normal";
+            settings.width = value === "light-novel" ? "narrow" : "normal";
+            settings.size = Defaults.size;
+        }
         if (button.dataset.setting === "size") settings.size = Math.min(2, Math.max(0.8, settings.size + (value === "larger" ? 0.1 : -0.1)));
+        if (button.dataset.setting === "font") settings.font = value as ReaderSettings["font"];
+        if (button.dataset.setting === "lineHeight") settings.lineHeight = value as ReaderSettings["lineHeight"];
+        if (button.dataset.setting === "width") settings.width = value as ReaderSettings["width"];
+        if (["size", "font", "lineHeight", "width"].includes(button.dataset.setting ?? "")) settings.preset = "custom";
         if (button.dataset.setting === "theme") settings.theme = value as ReaderSettings["theme"];
         if (button.dataset.setting === "mode") settings.mode = value as ReaderSettings["mode"];
         apply();
+        scrollToBlock(visibleBlock);
         try { localStorage.setItem(SettingsKey, JSON.stringify(settings)); } catch { /* Optional device storage. */ }
     }));
 
+    // Paged transport is available without gesture or keyboard shortcuts.
+    reader.querySelectorAll<HTMLButtonElement>("[data-page-step]").forEach(button =>
+        button.addEventListener("click", event => page(Number(button.dataset.pageStep), event)));
+
     // Paged mode turns pages; the edges continue to the neighbouring section.
     document.addEventListener("keydown", event => {
-        if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-        if (event.key === "ArrowRight" || event.key === "PageDown") page(1, event);
-        if (event.key === "ArrowLeft" || event.key === "PageUp") page(-1, event);
+        if (event.key === "Escape" && reader!.classList.contains("reader--focused")) {
+            event.preventDefault();
+            setFocusMode(false);
+            return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement &&
+            event.target.closest('a, input, textarea, select, button, [contenteditable="true"]')) return;
+        if (event.key === "ArrowRight") page(direction() === "rtl" ? -1 : 1, event);
+        if (event.key === "ArrowLeft") page(direction() === "rtl" ? 1 : -1, event);
+        if (event.key === "PageDown") page(1, event);
+        if (event.key === "PageUp") page(-1, event);
     });
+    // Horizontal touch gestures turn a spread; vertical movement and selections remain native.
+    let pointer: { x: number; y: number } | null = null;
+    let swiped = false;
+    content.addEventListener("pointerdown", event => {
+        if (settings.mode !== "paged" || !(event.target instanceof Element) ||
+            event.target.closest('a, button, input, select, textarea, mark, [contenteditable="true"]')) return;
+        pointer = { x: event.clientX, y: event.clientY };
+        swiped = false;
+    });
+    content.addEventListener("pointerup", event => {
+        if (!pointer) return;
+        const dx = event.clientX - pointer.x;
+        const dy = event.clientY - pointer.y;
+        pointer = null;
+        if (settings.mode !== "paged" || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.4 ||
+            window.getSelection()?.toString()) return;
+        swiped = true;
+        page((dx < 0 ? 1 : -1) * (direction() === "rtl" ? -1 : 1), event);
+    });
+    content.addEventListener("pointercancel", () => { pointer = null; });
     content.addEventListener("click", event => {
-        if (settings.mode !== "paged" || (event.target as HTMLElement).closest("a, mark")) return;
-        page(event.clientX > window.innerWidth / 2 ? 1 : -1, event);
+        if (swiped) { swiped = false; return; }
+        if (settings.mode !== "paged" || !(event.target instanceof Element) ||
+            event.target.closest('a, button, input, select, textarea, mark, [contenteditable="true"]') ||
+            window.getSelection()?.toString()) return;
+        const bounds = content.getBoundingClientRect();
+        const right = event.clientX > bounds.left + bounds.width / 2;
+        page(right === (direction() === "rtl") ? -1 : 1, event);
     });
 
-    content.addEventListener("scroll", schedule, { passive: true });
+    content.addEventListener("scroll", () => { updatePageButtons(); schedule(); }, { passive: true });
     window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", () => { scrollToBlock(anchorBlock); updatePageButtons(); });
     window.addEventListener("pagehide", () => report(true));
 
     function load(): ReaderSettings {
@@ -90,7 +147,11 @@ if (reader?.querySelector("[data-role=content]")) {
             return {
                 size: typeof value?.size === 'number' && Number.isFinite(value.size) ? Math.min(2, Math.max(0.8, value.size)) : Defaults.size,
                 theme: value?.theme === 'sepia' || value?.theme === 'dark' ? value.theme : Defaults.theme,
-                mode: value?.mode === 'paged' ? value.mode : Defaults.mode
+                mode: value?.mode === 'paged' ? value.mode : Defaults.mode,
+                preset: value?.preset === "light-novel" || value?.preset === "custom" ? value.preset : Defaults.preset,
+                font: value?.font === "sans" ? value.font : Defaults.font,
+                lineHeight: value?.lineHeight === "compact" || value?.lineHeight === "spacious" ? value.lineHeight : Defaults.lineHeight,
+                width: value?.width === "narrow" || value?.width === "wide" ? value.width : Defaults.width
             };
         } catch {
             return { ...Defaults };
@@ -101,19 +162,54 @@ if (reader?.querySelector("[data-role=content]")) {
         reader!.dataset.theme = settings.theme;
         reader!.dataset.mode = settings.mode;
         reader!.style.setProperty("--reader-size", `${settings.size.toFixed(1)}rem`);
+        reader!.style.setProperty("--reader-font-family", settings.font === "sans" ? "system-ui, sans-serif" : 'Georgia, "Iowan Old Style", "Times New Roman", serif');
+        reader!.style.setProperty("--reader-line-height", { compact: "1.45", normal: "1.65", spacious: "1.9" }[settings.lineHeight]);
+        reader!.style.setProperty("--reader-width", { narrow: "34rem", normal: "42rem", wide: "55rem" }[settings.width]);
         reader!.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => {
-            const active = (button.dataset.setting === "theme" && button.dataset.value === settings.theme) || (button.dataset.setting === "mode" && button.dataset.value === settings.mode);
+            const selected = settings[button.dataset.setting as keyof ReaderSettings];
+            const active = button.dataset.value === selected;
             button.setAttribute("aria-pressed", String(active));
         });
+        updatePageButtons();
+    }
+
+    function setFocusMode(enabled: boolean): void {
+        const visibleBlock = current();
+        reader!.classList.toggle("reader--focused", enabled);
+        reader!.querySelectorAll<HTMLElement>("[data-panel]").forEach(panel => { panel.hidden = true; });
+        reader!.querySelectorAll<HTMLElement>("[aria-expanded]").forEach(control => control.setAttribute("aria-expanded", "false"));
+        const restore = reader!.querySelector<HTMLButtonElement>("[data-action=restore-focus]");
+        if (restore) {
+            restore.hidden = !enabled;
+            if (enabled) restore.focus();
+        }
+        if (!enabled) reader!.querySelector<HTMLButtonElement>("[data-action=focus]")?.focus();
+        scrollToBlock(visibleBlock);
     }
 
     function toggle(button: HTMLButtonElement) {
         const name = button.dataset.action!;
+        if (name === "focus" || name === "restore-focus") {
+            setFocusMode(name === "focus");
+            return;
+        }
         reader!.querySelectorAll<HTMLElement>("[data-panel]").forEach(panel => {
             const open = panel.dataset.panel === name && panel.hidden;
             panel.hidden = !open;
             reader!.querySelector(`[data-action=${panel.dataset.panel}]`)?.setAttribute("aria-expanded", String(open));
         });
+    }
+
+    // Preserve the canonical block locator through reflow and viewport changes.
+    function direction(): "ltr" | "rtl" {
+        return reader!.dataset.direction === "rtl" ? "rtl" : "ltr";
+    }
+
+    function scrollToBlock(index: number): void {
+        const block = allBlocks.find(item => Number(item.dataset.b) === index);
+        if (!block) return;
+        block.scrollIntoView({ block: "start", inline: "start", behavior: "instant" });
+        anchorBlock = index;
     }
 
     // A note's block, else the saved block of this section, unless the address names an anchor.
@@ -123,21 +219,38 @@ if (reader?.querySelector("[data-role=content]")) {
         const match = /^s(\d+)\/b(\d+)$/.exec(reader!.dataset.locator ?? "");
         const block = linked ?? (match && Number(match[1]) === section ? match[2] : null);
         if (location.hash || block === null) return;
-        content.querySelector(`[data-b="${block}"]`)?.scrollIntoView({ block: "start" });
+        scrollToBlock(Number(block));
     }
 
-    function page(direction: number, event: Event) {
+    function updatePageButtons(): void {
+        const paged = settings.mode === "paged";
+        const offset = Math.abs(content.scrollLeft);
+        const atEnd = offset + content.clientWidth >= content.scrollWidth - 4;
+        reader!.querySelectorAll<HTMLButtonElement>("[data-page-step]").forEach(button => {
+            button.hidden = !paged;
+            const step = Number(button.dataset.pageStep);
+            button.disabled = paged && (step < 0 ? offset <= 4 && !reader!.querySelector("[data-role=previous]")
+                : atEnd && !reader!.querySelector("[data-role=next]"));
+        });
+    }
+
+    function page(step: number, event: Event) {
         if (settings.mode !== "paged") return;
         event.preventDefault();
         const width = content.clientWidth;
-        const atEnd = content.scrollLeft + width >= content.scrollWidth - 4;
-        const atStart = content.scrollLeft <= 4;
-        if (direction > 0 && atEnd) {
+        const gap = Number.parseFloat(getComputedStyle(content).columnGap) || 0;
+        const spreadWidth = width + gap;
+        const directionOfContent = direction();
+        const offset = Math.abs(content.scrollLeft);
+        const maximum = Math.max(0, content.scrollWidth - width);
+        if (step > 0 && offset >= maximum - 4) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=next]")?.click();
-        } else if (direction < 0 && atStart) {
+        } else if (step < 0 && offset <= 4) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=previous]")?.click();
         } else {
-            content.scrollBy({ left: direction * width, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+            const target = Math.max(0, Math.min(maximum, (Math.round(offset / spreadWidth) + step) * spreadWidth));
+            content.scrollTo({ left: target * (directionOfContent === "rtl" ? -1 : 1),
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
         }
     }
 
@@ -147,23 +260,26 @@ if (reader?.querySelector("[data-role=content]")) {
         const top = reader!.querySelector('.reader__top')?.getBoundingClientRect().bottom ?? 0;
         for (const block of allBlocks) {
             const box = block.getBoundingClientRect();
-            if (settings.mode === "paged" ? box.right > bounds.left + 1 : box.bottom > top + 1) return Number(block.dataset.b);
+            if (settings.mode === "paged" ? (direction() === "rtl" ? box.left < bounds.right - 1 : box.right > bounds.left + 1)
+                : box.bottom > top + 1) return Number(block.dataset.b);
         }
 
         return allBlocks.length > 0 ? Number(allBlocks[allBlocks.length - 1].dataset.b) : 0;
     }
 
     function schedule() {
+        anchorBlock = current();
         window.clearTimeout(timer);
         timer = window.setTimeout(() => report(false), ReportDelay);
     }
 
     function report(leaving: boolean) {
         const block = current();
+        anchorBlock = block;
         // Completion requires the section end.
         const bounds = content.getBoundingClientRect();
         const atEnd = allBlocks.length > 0 && (settings.mode === 'paged'
-            ? content.scrollLeft + content.clientWidth >= content.scrollWidth - 4
+            ? Math.abs(content.scrollLeft) + content.clientWidth >= content.scrollWidth - 4
             : bounds.bottom <= window.innerHeight);
         const completed = section === sections - 1 && atEnd;
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);

@@ -900,6 +900,14 @@
    "Settings",
    "Instellingen"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Focus op tekst"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Bediening tonen"
+  ],
   "reader.previous": [
    "Previous",
    "Vorige"
@@ -951,6 +959,62 @@
   "reader.mode.paged": [
    "Pages",
    "Pagina's"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "Leesvoorinstelling"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Boek"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Light novel"
+  ],
+  "reader.font": [
+   "Font",
+   "Lettertype"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Met schreef"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Schreefloos"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Regelafstand"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Compact"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Comfortabel"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Ruim"
+  ],
+  "reader.width": [
+   "Text width",
+   "Tekstbreedte"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Smal"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normaal"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Breed"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -5808,6 +5872,14 @@
    "Off",
    "Uit"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Ondertitelvertraging (seconden)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Vertraging resetten"
+  ],
   "player.subtitles.forced": [
    "forced",
    "geforceerd"
@@ -5844,6 +5916,30 @@
    "More",
    "Meer"
   ],
+  "player.settings": [
+   "Player settings",
+   "Spelerinstellingen"
+  ],
+  "player.settings.close": [
+   "Close settings",
+   "Instellingen sluiten"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Beeldgrootte"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Passend"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Vullen"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Origineel"
+  ],
   "player.delivery": [
    "Delivery",
    "Levering"
@@ -5876,9 +5972,17 @@
    "This media is no longer available.",
    "Deze media is niet meer beschikbaar."
   ],
+  "player.buffering": [
+   "Buffering…",
+   "Bufferen…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "Het afspelen kon niet worden gestart."
+  ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Druk op Afspelen om te beginnen."
   ],
   "details.play": [
    "Play",
