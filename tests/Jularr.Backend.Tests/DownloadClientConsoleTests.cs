@@ -22,7 +22,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(50d, snapshot.Queue[0].Percentage);
             Assert.AreEqual(1, snapshot.History.Count);
             Assert.AreEqual(2_048L, snapshot.SpeedBytesPerSecond);
-            Assert.AreEqual(104_857_600L, snapshot.FreeBytes);
+            Assert.AreEqual(107_374_182_400L, snapshot.FreeBytes);
             CollectionAssert.AreEqual(new[] { "movies", "tv" }, (await provider.ReadCategoriesAsync(connection, CancellationToken.None)).ToArray());
         }
 
