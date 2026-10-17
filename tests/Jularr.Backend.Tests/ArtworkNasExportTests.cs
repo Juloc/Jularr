@@ -153,7 +153,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task JxlOnlyMode_DoesNotQueueUnsupportedJpegExport()
+        public async Task JxlOnlyMode_QueuesJxlExportAndNeverWritesJpegWithoutEncoding()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path);
@@ -175,7 +175,7 @@ namespace Jularr.Backend.Tests
                 VALUES ({workId}, 'Poster', '{PosterUrl}', TRUE);
                 """);
             await LibraryTests.ScanAsync(host, rootId);
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 4"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 4 AND \"OperationStatusTypeId\" = 1"));
             Assert.IsFalse(File.Exists(Path.Combine(folder, "poster.jpg")));
         }
 

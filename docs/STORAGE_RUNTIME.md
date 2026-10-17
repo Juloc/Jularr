@@ -181,3 +181,7 @@ The artwork scan stores relative NAS artwork source paths and size/mtime fingerp
 ### JPEG XL Artwork Variants
 
 The official runtime image installs `libjxl-tools` alongside FFmpeg. When the cache preference is JXL, the artwork worker uses bounded `cjxl` to encode a real, optionally progressive `.jxl` variant and retains the independent WebP fallback. Existing JXL artwork on the NAS may be decoded by `djxl` in the worker. The browser-facing JXL endpoint never opens the NAS; it serves local cache bytes only and is authorized per profile. Missing native binaries do not block WebP output.
+
+### NAS JPEG XL Export
+
+Artwork export uses the same Work-mapped, read/write-checked NAS folder for three configurable modes: compatible JPG, JXL plus JPG, or JXL-only. In JXL modes `cjxl` encodes the validated JPEG from provider metadata into a real progressive JXL when requested. Existing sidecar images block any replacement. Jularr reports native failures rather than mislabeling JPEGs as JXL. Dual mode cannot atomically publish two files as one unit; partial exports require review without overriding possible manual artwork.

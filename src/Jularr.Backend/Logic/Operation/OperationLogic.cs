@@ -46,7 +46,7 @@ namespace Jularr.Backend.Logic.Operation
                     4, work."Id"
                 FROM
                     "Works" AS work
-                    JOIN "ArtworkSettings" AS settings ON settings."Id" = 1 AND settings."ExportToNas" AND settings."NasModeId" = 1
+                    JOIN "ArtworkSettings" AS settings ON settings."Id" = 1 AND settings."ExportToNas"
                 WHERE
                     work."Id" = @WorkId
                     AND EXISTS (
@@ -102,7 +102,7 @@ namespace Jularr.Backend.Logic.Operation
                     JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId" AND NOT mount."IsReadOnly"
-                    JOIN "ArtworkSettings" AS settings ON settings."Id" = 1 AND settings."ExportToNas" AND settings."NasModeId" = 1
+                    JOIN "ArtworkSettings" AS settings ON settings."Id" = 1 AND settings."ExportToNas"
                 WHERE
                     file."LibraryRootId" = @LibraryRootId
                     AND file."MissingSince" IS NULL
