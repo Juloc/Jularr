@@ -1648,6 +1648,16 @@ namespace Jularr.Frontend.Localization
             new("console.total", "Total downloads"),
             new("console.incompleteRemotePath", "Incomplete folder path reported by SABnzbd"),
             new("console.incompleteLocalPath", "Same incomplete folder path visible to Jularr"),
+            new("console.mappingTitle", "Categories by media type (blank uses default)"),
+            new("console.kind.movie", "Movies"),
+            new("console.kind.tv", "Series"),
+            new("console.kind.anime", "Anime"),
+            new("console.kind.book", "Books"),
+            new("console.kind.audiobook", "Audiobooks (not routed separately yet)"),
+            new("console.kind.manga", "Manga / comics"),
+            new("console.kind.lightNovel", "Light novels"),
+            new("console.kind.music", "Music"),
+            new("console.kind.game", "Games"),
         ];
     }
 }
