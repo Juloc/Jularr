@@ -91,9 +91,13 @@ its subtitles, and folders a rename emptied are removed.
 
 Without a volume Jularr speaks SMB itself through [SMBLibrary](https://github.com/TalAloni/SMBLibrary)
 (LGPL-3.0, owner-approved): nothing goes into `compose.yaml`, and the container starts while the NAS
-sleeps. [SmbShares.cs](../src/Jularr.Integrations/Logic/Storage/SmbShares.cs) keeps one signed-in session
-per connection and saved configuration; requests take turns on it, a lost session opens again on the
-next request, and a session without open files closes after 15 idle minutes so the NAS may sleep.
+sleeps. [SmbShares.cs](../src/Jularr.Integrations/Logic/Storage/SmbShares.cs) keeps the signed-in sessions
+per connection and saved configuration ([SmbShare.cs](../src/Jularr.Integrations/Logic/Storage/SmbShare.cs)):
+listings, renames and deletions share one session, every open file reads or writes on a session of its own
+(at most eight per share, then the least busy is shared), so a playback never waits behind a scan or an
+import. Requests on one session take turns, a lost session opens again on the next request, and a session
+without open files closes after 15 idle minutes so the NAS may sleep. A file reads in pieces of up to a
+megabyte and fetches the next piece while the current one is used.
 The share path names the share and then a folder inside it (`/media/library` is the folder `library`
 of the share `media`). Hidden and system entries and links are left out like on a local folder.
 

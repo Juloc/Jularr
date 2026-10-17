@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Share_LostSessionAndIdleTime_OpenAgainOnlyWhenNeeded()
+        public async Task Share_OpenFilesOnOwnSessions_LostSessionsReopenAndIdleOnesClose()
         {
             using var folder = new LibraryTests.TemporaryDirectory();
             File.WriteAllBytes(Path.Combine(folder.Path, "a.mkv"), Film);
@@ -89,33 +89,70 @@ namespace Jularr.Backend.Tests
             var files = new SmbStorageFiles(share, "");
             var ct = CancellationToken.None;
 
+            // Short requests share one session; every open file reads on a session of its own, so a playback never waits behind a scan.
             Assert.IsNotNull(await files.GetAsync("a.mkv", ct));
-            Assert.AreEqual(1, connects);
+            var first = await files.OpenReadAsync("a.mkv", ct);
+            var second = await files.OpenReadAsync("a.mkv", ct);
+            Assert.AreEqual(0, first.ReadByte());
+            Assert.AreEqual(0, second.ReadByte());
+            Assert.AreEqual((3, 3), (connects, share.OpenSessions));
 
-            // A dropped session fails the request and its open streams; the next request opens a new one.
-            var stream = await files.OpenReadAsync("a.mkv", ct);
+            // At most eight sessions; further files share the least busy one.
+            var more = new List<Stream>();
+            for (var index = 0; index < 8; index++)
+            {
+                var stream = await files.OpenReadAsync("a.mkv", ct);
+                stream.ReadByte();
+                more.Add(stream);
+            }
+
+            Assert.AreEqual(SmbShare.MaximumSessions, share.OpenSessions);
+            foreach (var stream in more) await stream.DisposeAsync();
+
+            // A dropped session fails the request and the files on it; the next request opens a new one.
             store.IsLost = true;
             await Assert.ThrowsExactlyAsync<NasMountException>(() => files.ListAsync("", ct));
+            first.Position = 4000;
+            Assert.ThrowsExactly<NasMountException>(() => first.Read(new byte[2000]));
             store.IsLost = false;
-            Assert.ThrowsExactly<IOException>(() => stream.ReadByte());
-            await stream.DisposeAsync();
+            Assert.ThrowsExactly<IOException>(() => first.Read(new byte[2000]));
+            await first.DisposeAsync();
             Assert.AreEqual(1, (await files.ListAsync("", ct)).Count);
-            Assert.AreEqual((2, 1), (connects, closes));
 
-            // An open stream keeps the session; after 15 idle minutes it closes and the NAS may sleep.
-            stream = await files.OpenReadAsync("a.mkv", ct);
-            clock.Advance(TimeSpan.FromMinutes(20));
+            // An open file keeps its session; after 15 idle minutes the others close and the NAS may sleep.
+            clock.Advance(TimeSpan.FromMinutes(16));
             share.CloseIfIdle(SmbShares.IdleTime);
-            Assert.AreEqual(1, closes);
-            await stream.DisposeAsync();
-            clock.Advance(TimeSpan.FromMinutes(14));
+            Assert.AreEqual(1, share.OpenSessions);
+            await second.DisposeAsync();
+            clock.Advance(TimeSpan.FromMinutes(16));
             share.CloseIfIdle(SmbShares.IdleTime);
-            Assert.AreEqual(1, closes);
-            clock.Advance(TimeSpan.FromMinutes(2));
-            share.CloseIfIdle(SmbShares.IdleTime);
-            Assert.AreEqual(2, closes);
+            Assert.AreEqual(0, share.OpenSessions);
+            Assert.AreEqual(connects, closes);
             Assert.IsNotNull(await files.GetAsync("a.mkv", ct));
-            Assert.AreEqual(3, connects);
+        }
+
+        [TestMethod]
+        public async Task Stream_ReadsAhead_SmallReadsAndSeeksReturnTheFileExactly()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            File.WriteAllBytes(Path.Combine(folder.Path, "a.mkv"), Film);
+            using var share = new SmbShare(() => new SmbSession(new FakeSmbStore(folder.Path), () => { }), TimeProvider.System);
+            await using var stream = await new SmbStorageFiles(share, "").OpenReadAsync("a.mkv", CancellationToken.None);
+
+            // Reads smaller than a piece and across piece borders, as a player's copy loop does.
+            using var copy = new MemoryStream();
+            var buffer = new byte[7];
+            for (int read; (read = stream.Read(buffer)) > 0;) copy.Write(buffer, 0, read);
+            CollectionAssert.AreEqual(Film, copy.ToArray());
+
+            // Back and forth; a piece fetched ahead and passed over does no harm.
+            foreach (var position in new long[] { 4321, 10, 2999, 4999, 0 })
+            {
+                stream.Position = position;
+                var part = new byte[Math.Min(1500, Film.Length - (int)position)];
+                stream.ReadExactly(part);
+                CollectionAssert.AreEqual(Film[(int)position..((int)position + part.Length)], part, "at " + position);
+            }
         }
 
         [TestMethod]

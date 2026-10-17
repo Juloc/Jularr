@@ -56,23 +56,23 @@ namespace Jularr.Integrations.Logic.Storage
             }
         }, ct);
 
-        public override Task<Stream> OpenReadAsync(string path, CancellationToken ct) => share.RunAsync<Stream>(store =>
+        public override async Task<Stream> OpenReadAsync(string path, CancellationToken ct) => (await OpenAsync((lane, store) =>
         {
             SmbShare.Check(store.CreateFile(out var handle, out _, Map(path), AccessMask.GENERIC_READ | AccessMask.SYNCHRONIZE, FileAttributes.Normal, ShareAccess.Read,
                 CreateDisposition.FILE_OPEN, CreateOptions.FILE_NON_DIRECTORY_FILE, null));
             try
             {
                 SmbShare.Check(store.GetFileInformation(out var information, handle, FileInformationClass.FileNetworkOpenInformation));
-                return new SmbFileStream(share, handle, ((FileNetworkOpenInformation)information).EndOfFile, false);
+                return new SmbFileStream(lane, handle, ((FileNetworkOpenInformation)information).EndOfFile, false);
             }
             catch
             {
                 store.CloseFile(handle);
                 throw;
             }
-        }, ct);
+        }, ct))!;
 
-        public override Task<Stream?> CreateAsync(string path, CancellationToken ct) => share.RunAsync<Stream?>(store =>
+        public override async Task<Stream?> CreateAsync(string path, CancellationToken ct) => await OpenAsync((lane, store) =>
         {
             CreateParents(store, path);
             var status = store.CreateFile(out var handle, out _, Map(path), AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, FileAttributes.Normal, ShareAccess.None,
@@ -83,7 +83,7 @@ namespace Jularr.Integrations.Logic.Storage
             }
 
             SmbShare.Check(status);
-            return new SmbFileStream(share, handle, 0, true);
+            return new SmbFileStream(lane, handle, 0, true);
         }, ct);
 
         public override Task<bool> MoveAsync(string source, string target, CancellationToken ct) => share.RunAsync(store =>
@@ -179,6 +179,23 @@ namespace Jularr.Integrations.Logic.Storage
                 return new StorageProbe(false, "storage_unavailable", null, null);
             }
         }
+
+        // An open file keeps a session of its own until it closes; none when nothing was opened.
+        private Task<SmbFileStream?> OpenAsync(Func<SmbLane, ISMBFileStore, SmbFileStream?> open, CancellationToken ct) => Task.Run(() =>
+        {
+            var lane = share.Lease();
+            try
+            {
+                var stream = lane.Run(store => open(lane, store));
+                if (stream is null) lane.Closed();
+                return stream;
+            }
+            catch
+            {
+                lane.Closed();
+                throw;
+            }
+        }, ct);
 
         // Share paths use backslashes and start at the share's root.
         private string Map(string path) => StoragePath.Combine(_basePath, path).Replace('/', '\\');

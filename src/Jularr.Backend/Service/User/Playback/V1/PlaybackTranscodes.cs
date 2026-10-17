@@ -26,7 +26,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
         private const int HighWater = 30;
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan ExpiryTimeout = TimeSpan.FromHours(6);
+        // A running FFmpeg may need long for its first segment, such as on a share that is busy; without one the wait is short.
         private static readonly TimeSpan SegmentTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan RunningSegmentTimeout = TimeSpan.FromMinutes(2);
 
         private readonly ConcurrentDictionary<Guid, Job> _jobs = new();
         private readonly MediaTranscoder _transcoder;
@@ -98,7 +100,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     }
                 }
 
-                if (Stopwatch.GetElapsedTime(started) > SegmentTimeout)
+                bool running;
+                lock (job)
+                {
+                    running = job.Process is { HasExited: false };
+                }
+
+                if (Stopwatch.GetElapsedTime(started) > (running ? RunningSegmentTimeout : SegmentTimeout))
                 {
                     throw new ServiceUnavailableException("playback_conversion_failed");
                 }

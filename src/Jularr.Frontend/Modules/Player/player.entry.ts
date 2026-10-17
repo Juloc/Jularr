@@ -144,7 +144,20 @@ async function start(player: HTMLElement): Promise<void> {
         });
         if (next.playbackModeTypeId !== 1 && video.canPlayType("application/vnd.apple.mpegurl") === "") {
             const { default: Hls } = await import("hls.js/light");
-            const instance = new Hls({ startPosition: position });
+            // The server holds a segment until FFmpeg has it (up to two minutes) and answers a passing stall with 503: wait that long and try
+            // again instead of giving up, and keep a minute ahead so a slow moment of the storage does not stop the picture.
+            const instance = new Hls({
+                startPosition: position,
+                maxBufferLength: 60,
+                fragLoadPolicy: {
+                    default: {
+                        maxTimeToFirstByteMs: 125_000,
+                        maxLoadTimeMs: 180_000,
+                        timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 },
+                        errorRetry: { maxNumRetry: 6, retryDelayMs: 1_000, maxRetryDelayMs: 8_000 }
+                    }
+                }
+            });
             instance.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);

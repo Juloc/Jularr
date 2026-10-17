@@ -119,7 +119,7 @@ namespace Jularr.Integrations.Logic.Storage
                     }
 
                     content.Seek(start, SeekOrigin.Begin);
-                    var buffer = new byte[256 * 1024];
+                    var buffer = new byte[1024 * 1024];
                     while (count > 0)
                     {
                         var read = await content.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, count)), _stop.Token);
