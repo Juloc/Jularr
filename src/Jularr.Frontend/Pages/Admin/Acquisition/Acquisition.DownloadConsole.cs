@@ -29,7 +29,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 "downloads" => DownloadQueue(data, connectionId, csrf),
                 "statistics" => DownloadStatistics(data),
                 "history" => DownloadHistory(data, connectionId, csrf),
-                "files" => DownloadFiles(data),
+                "files" => DownloadFiles(data, connectionId, csrf),
                 _ => new P(new Text("console.notMapped"))
             }).Class("download-console");
         }
@@ -71,7 +71,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     Metric("console.speed", data.SpeedBytesPerSecond is { } speed ? ByteSize.Format(speed) + "/s" : "—"),
                     Metric("console.free", data.FreeBytes is { } free ? ByteSize.Format(free) : "—"),
                     Metric("console.queueCount", data.Queue.Count.ToString(CultureInfo.CurrentCulture)),
-                    Metric("console.size", ByteSize.Format(total)))
+                    Metric("console.size", ByteSize.Format(total)),
+                    Metric("console.today", data.TodayBytes is { } day ? ByteSize.Format(day) : "—"),
+                    Metric("console.week", data.WeekBytes is { } week ? ByteSize.Format(week) : "—"),
+                    Metric("console.month", data.MonthBytes is { } month ? ByteSize.Format(month) : "—"),
+                    Metric("console.total", data.TotalBytes is { } all ? ByteSize.Format(all) : "—"))
                     .Class("download-console__metrics"),
                 new H2(new Text("console.categories")),
                 new P(new ValueText(data.Categories.Length > 0 ? string.Join(" · ", data.Categories) : "—")),
@@ -95,7 +99,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 .Class("download-console__section");
         }
 
-        private IUiComponent DownloadFiles(DownloadClientDashboardV1 data)
+        private IUiComponent DownloadFiles(DownloadClientDashboardV1 data, long connectionId, string? csrf)
         {
             IUiComponent Folder(string name, string? path, bool available)
             {
@@ -105,11 +109,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     .Content("console.size", item => new ValueText(item.SizeBytes is { } size ? ByteSize.Format(size) : "—"))
                     .Content("console.fileAssignment", item => new Span(new Text(item.Assignment switch
                     {
+                        "orphan" => "console.orphan",
                         "queue" => "console.queued",
                         "history" => "console.inHistory",
                         "unchecked" => "console.unchecked",
                         _ => "console.unassigned"
-                    })).Class(item.Assignment == "unassigned" ? "download-console__state download-console__state--warning" : "download-console__state"));
+                    })).Class(item.Assignment == "unassigned" ? "download-console__state download-console__state--warning" : "download-console__state"))
+                    .Content("console.actions", item => item.Assignment == "orphan" ? OrphanActions(connectionId, item.Name, csrf) : new Span());
 
                 return new Section(new H2(new ValueText(name)),
                     new P(new ValueText(path ?? "—")).Class("download-console__note"),
@@ -123,6 +129,20 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 new Div(Folder("complete", data.CompletePath, data.CompleteAvailable),
                     Folder("incomplete", data.IncompletePath, data.IncompleteAvailable)).Class("download-console__folders"))
                 .Class("download-console__section");
+        }
+
+        private IUiComponent OrphanActions(long connectionId, string folderName, string? csrf)
+        {
+            if (ConfirmJobId == folderName)
+            {
+                return new Div(new P(new Text("console.removeOrphanConfirm")),
+                    JobForm(connectionId, folderName, "removeOrphan", "console.confirm", csrf, true),
+                    new A(new Text("common.back")).Attribute("href", Address(connectionId) + "&Pane=files").Class("button"))
+                    .Class("download-console__confirm");
+            }
+
+            return new A(new Text("console.removeOrphan")).Class("button")
+                .Attribute("href", Address(connectionId) + "&Pane=files&ConfirmJobId=" + Uri.EscapeDataString(folderName));
         }
 
         private IUiComponent JobControls(long connectionId, string jobId, string? status, string? csrf, bool history)
@@ -160,7 +180,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Content(new Input().Attribute("type", "hidden").Attribute("name", "confirmed").Attribute("value", "true"));
                 }
                 form.Submit(new Button(new Text(label)).Compact());
-            }, Address(connectionId, handler: "Job") + "&Pane=" + (action == "removeHistory" ? "history" : "downloads"),
+            }, Address(connectionId, handler: "Job") + "&Pane=" + (action == "removeHistory" ? "history" : action == "removeOrphan" ? "files" : "downloads"),
                 csrf, new DownloadClientJobCommandV1(jobId, action));
 
         private static IUiComponent Metric(string key, string value) =>
