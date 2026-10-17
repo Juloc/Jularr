@@ -116,7 +116,7 @@ namespace Jularr.Integrations.Logic.Sabnzbd
                 diskMb is >= 0 and < 1e6 ? (long?)Math.Round(diskMb.Value * 1024 * 1024 * 1024) : null,
                 ReadBool(queue, "paused") is true,
                 ReadLong(usage, "day"), ReadLong(usage, "week"), ReadLong(usage, "month"), ReadLong(usage, "total"),
-                ReadStringArray(status, "folders"));
+                ReadStringArray(status, "folders"), ReadString(status, "completedir"), ReadString(status, "downloaddir"));
         }
 
         public async Task<IReadOnlyList<string>> ReadCategoriesAsync(SabnzbdConnection connection, CancellationToken ct)
