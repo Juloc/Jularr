@@ -13,6 +13,10 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly LongField SourceSizeBytes = new() { Minimum = 0, Required = false };
         public static readonly LongField CacheLimitBytes = new() { Minimum = 0, Maximum = 1099511627776 };
         public static readonly EnumField CacheQualityId = new(typeof(ArtworkQuality));
+        public static readonly EnumField CacheFormatId = new(typeof(ArtworkCacheFormat));
+        public static readonly BoolField ProgressiveJxl = new();
+        public static readonly EnumField FormatId = new(typeof(ArtworkFormat));
+        public static readonly BoolField IsProgressive = new();
         public static readonly EnumField SlotId = new(typeof(ArtworkSlot));
         public static readonly StringField CacheKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, MinimumLength = 64, AllowBlank = false, Required = false };
         public static readonly StringField ContentHash = new(NpgsqlDbType.Varchar) { MaximumLength = 64, MinimumLength = 64, AllowBlank = false };

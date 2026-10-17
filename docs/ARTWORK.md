@@ -17,7 +17,7 @@
 - A bounded, single-encoder `ArtworkCache` generates a 384px WebP derivative and an optional tiny, at-most-64KiB WebP fallback. Files are written under persistent `DataPath/cache/artwork` using opaque content-derived keys and a create-only rename. The database stores the matching `ArtworkRenditions` metadata and fallback, not full-resolution images. Encoding never overwrites the NAS.
 - Cache population runs in the system library scan, and immediately after a successful explicit/automatic NAS export. It has a per-scan cap of 100 candidates, a 12MiB source cap, a 32-megapixel decoded-image cap, and a configured byte budget. A corrupt or unsupported sidecar cannot delete last-known-good previews.
 - `GET /api/v1/works/{workId}/artwork/{slotId}` authorizes a profile's visible Work and serves an already-cached WebP rendition (or database fallback) without a NAS request. Library and Continue prefer the local endpoint once cached. The existing provider poster remains in the response until a local image is actually available.
-- The only encoder in this slice is **SkiaSharp WebP**. If the preferred cache format is JPEG XL, WebP is still generated as its necessary browser-compatibility fallback; **a native JXL cache file is not generated yet**. Progressive JPEG XL, JXL NAS export, dynamic format negotiation, cache garbage collection and ETags are separate follow-ups.
+- The WebP encoder uses SkiaSharp. The next stacked slice adds a *real* JPEG XL rendition using the bundled libjxl `cjxl` executable, with `--progressive` when enabled. Original JXL sidecars are decoded with `djxl` into the same bounded WebP fallback pipeline. JXL cache generation is best-effort; missing native tools do not interrupt the WebP path. Automatic browser format selection, NAS JXL export, cache garbage collection and ETags are separate follow-ups.
 - Existing databases are not migrated. The `Artwork.sql` schema remains a fresh-install baseline only.
 
 ## Remaining slices
@@ -33,3 +33,11 @@
 9. **P7:** end-to-end NAS/Plex/Jellyfin coexistence, browser and failure tests, performance benchmarks.
 
 `database/Artwork.sql` is installed **only on a fresh database**, after the Library baseline. Existing installations are never altered automatically. An explicit, non-destructive database upgrade path must be approved and implemented before enabling this feature on existing instances.
+
+## P3b – Progressive JPEG XL codec and endpoint
+
+- The Docker runtime installs Debian's `libjxl-tools` (`cjxl`, `djxl`). Input is a bounded, resized PNG generated through SkiaSharp; `cjxl --progressive` encodes a progressively decodable JXL bitstream. Encoder effort and threads are bounded for low-power CPUs.
+- If `ArtworkSettings.CacheFormatId=2`, cache warming writes *both* WebP and real JXL under content-derived keys, storing separate `ArtworkRenditions` rows (formats 3 and 4). The stored progressive flag and encoder version prevent stale variant reuse after a configuration change.
+- Authorized `GET /api/v1/works/{workId}/artwork/{slotId}.jxl` serves `image/jxl`, independently of the WebP `GET /api/v1/works/{workId}/artwork/{slotId}`. Both endpoints read persistent local storage only. The frontend must opt into a JXL source only after an actual rendition exists; this PR does not yet activate unconditional `<picture>` sources.
+- Native JXL progressive *codestream* support does not by itself guarantee that a browser progressively renders partial downloads. Browser support and first-frame behavior require live E2E verification. On unsupported browsers Jularr's WebP remains the fallback.
+- The separate JXL file is not a renamed WebP file. Native codec failures leave the WebP rendition usable. JXL NAS exports and runtime settings UI remain outstanding.

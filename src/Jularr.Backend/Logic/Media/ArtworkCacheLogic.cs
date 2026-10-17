@@ -14,7 +14,9 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     "CacheQualityId",
-                    "CacheLimitBytes"
+                    "CacheLimitBytes",
+                    "CacheFormatId",
+                    "ProgressiveJxl"
                 FROM
                     "ArtworkSettings"
                 WHERE
@@ -42,7 +44,6 @@ namespace Jularr.Backend.Logic.Media
                     AND artwork."SourceKindId" = 2
                     AND artwork."WorkUnitId" IS NULL
                     AND artwork."SourceSizeBytes" BETWEEN 1 AND 12582912
-                    AND lower(artwork."SourceKey") !~ '\.jxl$'
                     AND settings."CacheLimitBytes" > 0
                     AND NOT EXISTS (
                         SELECT
@@ -54,6 +55,22 @@ namespace Jularr.Backend.Logic.Media
                             AND rendition."FormatId" = 3
                             AND rendition."QualityId" = settings."CacheQualityId"
                             AND rendition."CreatedAt" >= artwork."UpdatedAt"
+                    )
+                    OR (
+                        artwork."LibraryRootId" = @LibraryRootId
+                        AND artwork."SourceKindId" = 2
+                        AND artwork."WorkUnitId" IS NULL
+                        AND artwork."SourceSizeBytes" BETWEEN 1 AND 12582912
+                        AND settings."CacheLimitBytes" > 0
+                        AND settings."CacheFormatId" = 2
+                        AND NOT EXISTS (
+                            SELECT 1 FROM "ArtworkRenditions" AS jxl
+                            WHERE jxl."WorkArtworkId" = artwork."Id"
+                                AND jxl."FormatId" = 4
+                                AND jxl."QualityId" = settings."CacheQualityId"
+                                AND jxl."IsProgressive" = settings."ProgressiveJxl"
+                                AND jxl."CreatedAt" >= artwork."UpdatedAt"
+                        )
                     )
                 ORDER BY
                     artwork."UpdatedAt", artwork."Id"
@@ -77,15 +94,17 @@ namespace Jularr.Backend.Logic.Media
                     AND "WorkId" = @WorkId;
 
                 INSERT INTO
-                    "ArtworkRenditions" ("WorkArtworkId", "FormatId", "Width", "Height", "CacheKey", "ContentHash", "SizeBytes", "QualityId", "EncoderVersion")
+                    "ArtworkRenditions" ("WorkArtworkId", "FormatId", "Width", "Height", "CacheKey", "ContentHash", "SizeBytes", "QualityId", "IsProgressive", "EncoderVersion")
                 VALUES
-                    (@ArtworkId, 3, @Width, @Height, @CacheKey, @ContentHash, @SizeBytes, @QualityId, 'skia-webp-v1')
+                    (@ArtworkId, @FormatId, @Width, @Height, @CacheKey, @ContentHash, @SizeBytes, @QualityId, @IsProgressive,
+                        CASE WHEN @FormatId = 4 THEN 'libjxl-cjxl-v1' ELSE 'skia-webp-v1' END)
                 ON CONFLICT ("WorkArtworkId", "FormatId", "Width", "Height") DO UPDATE
                 SET
                     "CacheKey" = EXCLUDED."CacheKey",
                     "ContentHash" = EXCLUDED."ContentHash",
                     "SizeBytes" = EXCLUDED."SizeBytes",
                     "QualityId" = EXCLUDED."QualityId",
+                    "IsProgressive" = EXCLUDED."IsProgressive",
                     "EncoderVersion" = EXCLUDED."EncoderVersion",
                     "CreatedAt" = now();
 
@@ -115,6 +134,7 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     rendition."CacheKey",
+                    jxl."JxlCacheKey",
                     fallback."WebpBytes" AS "FallbackBytes"
                 FROM
                     "ProfileWorks" AS visible
@@ -135,6 +155,23 @@ namespace Jularr.Backend.Logic.Media
                             image."Id"
                         LIMIT 1
                     ) AS rendition ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            variant."CacheKey" AS "JxlCacheKey"
+                        FROM
+                            "WorkArtworks" AS image
+                            JOIN "ArtworkRenditions" AS variant ON variant."WorkArtworkId" = image."Id" AND variant."FormatId" = 4
+                        WHERE
+                            image."WorkId" = visible."WorkId"
+                            AND image."WorkUnitId" IS NULL
+                            AND image."SlotId" = @SlotId
+                        ORDER BY
+                            image."IsPinned" DESC,
+                            image."SourceKindId",
+                            variant."CreatedAt" DESC,
+                            image."Id"
+                        LIMIT 1
+                    ) AS jxl ON TRUE
                     LEFT JOIN "ArtworkFallbacks" AS fallback ON fallback."WorkId" = visible."WorkId"
                         AND fallback."WorkUnitId" IS NULL AND fallback."Locale" IS NULL AND fallback."SlotId" = @SlotId
                 WHERE

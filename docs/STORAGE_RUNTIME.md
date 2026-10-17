@@ -177,3 +177,7 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 ### Local Artwork Cache
 
 The artwork scan stores relative NAS artwork source paths and size/mtime fingerprints; a single bounded SkiaSharp encoder creates WebP variants under `DataPath/cache/artwork`, independent of the library mount. Cache reads do not open or wake NAS storage. Small WebP fallbacks in PostgreSQL survive a deleted cache file. Files are create-only and content-keyed; budget pressure stops new writes without modifying the NAS. JXL cache encoding is not implemented yet; WebP remains the browser fallback in JXL-preferred mode. See [Artwork](ARTWORK.md).
+
+### JPEG XL Artwork Variants
+
+The official runtime image installs `libjxl-tools` alongside FFmpeg. When the cache preference is JXL, the artwork worker uses bounded `cjxl` to encode a real, optionally progressive `.jxl` variant and retains the independent WebP fallback. Existing JXL artwork on the NAS may be decoded by `djxl` in the worker. The browser-facing JXL endpoint never opens the NAS; it serves local cache bytes only and is authorized per profile. Missing native binaries do not block WebP output.
