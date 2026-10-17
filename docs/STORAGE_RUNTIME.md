@@ -185,3 +185,7 @@ The official runtime image installs `libjxl-tools` alongside FFmpeg. When the ca
 ### NAS JPEG XL Export
 
 Artwork export uses the same Work-mapped, read/write-checked NAS folder for three configurable modes: compatible JPG, JXL plus JPG, or JXL-only. In JXL modes `cjxl` encodes the validated JPEG from provider metadata into a real progressive JXL when requested. Existing sidecar images block any replacement. Jularr reports native failures rather than mislabeling JPEGs as JXL. Dual mode cannot atomically publish two files as one unit; partial exports require review without overriding possible manual artwork.
+
+### Cache Space Reclamation
+
+Before artwork cache warming, Jularr reconciles managed WebP/JXL disk files and indexed PostgreSQL renditions. Orphans are deleted, then oldest indexed variants are retired until the configured disk cap is respected. The database references are retired before file deletion to prevent broken JXL `picture` sources; the small PostgreSQL fallback remains available. Only lowercase SHA-style 64-character artwork filenames are eligible. No storage mount or media sidecar is deleted.

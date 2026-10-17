@@ -31,15 +31,13 @@ namespace Jularr.Backend.Service.Core
             var (settings, candidates) = await context.ExecuteBatchAsync(async (ctx, token) =>
                 (await ctx.ReadArtworkCacheSettingsAsync(token),
                     await ctx.ReadArtworkCacheCandidatesAsync(new ArtworkCacheRootData(libraryRootId), token)), ct);
-            if (settings.CacheLimitBytes == 0 || candidates.Count == 0) return;
-
             await Encoder.WaitAsync(ct);
             try
             {
                 Directory.CreateDirectory(_path);
-                var used = Directory.EnumerateFiles(_path, "*.*", SearchOption.TopDirectoryOnly)
-                    .Where(path => path.EndsWith(".webp", StringComparison.Ordinal) || path.EndsWith(".jxl", StringComparison.Ordinal))
-                    .Sum(path => new FileInfo(path).Length);
+                var used = await PruneUnderLockAsync(context, settings.CacheLimitBytes, ct);
+                if (settings.CacheLimitBytes == 0 || candidates.Count == 0) return;
+
                 foreach (var candidate in candidates)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -146,6 +144,83 @@ namespace Jularr.Backend.Service.Core
             finally
             {
                 Encoder.Release();
+            }
+        }
+
+
+        // The writer and pruner share one process-wide lock. Database references are
+        // retired before files: the API falls back to PostgreSQL previews rather than
+        // advertising a deleted JXL source.
+        private async Task<long> PruneUnderLockAsync(LogicContext context, long limitBytes, CancellationToken ct)
+        {
+            var stored = await context.ExecuteBatchAsync(
+                (ctx, token) => ctx.ReadArtworkStoredRenditionsAsync(token), ct);
+            var indexed = stored.ToDictionary(item => item.CacheKey + Extension(item.FormatId), StringComparer.Ordinal);
+            var files = Directory.EnumerateFiles(_path, "*", SearchOption.TopDirectoryOnly)
+                .Select(path => new FileInfo(path))
+                .Where(info => IsManagedImage(info.Name) && (info.Attributes & FileAttributes.ReparsePoint) == 0)
+                .ToDictionary(info => info.Name, StringComparer.Ordinal);
+            long used = files.Values.Sum(info => info.Length);
+
+            // Remove orphaned files first. Covers are content-addressed and can be shared.
+            // Arbitrary files, symlinks and unrelated temporary files are never touched.
+            foreach (var (name, info) in files.ToArray())
+            {
+                ct.ThrowIfCancellationRequested();
+                if (indexed.ContainsKey(name)) continue;
+                if (TryDelete(info.FullName))
+                {
+                    used -= info.Length;
+                    files.Remove(name);
+                }
+            }
+
+            foreach (var item in stored)
+            {
+                ct.ThrowIfCancellationRequested();
+                var name = item.CacheKey + Extension(item.FormatId);
+                var isPresent = files.TryGetValue(name, out var info);
+                if (isPresent && used <= limitBytes) continue;
+
+                // A missing file also needs its DB entry retired so <picture> cannot
+                // select a broken native source. The durable tiny fallback is retained.
+                await context.ExecuteBatchAsync(
+                    (ctx, token) => ctx.RetireArtworkCacheFileAsync(item, token), ct);
+                if (isPresent && info is not null && TryDelete(info.FullName))
+                {
+                    used -= info.Length;
+                    files.Remove(name);
+                }
+            }
+
+            return used;
+        }
+
+        private static string Extension(ArtworkFormat format) => format == ArtworkFormat.Jxl ? ".jxl" : ".webp";
+
+        private static bool IsManagedImage(string name)
+        {
+            if (name.Length is not (69 or 68)) return false;
+            var extension = name.EndsWith(".webp", StringComparison.Ordinal) ? ".webp"
+                : name.EndsWith(".jxl", StringComparison.Ordinal) ? ".jxl" : null;
+            if (extension is null || name.Length != 64 + extension.Length) return false;
+            return name.AsSpan(0, 64).ToString().All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+        }
+
+        private static bool TryDelete(string path)
+        {
+            try
+            {
+                File.Delete(path);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
             }
         }
 

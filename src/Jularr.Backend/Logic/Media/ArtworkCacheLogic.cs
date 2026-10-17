@@ -7,6 +7,43 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class ArtworkCacheLogic
     {
+        // Content-key references are ordered by oldest effective rendition, not by user activity.
+        // All references to one file are removed together before its bytes can be pruned.
+        public static Task<IReadOnlyList<ArtworkStoredRenditionData>> ReadArtworkStoredRenditionsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    "CacheKey",
+                    "FormatId"
+                FROM
+                    "ArtworkRenditions"
+                WHERE
+                    "FormatId" IN (3, 4)
+                GROUP BY
+                    "CacheKey", "FormatId"
+                ORDER BY
+                    max("CreatedAt"), "CacheKey";
+                """;
+            return ctx.ReadSql.ReadListAsync<ArtworkStoredRenditionData>(sql, ct);
+        }
+
+        public static Task<int> RetireArtworkCacheFileAsync(this LogicContext ctx, ArtworkStoredRenditionData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "ArtworkRenditions"
+                WHERE
+                    "CacheKey" = @CacheKey
+                    AND "FormatId" = @FormatId;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static Task<ArtworkCacheSettingsData> ReadArtworkCacheSettingsAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
