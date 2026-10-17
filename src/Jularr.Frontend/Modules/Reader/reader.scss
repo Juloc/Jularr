@@ -158,6 +158,8 @@
         td, th { border: 1px solid var(--reader-line); padding: 4px 8px; }
     }
 
+    &[data-direction="rtl"] &__content { direction: rtl; }
+
     // The requested page mode flows a section into one or two visible columns.
     // Fixed content height and column-fill:auto prevent balancing whole chapters into a single spread.
     &[data-mode="paged"] { height: 100dvh; min-height: 0; }
