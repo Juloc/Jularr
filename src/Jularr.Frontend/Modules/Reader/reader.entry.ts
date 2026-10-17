@@ -86,6 +86,11 @@ if (reader?.querySelector("[data-role=content]")) {
 
     // Paged mode turns pages; the edges continue to the neighbouring section.
     document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && reader!.classList.contains("reader--focused")) {
+            event.preventDefault();
+            setFocusMode(false);
+            return;
+        }
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
         if (event.key === "ArrowRight" || event.key === "PageDown") page(1, event);
         if (event.key === "ArrowLeft" || event.key === "PageUp") page(-1, event);
@@ -130,8 +135,24 @@ if (reader?.querySelector("[data-role=content]")) {
         });
     }
 
+    function setFocusMode(enabled: boolean): void {
+        reader!.classList.toggle("reader--focused", enabled);
+        reader!.querySelectorAll<HTMLElement>("[data-panel]").forEach(panel => { panel.hidden = true; });
+        reader!.querySelectorAll<HTMLElement>("[aria-expanded]").forEach(control => control.setAttribute("aria-expanded", "false"));
+        const restore = reader!.querySelector<HTMLButtonElement>("[data-action=restore-focus]");
+        if (restore) {
+            restore.hidden = !enabled;
+            if (enabled) restore.focus();
+        }
+        if (!enabled) reader!.querySelector<HTMLButtonElement>("[data-action=focus]")?.focus();
+    }
+
     function toggle(button: HTMLButtonElement) {
         const name = button.dataset.action!;
+        if (name === "focus" || name === "restore-focus") {
+            setFocusMode(name === "focus");
+            return;
+        }
         reader!.querySelectorAll<HTMLElement>("[data-panel]").forEach(panel => {
             const open = panel.dataset.panel === name && panel.hidden;
             panel.hidden = !open;

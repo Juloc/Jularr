@@ -900,6 +900,14 @@
    "Settings",
    "Einstellungen"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Nur Text"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Bedienelemente anzeigen"
+  ],
   "reader.previous": [
    "Previous",
    "Zurück"

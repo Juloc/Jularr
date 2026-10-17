@@ -900,6 +900,14 @@
    "Settings",
    "Ajustes"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Centrarse en el texto"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Mostrar controles"
+  ],
   "reader.previous": [
    "Previous",
    "Anterior"

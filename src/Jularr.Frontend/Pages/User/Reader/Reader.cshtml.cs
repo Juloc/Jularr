@@ -88,6 +88,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new Button(new Text("reader.notes")).Class("button").Attribute("data-action", "notes").Attribute("aria-expanded", NotesPage > 1 ? "true" : "false"),
                 new Button(new Text("reader.search")).Class("button").Attribute("data-action", "search").Attribute("aria-expanded", _hits is null ? "false" : "true"),
                 new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false"),
+                new Button(new Text("reader.focus")).Class("button").Attribute("data-action", "focus"),
                 _languages.Length > 0
                     ? new Button(new ValueText(LanguageName(Chosen(document)))).Class("button").Attribute("data-action", "language").Attribute("aria-expanded", "false")
                         .Attribute("aria-label", texts["reader.language"])
@@ -143,6 +144,8 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             var view = new Div(
                 top,
+                new Button(new Text("reader.restoreControls")).Class("button reader__focus-restore").Attribute("data-action", "restore-focus")
+                    .Attribute("hidden", "hidden"),
                 contents,
                 notes,
                 searching,

@@ -900,6 +900,14 @@
    "Settings",
    "Instellingen"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Focus op tekst"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Bediening tonen"
+  ],
   "reader.previous": [
    "Previous",
    "Vorige"

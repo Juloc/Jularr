@@ -900,6 +900,14 @@
    "Settings",
    "設定"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "本文に集中"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "操作ボタンを表示"
+  ],
   "reader.previous": [
    "Previous",
    "前へ"

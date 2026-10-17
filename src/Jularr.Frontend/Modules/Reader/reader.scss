@@ -42,6 +42,22 @@
     }
 
     &__top { top: 0; border-bottom: 1px solid var(--reader-line); }
+
+    &__focus-restore {
+        position: fixed;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        z-index: 6;
+        background: var(--reader-paper);
+        color: var(--reader-ink);
+        border: 1px solid var(--reader-line);
+
+        &[hidden] { display: none; }
+    }
+
+    &--focused &__top,
+    &--focused &__bottom,
+    &--focused &__panel { display: none; }
     &__bottom { bottom: 0; justify-content: space-between; border-top: 1px solid var(--reader-line); }
 
     &__heading { flex: 1; min-width: 0; }

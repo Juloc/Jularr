@@ -289,6 +289,8 @@ namespace Jularr.Frontend.Localization
             new("reader.highlight.Pink", "Pink"),
             new("reader.saveNote", "Save note"),
             new("reader.settings", "Settings"),
+            new("reader.focus", "Focus on text"),
+            new("reader.restoreControls", "Show controls"),
             new("reader.previous", "Previous"),
             new("reader.next", "Next"),
             new("reader.end", "The end"),

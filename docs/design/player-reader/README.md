@@ -33,7 +33,7 @@ commit `138c7a98568ceebb4361f25db2d474f5a2ba432d` (2026-10-17). There it renders
 ## Integrated into the live Jularr components (first release slice)
 
 - Player: one playback-speed slider (0.25×–4× in 0.05× steps) plus nine quick presets using the actual `<video>` playback rate. Existing session, stream, progress, audio/subtitle state and mini-player are unchanged.
-- Reflowable Reader: Book/Light Novel typography presets and independently adjustable font, line spacing and reading width. Existing section locators, reading progress, highlights and translation remain canonical. EPUB/reflowable settings intentionally do not change the separate comic/PDF renderers.
+- Reflowable Reader: Book/Light Novel typography presets, independently adjustable font, line spacing and reading width, and an explicit focus mode with accessible restore. Existing section locators, reading progress, highlights and translation remain canonical. EPUB/reflowable settings intentionally do not change the separate comic/PDF renderers.
 - Locale keys use the existing English source and shipped language catalogs, not workbench `design.*` keys.
 
 **Not yet integrated:** the complete Player settings popover/full-screen tabs, chapters/markers/sync/track appearance, the complete Reader visual layout and true paginated spreads, platform parity and full playback/reader E2E. Never copy the workbench's sample data into production. Verification is required before calling this PR finished.

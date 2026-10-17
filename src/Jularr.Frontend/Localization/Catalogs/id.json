@@ -900,6 +900,14 @@
    "Settings",
    "Pengaturan"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Fokus pada teks"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Tampilkan kontrol"
+  ],
   "reader.previous": [
    "Previous",
    "Sebelumnya"
