@@ -62,9 +62,9 @@ namespace Jularr.E2E.Tests
                 // Both audio tracks are offered in their languages; choosing the second asks for a new plan with that stream, and the new source plays.
                 await OpenWithTracksAsync(page, details, pilot);
                 await page.Locator("[data-action=audio]").ClickAsync();
-                var audio = page.Locator("[data-panel=audio] [data-audio]");
+                var audio = page.Locator("[data-settings-pane=audio] [data-audio]");
                 Assert.AreEqual(2, await audio.CountAsync());
-                Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-checked"));
+                Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-pressed"));
                 var languages = new[] { await audio.Nth(0).GetAttributeAsync("data-language"), await audio.Nth(1).GetAttributeAsync("data-language") };
                 Assert.IsTrue(languages.All(language => !string.IsNullOrEmpty(language)) && languages[0] != languages[1], string.Join(", ", languages));
                 var stream = await audio.Nth(1).GetAttributeAsync("data-audio");
@@ -79,7 +79,7 @@ namespace Jularr.E2E.Tests
 
                 // The subtitle file beside it is the only subtitle, in English, with its own text.
                 await page.Locator("[data-action=subtitles]").ClickAsync();
-                var subtitles = page.Locator("[data-panel=subtitles] [data-subtitle]:not([data-subtitle=''])");
+                var subtitles = page.Locator("[data-settings-pane=subtitles] [data-subtitle]:not([data-subtitle=''])");
                 Assert.AreEqual(1, await subtitles.CountAsync());
                 StringAssert.StartsWith(await subtitles.GetAttributeAsync("data-language") ?? "", "en");
                 await subtitles.ClickAsync();
