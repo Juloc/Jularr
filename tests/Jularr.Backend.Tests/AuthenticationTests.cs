@@ -438,7 +438,7 @@ namespace Jularr.Backend.Tests
 
                 if (library)
                 {
-                    foreach (var name in new[] { "Library", "Playback" })
+                    foreach (var name in new[] { "Library", "Playback", "Artwork" })
                     {
                         using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!;
                         using var reader = new StreamReader(schema);
