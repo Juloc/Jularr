@@ -215,7 +215,7 @@ async function start(player: HTMLElement): Promise<void> {
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.
     async function switchAudio(streamIndex: number, selected: HTMLButtonElement): Promise<void> {
-        if (switching) return;
+        if (switching || recoveringDirectPlay) return;
         switching = true;
         try {
             const position = video.currentTime;
@@ -295,7 +295,7 @@ async function start(player: HTMLElement): Promise<void> {
     // existing Remux/Transcode planner. An unavailable FFmpeg/HLS path still fails visibly.
     async function recoverDirectPlay(): Promise<void> {
         hideBuffering();
-        if (signal.aborted || recoveringDirectPlay) return;
+        if (signal.aborted || recoveringDirectPlay || switching) return;
         if (fallbackTried || plan?.playbackModeTypeId !== 1 || !hlsFallbackCapabilities(capabilities())) {
             show("failed");
             return;
@@ -390,7 +390,7 @@ async function start(player: HTMLElement): Promise<void> {
     player.addEventListener("click", event => {
         const target = event.target as Element;
         const audio = target.closest<HTMLButtonElement>("[data-audio]");
-        if (audio && !audio.disabled && !switching) {
+        if (audio && !audio.disabled && !switching && !recoveringDirectPlay) {
             if (audio.getAttribute("aria-pressed") === "true") { panel(null); return; }
             void switchAudio(Number(audio.dataset.audio), audio).catch(() => { if (!signal.aborted) show("failed"); });
             return;
