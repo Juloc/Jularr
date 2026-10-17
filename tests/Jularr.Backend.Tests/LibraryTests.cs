@@ -418,6 +418,29 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Parser_MixedSuffixIds_DoNotContaminateTheTitle()
+        {
+            const string path = "Example Show - tt39551287 - tvdb-24680/Season 1/Example Show - S01E07.mkv";
+            Assert.AreEqual("Example Show", MediaPathParser.Parse(path, MediaType.Series).Title);
+            Assert.AreEqual("Example Movie", MediaPathParser.Parse("Example Movie - tmdb-603 - tt0133093.mkv", MediaType.Movie).Title);
+            Assert.AreEqual("Example Movie", MediaPathParser.Parse("Example Movie - tt0133093 - tmdb-603.mkv", MediaType.Movie).Title);
+        }
+
+        [TestMethod]
+        public void Parser_PlexMatch_MismatchedEpisodeInstructionsAreRejected()
+        {
+            var parsed = MediaPathParser.Parse("Example Show/Season 1/Example Show - S01E07.mkv", MediaType.Series);
+            var wrong = MediaPathParser.ParsePlexMatch("episode: S01E08: Season 1/Example Show - S01E07.mkv");
+            var matched = MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv", wrong, MediaPathParser.ParsePlexMatch(""));
+            Assert.IsNull(matched.WorkUnitTypeId);
+
+            var wrongSeason = MediaPathParser.ParsePlexMatch("Season: 2");
+            var mismatchedSeason = MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv",
+                MediaPathParser.ParsePlexMatch(""), wrongSeason);
+            Assert.IsNull(mismatchedSeason.WorkUnitTypeId);
+        }
+
+        [TestMethod]
         public void Parser_NfoIdentity_RejectsConflictsAndExternalEntities()
         {
             var (ids, conflicted) = MediaPathParser.ParseNfo(

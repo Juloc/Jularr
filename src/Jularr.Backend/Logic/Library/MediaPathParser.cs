@@ -371,11 +371,24 @@ namespace Jularr.Backend.Logic.Library
             if (hasSeasonEpisode || hasRootEpisode)
             {
                 var explicitEpisode = hasSeasonEpisode ? local : root;
+                var resolvedSeason = explicitEpisode.Season ?? season.Season ?? series.Season ?? parsed.ParentUnitNumber ?? 1m;
+                if (parsed.WorkUnitTypeId == WorkUnitType.Episode
+                    && (parsed.UnitNumber != explicitEpisode.Episode || parsed.ParentUnitNumber != resolvedSeason)
+                    || explicitEpisode.Season is { } stated && season.Season is { } folderSeason && stated != folderSeason)
+                {
+                    return new MediaPathInfo(title, year, null, null, null);
+                }
+
                 episode = explicitEpisode.Episode;
-                episodeSeason = explicitEpisode.Season ?? season.Season ?? series.Season ?? parsed.ParentUnitNumber ?? 1m;
+                episodeSeason = resolvedSeason;
             }
             else if (parsed.WorkUnitTypeId == WorkUnitType.Episode)
             {
+                if (season.Season is { } stated && parsed.ParentUnitNumber != stated)
+                {
+                    return new MediaPathInfo(title, year, null, null, null);
+                }
+
                 episodeSeason = season.Season ?? series.Season ?? parsed.ParentUnitNumber;
             }
 
@@ -387,7 +400,12 @@ namespace Jularr.Backend.Logic.Library
         private static string Clean(string name, out int? year)
         {
             // Release tags never belong to the title.
-            var text = TaggedIdSuffix().Replace(ImdbSuffix().Replace(Brackets().Replace(name, " "), " "), " ");
+            var text = Brackets().Replace(name, " ");
+            for (var previous = ""; previous != text;)
+            {
+                previous = text;
+                text = ImdbSuffix().Replace(TaggedIdSuffix().Replace(text, " "), " ");
+            }
             if (!text.Contains(' ')) text = text.Replace('.', ' ').Replace('_', ' ');
 
             year = null;
