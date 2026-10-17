@@ -201,10 +201,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl)
+            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl,
+            string? incompleteRemotePath, string? incompleteLocalPath)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, isEnabled, priority, Categories(categories),
-                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl);
+                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl, incompleteRemotePath, incompleteLocalPath);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -277,7 +278,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
                     selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl)
+                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl,
+                    selected.IncompleteRemotePath, selected.IncompleteLocalPath)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
@@ -344,6 +346,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
                     form.Text(item => item.RemotePath, "acquisition.connection.remotePath");
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
+                    form.Text(item => item.IncompleteRemotePath, "console.incompleteRemotePath");
+                    form.Text(item => item.IncompleteLocalPath, "console.incompleteLocalPath");
                 }
 
                 form.Submit("common.save");
