@@ -7,19 +7,23 @@ import ts from 'typescript';
 const source = readFileSync(new URL('../Modules/Reader/reader.entry.ts', import.meta.url), 'utf8').replace('import "./reader.scss";', '');
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 
-function reader(stored = '{}', blocked = false) {
+function reader(stored = '{}', blocked = false, direction = 'ltr') {
     const events = {}, buttons = {}, saved = [], properties = {}, activeClasses = new Set();
     let bottom = 10000;
-    const block = { dataset: { b: '0' }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
+    let scrollCount = 0;
+    const scrolled = [];
+    const block = { dataset: { b: '0' }, scrollIntoView: () => { scrollCount++; }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
     const content = {
         querySelectorAll: () => [block], querySelector: () => null, addEventListener() {},
-        getBoundingClientRect: () => ({ left: 0, bottom })
+        clientWidth: 600, scrollWidth: 1800, scrollLeft: 0,
+        scrollBy: options => scrolled.push(options.left),
+        getBoundingClientRect: () => ({ left: 0, right: 600, width: 600, bottom })
     };
     const button = { dataset: { setting: 'size', value: 'larger' }, setAttribute() {}, addEventListener: (name, action) => buttons[name] = action };
     const focus = { dataset: { action: 'focus' }, focus() {}, addEventListener: (_, action) => buttons.focus = action };
     const restore = { dataset: { action: 'restore-focus' }, hidden: true, focus() {}, addEventListener: (_, action) => buttons.restore = action };
     const element = {
-        dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100' },
+        dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100', direction },
         classList: {
             contains: key => activeClasses.has(key),
             toggle: (key, enabled) => enabled ? activeClasses.add(key) : activeClasses.delete(key)
@@ -30,12 +34,17 @@ function reader(stored = '{}', blocked = false) {
     };
     runInNewContext(script, {
         exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
-        document: { querySelector: () => element, addEventListener() {} },
-        window: { innerHeight: 900, addEventListener: (name, action) => events[name] = action },
+        document: { querySelector: () => element, addEventListener: (name, action) => events[name] = action },
+        HTMLElement: class HTMLElement {},
+        window: { innerHeight: 900, matchMedia: () => ({ matches: true }), addEventListener: (name, action) => events[name] = action },
         location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
     });
-    return { element, properties, saved, restoreButton: restore, enlarge: () => buttons.click(), focus: () => buttons.focus(), restore: () => buttons.restore(), leave: () => events.pagehide(), finish: () => bottom = 800 };
+    return { element, properties, saved, restoreButton: restore, scrolled,
+        get scrollCount() { return scrollCount; },
+        enlarge: () => buttons.click(), focus: () => buttons.focus(), restore: () => buttons.restore(),
+        resize: () => events.resize(), key: key => events.keydown({ key, target: null, preventDefault() {} }),
+        leave: () => events.pagehide(), finish: () => bottom = 800 };
 }
 
 test('reader requires the visible section end before marking a single-block book complete', () => {
@@ -100,4 +109,20 @@ test('focus reading hides chrome only on explicit action and restores it without
     assert.equal(ui.element.classList.contains('reader--focused'), false);
     assert.equal(ui.restoreButton.hidden, true);
     assert.equal(ui.saved.length, 0);
+});
+
+
+test('typography and viewport changes restore the same canonical block', () => {
+    const ui = reader();
+    ui.enlarge();
+    assert.equal(ui.scrollCount, 1);
+    ui.resize();
+    assert.equal(ui.scrollCount, 2);
+    assert.equal(ui.saved.length, 0);
+});
+
+test('RTL paged navigation advances toward negative horizontal scroll positions', () => {
+    const ui = reader('{"mode":"paged"}', false, 'rtl');
+    ui.key('PageDown');
+    assert.deepEqual(ui.scrolled, [-600]);
 });
