@@ -10,13 +10,14 @@ namespace Jularr.Backend.Data.Logic.Library
     {
         public LibraryRenameFileData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string relativePath, DateTime? missingSince,
             long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber,
-            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}", string mediaTracks = "[]", string customFormats = "{}", string? releaseName = null, string? collection = null)
+            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}", string mediaTracks = "[]", string customFormats = "{}", string? releaseName = null, string? collection = null, string localizedTitles = "{}")
         {
             ProviderIds = providerIds;
             MediaTracks = mediaTracks;
             CustomFormats = customFormats;
             ReleaseName = releaseName;
             Collection = collection;
+            LocalizedTitles = localizedTitles;
             QualityKey = qualityKey;
             ReleaseGroup = releaseGroup;
             Edition = edition;
@@ -98,6 +99,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.OriginalTitle))]
         public string? Collection { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
+        public string LocalizedTitles { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
         public string? QualityKey { get; }

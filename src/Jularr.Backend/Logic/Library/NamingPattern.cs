@@ -126,7 +126,8 @@ namespace Jularr.Backend.Logic.Library
             if (name.Contains("Title", StringComparison.OrdinalIgnoreCase) || name is "Release Group" or "Edition Tags")
             {
                 return int.TryParse(format, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var count)
-                    && count != 0 && Math.Abs((long)count) <= 200;
+                    && count != 0 && Math.Abs((long)count) <= 200
+                    || name.Contains("Title", StringComparison.OrdinalIgnoreCase) && format.Length == 2 && format.All(char.IsLetter);
             }
 
             return false;
@@ -134,7 +135,9 @@ namespace Jularr.Backend.Logic.Library
 
         private static string Value(string name, string format, NamingValues values)
         {
-            var title = name.Contains("Clean", StringComparison.OrdinalIgnoreCase) ? Clean(values.Title) : values.Title;
+            var localized = format.Length == 2 && values.LocalizedTitles?.GetValueOrDefault(format.ToLowerInvariant()) is { } translated
+                ? translated : values.Title;
+            var title = name.Contains("Clean", StringComparison.OrdinalIgnoreCase) ? Clean(localized) : localized;
             var year = values.Year?.ToString(CultureInfo.InvariantCulture) ?? "";
             var finalTitle = name.Contains("The", StringComparison.OrdinalIgnoreCase) ? MoveThe(title) : title;
             var value = name switch
@@ -281,5 +284,6 @@ namespace Jularr.Backend.Logic.Library
         public string? Certification { get; init; }
         public IReadOnlyDictionary<string, string>? MediaInfo { get; init; }
         public IReadOnlyDictionary<string, string>? CustomFormats { get; init; }
+        public IReadOnlyDictionary<string, string>? LocalizedTitles { get; init; }
     }
 }

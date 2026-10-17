@@ -86,6 +86,17 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void NamingPattern_LocalizedTitle_UsesStoredLocaleAndFallsBackToCanonical()
+        {
+            var values = new NamingValues("The Film", 2010, null, null, null, null, null, null, 1)
+            {
+                LocalizedTitles = new Dictionary<string, string> { ["de"] = "Der Film" }
+            };
+            NamingPattern.Validate(MediaType.Movie, "{Movie Title:DE}/{Movie Title:FR} - {ImdbId}", "Pattern");
+            Assert.AreEqual("Der Film/The Film", NamingPattern.Apply("{Movie Title:DE}/{Movie Title:FR} - {ImdbId}", values));
+        }
+
+        [TestMethod]
         public void NamingPattern_UnknownOrIncomplete_IsRejected()
         {
             Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {Studio}", "Pattern")).Code);

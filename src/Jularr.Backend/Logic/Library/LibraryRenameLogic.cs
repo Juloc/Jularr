@@ -58,6 +58,19 @@ namespace Jularr.Backend.Logic.Library
                             AND format."IncludeWhenRenaming"), '{}') AS "CustomFormats",
                     file."ReleaseName",
                     franchise."Name" AS "Collection",
+                    coalesce((
+                        SELECT jsonb_object_agg(translation."Locale", translation."Title")::text
+                        FROM (
+                            SELECT DISTINCT ON (lower(split_part(locale."Locale", '-', 1)))
+                                lower(split_part(locale."Locale", '-', 1)) AS "Locale",
+                                title."Title"
+                            FROM "WorkTitles" AS title
+                            JOIN "UiLocales" AS locale ON locale."Id" = title."UiLocaleId"
+                            WHERE title."WorkId" = work."Id"
+                            ORDER BY lower(split_part(locale."Locale", '-', 1)),
+                                title."IsManual" DESC, title."UpdatedAt" DESC, title."Id" DESC
+                        ) AS translation
+                    ), '{}') AS "LocalizedTitles",
                     (
                         SELECT
                             max(track."Width")
@@ -177,7 +190,8 @@ namespace Jularr.Backend.Logic.Library
                 OriginalReleaseTitle = file.ReleaseName,
                 Collection = file.Collection,
                 CustomFormats = JsonSerializer.Deserialize<Dictionary<string, string>>(file.CustomFormats),
-                MediaInfo = MediaDetails(file.MediaTracks)
+                MediaInfo = MediaDetails(file.MediaTracks),
+                LocalizedTitles = JsonSerializer.Deserialize<Dictionary<string, string>>(file.LocalizedTitles)
             };
 
         private static IReadOnlyDictionary<string, string> MediaDetails(string json)
