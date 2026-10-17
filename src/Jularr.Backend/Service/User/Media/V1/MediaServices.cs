@@ -66,8 +66,34 @@ namespace Jularr.Backend.Service.User.Media.V1
                     (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     visible."Overview",
-                    facts."PosterUrl",
-                    facts."BackdropUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "ArtworkFallbacks" AS fallback
+                        WHERE fallback."WorkId" = work."Id" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 1
+                    ) OR EXISTS (
+                        SELECT 1 FROM "WorkArtworks" AS artwork
+                        JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = artwork."Id" AND rendition."FormatId" = 3
+                        WHERE artwork."WorkId" = work."Id" AND artwork."WorkUnitId" IS NULL AND artwork."SlotId" = 1
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1'
+                    ELSE facts."PosterUrl" END AS "PosterUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "ArtworkFallbacks" AS fallback
+                        WHERE fallback."WorkId" = work."Id" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 2
+                    ) OR EXISTS (
+                        SELECT 1 FROM "WorkArtworks" AS artwork
+                        JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = artwork."Id" AND rendition."FormatId" = 3
+                        WHERE artwork."WorkId" = work."Id" AND artwork."WorkUnitId" IS NULL AND artwork."SlotId" = 2
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/2'
+                    ELSE facts."BackdropUrl" END AS "BackdropUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "ArtworkSettings" AS settings
+                        JOIN "WorkArtworks" AS image ON image."WorkId" = work."Id"
+                        JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = image."Id" AND native."FormatId" = 4
+                        WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                            AND image."WorkUnitId" IS NULL AND image."SlotId" = 2
+                            AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                WHERE webp."WorkArtworkId" = image."Id" AND webp."FormatId" = 3)
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/2.jxl'
+                    END AS "JxlBackdropUrl",
                     (
                         SELECT
                             'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"

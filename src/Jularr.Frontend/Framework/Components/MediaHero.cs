@@ -3,7 +3,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // Featured title with backdrop artwork; the page decides which title is featured.
-    public sealed class MediaHero(string title, string? backdropUrl, string? meta, string? overview, string? actionKey = null, string? actionHref = null, string? detailsHref = null) : IUiComponent
+    public sealed class MediaHero(string title, string? backdropUrl, string? meta, string? overview, string? actionKey = null, string? actionHref = null, string? detailsHref = null, string? jxlBackdropUrl = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -24,7 +24,7 @@ namespace Jularr.Frontend.Framework
             if (actions.Count > 0) body.Add(new Div([.. actions]).Class("media-hero__actions"));
 
             var parts = new List<IUiComponent>();
-            if (backdropUrl is not null) parts.Add(new MediaImage(backdropUrl, "", 1280, 720, priority: true));
+            if (backdropUrl is not null) parts.Add(new MediaImage(backdropUrl, "", 1280, 720, priority: true, jxlUrl: jxlBackdropUrl));
             parts.Add(new Div([.. body]).Class("media-hero__body"));
             new Section([.. parts]).Class(backdropUrl is null ? "media-hero media-hero--placeholder" : "media-hero").WriteTo(writer, encoder, texts);
         }

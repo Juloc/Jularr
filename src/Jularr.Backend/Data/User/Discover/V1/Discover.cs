@@ -260,7 +260,7 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class DiscoverItemV1 : BaseResponse
     {
         public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            MediaStateType mediaStateTypeId, string? plexUrl)
+            MediaStateType mediaStateTypeId, string? plexUrl, string? jxlPosterUrl = null, string? jxlBackdropUrl = null)
         {
             MediaTypeId = mediaTypeId;
             TmdbId = tmdbId;
@@ -271,6 +271,8 @@ namespace Jularr.Backend.Data.User.Discover.V1
             Overview = overview;
             PosterUrl = posterUrl;
             BackdropUrl = backdropUrl;
+            JxlPosterUrl = jxlPosterUrl;
+            JxlBackdropUrl = jxlBackdropUrl;
             MediaStateTypeId = mediaStateTypeId;
         }
 
@@ -297,6 +299,12 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlPosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlBackdropUrl { get; }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
         public MediaStateType MediaStateTypeId { get; }

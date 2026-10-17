@@ -137,6 +137,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                         texts.CanRead() ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
                     HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(assets, item.Title,
                         "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
+                        .Jxl(item.JxlPosterUrl)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]),
                     _ => Recommendations(selected?.Slug)
                 });
@@ -162,6 +163,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
                 MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
                 (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
+                .Jxl(item.JxlPosterUrl)
                 .Bookmark(new MediaBookmark(assets, item.WorkId));
             return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
         })]);
@@ -173,7 +175,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 var (actionKey, actionHref) = Action(featured);
                 page.Content.Add(new MediaHero(featured.Title, featured.BackdropUrl, featured.ReleaseYear?.ToString(CultureInfo.InvariantCulture), featured.Overview,
-                    actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured)));
+                    actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured), featured.JxlBackdropUrl));
             }
         }
 
@@ -338,7 +340,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Card(DiscoverItemV1 item)
         {
             var (actionKey, actionHref) = Action(item);
-            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref).Jxl(item.JxlPosterUrl);
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
         }

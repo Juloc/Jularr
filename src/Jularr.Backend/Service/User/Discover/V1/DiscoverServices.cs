@@ -90,8 +90,44 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         visible."Title" AS "Title",
                         work."ReleaseYear"::integer AS "ReleaseYear",
                         visible."Overview" AS "Overview",
-                        poster."Value" AS "PosterUrl",
-                        backdrop."Value" AS "BackdropUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkFallbacks" AS fallback
+                            WHERE fallback."WorkId" = work."Id" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 1
+                        ) OR EXISTS (
+                            SELECT 1 FROM "WorkArtworks" AS image
+                            JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = image."Id" AND rendition."FormatId" = 3
+                            WHERE image."WorkId" = work."Id" AND image."WorkUnitId" IS NULL AND image."SlotId" = 1
+                        ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1'
+                        ELSE poster."Value" END AS "PosterUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkFallbacks" AS fallback
+                            WHERE fallback."WorkId" = work."Id" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 2
+                        ) OR EXISTS (
+                            SELECT 1 FROM "WorkArtworks" AS image
+                            JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = image."Id" AND rendition."FormatId" = 3
+                            WHERE image."WorkId" = work."Id" AND image."WorkUnitId" IS NULL AND image."SlotId" = 2
+                        ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/2'
+                        ELSE backdrop."Value" END AS "BackdropUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkSettings" AS settings
+                            JOIN "WorkArtworks" AS image ON image."WorkId" = work."Id"
+                            JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = image."Id" AND native."FormatId" = 4
+                            WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                              AND image."WorkUnitId" IS NULL AND image."SlotId" = 1
+                              AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                  WHERE webp."WorkArtworkId" = image."Id" AND webp."FormatId" = 3)
+                        ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1.jxl'
+                        END AS "JxlPosterUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkSettings" AS settings
+                            JOIN "WorkArtworks" AS image ON image."WorkId" = work."Id"
+                            JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = image."Id" AND native."FormatId" = 4
+                            WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                              AND image."WorkUnitId" IS NULL AND image."SlotId" = 2
+                              AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                  WHERE webp."WorkArtworkId" = image."Id" AND webp."FormatId" = 3)
+                        ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/2.jxl'
+                        END AS "JxlBackdropUrl",
                         state."MediaStateTypeId",
                         (
                             SELECT
@@ -267,7 +303,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         identity."WorkId"
                     FROM
                         "WorkExternalIdentities" AS identity
-                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId AND NOT visible."IsHidden"
                     WHERE
                         identity."WorkId" = @WorkId
                         AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv')
@@ -519,7 +555,45 @@ namespace Jularr.Backend.Service.User.Discover.V1
                             WHERE
                                 plex."WorkId" = identity."WorkId"
                                 AND plex."Namespace" = 'plex'
-                        ) AS "PlexUrl"
+                        ) AS "PlexUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkFallbacks" AS fallback
+                            WHERE fallback."WorkId" = identity."WorkId" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 1
+                        ) OR EXISTS (
+                            SELECT 1 FROM "WorkArtworks" AS image
+                            JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = image."Id" AND rendition."FormatId" = 3
+                            WHERE image."WorkId" = identity."WorkId" AND image."WorkUnitId" IS NULL AND image."SlotId" = 1
+                        ) THEN '/api/v1/works/' || identity."WorkId"::text || '/artwork/1'
+                        ELSE NULL END AS "PosterUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkFallbacks" AS fallback
+                            WHERE fallback."WorkId" = identity."WorkId" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 2
+                        ) OR EXISTS (
+                            SELECT 1 FROM "WorkArtworks" AS image
+                            JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = image."Id" AND rendition."FormatId" = 3
+                            WHERE image."WorkId" = identity."WorkId" AND image."WorkUnitId" IS NULL AND image."SlotId" = 2
+                        ) THEN '/api/v1/works/' || identity."WorkId"::text || '/artwork/2'
+                        ELSE NULL END AS "BackdropUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkSettings" AS settings
+                            JOIN "WorkArtworks" AS image ON image."WorkId" = identity."WorkId"
+                            JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = image."Id" AND native."FormatId" = 4
+                            WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                              AND image."WorkUnitId" IS NULL AND image."SlotId" = 1
+                              AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                  WHERE webp."WorkArtworkId" = image."Id" AND webp."FormatId" = 3)
+                        ) THEN '/api/v1/works/' || identity."WorkId"::text || '/artwork/1.jxl'
+                        END AS "JxlPosterUrl",
+                        CASE WHEN EXISTS (
+                            SELECT 1 FROM "ArtworkSettings" AS settings
+                            JOIN "WorkArtworks" AS image ON image."WorkId" = identity."WorkId"
+                            JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = image."Id" AND native."FormatId" = 4
+                            WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                              AND image."WorkUnitId" IS NULL AND image."SlotId" = 2
+                              AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                  WHERE webp."WorkArtworkId" = image."Id" AND webp."FormatId" = 3)
+                        ) THEN '/api/v1/works/' || identity."WorkId"::text || '/artwork/2.jxl'
+                        END AS "JxlBackdropUrl"
                     FROM
                         "WorkExternalIdentities" AS identity
                         JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId
@@ -537,7 +611,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             var known = overlay.GetValueOrDefault(result.Id);
             return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, TextLimit.Cut(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000),
-                TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
+                known?.PosterUrl ?? TmdbClient.PosterUrl(result.PosterPath),
+                known?.BackdropUrl ?? TmdbClient.BackdropUrl(result.BackdropPath),
+                known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl, known?.JxlPosterUrl, known?.JxlBackdropUrl);
         }
     }
 }

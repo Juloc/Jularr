@@ -134,7 +134,7 @@ namespace Jularr.Backend.Data.User.Media.V1
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
-            int? runtimeMinutes, string? genres, string? trailerKey, string? studio, decimal? franchisePosition = null)
+            int? runtimeMinutes, string? genres, string? trailerKey, string? studio, decimal? franchisePosition = null, string? jxlBackdropUrl = null)
         {
             FranchisePosition = franchisePosition;
             RuntimeMinutes = runtimeMinutes;
@@ -156,6 +156,7 @@ namespace Jularr.Backend.Data.User.Media.V1
             Overview = overview;
             PosterUrl = posterUrl;
             BackdropUrl = backdropUrl;
+            JxlBackdropUrl = jxlBackdropUrl;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -185,6 +186,9 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlBackdropUrl { get; }
 
         // Opens the title on the connected Plex server.
         [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
