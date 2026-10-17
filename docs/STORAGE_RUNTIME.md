@@ -171,3 +171,28 @@ the owner decision.
 
 References: [Docker volume options](https://docs.docker.com/reference/compose-file/volumes/#driver_opts),
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
+
+
+## SABnzbd completed category folders (first release)
+
+SABnzbd controls its own temporary and completed download directories, including
+category subfolders such as `complete/movies` and `complete/tv`. Jularr does
+**not** change SABnzbd's physical paths. Add the same completed directory as
+a read-accessible container mount, then configure each SAB connection's
+`RemotePath` (SAB history path prefix) and `LocalPath` (Jularr's container
+path prefix). All category and release subfolders stay underneath the mapping.
+The original SAB completed files are retained after successful library import.
+
+To send different media types to distinct SABnzbd categories, configure one
+Jularr SABnzbd **download connection per category** using the same server
+address and API key, with the appropriate `Media types` selection:
+- Movies: category `movies`, media type Movie.
+- Series: category `tv`, media type Series.
+- Books: category `books`, media type Book.
+
+Only explicitly matching connections are preferred; a connection with no
+selected media types serves as fallback. No suitable download client means
+no grab. A generic high-priority SAB connection must not override an explicit
+category for a selected media type. The configured category name must exist
+in SABnzbd; further live category/path validation and storage limits are
+separate pre-release requirements (#1209).
