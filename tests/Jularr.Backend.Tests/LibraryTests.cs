@@ -434,6 +434,29 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_WithoutProviderId_MatchesUniqueLocalizedTitle()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Deutscher Titel (2020)", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Deutscher Titel - S01E07.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Original Title', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual")
+                SELECT "Id", 'Deutscher Titel', TRUE FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task Scan_UnknownSecondProviderId_DoesNotGuessFromTheFirst()
         {
             using var storage = new TemporaryDirectory();

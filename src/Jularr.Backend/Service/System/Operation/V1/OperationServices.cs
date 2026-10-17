@@ -461,7 +461,18 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                         )
                                         OR (
                                             jsonb_array_length(@ProviderIds::jsonb) = 0
-                                            AND lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                                            AND (
+                                                lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                                                OR EXISTS (
+                                                    SELECT
+                                                        1
+                                                    FROM
+                                                        "WorkTitles" AS title
+                                                    WHERE
+                                                        title."WorkId" = work."Id"
+                                                        AND lower(title."Title") = lower(@CanonicalTitle)
+                                                )
+                                            )
                                             AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
                                         )
                                     )
