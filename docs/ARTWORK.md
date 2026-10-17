@@ -10,6 +10,16 @@
 - No overwrite of unknown/custom sidecars, no write to read-only storage, no NAS wake for ordinary page reads. Existing provider `WorkMetadataFacts` remain readable until the canonical resolver is connected and all reads are migrated.
 - `ArtworkFileNames` recognizes conservative Kodi/Plex-style basename conventions, including `season01-poster.jpg`. Other patterns need explicit identity checks before import.
 
+
+## P3 – first cache/delivery slice (this stacked branch)
+
+- The canonical scan now records source size and modification time for NAS image sidecars. When an original changes, the index records a changed `UpdatedAt` rather than re-encoding every cover on every pass.
+- A bounded, single-encoder `ArtworkCache` generates a 384px WebP derivative and an optional tiny, at-most-64KiB WebP fallback. Files are written under persistent `DataPath/cache/artwork` using opaque content-derived keys and a create-only rename. The database stores the matching `ArtworkRenditions` metadata and fallback, not full-resolution images. Encoding never overwrites the NAS.
+- Cache population runs in the system library scan, and immediately after a successful explicit/automatic NAS export. It has a per-scan cap of 100 candidates, a 12MiB source cap, a 32-megapixel decoded-image cap, and a configured byte budget. A corrupt or unsupported sidecar cannot delete last-known-good previews.
+- `GET /api/v1/works/{workId}/artwork/{slotId}` authorizes a profile's visible Work and serves an already-cached WebP rendition (or database fallback) without a NAS request. Library and Continue prefer the local endpoint once cached. The existing provider poster remains in the response until a local image is actually available.
+- The only encoder in this slice is **SkiaSharp WebP**. If the preferred cache format is JPEG XL, WebP is still generated as its necessary browser-compatibility fallback; **a native JXL cache file is not generated yet**. Progressive JPEG XL, JXL NAS export, dynamic format negotiation, cache garbage collection and ETags are separate follow-ups.
+- Existing databases are not migrated. The `Artwork.sql` schema remains a fresh-install baseline only.
+
 ## Remaining slices
 
 1. **P2 discovery (this branch):** after media inventory/identification, a bounded second filesystem walk recognizes conventional image names and matches each folder to exactly one existing Work via its assigned StoredFiles. Season-specific posters resolve through a canonical season WorkUnit. Accepted artwork is upserted by Work/WorkUnit/slot/source and reconciled only after a complete image scan. No image is stored as a playable StoredFile and no local file is modified. Ambiguous folders, invalid extensions, oversized paths and images over 20 MiB are not indexed. Images may need a rescan after manual media identification.

@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                 var slash = file.RelativePath.LastIndexOf('/');
                 candidates.Add(new ArtworkScanCandidate(file.RelativePath, slash < 0 ? "" : file.RelativePath[..slash],
-                    (short)sidecar.Value.Slot, sidecar.Value.SeasonNumber));
+                    (short)sidecar.Value.Slot, sidecar.Value.SeasonNumber, file.SizeBytes, file.ModifiedAt));
                 if (candidates.Count >= BatchSize)
                 {
                     await SaveAsync(context, libraryRootId, seenAt, candidates, ct);

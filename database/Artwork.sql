@@ -34,6 +34,8 @@ CREATE TABLE "WorkArtworks" (
     "ProviderId" bigint NULL REFERENCES "Providers" ("Id") ON DELETE SET NULL,
     "IsPinned" boolean NOT NULL DEFAULT FALSE,
     "SourceHash" varchar(64) NULL CHECK ("SourceHash" ~ '^[0-9a-f]{64}$'),
+    "SourceSizeBytes" bigint NULL CHECK ("SourceSizeBytes" > 0),
+    "SourceModifiedAt" timestamptz NULL,
     "Width" integer NULL CHECK ("Width" BETWEEN 1 AND 16000),
     "Height" integer NULL CHECK ("Height" BETWEEN 1 AND 16000),
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),

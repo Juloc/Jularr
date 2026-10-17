@@ -173,3 +173,7 @@ the owner decision.
 
 References: [Docker volume options](https://docs.docker.com/reference/compose-file/volumes/#driver_opts),
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
+
+### Local Artwork Cache
+
+The artwork scan stores relative NAS artwork source paths and size/mtime fingerprints; a single bounded SkiaSharp encoder creates WebP variants under `DataPath/cache/artwork`, independent of the library mount. Cache reads do not open or wake NAS storage. Small WebP fallbacks in PostgreSQL survive a deleted cache file. Files are create-only and content-keyed; budget pressure stops new writes without modifying the NAS. JXL cache encoding is not implemented yet; WebP remains the browser fallback in JXL-preferred mode. See [Artwork](ARTWORK.md).

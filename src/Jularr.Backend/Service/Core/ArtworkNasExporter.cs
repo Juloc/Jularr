@@ -13,10 +13,11 @@ using Jularr.Integrations.Logic.Storage;
 namespace Jularr.Backend.Service.Core
 {
     // Shared, bounded NAS work for both the explicit Owner action and System's operation queue.
-    internal sealed class ArtworkNasExporter(StorageAccess storage, ArtworkImageDownloader images)
+    internal sealed class ArtworkNasExporter(StorageAccess storage, ArtworkImageDownloader images, ArtworkCache cache)
     {
         private readonly StorageAccess _storage = storage;
         private readonly ArtworkImageDownloader _images = images;
+        private readonly ArtworkCache _cache = cache;
 
         public async Task<ArtworkExportResultV1> ExportAsync(LogicContext context, long workId, CancellationToken ct)
         {
@@ -90,13 +91,14 @@ namespace Jularr.Backend.Service.Core
                     var name = ArtworkFileNames.ExportName(slot, jxl: false);
                     var relativePath = StoragePath.Combine(folder, name);
                     using var image = new MemoryStream(jpeg, writable: false);
-                    if (await LibraryFileWriter.WriteAsync(files, location.RootRelativePath, relativePath, image, ct) is null)
+                    var written = await LibraryFileWriter.WriteAsync(files, location.RootRelativePath, relativePath, image, ct);
+                    if (written is null)
                     {
                         skipped++;
                         continue;
                     }
 
-                    var candidate = new ArtworkScanCandidate(relativePath, folder, (short)slot, null);
+                    var candidate = new ArtworkScanCandidate(relativePath, folder, (short)slot, null, written.Value.Length, written.Value.ModifiedAt);
                     var batch = new ArtworkScanBatchData(location.LibraryRootId, StoredFileLogic.StoredTime(DateTime.UtcNow),
                         JsonSerializer.Serialize(new[] { candidate }));
                     await context.ExecuteBatchAsync(async (ctx, batchCt) =>
@@ -105,6 +107,12 @@ namespace Jularr.Backend.Service.Core
                         return true;
                     }, ct);
                     saved++;
+                }
+
+                // The next Library page can use the local rendition immediately.
+                if (saved > 0)
+                {
+                    await _cache.WarmAsync(context, files, location.RootRelativePath, location.LibraryRootId, ct);
                 }
 
                 return new ArtworkExportResultV1(saved, skipped);
