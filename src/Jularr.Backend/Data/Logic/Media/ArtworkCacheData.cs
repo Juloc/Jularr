@@ -62,7 +62,7 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class ArtworkRenditionSaveData : BaseData
     {
         public ArtworkRenditionSaveData(long artworkId, long workId, ArtworkSlot slotId, int width, int height, string cacheKey, string sourceHash, string contentHash, long sizeBytes,
-            ArtworkQuality qualityId, byte[]? fallbackBytes)
+            ArtworkQuality qualityId, byte[]? fallbackBytes, string? fallbackHash)
         {
             ArtworkId = artworkId;
             WorkId = workId;
@@ -75,6 +75,7 @@ namespace Jularr.Backend.Data.Logic.Media
             SizeBytes = sizeBytes;
             QualityId = qualityId;
             FallbackBytes = fallbackBytes;
+            FallbackHash = fallbackHash;
         }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.ArtworkId))]
@@ -109,6 +110,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.FallbackBytes))]
         public byte[]? FallbackBytes { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.ContentHash), false)]
+        public string? FallbackHash { get; }
     }
 
     internal sealed class ArtworkPreviewData : BaseData

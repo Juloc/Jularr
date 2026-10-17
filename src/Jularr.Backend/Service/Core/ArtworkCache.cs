@@ -81,7 +81,8 @@ namespace Jularr.Backend.Service.Core
                         }
 
                         var result = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId, candidate.SlotId, value.Width, value.Height,
-                            key, sourceHash, hash, value.WebpBytes.Length, settings.CacheQualityId, value.FallbackBytes);
+                            key, sourceHash, hash, value.WebpBytes.Length, settings.CacheQualityId, value.FallbackBytes,
+                            value.FallbackBytes is { } fallbackBytes ? Convert.ToHexStringLower(SHA256.HashData(fallbackBytes)) : null);
                         await context.ExecuteBatchAsync(async (ctx, token) =>
                         {
                             await ctx.SaveArtworkRenditionAsync(result, token);

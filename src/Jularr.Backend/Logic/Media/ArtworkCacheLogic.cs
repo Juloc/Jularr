@@ -92,7 +92,7 @@ namespace Jularr.Backend.Logic.Media
                 INSERT INTO
                     "ArtworkFallbacks" ("WorkId", "SlotId", "WebpBytes", "ContentHash")
                 SELECT
-                    @WorkId, @SlotId, @FallbackBytes, @ContentHash
+                    @WorkId, @SlotId, @FallbackBytes, @FallbackHash
                 WHERE
                     @FallbackBytes::bytea IS NOT NULL
                 ON CONFLICT ("WorkId", "WorkUnitId", "SlotId", "Locale") DO UPDATE
