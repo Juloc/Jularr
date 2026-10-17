@@ -8,13 +8,15 @@ const source = readFileSync(new URL('../Modules/Reader/reader.entry.ts', import.
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 
 function reader(stored = '{}', blocked = false, direction = 'ltr') {
-    const events = {}, buttons = {}, saved = [], properties = {}, activeClasses = new Set();
+    const events = {}, contentEvents = {}, buttons = {}, saved = [], properties = {}, activeClasses = new Set();
+    class ElementClass { closest() { return null; } }
     let bottom = 10000;
     let scrollCount = 0;
     const scrolled = [];
     const block = { dataset: { b: '0' }, scrollIntoView: () => { scrollCount++; }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
     const content = {
-        querySelectorAll: () => [block], querySelector: () => null, addEventListener() {},
+        querySelectorAll: () => [block], querySelector: () => null,
+        addEventListener: (name, action) => contentEvents[name] = action,
         clientWidth: 600, scrollWidth: 1800, scrollLeft: 0,
         scrollTo: options => scrolled.push(options.left),
         getBoundingClientRect: () => ({ left: 0, right: 600, width: 600, bottom })
@@ -35,9 +37,10 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
     runInNewContext(script, {
         exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
         document: { querySelector: () => element, addEventListener: (name, action) => events[name] = action },
-        HTMLElement: class HTMLElement {},
+        HTMLElement: class HTMLElement {}, Element: ElementClass,
         getComputedStyle: () => ({ columnGap: '32px' }),
-        window: { innerHeight: 900, matchMedia: () => ({ matches: true }), addEventListener: (name, action) => events[name] = action },
+        window: { innerHeight: 900, matchMedia: () => ({ matches: true }), getSelection: () => ({ toString: () => '' }),
+            addEventListener: (name, action) => events[name] = action },
         location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
     });
@@ -45,6 +48,12 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
         get scrollCount() { return scrollCount; },
         enlarge: () => buttons.click(), focus: () => buttons.focus(), restore: () => buttons.restore(),
         resize: () => events.resize(), key: key => events.keydown({ key, target: null, preventDefault() {} }),
+        swipe: (from, to) => {
+            const target = new ElementClass();
+            contentEvents.pointerdown({ clientX: from, clientY: 0, target });
+            contentEvents.pointerup({ clientX: to, clientY: 0, target, preventDefault() {} });
+            contentEvents.click({ clientX: to, clientY: 0, target, preventDefault() {} });
+        },
         leave: () => events.pagehide(), finish: () => bottom = 800 };
 }
 
@@ -127,4 +136,11 @@ test('RTL paged navigation advances toward negative horizontal scroll positions'
     const ui = reader('{"mode":"paged"}', false, 'rtl');
     ui.key('PageDown');
     assert.deepEqual(ui.scrolled, [-632]);
+});
+
+
+test('horizontal touch swipe turns one spread without triggering a duplicate click', () => {
+    const ui = reader('{"mode":"paged"}');
+    ui.swipe(500, 400);
+    assert.deepEqual(ui.scrolled, [632]);
 });
