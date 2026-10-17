@@ -24,6 +24,8 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
     const button = { dataset: { setting: 'size', value: 'larger' }, setAttribute() {}, addEventListener: (name, action) => buttons[name] = action };
     const focus = { dataset: { action: 'focus' }, focus() {}, addEventListener: (_, action) => buttons.focus = action };
     const restore = { dataset: { action: 'restore-focus' }, hidden: true, focus() {}, addEventListener: (_, action) => buttons.restore = action };
+    const pagePrevious = { dataset: { pageStep: '-1' }, hidden: true, disabled: false, addEventListener: (_, action) => buttons.pagePrevious = action };
+    const pageNext = { dataset: { pageStep: '1' }, hidden: true, disabled: false, addEventListener: (_, action) => buttons.pageNext = action };
     const element = {
         dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100', direction },
         classList: {
@@ -32,7 +34,8 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
         },
         style: { setProperty: (key, value) => { properties[key] = value; if (key === '--reader-size') element.size = value; } },
         querySelector: selector => selector === '[data-role=content]' ? content : selector === '[data-action=restore-focus]' ? restore : selector === '[data-action=focus]' ? focus : null,
-        querySelectorAll: selector => selector === '[data-setting]' ? [button] : selector === '[data-action]' ? [focus, restore] : []
+        querySelectorAll: selector => selector === '[data-setting]' ? [button] : selector === '[data-action]' ? [focus, restore]
+            : selector === '[data-page-step]' ? [pagePrevious, pageNext] : []
     };
     runInNewContext(script, {
         exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
@@ -44,10 +47,13 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
         location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
     });
-    return { element, properties, saved, restoreButton: restore, scrolled,
+    return { element, properties, saved, restoreButton: restore, pagePrevious, pageNext, scrolled,
         get scrollCount() { return scrollCount; },
         enlarge: () => buttons.click(), focus: () => buttons.focus(), restore: () => buttons.restore(),
         resize: () => events.resize(), key: key => events.keydown({ key, target: null, preventDefault() {} }),
+        nextPage: () => buttons.pageNext({ preventDefault() {} }),
+        previousPage: () => buttons.pagePrevious({ preventDefault() {} }),
+        setOffset: value => { content.scrollLeft = value; },
         swipe: (from, to) => {
             const target = new ElementClass();
             contentEvents.pointerdown({ clientX: from, clientY: 0, target });
@@ -143,4 +149,21 @@ test('horizontal touch swipe turns one spread without triggering a duplicate cli
     const ui = reader('{"mode":"paged"}');
     ui.swipe(500, 400);
     assert.deepEqual(ui.scrolled, [632]);
+});
+
+
+test('paged transport remains available without gestures and is hidden for scroll reading', () => {
+    const normal = reader();
+    assert.equal(normal.pagePrevious.hidden, true);
+    assert.equal(normal.pageNext.hidden, true);
+    const paged = reader('{"mode":"paged"}');
+    assert.equal(paged.pagePrevious.hidden, false);
+    assert.equal(paged.pageNext.hidden, false);
+    assert.equal(paged.pagePrevious.disabled, true);
+    assert.equal(paged.pageNext.disabled, false);
+    paged.nextPage();
+    assert.deepEqual(paged.scrolled, [632]);
+    paged.setOffset(1200);
+    paged.enlarge();
+    assert.equal(paged.pageNext.disabled, true);
 });
