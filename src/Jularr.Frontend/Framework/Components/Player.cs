@@ -12,8 +12,7 @@ namespace Jularr.Frontend.Framework
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
-        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
-        private static readonly string[] Speeds = ["0.75", "1", "1.25", "1.5", "2"];
+        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "play_gesture_required", "failed"];
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -39,8 +38,13 @@ namespace Jularr.Frontend.Framework
                     new Div(
                         new Div(
                             new Span(new ValueText("0:00")).Attribute("data-role", "time"),
-                            new Input().Class("player__timeline").Attribute("type", "range").Attribute("min", "0").Attribute("max", "0").Attribute("step", "1")
-                                .Attribute("value", "0").Attribute("data-role", "timeline").Attribute("aria-label", texts["player.timeline"]),
+                            new Div(
+                                new Div(new Div().Class("player__buffered").Attribute("data-role", "buffered"),
+                                    new Div().Class("player__played").Attribute("data-role", "played")).Class("player__timeline-track")
+                                    .Attribute("aria-hidden", "true"),
+                                new Input().Class("player__timeline").Attribute("type", "range").Attribute("min", "0").Attribute("max", "0").Attribute("step", "1")
+                                    .Attribute("value", "0").Attribute("data-role", "timeline").Attribute("aria-label", texts["player.timeline"])
+                            ).Class("player__timeline-wrap"),
                             new Div().Class("player__preview").Attribute("data-role", "preview").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                             new Span(new ValueText("0:00")).Attribute("data-role", "duration")
                         ).Class("player__progress"),
@@ -71,19 +75,13 @@ namespace Jularr.Frontend.Framework
                             ]).Class("player__options")
                         ).Class("player__actions")
                     ).Class("player__bottom"),
-                    new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
-                        .Attribute("data-speed", speed).Attribute("role", "menuitemradio").Attribute("aria-checked", speed == "1" ? "true" : "false"))])
-                        .Class("player__panel").Attribute("data-panel", "speed").Attribute("role", "menu").Attribute("aria-label", texts["player.speed"]).Attribute("hidden", "hidden"),
-                    TrackPanel("audio", "player.audio", Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))),
-                    TrackPanel("subtitles", "player.subtitles", [
-                        Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),
-                        .. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))
-                    ]),
-                    new Div(
-                        new P(new Text("player.delivery")),
-                        new P().Attribute("data-role", "mode")
-                    ).Class("player__panel").Attribute("data-panel", "more").Attribute("hidden", "hidden")
+                    new UiPlayerSettings(source, assets)
                 ).Class("player__chrome"),
+                new Div(
+                    new Span().Class("player__buffering-ring").Attribute("aria-hidden", "true"),
+                    new Span(new Text("player.buffering"))
+                ).Class("player__buffering").Attribute("data-role", "buffering").Attribute("role", "status")
+                    .Attribute("aria-live", "polite").Attribute("hidden", "hidden"),
                 new P().Class("player__status").Attribute("role", "status").Attribute("data-role", "status").Attribute("hidden", "hidden"),
                 new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
                 new Div([
@@ -104,22 +102,12 @@ namespace Jularr.Frontend.Framework
             HtmlElement Action(string action, string labelKey, string icon) => new Button(Icon(icon)).Class("player__button")
                 .Attribute("data-action", action).Attribute("aria-label", texts[labelKey]);
 
-            // Direct actions open their own part of the shared settings panels.
+            // Direct actions select the corresponding section of the shared settings panel.
             IEnumerable<IUiComponent> Choice(string action, string labelKey, IUiComponent icon, bool visible) => visible
                 ? [new Button(icon).Class("player__button").Attribute("data-action", action).Attribute("aria-label", texts[labelKey]).Attribute("aria-expanded", "false")]
                 : [];
 
-            HtmlElement TrackPanel(string name, string labelKey, IEnumerable<IUiComponent> options) => new Div([.. options]).Class("player__panel")
-                .Attribute("data-panel", name).Attribute("role", "menu").Attribute("aria-label", texts[labelKey]).Attribute("hidden", "hidden");
 
-            HtmlElement Option(string kind, string key, IUiComponent label, bool isChecked, bool isSupported, string? language)
-            {
-                var option = new Button(label).Class("player__option").Attribute("data-" + kind, key).Attribute("role", "menuitemradio")
-                    .Attribute("aria-checked", isChecked ? "true" : "false");
-                if (language is not null) option.Attribute("data-language", language);
-                if (!isSupported) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
-                return option;
-            }
         }
 
         private IReadOnlyList<PlayerTrack> Audio => source.AudioTracks ?? [];

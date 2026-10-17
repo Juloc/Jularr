@@ -1,6 +1,7 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
 import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
+import { applyFit, normalizedSpeed, selectSettingsPane, shiftTextCues, hlsFallbackCapabilities } from "./PlayerSettings";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -33,12 +34,21 @@ async function start(player: HTMLElement): Promise<void> {
     const volume = player.querySelector<HTMLInputElement>("[data-role=volume]")!;
     const toggle = player.querySelector<HTMLButtonElement>("[data-action=toggle]")!;
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
+    const subtitleDelayControl = player.querySelector<HTMLInputElement>("[data-role=subtitle-delay]");
+    const subtitleReset = player.querySelector<HTMLButtonElement>("[data-action=subtitle-delay-reset]");
     const antiforgery = player.dataset.antiforgery ?? "";
+    const lifetime = new AbortController();
+    const signal = lifetime.signal;
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
+    let metadataListener: AbortController | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
+    let recoveringDirectPlay = false;
+    let fallbackTried = false;
     let idle = 0;
+    let subtitleDelay = 0;
+    const cueTimes = new WeakMap<TextTrackCue, { start: number; end: number }>();
 
     plan = await requestPlan(null);
     if (!plan) return;
@@ -60,17 +70,17 @@ async function start(player: HTMLElement): Promise<void> {
         }, ended);
         if (ended) plan = null;
     };
-    setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
+    const progressInterval = window.setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
     // The pause before an end is no position worth saving.
-    video.addEventListener("pause", () => { if (!video.ended) report(false); });
+    video.addEventListener("pause", () => { if (!video.ended) report(false); }, { signal });
     video.addEventListener("ended", () => {
         report(true);
         // An album or season continues with the next unit in the full player; the mini player stops where it is.
         const next = player.querySelector<HTMLElement>("[data-action=next][data-href]")?.dataset.href;
         if (next && !player.classList.contains("player--mini")) location.assign(next);
-    });
-    document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
-    window.addEventListener("pagehide", event => report(!event.persisted, false));
+    }, { signal });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); }, { signal });
+    window.addEventListener("pagehide", event => report(!event.persisted, false), { signal });
 
     function go(direction: "previous" | "next") {
         const href = player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`)?.dataset.href;
@@ -84,7 +94,7 @@ async function start(player: HTMLElement): Promise<void> {
         const url = player.dataset.trickplayUrl;
         const preview = player.querySelector<HTMLElement>("[data-role=preview]");
         if (!url || !preview) return;
-        const response = await fetch(url, { credentials: "same-origin" }).catch(() => null);
+        const response = await fetch(url, { credentials: "same-origin", signal }).catch(() => null);
         if (!response?.ok) return;
         const layout = await (response.json() as Promise<{ intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number }>).catch(() => null);
         if (!layout || layout.frames < 1) return;
@@ -104,22 +114,27 @@ async function start(player: HTMLElement): Promise<void> {
         timeline.addEventListener("pointermove", event => {
             const bounds = timeline.getBoundingClientRect();
             show(Number(timeline.max) * Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)), event.clientX);
-        });
+        }, { signal });
         timeline.addEventListener("input", () => {
             const bounds = timeline.getBoundingClientRect();
             show(Number(timeline.value), bounds.left + bounds.width * (Number(timeline.value) / Math.max(1, Number(timeline.max))));
-        });
-        for (const name of ["pointerleave", "change"]) timeline.addEventListener(name, () => { preview.hidden = true; });
+        }, { signal });
+        for (const name of ["pointerleave", "change"]) timeline.addEventListener(name, () => { preview.hidden = true; }, { signal });
     }
 
     // Planning needs the real browser capabilities; another audio track asks for a new plan.
-    async function requestPlan(audioStreamIndex: number | null): Promise<PlaybackPlan | null> {
+    async function requestPlan(audioStreamIndex: number | null, forceHls = false): Promise<PlaybackPlan | null> {
         for (let attempt = 0; ; attempt++) {
+            if (signal.aborted) return null;
+            const device = capabilities();
+            const offered = forceHls ? hlsFallbackCapabilities(device) : device;
+            if (!offered) return null;
             const response = await fetch(player.dataset.startUrl!, {
                 method: "POST",
+                signal,
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-                body: JSON.stringify({ ...capabilities(), audioStreamIndex })
+                body: JSON.stringify({ ...offered, audioStreamIndex })
             });
             if (response.ok) {
                 status.hidden = true;
@@ -134,7 +149,11 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     // Conversions use HLS: native where available, otherwise hls.js on demand.
-    async function attach(next: PlaybackPlan, position: number): Promise<void> {
+    async function attach(next: PlaybackPlan, position: number, shouldPlay = true): Promise<void> {
+        if (signal.aborted) return;
+        const rate = video.playbackRate;
+        metadataListener?.abort();
+        metadataListener = new AbortController();
         hls?.destroy();
         hls = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
@@ -144,6 +163,7 @@ async function start(player: HTMLElement): Promise<void> {
         });
         if (next.playbackModeTypeId !== 1 && video.canPlayType("application/vnd.apple.mpegurl") === "") {
             const { default: Hls } = await import("hls.js/light");
+            if (signal.aborted) return;
             // The server holds a segment until FFmpeg has it (up to two minutes) and answers a passing stall with 503: wait that long and try
             // again instead of giving up, and keep a minute ahead so a slow moment of the storage does not stop the picture.
             const instance = new Hls({
@@ -158,7 +178,21 @@ async function start(player: HTMLElement): Promise<void> {
                     }
                 }
             });
-            instance.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
+            let networkRecoveries = 0;
+            let mediaRecoveries = 0;
+            instance.on(Hls.Events.ERROR, (_, data) => {
+                if (!data.fatal || signal.aborted || hls !== instance) return;
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRecoveries++ < 2) {
+                    instance.startLoad();
+                    return;
+                }
+                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++ < 1) {
+                    instance.recoverMediaError();
+                    return;
+                }
+                hideBuffering();
+                show("failed");
+            });
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
@@ -169,73 +203,180 @@ async function start(player: HTMLElement): Promise<void> {
         }
 
         // A new source resets the speed; the chosen one stays.
-        const rate = video.playbackRate;
         video.addEventListener("loadedmetadata", () => {
             timeline.max = String(Math.floor(video.duration));
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
-            void video.play().catch(() => undefined);
-        }, { once: true });
+            hideBuffering();
+            if (shouldPlay) play();
+        }, { once: true, signal: metadataListener.signal });
     }
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.
-    async function switchAudio(streamIndex: number): Promise<void> {
-        if (switching) return;
+    async function switchAudio(streamIndex: number, selected: HTMLButtonElement): Promise<void> {
+        if (switching || recoveringDirectPlay) return;
         switching = true;
         try {
             const position = video.currentTime;
+            const shouldPlay = !video.paused;
             const next = await requestPlan(streamIndex);
-            if (!next) return;
+            if (!next || signal.aborted) return;
             report(true, false);
             plan = next;
-            await attach(next, position);
+            await attach(next, position, shouldPlay);
+            choose("data-audio", selected);
         } finally {
             switching = false;
         }
     }
 
+    // WebVTT delay applies to the actual cues, not merely to a displayed setting.
+    function setSubtitleDelay(value: number): void {
+        if (!Number.isFinite(value)) return;
+        subtitleDelay = Math.round(Math.max(-10, Math.min(10, value)) * 20) / 20;
+        if (subtitleDelayControl) subtitleDelayControl.value = String(subtitleDelay);
+        const label = player.querySelector<HTMLElement>("[data-role=subtitle-delay-label]");
+        if (label) label.textContent = subtitleDelay === 0 ? "0 s" : `${subtitleDelay > 0 ? "+" : ""}${Number(subtitleDelay.toFixed(2))} s`;
+        if (subtitleReset) subtitleReset.disabled = subtitleDelay === 0 || !video.querySelector("track");
+        shiftTextCues(video.querySelector<HTMLTrackElement>("track")?.track ?? null, subtitleDelay, cueTimes);
+    }
+
+    subtitleDelayControl?.addEventListener("input", () => setSubtitleDelay(Number(subtitleDelayControl.value)), { signal });
+
     // Subtitles are WebVTT tracks on the same video; Off removes them.
     function showSubtitle(key: string, language: string | undefined): void {
         video.querySelectorAll("track").forEach(track => track.remove());
+        if (subtitleDelayControl) subtitleDelayControl.disabled = !key;
+        if (subtitleReset) subtitleReset.disabled = !key || subtitleDelay === 0;
         if (!key) return;
         const track = document.createElement("track");
         track.kind = "subtitles";
         track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
         if (language) track.srclang = language;
         track.default = true;
-        track.addEventListener("load", () => { track.track.mode = "showing"; });
+        track.addEventListener("load", () => {
+            track.track.mode = "showing";
+            shiftTextCues(track.track, subtitleDelay, cueTimes);
+        }, { signal });
         track.addEventListener("error", () => {
             show("failed");
             track.remove();
+            if (subtitleDelayControl) subtitleDelayControl.disabled = true;
+            if (subtitleReset) subtitleReset.disabled = true;
             const off = player.querySelector<HTMLElement>('[data-subtitle=""]');
             if (off) choose("data-subtitle", off);
-        });
+        }, { signal });
         video.append(track);
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => show("failed"));
+    // Show genuine stalls only after a short delay; the overlay never shifts the video or controls.
+    const buffering = player.querySelector<HTMLElement>("[data-role=buffering]");
+    let bufferingTimer: number | undefined;
+    function hideBuffering(): void {
+        if (bufferingTimer !== undefined) window.clearTimeout(bufferingTimer);
+        bufferingTimer = undefined;
+        if (buffering) buffering.hidden = true;
+    }
+    function watchBuffering(): void {
+        if (!buffering || signal.aborted || video.paused || video.ended ||
+            (video.readyState >= 3 && !video.seeking) || bufferingTimer !== undefined || !buffering.hidden) return;
+        bufferingTimer = window.setTimeout(() => {
+            bufferingTimer = undefined;
+            if (!signal.aborted && !video.paused && !video.ended && (video.readyState < 3 || video.seeking)) buffering.hidden = false;
+        }, 400);
+    }
+    for (const name of ["waiting", "stalled", "seeking", "play"])
+        video.addEventListener(name, watchBuffering, { signal });
+    for (const name of ["canplay", "playing", "seeked", "pause", "ended", "emptied"])
+        video.addEventListener(name, hideBuffering, { signal });
+    // Browser probes are advisory: when Direct Play really fails, retry once through the server's
+    // existing Remux/Transcode planner. An unavailable FFmpeg/HLS path still fails visibly.
+    async function recoverDirectPlay(): Promise<void> {
+        hideBuffering();
+        if (signal.aborted || recoveringDirectPlay || switching) return;
+        if (fallbackTried || plan?.playbackModeTypeId !== 1 || !hlsFallbackCapabilities(capabilities())) {
+            show("failed");
+            return;
+        }
+        fallbackTried = true;
+        recoveringDirectPlay = true;
+        const position = video.readyState >= HTMLMediaElement.HAVE_METADATA && Number.isFinite(video.currentTime)
+            ? video.currentTime : plan.resumePositionMs / 1000;
+        const shouldPlay = !video.paused || video.readyState === 0;
+        if (buffering) buffering.hidden = false;
+        let attached = false;
+        try {
+            const next = await requestPlan(null, true);
+            if (!next || signal.aborted) return;
+            report(true, false);
+            plan = next;
+            await attach(next, position, shouldPlay);
+            attached = !signal.aborted;
+        } catch {
+            if (!signal.aborted) show("failed");
+        } finally {
+            recoveringDirectPlay = false;
+            if (!attached || signal.aborted || plan?.playbackModeTypeId === 1) hideBuffering();
+        }
+    }
+    video.addEventListener("error", () => { void recoverDirectPlay(); }, { signal });
+
+    // The real decoded/buffered ranges are read from the media element; no client-side guessing.
+    const bufferBar = player.querySelector<HTMLElement>("[data-role=buffered]");
+    const playedBar = player.querySelector<HTMLElement>("[data-role=played]");
+    const updateBuffer = () => {
+        if (!bufferBar) return;
+        const duration = video.duration;
+        if (playedBar) playedBar.style.width = Number.isFinite(duration) && duration > 0
+            ? `${(Math.min(duration, Math.max(0, video.currentTime)) / duration * 100).toFixed(2)}%` : "0%";
+        if (!Number.isFinite(duration) || duration <= 0) {
+            bufferBar.style.width = "0%";
+            return;
+        }
+        let end = 0;
+        for (let i = 0; i < video.buffered.length; i++) {
+            if (video.buffered.start(i) <= video.currentTime + 0.5 && video.buffered.end(i) >= video.currentTime) {
+                end = video.buffered.end(i);
+                break;
+            }
+        }
+        bufferBar.style.width = `${(Math.min(duration, end) / duration * 100).toFixed(2)}%`;
+    };
+    for (const name of ["progress", "durationchange", "loadedmetadata", "seeked", "timeupdate", "emptied"])
+        video.addEventListener(name, updateBuffer, { signal });
 
     // Transport state.
-    video.addEventListener("play", () => setPlaying(true));
-    video.addEventListener("pause", () => setPlaying(false));
+    video.addEventListener("play", () => { status.hidden = true; setPlaying(true); }, { signal });
+    video.addEventListener("pause", () => setPlaying(false), { signal });
     video.addEventListener("timeupdate", () => {
         timeline.value = String(Math.floor(video.currentTime));
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
-    });
+    }, { signal });
     video.addEventListener("volumechange", () => {
         volume.value = String(video.muted ? 0 : video.volume);
         mute.setAttribute("aria-pressed", String(video.muted));
         player.classList.toggle("player--muted", video.muted);
-    });
-    timeline.addEventListener("input", () => { video.currentTime = Number(timeline.value); });
+    }, { signal });
+    timeline.addEventListener("input", () => { video.currentTime = Number(timeline.value); }, { signal });
     void previews();
-    volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
+    volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; }, { signal });
     player.querySelector<HTMLElement>("[data-action=pip]")!.hidden = !document.pictureInPictureEnabled;
 
+    function play(): void {
+        void video.play().catch(error => {
+            if (signal.aborted || recoveringDirectPlay || error instanceof DOMException && error.name === "AbortError") return;
+            if (error instanceof DOMException && error.name === "NotSupportedError" && plan?.playbackModeTypeId === 1) {
+                void recoverDirectPlay();
+                return;
+            }
+            show(error instanceof DOMException && error.name === "NotAllowedError" ? "play_gesture_required" : "failed");
+        });
+    }
+
     const actions: Record<string, () => void> = {
-        toggle: () => void (video.paused ? video.play() : video.pause()),
+        toggle: () => { if (video.paused) play(); else video.pause(); },
         back: () => seek(-10),
         forward: () => seek(30),
         mute: () => { video.muted = !video.muted; },
@@ -244,7 +385,9 @@ async function start(player: HTMLElement): Promise<void> {
         speed: () => panel("speed"),
         audio: () => panel("audio"),
         subtitles: () => panel("subtitles"),
-        more: () => panel("more"),
+        more: () => panel("info"),
+        "settings-close": () => panel(null),
+        "subtitle-delay-reset": () => setSubtitleDelay(0),
         close: () => report(true, false),
         previous: () => go("previous"),
         next: () => go("next"),
@@ -255,9 +398,9 @@ async function start(player: HTMLElement): Promise<void> {
     player.addEventListener("click", event => {
         const target = event.target as Element;
         const audio = target.closest<HTMLButtonElement>("[data-audio]");
-        if (audio && !audio.disabled && !switching) {
-            choose("data-audio", audio);
-            void switchAudio(Number(audio.dataset.audio));
+        if (audio && !audio.disabled && !switching && !recoveringDirectPlay) {
+            if (audio.getAttribute("aria-pressed") === "true") { panel(null); return; }
+            void switchAudio(Number(audio.dataset.audio), audio).catch(() => { if (!signal.aborted) show("failed"); });
             return;
         }
 
@@ -268,24 +411,58 @@ async function start(player: HTMLElement): Promise<void> {
             return;
         }
 
-        const speed = target.closest<HTMLElement>("[data-speed]");
+        const speed = target.closest<HTMLButtonElement>("[data-speed]");
         if (speed) {
-            video.playbackRate = Number(speed.dataset.speed);
-            player.querySelector("[data-role=speed-label]")!.textContent = speed.dataset.speed + "×";
-            player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-checked", String(item === speed)));
+            setSpeed(Number(speed.dataset.speed));
             panel(null);
+            return;
+        }
+
+        const tab = target.closest<HTMLButtonElement>("[data-settings-tab]");
+        if (tab) {
+            selectSettingsTab(tab.dataset.settingsTab!);
+            return;
+        }
+
+        const fit = target.closest<HTMLButtonElement>("[data-fit]");
+        if (fit) {
+            if (applyFit(video, fit.dataset.fit)) {
+                player.querySelectorAll<HTMLButtonElement>("[data-fit]").forEach(button =>
+                    button.setAttribute("aria-pressed", String(button === fit)));
+            }
             return;
         }
 
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
         if (action && actions[action]) actions[action]();
         else if (target === video) actions.toggle();
-    });
-    video.addEventListener("dblclick", actions.fullscreen);
+    }, { signal });
+    // Fine speed control shares the same state as the presets and survives delivery changes.
+    const speedControl = player.querySelector<HTMLInputElement>("[data-role=speed-control]");
+    speedControl?.addEventListener("input", () => setSpeed(Number(speedControl.value)), { signal });
+    function setSpeed(value: number): void {
+        const speed = normalizedSpeed(value);
+        if (speed === null) return;
+        video.playbackRate = speed;
+        const label = Number(speed.toFixed(2)).toString() + "×";
+        player.querySelector("[data-role=speed-label]")!.textContent = label;
+        const current = player.querySelector("[data-role=speed-current]");
+        if (current) current.textContent = label;
+        if (speedControl) speedControl.value = String(speed);
+        player.querySelectorAll<HTMLElement>("[data-speed]").forEach(button =>
+            button.setAttribute("aria-pressed", String(Number(button.dataset.speed) === speed)));
+    }
+    video.addEventListener("dblclick", actions.fullscreen, { signal });
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
-        if (event.target instanceof HTMLInputElement && event.target.type !== "range") return;
+        if (event.key === "Escape" && !player.querySelector<HTMLElement>("[data-panel=settings]")?.hidden) {
+            event.preventDefault();
+            panel(null);
+            return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement &&
+            event.target.closest('a, button, input, select, textarea, [contenteditable="true"]')) return;
         if (player.classList.contains("player--mini") && !player.contains(event.target as Node)) return;
         const keys: Record<string, () => void> = {
             " ": actions.toggle, k: actions.toggle, ArrowLeft: () => seek(-10), j: () => seek(-10), ArrowRight: () => seek(30), l: () => seek(30),
@@ -297,11 +474,11 @@ async function start(player: HTMLElement): Promise<void> {
         event.preventDefault();
         handler();
         wake();
-    });
+    }, { signal });
 
     // Chrome hides only while playing without an open panel.
-    player.addEventListener("pointermove", wake);
-    player.addEventListener("focusin", wake);
+    player.addEventListener("pointermove", wake, { signal });
+    player.addEventListener("focusin", wake, { signal });
     wake();
 
     // Minimize keeps the same session in a bar while the app is browsed around it.
@@ -327,7 +504,13 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Stop ends the session and leaves the app as it is; progress stays.
     function stop(): void {
+        if (signal.aborted) return;
         report(true, false);
+        lifetime.abort();
+        metadataListener?.abort();
+        hideBuffering();
+        window.clearInterval(progressInterval);
+        window.clearTimeout(idle);
         video.pause();
         hls?.destroy();
         video.removeAttribute("src");
@@ -357,15 +540,40 @@ async function start(player: HTMLElement): Promise<void> {
         }, IdleDelay);
     }
 
-    function panel(name: string | null): void {
-        player.querySelectorAll<HTMLElement>("[data-panel]").forEach(item => { item.hidden = item.dataset.panel !== name || !item.hidden; });
-        player.querySelectorAll<HTMLElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
-            .forEach(button => button.setAttribute("aria-expanded", String(!player.querySelector<HTMLElement>(`[data-panel=${button.dataset.action}]`)!.hidden)));
+    let currentSettingsTab = "speed";
+
+    // One live settings dialog, selected by the direct audio/subtitle/speed shortcuts.
+    function selectSettingsTab(name: string): void {
+        const settings = player.querySelector<HTMLElement>("[data-panel=settings]")!;
+        if (!selectSettingsPane(settings, name)) return;
+        currentSettingsTab = name;
+        player.querySelectorAll<HTMLButtonElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
+            .forEach(button => button.setAttribute("aria-expanded",
+                String((button.dataset.action === "more" ? "info" : button.dataset.action) === name)));
         wake();
     }
 
+    function panel(name: string | null): void {
+        const settings = player.querySelector<HTMLElement>("[data-panel=settings]")!;
+        if (!name || !settings.hidden && currentSettingsTab === name) {
+            const restoreFocus = settings.contains(document.activeElement);
+            settings.hidden = true;
+            player.querySelectorAll<HTMLButtonElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
+                .forEach(button => button.setAttribute("aria-expanded", "false"));
+            if (restoreFocus) {
+                const action = currentSettingsTab === "info" ? "more" : currentSettingsTab;
+                player.querySelector<HTMLButtonElement>(`[data-action="${action}"]`)?.focus();
+            }
+            wake();
+            return;
+        }
+        selectSettingsTab(name);
+        player.querySelector<HTMLButtonElement>(`[data-settings-tab="${name}"]`)?.focus();
+    }
+
     function choose(attribute: string, chosen: HTMLElement): void {
-        player.querySelectorAll(`[${attribute}]`).forEach(item => item.setAttribute("aria-checked", String(item === chosen)));
+        player.querySelectorAll(`[${attribute}]`).forEach(item =>
+            item.setAttribute("aria-pressed", String(item === chosen)));
         panel(null);
     }
 

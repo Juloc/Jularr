@@ -68,6 +68,39 @@ namespace Jularr.E2E.Tests
                 // Reading on saves the position in each.
                 await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter One");
+
+                // Reader appearance works on the real EPUB and stays independent from progress.
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.Locator("[data-setting=preset][data-value=light-novel]").ClickAsync();
+                Assert.AreEqual("34rem", await page.Locator(".reader").EvaluateAsync<string>("element => element.style.getPropertyValue('--reader-width')"));
+                Assert.AreEqual("true", await page.Locator("[data-setting=preset][data-value=light-novel]").GetAttributeAsync("aria-pressed"));
+                await page.Locator("[data-setting=mode][data-value=paged]").ClickAsync();
+                Assert.AreEqual("paged", await page.Locator(".reader").GetAttributeAsync("data-mode"));
+                await Assertions.Expect(page.Locator("[data-page-step='1']")).ToBeVisibleAsync();
+                await page.Locator("[data-setting=pages][data-value=spread]").ClickAsync();
+                Assert.AreEqual("2", await page.Locator("[data-role=content]").EvaluateAsync<string>("element => getComputedStyle(element).columnCount"));
+                await page.Locator("[data-setting=pages][data-value=single]").ClickAsync();
+                Assert.AreEqual("1", await page.Locator("[data-role=content]").EvaluateAsync<string>("element => getComputedStyle(element).columnCount"));
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                var spreadWidth = await page.Locator("[data-role=content]").EvaluateAsync<double>(
+                    "element => { const style = getComputedStyle(element); return element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) + parseFloat(style.columnGap); }");
+                await page.Locator("[data-page-step='1']").ClickAsync();
+                await page.WaitForFunctionAsync("width => Math.abs(Math.abs(document.querySelector('[data-role=content]').scrollLeft) - width) < 2", spreadWidth);
+                var visibleParagraph = await page.Locator("[data-role=content]").EvaluateAsync<string>(
+                    "element => { const viewport = element.getBoundingClientRect(); return [...element.querySelectorAll('p[data-b]')].find(p => [...p.getClientRects()].some(r => r.left >= viewport.left && r.right <= viewport.right))?.dataset.b; }");
+                Assert.IsNotNull(visibleParagraph, "The next page must contain selectable prose.");
+                await page.Locator("p[data-b='" + visibleParagraph + "']").ClickAsync();
+                Assert.IsTrue(Math.Abs(Math.Abs(await page.Locator("[data-role=content]").EvaluateAsync<double>("element => element.scrollLeft")) - spreadWidth) < 2,
+                    "Text clicks must not turn the page.");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.Locator("[data-setting=pages][data-value=auto]").ClickAsync();
+                await page.Locator("[data-setting=mode][data-value=scroll]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-page-step='1']")).ToBeHiddenAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Focus on text" }).ClickAsync();
+                Assert.IsTrue(await page.Locator(".reader").EvaluateAsync<bool>("element => element.classList.contains('reader--focused')"));
+                await page.Keyboard.PressAsync("Escape");
+                Assert.IsFalse(await page.Locator(".reader").EvaluateAsync<bool>("element => element.classList.contains('reader--focused')"));
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.OpenReaderAsync(page, mangaDetails);
                 await Steps.TurnAsync(page);

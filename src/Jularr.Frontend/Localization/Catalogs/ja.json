@@ -900,6 +900,14 @@
    "Settings",
    "設定"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "本文に集中"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "操作ボタンを表示"
+  ],
   "reader.previous": [
    "Previous",
    "前へ"
@@ -951,6 +959,78 @@
   "reader.mode.paged": [
    "Pages",
    "ページ"
+  ],
+  "reader.pages": [
+   "Pages on screen",
+   "画面内のページ数"
+  ],
+  "reader.pages.auto": [
+   "Automatic",
+   "自動"
+  ],
+  "reader.pages.single": [
+   "One page",
+   "1ページ"
+  ],
+  "reader.pages.spread": [
+   "Two pages",
+   "2ページ"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "読書プリセット"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "書籍"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "ライトノベル"
+  ],
+  "reader.font": [
+   "Font",
+   "フォント"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "セリフ体"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "サンセリフ体"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "行間"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "狭い"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "標準"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "広い"
+  ],
+  "reader.width": [
+   "Text width",
+   "文字幅"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "狭い"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "標準"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "広い"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -5808,6 +5888,14 @@
    "Off",
    "オフ"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "字幕の時間調整（秒）"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "ずれをリセット"
+  ],
   "player.subtitles.forced": [
    "forced",
    "強制"
@@ -5844,6 +5932,30 @@
    "More",
    "その他"
   ],
+  "player.settings": [
+   "Player settings",
+   "プレーヤー設定"
+  ],
+  "player.settings.close": [
+   "Close settings",
+   "設定を閉じる"
+  ],
+  "player.fit": [
+   "Picture size",
+   "映像サイズ"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "全体表示"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "画面いっぱい"
+  ],
+  "player.fit.original": [
+   "Original",
+   "オリジナル"
+  ],
   "player.delivery": [
    "Delivery",
    "配信方式"
@@ -5876,9 +5988,17 @@
    "This media is no longer available.",
    "このメディアは利用できなくなりました。"
   ],
+  "player.buffering": [
+   "Buffering…",
+   "バッファリング中…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "再生を開始できませんでした。"
+  ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "再生ボタンを押して開始してください。"
   ],
   "details.play": [
    "Play",

@@ -81,6 +81,16 @@ namespace Jularr.Frontend.Framework
             Add(field, FieldControl.Password, labelKey, autocomplete, help);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
 
+        public Form<TData> Color(Expression<Func<TData, string>> selector, string labelKey)
+        {
+            var field = Declare(selector, FieldControl.Text, labelKey);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "color");
+            if (Value(field) is { } value) input.Attribute("value", value);
+            Configure(field, input);
+            AddField(field, input);
+            return this;
+        }
+
         // A file field makes the form a multipart upload.
         public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
         {

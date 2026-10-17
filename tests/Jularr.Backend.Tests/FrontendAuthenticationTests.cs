@@ -569,6 +569,36 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Profile A", await host.Fixture.NameAsync(host.Fixture.ProfileAId));
         }
 
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Form_Color_RetainsTypedValueMetadataAndReadOnlyContract(bool editable)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+            var form = new Form<ColorInput>(fields => fields.Color(item => item.Color, "reader.theme"),
+                editable ? "/Settings" : null, editable ? "test-antiforgery-token" : null, new ColorInput());
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var input = Regex.Match(writer.ToString(), "<input[^>]*name=\"Color\"[^>]*>").Value;
+            StringAssert.Contains(input, "type=\"color\"");
+            StringAssert.Contains(input, "value=\"#f7f3ec\"");
+            StringAssert.Contains(input, "maxlength=\"7\"");
+            Assert.AreEqual(!editable, input.Contains("disabled=\"disabled\"", StringComparison.Ordinal));
+        }
+
+        private sealed class ColorInput : BaseData
+        {
+            public static readonly Jularr.Backend.Data.Fields.StringField ColorField = new() { MinimumLength = 7, MaximumLength = 7 };
+
+            [DataField(typeof(ColorInput), nameof(ColorField))]
+            public string Color { get; } = "#f7f3ec";
+        }
+
         private static Dictionary<string, string> Form(string html, params (string Name, string Value)[] values)
         {
             var match = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"");
