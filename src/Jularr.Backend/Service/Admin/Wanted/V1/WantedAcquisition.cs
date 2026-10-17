@@ -215,7 +215,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 try
                 {
                     var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
-                    result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
+                    var category = client.DownloadCategory;
+                    if (client.DownloadCategoryMap is { } categoryMap)
+                    {
+                        using var categoryDocument = JsonDocument.Parse(categoryMap);
+                        if (categoryDocument.RootElement.TryGetProperty(kind.ToString(), out var mappedCategory)
+                            && mappedCategory.ValueKind == JsonValueKind.String)
+                        {
+                            category = mappedCategory.GetString();
+                        }
+                    }
+
+                    result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, category), ct);
                 }
                 catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
                 {
