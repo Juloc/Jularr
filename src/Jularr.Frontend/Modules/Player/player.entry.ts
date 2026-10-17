@@ -35,6 +35,8 @@ async function start(player: HTMLElement): Promise<void> {
     const toggle = player.querySelector<HTMLButtonElement>("[data-action=toggle]")!;
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
     const antiforgery = player.dataset.antiforgery ?? "";
+    const lifetime = new AbortController();
+    const signal = lifetime.signal;
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
@@ -61,17 +63,17 @@ async function start(player: HTMLElement): Promise<void> {
         }, ended);
         if (ended) plan = null;
     };
-    setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
+    const progressInterval = window.setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
     // The pause before an end is no position worth saving.
-    video.addEventListener("pause", () => { if (!video.ended) report(false); });
+    video.addEventListener("pause", () => { if (!video.ended) report(false); }, { signal });
     video.addEventListener("ended", () => {
         report(true);
         // An album or season continues with the next unit in the full player; the mini player stops where it is.
         const next = player.querySelector<HTMLElement>("[data-action=next][data-href]")?.dataset.href;
         if (next && !player.classList.contains("player--mini")) location.assign(next);
-    });
-    document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
-    window.addEventListener("pagehide", event => report(!event.persisted, false));
+    }, { signal });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); }, { signal });
+    window.addEventListener("pagehide", event => report(!event.persisted, false), { signal });
 
     function go(direction: "previous" | "next") {
         const href = player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`)?.dataset.href;
@@ -105,12 +107,12 @@ async function start(player: HTMLElement): Promise<void> {
         timeline.addEventListener("pointermove", event => {
             const bounds = timeline.getBoundingClientRect();
             show(Number(timeline.max) * Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)), event.clientX);
-        });
+        }, { signal });
         timeline.addEventListener("input", () => {
             const bounds = timeline.getBoundingClientRect();
             show(Number(timeline.value), bounds.left + bounds.width * (Number(timeline.value) / Math.max(1, Number(timeline.max))));
-        });
-        for (const name of ["pointerleave", "change"]) timeline.addEventListener(name, () => { preview.hidden = true; });
+        }, { signal });
+        for (const name of ["pointerleave", "change"]) timeline.addEventListener(name, () => { preview.hidden = true; }, { signal });
     }
 
     // Planning needs the real browser capabilities; another audio track asks for a new plan.
@@ -177,7 +179,7 @@ async function start(player: HTMLElement): Promise<void> {
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
             if (shouldPlay) play();
-        }, { once: true });
+        }, { once: true, signal });
     }
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.
@@ -207,18 +209,18 @@ async function start(player: HTMLElement): Promise<void> {
         track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
         if (language) track.srclang = language;
         track.default = true;
-        track.addEventListener("load", () => { track.track.mode = "showing"; });
+        track.addEventListener("load", () => { track.track.mode = "showing"; }, { signal });
         track.addEventListener("error", () => {
             show("failed");
             track.remove();
             const off = player.querySelector<HTMLElement>('[data-subtitle=""]');
             if (off) choose("data-subtitle", off);
-        });
+        }, { signal });
         video.append(track);
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => show("failed"));
+    video.addEventListener("error", () => show("failed"), { signal });
 
     // The real decoded/buffered ranges are read from the media element; no client-side guessing.
     const bufferBar = player.querySelector<HTMLElement>("[data-role=buffered]");
@@ -239,23 +241,23 @@ async function start(player: HTMLElement): Promise<void> {
         bufferBar.style.width = `${(Math.min(duration, end) / duration * 100).toFixed(2)}%`;
     };
     for (const name of ["progress", "durationchange", "loadedmetadata", "seeked", "timeupdate", "emptied"])
-        video.addEventListener(name, updateBuffer);
+        video.addEventListener(name, updateBuffer, { signal });
 
     // Transport state.
-    video.addEventListener("play", () => { status.hidden = true; setPlaying(true); });
-    video.addEventListener("pause", () => setPlaying(false));
+    video.addEventListener("play", () => { status.hidden = true; setPlaying(true); }, { signal });
+    video.addEventListener("pause", () => setPlaying(false), { signal });
     video.addEventListener("timeupdate", () => {
         timeline.value = String(Math.floor(video.currentTime));
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
-    });
+    }, { signal });
     video.addEventListener("volumechange", () => {
         volume.value = String(video.muted ? 0 : video.volume);
         mute.setAttribute("aria-pressed", String(video.muted));
         player.classList.toggle("player--muted", video.muted);
-    });
-    timeline.addEventListener("input", () => { video.currentTime = Number(timeline.value); });
+    }, { signal });
+    timeline.addEventListener("input", () => { video.currentTime = Number(timeline.value); }, { signal });
     void previews();
-    volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
+    volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; }, { signal });
     player.querySelector<HTMLElement>("[data-action=pip]")!.hidden = !document.pictureInPictureEnabled;
 
     function play(): void {
@@ -324,10 +326,10 @@ async function start(player: HTMLElement): Promise<void> {
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
         if (action && actions[action]) actions[action]();
         else if (target === video) actions.toggle();
-    });
+    }, { signal });
     // Fine speed control shares the same state as the presets and survives delivery changes.
     const speedControl = player.querySelector<HTMLInputElement>("[data-role=speed-control]");
-    speedControl?.addEventListener("input", () => setSpeed(Number(speedControl.value)));
+    speedControl?.addEventListener("input", () => setSpeed(Number(speedControl.value)), { signal });
     function setSpeed(value: number): void {
         const speed = normalizedSpeed(value);
         if (speed === null) return;
@@ -340,7 +342,7 @@ async function start(player: HTMLElement): Promise<void> {
         player.querySelectorAll<HTMLElement>("[data-speed]").forEach(button =>
             button.setAttribute("aria-pressed", String(Number(button.dataset.speed) === speed)));
     }
-    video.addEventListener("dblclick", actions.fullscreen);
+    video.addEventListener("dblclick", actions.fullscreen, { signal });
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
@@ -357,11 +359,11 @@ async function start(player: HTMLElement): Promise<void> {
         event.preventDefault();
         handler();
         wake();
-    });
+    }, { signal });
 
     // Chrome hides only while playing without an open panel.
-    player.addEventListener("pointermove", wake);
-    player.addEventListener("focusin", wake);
+    player.addEventListener("pointermove", wake, { signal });
+    player.addEventListener("focusin", wake, { signal });
     wake();
 
     // Minimize keeps the same session in a bar while the app is browsed around it.
@@ -387,7 +389,11 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Stop ends the session and leaves the app as it is; progress stays.
     function stop(): void {
+        if (signal.aborted) return;
         report(true, false);
+        lifetime.abort();
+        window.clearInterval(progressInterval);
+        window.clearTimeout(idle);
         video.pause();
         hls?.destroy();
         video.removeAttribute("src");
