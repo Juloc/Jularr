@@ -38,6 +38,8 @@ CREATE TABLE "WorkArtworks" (
     "Height" integer NULL CHECK ("Height" BETWEEN 1 AND 16000),
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
+    -- Only complete sidecar scans may remove candidates not seen in that scan.
+    "LastSeenAt" timestamptz NULL,
     FOREIGN KEY ("WorkId", "WorkUnitId") REFERENCES "WorkUnits" ("WorkId", "Id") ON DELETE CASCADE,
     CHECK (("SourceKindId" = 2) = ("LibraryRootId" IS NOT NULL)),
     CHECK ("SourceKindId" <> 2 OR (
@@ -48,7 +50,7 @@ CREATE TABLE "WorkArtworks" (
     ))
 );
 CREATE UNIQUE INDEX "UX_WorkArtworks_Source"
-    ON "WorkArtworks" ("WorkId", "WorkUnitId", "SlotId", "Locale", "SourceKindId", "SourceKey") NULLS NOT DISTINCT;
+    ON "WorkArtworks" ("WorkId", "WorkUnitId", "SlotId", "Locale", "SourceKindId", "SourceKey", "LibraryRootId") NULLS NOT DISTINCT;
 CREATE UNIQUE INDEX "UX_WorkArtworks_Pin"
     ON "WorkArtworks" ("WorkId", "WorkUnitId", "SlotId", "Locale") NULLS NOT DISTINCT WHERE "IsPinned";
 CREATE INDEX "IX_WorkArtworks_Work" ON "WorkArtworks" ("WorkId", "WorkUnitId", "SlotId");
