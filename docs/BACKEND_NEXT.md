@@ -20,7 +20,9 @@ Each slice adds its versioned Data, declared Service permissions, static reads,
 canonical Logic writers, fresh-baseline tables/fields/enums where needed, focused
 isolated PostgreSQL tests and updated navigation in one reviewable change.
 External I/O stays outside long database transactions; final mutations revalidate
-and commit together. No migration, active-database installation or extra server.
+and commit together. No legacy Phase-B migration, active-Owner-database installation
+or extra server. Future supported release upgrades use the single
+[backup-first schema owner](DATABASE_UPGRADES.md).
 
 ## Boundaries already decided
 
@@ -81,7 +83,8 @@ and commit together. No migration, active-database installation or extra server.
   `DataPath/translation`), with translated sections shared on the server. Retro games play
   through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
-  a Jularr backup restore; migration stays with the stopped Phase B; the AI step waits
+  a Jularr backup restore; legacy migration stays with the stopped Phase B, while
+  supported release upgrades follow [the versioned startup contract](DATABASE_UPGRADES.md); the AI step waits
   for its own package.
 - Owner decisions of 14 October 2026: order is the running Arr+ packages, then Playwright
   browser and end-to-end tests (agents check important changes with them), then K24 and

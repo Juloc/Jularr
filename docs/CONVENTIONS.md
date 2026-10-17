@@ -80,7 +80,7 @@ use the same services through the shared API adapter.
 - Instance module gates use that same context. Writes lock verified authorization before module configuration and retain module locks through commit. Module-dependent Execute services authorize in a short batch before their hook, then recheck each mutation batch without holding a transaction during external work. Read gates use ordinary read-only SQL (`ReadModuleStatesAsync`, also for services without a session, so login and pairing pages need no module SQL of their own), and `ModuleRequirement.None` performs no module query. Never open a separate module connection or add navigation-only switches.
 - Enforce relationships, uniqueness and required values in the schema as well as business rules in Logic. Do not bypass integrity constraints.
 - Avoid N+1 queries, application filtering of whole tables and per-row save loops; use bounded reads and set-based writes where needed.
-- During clean cut, edit only the explicit fresh baseline, not migrations. Never install or migrate the active database automatically. Schema tests use explicit isolated PostgreSQL connections and only their own disposable databases.
+- Before the first official clean-start release, evolve the explicit fresh baseline; legacy Phase B and active-instance adoption remain stopped. From that release onward, freeze released SQL and add ordered migrations through `DatabaseBaseline` only. Supported versioned upgrades back up the database and keys before changing the schema; backup failure aborts startup. Tests use explicit isolated PostgreSQL connections and only their own disposable databases. Never update an active Owner database as part of agent work. See [release upgrades](DATABASE_UPGRADES.md).
 
 ## Tests and documentation
 
