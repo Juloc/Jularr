@@ -158,13 +158,13 @@ namespace Jularr.Backend.Logic.Library
         [GeneratedRegex(@"(?<![A-Za-z0-9])tt\d{7,10}(?!\d)", RegexOptions.IgnoreCase)]
         private static partial Regex ImdbToken();
 
-        [GeneratedRegex(@"[\s._-]+tt\d{7,10}\s*$", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"[\s._-]+(?:imdb(?:id)?[\s._:#-]*)?tt\d{7,10}\s*$", RegexOptions.IgnoreCase)]
         private static partial Regex ImdbSuffix();
 
-        [GeneratedRegex(@"(?<![A-Za-z0-9])(?<source>tmdb|tvdb|tvmaze|anilist|igdb)[\s._:#-]*(?<id>\d{1,12})(?!\d)", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"(?<![A-Za-z0-9])(?<source>tmdb|tvdb|tvmaze|anilist|igdb)(?:id)?[\s._:#-]*(?<id>\d{1,12})(?!\d)", RegexOptions.IgnoreCase)]
         private static partial Regex TaggedId();
 
-        [GeneratedRegex(@"[\s._-]+(?:tmdb|tvdb|tvmaze|anilist|igdb)[\s._:#-]*\d{1,12}\s*$", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"[\s._-]+(?:tmdb|tvdb|tvmaze|anilist|igdb)(?:id)?[\s._:#-]*\d{1,12}\s*$", RegexOptions.IgnoreCase)]
         private static partial Regex TaggedIdSuffix();
 
         [GeneratedRegex(@"\bsample\b", RegexOptions.IgnoreCase)]

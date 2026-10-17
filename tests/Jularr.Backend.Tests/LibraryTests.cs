@@ -490,6 +490,18 @@ namespace Jularr.Backend.Tests
 
             var mismatched = MediaPathParser.ProviderIds(path.Replace("S01E07 tt39551287", "S01E07 tt12345678", StringComparison.Ordinal), MediaType.Series);
             Assert.IsTrue(mismatched.Conflicted);
+
+            const string plex = "Series [imdbid-tt39551287] [tmdbid-1399] [tvdbid-24680]/Season 1/Series - S01E07.mkv";
+            var (plexIds, plexConflict) = MediaPathParser.ProviderIds(plex, MediaType.Series);
+            Assert.IsFalse(plexConflict);
+            Assert.AreEqual("tt39551287", plexIds["imdb"]);
+            Assert.AreEqual("1399", plexIds["tmdb_tv"]);
+            Assert.AreEqual("24680", plexIds["tvdb"]);
+            Assert.AreEqual("Series", MediaPathParser.Parse(plex, MediaType.Series).Title);
+
+            const string plain = "Movie - imdb-tt1234567.mkv";
+            Assert.AreEqual("Movie", MediaPathParser.Parse(plain, MediaType.Movie).Title);
+            Assert.AreEqual("tt1234567", MediaPathParser.ProviderIds(plain, MediaType.Movie).Ids["imdb"]);
         }
 
         [TestMethod]
