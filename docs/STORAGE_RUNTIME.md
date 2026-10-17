@@ -216,6 +216,9 @@ reserve disk across downloads, cap PAR2/7-Zip extraction, protect other
 processes sharing the filesystem, or cover direct-source books. Those remain
 separate prerequisites of release issue #1209; do not expose this as a
 complete hard workspace quota.
+NZB segment sizes are checked before summing to reject numeric overflow. Existing
+article files count against the job limit even when every article is finished,
+so a restart or lower configured limit cannot bypass the extraction preflight.
 
 **Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
 `proc` and other operating-system pseudo filesystems even if Docker reports

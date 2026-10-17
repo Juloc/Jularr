@@ -109,6 +109,34 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Usenet_FinishedArticlesStillCountTowardTheJobBudget()
+        {
+            using var staging = new TemporaryDirectory();
+            File.WriteAllBytes(Path.Combine(staging.Path, "finished.mkv"), new byte[3_000]);
+            var file = new NzbFile("finished.mkv", [new NzbSegment(1, 2_000, "finished@example.test")]);
+            var server = new UsenetServer("127.0.0.1", 1, false, null, null, 1);
+            await Assert.ThrowsAsync<UsenetStorageBudgetException>(async () => await new UsenetDownloader().DownloadAsync(server, [file], staging.Path,
+                new HashSet<string> { "finished@example.test" }, DateTimeOffset.UtcNow.AddSeconds(1), 2_500, CancellationToken.None));
+            Assert.AreEqual(3_000, new FileInfo(Path.Combine(staging.Path, "finished.mkv")).Length);
+        }
+
+        [TestMethod]
+        public async Task Usenet_OverflowingNzbSizeWaitsWithoutCreatingArticleFiles()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[300_000], 3);
+            var nzb = System.Text.RegularExpressions.Regex.Replace(news.Nzb(Feature + ".mkv"), "bytes=\"[0-9]+\"", "bytes=\"9223372036854775807\"");
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(nzb), news.Port);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<DownloadUsenetV1>(host);
+            Assert.AreEqual("usenet_disk_budget", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*.mkv", SearchOption.AllDirectories).Any());
+        }
+
+        [TestMethod]
         public void NativeDownload_RejectsSymbolicWorkspaceAncestors()
         {
             if (!OperatingSystem.IsLinux())

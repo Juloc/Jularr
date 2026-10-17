@@ -85,12 +85,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var announced = 0L;
             foreach (var file in files)
             {
-                if (_storage.UsenetMaxJobBytes <= 0 || file.Bytes <= 0 || file.Bytes > _storage.UsenetMaxJobBytes - announced)
+                foreach (var segment in file.Segments)
                 {
-                    return new UsenetPassResult(UsenetPassState.Waiting, 0, 0, 0, "usenet_disk_budget", progressed: false);
-                }
+                    if (_storage.UsenetMaxJobBytes <= 0 || segment.Bytes <= 0 || segment.Bytes > _storage.UsenetMaxJobBytes - announced)
+                    {
+                        return new UsenetPassResult(UsenetPassState.Waiting, 0, 0, 0, "usenet_disk_budget", progressed: false);
+                    }
 
-                announced += file.Bytes;
+                    announced += segment.Bytes;
+                }
             }
 
             // Finished articles are remembered; a leading "!" marks a damaged one.
@@ -107,6 +110,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 return new UsenetPassResult(UsenetPassState.Waiting, 0, announced, 0, "usenet_disk_budget", progressed: false);
             }
+
             await File.AppendAllLinesAsync(statePath, [.. progress.Done, .. progress.Damaged.Select(id => "!" + id)], ct);
             finished.UnionWith(progress.Done);
             finished.UnionWith(progress.Damaged);
