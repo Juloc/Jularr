@@ -1,3 +1,8 @@
+@keyframes player-buffering-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .player__buffering-ring { animation: none; }
+}
+
 .player-page { background: #080809; color: #fff; }
 .player-main { width: 100%; min-height: 100dvh; }
 .player-main .page-screen,
@@ -16,6 +21,34 @@
         object-fit: contain;
         background: #000;
     }
+
+    // Buffer feedback floats over the frame and never participates in layout.
+    &__buffering {
+        position: absolute;
+        z-index: 2;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border-radius: 999px;
+        color: #fff;
+        background: rgb(20 20 24 / 88%);
+        pointer-events: none;
+        font-size: .9rem;
+        &[hidden] { display: none; }
+    }
+    &__buffering-ring {
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgb(255 255 255 / 24%);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: player-buffering-spin 800ms linear infinite;
+    }
+    &--mini &__buffering { display: none; }
 
     // Chrome never blocks clicks on the video itself.
     &__chrome {
