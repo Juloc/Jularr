@@ -75,7 +75,8 @@ test('player planning network failure displays the localized status', async () =
         querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' } : {}
     };
     runInNewContext(code, {
-        exports: {}, require: () => ({}), document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }) },
+        exports: {}, require: () => ({}), AbortController,
+        document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }) },
         fetch: () => Promise.reject(new Error('Offline'))
     });
     await new Promise(resolve => setImmediate(resolve));
