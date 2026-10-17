@@ -39,6 +39,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(107_374_182_400L, snapshot.FreeBytes);
             Assert.AreEqual(1_024L, snapshot.TodayBytes);
             CollectionAssert.AreEqual(new[] { "stale-folder" }, snapshot.OrphanFolders.ToArray());
+            Assert.AreEqual("/data/complete", snapshot.ReportedCompletePath);
+            Assert.AreEqual("/data/incomplete", snapshot.ReportedIncompletePath);
             CollectionAssert.AreEqual(new[] { "movies", "tv" }, (await provider.ReadCategoriesAsync(connection, CancellationToken.None)).ToArray());
         }
 
@@ -70,18 +72,23 @@ namespace Jularr.Backend.Tests
             {
                 var leftovers = Path.Combine(complete, "leftover.nfo");
                 File.WriteAllText(leftovers, "keep");
-                var snapshot = new SabnzbdConsoleSnapshot([], [], null, null, false);
-                var result = DownloadClientFolderInspector.Inspect(complete, snapshot, incomplete);
+                var snapshot = new SabnzbdConsoleSnapshot([], [], null, null, false,
+                    reportedCompletePath: "/data/complete", reportedIncompletePath: "/data/incomplete");
+                var result = DownloadClientFolderInspector.Inspect(complete, snapshot, incomplete, "/data/complete", "/data/incomplete");
 
                 Assert.IsTrue(result.CompleteAvailable);
                 Assert.IsTrue(result.IncompleteAvailable);
                 Assert.AreEqual("unassigned", result.Entries.Single().Assignment);
                 Assert.IsTrue(File.Exists(leftovers));
 
-                var onlyIncomplete = DownloadClientFolderInspector.Inspect(null, snapshot, incomplete);
+                var onlyIncomplete = DownloadClientFolderInspector.Inspect(null, snapshot, incomplete, null, "/data/incomplete");
                 Assert.IsFalse(onlyIncomplete.CompleteAvailable);
                 Assert.IsTrue(onlyIncomplete.IncompleteAvailable);
                 Assert.IsNull(onlyIncomplete.CompletePath);
+
+                var unmatched = DownloadClientFolderInspector.Inspect(complete, snapshot, incomplete, "/unrelated", "/data/incomplete");
+                Assert.IsFalse(unmatched.CompleteAvailable);
+                Assert.IsTrue(unmatched.IncompleteAvailable);
             }
             finally
             {
@@ -103,7 +110,7 @@ namespace Jularr.Backend.Tests
                 var response = body.Contains("mode=server_stats", StringComparison.Ordinal)
                     ? "{\"day\":1024,\"week\":4096,\"month\":8192,\"total\":16384}"
                     : body.Contains("mode=status", StringComparison.Ordinal) && !body.Contains("name=delete_orphan", StringComparison.Ordinal)
-                        ? "{\"status\":{\"folders\":[\"stale-folder\"]}}"
+                        ? "{\"status\":{\"folders\":[\"stale-folder\"],\"completedir\":\"/data/complete\",\"downloaddir\":\"/data/incomplete\"}}"
                     : body.Contains("mode=get_cats", StringComparison.Ordinal)
                     ? "{\"categories\":[\"movies\",\"tv\"]}"
                     : body.Contains("mode=history", StringComparison.Ordinal) && !body.Contains("name=delete", StringComparison.Ordinal)
