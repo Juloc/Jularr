@@ -100,7 +100,25 @@ namespace Jularr.E2E.Tests
                     "video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].startTime"), 0.01);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
-                // The broken file stops with the player's general failure, not silently.
+                // A server-selected native file can still fail the actual browser decoder.
+                // Simulate only that stream failing; the retry must request the canonical HLS plan.
+                await page.GotoAsync(details);
+                await page.RouteAsync("**/api/v1/playback/sessions/*/stream", route => route.FulfillAsync(new()
+                {
+                    Status = 415,
+                    ContentType = "text/plain",
+                    Body = "Native decoder rejected stream"
+                }));
+                var recovered = await page.RunAndWaitForResponseAsync(() => pilot.ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\\"containers\\":[\\"hls\\"]", StringComparison.Ordinal) == true,
+                    new() { Timeout = Steps.MediaTimeout });
+                Assert.IsTrue(recovered.Ok, "The native decoder failed, but the HLS fallback plan was not offered.");
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 2 && document.querySelector('video')?.currentTime > 0",
+                    null, new() { Timeout = Steps.MediaTimeout });
+                await page.UnrouteAsync("**/api/v1/playback/sessions/*/stream");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+
+                // A genuinely broken file must still explain its playback failure.
                 await page.GotoAsync(details);
                 await brokenEpisode.ClickAsync();
                 var status = page.Locator("[data-role=status]");
