@@ -25,6 +25,18 @@ export function selectSettingsPane(settings: HTMLElement, name: string): name is
     return true;
 }
 
+// A rejected browser probe can force the server's normal HLS planner without
+// fabricating a codec capability or changing the actual playing media asset.
+export interface PlaybackCapabilities {
+    containers: string[];
+    videoCodecs: string[];
+    audioCodecs: string[];
+}
+
+export function hlsFallbackCapabilities(capabilities: PlaybackCapabilities): PlaybackCapabilities | null {
+    return capabilities.containers.includes("hls") ? { ...capabilities, containers: ["hls"] } : null;
+}
+
 // An active WebVTT track can be shifted without rebuilding its PlaybackPlan.
 // Original times are retained so repeated slider changes never accumulate drift.
 export function shiftTextCues(track: Pick<TextTrack, "cues"> | null, seconds: number,
