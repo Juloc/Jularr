@@ -10,8 +10,9 @@ namespace Jularr.Backend.Data.Logic.Library
     {
         public LibraryRenameFileData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string relativePath, DateTime? missingSince,
             long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber,
-            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width)
+            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}")
         {
+            ProviderIds = providerIds;
             QualityKey = qualityKey;
             ReleaseGroup = releaseGroup;
             Edition = edition;
@@ -78,6 +79,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
+        public string ProviderIds { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
         public string? QualityKey { get; }

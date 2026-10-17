@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Media;
@@ -43,6 +44,8 @@ namespace Jularr.Backend.Logic.Library
                     file."ReleaseGroup",
                     file."Edition",
                     file."Revision",
+                    coalesce((SELECT jsonb_object_agg(identity."Namespace", identity."Value")::text FROM "WorkExternalIdentities" AS identity
+                        WHERE identity."WorkId" = work."Id"), '{}') AS "ProviderIds",
                     (
                         SELECT
                             max(track."Width")
@@ -153,7 +156,12 @@ namespace Jularr.Backend.Logic.Library
         }
 
         private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
-            new(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision);
+            new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
+            {
+                MediaType = file.MediaTypeId,
+                ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
+                OriginalFilename = Path.GetFileName(file.RelativePath)
+            };
 
         // The stored release quality, else a tag only an older name carries, else the analysed width, wide formats included.
         private static string? QualityOf(LibraryRenameFileData file) => file.QualityKey
