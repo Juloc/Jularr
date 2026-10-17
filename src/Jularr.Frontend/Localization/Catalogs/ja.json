@@ -5872,6 +5872,14 @@
    "Off",
    "オフ"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "字幕の時間調整（秒）"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "ずれをリセット"
+  ],
   "player.subtitles.forced": [
    "forced",
    "強制"
