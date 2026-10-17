@@ -55,7 +55,7 @@ namespace Jularr.E2E.Tests
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
-                var pilot = page.Locator(".episode-card", new() { HasText = "Pilot" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
+                var pilot = page.Locator(".episode-card", new() { HasText = "Pilot" }).Locator(".episode-card__play");
                 var brokenEpisode = page.Locator(".episode-card", new() { HasText = "Second" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
                 await WaitForPlayableAsync(page, details, brokenEpisode);
 
