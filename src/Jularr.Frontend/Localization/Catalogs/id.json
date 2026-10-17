@@ -5944,6 +5944,10 @@
    "Playback could not be started.",
    "Pemutaran tidak dapat dimulai."
   ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Tekan Putar untuk memulai."
+  ],
   "details.play": [
    "Play",
    "Putar"

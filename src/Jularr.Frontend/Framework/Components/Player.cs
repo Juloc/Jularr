@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Framework
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
-        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
+        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "play_gesture_required", "failed"];
         private static readonly string[] Speeds = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)

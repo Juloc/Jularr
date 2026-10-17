@@ -5944,6 +5944,10 @@
    "Playback could not be started.",
    "La lecture n'a pas pu démarrer."
   ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Appuyez sur Lecture pour démarrer."
+  ],
   "details.play": [
    "Play",
    "Lire"

@@ -5944,6 +5944,10 @@
    "Playback could not be started.",
    "Het afspelen kon niet worden gestart."
   ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Druk op Afspelen om te beginnen."
+  ],
   "details.play": [
    "Play",
    "Afspelen"

@@ -5944,6 +5944,10 @@
    "Playback could not be started.",
    "Nie udało się rozpocząć odtwarzania."
   ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Naciśnij Odtwórz, aby rozpocząć."
+  ],
   "details.play": [
    "Play",
    "Odtwórz"

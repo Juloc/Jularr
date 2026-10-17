@@ -130,6 +130,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-role=\"speed-control\"");
             StringAssert.Contains(html, "data-speed=\"0.25\"");
             StringAssert.Contains(html, "data-speed=\"4\"");
+            StringAssert.Contains(html, "data-status=\"play_gesture_required\"");
             StringAssert.Contains(html, ">Film</h1>");
             Assert.IsFalse(html.Contains("Film.mp4", StringComparison.Ordinal));
         }

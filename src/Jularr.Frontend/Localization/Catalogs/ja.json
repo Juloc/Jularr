@@ -5944,6 +5944,10 @@
    "Playback could not be started.",
    "再生を開始できませんでした。"
   ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "再生ボタンを押して開始してください。"
+  ],
   "details.play": [
    "Play",
    "再生"

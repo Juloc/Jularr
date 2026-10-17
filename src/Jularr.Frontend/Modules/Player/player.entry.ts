@@ -175,7 +175,7 @@ async function start(player: HTMLElement): Promise<void> {
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
-            void video.play().catch(() => undefined);
+            play();
         }, { once: true });
     }
 
@@ -218,7 +218,7 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("error", () => show("failed"));
 
     // Transport state.
-    video.addEventListener("play", () => setPlaying(true));
+    video.addEventListener("play", () => { status.hidden = true; setPlaying(true); });
     video.addEventListener("pause", () => setPlaying(false));
     video.addEventListener("timeupdate", () => {
         timeline.value = String(Math.floor(video.currentTime));
@@ -234,8 +234,15 @@ async function start(player: HTMLElement): Promise<void> {
     volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
     player.querySelector<HTMLElement>("[data-action=pip]")!.hidden = !document.pictureInPictureEnabled;
 
+    function play(): void {
+        void video.play().catch(error => {
+            if (error instanceof DOMException && error.name === "AbortError") return;
+            show(error instanceof DOMException && error.name === "NotAllowedError" ? "play_gesture_required" : "failed");
+        });
+    }
+
     const actions: Record<string, () => void> = {
-        toggle: () => void (video.paused ? video.play() : video.pause()),
+        toggle: () => { if (video.paused) play(); else video.pause(); },
         back: () => seek(-10),
         forward: () => seek(30),
         mute: () => { video.muted = !video.muted; },

@@ -1577,6 +1577,7 @@ namespace Jularr.Frontend.Localization
             new("player.status.storage_unavailable", "The storage holding this file is unavailable."),
             new("player.status.playback_conversion_unavailable", "This browser cannot play the file directly, and conversion is not available yet."),
             new("player.status.not_found", "This media is no longer available."),
+            new("player.status.play_gesture_required", "Press Play to start watching."),
             new("player.status.failed", "Playback could not be started."),
             new("details.play", "Play"),
             new("details.playAgain", "Play again"),
