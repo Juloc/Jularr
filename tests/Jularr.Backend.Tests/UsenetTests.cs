@@ -10,9 +10,8 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Acquisition.V1;
-using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Admin.Wanted.V1;
-using Jularr.Backend.Data.Common;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
@@ -50,6 +49,9 @@ namespace Jularr.Backend.Tests
             }
 
             options.AllowDirectDownloadOnHostFilesystem = true;
+            options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
+            Assert.IsNull(options.ReadyDirectDownloadPath(), "A filesystem root is not a staging workspace.");
+            options.DirectDownloadPath = directory.Path;
             Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectDownloadPath());
             Assert.AreEqual(Path.Combine(Path.GetFullPath(directory.Path), "42"), WantedAcquisition.Staging(options, 42));
         }
