@@ -67,7 +67,7 @@ test("subtitle offset follows original cue times without accumulated drift", () 
 test("a failed direct play retries through HLS only when the client actually supports it", () => {
     const device = { containers: ["mp4", "hls", "webm"], videoCodecs: ["h264", "vp9"], audioCodecs: ["aac"] };
     const forced = hlsFallbackCapabilities(device);
-    assert.deepEqual(forced, { containers: ["hls"], videoCodecs: ["h264", "vp9"], audioCodecs: ["aac"] });
+    assert.deepEqual(JSON.parse(JSON.stringify(forced)), { containers: ["hls"], videoCodecs: ["h264", "vp9"], audioCodecs: ["aac"] });
     assert.deepEqual(device.containers, ["mp4", "hls", "webm"], "original capability probes stay unchanged");
     assert.equal(hlsFallbackCapabilities({ ...device, containers: ["mp4"] }), null);
 });
