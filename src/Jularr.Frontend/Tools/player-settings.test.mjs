@@ -8,7 +8,7 @@ const code = readFileSync(new URL("../Modules/Player/PlayerSettings.ts", import.
 const script = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
 runInNewContext(script, { exports });
-const { normalizedSpeed, applyFit, selectSettingsPane, shiftTextCues } = exports;
+const { normalizedSpeed, applyFit, selectSettingsPane, shiftTextCues, hlsFallbackCapabilities } = exports;
 
 test("speed is bounded, finite and rounded to the actual 0.05 step", () => {
     assert.equal(normalizedSpeed(0.1), 0.25);
@@ -61,4 +61,13 @@ test("subtitle offset follows original cue times without accumulated drift", () 
     assert.equal(clipped.endTime, 0.5);
     shiftTextCues(track, Number.NaN, originals);
     assert.equal(cue.startTime, 2);
+});
+
+
+test("a failed direct play retries through HLS only when the client actually supports it", () => {
+    const device = { containers: ["mp4", "hls", "webm"], videoCodecs: ["h264", "vp9"], audioCodecs: ["aac"] };
+    const forced = hlsFallbackCapabilities(device);
+    assert.deepEqual(forced, { containers: ["hls"], videoCodecs: ["h264", "vp9"], audioCodecs: ["aac"] });
+    assert.deepEqual(device.containers, ["mp4", "hls", "webm"], "original capability probes stay unchanged");
+    assert.equal(hlsFallbackCapabilities({ ...device, containers: ["mp4"] }), null);
 });
