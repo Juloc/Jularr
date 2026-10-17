@@ -58,7 +58,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
             DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search, string? host = null,
-            int? port = null, bool? useSsl = null)
+            int? port = null, bool? useSsl = null, string? incompleteRemotePath = null, string? incompleteLocalPath = null)
         {
             Host = host;
             Port = port;
@@ -85,6 +85,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             DownloadCategory = downloadCategory;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
             CheckedAt = checkedAt;
             ErrorKey = errorKey;
             Version = version;
@@ -137,6 +139,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.CheckedAt))]
         public DateTime? CheckedAt { get; }
 
@@ -183,7 +191,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
             string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
-            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null)
+            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null, string? incompleteRemotePath = null, string? incompleteLocalPath = null)
         {
             Host = host;
             Port = port;
@@ -205,6 +213,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             DownloadCategory = downloadCategory;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
@@ -247,14 +257,25 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
+
         public override void Validate()
         {
             base.Validate();
 
             // Download settings belong to download clients; mappings are complete pairs.
-            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd && (DownloadCategory is not null || RemotePath is not null || LocalPath is not null))
+            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd && (DownloadCategory is not null || RemotePath is not null || LocalPath is not null || IncompleteRemotePath is not null || IncompleteLocalPath is not null))
             {
                 throw new DataValidationException(nameof(DownloadCategory), "invalid_transition");
+            }
+
+            if ((IncompleteRemotePath is null) != (IncompleteLocalPath is null))
+            {
+                throw new DataValidationException(IncompleteRemotePath is null ? nameof(IncompleteRemotePath) : nameof(IncompleteLocalPath), "required");
             }
 
             if ((RemotePath is null) != (LocalPath is null))
