@@ -5,6 +5,21 @@ using Jularr.Backend.Data.Fields.Acquisition;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
+    internal sealed class AcquisitionConnectionCategoryMapData : BaseData
+    {
+        public AcquisitionConnectionCategoryMapData(long acquisitionConnectionId, string categoryMap)
+        {
+            AcquisitionConnectionId = acquisitionConnectionId;
+            CategoryMap = categoryMap;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategoryMap))]
+        public string CategoryMap { get; }
+    }
+
     internal sealed class AcquisitionConnectionData : BaseData
     {
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
