@@ -91,4 +91,14 @@ CREATE TABLE "ArtworkFallbacks" (
 CREATE UNIQUE INDEX "UX_ArtworkFallbacks_Owner"
     ON "ArtworkFallbacks" ("WorkId", "WorkUnitId", "SlotId", "Locale") NULLS NOT DISTINCT;
 
+
+-- One bounded artwork export per Work, executed by the existing Operation worker.
+-- The Work FK preserves identity; active jobs are de-duplicated on that identity.
+INSERT INTO "OperationTypes" ("Id", "Key") VALUES (4, 'ArtworkExport');
+ALTER TABLE "Operations" ADD COLUMN "ArtworkWorkId" bigint NULL REFERENCES "Works" ("Id") ON DELETE CASCADE;
+ALTER TABLE "Operations" ADD CONSTRAINT "CK_Operations_ArtworkWork" CHECK ("OperationTypeId" <> 4 OR "ArtworkWorkId" IS NOT NULL);
+CREATE UNIQUE INDEX "UX_Operations_ActiveArtwork" ON "Operations" ("ArtworkWorkId")
+    WHERE "OperationTypeId" = 4 AND "OperationStatusTypeId" IN (1, 2);
+CREATE INDEX "IX_Operations_ArtworkWork" ON "Operations" ("ArtworkWorkId") WHERE "ArtworkWorkId" IS NOT NULL;
+
 COMMIT;

@@ -4,6 +4,8 @@ using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Data.Logic.Operation;
 
 namespace Jularr.Backend.Logic.Media
 {
@@ -123,6 +125,7 @@ namespace Jularr.Backend.Logic.Media
                 await ctx.TagGameReleaseAsync(new GameReleaseData(asset.Id, data.GamePlatformId, file.RelativePath.Split('/')[0]), ct);
             }
 
+            await ctx.QueueArtworkForWorkAsync(new ArtworkWorkQueueData(workId), ct);
             return asset;
         }
 

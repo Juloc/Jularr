@@ -33,6 +33,113 @@ namespace Jularr.Backend.Logic.Operation
             return (await ctx.ReadOptionalAsync<OperationData>(sql, ct) ?? throw new KeyNotFoundException("The library root was not found.")).Id;
         }
 
+
+        // Queue a Work only when it has actual writable media and a known provider poster or backdrop.
+        public static Task<int> QueueArtworkForWorkAsync(this LogicContext ctx, ArtworkWorkQueueData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "Operations" ("OperationTypeId", "ArtworkWorkId")
+                SELECT
+                    4, work."Id"
+                FROM
+                    "Works" AS work
+                    JOIN "ArtworkSettings" AS settings ON settings."Id" = 1 AND settings."ExportToNas" AND settings."NasModeId" = 1
+                WHERE
+                    work."Id" = @WorkId
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
+                            JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                            JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId" AND NOT mount."IsReadOnly"
+                        WHERE
+                            asset."WorkId" = work."Id"
+                    )
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" IN ('Poster', 'Backdrop')
+                    )
+                ON CONFLICT ("ArtworkWorkId") WHERE "OperationTypeId" = 4 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // A successful library scan covers imports and media newly linked to metadata.
+        public static Task<int> QueueArtworkForRootAsync(this LogicContext ctx, ArtworkRootQueueData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "Operations" ("OperationTypeId", "ArtworkWorkId")
+                SELECT DISTINCT
+                    4,
+                    asset."WorkId"
+                FROM
+                    "StoredFiles" AS file
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId" AND NOT mount."IsReadOnly"
+                    JOIN "ArtworkSettings" AS settings ON settings."Id" = 1 AND settings."ExportToNas" AND settings."NasModeId" = 1
+                WHERE
+                    file."LibraryRootId" = @LibraryRootId
+                    AND file."MissingSince" IS NULL
+                    AND NOT file."IsSubtitle"
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = asset."WorkId"
+                            AND fact."FactKey" IN ('Poster', 'Backdrop')
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkArtworks" AS artwork
+                                WHERE
+                                    artwork."WorkId" = asset."WorkId"
+                                    AND artwork."WorkUnitId" IS NULL
+                                    AND artwork."SlotId" = CASE fact."FactKey" WHEN 'Poster' THEN 1 ELSE 2 END
+                                    AND artwork."SourceKindId" IN (1, 2)
+                            )
+                    )
+                ON CONFLICT ("ArtworkWorkId") WHERE "OperationTypeId" = 4 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static Task<ArtworkJobData> ReadArtworkJobAsync(this LogicContext ctx, ArtworkJobParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."ArtworkWorkId" AS "Id"
+                FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 4
+                    AND operation."OperationStatusTypeId" = 2;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadRequiredAsync<ArtworkJobData>(sql, ct);
+        }
+
         public static Task<int> QueueDueLibraryScansAsync(this LogicContext ctx, CancellationToken ct)
         {
             // The instance's interval; storage last probed offline or denied is not scanned, so a sleeping NAS stays asleep.
@@ -132,7 +239,7 @@ namespace Jularr.Backend.Logic.Operation
                         FROM
                             "Operations" AS queued
                         WHERE
-                            queued."OperationTypeId" IN (1, 3)
+                            queued."OperationTypeId" IN (1, 3, 4)
                             AND queued."OperationStatusTypeId" = 1
                         ORDER BY
                             queued."CreatedAt",
@@ -163,7 +270,7 @@ namespace Jularr.Backend.Logic.Operation
                     "FinishedAt" = CASE WHEN @OperationStatusTypeId IN (3, 4) THEN now() END
                 WHERE
                     operation."Id" = @Id
-                    AND operation."OperationTypeId" IN (1, 3)
+                    AND operation."OperationTypeId" IN (1, 3, 4)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
@@ -203,7 +310,8 @@ namespace Jularr.Backend.Logic.Operation
                         operation."Id",
                         operation."OperationTypeId",
                         operation."LibraryRootId",
-                        operation."AcquisitionReleaseId"
+                        operation."AcquisitionReleaseId",
+                        operation."ArtworkWorkId"
                     FROM
                         "Operations" AS operation
                     WHERE
@@ -234,6 +342,18 @@ namespace Jularr.Backend.Logic.Operation
                     WHERE
                         failed."OperationTypeId" = 3
                     ON CONFLICT ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING
+                ), artwork AS (
+                    INSERT INTO
+                        "Operations" ("OperationTypeId", "ArtworkWorkId", "RequestedByAccountId")
+                    SELECT
+                        4,
+                        failed."ArtworkWorkId",
+                        @AccountId
+                    FROM
+                        failed
+                    WHERE
+                        failed."OperationTypeId" = 4
+                    ON CONFLICT ("ArtworkWorkId") WHERE "OperationTypeId" = 4 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING
                 ), searched AS (
                     UPDATE
                         "WantedItems" AS wanted
@@ -273,7 +393,7 @@ namespace Jularr.Backend.Logic.Operation
                     "OperationStatusTypeId" = 1,
                     "StartedAt" = NULL
                 WHERE
-                    operation."OperationTypeId" IN (1, 3)
+                    operation."OperationTypeId" IN (1, 3, 4)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
