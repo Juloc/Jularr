@@ -89,7 +89,7 @@ namespace Jularr.Backend.Tests
             var bytes = Enumerable.Range(0, 6_000).Select(index => (byte)index).ToArray();
             news.Publish("quota.mkv", bytes, 3);
             var files = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(news.Nzb("quota.mkv"))));
-            var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 1);
+            var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 3);
             var downloader = new UsenetDownloader();
 
             await Assert.ThrowsExceptionAsync<UsenetStorageBudgetException>(async () =>
@@ -202,7 +202,7 @@ namespace Jularr.Backend.Tests
                 {
                     ["Storage:DirectDownloadPath"] = staging,
                     ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true",
-                    ["Storage:UsenetMaxJobBytes"] = (maxJobBytes ?? 100L * 1024 * 1024 * 1024).ToString(CultureInfo.InvariantCulture)
+                    ["Storage:UsenetMaxJobBytes"] = (maxJobBytes ?? 20L * 1024 * 1024 * 1024).ToString(CultureInfo.InvariantCulture)
                 },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);

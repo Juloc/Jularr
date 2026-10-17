@@ -203,7 +203,7 @@ enabling acquisition.
 ## Native NNTP job size ceiling
 
 `Storage__UsenetMaxJobBytes` controls the maximum allocated article-file bytes
-for any single NNTP job (default: **100 GiB**, independently configurable per
+for any single NNTP job (default: **20 GiB**, independently configurable per
 installation). The worker validates the parsed NZB's total declared size
 before opening article files; the downloader additionally reserves actual
 file-growth extents across concurrent NNTP sessions before each write. An
