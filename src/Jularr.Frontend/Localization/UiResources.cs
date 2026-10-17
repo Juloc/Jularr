@@ -1560,6 +1560,8 @@ namespace Jularr.Frontend.Localization
             new("player.stop", "Stop playback"),
             new("player.subtitles", "Subtitles"),
             new("player.subtitles.off", "Off"),
+            new("player.subtitle.delay", "Subtitle delay (seconds)"),
+            new("player.subtitle.reset", "Reset delay"),
             new("player.subtitles.forced", "forced"),
             new("player.track.unknown", "Track"),
             new("player.channels.mono", "Mono"),
