@@ -171,3 +171,15 @@ the owner decision.
 
 References: [Docker volume options](https://docs.docker.com/reference/compose-file/volumes/#driver_opts),
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
+
+
+## Space checks for native Usenet unpacking
+
+Before extracting archives, the native worker checks free space on the **actual
+filesystem containing the staging files** and reserves a rough 10% overhead
+above the compressed input size for the next extraction. Linux mount identity
+is read from `/proc/self/mountinfo`; if the filesystem cannot be resolved
+to a ready mount, extraction enters the existing `usenet_disk_full` wait state
+rather than using a misleading VM-root free-space number. This is a preflight
+safeguard, **not a hard quota**; capacity reservation across jobs and checks
+during extraction are still part of #1209.
