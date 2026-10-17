@@ -23,6 +23,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, snapshot.History.Count);
             Assert.AreEqual(2_048L, snapshot.SpeedBytesPerSecond);
             Assert.AreEqual(107_374_182_400L, snapshot.FreeBytes);
+            Assert.AreEqual(1_024L, snapshot.TodayBytes);
+            CollectionAssert.AreEqual(new[] { "stale-folder" }, snapshot.OrphanFolders.ToArray());
             CollectionAssert.AreEqual(new[] { "movies", "tv" }, (await provider.ReadCategoriesAsync(connection, CancellationToken.None)).ToArray());
         }
 
@@ -38,6 +40,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(handler.LastRequest!, "name=delete");
             StringAssert.Contains(handler.LastRequest!, "del_files=1");
             await Assert.ThrowsExactlyAsync<ArgumentException>(() => provider.ControlJobAsync(connection, "../bad", SabnzbdJobCommand.RemoveFromQueue, CancellationToken.None));
+            await provider.RemoveOrphanAsync(connection, "stale-folder", CancellationToken.None);
+            StringAssert.Contains(handler.LastRequest!, "name=delete_orphan");
         }
 
         [TestMethod]
@@ -77,7 +81,11 @@ namespace Jularr.Backend.Tests
                 var body = await request.Content!.ReadAsStringAsync(cancellationToken);
                 LastRequest = body;
                 StringAssert.Contains(body, "apikey=secret");
-                var response = body.Contains("mode=get_cats", StringComparison.Ordinal)
+                var response = body.Contains("mode=server_stats", StringComparison.Ordinal)
+                    ? "{\"day\":1024,\"week\":4096,\"month\":8192,\"total\":16384}"
+                    : body.Contains("mode=status", StringComparison.Ordinal) && !body.Contains("name=delete_orphan", StringComparison.Ordinal)
+                        ? "{\"status\":{\"folders\":[\"stale-folder\"]}}"
+                    : body.Contains("mode=get_cats", StringComparison.Ordinal)
                     ? "{\"categories\":[\"movies\",\"tv\"]}"
                     : body.Contains("mode=history", StringComparison.Ordinal) && !body.Contains("name=delete", StringComparison.Ordinal)
                         ? "{\"history\":{\"slots\":[{\"nzo_id\":\"HIST_1\",\"name\":\"Old Show\",\"status\":\"Completed\"}]}}"
