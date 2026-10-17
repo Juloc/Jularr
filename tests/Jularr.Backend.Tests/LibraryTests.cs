@@ -606,6 +606,55 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
+        [DataTestMethod]
+        [DataRow("Series/Season 1/Series - S01E01-E02.mkv", 1, 1, 2)]
+        [DataRow("Series/Season 1/Series - S01E01E03.mkv", 1, 1, 3)]
+        [DataRow("Series/Season 1/Series - S01E01-03.mkv", 1, 1, 3)]
+        [DataRow("Series/Season 1/Series - 1x01-02.mkv", 1, 1, 2)]
+        [DataRow("Series/Season 0/Series - S00E01-E02.mkv", 0, 1, 2)]
+        public void Parser_EpisodeRange_ProvidesAllContiguousEpisodes(string path, int season, int first, int last)
+        {
+            var range = MediaPathParser.ParseEpisodeRange(path);
+            Assert.IsNotNull(range, path);
+            Assert.AreEqual((decimal)season, range.Season);
+            CollectionAssert.AreEqual(Enumerable.Range(first, last - first + 1).Select(number => (decimal)number).ToArray(), range.Episodes.ToArray());
+            Assert.IsNull(MediaPathParser.Parse(path, MediaType.Series).WorkUnitTypeId, path);
+        }
+
+        [DataTestMethod]
+        [DataRow("Series/Season 2/Series - S01E01-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E05-E01.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01-E09.mkv")]
+        [DataRow("Series/Season 1/Series - 1x03-01.mkv")]
+        [DataRow("Series/Season 1/Series - 2024-10-17.mkv")]
+        public void Parser_EpisodeRange_RejectsContradictionsAndUnboundedSpans(string path)
+        {
+            Assert.IsNull(MediaPathParser.ParseEpisodeRange(path));
+        }
+
+        [TestMethod]
+        public async Task MultiEpisodeCoverage_RelationalLinksStayWithinTheirWork()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'One Show') RETURNING "Id"
+                ), season AS (
+                    INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    SELECT work."Id", 1, 1 FROM work RETURNING "Id", "WorkId"
+                )
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                SELECT season."WorkId", season."Id", 2, number
+                FROM season CROSS JOIN generate_series(1, 2) AS number;
+                """);
+            var workId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Works" WHERE "CanonicalTitle" = 'One Show'"""))!;
+            // The coverage table and view are installed as one part of the new schema.
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetAdditionalUnits" """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
+            Assert.AreEqual(2L, await host.ScalarAsync($"""SELECT count(*) FROM "WorkUnits" WHERE "WorkId" = {workId} AND "WorkUnitTypeId" = 2"""));
+        }
+
         [TestMethod]
         public async Task Scan_MultiEpisodeFile_DoesNotLinkToOnlyTheFirstEpisode()
         {
