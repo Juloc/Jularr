@@ -112,6 +112,31 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // Positive and negative identity lookups share one cache across scans.
+        public async Task<int?> FindExternalAsync(TmdbConnection connection, MediaType mediaType, string @namespace, string externalId, CancellationToken ct)
+        {
+            var key = $"metadata.identity.{mediaType}.{@namespace}.{externalId}";
+            if (_cache.TryGetValue(key, out int? cached))
+            {
+                return cached;
+            }
+
+            try
+            {
+                var result = await _tmdb.FindExternalAsync(connection, Kind(mediaType), @namespace, externalId, ct);
+                _cache.Set<int?>(key, result, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = result is null ? TimeSpan.FromHours(12) : TimeSpan.FromDays(7),
+                    Size = 1
+                });
+                return result;
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         // Similar titles change slowly; a shared cache of half a day spares the provider.
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
         {

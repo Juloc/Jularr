@@ -1136,6 +1136,14 @@ namespace Jularr.Backend.Tests
                 Assert.IsFalse(StorageFileSystem.IsMountPoint(Path.GetTempPath()));
             }
 
+            using (var temporary = new TemporaryDirectory())
+            {
+                Assert.IsTrue(StorageFileSystem.AvailableFreeSpace(temporary.Path) is > 0,
+                    "The temporary directory should have a real filesystem with measurable free space.");
+                Assert.IsNull(StorageFileSystem.AvailableFreeSpace(Path.Combine(temporary.Path, "missing")),
+                    "Unknown destinations must never borrow the VM root's free-space reading.");
+            }
+
             Assert.Throws<ArgumentException>(() => new A().Attribute("href", "\u0001javascript:alert(1)"));
             Assert.Throws<ArgumentException>(() => new A().Attribute("href", "java\tscript:alert(1)"));
             new A().Attribute("href", "/Admin/Wanted?Tab=search");

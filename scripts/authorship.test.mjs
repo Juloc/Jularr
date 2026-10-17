@@ -25,6 +25,8 @@ test("Feature pushes preserve merged history but reject new foreign authorship",
 
     try {
         git("init", "--quiet");
+        git("commit", "--allow-empty", "-m", "Original baseline");
+        const original = git("rev-parse", "HEAD");
         const merged = run("git", ["commit", "--allow-empty", "-m", "Existing merged frontend"], {
             env: { ...owner, GIT_COMMITTER_NAME: "GitHub", GIT_COMMITTER_EMAIL: "noreply@github.com" }
         });
@@ -53,8 +55,13 @@ test("Feature pushes preserve merged history but reject new foreign authorship",
         });
         const zero = "0".repeat(40);
         assert.equal(push(good, "codex/test", zero).status, 0);
-        assert.equal(push(good, "clean-start", zero).status, 1);
+        assert.equal(push(good, "fix/test", zero).status, 0);
+        assert.equal(push(good, "fix/test", original).status, 0);
+        for (const target of ["clean-start", "dev", "main"]) {
+            assert.equal(push(good, target, original).status, 1);
+        }
         assert.equal(push(git("rev-parse", "HEAD"), "codex/test", good).status, 1);
+        assert.equal(push(git("rev-parse", "HEAD"), "fix/test", good).status, 1);
     } finally {
         rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }

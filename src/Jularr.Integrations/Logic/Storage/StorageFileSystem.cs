@@ -90,6 +90,48 @@ namespace Jularr.Integrations.Logic.Storage
             return false;
         }
 
+        // Disk reservations must inspect the filesystem holding the actual output,
+        // not Path.GetPathRoot(output), which would always be "/" on Linux.
+        // If mountinfo and DriveInfo disagree, no free-space claim is trustworthy.
+        public static long? AvailableFreeSpace(string directory)
+        {
+            if (!Directory.Exists(directory))
+            {
+                return null;
+            }
+
+            try
+            {
+                var fullPath = Path.GetFullPath(directory);
+                var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                var mountPath = Path.GetPathRoot(fullPath)!;
+                if (OperatingSystem.IsLinux())
+                {
+                    DirectoryInfo? parent = new(fullPath);
+                    while (parent is not null && !IsMountPoint(parent.FullName))
+                    {
+                        parent = parent.Parent;
+                    }
+
+                    if (parent is null)
+                    {
+                        return null;
+                    }
+
+                    mountPath = parent.FullName;
+                }
+
+                var root = Path.TrimEndingDirectorySeparator(mountPath);
+                var drive = DriveInfo.GetDrives().FirstOrDefault(item =>
+                    string.Equals(Path.TrimEndingDirectorySeparator(item.RootDirectory.FullName), root, pathComparison));
+                return drive is { IsReady: true } ? drive.AvailableFreeSpace : null;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                return null;
+            }
+        }
+
         // Without extensions every file counts.
         public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string>? extensions, StorageScanState state, CancellationToken ct)
         {
