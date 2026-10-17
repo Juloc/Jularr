@@ -32,6 +32,7 @@ if (reader?.querySelector("[data-role=content]")) {
     const sections = Number(reader.dataset.sections);
     let settings = load();
     let timer = 0;
+    let anchorBlock = 0;
     const allBlocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         const feedback = reader.querySelector<HTMLElement>('[data-role=save-error]');
@@ -65,6 +66,7 @@ if (reader?.querySelector("[data-role=content]")) {
     // Panels and settings.
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
     reader.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => button.addEventListener("click", () => {
+        const visibleBlock = current();
         const value = button.dataset.value!;
         if (button.dataset.setting === "preset") {
             settings.preset = value as ReaderSettings["preset"];
@@ -81,6 +83,7 @@ if (reader?.querySelector("[data-role=content]")) {
         if (button.dataset.setting === "theme") settings.theme = value as ReaderSettings["theme"];
         if (button.dataset.setting === "mode") settings.mode = value as ReaderSettings["mode"];
         apply();
+        scrollToBlock(visibleBlock);
         try { localStorage.setItem(SettingsKey, JSON.stringify(settings)); } catch { /* Optional device storage. */ }
     }));
 
@@ -91,19 +94,25 @@ if (reader?.querySelector("[data-role=content]")) {
             setFocusMode(false);
             return;
         }
-        if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, button, [contenteditable="true"]')) return;
-        if (event.key === "ArrowRight" || event.key === "PageDown") page(1, event);
-        if (event.key === "ArrowLeft" || event.key === "PageUp") page(-1, event);
+        if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement &&
+            event.target.closest('a, input, textarea, select, button, [contenteditable="true"]')) return;
+        if (event.key === "ArrowRight") page(direction() === "rtl" ? -1 : 1, event);
+        if (event.key === "ArrowLeft") page(direction() === "rtl" ? 1 : -1, event);
+        if (event.key === "PageDown") page(1, event);
+        if (event.key === "PageUp") page(-1, event);
     });
     content.addEventListener("click", event => {
         if (settings.mode !== "paged" || !(event.target instanceof Element) ||
             event.target.closest('a, button, input, select, textarea, mark, [contenteditable="true"]') ||
             window.getSelection()?.toString()) return;
-        page(event.clientX > window.innerWidth / 2 ? 1 : -1, event);
+        const bounds = content.getBoundingClientRect();
+        const right = event.clientX > bounds.left + bounds.width / 2;
+        page(right === (direction() === "rtl") ? -1 : 1, event);
     });
 
     content.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", () => scrollToBlock(anchorBlock));
     window.addEventListener("pagehide", () => report(true));
 
     function load(): ReaderSettings {
@@ -138,6 +147,7 @@ if (reader?.querySelector("[data-role=content]")) {
     }
 
     function setFocusMode(enabled: boolean): void {
+        const visibleBlock = current();
         reader!.classList.toggle("reader--focused", enabled);
         reader!.querySelectorAll<HTMLElement>("[data-panel]").forEach(panel => { panel.hidden = true; });
         reader!.querySelectorAll<HTMLElement>("[aria-expanded]").forEach(control => control.setAttribute("aria-expanded", "false"));
@@ -147,6 +157,7 @@ if (reader?.querySelector("[data-role=content]")) {
             if (enabled) restore.focus();
         }
         if (!enabled) reader!.querySelector<HTMLButtonElement>("[data-action=focus]")?.focus();
+        scrollToBlock(visibleBlock);
     }
 
     function toggle(button: HTMLButtonElement) {
@@ -162,6 +173,18 @@ if (reader?.querySelector("[data-role=content]")) {
         });
     }
 
+    // Preserve the canonical block locator through reflow and viewport changes.
+    function direction(): "ltr" | "rtl" {
+        return reader!.dataset.direction === "rtl" ? "rtl" : "ltr";
+    }
+
+    function scrollToBlock(index: number): void {
+        const block = allBlocks.find(item => Number(item.dataset.b) === index);
+        if (!block) return;
+        block.scrollIntoView({ block: "start", inline: "start", behavior: "instant" });
+        anchorBlock = index;
+    }
+
     // A note's block, else the saved block of this section, unless the address names an anchor.
     function restore() {
         const requested = new URLSearchParams(location.search).get("b");
@@ -169,21 +192,23 @@ if (reader?.querySelector("[data-role=content]")) {
         const match = /^s(\d+)\/b(\d+)$/.exec(reader!.dataset.locator ?? "");
         const block = linked ?? (match && Number(match[1]) === section ? match[2] : null);
         if (location.hash || block === null) return;
-        content.querySelector(`[data-b="${block}"]`)?.scrollIntoView({ block: "start" });
+        scrollToBlock(Number(block));
     }
 
     function page(direction: number, event: Event) {
         if (settings.mode !== "paged") return;
         event.preventDefault();
         const width = content.clientWidth;
-        const atEnd = content.scrollLeft + width >= content.scrollWidth - 4;
-        const atStart = content.scrollLeft <= 4;
+        const directionOfContent = direction();
+        const atEnd = Math.abs(content.scrollLeft) + width >= content.scrollWidth - 4;
+        const atStart = Math.abs(content.scrollLeft) <= 4;
         if (direction > 0 && atEnd) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=next]")?.click();
         } else if (direction < 0 && atStart) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=previous]")?.click();
         } else {
-            content.scrollBy({ left: direction * width, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+            content.scrollBy({ left: direction * width * (directionOfContent === "rtl" ? -1 : 1),
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
         }
     }
 
@@ -193,23 +218,26 @@ if (reader?.querySelector("[data-role=content]")) {
         const top = reader!.querySelector('.reader__top')?.getBoundingClientRect().bottom ?? 0;
         for (const block of allBlocks) {
             const box = block.getBoundingClientRect();
-            if (settings.mode === "paged" ? box.right > bounds.left + 1 : box.bottom > top + 1) return Number(block.dataset.b);
+            if (settings.mode === "paged" ? (direction() === "rtl" ? box.left < bounds.right - 1 : box.right > bounds.left + 1)
+                : box.bottom > top + 1) return Number(block.dataset.b);
         }
 
         return allBlocks.length > 0 ? Number(allBlocks[allBlocks.length - 1].dataset.b) : 0;
     }
 
     function schedule() {
+        anchorBlock = current();
         window.clearTimeout(timer);
         timer = window.setTimeout(() => report(false), ReportDelay);
     }
 
     function report(leaving: boolean) {
         const block = current();
+        anchorBlock = block;
         // Completion requires the section end.
         const bounds = content.getBoundingClientRect();
         const atEnd = allBlocks.length > 0 && (settings.mode === 'paged'
-            ? content.scrollLeft + content.clientWidth >= content.scrollWidth - 4
+            ? Math.abs(content.scrollLeft) + content.clientWidth >= content.scrollWidth - 4
             : bounds.bottom <= window.innerHeight);
         const completed = section === sections - 1 && atEnd;
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
