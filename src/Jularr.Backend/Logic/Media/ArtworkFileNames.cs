@@ -12,6 +12,9 @@ namespace Jularr.Backend.Logic.Media
     {
         private static readonly FrozenSet<string> ImageExtensions =
             new[] { ".jpg", ".jpeg", ".png", ".webp", ".jxl" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        
+        // The scanner filters these extensions before trying conventional filenames.
+        public static IReadOnlySet<string> ScanExtensions => ImageExtensions;
 
         public static ArtworkSidecar? Recognize(string relativePath)
         {

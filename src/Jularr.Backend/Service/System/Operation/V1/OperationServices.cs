@@ -210,6 +210,15 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 await AssignKnownFoldersAsync(root.Id, root.MediaTypeId);
             }
 
+            // Artwork is indexed only after media has established a reliable Work identity.
+            // An incomplete NAS traversal keeps older artwork candidates rather than deleting them.
+            if (!await ArtworkSidecarScan.RunAsync(Context, storage, directory, root.Id, seenAt, CancellationToken))
+            {
+                await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(
+                    Parameters.OperationId, processed, OperationStatusType.Failed, "scan_incomplete"), ct), CancellationToken);
+                return new UpdateResult(false);
+            }
+
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
             return new UpdateResult(true);
         }

@@ -79,6 +79,8 @@ fingerprints all match one album goes to that album. Everything else waits for m
 identification under `/Admin/Library`.
 Profiles read the stored availability only.
 
+After the media identity pass, Artwork's second bounded scan searches for conventional JPG/PNG/WebP/JXL sidecars, not playable files. It associates artwork only when the containing folder maps to exactly one already-identified Work through StoredFiles/MediaAssets; season posters additionally require a matching season WorkUnit. An incomplete/offline image traversal preserves previously indexed sidecars. This discovery currently records candidates in `WorkArtworks` but does not yet generate cache derivatives or export NAS images; see [Artwork](ARTWORK.md).
+
 The Rename tab there previews moving identified files into the import layout
 (subtitles follow their video, a trailing `[quality]` tag stays, taken names get a
 counter, games and libraries being scanned are left alone). Applying needs the
