@@ -64,7 +64,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
         public long? TotalBytes { get; }
 
-        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Categories))]
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.OrphanFolders))]
         public string[] OrphanFolders { get; }
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Path))]
