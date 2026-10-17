@@ -82,7 +82,7 @@ namespace Jularr.Backend.Service.Core
 
                     if (process.ExitCode != 0) return null;
                 }
-                catch (System.ComponentModel.Win32Exception)
+                catch (global::System.ComponentModel.Win32Exception)
                 {
                     // Non-container developers can run Jularr without cjxl; WebP remains functional.
                     return null;
