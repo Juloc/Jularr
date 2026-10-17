@@ -31,10 +31,11 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ArtworkCacheCandidateData : BaseData
     {
-        public ArtworkCacheCandidateData(long artworkId, long workId, ArtworkSlot slotId, string sourceKey, long? sourceSizeBytes)
+        public ArtworkCacheCandidateData(long artworkId, long workId, long? workUnitId, ArtworkSlot slotId, string sourceKey, long? sourceSizeBytes)
         {
             ArtworkId = artworkId;
             WorkId = workId;
+            WorkUnitId = workUnitId;
             SlotId = slotId;
             SourceKey = sourceKey;
             SourceSizeBytes = sourceSizeBytes;
@@ -45,6 +46,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id), false)]
+        public long? WorkUnitId { get; }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.SlotId))]
         public ArtworkSlot SlotId { get; }
@@ -69,11 +73,12 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ArtworkRenditionSaveData : BaseData
     {
-        public ArtworkRenditionSaveData(long artworkId, long workId, ArtworkSlot slotId, ArtworkFormat formatId, bool isProgressive, int width, int height, string cacheKey, string sourceHash, string contentHash, long sizeBytes,
+        public ArtworkRenditionSaveData(long artworkId, long workId, long? workUnitId, ArtworkSlot slotId, ArtworkFormat formatId, bool isProgressive, int width, int height, string cacheKey, string sourceHash, string contentHash, long sizeBytes,
             ArtworkQuality qualityId, byte[]? fallbackBytes, string? fallbackHash)
         {
             ArtworkId = artworkId;
             WorkId = workId;
+            WorkUnitId = workUnitId;
             SlotId = slotId;
             FormatId = formatId;
             IsProgressive = isProgressive;
@@ -93,6 +98,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id), false)]
+        public long? WorkUnitId { get; }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.SlotId))]
         public ArtworkSlot SlotId { get; }

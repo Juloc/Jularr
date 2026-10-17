@@ -525,7 +525,25 @@ namespace Jularr.Backend.Service.User.Media.V1
                 SELECT
                     season."Number"::integer AS "SeasonNumber",
                     season."Title",
-                    season."ImageUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "WorkArtworks" AS image
+                        JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = image."Id" AND rendition."FormatId" = 3
+                        WHERE image."WorkId" = season."WorkId" AND image."WorkUnitId" = season."Id" AND image."SlotId" = 1
+                    ) OR EXISTS (
+                        SELECT 1 FROM "ArtworkFallbacks" AS preview
+                        WHERE preview."WorkId" = season."WorkId" AND preview."WorkUnitId" = season."Id" AND preview."SlotId" = 1
+                    ) THEN '/api/v1/works/' || season."WorkId"::text || '/units/' || season."Id"::text || '/artwork/1'
+                    ELSE season."ImageUrl" END AS "ImageUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "ArtworkSettings" AS settings
+                        JOIN "WorkArtworks" AS image ON image."WorkId" = season."WorkId" AND image."WorkUnitId" = season."Id"
+                        JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = image."Id" AND native."FormatId" = 4
+                        WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                          AND image."SlotId" = 1
+                          AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                              WHERE webp."WorkArtworkId" = image."Id" AND webp."FormatId" = 3)
+                    ) THEN '/api/v1/works/' || season."WorkId"::text || '/units/' || season."Id"::text || '/artwork/1.jxl'
+                    END AS "JxlImageUrl",
                     extract(year FROM season."ReleasedOn")::integer AS "ReleaseYear",
                     count(episode."Id")::integer AS "EpisodeCount",
                     (count(episode."Id") FILTER (WHERE EXISTS (

@@ -70,6 +70,7 @@ namespace Jularr.Backend.Logic.Media
                 SELECT
                     artwork."Id" AS "ArtworkId",
                     artwork."WorkId",
+                    artwork."WorkUnitId",
                     artwork."SlotId",
                     artwork."SourceKey",
                     artwork."SourceSizeBytes"
@@ -79,7 +80,6 @@ namespace Jularr.Backend.Logic.Media
                 WHERE
                     artwork."LibraryRootId" = @LibraryRootId
                     AND artwork."SourceKindId" = 2
-                    AND artwork."WorkUnitId" IS NULL
                     AND artwork."SourceSizeBytes" BETWEEN 1 AND 12582912
                     AND settings."CacheLimitBytes" > 0
                     AND NOT EXISTS (
@@ -96,8 +96,7 @@ namespace Jularr.Backend.Logic.Media
                     OR (
                         artwork."LibraryRootId" = @LibraryRootId
                         AND artwork."SourceKindId" = 2
-                        AND artwork."WorkUnitId" IS NULL
-                        AND artwork."SourceSizeBytes" BETWEEN 1 AND 12582912
+                            AND artwork."SourceSizeBytes" BETWEEN 1 AND 12582912
                         AND settings."CacheLimitBytes" > 0
                         AND settings."CacheFormatId" = 2
                         AND NOT EXISTS (
@@ -146,9 +145,9 @@ namespace Jularr.Backend.Logic.Media
                     "CreatedAt" = now();
 
                 INSERT INTO
-                    "ArtworkFallbacks" ("WorkId", "SlotId", "WebpBytes", "ContentHash")
+                    "ArtworkFallbacks" ("WorkId", "WorkUnitId", "SlotId", "WebpBytes", "ContentHash")
                 SELECT
-                    @WorkId, @SlotId, @FallbackBytes, @FallbackHash
+                    @WorkId, @WorkUnitId, @SlotId, @FallbackBytes, @FallbackHash
                 WHERE
                     @FallbackBytes::bytea IS NOT NULL
                 ON CONFLICT ("WorkId", "WorkUnitId", "SlotId", "Locale") DO UPDATE
@@ -157,8 +156,7 @@ namespace Jularr.Backend.Logic.Media
                     "ContentHash" = EXCLUDED."ContentHash",
                     "UpdatedAt" = now()
                 WHERE
-                    "ArtworkFallbacks"."WorkUnitId" IS NULL
-                    AND "ArtworkFallbacks"."Locale" IS NULL;
+                    "ArtworkFallbacks"."Locale" IS NULL;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -183,7 +181,7 @@ namespace Jularr.Backend.Logic.Media
                             JOIN "ArtworkRenditions" AS variant ON variant."WorkArtworkId" = image."Id" AND variant."FormatId" = 3
                         WHERE
                             image."WorkId" = visible."WorkId"
-                            AND image."WorkUnitId" IS NULL
+                            AND image."WorkUnitId" IS NOT DISTINCT FROM @WorkUnitId
                             AND image."SlotId" = @SlotId
                         ORDER BY
                             image."IsPinned" DESC,
@@ -200,7 +198,7 @@ namespace Jularr.Backend.Logic.Media
                             JOIN "ArtworkRenditions" AS variant ON variant."WorkArtworkId" = image."Id" AND variant."FormatId" = 4
                         WHERE
                             image."WorkId" = visible."WorkId"
-                            AND image."WorkUnitId" IS NULL
+                            AND image."WorkUnitId" IS NOT DISTINCT FROM @WorkUnitId
                             AND image."SlotId" = @SlotId
                         ORDER BY
                             image."IsPinned" DESC,
@@ -210,7 +208,8 @@ namespace Jularr.Backend.Logic.Media
                         LIMIT 1
                     ) AS jxl ON TRUE
                     LEFT JOIN "ArtworkFallbacks" AS fallback ON fallback."WorkId" = visible."WorkId"
-                        AND fallback."WorkUnitId" IS NULL AND fallback."Locale" IS NULL AND fallback."SlotId" = @SlotId
+                        AND fallback."WorkUnitId" IS NOT DISTINCT FROM @WorkUnitId
+                        AND fallback."Locale" IS NULL AND fallback."SlotId" = @SlotId
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND visible."WorkId" = @WorkId

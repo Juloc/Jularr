@@ -263,7 +263,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 var current = season.SeasonNumber == SelectedSeason;
                 var facts = string.Join(" · ", new[] { string.Format(CultureInfo.CurrentCulture, texts["details.episodeCount"], season.EpisodeCount),
                     season.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }.OfType<string>());
-                var link = new A(season.ImageUrl is null ? new Span().Class("details-season__poster") : new MediaImage(season.ImageUrl, "", 92, 138),
+                var link = new A(season.ImageUrl is null ? new Span().Class("details-season__poster") : new MediaImage(season.ImageUrl, "", 92, 138, jxlUrl: season.JxlImageUrl),
                     new Span(new Strong(new ValueText(SeasonName(season))), new Span(new ValueText(facts)).Class("details-season__facts")).Class("details-season__text"))
                     .Class(current ? "details-season details-season--current" : "details-season").Attribute("href", home + "?season=" + season.SeasonNumber.ToString(CultureInfo.InvariantCulture));
                 return current ? (IUiComponent)link.Attribute("aria-current", "page") : link;

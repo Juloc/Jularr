@@ -15,6 +15,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(new ArtworkSidecar(ArtworkSlot.Logo), ArtworkFileNames.Recognize("Movies/Film/clearlogo.png"));
             Assert.AreEqual(new ArtworkSidecar(ArtworkSlot.Poster, 1), ArtworkFileNames.Recognize("Shows/Series/season01-poster.jpg"));
             Assert.AreEqual(new ArtworkSidecar(ArtworkSlot.Poster, 0), ArtworkFileNames.Recognize("Shows/Series/season00-poster.webp"));
+            Assert.AreEqual(new ArtworkSidecar(ArtworkSlot.Poster, 1), ArtworkFileNames.Recognize("Shows/Series/Season 1/poster.png"));
+            Assert.AreEqual(new ArtworkSidecar(ArtworkSlot.Backdrop, 2), ArtworkFileNames.Recognize("Shows/Series/Season 02/fanart.jxl"));
+            Assert.AreEqual(new ArtworkSidecar(ArtworkSlot.Poster, 0), ArtworkFileNames.Recognize("Shows/Series/Specials/cover.jpg"));
 
             foreach (var unsafePath in new[] { "../poster.jpg", "/absolute/poster.jpg", "Series//poster.jpg", "Series/.hidden/poster.jpg",
                 "Series\\poster.jpg", "poster.jpg.exe", "not-a-poster.jpg", "seasonab-poster.jpg", "season1000-poster.jpg" })
