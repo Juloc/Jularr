@@ -47,7 +47,7 @@ namespace Jularr.Backend.Logic.Library
             pattern.LastIndexOf('/') is var slash and >= 0 ? (pattern[..slash], pattern[(slash + 1)..]) : (null, pattern);
 
         public static string Example(MediaType mediaType, string pattern) => Apply(pattern, mediaType == MediaType.Series
-            ? new NamingValues("Example Show", 2020, 1, 2, "The Second", "WEBDL-1080p", "GRP", null, 1) { MediaType = MediaType.Series }
+            ? new NamingValues("Example Show", 2020, 1, 2, "The Second", "WEBDL-1080p", "GRP", null, 1) { MediaTypeId = MediaType.Series }
             : new NamingValues("Example Movie", 1999, null, null, null, "Bluray-1080p", "GRP", null, 1)) + ".mkv";
 
         public static bool Distinguishes(string pattern) =>
@@ -153,7 +153,7 @@ namespace Jularr.Backend.Logic.Library
                 "Original Title" => values.OriginalReleaseTitle ?? "",
                 "Original Filename" => values.OriginalFilename ?? "",
                 "ImdbId" => Id(values, "imdb"),
-                "TmdbId" => Id(values, values.MediaType == MediaType.Series ? "tmdb_tv" : "tmdb_movie"),
+                "TmdbId" => Id(values, values.MediaTypeId == MediaType.Series ? "tmdb_tv" : "tmdb_movie"),
                 "TvdbId" => Id(values, "tvdb"),
                 "TvMazeId" => Id(values, "tvmaze"),
                 "AnilistId" => Id(values, "anilist"),
@@ -254,7 +254,7 @@ namespace Jularr.Backend.Logic.Library
 
     internal sealed record NamingValues(string Title, int? Year, decimal? Season, decimal? Episode, string? EpisodeTitle, string? Quality, string? ReleaseGroup, string? Edition, int Revision)
     {
-        public MediaType MediaType { get; init; } = MediaType.Movie;
+        public MediaType MediaTypeId { get; init; } = MediaType.Movie;
         public IReadOnlyDictionary<string, string>? ProviderIds { get; init; }
         public string? OriginalTitle { get; init; }
         public string? OriginalFilename { get; init; }

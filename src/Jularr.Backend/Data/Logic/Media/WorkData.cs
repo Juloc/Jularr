@@ -34,12 +34,12 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class WorkFolderMatchData : BaseData
     {
-        public WorkFolderMatchData(MediaType mediaTypeId, string canonicalTitle, int? releaseYear, string? imdbId)
+        public WorkFolderMatchData(MediaType mediaTypeId, string canonicalTitle, int? releaseYear, string providerIds)
         {
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
             ReleaseYear = releaseYear;
-            ImdbId = imdbId;
+            ProviderIds = providerIds;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
@@ -51,8 +51,8 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
         public int? ReleaseYear { get; }
 
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId), false)]
-        public string? ImdbId { get; }
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
+        public string ProviderIds { get; }
     }
 
     public sealed class WorkUpdateData : BaseData

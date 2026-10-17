@@ -379,7 +379,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType)
         {
-            var matches = new Dictionary<(string Title, int? Year, string? ImdbId), long?>();
+            var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
             for (var afterId = 0L; ;)
             {
                 var files = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -411,8 +411,15 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         continue;
                     }
 
-                    var imdbId = MediaPathParser.ImdbId(file.RelativePath);
-                    var key = (parsed.Title.ToUpperInvariant(), parsed.Year, imdbId);
+                    var (ids, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
+                    if (conflicted)
+                    {
+                        continue;
+                    }
+
+                    var supplied = JsonSerializer.Serialize(ids.OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new { Namespace = item.Key, Value = item.Value }));
+                    var key = (parsed.Title.ToUpperInvariant(), parsed.Year, supplied);
                     if (!matches.TryGetValue(key, out var workId))
                     {
                         var candidates = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -422,25 +429,34 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                 """
                                 SELECT work."Id"
                                 FROM "Works" AS work
-                                WHERE work."MediaTypeId" = @MediaTypeId AND (
-                                    (@ImdbId::text IS NOT NULL AND EXISTS (
-                                        SELECT 1 FROM "WorkExternalIdentities" AS identity
-                                        WHERE identity."WorkId" = work."Id" AND identity."Namespace" = 'imdb' AND identity."Value" = @ImdbId
-                                    ))
-                                    OR (
-                                        NOT EXISTS (
-                                            SELECT 1 FROM "WorkExternalIdentities" AS identity
-                                            JOIN "Works" AS identified ON identified."Id" = identity."WorkId"
-                                            WHERE identity."Namespace" = 'imdb' AND identity."Value" = @ImdbId AND identified."MediaTypeId" = @MediaTypeId
+                                WHERE work."MediaTypeId" = @MediaTypeId
+                                    AND (
+                                        (
+                                            jsonb_array_length(@ProviderIds::jsonb) > 0
+                                            AND EXISTS (
+                                                SELECT 1
+                                                FROM jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
+                                                JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
+                                                    AND identity."Value" = expected."Value" AND identity."WorkId" = work."Id"
+                                            )
+                                            AND NOT EXISTS (
+                                                SELECT 1
+                                                FROM jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
+                                                JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
+                                                    AND identity."WorkId" = work."Id"
+                                                WHERE identity."Value" <> expected."Value"
+                                            )
                                         )
-                                        AND lower(work."CanonicalTitle") = lower(@CanonicalTitle)
-                                        AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
+                                        OR (
+                                            jsonb_array_length(@ProviderIds::jsonb) = 0
+                                            AND lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                                            AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
+                                        )
                                     )
-                                )
                                 ORDER BY work."Id"
                                 LIMIT 2;
                                 """;
-                            sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, imdbId));
+                            sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
                             return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
                         }, CancellationToken);
                         workId = candidates.Count == 1 ? candidates[0].Id : null;

@@ -356,6 +356,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         [DataRow("Show (2020)/Season 2/Show.S02E05.1080p.WEB-DL.mkv", MediaType.Series, "Show", WorkUnitType.Episode, "5", "2")]
         [DataRow("Series Name - tt39551287/Season 1/Series Name - S01E07 tt39551287.mkv", MediaType.Series, "Series Name", WorkUnitType.Episode, "7", "1")]
+        [DataRow("Series Name - tvdb-12345/Season 1/Series Name - S01E07.mkv", MediaType.Series, "Series Name", WorkUnitType.Episode, "7", "1")]
         [DataRow("Anime Name/Anime Name - 012 [1080p].mkv", MediaType.Series, "Anime Name", WorkUnitType.Episode, "12", "1")]
         [DataRow("Manga Title/Manga Title v03 c012.5.cbz", MediaType.Book, "Manga Title", WorkUnitType.Chapter, "12.5", "3")]
         [DataRow("Novel/Novel Vol. 4.epub", MediaType.Book, "Novel", WorkUnitType.Volume, "4", null)]
@@ -389,11 +390,28 @@ namespace Jularr.Backend.Tests
                 VALUES (2, 'Imported Show', FALSE), (2, 'Duplicate Show', FALSE), (2, 'Duplicate Show', FALSE);
                 """);
 
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM "Works" WHERE "CanonicalTitle" = 'Imported Show';
+                """);
             await ScanAsync(host, rootId);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL AND "RelativePath" LIKE 'Imported Show%' """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND "RelativePath" LIKE 'Duplicate Show%' """));
             await ScanAsync(host, rootId);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+        }
+
+        [TestMethod]
+        public void Parser_ProviderIds_MatchAcrossFoldersAndRejectConflicts()
+        {
+            const string path = "Series - tt39551287 - tvdb-12345/Season 1/Series - S01E07 tt39551287.mkv";
+            var (ids, conflicted) = MediaPathParser.ProviderIds(path, MediaType.Series);
+            Assert.IsFalse(conflicted);
+            Assert.AreEqual("tt39551287", ids["imdb"]);
+            Assert.AreEqual("12345", ids["tvdb"]);
+
+            var mismatched = MediaPathParser.ProviderIds(path.Replace("S01E07 tt39551287", "S01E07 tt12345678", StringComparison.Ordinal), MediaType.Series);
+            Assert.IsTrue(mismatched.Conflicted);
         }
 
         [TestMethod]

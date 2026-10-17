@@ -49,13 +49,13 @@ namespace Jularr.Backend.Tests
         {
             var episode = new NamingValues("The Series", 2020, 1, 7, "Midnight", "HDTV-1080p", "DKB", null, 1)
             {
-                MediaType = MediaType.Series,
+                MediaTypeId = MediaType.Series,
                 ProviderIds = new Dictionary<string, string> { ["imdb"] = "tt39551287", ["tmdb_tv"] = "123456", ["tvdb"] = "78910" }
             };
             const string series = "{Series Title} - {ImdbId}/Season {Season:00}/{Series CleanTitle} - S{Season:00}E{Episode:00} - {Episode Title} {[Quality Full]}{-Release Group}";
             NamingPattern.Validate(MediaType.Series, series, "Pattern");
             Assert.AreEqual("The Series - tt39551287/Season 01/The Series - S01E07 - Midnight [HDTV-1080p]-DKB", NamingPattern.Apply(series, episode));
-            Assert.AreEqual("The.Series.2020/78910/123456", NamingPattern.Apply("{Series.TitleYear}/{TvdbId}/{ProviderId:tmdb_tv}", episode));
+            Assert.AreEqual("The.Series.(2020)/78910/123456", NamingPattern.Apply("{Series.TitleYear}/{TvdbId}/{ProviderId:tmdb_tv}", episode));
 
             var movie = new NamingValues("The Movie", 2010, null, null, null, "Bluray-1080p", "EVOLVE", "Extended", 2)
             {

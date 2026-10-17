@@ -58,12 +58,55 @@ namespace Jularr.Backend.Logic.Library
             return ids.Length == 1 ? ids[0] : null;
         }
 
+        // All labelled ids in any path component must agree with themselves.
+        public static (IReadOnlyDictionary<string, string> Ids, bool Conflicted) ProviderIds(string relativePath, MediaType mediaType)
+        {
+            var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var conflicted = false;
+
+            void Add(string name, string value)
+            {
+                if (ids.TryGetValue(name, out var existing) && !existing.Equals(value, StringComparison.OrdinalIgnoreCase))
+                {
+                    conflicted = true;
+                }
+                else
+                {
+                    ids[name] = value;
+                }
+            }
+
+            foreach (Match match in ImdbToken().Matches(relativePath))
+            {
+                Add("imdb", match.Value.ToLowerInvariant());
+            }
+
+            foreach (Match match in TaggedId().Matches(relativePath))
+            {
+                var name = match.Groups["source"].Value.ToLowerInvariant() switch
+                {
+                    "tmdb" => mediaType == MediaType.Series ? "tmdb_tv" : "tmdb_movie",
+                    "tvdb" => "tvdb",
+                    "tvmaze" => "tvmaze",
+                    "anilist" => "anilist",
+                    "igdb" => "igdb",
+                    _ => ""
+                };
+                if (name.Length > 0)
+                {
+                    Add(name, match.Groups["id"].Value);
+                }
+            }
+
+            return (ids, conflicted);
+        }
+
         public static bool IsSample(string relativePath) => Sample().IsMatch(Path.GetFileNameWithoutExtension(relativePath));
 
         private static string Clean(string name, out int? year)
         {
             // Release tags never belong to the title.
-            var text = ImdbSuffix().Replace(Brackets().Replace(name, " "), " ");
+            var text = TaggedIdSuffix().Replace(ImdbSuffix().Replace(Brackets().Replace(name, " "), " "), " ");
             if (!text.Contains(' ')) text = text.Replace('.', ' ').Replace('_', ' ');
 
             year = null;
@@ -117,6 +160,12 @@ namespace Jularr.Backend.Logic.Library
 
         [GeneratedRegex(@"[\s._-]+tt\d{7,10}\s*$", RegexOptions.IgnoreCase)]
         private static partial Regex ImdbSuffix();
+
+        [GeneratedRegex(@"(?<![A-Za-z0-9])(?<source>tmdb|tvdb|tvmaze|anilist|igdb)[\s._:#-]*(?<id>\d{1,12})(?!\d)", RegexOptions.IgnoreCase)]
+        private static partial Regex TaggedId();
+
+        [GeneratedRegex(@"[\s._-]+(?:tmdb|tvdb|tvmaze|anilist|igdb)[\s._:#-]*\d{1,12}\s*$", RegexOptions.IgnoreCase)]
+        private static partial Regex TaggedIdSuffix();
 
         [GeneratedRegex(@"\bsample\b", RegexOptions.IgnoreCase)]
         private static partial Regex Sample();
