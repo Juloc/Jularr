@@ -1,24 +1,24 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
-using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     // Indexers, download clients and subtitle providers, each kind on its own page.
     public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
         UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
-        UiText texts, IOptions<StorageOptions> storage) : JularrPage
+        UiText texts, ReadDownloadStorageV1 storage) : JularrPage
     {
         // The kinds each tab adds.
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
@@ -34,6 +34,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private SaveAcquisitionConnectionDataV1? _input;
         private SearchAcquisitionConnectionDataV1? _searchInput;
         private IReadOnlyList<IndexerReleaseV1>? _releases;
+        private DownloadStorageDetailsV1? _downloadStorage;
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionConnectionId { get; set; }
@@ -80,16 +81,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
                 // Download workspaces are configured by the server owner, not by SABnzbd.
                 // Surface the effective values without implying that a configured mount is online.
-                if (Role == AcquisitionConnectionRole.Download)
+                if (_downloadStorage is { } configured)
                 {
-                    var configured = storage.Value;
-                    var usenetPath = configured.UsenetDownloadPath ?? configured.DirectDownloadPath;
-                    var directPath = configured.DirectSourceDownloadPath ?? configured.DirectDownloadPath;
                     split.Primary.Add(new UiSection("acquisition.workspace.title",
                     [
                         new P(new Text("acquisition.workspace.hint")),
-                        WorkspaceLine("acquisition.workspace.usenet", usenetPath),
-                        WorkspaceLine("acquisition.workspace.direct", directPath),
+                        WorkspaceLine("acquisition.workspace.usenet", configured.UsenetDownloadPath),
+                        WorkspaceLine("acquisition.workspace.direct", configured.DirectSourceDownloadPath),
                         new P(new Strong(new Text("acquisition.workspace.limit")),
                             new ValueText(": " + ByteSize.Format(configured.UsenetMaxJobBytes) + " (" +
                                 (configured.UsenetMaxJobBytes / (1024d * 1024 * 1024)).ToString("0.##", CultureInfo.CurrentCulture) + " GiB)")),
@@ -260,6 +258,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
             _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role),
                 HttpContext.RequestAborted);
+            if (Role == AcquisitionConnectionRole.Download)
+            {
+                _downloadStorage = await storage.ExecuteAsync<DownloadStorageDetailsV1>(new ReadDownloadStorageParametersV1(), HttpContext.RequestAborted);
+            }
         }
 
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf)
