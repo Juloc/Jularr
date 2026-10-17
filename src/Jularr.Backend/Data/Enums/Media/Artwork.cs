@@ -1,7 +1,7 @@
 namespace Jularr.Backend.Data.Enums.Media
 {
     // Common across every media type; seasons and episodes use the same slots as whole Works.
-    public enum ArtworkSlot : short
+    public enum ArtworkSlot : byte
     {
         Poster = 1,
         Backdrop = 2,
@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Enums.Media
         Thumbnail = 5
     }
 
-    public enum ArtworkSourceKind : short
+    public enum ArtworkSourceKind : byte
     {
         Manual = 1,
         Sidecar = 2,
@@ -18,7 +18,7 @@ namespace Jularr.Backend.Data.Enums.Media
         Embedded = 4
     }
 
-    public enum ArtworkFormat : short
+    public enum ArtworkFormat : byte
     {
         Jpeg = 1,
         Png = 2,
@@ -26,20 +26,20 @@ namespace Jularr.Backend.Data.Enums.Media
         Jxl = 4
     }
 
-    public enum NasArtworkMode : short
+    public enum NasArtworkMode : byte
     {
         Compatible = 1,
         JxlAndCompatible = 2,
         JxlOnly = 3
     }
 
-    public enum ArtworkCacheFormat : short
+    public enum ArtworkCacheFormat : byte
     {
         Webp = 1,
         Jxl = 2
     }
 
-    public enum ArtworkQuality : short
+    public enum ArtworkQuality : byte
     {
         Balanced = 1,
         High = 2,
