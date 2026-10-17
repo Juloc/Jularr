@@ -230,9 +230,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostJobAsync(string jobId, string action, bool confirmed = false)
         {
-            if (action is "cancel" or "removeHistory" && !confirmed) return BadRequest();
+            if ((action is "cancel" or "removeHistory" or "removeOrphan") && !confirmed) return BadRequest();
             await manage.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()), new DownloadClientJobCommandV1(jobId, action), HttpContext.RequestAborted);
-            return LocalRedirect(Address(SelectedId()) + "&Pane=" + (action == "removeHistory" ? "history" : "downloads"));
+            return LocalRedirect(Address(SelectedId()) + "&Pane=" + (action == "removeHistory" ? "history" : action == "removeOrphan" ? "files" : "downloads"));
         }
 
         public async Task<IActionResult> OnPostSearchAsync(string? query)
