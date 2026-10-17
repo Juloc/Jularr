@@ -1,50 +1,169 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Logic.Database;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
 
 namespace Jularr.Backend.Service.Core
 {
-    // A new installation: an empty database receives the fresh baselines in one transaction before anything else starts.
-    // A database with any table of its own is left exactly as it is; nothing is migrated.
-    internal sealed partial class DatabaseBaseline(string connectionString) : IHostedService
+    // Unversioned pre-release databases retain their existing startup behavior.
+    // Versioned release schemas share one installation and upgrade owner.
+    internal sealed partial class DatabaseBaseline : IHostedService
     {
+        private readonly string _connectionString;
+        private readonly BackupOptions _backup;
+        private readonly PostgresBackupTools _tools;
+        private readonly IReadOnlyList<DatabaseMigration> _migrations;
+
+        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = [];
+        public static int CurrentVersion => 1 + Migrations.Count;
+        public static string CurrentFingerprint => Fingerprint(CurrentVersion, Migrations);
+
+        internal DatabaseBaseline(string connectionString, BackupOptions? backup = null, PostgresBackupTools? tools = null, IReadOnlyList<DatabaseMigration>? migrations = null)
+        {
+            _connectionString = connectionString;
+            _backup = backup ?? new BackupOptions();
+            _tools = tools ?? new PostgresBackupTools();
+            _migrations = migrations ?? Migrations;
+            for (var index = 0; index < _migrations.Count; index++)
+            {
+                if (_migrations[index].Version != index + 2)
+                {
+                    throw new InvalidDataException("Database migrations must be contiguous, starting at version 2.");
+                }
+            }
+        }
+
         [GeneratedRegex(@"\A\s*BEGIN;|COMMIT;\s*\z")]
         private static partial Regex Wrapper();
 
         // The order of a new installation.
-        public static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback"];
+        public static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback", "Schema"];
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            await using var connection = new NpgsqlConnection(connectionString);
+            await using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync(cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+            // Serialize concurrent starts before inspecting or changing the schema.
+            await using (var schemaLock = new NpgsqlCommand("SELECT pg_advisory_xact_lock(1247104082);", connection, transaction))
+            {
+                await schemaLock.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            bool isEmpty;
             await using (var empty = new NpgsqlCommand("SELECT NOT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname = current_schema());", connection, transaction))
             {
-                if (!(bool)(await empty.ExecuteScalarAsync(cancellationToken))!)
+                isEmpty = (bool)(await empty.ExecuteScalarAsync(cancellationToken))!;
+            }
+
+            if (!isEmpty)
+            {
+                await using var marker = new NpgsqlCommand("SELECT to_regclass('\"DatabaseSchemaVersions\"') IS NOT NULL;", connection, transaction);
+                if (!(bool)(await marker.ExecuteScalarAsync(cancellationToken))!)
                 {
+                    // No adoption, reset or migration of existing pre-release installations.
                     return;
                 }
             }
 
-            foreach (var name in Baselines)
+            if (isEmpty)
             {
-                // Each baseline is its own transaction when applied alone; here they share one.
-                using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!);
-                var text = await reader.ReadToEndAsync(cancellationToken);
-                if (Wrapper().Count(text) != 2 || text.Split("COMMIT;").Length != 2)
+                foreach (var name in Baselines)
                 {
-                    throw new InvalidDataException("The " + name + " baseline must be exactly one BEGIN ... COMMIT block.");
+                    using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!);
+                    var text = await reader.ReadToEndAsync(cancellationToken);
+                    if (Wrapper().Count(text) != 2 || text.Split("COMMIT;").Length != 2)
+                    {
+                        throw new InvalidDataException("The " + name + " baseline must be exactly one BEGIN ... COMMIT block.");
+                    }
+
+                    await using var baseline = new NpgsqlCommand(Wrapper().Replace(text, ""), connection, transaction);
+                    await baseline.ExecuteNonQueryAsync(cancellationToken);
                 }
 
-                var baseline = Wrapper().Replace(text, "");
-                await using var command = new NpgsqlCommand(baseline, connection, transaction);
+                await RecordVersionAsync(connection, transaction, 1, cancellationToken);
+            }
+
+            var installedVersion = await ReadVersionAsync(connection, transaction, cancellationToken);
+            if (!isEmpty && installedVersion < 1 + _migrations.Count)
+            {
+                await BackupFiles.CreateAsync(_backup, _tools, DateTime.UtcNow, installedVersion, Fingerprint(installedVersion, _migrations), cancellationToken);
+            }
+
+            foreach (var migration in _migrations.Where(migration => migration.Version > installedVersion))
+            {
+                await using var command = new NpgsqlCommand(migration.Statement, connection, transaction);
                 await command.ExecuteNonQueryAsync(cancellationToken);
+                await RecordVersionAsync(connection, transaction, migration.Version, cancellationToken);
             }
 
             await transaction.CommitAsync(cancellationToken);
         }
 
+        private async Task<int> ReadVersionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+        {
+            await using var versions = new NpgsqlCommand("SELECT \"Version\", \"Fingerprint\" FROM \"DatabaseSchemaVersions\" ORDER BY \"Version\";", connection, transaction);
+            await using var reader = await versions.ExecuteReaderAsync(ct);
+            var version = 0;
+            while (await reader.ReadAsync(ct))
+            {
+                var next = reader.GetInt32(0);
+                if (next > 1 + _migrations.Count)
+                {
+                    throw new InvalidDataException("The database belongs to a newer Jularr release. Start a compatible image or recover the previous image and backup together.");
+                }
+
+                if (next != version + 1 || reader.GetString(1) != Fingerprint(next, _migrations))
+                {
+                    throw new InvalidDataException("The database schema history does not match a supported release. No schema changes were applied.");
+                }
+
+                version = next;
+            }
+
+            return version > 0 ? version : throw new InvalidDataException("The database schema history is empty. No schema changes were applied.");
+        }
+
+        private async Task RecordVersionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int version, CancellationToken ct)
+        {
+            await using var command = new NpgsqlCommand("INSERT INTO \"DatabaseSchemaVersions\" (\"Version\", \"Fingerprint\") VALUES (@Version, @Fingerprint);", connection, transaction);
+            command.Parameters.AddWithValue("Version", version);
+            command.Parameters.AddWithValue("Fingerprint", Fingerprint(version, _migrations));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        internal static string Fingerprint(int version, IReadOnlyList<DatabaseMigration> migrations)
+        {
+            if (version < 1 || version > migrations.Count + 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(version));
+            }
+
+            var content = new StringBuilder();
+            foreach (var name in Baselines)
+            {
+                using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!);
+                content.Append(name).Append('\n').Append(reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal));
+            }
+
+            foreach (var migration in migrations.Take(version - 1))
+            {
+                content.Append(migration.Version.ToString(global::System.Globalization.CultureInfo.InvariantCulture)).Append('\n')
+                    .Append(migration.Statement.Replace("\r\n", "\n", StringComparison.Ordinal));
+            }
+
+            return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content.ToString())));
+        }
+
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    internal sealed class DatabaseMigration(int version, string statement)
+    {
+        public int Version { get; } = version;
+        public string Statement { get; } = statement;
     }
 }
