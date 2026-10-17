@@ -158,18 +158,20 @@
         td, th { border: 1px solid var(--reader-line); padding: 4px 8px; }
     }
 
-    // Paged mode lays the section out in screen-wide columns.
+    // The requested page mode flows a section into one or two visible columns.
+    // Fixed content height and column-fill:auto prevent balancing whole chapters into a single spread.
     &[data-mode="paged"] { height: 100dvh; min-height: 0; }
     &[data-mode="paged"] &__content {
         width: 100%;
         flex: 1;
         min-height: 0;
-        padding: 32px 0;
-        columns: min(var(--reader-width), calc(100vw - 32px)) 1;
+        padding: 32px 16px;
+        box-sizing: border-box;
+        columns: var(--reader-width) 2;
+        column-fill: auto;
         column-gap: 32px;
         overflow-x: hidden;
         overflow-y: hidden;
-        scroll-snap-type: x mandatory;
     }
 
     &__status,

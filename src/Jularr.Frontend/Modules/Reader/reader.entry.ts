@@ -91,12 +91,14 @@ if (reader?.querySelector("[data-role=content]")) {
             setFocusMode(false);
             return;
         }
-        if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+        if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, button, [contenteditable="true"]')) return;
         if (event.key === "ArrowRight" || event.key === "PageDown") page(1, event);
         if (event.key === "ArrowLeft" || event.key === "PageUp") page(-1, event);
     });
     content.addEventListener("click", event => {
-        if (settings.mode !== "paged" || (event.target as HTMLElement).closest("a, mark")) return;
+        if (settings.mode !== "paged" || !(event.target instanceof Element) ||
+            event.target.closest('a, button, input, select, textarea, mark, [contenteditable="true"]') ||
+            window.getSelection()?.toString()) return;
         page(event.clientX > window.innerWidth / 2 ? 1 : -1, event);
     });
 
