@@ -5872,6 +5872,14 @@
    "Off",
    "Désactivés"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Décalage des sous-titres (secondes)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Réinitialiser le décalage"
+  ],
   "player.subtitles.forced": [
    "forced",
    "forcés"
