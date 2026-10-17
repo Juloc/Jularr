@@ -24,3 +24,22 @@ export function selectSettingsPane(settings: HTMLElement, name: string): name is
         tab.setAttribute("aria-pressed", String(tab.dataset.settingsTab === name)));
     return true;
 }
+
+// An active WebVTT track can be shifted without rebuilding its PlaybackPlan.
+// Original times are retained so repeated slider changes never accumulate drift.
+export function shiftTextCues(track: Pick<TextTrack, "cues"> | null, seconds: number,
+    originals: WeakMap<TextTrackCue, { start: number; end: number }>): void {
+    if (!track?.cues || !Number.isFinite(seconds)) return;
+    for (const cue of Array.from(track.cues)) {
+        let original = originals.get(cue);
+        if (!original) {
+            original = { start: cue.startTime, end: cue.endTime };
+            originals.set(cue, original);
+        }
+        const start = Math.max(0, original.start + seconds);
+        const end = Math.max(start, original.end + seconds);
+        if (end >= cue.endTime) cue.endTime = end;
+        cue.startTime = start;
+        cue.endTime = end;
+    }
+}
