@@ -54,7 +54,7 @@ namespace Jularr.Backend.Tests
             {
             }
 
-            var feature = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)", "Example Movie (2020) [WEB-1080p].mkv");
+            var feature = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)", "Example Movie (2020) [WEBDL-1080p].mkv");
             Assert.IsTrue(File.Exists(feature));
             CollectionAssert.AreEqual(movie, File.ReadAllBytes(feature));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
