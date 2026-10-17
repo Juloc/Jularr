@@ -156,8 +156,9 @@ namespace Jularr.Backend.Service.Core
 
         internal static IServiceCollection AddJularrServices(this IServiceCollection services, NpgsqlDataSource database, params Assembly[] assemblies)
         {
-            // Tests own isolated data sources.
+            // Tests own isolated data sources and never share a persistent image cache.
             services.AddSingleton(new SqlDatabase(database));
+            services.TryAddSingleton(new ArtworkCache(Path.Combine(Path.GetTempPath(), "jularr-artwork-tests", Guid.NewGuid().ToString("N"))));
             return RegisterServices(services, assemblies, new ProviderOptions());
         }
 
