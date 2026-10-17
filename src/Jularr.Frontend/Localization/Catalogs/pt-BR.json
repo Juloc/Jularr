@@ -3844,6 +3844,10 @@
    "Indexer grab limit reached",
    "Limite de downloads do indexer atingido"
   ],
+  "acquisition.outcome.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Pasta temporária de downloads não configurada ou indisponível"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "A pasta de download não está mapeada para o armazenamento"

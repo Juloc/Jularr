@@ -297,6 +297,16 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
+                if (_options.ReadyUsenetDownloadPath() is null)
+                {
+                    foreach (var download in group)
+                    {
+                        await _import.AttentionAsync(Context, download.OperationId, "acquisition_download_path_unconfigured", null, CancellationToken);
+                    }
+
+                    continue;
+                }
+
                 // A reservation whose NZB never arrived is given up.
                 foreach (var stuck in group.Where(download => download.ExternalId is null && now.UtcDateTime - download.StartedAt > ReservationGrace))
                 {
@@ -425,6 +435,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     foreach (var download in group.Take(DirectPerCycle))
                     {
+                        if (_options.ReadyDirectSourceDownloadPath() is null)
+                        {
+                            await _import.AttentionAsync(Context, download.OperationId, "acquisition_download_path_unconfigured", null, CancellationToken);
+                            continue;
+                        }
+
                         await DownloadDirectAsync(download, connection);
                     }
 
@@ -607,7 +623,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.
         private async Task DownloadDirectAsync(DownloadData download, AcquisitionConnectionData connection)
         {
-            var staging = Path.Combine(_options.DirectDownloadPath, download.OperationId.ToString(CultureInfo.InvariantCulture));
+            var staging = WantedAcquisition.DirectStaging(_options, download.OperationId);
             var name = "book." + DirectSources.Format(download.ExternalId ?? "");
             var path = Path.Combine(staging, name);
             if (!File.Exists(path))

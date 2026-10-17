@@ -10,10 +10,13 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Wanted.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Usenet;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
@@ -25,6 +28,69 @@ namespace Jularr.Backend.Tests
     {
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
+
+        [TestMethod]
+        public void NativeDownload_RequiresConfirmedWorkspaceAndNeverUsesImplicitTemp()
+        {
+            using var directory = new TemporaryDirectory();
+            var options = new StorageOptions();
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Assert.Throws<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
+
+            options.DirectDownloadPath = "relative/downloads";
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            options.DirectDownloadPath = Path.Combine(directory.Path, "unmounted");
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+
+            options.DirectDownloadPath = directory.Path;
+            if (OperatingSystem.IsLinux() && !StorageFileSystem.IsMountPoint(directory.Path))
+            {
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                Assert.IsFalse(StorageFileSystem.IsDownloadWorkspaceMount("/dev/shm"),
+                    "RAM-backed mounts cannot be accepted for persistent native downloads.");
+                options.DirectDownloadPath = "/dev/shm";
+                Assert.IsNull(options.ReadyUsenetDownloadPath());
+                options.AllowDirectDownloadOnHostFilesystem = true;
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "Host opt-in must not allow RAM-backed staging.");
+            }
+
+            options.AllowDirectDownloadOnHostFilesystem = true;
+            options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
+            Assert.IsNull(options.ReadyUsenetDownloadPath(), "A filesystem root is not a staging workspace.");
+            options.DirectDownloadPath = directory.Path;
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath());
+            Assert.AreEqual(Path.Combine(Path.GetFullPath(directory.Path), "42"), WantedAcquisition.Staging(options, 42));
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectSourceDownloadPath(), "An explicitly set shared workspace remains compatible.");
+
+            using var books = new TemporaryDirectory();
+            options.DirectSourceDownloadPath = books.Path;
+            Assert.AreEqual(Path.GetFullPath(books.Path), options.ReadyDirectSourceDownloadPath());
+            Assert.AreEqual(Path.Combine(Path.GetFullPath(books.Path), "43"), WantedAcquisition.DirectStaging(options, 43));
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath(), "Book download configuration must not change NNTP staging.");
+        }
+
+        [TestMethod]
+        public void NativeDownload_RejectsSymbolicWorkspaceAncestors()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("Linux CI verifies symbolic mount aliases without Windows developer-mode permissions.");
+            }
+
+            using var directory = new TemporaryDirectory();
+            using var target = new TemporaryDirectory();
+            var alias = Path.Combine(directory.Path, "alias");
+            Directory.CreateSymbolicLink(alias, target.Path);
+            var options = new StorageOptions { DirectDownloadPath = alias, AllowDirectDownloadOnHostFilesystem = true };
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Directory.CreateDirectory(Path.Combine(target.Path, "nested"));
+            options.DirectDownloadPath = Path.Combine(alias, "nested");
+            Assert.IsNull(options.ReadyDirectSourceDownloadPath());
+        }
 
         [TestMethod]
         public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
@@ -126,7 +192,11 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = staging },
+            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string>
+                {
+                    ["Storage:DirectDownloadPath"] = staging,
+                    ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+                },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");

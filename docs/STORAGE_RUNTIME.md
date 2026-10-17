@@ -173,6 +173,40 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
 
 
+## Native/direct download staging safety (pre-release R03 slice)
+
+Jularr's native Usenet downloader and direct-source book downloader accept
+independent `Storage:UsenetDownloadPath` and `Storage:DirectSourceDownloadPath`
+workspaces. For existing explicitly configured installations, each falls back
+to the shared `Storage:DirectDownloadPath` setting when its own setting is
+absent. None has a built-in default: unconfigured,
+missing, relative or symlinked paths are rejected before native/direct grabs.
+Jobs already active are put into attention rather than silently writing into
+`/tmp` or the container's overlay filesystem. The SABnzbd download directory
+is a **separate service**; its completed files use `RemotePath` / `LocalPath`
+mapping in the SABnzbd acquisition connection.
+
+For example, mount a persistent storage volume at `/downloads/staging` in
+the Jularr container, then set `Storage__UsenetDownloadPath=/downloads/staging`. Direct-source book
+downloads can separately use `Storage__DirectSourceDownloadPath=/downloads/books`,
+with that path also mounted before Jularr starts.
+The directory must already exist. On Linux, Jularr requires this path to be
+inside a non-root mounted filesystem (a nested folder is accepted) unless the
+owner deliberately sets `Storage__AllowDirectDownloadOnHostFilesystem=true`
+for an explicitly configured local/VM workspace. This is **not** a quota
+override: disk reservations, capacity checks and UI confirmation are still
+required before release in #1209. If a NAS mount disappears, Jularr must not
+fall back to VM-local storage; check the actual mounts and free space before
+enabling acquisition.
+
+
+**Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
+`proc` and other operating-system pseudo filesystems even if Docker reports
+a mount point. A separate bind mount can still target VM-local storage:
+verify its physical source explicitly before enabling downloads.
+The nearest mount is authoritative: an unsafe nested mount cannot inherit its
+parent's approval, and host-filesystem opt-in does not permit RAM/overlay storage.
+
 ## Space checks for native Usenet unpacking
 
 Before extracting archives, the native worker checks free space on the **actual
