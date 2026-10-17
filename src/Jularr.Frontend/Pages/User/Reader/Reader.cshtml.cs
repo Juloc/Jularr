@@ -137,7 +137,11 @@ namespace Jularr.Frontend.Pages.User.Reader
             navigation.Add(index > 0
                 ? new A(new Text("reader.previous")).Class("button").Attribute("href", "?s=" + (index - 1).ToString(CultureInfo.InvariantCulture)).Attribute("data-role", "previous")
                 : new Span());
+            navigation.Add(new Button(new Text("reader.previous")).Class("button reader__page-turn").Attribute("type", "button")
+                .Attribute("data-page-step", "-1").Attribute("hidden", "hidden"));
             navigation.Add(new Span(new ValueText(Percent(current.CharactersBefore, current.TotalCharacters))).Class("reader__position").Attribute("data-role", "position"));
+            navigation.Add(new Button(new Text("reader.next")).Class("button button--primary reader__page-turn").Attribute("type", "button")
+                .Attribute("data-page-step", "1").Attribute("hidden", "hidden"));
             navigation.Add(index + 1 < document.SectionCount
                 ? new A(new Text("reader.next")).Class("button button--primary").Attribute("href", "?s=" + (index + 1).ToString(CultureInfo.InvariantCulture)).Attribute("data-role", "next")
                 : new Span(new Text("reader.end")));
