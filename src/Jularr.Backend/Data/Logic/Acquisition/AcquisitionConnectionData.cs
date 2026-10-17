@@ -5,12 +5,27 @@ using Jularr.Backend.Data.Fields.Acquisition;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
+    internal sealed class AcquisitionConnectionCategoryMapData : BaseData
+    {
+        public AcquisitionConnectionCategoryMapData(long acquisitionConnectionId, string categoryMap)
+        {
+            AcquisitionConnectionId = acquisitionConnectionId;
+            CategoryMap = categoryMap;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategoryMap))]
+        public string CategoryMap { get; }
+    }
+
     internal sealed class AcquisitionConnectionData : BaseData
     {
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt,
-            string? host, int? port, bool? useSsl)
+            string? host, int? port, bool? useSsl, string? incompleteRemotePath = null, string? incompleteLocalPath = null, string? downloadCategoryMap = null)
         {
             Host = host;
             Port = port;
@@ -36,6 +51,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             DownloadCategory = downloadCategory;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
+            DownloadCategoryMap = downloadCategoryMap;
             Capabilities = capabilities;
             Version = version;
         }
@@ -86,6 +104,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategoryMap))]
+        public string? DownloadCategoryMap { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Capabilities))]
         public string? Capabilities { get; }
 
@@ -131,7 +158,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, string? host = null, int? port = null,
-            bool? useSsl = null)
+            bool? useSsl = null, string? incompleteRemotePath = null, string? incompleteLocalPath = null)
         {
             Host = host;
             Port = port;
@@ -154,6 +181,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             DownloadCategory = downloadCategory;
             RemotePath = remotePath;
             LocalPath = localPath;
+            IncompleteRemotePath = incompleteRemotePath;
+            IncompleteLocalPath = incompleteLocalPath;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id), false)]
@@ -198,6 +227,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteRemotePath))]
+        public string? IncompleteRemotePath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
+        public string? IncompleteLocalPath { get; }
 
         // OPDS catalogs and news servers may need an account; the password is the protected key.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Username))]

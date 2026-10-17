@@ -233,7 +233,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 try
                 {
                     var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
-                    result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
+                    var category = AcquisitionConnectionLogic.ResolveDownloadCategory(client.DownloadCategoryMap, client.DownloadCategory, kind);
+                    result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, category), ct);
                 }
                 catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
                 {

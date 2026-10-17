@@ -140,6 +140,50 @@ namespace Jularr.Integrations.Data.Sabnzbd
         public IReadOnlyList<SabnzbdHistoryJob> Jobs { get; }
     }
 
+
+    internal enum SabnzbdJobCommand
+    {
+        Pause,
+        Resume,
+        RemoveFromQueue,
+        RemoveFromHistory,
+        RemoveOrphan
+    }
+
+    internal sealed class SabnzbdConsoleSnapshot
+    {
+        public SabnzbdConsoleSnapshot(IReadOnlyList<SabnzbdQueueJob> queue, IReadOnlyList<SabnzbdHistoryJob> history, long? speedBytesPerSecond, long? freeBytes, bool isPaused,
+            long? todayBytes = null, long? weekBytes = null, long? monthBytes = null, long? totalBytes = null, IReadOnlyList<string>? orphanFolders = null,
+            string? reportedCompletePath = null, string? reportedIncompletePath = null)
+        {
+            Queue = queue;
+            History = history;
+            SpeedBytesPerSecond = speedBytesPerSecond;
+            FreeBytes = freeBytes;
+            IsPaused = isPaused;
+            TodayBytes = todayBytes;
+            WeekBytes = weekBytes;
+            MonthBytes = monthBytes;
+            TotalBytes = totalBytes;
+            OrphanFolders = orphanFolders ?? [];
+            ReportedCompletePath = reportedCompletePath;
+            ReportedIncompletePath = reportedIncompletePath;
+        }
+
+        public IReadOnlyList<SabnzbdQueueJob> Queue { get; }
+        public IReadOnlyList<SabnzbdHistoryJob> History { get; }
+        public long? SpeedBytesPerSecond { get; }
+        public long? FreeBytes { get; }
+        public bool IsPaused { get; }
+        public long? TodayBytes { get; }
+        public long? WeekBytes { get; }
+        public long? MonthBytes { get; }
+        public long? TotalBytes { get; }
+        public IReadOnlyList<string> OrphanFolders { get; }
+        public string? ReportedCompletePath { get; }
+        public string? ReportedIncompletePath { get; }
+    }
+
     // Messages never contain the API key.
     internal sealed class SabnzbdException(string message, Exception? innerException = null) : Exception(message, innerException);
 }

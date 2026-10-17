@@ -6863,6 +6863,238 @@
   "arr.applyCondition": [
    "Apply condition type",
    "Applica tipo di condizione"
+  ],
+  "console.general": [
+   "General",
+   "General"
+  ],
+  "console.downloads": [
+   "Downloads",
+   "Downloads"
+  ],
+  "console.statistics": [
+   "Statistics",
+   "Statistics"
+  ],
+  "console.history": [
+   "History",
+   "History"
+  ],
+  "console.files": [
+   "Files",
+   "Files"
+  ],
+  "console.queue": [
+   "Download queue",
+   "Download queue"
+  ],
+  "console.queueEmpty": [
+   "No jobs in the queue.",
+   "No jobs in the queue."
+  ],
+  "console.historyEmpty": [
+   "No items in the provider history.",
+   "No items in the provider history."
+  ],
+  "console.name": [
+   "Name",
+   "Name"
+  ],
+  "console.progress": [
+   "Progress",
+   "Progress"
+  ],
+  "console.status": [
+   "Status",
+   "Status"
+  ],
+  "console.size": [
+   "Size",
+   "Size"
+  ],
+  "console.timeLeft": [
+   "Remaining",
+   "Remaining"
+  ],
+  "console.actions": [
+   "Actions",
+   "Actions"
+  ],
+  "console.speed": [
+   "Current speed",
+   "Current speed"
+  ],
+  "console.free": [
+   "Free space",
+   "Free space"
+  ],
+  "console.queueCount": [
+   "Jobs in queue",
+   "Jobs in queue"
+  ],
+  "console.paused": [
+   "Queue paused",
+   "Queue paused"
+  ],
+  "console.pause": [
+   "Pause",
+   "Pause"
+  ],
+  "console.resume": [
+   "Resume",
+   "Resume"
+  ],
+  "console.cancel": [
+   "Cancel download",
+   "Cancel download"
+  ],
+  "console.cancelConfirm": [
+   "Cancel this download and remove its temporary files?",
+   "Cancel this download and remove its temporary files?"
+  ],
+  "console.removeHistory": [
+   "Remove from history",
+   "Remove from history"
+  ],
+  "console.removeHistoryConfirm": [
+   "Remove this record from SABnzbd history without deleting stored files?",
+   "Remove this record from SABnzbd history without deleting stored files?"
+  ],
+  "console.confirm": [
+   "Confirm",
+   "Confirm"
+  ],
+  "console.limit": [
+   "Only the first 200 provider items are shown.",
+   "Only the first 200 provider items are shown."
+  ],
+  "console.statsNote": [
+   "Current values are live. Historical speed samples are not stored yet.",
+   "Current values are live. Historical speed samples are not stored yet."
+  ],
+  "console.categories": [
+   "Available SABnzbd categories",
+   "Available SABnzbd categories"
+  ],
+  "console.complete": [
+   "Complete",
+   "Complete"
+  ],
+  "console.incomplete": [
+   "Incomplete",
+   "Incomplete"
+  ],
+  "console.filesEmpty": [
+   "No files found in this folder.",
+   "No files found in this folder."
+  ],
+  "console.notMapped": [
+   "Folder path is not configured or not accessible to Jularr.",
+   "Folder path is not configured or not accessible to Jularr."
+  ],
+  "console.fileAssignment": [
+   "Assignment",
+   "Assignment"
+  ],
+  "console.unassigned": [
+   "Not assigned; verify before deleting",
+   "Not assigned; verify before deleting"
+  ],
+  "console.unchecked": [
+   "Not fully checked",
+   "Not fully checked"
+  ],
+  "console.queued": [
+   "Active download",
+   "Active download"
+  ],
+  "console.inHistory": [
+   "In SABnzbd history",
+   "In SABnzbd history"
+  ],
+  "console.filesNote": [
+   "Files are shown read-only. Unassigned does not mean safe to delete.",
+   "Files are shown read-only. Unassigned does not mean safe to delete."
+  ],
+  "console.refresh": [
+   "Refresh",
+   "Refresh"
+  ],
+  "console.orphan": [
+   "SABnzbd orphan",
+   "SABnzbd orphan"
+  ],
+  "console.removeOrphan": [
+   "Clean up orphan",
+   "Clean up orphan"
+  ],
+  "console.removeOrphanConfirm": [
+   "Let SABnzbd delete this verified orphan folder?",
+   "Let SABnzbd delete this verified orphan folder?"
+  ],
+  "console.today": [
+   "Today",
+   "Today"
+  ],
+  "console.week": [
+   "This week",
+   "This week"
+  ],
+  "console.month": [
+   "This month",
+   "This month"
+  ],
+  "console.total": [
+   "Total downloads",
+   "Total downloads"
+  ],
+  "console.incompleteRemotePath": [
+   "Incomplete folder path reported by SABnzbd",
+   "Incomplete folder path reported by SABnzbd"
+  ],
+  "console.incompleteLocalPath": [
+   "Same incomplete folder path visible to Jularr",
+   "Same incomplete folder path visible to Jularr"
+  ],
+  "console.mappingTitle": [
+   "Categories by media type (blank uses default)",
+   "Categories by media type (blank uses default)"
+  ],
+  "console.kind.movie": [
+   "Movies",
+   "Movies"
+  ],
+  "console.kind.tv": [
+   "Series",
+   "Series"
+  ],
+  "console.kind.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "console.kind.book": [
+   "Books",
+   "Books"
+  ],
+  "console.kind.audiobook": [
+   "Audiobooks (not routed separately yet)",
+   "Audiobooks (not routed separately yet)"
+  ],
+  "console.kind.manga": [
+   "Manga / comics",
+   "Manga / comics"
+  ],
+  "console.kind.lightNovel": [
+   "Light novels",
+   "Light novels"
+  ],
+  "console.kind.music": [
+   "Music",
+   "Music"
+  ],
+  "console.kind.game": [
+   "Games",
+   "Games"
   ]
  }
 }

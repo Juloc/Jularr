@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -27,8 +28,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Priority",
                     connection."Categories",
                     connection."DownloadCategory",
+                    connection."DownloadCategoryMap"::text AS "DownloadCategoryMap",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."Username",
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
@@ -69,8 +73,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Priority",
                     connection."Categories",
                     connection."DownloadCategory",
+                    connection."DownloadCategoryMap"::text AS "DownloadCategoryMap",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."Username",
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
@@ -95,6 +102,39 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(new AcquisitionConnectionRoleParameters(role));
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
+        }
+
+        public static async Task UpdateDownloadCategoryMapAsync(this LogicContext ctx, AcquisitionConnectionCategoryMapData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionConnections" AS connection
+                SET
+                    "DownloadCategoryMap" = @CategoryMap::jsonb,
+                    "Version" = connection."Version" + 1
+                WHERE
+                    connection."Id" = @AcquisitionConnectionId
+                    AND connection."AcquisitionConnectionTypeId" = 2;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.AcquisitionConnectionId), "invalid_transition");
+            }
+        }
+
+        public static string? ResolveDownloadCategory(string? mappingJson, string? defaultCategory, AcquisitionKind kind)
+        {
+            if (mappingJson is null) return defaultCategory;
+            using var document = JsonDocument.Parse(mappingJson);
+            if (document.RootElement.TryGetProperty(kind.ToString(), out var category) && category.ValueKind == JsonValueKind.String)
+            {
+                return category.GetString() ?? defaultCategory;
+            }
+
+            return defaultCategory;
         }
 
         // An indexer serves its media types, and automatic searches only when it is not manual-only.
@@ -242,10 +282,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "Host", "Port", "UseSsl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories",
-                        "DownloadCategory", "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
+                        "DownloadCategory", "RemotePath", "LocalPath", "IncompleteRemotePath", "IncompleteLocalPath", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
                 VALUES
                     (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath,
-                        @LocalPath, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
+                        @LocalPath, @IncompleteRemotePath, @IncompleteLocalPath, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
                 RETURNING
                     "Id";
                 """;
@@ -287,6 +327,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "DownloadCategory" = @DownloadCategory,
                     "RemotePath" = @RemotePath,
                     "LocalPath" = @LocalPath,
+                    "IncompleteRemotePath" = @IncompleteRemotePath,
+                    "IncompleteLocalPath" = @IncompleteLocalPath,
                     "Username" = @Username,
                     "MaxConnections" = @MaxConnections,
                     "MediaTypeIds" = @MediaTypeIds,
