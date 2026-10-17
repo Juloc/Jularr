@@ -127,6 +127,9 @@ namespace Jularr.Backend.Tests
             html = await player.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
             StringAssert.Contains(html, "data-start-url=\"/api/v1/playback/assets/" + assetId + "/sessions\"");
+            StringAssert.Contains(html, "data-role=\"speed-control\"");
+            StringAssert.Contains(html, "data-speed=\"0.25\"");
+            StringAssert.Contains(html, "data-speed=\"4\"");
             StringAssert.Contains(html, ">Film</h1>");
             Assert.IsFalse(html.Contains("Film.mp4", StringComparison.Ordinal));
         }

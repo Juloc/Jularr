@@ -9,11 +9,15 @@ interface ReaderSettings {
     size: number;
     theme: "light" | "sepia" | "dark";
     mode: "scroll" | "paged";
+    preset: "book" | "light-novel" | "custom";
+    font: "serif" | "sans";
+    lineHeight: "compact" | "normal" | "spacious";
+    width: "narrow" | "normal" | "wide";
 }
 
 const SettingsKey = "jularr.reader";
 const ReportDelay = 1500;
-const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll" };
+const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll", preset: "book", font: "serif", lineHeight: "normal", width: "normal" };
 
 // The PDF view shares only the reader's look.
 const reader = document.querySelector<HTMLElement>(".reader");
@@ -62,7 +66,18 @@ if (reader?.querySelector("[data-role=content]")) {
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
     reader.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => button.addEventListener("click", () => {
         const value = button.dataset.value!;
+        if (button.dataset.setting === "preset") {
+            settings.preset = value as ReaderSettings["preset"];
+            settings.font = "serif";
+            settings.lineHeight = value === "light-novel" ? "spacious" : "normal";
+            settings.width = value === "light-novel" ? "narrow" : "normal";
+            settings.size = Defaults.size;
+        }
         if (button.dataset.setting === "size") settings.size = Math.min(2, Math.max(0.8, settings.size + (value === "larger" ? 0.1 : -0.1)));
+        if (button.dataset.setting === "font") settings.font = value as ReaderSettings["font"];
+        if (button.dataset.setting === "lineHeight") settings.lineHeight = value as ReaderSettings["lineHeight"];
+        if (button.dataset.setting === "width") settings.width = value as ReaderSettings["width"];
+        if (["size", "font", "lineHeight", "width"].includes(button.dataset.setting ?? "")) settings.preset = "custom";
         if (button.dataset.setting === "theme") settings.theme = value as ReaderSettings["theme"];
         if (button.dataset.setting === "mode") settings.mode = value as ReaderSettings["mode"];
         apply();
@@ -90,7 +105,11 @@ if (reader?.querySelector("[data-role=content]")) {
             return {
                 size: typeof value?.size === 'number' && Number.isFinite(value.size) ? Math.min(2, Math.max(0.8, value.size)) : Defaults.size,
                 theme: value?.theme === 'sepia' || value?.theme === 'dark' ? value.theme : Defaults.theme,
-                mode: value?.mode === 'paged' ? value.mode : Defaults.mode
+                mode: value?.mode === 'paged' ? value.mode : Defaults.mode,
+                preset: value?.preset === "light-novel" || value?.preset === "custom" ? value.preset : Defaults.preset,
+                font: value?.font === "sans" ? value.font : Defaults.font,
+                lineHeight: value?.lineHeight === "compact" || value?.lineHeight === "spacious" ? value.lineHeight : Defaults.lineHeight,
+                width: value?.width === "narrow" || value?.width === "wide" ? value.width : Defaults.width
             };
         } catch {
             return { ...Defaults };
@@ -101,8 +120,12 @@ if (reader?.querySelector("[data-role=content]")) {
         reader!.dataset.theme = settings.theme;
         reader!.dataset.mode = settings.mode;
         reader!.style.setProperty("--reader-size", `${settings.size.toFixed(1)}rem`);
+        reader!.style.setProperty("--reader-font-family", settings.font === "sans" ? "system-ui, sans-serif" : 'Georgia, "Iowan Old Style", "Times New Roman", serif');
+        reader!.style.setProperty("--reader-line-height", { compact: "1.45", normal: "1.65", spacious: "1.9" }[settings.lineHeight]);
+        reader!.style.setProperty("--reader-width", { narrow: "34rem", normal: "42rem", wide: "55rem" }[settings.width]);
         reader!.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => {
-            const active = (button.dataset.setting === "theme" && button.dataset.value === settings.theme) || (button.dataset.setting === "mode" && button.dataset.value === settings.mode);
+            const selected = settings[button.dataset.setting as keyof ReaderSettings];
+            const active = button.dataset.value === selected;
             button.setAttribute("aria-pressed", String(active));
         });
     }

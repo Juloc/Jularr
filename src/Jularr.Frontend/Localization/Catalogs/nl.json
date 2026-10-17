@@ -952,6 +952,62 @@
    "Pages",
    "Pagina's"
   ],
+  "reader.preset": [
+   "Reading preset",
+   "Leesvoorinstelling"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Boek"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Light novel"
+  ],
+  "reader.font": [
+   "Font",
+   "Lettertype"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Met schreef"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Schreefloos"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Regelafstand"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Compact"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Comfortabel"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Ruim"
+  ],
+  "reader.width": [
+   "Text width",
+   "Tekstbreedte"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Smal"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normaal"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Breed"
+  ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
    "Dit boek wordt nog opgeslagen om zonder de opslag te kunnen lezen."

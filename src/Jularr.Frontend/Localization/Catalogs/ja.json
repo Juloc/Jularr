@@ -952,6 +952,62 @@
    "Pages",
    "ページ"
   ],
+  "reader.preset": [
+   "Reading preset",
+   "読書プリセット"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "書籍"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "ライトノベル"
+  ],
+  "reader.font": [
+   "Font",
+   "フォント"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "セリフ体"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "サンセリフ体"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "行間"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "狭い"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "標準"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "広い"
+  ],
+  "reader.width": [
+   "Text width",
+   "文字幅"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "狭い"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "標準"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "広い"
+  ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
    "この本はストレージなしで読めるよう、まだ保存中です。"

@@ -13,7 +13,7 @@ namespace Jularr.Frontend.Framework
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
         private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
-        private static readonly string[] Speeds = ["0.75", "1", "1.25", "1.5", "2"];
+        private static readonly string[] Speeds = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -71,9 +71,14 @@ namespace Jularr.Frontend.Framework
                             ]).Class("player__options")
                         ).Class("player__actions")
                     ).Class("player__bottom"),
-                    new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
-                        .Attribute("data-speed", speed).Attribute("role", "menuitemradio").Attribute("aria-checked", speed == "1" ? "true" : "false"))])
-                        .Class("player__panel").Attribute("data-panel", "speed").Attribute("role", "menu").Attribute("aria-label", texts["player.speed"]).Attribute("hidden", "hidden"),
+                    new Div(
+                        new Div(new Input().Class("player__speed-range").Attribute("type", "range").Attribute("min", "0.25").Attribute("max", "4")
+                            .Attribute("step", "0.05").Attribute("value", "1").Attribute("data-role", "speed-control").Attribute("aria-label", texts["player.speed"]),
+                            new Span(new ValueText("1×")).Class("player__speed-current").Attribute("data-role", "speed-current")).Class("player__speed-adjust"),
+                        new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
+                            .Attribute("data-speed", speed).Attribute("aria-pressed", speed == "1" ? "true" : "false"))]).Class("player__speed-presets")
+                    ).Class("player__panel player__panel--speed").Attribute("data-panel", "speed").Attribute("role", "group")
+                        .Attribute("aria-label", texts["player.speed"]).Attribute("hidden", "hidden"),
                     TrackPanel("audio", "player.audio", Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))),
                     TrackPanel("subtitles", "player.subtitles", [
                         Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),

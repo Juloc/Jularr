@@ -268,11 +268,9 @@ async function start(player: HTMLElement): Promise<void> {
             return;
         }
 
-        const speed = target.closest<HTMLElement>("[data-speed]");
+        const speed = target.closest<HTMLButtonElement>("[data-speed]");
         if (speed) {
-            video.playbackRate = Number(speed.dataset.speed);
-            player.querySelector("[data-role=speed-label]")!.textContent = speed.dataset.speed + "×";
-            player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-checked", String(item === speed)));
+            setSpeed(Number(speed.dataset.speed));
             panel(null);
             return;
         }
@@ -281,6 +279,21 @@ async function start(player: HTMLElement): Promise<void> {
         if (action && actions[action]) actions[action]();
         else if (target === video) actions.toggle();
     });
+    // Fine speed control shares the same state as the presets and survives delivery changes.
+    const speedControl = player.querySelector<HTMLInputElement>("[data-role=speed-control]");
+    speedControl?.addEventListener("input", () => setSpeed(Number(speedControl.value)));
+    function setSpeed(value: number): void {
+        if (!Number.isFinite(value)) return;
+        const speed = Math.min(4, Math.max(0.25, Math.round(value * 20) / 20));
+        video.playbackRate = speed;
+        const label = Number(speed.toFixed(2)).toString() + "×";
+        player.querySelector("[data-role=speed-label]")!.textContent = label;
+        const current = player.querySelector("[data-role=speed-current]");
+        if (current) current.textContent = label;
+        if (speedControl) speedControl.value = String(speed);
+        player.querySelectorAll<HTMLElement>("[data-speed]").forEach(button =>
+            button.setAttribute("aria-pressed", String(Number(button.dataset.speed) === speed)));
+    }
     video.addEventListener("dblclick", actions.fullscreen);
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.

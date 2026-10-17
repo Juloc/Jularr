@@ -119,7 +119,12 @@ namespace Jularr.Frontend.Pages.User.Reader
             var notes = Notes(index);
             var searching = Search(index);
             var settings = new Div(
+                Setting("reader.preset", [("book", "reader.preset.book"), ("light-novel", "reader.preset.lightNovel")], "preset"),
                 Setting("reader.fontSize", [("smaller", "reader.smaller"), ("larger", "reader.larger")], "size"),
+                Setting("reader.font", [("serif", "reader.font.serif"), ("sans", "reader.font.sans")], "font"),
+                Setting("reader.lineHeight", [("compact", "reader.lineHeight.compact"), ("normal", "reader.lineHeight.normal"),
+                    ("spacious", "reader.lineHeight.spacious")], "lineHeight"),
+                Setting("reader.width", [("narrow", "reader.width.narrow"), ("normal", "reader.width.normal"), ("wide", "reader.width.wide")], "width"),
                 Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
                 Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode")
             ).Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden");

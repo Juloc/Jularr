@@ -952,6 +952,62 @@
    "Pages",
    "Páginas"
   ],
+  "reader.preset": [
+   "Reading preset",
+   "Ajuste de lectura"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Libro"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Novela ligera"
+  ],
+  "reader.font": [
+   "Font",
+   "Fuente"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Con serifas"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Sin serifas"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Interlineado"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Compacto"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Cómodo"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Amplio"
+  ],
+  "reader.width": [
+   "Text width",
+   "Ancho del texto"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Estrecho"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normal"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Ancho"
+  ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
    "Este libro aún se está guardando para leerlo sin acceso al almacenamiento."

@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../Modules/Reader/reader.entry.ts', import.
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 
 function reader(stored = '{}', blocked = false) {
-    const events = {}, buttons = {}, saved = [];
+    const events = {}, buttons = {}, saved = [], properties = {};
     let bottom = 10000;
     const block = { dataset: { b: '0' }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
     const content = {
@@ -18,7 +18,7 @@ function reader(stored = '{}', blocked = false) {
     const button = { dataset: { setting: 'size', value: 'larger' }, setAttribute() {}, addEventListener: (name, action) => buttons[name] = action };
     const element = {
         dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100' },
-        style: { setProperty: (_, value) => element.size = value },
+        style: { setProperty: (key, value) => { properties[key] = value; if (key === '--reader-size') element.size = value; } },
         querySelector: selector => selector === '[data-role=content]' ? content : null,
         querySelectorAll: selector => selector === '[data-setting]' ? [button] : []
     };
@@ -29,7 +29,7 @@ function reader(stored = '{}', blocked = false) {
         location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
     });
-    return { element, saved, enlarge: () => buttons.click(), leave: () => events.pagehide(), finish: () => bottom = 800 };
+    return { element, properties, saved, enlarge: () => buttons.click(), leave: () => events.pagehide(), finish: () => bottom = 800 };
 }
 
 test('reader requires the visible section end before marking a single-block book complete', () => {
@@ -66,4 +66,20 @@ test('player planning network failure displays the localized status', async () =
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(status.hidden, false);
     assert.equal(status.textContent, 'Localized failure');
+});
+
+test('reader reuses the preview typography controls with validated device settings', () => {
+    const ui = reader('{"font":"sans","lineHeight":"spacious","width":"narrow","preset":"custom"}');
+    assert.equal(ui.properties['--reader-font-family'], 'system-ui, sans-serif');
+    assert.equal(ui.properties['--reader-line-height'], '1.9');
+    assert.equal(ui.properties['--reader-width'], '34rem');
+    ui.enlarge();
+    assert.equal(ui.element.size, '1.2rem');
+});
+
+test('invalid reader appearance preferences cannot inject CSS or change layout', () => {
+    const ui = reader('{"font":"invalid","lineHeight":"99","width":"999vw","preset":"unknown"}');
+    assert.match(ui.properties['--reader-font-family'], /Georgia/);
+    assert.equal(ui.properties['--reader-line-height'], '1.65');
+    assert.equal(ui.properties['--reader-width'], '42rem');
 });

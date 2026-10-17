@@ -175,6 +175,15 @@
         p { margin: 0; }
     }
 
+    &__panel--speed { width: min(340px, calc(100vw - 40px)); }
+
+    &__speed-adjust { display: flex; align-items: center; gap: 12px; padding: 4px; }
+    &__speed-range { flex: 1; min-width: 0; accent-color: var(--accent); }
+    &__speed-current { width: 3.5rem; text-align: end; font-variant-numeric: tabular-nums; font-weight: 650; }
+    &__speed-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    &__speed-presets .player__option { text-align: center; padding: 0 4px; }
+    &__speed-presets .player__option[aria-pressed=true] { background-color: var(--accent); color: var(--accent-contrast); }
+
     &__option {
         min-height: 40px;
         border: 0;
