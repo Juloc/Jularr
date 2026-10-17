@@ -31,7 +31,7 @@
         flex-direction: column;
         gap: 6px;
 
-        span { font-size: 12px; color: var(--text-muted); }
+        span { font-size: 12px; color: var(--muted); }
         strong { font-size: 20px; overflow-wrap: anywhere; }
     }
 
@@ -70,11 +70,11 @@
         .button { justify-self: start; }
     }
 
-    &__note { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+    &__note { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
     &__state { font-size: 12px; white-space: nowrap; }
     &__state--error { color: var(--danger); }
-    &__state--warning { color: var(--text-muted); }
+    &__state--warning { color: var(--muted); }
 
     &__folders {
         display: grid;
