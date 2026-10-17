@@ -189,6 +189,21 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Locale { get; }
     }
 
+    internal sealed class WorkIdentityProbeData : BaseData
+    {
+        public WorkIdentityProbeData(string @namespace, string value)
+        {
+            Namespace = @namespace;
+            Value = value;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string Value { get; }
+    }
+
     // JSON rows of Namespace and Value.
     internal sealed class WorkIdentityLookupData : BaseData
     {

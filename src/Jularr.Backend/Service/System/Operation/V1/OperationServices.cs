@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Logic.Library;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -210,6 +211,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 await AssignKnownFoldersAsync(root.Id, root.MediaTypeId);
             }
 
+            // Link completely new folders to their catalog identity without moving files.
+            if (root.MediaTypeId is MediaType.Movie or MediaType.Series)
+            {
+                await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId);
+            }
+
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
             return new UpdateResult(true);
         }
@@ -365,6 +372,97 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     }
                     catch (DataValidationException)
                     {
+                    }
+                }
+            }
+        }
+
+        private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType)
+        {
+            var matches = new Dictionary<(string Title, int? Year, string? ImdbId), long?>();
+            for (var afterId = 0L; ;)
+            {
+                var files = await Context.ExecuteBatchAsync((ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT file."Id", file."RelativePath", file."SizeBytes", file."ModifiedAt", NULL::bigint AS "WorkId"
+                        FROM "StoredFiles" AS file
+                        WHERE file."LibraryRootId" = @LibraryRootId AND file."Id" > @AfterId
+                            AND file."MediaAssetId" IS NULL AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        ORDER BY file."Id"
+                        LIMIT 100;
+                        """;
+                    sql.Parameters.Add(new StoredFileCursorData(libraryRootId, afterId));
+                    return ctx.ReadSql.ReadListAsync<StoredFileCandidateData>(sql, ct);
+                }, CancellationToken);
+                if (files.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var file in files)
+                {
+                    afterId = file.Id;
+                    var parsed = MediaPathParser.Parse(file.RelativePath, mediaType);
+                    if (parsed.Title.Length > 500 || (mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode))
+                    {
+                        continue;
+                    }
+
+                    var imdbId = MediaPathParser.ImdbId(file.RelativePath);
+                    var key = (parsed.Title.ToUpperInvariant(), parsed.Year, imdbId);
+                    if (!matches.TryGetValue(key, out var workId))
+                    {
+                        var candidates = await Context.ExecuteBatchAsync((ctx, ct) =>
+                        {
+                            var sql = new SqlStatement();
+                            sql.Statement =
+                                """
+                                SELECT work."Id"
+                                FROM "Works" AS work
+                                WHERE work."MediaTypeId" = @MediaTypeId AND (
+                                    (@ImdbId::text IS NOT NULL AND EXISTS (
+                                        SELECT 1 FROM "WorkExternalIdentities" AS identity
+                                        WHERE identity."WorkId" = work."Id" AND identity."Namespace" = 'imdb' AND identity."Value" = @ImdbId
+                                    ))
+                                    OR (
+                                        NOT EXISTS (
+                                            SELECT 1 FROM "WorkExternalIdentities" AS identity
+                                            JOIN "Works" AS identified ON identified."Id" = identity."WorkId"
+                                            WHERE identity."Namespace" = 'imdb' AND identity."Value" = @ImdbId AND identified."MediaTypeId" = @MediaTypeId
+                                        )
+                                        AND lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                                        AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
+                                    )
+                                )
+                                ORDER BY work."Id"
+                                LIMIT 2;
+                                """;
+                            sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, imdbId));
+                            return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                        }, CancellationToken);
+                        workId = candidates.Count == 1 ? candidates[0].Id : null;
+                        if (matches.Count < 10000)
+                        {
+                            matches[key] = workId;
+                        }
+                    }
+
+                    if (workId is null)
+                    {
+                        continue;
+                    }
+
+                    var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
+                    try
+                    {
+                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                    }
+                    catch (DataValidationException)
+                    {
+                        // Incomplete episode structure remains available for manual review.
                     }
                 }
             }

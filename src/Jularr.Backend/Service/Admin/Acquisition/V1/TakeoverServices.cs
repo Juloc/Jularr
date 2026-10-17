@@ -19,7 +19,7 @@ using Jularr.Backend.Logic.Library;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
 {
-    // A one-time takeover from Prowlarr or a Servarr: indexers, clients, quality profiles with their custom formats and monitoring, root folders and missing titles; nothing keeps running alongside.
+    // A one-time takeover from Prowlarr or a Servarr: indexers, clients, quality profiles with their custom formats and monitoring, root folders and existing titles; nothing keeps running alongside.
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/takeover")]
     public sealed class RunTakeoverV1 : AdminService<TakeoverParametersV1, RunTakeoverDataV1>
     {
@@ -240,21 +240,22 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }));
             }
 
-            // Watched titles without files become wanted through their provider id; large libraries continue in later runs.
+            // Import existing titles without starting downloads; missing monitored titles become wanted.
+            // Previously imported provider ids never use the limited catalog-import budget.
             var taken = 0;
-            foreach (var title in titles.Where(title => title.IsMonitored && title.IsMissing))
+            foreach (var title in titles.OrderByDescending(item => item.IsMonitored && item.IsMissing))
             {
+                var wantsDownload = title.IsMonitored && title.IsMissing;
                 var name = Limit(title.Year is { } year ? title.Title + " (" + year + ")" : title.Title, 500);
                 var sourceProfileId = SourceProfile(title);
                 var sourceMetadataId = SourceMetadata(title);
-                if (sourceProfileId is { } requiredProfile && !supportedProfiles.Contains((requiredProfile, sourceMetadataId)))
+                if (wantsDownload && sourceProfileId is { } requiredProfile && !supportedProfiles.Contains((requiredProfile, sourceMetadataId)))
                 {
                     items.Add(new TakeoverItemV1(type, name, "takeover_profile_unsupported", null));
                     continue;
                 }
 
-                // Lidarr's metadata profile may leave out an album's type.
-                if (metadataById.TryGetValue(sourceMetadataId, out var metadata)
+                if (wantsDownload && metadataById.TryGetValue(sourceMetadataId, out var metadata)
                     && !ServarrProfileLogic.Monitoring(metadata).AllowsType(title.AlbumType))
                 {
                     items.Add(new TakeoverItemV1(type, name, "takeover_not_monitored", null));
@@ -271,22 +272,47 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 if (identity.Item1 is null)
                 {
                     items.Add(new TakeoverItemV1(type, name, mediaType == MediaType.Series ? "takeover_no_match" : "takeover_no_id", null));
+                    continue;
                 }
-                else if (!Data.Apply)
+
+                if (!Data.Apply)
                 {
-                    items.Add(new TakeoverItemV1(type, name, "takeover_will_want", null));
+                    items.Add(new TakeoverItemV1(type, name, wantsDownload ? "takeover_will_want" : "takeover_will_add", null));
+                    continue;
                 }
-                else if (taken++ >= TitlesPerRun)
-                {
-                    items.Add(new TakeoverItemV1(type, name, "takeover_next_run", null));
-                }
-                else if ((mediaType == MediaType.Book ? await FindBookAsync(title) : identity.Item2) is not { } externalId)
+
+                if ((mediaType == MediaType.Book ? await FindBookAsync(title) : identity.Item2) is not { } externalId)
                 {
                     items.Add(new TakeoverItemV1(type, name, "takeover_no_match", null));
+                    continue;
                 }
-                else
+
+                var existingWork = await Context.ExecuteBatchAsync((ctx, ct) =>
                 {
-                    var workId = await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT identity."WorkId" AS "Id"
+                        FROM "WorkExternalIdentities" AS identity
+                        WHERE identity."Namespace" = @Namespace AND identity."Value" = @Value;
+                        """;
+                    sql.Parameters.Add(new WorkIdentityProbeData(identity.Item1, externalId));
+                    return ctx.ReadSql.ReadOptionalAsync<WorkIdData>(sql, ct);
+                }, CancellationToken);
+                if (existingWork is null && taken >= TitlesPerRun)
+                {
+                    items.Add(new TakeoverItemV1(type, name, "takeover_next_run", null));
+                    continue;
+                }
+
+                var workId = existingWork?.Id ?? await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
+                if (existingWork is null)
+                {
+                    taken++;
+                }
+
+                if (wantsDownload)
+                {
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
                         await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, sourceProfileId is { } profileId && profileIds.TryGetValue((profileId, sourceMetadataId), out var id) ? id : null,
@@ -294,8 +320,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                                 && chosen.TryGetValue(Folder(root.Path), out var libraryRootId) ? libraryRootId : null), ct);
                         return true;
                     }, CancellationToken);
-                    items.Add(new TakeoverItemV1(type, name, "takeover_wanted", null));
                 }
+
+                items.Add(new TakeoverItemV1(type, name, existingWork is not null ? "takeover_exists" : wantsDownload ? "takeover_wanted" : "takeover_added", null));
             }
 
             return new BaseDataList<TakeoverItemV1>([.. items.Take(1000)]);

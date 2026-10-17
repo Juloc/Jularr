@@ -51,12 +51,19 @@ namespace Jularr.Backend.Logic.Library
             }
         }
 
+        // Conflicting ids must never produce a match.
+        public static string? ImdbId(string relativePath)
+        {
+            var ids = ImdbToken().Matches(relativePath).Select(match => match.Value.ToLowerInvariant()).Distinct().Take(2).ToArray();
+            return ids.Length == 1 ? ids[0] : null;
+        }
+
         public static bool IsSample(string relativePath) => Sample().IsMatch(Path.GetFileNameWithoutExtension(relativePath));
 
         private static string Clean(string name, out int? year)
         {
             // Release tags never belong to the title.
-            var text = Brackets().Replace(name, " ");
+            var text = ImdbSuffix().Replace(Brackets().Replace(name, " "), " ");
             if (!text.Contains(' ')) text = text.Replace('.', ' ').Replace('_', ' ');
 
             year = null;
@@ -104,6 +111,12 @@ namespace Jularr.Backend.Logic.Library
 
         [GeneratedRegex(@"\[[^\]]*\]|\{[^}]*\}")]
         private static partial Regex Brackets();
+
+        [GeneratedRegex(@"(?<![A-Za-z0-9])tt\d{7,10}(?!\d)", RegexOptions.IgnoreCase)]
+        private static partial Regex ImdbToken();
+
+        [GeneratedRegex(@"[\s._-]+tt\d{7,10}\s*$", RegexOptions.IgnoreCase)]
+        private static partial Regex ImdbSuffix();
 
         [GeneratedRegex(@"\bsample\b", RegexOptions.IgnoreCase)]
         private static partial Regex Sample();

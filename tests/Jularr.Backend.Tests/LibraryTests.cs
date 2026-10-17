@@ -355,6 +355,7 @@ namespace Jularr.Backend.Tests
 
         [TestMethod]
         [DataRow("Show (2020)/Season 2/Show.S02E05.1080p.WEB-DL.mkv", MediaType.Series, "Show", WorkUnitType.Episode, "5", "2")]
+        [DataRow("Series Name - tt39551287/Season 1/Series Name - S01E07 tt39551287.mkv", MediaType.Series, "Series Name", WorkUnitType.Episode, "7", "1")]
         [DataRow("Anime Name/Anime Name - 012 [1080p].mkv", MediaType.Series, "Anime Name", WorkUnitType.Episode, "12", "1")]
         [DataRow("Manga Title/Manga Title v03 c012.5.cbz", MediaType.Book, "Manga Title", WorkUnitType.Chapter, "12.5", "3")]
         [DataRow("Novel/Novel Vol. 4.epub", MediaType.Book, "Novel", WorkUnitType.Volume, "4", null)]
@@ -368,6 +369,31 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(unitType, parsed.WorkUnitTypeId);
             Assert.AreEqual(number is null ? null : decimal.Parse(number, System.Globalization.CultureInfo.InvariantCulture), parsed.UnitNumber);
             Assert.AreEqual(parent is null ? null : decimal.Parse(parent, System.Globalization.CultureInfo.InvariantCulture), parsed.ParentUnitNumber);
+        }
+
+        [TestMethod]
+        public async Task Scan_MatchesImportedSeriesAndKeepsAmbiguousFilesUnassigned()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Imported Show - tt39551287", "Season 1");
+            var ambiguous = Path.Combine(storage.Path, mountId.ToString(), "Series", "Duplicate Show", "Season 1");
+            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(ambiguous);
+            File.WriteAllText(Path.Combine(folder, "Imported Show - S01E07 HDTV-1080p tt39551287.mkv"), "episode");
+            File.WriteAllText(Path.Combine(ambiguous, "Duplicate Show - S01E01.mkv"), "ambiguous");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "IsMediaSubtypeManual")
+                VALUES (2, 'Imported Show', FALSE), (2, 'Duplicate Show', FALSE), (2, 'Duplicate Show', FALSE);
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL AND "RelativePath" LIKE 'Imported Show%' """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND "RelativePath" LIKE 'Duplicate Show%' """));
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
         }
 
         [TestMethod]
