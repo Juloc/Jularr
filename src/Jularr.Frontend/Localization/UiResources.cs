@@ -1646,6 +1646,8 @@ namespace Jularr.Frontend.Localization
             new("console.week", "This week"),
             new("console.month", "This month"),
             new("console.total", "Total downloads"),
+            new("console.incompleteRemotePath", "Incomplete folder path reported by SABnzbd"),
+            new("console.incompleteLocalPath", "Same incomplete folder path visible to Jularr"),
         ];
     }
 }
