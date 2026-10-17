@@ -1,7 +1,7 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
 import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
-import { applyFit, normalizedSpeed, selectSettingsPane } from "./PlayerSettings";
+import { applyFit, normalizedSpeed, selectSettingsPane, shiftTextCues } from "./PlayerSettings";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -34,6 +34,8 @@ async function start(player: HTMLElement): Promise<void> {
     const volume = player.querySelector<HTMLInputElement>("[data-role=volume]")!;
     const toggle = player.querySelector<HTMLButtonElement>("[data-action=toggle]")!;
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
+    const subtitleDelayControl = player.querySelector<HTMLInputElement>("[data-role=subtitle-delay]");
+    const subtitleReset = player.querySelector<HTMLButtonElement>("[data-action=subtitle-delay-reset]");
     const antiforgery = player.dataset.antiforgery ?? "";
     const lifetime = new AbortController();
     const signal = lifetime.signal;
@@ -43,6 +45,8 @@ async function start(player: HTMLElement): Promise<void> {
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     let idle = 0;
+    let subtitleDelay = 0;
+    const cueTimes = new WeakMap<TextTrackCue, { start: number; end: number }>();
 
     plan = await requestPlan(null);
     if (!plan) return;
@@ -220,19 +224,39 @@ async function start(player: HTMLElement): Promise<void> {
         }
     }
 
+    // WebVTT delay applies to the actual cues, not merely to a displayed setting.
+    function setSubtitleDelay(value: number): void {
+        if (!Number.isFinite(value)) return;
+        subtitleDelay = Math.round(Math.max(-10, Math.min(10, value)) * 20) / 20;
+        if (subtitleDelayControl) subtitleDelayControl.value = String(subtitleDelay);
+        const label = player.querySelector<HTMLElement>("[data-role=subtitle-delay-label]");
+        if (label) label.textContent = subtitleDelay === 0 ? "0 s" : `${subtitleDelay > 0 ? "+" : ""}${Number(subtitleDelay.toFixed(2))} s`;
+        if (subtitleReset) subtitleReset.disabled = subtitleDelay === 0 || !video.querySelector("track");
+        shiftTextCues(video.querySelector<HTMLTrackElement>("track")?.track ?? null, subtitleDelay, cueTimes);
+    }
+
+    subtitleDelayControl?.addEventListener("input", () => setSubtitleDelay(Number(subtitleDelayControl.value)), { signal });
+
     // Subtitles are WebVTT tracks on the same video; Off removes them.
     function showSubtitle(key: string, language: string | undefined): void {
         video.querySelectorAll("track").forEach(track => track.remove());
+        if (subtitleDelayControl) subtitleDelayControl.disabled = !key;
+        if (subtitleReset) subtitleReset.disabled = !key || subtitleDelay === 0;
         if (!key) return;
         const track = document.createElement("track");
         track.kind = "subtitles";
         track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
         if (language) track.srclang = language;
         track.default = true;
-        track.addEventListener("load", () => { track.track.mode = "showing"; }, { signal });
+        track.addEventListener("load", () => {
+            track.track.mode = "showing";
+            shiftTextCues(track.track, subtitleDelay, cueTimes);
+        }, { signal });
         track.addEventListener("error", () => {
             show("failed");
             track.remove();
+            if (subtitleDelayControl) subtitleDelayControl.disabled = true;
+            if (subtitleReset) subtitleReset.disabled = true;
             const off = player.querySelector<HTMLElement>('[data-subtitle=""]');
             if (off) choose("data-subtitle", off);
         }, { signal });
@@ -299,6 +323,7 @@ async function start(player: HTMLElement): Promise<void> {
         subtitles: () => panel("subtitles"),
         more: () => panel("info"),
         "settings-close": () => panel(null),
+        "subtitle-delay-reset": () => setSubtitleDelay(0),
         close: () => report(true, false),
         previous: () => go("previous"),
         next: () => go("next"),
