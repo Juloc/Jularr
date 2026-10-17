@@ -6999,6 +6999,14 @@
   "console.total": [
    "Total downloads",
    "Total downloads"
+  ],
+  "console.incompleteRemotePath": [
+   "Incomplete folder path reported by SABnzbd",
+   "Incomplete folder path reported by SABnzbd"
+  ],
+  "console.incompleteLocalPath": [
+   "Same incomplete folder path visible to Jularr",
+   "Same incomplete folder path visible to Jularr"
   ]
  }
 }
