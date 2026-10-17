@@ -418,6 +418,46 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Parser_NfoIdentity_RejectsConflictsAndExternalEntities()
+        {
+            var (ids, conflicted) = MediaPathParser.ParseNfo(
+                """<tvshow><uniqueid type="imdb">tt39551287</uniqueid><tvdbid>24680</tvdbid></tvshow>""", MediaType.Series);
+            Assert.IsFalse(conflicted);
+            Assert.AreEqual("tt39551287", ids["imdb"]);
+            Assert.AreEqual("24680", ids["tvdb"]);
+
+            Assert.IsTrue(MediaPathParser.ParseNfo(
+                """<tvshow><imdbid>tt39551287</imdbid><uniqueid type="imdb">tt12345678</uniqueid></tvshow>""", MediaType.Series).Conflicted);
+            Assert.IsTrue(MediaPathParser.ParseNfo(
+                """<!DOCTYPE tvshow [<!ENTITY ex SYSTEM "file:///etc/passwd">]><tvshow><imdbid>&ex;</imdbid></tvshow>""", MediaType.Series).Conflicted);
+        }
+
+        [TestMethod]
+        public async Task Scan_NfoIdentifiesSeriesWithDifferentFolderTitle()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Localized Folder", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(Directory.GetParent(folder)!.FullName, "tvshow.nfo"),
+                """<tvshow><uniqueid type="imdb">tt39551287</uniqueid></tvshow>""");
+            File.WriteAllText(Path.Combine(folder, "Localized Folder - S01E07.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Original Name') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
         public async Task Scan_MultiEpisodeFile_DoesNotLinkToOnlyTheFirstEpisode()
         {
             using var storage = new TemporaryDirectory();

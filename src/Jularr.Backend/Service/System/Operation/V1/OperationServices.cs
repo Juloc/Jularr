@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
@@ -213,13 +214,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
             // Folders already identified keep growing.
             if (root.MediaTypeId is not (MediaType.Movie or MediaType.Game))
             {
-                await AssignKnownFoldersAsync(root.Id, root.MediaTypeId);
+                await AssignKnownFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
             }
 
             // Link completely new folders to their catalog identity without moving files.
             if (root.MediaTypeId is MediaType.Movie or MediaType.Series)
             {
-                await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId);
+                await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
             }
 
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
@@ -312,8 +313,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private async Task AssignKnownFoldersAsync(long libraryRootId, MediaType mediaType)
+        private async Task AssignKnownFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
+            var nfoFolders = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             for (var afterId = 0L; ;)
             {
                 // Top folders linked to exactly one Work.
@@ -365,7 +367,23 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     // Unclear structure stays for manual review.
                     afterId = file.Id;
                     var path = MediaPathParser.Parse(file.RelativePath, mediaType);
-                    if (path.WorkUnitTypeId is null || mediaType == MediaType.Series && MediaPathParser.ProviderIds(file.RelativePath, mediaType).Ids.Count > 0)
+                    var hasNfo = false;
+                    if (mediaType == MediaType.Series)
+                    {
+                        var parent = file.RelativePath.Split('/')[0];
+                        if (!nfoFolders.TryGetValue(parent, out hasNfo))
+                        {
+                            hasNfo = await storage.GetAsync(StoragePath.Combine(directory, parent + "/tvshow.nfo"), CancellationToken) is not null;
+                            if (nfoFolders.Count >= 10_000)
+                            {
+                                nfoFolders.Clear();
+                            }
+
+                            nfoFolders[parent] = hasNfo;
+                        }
+                    }
+
+                    if (path.WorkUnitTypeId is null || hasNfo || mediaType == MediaType.Series && MediaPathParser.ProviderIds(file.RelativePath, mediaType).Ids.Count > 0)
                     {
                         // Explicit provider IDs require catalog validation, not just a matching parent folder.
                         continue;
@@ -383,12 +401,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType)
+        private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
             var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
             TmdbConnection? provider = null;
             var providerUnavailable = false;
             var externalLookups = 0;
+            var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.OrdinalIgnoreCase);
             for (var afterId = 0L; ;)
             {
                 var files = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -420,7 +439,35 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         continue;
                     }
 
-                    var (ids, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
+                    var (pathIds, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
+                    var ids = new Dictionary<string, string>(pathIds, StringComparer.OrdinalIgnoreCase);
+                    if (file.RelativePath.Contains('/'))
+                    {
+                        var folder = file.RelativePath.Split('/')[0];
+                        if (!nfoFolders.TryGetValue(folder, out var nfo))
+                        {
+                            nfo = await ReadFolderNfoAsync(storage, directory, folder, mediaType);
+                            if (nfoFolders.Count >= 10_000)
+                            {
+                                nfoFolders.Clear();
+                            }
+
+                            nfoFolders[folder] = nfo;
+                        }
+
+                        conflicted |= nfo.Conflicted;
+                        foreach (var (source, value) in nfo.Ids)
+                        {
+                            if (ids.TryGetValue(source, out var existing) && !existing.Equals(value, StringComparison.OrdinalIgnoreCase))
+                            {
+                                conflicted = true;
+                                break;
+                            }
+
+                            ids[source] = value;
+                        }
+                    }
+
                     if (conflicted)
                     {
                         continue;
@@ -579,6 +626,41 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     }
                 }
             }
+        }
+
+        private async Task<(IReadOnlyDictionary<string, string> Ids, bool Conflicted)> ReadFolderNfoAsync(StorageFiles storage, string directory, string folder, MediaType mediaType)
+        {
+            const int maxBytes = 65_536;
+            var name = mediaType == MediaType.Series ? "tvshow.nfo" : "movie.nfo";
+            var path = StoragePath.Combine(directory, folder + "/" + name);
+            var info = await storage.GetAsync(path, CancellationToken);
+            if (info is null)
+            {
+                return (new Dictionary<string, string>(), false);
+            }
+
+            if (info.IsDirectory || info.Length > maxBytes)
+            {
+                return (new Dictionary<string, string>(), true);
+            }
+
+            await using var stream = await storage.OpenReadAsync(path, CancellationToken);
+            var data = new byte[maxBytes + 1];
+            var read = 0;
+            while (read < data.Length)
+            {
+                var length = await stream.ReadAsync(data.AsMemory(read), CancellationToken);
+                if (length == 0)
+                {
+                    break;
+                }
+
+                read += length;
+            }
+
+            return read > maxBytes
+                ? (new Dictionary<string, string>(), true)
+                : MediaPathParser.ParseNfo(Encoding.UTF8.GetString(data, 0, read), mediaType);
         }
 
         private static bool IsStorablePath(string relativePath)

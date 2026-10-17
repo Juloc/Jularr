@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Xml;
+using System.Xml.Linq;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Library;
@@ -117,6 +119,64 @@ namespace Jularr.Backend.Logic.Library
             }
 
             return (ids, conflicted);
+        }
+
+        // Read only work-level identifiers; episode NFO files cannot identify a whole series.
+        public static (IReadOnlyDictionary<string, string> Ids, bool Conflicted) ParseNfo(string xml, MediaType mediaType)
+        {
+            var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var conflicted = false;
+            try
+            {
+                using var reader = XmlReader.Create(new StringReader(xml), new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null,
+                    MaxCharactersInDocument = 65_536
+                });
+                var document = XDocument.Load(reader);
+                var expected = mediaType == MediaType.Series ? "tvshow" : "movie";
+                if (!string.Equals(document.Root?.Name.LocalName, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (identities, true);
+                }
+
+                foreach (var entry in document.Root.Elements())
+                {
+                    var field = entry.Name.LocalName.ToLowerInvariant();
+                    var source = field == "uniqueid" ? entry.Attribute("type")?.Value.ToLowerInvariant() : field;
+                    var @namespace = source switch
+                    {
+                        "imdb" or "imdbid" => "imdb",
+                        "tmdb" or "tmdbid" => mediaType == MediaType.Series ? "tmdb_tv" : "tmdb_movie",
+                        "tvdb" or "tvdbid" => "tvdb",
+                        "tvmaze" or "tvmazeid" => "tvmaze",
+                        _ => null
+                    };
+                    if (@namespace is null)
+                    {
+                        continue;
+                    }
+
+                    var value = entry.Value.Trim();
+                    var valid = !entry.HasElements && (@namespace == "imdb"
+                        ? ImdbToken().Match(value) is { Success: true, Index: 0 } imdb && imdb.Length == value.Length
+                        : value.Length is > 0 and <= 12 && value.All(char.IsAsciiDigit) && value.Any(digit => digit != '0'));
+                    if (!valid || identities.TryGetValue(@namespace, out var previous) && !previous.Equals(value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        conflicted = true;
+                        continue;
+                    }
+
+                    identities[@namespace] = @namespace == "imdb" ? value.ToLowerInvariant() : value;
+                }
+            }
+            catch (XmlException)
+            {
+                conflicted = true;
+            }
+
+            return (identities, conflicted);
         }
 
         public static bool IsSample(string relativePath) => Sample().IsMatch(Path.GetFileNameWithoutExtension(relativePath));
