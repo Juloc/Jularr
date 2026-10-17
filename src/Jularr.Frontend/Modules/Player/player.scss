@@ -1,7 +1,4 @@
 @keyframes player-buffering-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-    .player__buffering-ring { animation: none; }
-}
 
 .player-page { background: #080809; color: #fff; }
 .player-main { width: 100%; min-height: 100dvh; }
@@ -47,6 +44,7 @@
         border-top-color: #fff;
         border-radius: 50%;
         animation: player-buffering-spin 800ms linear infinite;
+        @media (prefers-reduced-motion: reduce) { animation: none; }
     }
     &--mini &__buffering { display: none; }
 
