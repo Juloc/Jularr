@@ -518,6 +518,48 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_SeasonPlexMatchOverridesUnnumberedEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Different Title", "Season Two");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, ".plexmatch"), "Season: 2\nTVDBID: 13579\nEP: 07: Episode Seven.mkv");
+            File.WriteAllText(Path.Combine(folder, "Episode Seven.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Canonical Name') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'tvdb', '13579' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+        }
+
+        [TestMethod]
+        public async Task Scan_UnsupportedPlexMatchPattern_DoesNotGuessAnEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Canonical Name", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(Directory.GetParent(folder)!.FullName, ".plexmatch"), "Pattern: Show Part {se} - {ep} - *");
+            File.WriteAllText(Path.Combine(folder, "Canonical Name - S01E01.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Canonical Name');
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND NOT "IsSubtitle" """));
+        }
+
+        [TestMethod]
         public async Task Scan_MovieNfoMatchesAnUnrelatedFolderName()
         {
             using var storage = new TemporaryDirectory();

@@ -694,7 +694,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)
         {
             var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, folder + "/.plexmatch"), 32_768);
-            return invalid ? MediaPathParser.ParsePlexMatch("Pattern: unsupported") : MediaPathParser.ParsePlexMatch(text ?? "");
+            return invalid
+                ? new PlexMatchHints(null, null, null, new Dictionary<string, string>(), new Dictionary<string, (decimal?, decimal)>(), true)
+                : MediaPathParser.ParsePlexMatch(text ?? "");
         }
 
         private async Task<(IReadOnlyDictionary<string, string> Ids, bool Conflicted)> ReadFolderNfoAsync(StorageFiles storage, string directory, string folder, MediaType mediaType)
@@ -733,7 +735,19 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 total += length;
             }
 
-            return total > maxBytes ? (null, true) : (Encoding.UTF8.GetString(buffer, 0, total), false);
+            if (total > maxBytes)
+            {
+                return (null, true);
+            }
+
+            try
+            {
+                return (new UTF8Encoding(false, true).GetString(buffer, 0, total), false);
+            }
+            catch (DecoderFallbackException)
+            {
+                return (null, true);
+            }
         }
 
         private static bool IsStorablePath(string relativePath)
