@@ -6971,6 +6971,34 @@
   "console.refresh": [
    "Refresh",
    "Aktualisieren"
+  ],
+  "console.orphan": [
+   "SABnzbd orphan",
+   "SABnzbd-Waise"
+  ],
+  "console.removeOrphan": [
+   "Clean up orphan",
+   "Waise bereinigen"
+  ],
+  "console.removeOrphanConfirm": [
+   "Let SABnzbd delete this verified orphan folder?",
+   "Diesen von SABnzbd erkannten verwaisten Ordner löschen lassen?"
+  ],
+  "console.today": [
+   "Today",
+   "Heute"
+  ],
+  "console.week": [
+   "This week",
+   "Diese Woche"
+  ],
+  "console.month": [
+   "This month",
+   "Dieser Monat"
+  ],
+  "console.total": [
+   "Total downloads",
+   "Downloads insgesamt"
   ]
  }
 }
