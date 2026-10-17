@@ -14,7 +14,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void CategoryRouting_KindOverrideOrDefault_IsDeterministic()
         {
-            const string map = "{\\"Movie\\":\\"movies\\",\\"Tv\\":\\"series\\",\\"Anime\\":\\"anime\\",\\"Manga\\":\\"comics\\"}";
+            const string map = """{"Movie":"movies","Tv":"series","Anime":"anime","Manga":"comics"}""";
             Assert.AreEqual("movies", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Movie));
             Assert.AreEqual("series", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Tv));
             Assert.AreEqual("anime", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Anime));
