@@ -264,7 +264,27 @@ async function start(player: HTMLElement): Promise<void> {
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => show("failed"), { signal });
+    // Show genuine stalls only after a short delay; the overlay never shifts the video or controls.
+    const buffering = player.querySelector<HTMLElement>("[data-role=buffering]");
+    let bufferingTimer: number | undefined;
+    function hideBuffering(): void {
+        if (bufferingTimer !== undefined) window.clearTimeout(bufferingTimer);
+        bufferingTimer = undefined;
+        if (buffering) buffering.hidden = true;
+    }
+    function watchBuffering(): void {
+        if (!buffering || signal.aborted || video.paused || video.ended ||
+            (video.readyState >= 3 && !video.seeking) || bufferingTimer !== undefined || !buffering.hidden) return;
+        bufferingTimer = window.setTimeout(() => {
+            bufferingTimer = undefined;
+            if (!signal.aborted && !video.paused && !video.ended && (video.readyState < 3 || video.seeking)) buffering.hidden = false;
+        }, 400);
+    }
+    for (const name of ["waiting", "stalled", "seeking", "play"])
+        video.addEventListener(name, watchBuffering, { signal });
+    for (const name of ["canplay", "playing", "seeked", "pause", "ended", "emptied"])
+        video.addEventListener(name, hideBuffering, { signal });
+    video.addEventListener("error", () => { hideBuffering(); show("failed"); }, { signal });
 
     // The real decoded/buffered ranges are read from the media element; no client-side guessing.
     const bufferBar = player.querySelector<HTMLElement>("[data-role=buffered]");
@@ -444,6 +464,7 @@ async function start(player: HTMLElement): Promise<void> {
         report(true, false);
         lifetime.abort();
         metadataListener?.abort();
+        hideBuffering();
         window.clearInterval(progressInterval);
         window.clearTimeout(idle);
         video.pause();
