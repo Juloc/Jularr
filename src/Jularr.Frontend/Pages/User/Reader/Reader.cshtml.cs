@@ -168,6 +168,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-characters", current.Characters.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-total", current.TotalCharacters.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-locator", document.Locator ?? "")
+                .Attribute("data-direction", document.IsRightToLeft ? "rtl" : "ltr")
                 .Attribute("data-annotations-url", "/api/v1/reading/assets/" + asset + "/annotations")
                 .Attribute("data-annotations", JsonSerializer.Serialize(_marks, Json))
                 .Attribute("data-note-label", texts["reader.note"])
