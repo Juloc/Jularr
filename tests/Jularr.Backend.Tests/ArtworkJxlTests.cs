@@ -18,6 +18,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.Contains(args, "--num_threads=2");
             CollectionAssert.Contains(JxlArtworkCodec.EncoderOptions(ArtworkQuality.Lossless, false), "--distance=0");
             CollectionAssert.DoesNotContain(JxlArtworkCodec.EncoderOptions(ArtworkQuality.High, false), "--progressive");
+            CollectionAssert.Contains(JxlArtworkCodec.JpegEncoderOptions(ArtworkQuality.VisuallyLossless, true), "--lossless_jpeg=0");
+            CollectionAssert.Contains(JxlArtworkCodec.JpegEncoderOptions(ArtworkQuality.VisuallyLossless, true), "--progressive");
         }
 
         [TestMethod]

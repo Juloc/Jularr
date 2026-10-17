@@ -18,6 +18,7 @@ namespace Jularr.Backend.Service.Core
         private readonly StorageAccess _storage = storage;
         private readonly ArtworkImageDownloader _images = images;
         private readonly ArtworkCache _cache = cache;
+        private readonly JxlArtworkCodec _jxl = new();
 
         public async Task<ArtworkExportResultV1> ExportAsync(LogicContext context, long workId, CancellationToken ct)
         {
@@ -28,12 +29,6 @@ namespace Jularr.Backend.Service.Core
             if (!settings.ExportToNas)
             {
                 return new ArtworkExportResultV1(0, 0);
-            }
-
-            if (settings.NasModeId != NasArtworkMode.Compatible)
-            {
-                // Never silently produce only JPEG when the configured mode promises JPEG XL.
-                throw new ServiceUnavailableException("artwork_jxl_not_ready");
             }
 
             var images = facts
@@ -88,25 +83,49 @@ namespace Jularr.Backend.Service.Core
                         continue;
                     }
 
-                    var name = ArtworkFileNames.ExportName(slot, jxl: false);
-                    var relativePath = StoragePath.Combine(folder, name);
-                    using var image = new MemoryStream(jpeg, writable: false);
-                    var written = await LibraryFileWriter.WriteAsync(files, location.RootRelativePath, relativePath, image, ct);
-                    if (written is null)
+                    // JXL-only and dual NAS modes are real formats, never a JPEG file with
+                    // a .jxl extension. Existing sidecars (including manually supplied ones)
+                    // are protected by the earlier slot check and create-only writes.
+                    var targets = new List<(string Name, byte[] Bytes)>(2);
+                    if (settings.NasModeId != NasArtworkMode.Compatible)
                     {
-                        skipped++;
-                        continue;
+                        var jxl = await _jxl.EncodeJpegAsync(jpeg, ArtworkQuality.VisuallyLossless, progressive: settings.ProgressiveJxl, ct);
+                        if (jxl is null)
+                        {
+                            throw new ServiceUnavailableException("artwork_jxl_not_ready");
+                        }
+
+                        targets.Add((ArtworkFileNames.ExportName(slot, jxl: true), jxl));
                     }
 
-                    var candidate = new ArtworkScanCandidate(relativePath, folder, (short)slot, null, written.Value.Length, written.Value.ModifiedAt);
-                    var batch = new ArtworkScanBatchData(location.LibraryRootId, StoredFileLogic.StoredTime(DateTime.UtcNow),
-                        JsonSerializer.Serialize(new[] { candidate }));
-                    await context.ExecuteBatchAsync(async (ctx, batchCt) =>
+                    if (settings.NasModeId != NasArtworkMode.JxlOnly)
                     {
-                        await ctx.UpsertSidecarsAsync(batch, batchCt);
-                        return true;
-                    }, ct);
-                    saved++;
+                        targets.Add((ArtworkFileNames.ExportName(slot, jxl: false), jpeg));
+                    }
+
+                    foreach (var (name, bytes) in targets)
+                    {
+                        var relativePath = StoragePath.Combine(folder, name);
+                        using var image = new MemoryStream(bytes, writable: false);
+                        var written = await LibraryFileWriter.WriteAsync(files, location.RootRelativePath, relativePath, image, ct);
+                        if (written is null)
+                        {
+                            // Atomicity is per file; a partial dual export stays visible in
+                            // Activity, and a retry never overwrites an existing sidecar.
+                            skipped++;
+                            continue;
+                        }
+
+                        var candidate = new ArtworkScanCandidate(relativePath, folder, (short)slot, null, written.Value.Length, written.Value.ModifiedAt);
+                        var batch = new ArtworkScanBatchData(location.LibraryRootId, StoredFileLogic.StoredTime(DateTime.UtcNow),
+                            JsonSerializer.Serialize(new[] { candidate }));
+                        await context.ExecuteBatchAsync(async (ctx, batchCt) =>
+                        {
+                            await ctx.UpsertSidecarsAsync(batch, batchCt);
+                            return true;
+                        }, ct);
+                        saved++;
+                    }
                 }
 
                 // The next Library page can use the local rendition immediately.

@@ -66,7 +66,8 @@ namespace Jularr.Backend.Logic.Media
                 """
                 SELECT
                     "ExportToNas",
-                    "NasModeId"
+                    "NasModeId",
+                    "ProgressiveJxl"
                 FROM
                     "ArtworkSettings"
                 WHERE

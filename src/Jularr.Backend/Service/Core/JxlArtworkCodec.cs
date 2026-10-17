@@ -9,6 +9,7 @@ namespace Jularr.Backend.Service.Core
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(35);
         private const int MaximumOutputBytes = 4 * 1024 * 1024;
+        private static readonly SemaphoreSlim NativeEncoder = new(1, 1);
 
         internal static string[] EncoderOptions(ArtworkQuality quality, bool progressive) =>
             [
@@ -29,8 +30,36 @@ namespace Jularr.Backend.Service.Core
         public async Task<byte[]?> EncodeAsync(byte[] png, ArtworkQuality quality, bool progressive, CancellationToken ct)
         {
             if (png.Length is < 64 or > 8 * 1024 * 1024) return null;
-            return await TransformAsync(executable, png, ".png", ".jxl",
-                EncoderOptions(quality, progressive), ct);
+            await NativeEncoder.WaitAsync(ct);
+            try
+            {
+                return await TransformAsync(executable, png, ".png", ".jxl",
+                    EncoderOptions(quality, progressive), ct);
+            }
+            finally
+            {
+                NativeEncoder.Release();
+            }
+        }
+
+        // Provider cover downloads have been validated and converted to JPEG. Force pixel
+        // encoding instead of JPEG bitstream reconstruction so progressive mode is respected.
+        internal static string[] JpegEncoderOptions(ArtworkQuality quality, bool progressive) =>
+            [..EncoderOptions(quality, progressive), "--lossless_jpeg=0"];
+
+        public async Task<byte[]?> EncodeJpegAsync(byte[] jpeg, ArtworkQuality quality, bool progressive, CancellationToken ct)
+        {
+            if (jpeg.Length is < 64 or > 8 * 1024 * 1024) return null;
+            await NativeEncoder.WaitAsync(ct);
+            try
+            {
+                return await TransformAsync(executable, jpeg, ".jpg", ".jxl",
+                    JpegEncoderOptions(quality, progressive), ct);
+            }
+            finally
+            {
+                NativeEncoder.Release();
+            }
         }
 
         // Decode a NAS JXL only in the worker, then process it through the same bounded image pipeline.

@@ -65,10 +65,11 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ArtworkNasExportSettingsData : BaseData
     {
-        public ArtworkNasExportSettingsData(bool exportToNas, NasArtworkMode nasModeId)
+        public ArtworkNasExportSettingsData(bool exportToNas, NasArtworkMode nasModeId, bool progressiveJxl)
         {
             ExportToNas = exportToNas;
             NasModeId = nasModeId;
+            ProgressiveJxl = progressiveJxl;
         }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.ExportToNas))]
@@ -76,6 +77,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.NasModeId))]
         public NasArtworkMode NasModeId { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.ProgressiveJxl))]
+        public bool ProgressiveJxl { get; }
     }
 
     internal sealed class ArtworkExportFactData : BaseData
