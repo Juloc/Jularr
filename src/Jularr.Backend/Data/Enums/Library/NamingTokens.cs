@@ -17,7 +17,10 @@ namespace Jularr.Backend.Data.Enums.Library
             "Movie Collection", "Movie CollectionThe", "Movie CleanCollectionThe", "Movie Certification",
             "Release Year", "ImdbId", "TmdbId", "TvdbId", "TvMazeId", "AnilistId", "MusicBrainzId",
             "OpenLibraryId", "IgdbId", "GutenbergId", "IsbnId", "PlexId", "ProviderId",
-            "Quality Full", "Quality Title", "Edition Tags", "Original Title", "Original Filename"
+            "Quality Full", "Quality Title", "Edition Tags", "Original Title", "Original Filename",
+            "Custom Formats", "Custom Format", "MediaInfo Simple", "MediaInfo Full",
+            "MediaInfo AudioCodec", "MediaInfo AudioChannels", "MediaInfo AudioLanguages",
+            "MediaInfo AudioLanguagesAll", "MediaInfo SubtitleLanguages", "MediaInfo VideoCodec"
         ];
 
         // The placeholders that take a number format.

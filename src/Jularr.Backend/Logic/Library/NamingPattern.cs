@@ -113,6 +113,16 @@ namespace Jularr.Backend.Logic.Library
                 return Namespace().IsMatch(format);
             }
 
+            if (name == "Custom Format")
+            {
+                return format.Length is > 0 and <= 128 && !format.Contains('/');
+            }
+
+            if (name is "MediaInfo Full" or "MediaInfo AudioLanguages" or "MediaInfo AudioLanguagesAll" or "MediaInfo SubtitleLanguages")
+            {
+                return LanguageFilter().IsMatch(format);
+            }
+
             if (name.Contains("Title", StringComparison.OrdinalIgnoreCase) || name is "Release Group" or "Edition Tags")
             {
                 return int.TryParse(format, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var count)
@@ -152,6 +162,11 @@ namespace Jularr.Backend.Logic.Library
                 "Proper" => values.Revision > 1 ? "Proper" : "",
                 "Original Title" => values.OriginalReleaseTitle ?? "",
                 "Original Filename" => values.OriginalFilename ?? "",
+                "Custom Formats" => values.CustomFormats is null ? "" : string.Join(' ', values.CustomFormats.Values),
+                "Custom Format" => values.CustomFormats?.GetValueOrDefault(format) ?? "",
+                "MediaInfo Simple" or "MediaInfo Full" or "MediaInfo AudioCodec" or "MediaInfo AudioChannels"
+                    or "MediaInfo AudioLanguages" or "MediaInfo AudioLanguagesAll" or "MediaInfo SubtitleLanguages"
+                    or "MediaInfo VideoCodec" => values.MediaInfo?.GetValueOrDefault(name) ?? "",
                 "ImdbId" => Id(values, "imdb"),
                 "TmdbId" => Id(values, values.MediaTypeId == MediaType.Series ? "tmdb_tv" : "tmdb_movie"),
                 "TvdbId" => Id(values, "tvdb"),
@@ -230,11 +245,14 @@ namespace Jularr.Backend.Logic.Library
         private static string Number(decimal? value, string format) =>
             value?.ToString((format.Length > 0 ? format : "0") + ".###", CultureInfo.InvariantCulture) ?? "";
 
-        [GeneratedRegex(@"\{(?<prefix>[\[.-]?)(?<name>[A-Za-z][A-Za-z .]*?)(?<suffix>\]?)(?::(?<format>[a-zA-Z0-9_+-]+))?\}")]
+        [GeneratedRegex(@"\{(?<prefix>[\[.-]?)(?<name>[A-Za-z][A-Za-z .]*?)(?<suffix>\]?)(?::(?<format>[^{}]+))?\}")]
         private static partial Regex Token();
 
         [GeneratedRegex(@"^[a-z_]{2,16}$", RegexOptions.IgnoreCase)]
         private static partial Regex Namespace();
+
+        [GeneratedRegex(@"^[A-Za-z]{2}(?:[+-][A-Za-z]{2})*[+]?$")]
+        private static partial Regex LanguageFilter();
 
         [GeneratedRegex(@"\(\s*\)|\[\s*\]|\{\s*\}")]
         private static partial Regex EmptyBrackets();
@@ -261,5 +279,7 @@ namespace Jularr.Backend.Logic.Library
         public string? OriginalReleaseTitle { get; init; }
         public string? Collection { get; init; }
         public string? Certification { get; init; }
+        public IReadOnlyDictionary<string, string>? MediaInfo { get; init; }
+        public IReadOnlyDictionary<string, string>? CustomFormats { get; init; }
     }
 }

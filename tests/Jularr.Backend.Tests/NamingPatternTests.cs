@@ -68,6 +68,24 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void NamingPattern_MediaInfoAndCustomFormatTokens_RenderOnlyKnownData()
+        {
+            var movie = new NamingValues("Film", 2010, null, null, null, "Bluray-1080p", "EVOLVE", null, 1)
+            {
+                MediaInfo = new Dictionary<string, string>
+                {
+                    ["MediaInfo VideoCodec"] = "hevc",
+                    ["MediaInfo AudioCodec"] = "dts",
+                    ["MediaInfo AudioLanguagesAll"] = "[JA+EN]"
+                },
+                CustomFormats = new Dictionary<string, string> { ["Surround Sound x264"] = "Surround Sound x264" }
+            };
+            const string template = "{Movie Title} {[Quality Full]} {[Custom Formats]} {Custom Format:Surround Sound x264} {MediaInfo VideoCodec}";
+            NamingPattern.Validate(MediaType.Movie, template, "Pattern");
+            Assert.AreEqual("Film [Bluray-1080p] [Surround Sound x264] Surround Sound x264 hevc", NamingPattern.Apply(template, movie));
+        }
+
+        [TestMethod]
         public void NamingPattern_UnknownOrIncomplete_IsRejected()
         {
             Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {Studio}", "Pattern")).Code);
