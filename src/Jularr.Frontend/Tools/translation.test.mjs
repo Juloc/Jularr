@@ -27,3 +27,15 @@ test('English is a step of its own; other pairs go through it', () => {
     assert.equal(steps('id', 'en'), '[["id","en"]]');
     assert.equal(steps('de', 'ja'), '[["de","en"],["en","ja"]]');
 });
+
+
+test('translation restore signals a reader reflow without changing the canonical blocks', async () => {
+    const block = { innerHTML: '<p>Original</p>' };
+    const reader = { dataset: { language: 'en' }, querySelector: () => null };
+    const content = { innerText: 'Original', querySelectorAll: () => [block] };
+    let reflows = 0;
+    const choose = exports.translator(reader, content, () => { throw new Error('No worker expected'); }, () => reflows++);
+    await choose('');
+    assert.equal(block.innerHTML, '<p>Original</p>');
+    assert.equal(reflows, 1);
+});
