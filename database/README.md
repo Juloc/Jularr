@@ -85,7 +85,7 @@ A duplicate copy of the same unit becomes another version, never a second asset 
 the same version. GamePlatforms are Jularr's platform identities (GameReleases per
 owned version, WorkPlatforms per provider listing); GameRomCatalogs and GameRoms keep
 the imported libretro No-Intro DATs (SHA-1 to dump name, CC BY-SA 4.0) per platform.
-Metadata policy, image cache and monitoring are not installed.
+Monitoring remains a separate concern. The `Artwork.sql` fresh baseline follows Library and Playback: canonical `WorkArtworks` candidates with Work/WorkUnit identity, source and manual pin; `ArtworkRenditions` for rebuildable on-disk images, `ArtworkFallbacks` for at most 64 KiB WebP emergency previews in PostgreSQL; and singleton `ArtworkSettings` for independent NAS/cache formats (Plex-compatible JPG/PNG and optional JXL, WebP or JXL cache). See [artwork implementation plan](../docs/ARTWORK.md). The tables exist on fresh installs; source discovery, encoding, rendering and existing-database upgrades are not yet connected.
 
 `Playback.sql` follows Library. MediaProgress keeps one current position per profile
 and exact Work/unit target; completion is explicit and sticky, and a completed item
