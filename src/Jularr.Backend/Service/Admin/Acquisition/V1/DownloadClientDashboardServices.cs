@@ -71,7 +71,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
             var snapshot = await _client.ReadConsoleAsync(connection, CancellationToken);
             var categories = await _client.ReadCategoriesAsync(connection, CancellationToken);
-            var files = DownloadClientFolderInspector.Inspect(client.LocalPath, snapshot, client.IncompleteLocalPath);
+            var files = DownloadClientFolderInspector.Inspect(client.LocalPath, snapshot, client.IncompleteLocalPath, client.RemotePath, client.IncompleteRemotePath);
 
             return new DownloadClientDashboardV1(snapshot.SpeedBytesPerSecond, snapshot.FreeBytes, snapshot.IsPaused,
                 snapshot.Queue.Count >= 200, snapshot.History.Count >= 200,
@@ -155,12 +155,29 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         internal sealed record Snapshot(string? CompletePath, string? IncompletePath, bool CompleteAvailable, bool IncompleteAvailable,
             IReadOnlyList<DownloadClientFolderEntryV1> Entries);
 
-        public static Snapshot Inspect(string? mappedPath, SabnzbdConsoleSnapshot snapshot, string? incompleteMappedPath = null)
+        public static Snapshot Inspect(string? mappedPath, SabnzbdConsoleSnapshot snapshot, string? incompleteMappedPath = null,
+            string? remoteCompletePath = null, string? remoteIncompletePath = null)
         {
-            var complete = !string.IsNullOrWhiteSpace(mappedPath) && Path.IsPathFullyQualified(mappedPath)
-                ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(mappedPath)) : null;
-            var incomplete = !string.IsNullOrWhiteSpace(incompleteMappedPath) && Path.IsPathFullyQualified(incompleteMappedPath)
-                ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(incompleteMappedPath)) : null;
+            // Resolve the same remote-to-local mapping as the import pipeline. No path is guessed from a sibling folder.
+            static string? Resolve(string? localRoot, string? remoteRoot, string? reportedPath)
+            {
+                if (string.IsNullOrWhiteSpace(localRoot) || !Path.IsPathFullyQualified(localRoot)
+                    || string.IsNullOrWhiteSpace(remoteRoot) || string.IsNullOrWhiteSpace(reportedPath)
+                    || ImportPlacementLogic.MapRemotePath(reportedPath, remoteRoot) is not { } relative)
+                {
+                    return null;
+                }
+
+                var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(localRoot));
+                if (string.Equals(root, Path.GetPathRoot(root), StringComparison.Ordinal)) return null;
+                var resolved = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
+                var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                if (!resolved.Equals(root, comparison) && !resolved.StartsWith(root + Path.DirectorySeparatorChar, comparison)) return null;
+                return resolved;
+            }
+
+            var complete = Resolve(mappedPath, remoteCompletePath, snapshot.ReportedCompletePath);
+            var incomplete = Resolve(incompleteMappedPath, remoteIncompletePath, snapshot.ReportedIncompletePath);
 
             static bool SafeDirectory(string? path)
             {
