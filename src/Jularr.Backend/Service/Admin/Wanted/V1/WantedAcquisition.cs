@@ -179,7 +179,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
-            if (clients[0].AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 _ = _storage.ReadyUsenetDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
             }

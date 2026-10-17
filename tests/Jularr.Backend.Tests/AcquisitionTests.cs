@@ -1118,6 +1118,8 @@ namespace Jularr.Backend.Tests
             // connection, but is explicitly selected for Movie acquisitions.
             foreach (var data in new[]
             {
+                new SaveAcquisitionConnectionDataV1("Native news", AcquisitionConnectionType.Usenet, null,
+                    null, true, 1, [], null, null, null, maxConnections: 1, host: "news.example.test", useSsl: false),
                 new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
                     FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]),
                 new SaveAcquisitionConnectionDataV1("Movie SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
@@ -1149,6 +1151,24 @@ namespace Jularr.Backend.Tests
             await CreateWantedMovieAsync(host);
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "movies" }, sab.GrabbedCategories.ToArray());
+        }
+
+        [TestMethod]
+        public async Task Sabnzbd_OnlyOtherMediaTypeDoesNotStartADownload()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sab = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"AcquisitionConnectionTypeId\" = 2");
+            using var added = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, sab.GrabbedCategories.Count);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
         }
 
         [TestMethod]
