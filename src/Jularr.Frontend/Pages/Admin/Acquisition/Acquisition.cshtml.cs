@@ -14,8 +14,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     // Indexers, download clients and subtitle providers, each kind on its own page.
-    public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
-        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
+    public sealed partial class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
+        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage, IAntiforgery antiforgery,
         UiText texts) : JularrPage
     {
         // The kinds each tab adds.
@@ -32,6 +32,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private SaveAcquisitionConnectionDataV1? _input;
         private SearchAcquisitionConnectionDataV1? _searchInput;
         private IReadOnlyList<IndexerReleaseV1>? _releases;
+        private DownloadClientDashboardV1? _downloadDashboard;
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionConnectionId { get; set; }
@@ -56,6 +57,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        [BindProperty(SupportsGet = true)]
+        public string Pane { get; set; } = "general";
+
+        [BindProperty(SupportsGet = true)]
+        public string? ConfirmJobId { get; set; };
+
+
         protected override void Define(Page page)
         {
             page.Title("acquisition.role." + Role);
@@ -63,6 +71,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var isSetup = SetupWizard.IsActive(Request);
             if (isSetup) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             page.Navigation("nav.admin");
+            if (Role == AcquisitionConnectionRole.Download) page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
             var type = _selected?.AcquisitionConnectionTypeId ?? Type ?? (isSetup
                 ? Role == AcquisitionConnectionRole.Download ? AcquisitionConnectionType.Sabnzbd : AcquisitionConnectionType.Newznab
                 : (AcquisitionConnectionType?)null);
@@ -95,11 +104,27 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     // A test just run replaces the stored state.
                     if (TempData["AcquisitionTested"] is string tested) split.Secondary.Add(new Strong(new ValueText(tested)).Attribute("role", "status"));
                     else if (_selected is { } selected) split.Secondary.Add(new Strong(Health(selected)).Attribute("role", "status"));
-                    split.Secondary.Add(ConnectionForm(selectedType, csrf));
-                    if (_selected is { } current)
+                    if (Role == AcquisitionConnectionRole.Download && _selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } downloadClient)
                     {
-                        split.Secondary.Add(Actions(current, csrf));
-                        if (current.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab) split.Secondary.Add(SearchSection(current, csrf));
+                        split.Secondary.Add(DownloadClientTabs(downloadClient.Id));
+                        if (Pane is "downloads" or "statistics" or "history" or "files")
+                        {
+                            split.Secondary.Add(DownloadClientPane(downloadClient.Id, csrf));
+                        }
+                        else
+                        {
+                            split.Secondary.Add(ConnectionForm(selectedType, csrf));
+                            split.Secondary.Add(Actions(downloadClient, csrf));
+                        }
+                    }
+                    else
+                    {
+                        split.Secondary.Add(ConnectionForm(selectedType, csrf));
+                        if (_selected is { } current)
+                        {
+                            split.Secondary.Add(Actions(current, csrf));
+                            if (current.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab) split.Secondary.Add(SearchSection(current, csrf));
+                        }
                     }
                 }
             });
@@ -203,6 +228,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             return LocalRedirect(Address(AcquisitionConnectionId));
         }
 
+        public async Task<IActionResult> OnPostJobAsync(string jobId, string action, bool confirmed = false)
+        {
+            if (action is "cancel" or "removeHistory" && !confirmed) return BadRequest();
+            await manage.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()), new DownloadClientJobCommandV1(jobId, action), HttpContext.RequestAborted);
+            return LocalRedirect(Address(SelectedId()) + "&Pane=" + (action == "removeHistory" ? "history" : "downloads"));
+        }
+
         public async Task<IActionResult> OnPostSearchAsync(string? query)
         {
             _searchInput = new SearchAcquisitionConnectionDataV1(query ?? "");
@@ -233,6 +265,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
             _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role),
                 HttpContext.RequestAborted);
+            if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } downloadClient
+                && Role == AcquisitionConnectionRole.Download && Pane is "downloads" or "statistics" or "history" or "files")
+            {
+                _downloadDashboard = await inspect.ExecuteAsync<DownloadClientDashboardV1>(new AcquisitionConnectionParametersV1(downloadClient.Id), default, HttpContext.RequestAborted);
+            }
         }
 
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf)
