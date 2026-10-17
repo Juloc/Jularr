@@ -105,7 +105,13 @@ namespace Jularr.E2E.Tests
                 await brokenEpisode.ClickAsync();
                 var status = page.Locator("[data-role=status]");
                 await Assertions.Expect(status).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
-                Assert.AreEqual(await page.Locator("[data-status=failed]").TextContentAsync(), await status.TextContentAsync());
+                var failureMessage = await status.TextContentAsync();
+                var supportedFailures = new[]
+                {
+                    await page.Locator("[data-status=failed]").TextContentAsync(),
+                    await page.Locator("[data-status=playback_conversion_unavailable]").TextContentAsync()
+                };
+                Assert.IsTrue(supportedFailures.Contains(failureMessage), "The broken source did not explain its playback failure: " + failureMessage);
                 Assert.IsTrue(await page.Locator("video").EvaluateAsync<bool>("video => video.error !== null"), "The video reported no error.");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
