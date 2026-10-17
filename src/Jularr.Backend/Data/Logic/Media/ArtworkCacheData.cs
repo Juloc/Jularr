@@ -8,10 +8,12 @@ namespace Jularr.Backend.Data.Logic.Media
 {
     internal sealed class ArtworkCacheSettingsData : BaseData
     {
-        public ArtworkCacheSettingsData(ArtworkQuality cacheQualityId, long cacheLimitBytes)
+        public ArtworkCacheSettingsData(ArtworkQuality cacheQualityId, long cacheLimitBytes, ArtworkCacheFormat cacheFormatId, bool progressiveJxl)
         {
             CacheQualityId = cacheQualityId;
             CacheLimitBytes = cacheLimitBytes;
+            CacheFormatId = cacheFormatId;
+            ProgressiveJxl = progressiveJxl;
         }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.CacheQualityId))]
@@ -19,6 +21,12 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.CacheLimitBytes))]
         public long CacheLimitBytes { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.CacheFormatId))]
+        public ArtworkCacheFormat CacheFormatId { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.ProgressiveJxl))]
+        public bool ProgressiveJxl { get; }
     }
 
     internal sealed class ArtworkCacheCandidateData : BaseData
@@ -61,12 +69,14 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ArtworkRenditionSaveData : BaseData
     {
-        public ArtworkRenditionSaveData(long artworkId, long workId, ArtworkSlot slotId, int width, int height, string cacheKey, string sourceHash, string contentHash, long sizeBytes,
+        public ArtworkRenditionSaveData(long artworkId, long workId, ArtworkSlot slotId, ArtworkFormat formatId, bool isProgressive, int width, int height, string cacheKey, string sourceHash, string contentHash, long sizeBytes,
             ArtworkQuality qualityId, byte[]? fallbackBytes, string? fallbackHash)
         {
             ArtworkId = artworkId;
             WorkId = workId;
             SlotId = slotId;
+            FormatId = formatId;
+            IsProgressive = isProgressive;
             SourceHash = sourceHash;
             Width = width;
             Height = height;
@@ -89,6 +99,12 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.ContentHash))]
         public string SourceHash { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.FormatId))]
+        public ArtworkFormat FormatId { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.IsProgressive))]
+        public bool IsProgressive { get; }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.Width))]
         public int Width { get; }
@@ -117,14 +133,18 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class ArtworkPreviewData : BaseData
     {
-        public ArtworkPreviewData(string? cacheKey, byte[]? fallbackBytes)
+        public ArtworkPreviewData(string? cacheKey, string? jxlCacheKey, byte[]? fallbackBytes)
         {
             CacheKey = cacheKey;
+            JxlCacheKey = jxlCacheKey;
             FallbackBytes = fallbackBytes;
         }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.CacheKey), false)]
         public string? CacheKey { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.CacheKey), false)]
+        public string? JxlCacheKey { get; }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.FallbackBytes), false)]
         public byte[]? FallbackBytes { get; }

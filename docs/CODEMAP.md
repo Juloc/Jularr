@@ -161,3 +161,5 @@ Player → Arr+; proposed table owners and decisions needed before those slices.
 
 - [INSTANCE_SETUP.md](INSTANCE_SETUP.md): four-step setup, presets, library gating, provider connections and atomic completion; AI and legacy migration remain separate.
 - [LOCAL_PREVIEW.md](LOCAL_PREVIEW.md): isolated D: checkout, scheduled preview on https://localhost:7241 with its own database and `D:\testlibrary`; [runner](../scripts/run-clean-start-preview.ps1).
+
+- [Progressive JPEG XL codec](../src/Jularr.Backend/Service/Core/JxlArtworkCodec.cs): bounded, subprocess-isolated `cjxl`/`djxl` behind the single-encoder ArtworkCache, with native `image/jxl` endpoint in [ArtworkServices.cs](../src/Jularr.Backend/Service/User/Artwork/V1/ArtworkServices.cs). WebP remains a real separate browser fallback. JXL UI selection, NAS JXL writing and cache eviction remain to do.

@@ -20,6 +20,17 @@ namespace Jularr.Backend.Data.User.Artwork.V1
         public ArtworkSlot SlotId { get; }
     }
 
+    public sealed class ArtworkJxlImageV1 : BaseResponse, IBinaryOutput
+    {
+        public ArtworkJxlImageV1(byte[] bytes) => Bytes = bytes;
+
+        [JsonIgnore]
+        public byte[] Bytes { get; }
+
+        [JsonIgnore]
+        public string ContentType => "image/jxl";
+    }
+
     public sealed class ArtworkImageV1 : BaseResponse, IBinaryOutput
     {
         public ArtworkImageV1(byte[] bytes)

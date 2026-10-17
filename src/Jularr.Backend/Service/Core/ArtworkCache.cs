@@ -17,11 +17,13 @@ namespace Jularr.Backend.Service.Core
         private const int PosterWidth = 384;
         private static readonly SemaphoreSlim Encoder = new(1, 1);
         private readonly string _path;
+        private readonly JxlArtworkCodec _jxl;
 
-        public ArtworkCache(string dataPath)
+        public ArtworkCache(string dataPath, JxlArtworkCodec? jxl = null)
         {
             if (!Path.IsPathFullyQualified(dataPath)) throw new ArgumentException("Artwork cache requires an absolute persistent DataPath.", nameof(dataPath));
             _path = Path.Combine(dataPath, "cache", "artwork");
+            _jxl = jxl ?? new JxlArtworkCodec();
         }
 
         public async Task WarmAsync(LogicContext context, StorageFiles files, string rootPath, long libraryRootId, CancellationToken ct)
@@ -35,7 +37,9 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 Directory.CreateDirectory(_path);
-                var used = Directory.EnumerateFiles(_path, "*.webp", SearchOption.TopDirectoryOnly).Sum(path => new FileInfo(path).Length);
+                var used = Directory.EnumerateFiles(_path, "*.*", SearchOption.TopDirectoryOnly)
+                    .Where(path => path.EndsWith(".webp", StringComparison.Ordinal) || path.EndsWith(".jxl", StringComparison.Ordinal))
+                    .Sum(path => new FileInfo(path).Length);
                 foreach (var candidate in candidates)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -56,7 +60,11 @@ namespace Jularr.Backend.Service.Core
                         }
 
                         var source = buffer.ToArray();
-                        var rendered = Encode(source, settings.CacheQualityId);
+                        var pixels = candidate.SourceKey.EndsWith(".jxl", StringComparison.OrdinalIgnoreCase)
+                            ? await _jxl.DecodeAsync(source, ct)
+                            : source;
+                        if (pixels is null) continue;
+                        var rendered = Encode(pixels, settings.CacheQualityId);
                         if (rendered is null || rendered.Value.WebpBytes.Length > 2 * 1024 * 1024) continue;
                         var value = rendered.Value;
                         if (used + value.WebpBytes.Length > settings.CacheLimitBytes) break;
@@ -81,7 +89,8 @@ namespace Jularr.Backend.Service.Core
                             }
                         }
 
-                        var result = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId, candidate.SlotId, value.Width, value.Height,
+                        var result = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId, candidate.SlotId,
+                            ArtworkFormat.Webp, false, value.Width, value.Height,
                             key, sourceHash, hash, value.WebpBytes.Length, settings.CacheQualityId, value.FallbackBytes,
                             value.FallbackBytes is { } fallbackBytes ? Convert.ToHexStringLower(SHA256.HashData(fallbackBytes)) : null);
                         await context.ExecuteBatchAsync(async (ctx, token) =>
@@ -89,6 +98,44 @@ namespace Jularr.Backend.Service.Core
                             await ctx.SaveArtworkRenditionAsync(result, token);
                             return true;
                         }, ct);
+
+                        // Store the actual JXL as a distinct rendition. WebP is retained for all browsers
+                        // that cannot decode image/jxl, even when JXL is the preferred cache format.
+                        if (settings.CacheFormatId == ArtworkCacheFormat.Jxl)
+                        {
+                            var jxlBytes = await _jxl.EncodeAsync(value.PngBytes, settings.CacheQualityId, settings.ProgressiveJxl, ct);
+                            if (jxlBytes is { Length: > 32 } && used + jxlBytes.Length <= settings.CacheLimitBytes)
+                            {
+                                var jxlHash = Convert.ToHexStringLower(SHA256.HashData(jxlBytes));
+                                var jxlKey = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+                                    sourceHash + ":jxl:" + (byte)settings.CacheQualityId + ":" + settings.ProgressiveJxl +
+                                    ":" + value.Width + ":" + value.Height + ":cjxl-v1")));
+                                var jxlPath = Path.Combine(_path, jxlKey + ".jxl");
+                                if (!File.Exists(jxlPath))
+                                {
+                                    var partial = Path.Combine(_path, Guid.NewGuid().ToString("N") + ".partial");
+                                    try
+                                    {
+                                        await File.WriteAllBytesAsync(partial, jxlBytes, ct);
+                                        File.Move(partial, jxlPath, overwrite: false);
+                                        used += jxlBytes.Length;
+                                    }
+                                    finally
+                                    {
+                                        if (File.Exists(partial)) File.Delete(partial);
+                                    }
+                                }
+
+                                var jxlRendition = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId,
+                                    candidate.SlotId, ArtworkFormat.Jxl, settings.ProgressiveJxl, value.Width, value.Height,
+                                    jxlKey, sourceHash, jxlHash, jxlBytes.Length, settings.CacheQualityId, null, null);
+                                await context.ExecuteBatchAsync(async (ctx, token) =>
+                                {
+                                    await ctx.SaveArtworkRenditionAsync(jxlRendition, token);
+                                    return true;
+                                }, ct);
+                            }
+                        }
                     }
                     catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
                     {
@@ -103,14 +150,15 @@ namespace Jularr.Backend.Service.Core
         }
 
         // A cached response never opens the NAS or downloads provider images.
-        public byte[]? Read(string? key)
+        public byte[]? Read(string? key, ArtworkFormat format = ArtworkFormat.Webp)
         {
             if (key is not { Length: 64 } || !key.All(char.IsAsciiHexDigit)) return null;
-            var path = Path.Combine(_path, key + ".webp");
+            if (format is not (ArtworkFormat.Webp or ArtworkFormat.Jxl)) return null;
+            var path = Path.Combine(_path, key + (format == ArtworkFormat.Jxl ? ".jxl" : ".webp"));
             try
             {
                 var info = new FileInfo(path);
-                return info.Exists && info.Length is > 0 and <= 2097152 ? File.ReadAllBytes(path) : null;
+                return info.Exists && info.Length is > 0 and <= 4194304 ? File.ReadAllBytes(path) : null;
             }
             catch (IOException)
             {
@@ -118,7 +166,7 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        private static (int Width, int Height, byte[] WebpBytes, byte[]? FallbackBytes)? Encode(byte[] source, ArtworkQuality profile)
+        private static (int Width, int Height, byte[] WebpBytes, byte[]? FallbackBytes, byte[] PngBytes)? Encode(byte[] source, ArtworkQuality profile)
         {
             using var header = SKCodec.Create(new MemoryStream(source, writable: false));
             if (header is null || header.Info.Width is < 16 or > 8000 || header.Info.Height is < 16 or > 8000 ||
@@ -150,6 +198,8 @@ namespace Jularr.Backend.Service.Core
             };
 
             using var image = surface.Snapshot();
+            using var png = image.Encode(SKEncodedImageFormat.Png, 100);
+            if (png is null) return null;
             using var webp = image.Encode(SKEncodedImageFormat.Webp, quality);
             if (webp is null) return null;
 
@@ -163,7 +213,7 @@ namespace Jularr.Backend.Service.Core
             using var previewImage = previewSurface.Snapshot();
             using var tiny = previewImage.Encode(SKEncodedImageFormat.Webp, 55);
             var fallback = tiny is { Size: > 0 and <= 65536 } ? tiny.ToArray() : null;
-            return (width, height, webp.ToArray(), fallback);
+            return (width, height, webp.ToArray(), fallback, png.ToArray());
         }
     }
 }
