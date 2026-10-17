@@ -1,5 +1,8 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.Instance.V1;
+using Jularr.Backend.Data.Admin.Artwork.V1;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Service.Admin.Artwork.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Public.Localization.V1;
@@ -13,6 +16,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Instance
 {
     public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales,
+        ReadArtworkSettingsV1 readArtwork, UpdateArtworkSettingsV1 updateArtwork,
         ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, ReadInstanceMediaV1 readMedia, UpdateInstanceMediaV1 updateMedia, IAntiforgery antiforgery,
         UiText texts) : JularrPage
     {
@@ -24,6 +28,8 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         private long? _moduleId;
         private IReadOnlyList<InstanceMediaDetailsV1> _media = [];
         private UpdateInstanceMediaDataV1? _mediaInput;
+        private ArtworkSettingsDetailsV1? _artwork;
+        private UpdateArtworkSettingsDataV1? _artworkInput;
 
         private string Home => SetupWizard.Address(Request, SetupStepType.Instance, "/Admin/Instance");
 
@@ -105,6 +111,54 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             }
 
             if (_media.Count > 0) page.Content.Add(new UiSection("admin.instance.media", mediaForms));
+
+            // NAS export and browser cache intentionally have separate format controls.
+            if (_artwork is { } artwork)
+            {
+                var nasModes = Enum.GetValues<NasArtworkMode>()
+                    .Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["admin.artwork.nas." + mode]));
+                var cacheFormats = Enum.GetValues<ArtworkCacheFormat>()
+                    .Select(format => new SelectOption(((byte)format).ToString(CultureInfo.InvariantCulture), texts["admin.artwork.cache." + format]));
+                var qualities = Enum.GetValues<ArtworkQuality>()
+                    .Select(quality => new SelectOption(((byte)quality).ToString(CultureInfo.InvariantCulture), texts["admin.artwork.quality." + quality]));
+                var limits = new long[] { 0, 64L * 1048576, 256L * 1048576, 512L * 1048576, 1024L * 1048576,
+                    2048L * 1048576, 4096L * 1048576, 8192L * 1048576 };
+                if (!limits.Contains(artwork.CacheLimitBytes)) limits = [.. limits, artwork.CacheLimitBytes];
+                var budgets = limits.Order().Select(value => new SelectOption(value.ToString(CultureInfo.InvariantCulture),
+                    value == 0 ? texts["admin.artwork.cache.disabled"]
+                    : value / 1048576 >= 1024 && value % (1024L * 1048576) == 0
+                        ? (value / (1024L * 1048576)).ToString(CultureInfo.CurrentCulture) + " GiB"
+                        : (value / 1048576).ToString("N0", CultureInfo.CurrentCulture) + " MiB"));
+
+                var values = _artworkInput ?? new UpdateArtworkSettingsDataV1(
+                    artwork.NasModeId, artwork.CacheFormatId, artwork.CacheQualityId,
+                    artwork.ProgressiveJxl, artwork.ExportToNas, artwork.CacheLimitBytes, artwork.Version);
+                page.Content.Add(new UiSection("admin.artwork.title", [
+                    new P(new Text("admin.artwork.introduction")),
+                    new Form<UpdateArtworkSettingsDataV1>(form =>
+                    {
+                        form.Hidden(item => item.Version);
+                        form.Section("admin.artwork.nas.title", section =>
+                        {
+                            section.Toggle(item => item.ExportToNas, "admin.artwork.export");
+                            section.Select(item => item.NasModeId, "admin.artwork.nas.mode", nasModes);
+                            section.Content(new P(new Text("admin.artwork.nas.notice")));
+                        });
+                        form.Section("admin.artwork.cache.title", section =>
+                        {
+                            section.Select(item => item.CacheFormatId, "admin.artwork.cache.format", cacheFormats);
+                            section.Select(item => item.CacheQualityId, "admin.artwork.cache.quality", qualities);
+                            section.Toggle(item => item.ProgressiveJxl, "admin.artwork.progressive");
+                            section.Select(item => item.CacheLimitBytes, "admin.artwork.cache.limit", budgets);
+                            section.Content(new P(new Text("admin.artwork.cache.notice")));
+                        });
+                        form.Submit("common.save");
+                    }, Home + "?handler=Artwork", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                    values, _artworkInput is null ? null : FormError)
+                ]));
+                if (TempData["ArtworkSaved"] is true)
+                    page.Content.Add(new P(new Text("admin.artwork.saved")).Attribute("role", "status"));
+            }
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -134,6 +188,8 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
             _modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), token);
             _media = await readMedia.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), token);
+            if (!SetupWizard.IsActive(Request) && texts.Can("instance.settings.read"))
+                _artwork = await readArtwork.ExecuteAsync<ArtworkSettingsDetailsV1>(new ArtworkSettingsParametersV1(), token);
         }
 
         public async Task<IActionResult> OnPostModuleAsync(long instanceModuleId, [BindRequired] bool isEnabled, long version)
@@ -141,6 +197,16 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             _moduleId = instanceModuleId;
             _moduleInput = new UpdateInstanceModuleDataV1(isEnabled, version);
             await updateModule.ExecuteAsync<UpdateResult>(new UpdateInstanceModuleParametersV1(instanceModuleId), _moduleInput, HttpContext.RequestAborted);
+            return LocalRedirect(Home);
+        }
+
+        public async Task<IActionResult> OnPostArtworkAsync(NasArtworkMode nasModeId, ArtworkCacheFormat cacheFormatId,
+            ArtworkQuality cacheQualityId, bool progressiveJxl, bool exportToNas, long cacheLimitBytes, long version)
+        {
+            _artworkInput = new UpdateArtworkSettingsDataV1(nasModeId, cacheFormatId, cacheQualityId,
+                progressiveJxl, exportToNas, cacheLimitBytes, version);
+            await updateArtwork.ExecuteAsync<UpdateResult>(new ArtworkSettingsParametersV1(), _artworkInput, HttpContext.RequestAborted);
+            TempData["ArtworkSaved"] = true;
             return LocalRedirect(Home);
         }
 

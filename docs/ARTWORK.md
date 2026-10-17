@@ -63,3 +63,11 @@
 - `PUT /api/v1/admin/artwork/settings` is restricted to administrators with `instance.settings.update`, rejects invalid typed field values, and uses `UPDATE ... WHERE Version = @Version` so concurrent edits cannot silently overwrite each other.
 - NAS export and the background cache worker already consult `ArtworkSettings`; changing a setting affects subsequent operations. Existing files are not overwritten and an explicit rescan/cache rebuild must be exposed by the future Admin UI.
 - This PR implements API contracts and tests only, **not** an Admin form or a migration for databases installed before Artwork.sql existed.
+
+## P5b – Admin UI (stacked PR)
+
+- The existing **Admin → Instance** page has a dedicated Artwork settings section that uses shared rounded `Form<T>` controls and two clearly separated settings groups: NAS sidecar export and persistent local artwork cache.
+- NAS export can be independently enabled and assigned compatible JPEG, JXL+JPEG, or JXL-only format. The local display cache separately selects WebP or JPEG XL, quality profile, progressive JXL, and a labeled cache budget in MiB/GiB. Users can keep JXL in the cache and compatible JPEG on NAS or choose both formats on NAS.
+- The form posts with the existing antiforgery token to the typed Administrator API, protects concurrent changes via `Version`, and confirms successful saves. It is hidden during initial instance setup and from users without instance settings permission.
+- English localization keys are registered centrally and can be translated through the existing localization pipeline. Browser E2E coverage checks independent settings and a narrow mobile viewport.
+- This UI does not introduce automatic cache eviction or existing-install PostgreSQL migration. Changing configuration affects upcoming scans/exports, not already written NAS files.
