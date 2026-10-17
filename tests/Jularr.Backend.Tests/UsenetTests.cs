@@ -10,10 +10,14 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.Admin.Wanted.V1;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Usenet;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
@@ -25,6 +29,30 @@ namespace Jularr.Backend.Tests
     {
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
+
+        [TestMethod]
+        public void NativeDownload_RequiresConfirmedWorkspaceAndNeverUsesImplicitTemp()
+        {
+            using var directory = new TemporaryDirectory();
+            var options = new StorageOptions();
+            Assert.IsNull(options.ReadyDirectDownloadPath());
+            Assert.ThrowsException<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
+
+            options.DirectDownloadPath = "relative/downloads";
+            Assert.IsNull(options.ReadyDirectDownloadPath());
+            options.DirectDownloadPath = Path.Combine(directory.Path, "unmounted");
+            Assert.IsNull(options.ReadyDirectDownloadPath());
+
+            options.DirectDownloadPath = directory.Path;
+            if (OperatingSystem.IsLinux() && !StorageFileSystem.IsMountPoint(directory.Path))
+            {
+                Assert.IsNull(options.ReadyDirectDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
+            }
+
+            options.AllowDirectDownloadOnHostFilesystem = true;
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectDownloadPath());
+            Assert.AreEqual(Path.Combine(Path.GetFullPath(directory.Path), "42"), WantedAcquisition.Staging(options, 42));
+        }
 
         [TestMethod]
         public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
@@ -126,7 +154,11 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = staging },
+            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string>
+                {
+                    ["Storage:DirectDownloadPath"] = staging,
+                    ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+                },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");

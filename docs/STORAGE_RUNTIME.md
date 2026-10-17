@@ -171,3 +171,25 @@ the owner decision.
 
 References: [Docker volume options](https://docs.docker.com/reference/compose-file/volumes/#driver_opts),
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
+
+
+## Native/direct download staging safety (pre-release R03 slice)
+
+Jularr's native Usenet downloader and direct-source book downloader share the
+`Storage:DirectDownloadPath` workspace. It has **no default**: unconfigured,
+missing, relative or symlinked paths are rejected before native/direct grabs.
+Jobs already active are put into attention rather than silently writing into
+`/tmp` or the container's overlay filesystem. The SABnzbd download directory
+is a **separate service**; its completed files use `RemotePath` / `LocalPath`
+mapping in the SABnzbd acquisition connection.
+
+For example, mount a persistent storage volume at `/downloads/staging` in
+the Jularr container, then set `Storage__DirectDownloadPath=/downloads/staging`.
+The directory must already exist. On Linux, Jularr requires this path to be
+inside a non-root mounted filesystem (a nested folder is accepted) unless the
+owner deliberately sets `Storage__AllowDirectDownloadOnHostFilesystem=true`
+for an explicitly configured local/VM workspace. This is **not** a quota
+override: disk reservations, capacity checks and UI confirmation are still
+required before release in #1209. If a NAS mount disappears, Jularr must not
+fall back to VM-local storage; check the actual mounts and free space before
+enabling acquisition.
