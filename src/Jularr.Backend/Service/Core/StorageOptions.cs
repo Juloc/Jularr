@@ -19,6 +19,10 @@ namespace Jularr.Backend.Service.Core
         public string? UsenetDownloadPath { get; set; }
         public string? DirectSourceDownloadPath { get; set; }
 
+        // Limit for one native NNTP job, including its existing incomplete articles.
+        // This is a per-job ceiling; aggregate workspace quotas require coordinated reservations.
+        public long UsenetMaxJobBytes { get; set; } = 100L * 1024 * 1024 * 1024;
+
         // Deliberate opt-in for workspaces on the host filesystem rather than a Docker/NAS mount.
         // Host limits and reservations are a separate required release gate (#1209).
         public bool AllowDirectDownloadOnHostFilesystem { get; set; }

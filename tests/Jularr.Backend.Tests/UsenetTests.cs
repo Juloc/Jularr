@@ -64,6 +64,24 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Usenet_JobLimitStopsDownloadBeforeCreatingArticleFiles()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[300_000], 3);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(news.Nzb(Feature + ".mkv")), news.Port, maxJobBytes: 1_024);
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<DownloadUsenetV1>(host);
+
+            Assert.AreEqual("usenet_disk_budget", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*.mkv", SearchOption.AllDirectories).Any(),
+                "An over-budget NZB must not start writing article files.");
+        }
+
+        [TestMethod]
         public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
         {
             using var storage = new TemporaryDirectory();
@@ -161,12 +179,13 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "good@example.test" }, file.Segments.Select(segment => segment.MessageId).ToArray());
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort)
+        private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort, long? maxJobBytes = null)
         {
             var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string>
                 {
                     ["Storage:DirectDownloadPath"] = staging,
-                    ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+                    ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true",
+                    ["Storage:UsenetMaxJobBytes"] = (maxJobBytes ?? 100L * 1024 * 1024 * 1024).ToString(CultureInfo.InvariantCulture)
                 },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);

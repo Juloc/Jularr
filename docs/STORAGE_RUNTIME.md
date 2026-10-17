@@ -198,3 +198,21 @@ override: disk reservations, capacity checks and UI confirmation are still
 required before release in #1209. If a NAS mount disappears, Jularr must not
 fall back to VM-local storage; check the actual mounts and free space before
 enabling acquisition.
+
+
+## Native NNTP job size ceiling
+
+`Storage__UsenetMaxJobBytes` controls the maximum allocated article-file bytes
+for any single NNTP job (default: **100 GiB**, independently configurable per
+installation). The worker validates the parsed NZB's total declared size
+before opening article files; the downloader additionally reserves actual
+file-growth extents across concurrent NNTP sessions before each write. An
+invalid, unknown or over-budget NZB waits with `usenet_disk_budget`, preserving
+its staging data instead of exceeding the configured job limit. Lowering the
+limit below an existing partial job pauses it on the next pass.
+
+**This is a job-size limit, not the total workspace size**, and it does not
+reserve disk across downloads, cap PAR2/7-Zip extraction, protect other
+processes sharing the filesystem, or cover direct-source books. Those remain
+separate prerequisites of release issue #1209; do not expose this as a
+complete hard workspace quota.
