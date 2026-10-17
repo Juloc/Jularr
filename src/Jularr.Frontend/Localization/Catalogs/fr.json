@@ -900,6 +900,14 @@
    "Settings",
    "Réglages"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Se concentrer sur le texte"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Afficher les commandes"
+  ],
   "reader.previous": [
    "Previous",
    "Précédent"
@@ -951,6 +959,78 @@
   "reader.mode.paged": [
    "Pages",
    "Pages"
+  ],
+  "reader.pages": [
+   "Pages on screen",
+   "Pages à l’écran"
+  ],
+  "reader.pages.auto": [
+   "Automatic",
+   "Automatique"
+  ],
+  "reader.pages.single": [
+   "One page",
+   "Une page"
+  ],
+  "reader.pages.spread": [
+   "Two pages",
+   "Deux pages"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "Préréglage de lecture"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Livre"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Roman léger"
+  ],
+  "reader.font": [
+   "Font",
+   "Police"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Avec empattements"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Sans empattements"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Interligne"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Compact"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Confortable"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Aéré"
+  ],
+  "reader.width": [
+   "Text width",
+   "Largeur du texte"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Étroit"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normal"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Large"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -5808,6 +5888,14 @@
    "Off",
    "Désactivés"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Décalage des sous-titres (secondes)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Réinitialiser le décalage"
+  ],
   "player.subtitles.forced": [
    "forced",
    "forcés"
@@ -5844,6 +5932,30 @@
    "More",
    "Plus"
   ],
+  "player.settings": [
+   "Player settings",
+   "Paramètres du lecteur"
+  ],
+  "player.settings.close": [
+   "Close settings",
+   "Fermer les paramètres"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Taille de l'image"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Adapter"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Remplir"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Original"
+  ],
   "player.delivery": [
    "Delivery",
    "Diffusion"
@@ -5876,9 +5988,17 @@
    "This media is no longer available.",
    "Ce média n'est plus disponible."
   ],
+  "player.buffering": [
+   "Buffering…",
+   "Mise en mémoire tampon…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "La lecture n'a pas pu démarrer."
+  ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Appuyez sur Lecture pour démarrer."
   ],
   "details.play": [
    "Play",

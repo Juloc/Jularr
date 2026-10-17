@@ -900,6 +900,14 @@
    "Settings",
    "Impostazioni"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Concentrati sul testo"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Mostra i controlli"
+  ],
   "reader.previous": [
    "Previous",
    "Indietro"
@@ -951,6 +959,78 @@
   "reader.mode.paged": [
    "Pages",
    "Pagine"
+  ],
+  "reader.pages": [
+   "Pages on screen",
+   "Pagine sullo schermo"
+  ],
+  "reader.pages.auto": [
+   "Automatic",
+   "Automatico"
+  ],
+  "reader.pages.single": [
+   "One page",
+   "Una pagina"
+  ],
+  "reader.pages.spread": [
+   "Two pages",
+   "Due pagine"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "Profilo di lettura"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Libro"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Light novel"
+  ],
+  "reader.font": [
+   "Font",
+   "Carattere"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Con grazie"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Senza grazie"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Interlinea"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Compatta"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Comoda"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Ampia"
+  ],
+  "reader.width": [
+   "Text width",
+   "Larghezza del testo"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Stretta"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normale"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Ampia"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -5808,6 +5888,14 @@
    "Off",
    "Disattivati"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Ritardo sottotitoli (secondi)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Reimposta ritardo"
+  ],
   "player.subtitles.forced": [
    "forced",
    "forzati"
@@ -5844,6 +5932,30 @@
    "More",
    "Altro"
   ],
+  "player.settings": [
+   "Player settings",
+   "Impostazioni lettore"
+  ],
+  "player.settings.close": [
+   "Close settings",
+   "Chiudi impostazioni"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Dimensione immagine"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Adatta"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Riempi"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Originale"
+  ],
   "player.delivery": [
    "Delivery",
    "Distribuzione"
@@ -5876,9 +5988,17 @@
    "This media is no longer available.",
    "Questo media non è più disponibile."
   ],
+  "player.buffering": [
+   "Buffering…",
+   "Caricamento in buffer…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "Impossibile avviare la riproduzione."
+  ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Premi Riproduci per iniziare."
   ],
   "details.play": [
    "Play",

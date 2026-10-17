@@ -85,6 +85,25 @@ namespace Jularr.E2E.Tests
 
                 await page.GotoAsync(filmDetails);
                 await Steps.PlayAndPauseAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First);
+
+                // The production settings dialog drives this video; it is not a workbench preview.
+                await page.Locator("[data-role=timeline]").FillAsync("6");
+                await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('video').currentTime - 6) < .25");
+                await page.WaitForFunctionAsync("() => parseFloat(document.querySelector('[data-role=played]').style.width) > 0");
+                var beforeWidth = await page.Locator("video").EvaluateAsync<double>("video => video.getBoundingClientRect().width");
+                await page.Locator("[data-action=speed]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-panel=settings]")).ToBeVisibleAsync();
+                await page.Locator("[data-speed='1.25']").ClickAsync();
+                Assert.AreEqual(1.25, await page.Locator("video").EvaluateAsync<double>("video => video.playbackRate"));
+                await page.Locator("[data-action=more]").ClickAsync();
+                await page.Locator("[data-settings-tab=speed]").ClickAsync();
+                await page.Locator("[data-fit=cover]").ClickAsync();
+                Assert.AreEqual("cover", await page.Locator("video").EvaluateAsync<string>("video => video.style.objectFit"));
+                Assert.AreEqual(beforeWidth, await page.Locator("video").EvaluateAsync<double>("video => video.getBoundingClientRect().width"),
+                    "The settings panel must overlay the video without shifting its layout.");
+                await page.Locator("[data-action=settings-close]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-panel=settings]")).ToBeHiddenAsync();
+
                 await page.GotoAsync(seriesDetails);
                 await Steps.PlayAndPauseAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First);
 

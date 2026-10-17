@@ -900,6 +900,14 @@
    "Settings",
    "Pengaturan"
   ],
+  "reader.focus": [
+   "Focus on text",
+   "Fokus pada teks"
+  ],
+  "reader.restoreControls": [
+   "Show controls",
+   "Tampilkan kontrol"
+  ],
   "reader.previous": [
    "Previous",
    "Sebelumnya"
@@ -951,6 +959,78 @@
   "reader.mode.paged": [
    "Pages",
    "Halaman"
+  ],
+  "reader.pages": [
+   "Pages on screen",
+   "Halaman di layar"
+  ],
+  "reader.pages.auto": [
+   "Automatic",
+   "Otomatis"
+  ],
+  "reader.pages.single": [
+   "One page",
+   "Satu halaman"
+  ],
+  "reader.pages.spread": [
+   "Two pages",
+   "Dua halaman"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "Preset bacaan"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Buku"
+  ],
+  "reader.preset.lightNovel": [
+   "Light novel",
+   "Novel ringan"
+  ],
+  "reader.font": [
+   "Font",
+   "Font"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Serif"
+  ],
+  "reader.font.sans": [
+   "Sans-serif",
+   "Sans-serif"
+  ],
+  "reader.lineHeight": [
+   "Line spacing",
+   "Spasi baris"
+  ],
+  "reader.lineHeight.compact": [
+   "Compact",
+   "Rapat"
+  ],
+  "reader.lineHeight.normal": [
+   "Comfortable",
+   "Nyaman"
+  ],
+  "reader.lineHeight.spacious": [
+   "Spacious",
+   "Lapang"
+  ],
+  "reader.width": [
+   "Text width",
+   "Lebar teks"
+  ],
+  "reader.width.narrow": [
+   "Narrow",
+   "Sempit"
+  ],
+  "reader.width.normal": [
+   "Normal",
+   "Normal"
+  ],
+  "reader.width.wide": [
+   "Wide",
+   "Lebar"
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
@@ -5808,6 +5888,14 @@
    "Off",
    "Mati"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Jeda subtitel (detik)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Atur ulang jeda"
+  ],
   "player.subtitles.forced": [
    "forced",
    "paksa"
@@ -5844,6 +5932,30 @@
    "More",
    "Lainnya"
   ],
+  "player.settings": [
+   "Player settings",
+   "Pengaturan pemutar"
+  ],
+  "player.settings.close": [
+   "Close settings",
+   "Tutup pengaturan"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Ukuran gambar"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Sesuaikan"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Penuhi"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Asli"
+  ],
   "player.delivery": [
    "Delivery",
    "Pengiriman"
@@ -5876,9 +5988,17 @@
    "This media is no longer available.",
    "Media ini sudah tidak tersedia."
   ],
+  "player.buffering": [
+   "Buffering…",
+   "Memuat buffer…"
+  ],
   "player.status.failed": [
    "Playback could not be started.",
    "Pemutaran tidak dapat dimulai."
+  ],
+  "player.status.play_gesture_required": [
+   "Press Play to start watching.",
+   "Tekan Putar untuk memulai."
   ],
   "details.play": [
    "Play",

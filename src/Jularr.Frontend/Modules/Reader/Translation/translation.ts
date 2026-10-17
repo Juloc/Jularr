@@ -42,7 +42,7 @@ export function steps(source: Language, target: Language): [string, string][] {
 
 interface RouteFile { step: number; fileType: string; url: string; precision: string | null }
 
-export function translator(reader: HTMLElement, content: HTMLElement, createWorker: () => Worker) {
+export function translator(reader: HTMLElement, content: HTMLElement, createWorker: () => Worker, onContentChanged?: () => void) {
     const blocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
     const originals = new Map(blocks.map(block => [block, block.innerHTML]));
     const status = reader.querySelector<HTMLElement>("[data-role=translation-status]");
@@ -60,6 +60,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     function restore() {
         for (const [block, html] of originals) block.innerHTML = html;
         delete reader.dataset.translated;
+        onContentChanged?.();
     }
 
     // Leaf blocks carry their text; a block holding others keeps its own.
@@ -70,6 +71,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     function show(translated: string[]) {
         translated.forEach((text, index) => { if (text.length > 0) blocks[index].textContent = text; });
         reader.dataset.translated = "true";
+        onContentChanged?.();
     }
 
     async function cached(target: Language): Promise<string[] | undefined> {

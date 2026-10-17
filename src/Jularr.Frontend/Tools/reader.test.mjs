@@ -7,29 +7,64 @@ import ts from 'typescript';
 const source = readFileSync(new URL('../Modules/Reader/reader.entry.ts', import.meta.url), 'utf8').replace('import "./reader.scss";', '');
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 
-function reader(stored = '{}', blocked = false) {
-    const events = {}, buttons = {}, saved = [];
+function reader(stored = '{}', blocked = false, direction = 'ltr') {
+    const events = {}, contentEvents = {}, buttons = {}, saved = [], properties = {}, activeClasses = new Set();
+    class ElementClass {
+        constructor(tag = '') { this.tag = tag; }
+        closest(selector) { return selector.split(',').some(part => part.trim() === this.tag) ? this : null; }
+    }
     let bottom = 10000;
-    const block = { dataset: { b: '0' }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
+    let scrollCount = 0;
+    const scrolled = [];
+    const block = { dataset: { b: '0' }, scrollIntoView: () => { scrollCount++; }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
     const content = {
-        querySelectorAll: () => [block], querySelector: () => null, addEventListener() {},
-        getBoundingClientRect: () => ({ left: 0, bottom })
+        querySelectorAll: () => [block], querySelector: () => null,
+        addEventListener: (name, action) => contentEvents[name] = action,
+        clientWidth: 600, scrollWidth: 1800, scrollLeft: 0,
+        scrollTo: options => scrolled.push(options.left),
+        getBoundingClientRect: () => ({ left: 0, right: 600, width: 600, bottom })
     };
     const button = { dataset: { setting: 'size', value: 'larger' }, setAttribute() {}, addEventListener: (name, action) => buttons[name] = action };
+    const focus = { dataset: { action: 'focus' }, focus() {}, addEventListener: (_, action) => buttons.focus = action };
+    const restore = { dataset: { action: 'restore-focus' }, hidden: true, focus() {}, addEventListener: (_, action) => buttons.restore = action };
+    const pagePrevious = { dataset: { pageStep: '-1' }, hidden: true, disabled: false, addEventListener: (_, action) => buttons.pagePrevious = action };
+    const pageNext = { dataset: { pageStep: '1' }, hidden: true, disabled: false, addEventListener: (_, action) => buttons.pageNext = action };
     const element = {
-        dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100' },
-        style: { setProperty: (_, value) => element.size = value },
-        querySelector: selector => selector === '[data-role=content]' ? content : null,
-        querySelectorAll: selector => selector === '[data-setting]' ? [button] : []
+        dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100', direction },
+        classList: {
+            contains: key => activeClasses.has(key),
+            toggle: (key, enabled) => enabled ? activeClasses.add(key) : activeClasses.delete(key)
+        },
+        style: { setProperty: (key, value) => { properties[key] = value; if (key === '--reader-size') element.size = value; } },
+        querySelector: selector => selector === '[data-role=content]' ? content : selector === '[data-action=restore-focus]' ? restore : selector === '[data-action=focus]' ? focus : null,
+        querySelectorAll: selector => selector === '[data-setting]' ? [button] : selector === '[data-action]' ? [focus, restore]
+            : selector === '[data-page-step]' ? [pagePrevious, pageNext] : []
     };
     runInNewContext(script, {
         exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
-        document: { querySelector: () => element, addEventListener() {} },
-        window: { innerHeight: 900, addEventListener: (name, action) => events[name] = action },
+        document: { querySelector: () => element, addEventListener: (name, action) => events[name] = action },
+        HTMLElement: class HTMLElement {}, Element: ElementClass,
+        getComputedStyle: () => ({ columnGap: '32px', paddingLeft: '16px', paddingRight: '16px' }),
+        window: { innerHeight: 900, matchMedia: () => ({ matches: true }), getSelection: () => ({ toString: () => '' }),
+            addEventListener: (name, action) => events[name] = action },
         location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
     });
-    return { element, saved, enlarge: () => buttons.click(), leave: () => events.pagehide(), finish: () => bottom = 800 };
+    return { element, properties, saved, restoreButton: restore, pagePrevious, pageNext, scrolled,
+        get scrollCount() { return scrollCount; },
+        enlarge: () => buttons.click(), focus: () => buttons.focus(), restore: () => buttons.restore(),
+        resize: () => events.resize(), key: key => events.keydown({ key, target: null, preventDefault() {} }),
+        nextPage: () => buttons.pageNext({ preventDefault() {} }),
+        previousPage: () => buttons.pagePrevious({ preventDefault() {} }),
+        setOffset: value => { content.scrollLeft = value; },
+        clickText: () => contentEvents.click({ target: new ElementClass('p'), clientX: 500, preventDefault() { throw new Error('Text click was intercepted'); } }),
+        swipe: (from, to) => {
+            const target = new ElementClass();
+            contentEvents.pointerdown({ clientX: from, clientY: 0, target });
+            contentEvents.pointerup({ clientX: to, clientY: 0, target, preventDefault() {} });
+            contentEvents.click({ clientX: to, clientY: 0, target, preventDefault() {} });
+        },
+        leave: () => events.pagehide(), finish: () => bottom = 800 };
 }
 
 test('reader requires the visible section end before marking a single-block book complete', () => {
@@ -60,10 +95,92 @@ test('player planning network failure displays the localized status', async () =
         querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' } : {}
     };
     runInNewContext(code, {
-        exports: {}, require: () => ({}), document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }) },
+        exports: {}, require: () => ({}), AbortController,
+        document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }) },
         fetch: () => Promise.reject(new Error('Offline'))
     });
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(status.hidden, false);
     assert.equal(status.textContent, 'Localized failure');
+});
+
+test('reader reuses the preview typography controls with validated device settings', () => {
+    const ui = reader('{"font":"sans","lineHeight":"spacious","width":"narrow","preset":"custom"}');
+    assert.equal(ui.properties['--reader-font-family'], 'system-ui, sans-serif');
+    assert.equal(ui.properties['--reader-line-height'], '1.9');
+    assert.equal(ui.properties['--reader-width'], '34rem');
+    ui.enlarge();
+    assert.equal(ui.element.size, '1.2rem');
+});
+
+test('invalid reader appearance preferences cannot inject CSS or change layout', () => {
+    const ui = reader('{"font":"invalid","lineHeight":"99","width":"999vw","preset":"unknown"}');
+    assert.match(ui.properties['--reader-font-family'], /Georgia/);
+    assert.equal(ui.properties['--reader-line-height'], '1.65');
+    assert.equal(ui.properties['--reader-width'], '42rem');
+});
+
+test('page layout is automatic unless a valid manual preference was saved', () => {
+    assert.equal(reader().element.dataset.pages, 'auto');
+    assert.equal(reader('{"pages":"single"}').element.dataset.pages, 'single');
+    assert.equal(reader('{"pages":"spread"}').element.dataset.pages, 'spread');
+    assert.equal(reader('{"pages":"999vw"}').element.dataset.pages, 'auto');
+});
+
+test('focus reading hides chrome only on explicit action and restores it without progress changes', () => {
+    const ui = reader();
+    ui.focus();
+    assert.equal(ui.element.classList.contains('reader--focused'), true);
+    assert.equal(ui.restoreButton.hidden, false);
+    assert.equal(ui.saved.length, 0);
+    ui.restore();
+    assert.equal(ui.element.classList.contains('reader--focused'), false);
+    assert.equal(ui.restoreButton.hidden, true);
+    assert.equal(ui.saved.length, 0);
+});
+
+
+test('typography and viewport changes restore the same canonical block', () => {
+    const ui = reader();
+    ui.enlarge();
+    assert.equal(ui.scrollCount, 1);
+    ui.resize();
+    assert.equal(ui.scrollCount, 2);
+    assert.equal(ui.saved.length, 0);
+});
+
+test('RTL paged navigation advances toward negative horizontal scroll positions', () => {
+    const ui = reader('{"mode":"paged"}', false, 'rtl');
+    ui.key('PageDown');
+    assert.deepEqual(ui.scrolled, [-600]);
+});
+
+
+test('horizontal touch swipe turns one spread without triggering a duplicate click', () => {
+    const ui = reader('{"mode":"paged"}');
+    ui.swipe(500, 400);
+    assert.deepEqual(ui.scrolled, [600]);
+});
+
+test('clicking selectable prose never turns the page', () => {
+    const ui = reader('{"mode":"paged"}');
+    ui.clickText();
+    assert.deepEqual(ui.scrolled, []);
+});
+
+
+test('paged transport remains available without gestures and is hidden for scroll reading', () => {
+    const normal = reader();
+    assert.equal(normal.pagePrevious.hidden, true);
+    assert.equal(normal.pageNext.hidden, true);
+    const paged = reader('{"mode":"paged"}');
+    assert.equal(paged.pagePrevious.hidden, false);
+    assert.equal(paged.pageNext.hidden, false);
+    assert.equal(paged.pagePrevious.disabled, true);
+    assert.equal(paged.pageNext.disabled, false);
+    paged.nextPage();
+    assert.deepEqual(paged.scrolled, [600]);
+    paged.setOffset(1200);
+    paged.enlarge();
+    assert.equal(paged.pageNext.disabled, true);
 });

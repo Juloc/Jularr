@@ -60,6 +60,13 @@
     }
 
     &__control > textarea { border-radius: 24px; resize: vertical; }
+    &__control > input[type=color] {
+        height: 44px;
+        cursor: pointer;
+        &::-webkit-color-swatch-wrapper { padding: 2px 0; }
+        &::-webkit-color-swatch { border: 1px solid var(--border); border-radius: var(--radius-control); }
+        &::-moz-color-swatch { border: 1px solid var(--border); border-radius: var(--radius-control); }
+    }
     &__control:has(textarea) { border-radius: 24px; }
     &__control:focus-within { border-color: var(--accent); }
     &__control:focus-within > legend { color: var(--accent-text); }
