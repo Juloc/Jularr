@@ -40,7 +40,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
             var snapshot = await _client.ReadConsoleAsync(connection, CancellationToken);
             var categories = await _client.ReadCategoriesAsync(connection, CancellationToken);
-            var files = DownloadClientFolderInspector.Inspect(client.LocalPath, snapshot);
+            var files = DownloadClientFolderInspector.Inspect(client.LocalPath, snapshot, client.IncompleteLocalPath);
 
             return new DownloadClientDashboardV1(snapshot.SpeedBytesPerSecond, snapshot.FreeBytes, snapshot.IsPaused,
                 snapshot.Queue.Count >= 200, snapshot.History.Count >= 200,
@@ -124,7 +124,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         internal sealed record Snapshot(string? CompletePath, string? IncompletePath, bool CompleteAvailable, bool IncompleteAvailable,
             IReadOnlyList<DownloadClientFolderEntryV1> Entries);
 
-        public static Snapshot Inspect(string? mappedPath, SabnzbdConsoleSnapshot snapshot)
+        public static Snapshot Inspect(string? mappedPath, SabnzbdConsoleSnapshot snapshot, string? incompleteMappedPath = null)
         {
             if (string.IsNullOrWhiteSpace(mappedPath) || !Path.IsPathFullyQualified(mappedPath))
             {
@@ -132,9 +132,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             }
 
             var complete = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mappedPath));
-            var parent = Path.GetDirectoryName(complete);
-            var incomplete = Path.GetFileName(complete).Equals("complete", StringComparison.OrdinalIgnoreCase) && parent is not null
-                ? Path.Combine(parent, "incomplete") : null;
+            var incomplete = !string.IsNullOrWhiteSpace(incompleteMappedPath) && Path.IsPathFullyQualified(incompleteMappedPath)
+                ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(incompleteMappedPath)) : null;
             bool SafeDirectory(string? path) => path is not null && Directory.Exists(path)
                 && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0;
             var completeAvailable = SafeDirectory(complete);
