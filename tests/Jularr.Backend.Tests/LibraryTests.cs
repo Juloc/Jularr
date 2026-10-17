@@ -646,6 +646,9 @@ namespace Jularr.Backend.Tests
 
         [DataTestMethod]
         [DataRow("Series/Season 2/Series - S01E01-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E00-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01-E02-E03.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01E02E04.mkv")]
         [DataRow("Series/Season 1/Series - S01E05-E01.mkv")]
         [DataRow("Series/Season 1/Series - S01E01-E09.mkv")]
         [DataRow("Series/Season 1/Series - 1x03-01.mkv")]

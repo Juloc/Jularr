@@ -86,7 +86,7 @@ namespace Jularr.Backend.Logic.Library
             var season = decimal.Parse(match.Groups["season"].Success ? match.Groups["season"].Value : match.Groups["seasonX"].Value, CultureInfo.InvariantCulture);
             var first = decimal.Parse(match.Groups["first"].Success ? match.Groups["first"].Value : match.Groups["firstX"].Value, CultureInfo.InvariantCulture);
             var last = decimal.Parse(match.Groups["last"].Success ? match.Groups["last"].Value : match.Groups["lastX"].Value, CultureInfo.InvariantCulture);
-            if (last <= first || last - first > 5)
+            if (first < 1 || last <= first || last - first > 5)
             {
                 return null;
             }
@@ -433,7 +433,7 @@ namespace Jularr.Backend.Logic.Library
         [GeneratedRegex(@"(?:[Ss]\d{1,3}[ ._-]*[Ee]\d{1,4}(?:[ ._-]*[Ee]\d{1,4}|-\d{2,4})|\b\d{1,2}x\d{2,3}-\d{2,3}\b)")]
         private static partial Regex MultiEpisode();
 
-        [GeneratedRegex(@"(?:[Ss](?<season>\d{1,3})[ ._-]*[Ee](?<first>\d{1,4})(?:-?[Ee](?<last>\d{1,4})|-(?<last>\d{2,4}))|\b(?<seasonX>\d{1,2})x(?<firstX>\d{2,3})-(?<lastX>\d{2,3})\b)", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"(?:[Ss](?<season>\d{1,3})[ ._-]*[Ee](?<first>\d{1,4})(?:-?[Ee](?<last>\d{1,4})|-(?<last>\d{2,4}))|\b(?<seasonX>\d{1,2})x(?<firstX>\d{2,3})-(?<lastX>\d{2,3})\b)(?![-Ee0-9])", RegexOptions.IgnoreCase)]
         private static partial Regex MultiEpisodeRange();
 
         [GeneratedRegex(@"(?<!\d)(?:19|20)\d{2}[ ._-](?:0?[1-9]|1[0-2])[ ._-](?:0?[1-9]|[12]\d|3[01])(?!\d)")]
