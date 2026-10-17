@@ -173,6 +173,33 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).
 
 
+## SABnzbd completed category folders (first release)
+
+SABnzbd controls its own temporary and completed download directories, including
+category subfolders such as `complete/movies` and `complete/tv`. Jularr does
+**not** change SABnzbd's physical paths. Add the same completed directory as
+a read-accessible container mount, then configure each SAB connection's
+`RemotePath` (SAB history path prefix) and `LocalPath` (Jularr's container
+path prefix). All category and release subfolders stay underneath the mapping.
+The original SAB completed files are retained after successful library import.
+
+To send different media types to distinct SABnzbd categories, configure one
+Jularr SABnzbd **download connection per category** using the same server
+address and API key, with the appropriate `Media types` selection:
+- Movies: category `movies`, media type Movie.
+- Series: category `tv`, media type Series.
+- Books: category `books`, media type Book.
+
+Only explicitly matching connections are preferred; a connection with no
+selected media types serves as fallback. No suitable download client means
+no grab. A generic high-priority SAB connection must not override an explicit
+category for a selected media type. The configured category name must exist
+in SABnzbd; further live category/path validation and storage limits are
+separate pre-release requirements (#1209).
+The fresh schema permits media scopes for SABnzbd and indexers; search scheduling
+and daily query/grab limits remain indexer-only. Workspace validation applies to
+the selected native client, so an unused news server cannot block a scoped SAB job.
+
 ## Native/direct download staging safety (pre-release R03 slice)
 
 Jularr's native Usenet downloader and direct-source book downloader accept
@@ -216,3 +243,24 @@ reserve disk across downloads, cap PAR2/7-Zip extraction, protect other
 processes sharing the filesystem, or cover direct-source books. Those remain
 separate prerequisites of release issue #1209; do not expose this as a
 complete hard workspace quota.
+NZB segment sizes are checked before summing to reject numeric overflow. Existing
+article files count against the job limit even when every article is finished,
+so a restart or lower configured limit cannot bypass the extraction preflight.
+
+**Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
+`proc` and other operating-system pseudo filesystems even if Docker reports
+a mount point. A separate bind mount can still target VM-local storage:
+verify its physical source explicitly before enabling downloads.
+The nearest mount is authoritative: an unsafe nested mount cannot inherit its
+parent's approval, and host-filesystem opt-in does not permit RAM/overlay storage.
+
+## Space checks for native Usenet unpacking
+
+Before extracting archives, the native worker checks free space on the **actual
+filesystem containing the staging files** and reserves a rough 10% overhead
+above the compressed input size for the next extraction. Linux mount identity
+is read from `/proc/self/mountinfo`; if the filesystem cannot be resolved
+to a ready mount, extraction enters the existing `usenet_disk_full` wait state
+rather than using a misleading VM-root free-space number. This is a preflight
+safeguard, **not a hard quota**; capacity reservation across jobs and checks
+during extraction are still part of #1209.

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
@@ -16,6 +17,7 @@ using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.System.Operation.V1;
 using Jularr.Integrations.Logic.Media;
+using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Workers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -355,6 +357,8 @@ namespace Jularr.Backend.Tests
 
         [TestMethod]
         [DataRow("Show (2020)/Season 2/Show.S02E05.1080p.WEB-DL.mkv", MediaType.Series, "Show", WorkUnitType.Episode, "5", "2")]
+        [DataRow("Series Name - tt39551287/Season 1/Series Name - S01E07 tt39551287.mkv", MediaType.Series, "Series Name", WorkUnitType.Episode, "7", "1")]
+        [DataRow("Series Name - tvdb-12345/Season 1/Series Name - S01E07.mkv", MediaType.Series, "Series Name", WorkUnitType.Episode, "7", "1")]
         [DataRow("Anime Name/Anime Name - 012 [1080p].mkv", MediaType.Series, "Anime Name", WorkUnitType.Episode, "12", "1")]
         [DataRow("Manga Title/Manga Title v03 c012.5.cbz", MediaType.Book, "Manga Title", WorkUnitType.Chapter, "12.5", "3")]
         [DataRow("Novel/Novel Vol. 4.epub", MediaType.Book, "Novel", WorkUnitType.Volume, "4", null)]
@@ -368,6 +372,524 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(unitType, parsed.WorkUnitTypeId);
             Assert.AreEqual(number is null ? null : decimal.Parse(number, System.Globalization.CultureInfo.InvariantCulture), parsed.UnitNumber);
             Assert.AreEqual(parent is null ? null : decimal.Parse(parent, System.Globalization.CultureInfo.InvariantCulture), parsed.ParentUnitNumber);
+        }
+
+        [TestMethod]
+        [DataRow("Series/Season 1/Series - S01E01-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01-02.mkv")]
+        [DataRow("Series/Season 1/Series - 1x01-02.mkv")]
+        [DataRow("Series/Season 2/Series - S01E07.mkv")]
+        [DataRow("Series/Season 1/Series - 2024.10.17.mkv")]
+        [DataRow("Series/Season 1/Series - 2024-10-17.mkv")]
+        public void Parser_AmbiguousEpisodePaths_NeedManualReview(string path)
+        {
+            var parsed = MediaPathParser.Parse(path, MediaType.Series);
+            Assert.IsNull(parsed.WorkUnitTypeId, path);
+        }
+
+        [TestMethod]
+        public async Task Scan_MatchesImportedSeriesAndKeepsAmbiguousFilesUnassigned()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Imported Show - tt39551287", "Season 1");
+            var ambiguous = Path.Combine(storage.Path, mountId.ToString(), "Series", "Duplicate Show", "Season 1");
+            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(ambiguous);
+            File.WriteAllText(Path.Combine(folder, "Imported Show - S01E07 HDTV-1080p tt39551287.mkv"), "episode");
+            File.WriteAllText(Path.Combine(ambiguous, "Duplicate Show - S01E01.mkv"), "ambiguous");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "IsMediaSubtypeManual")
+                VALUES (2, 'Imported Show', FALSE), (2, 'Duplicate Show', FALSE), (2, 'Duplicate Show', FALSE);
+                """);
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM "Works" WHERE "CanonicalTitle" = 'Imported Show';
+                """);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL AND "RelativePath" LIKE 'Imported Show%' """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND "RelativePath" LIKE 'Duplicate Show%' """));
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+        }
+
+        [TestMethod]
+        public void Parser_MixedSuffixIds_DoNotContaminateTheTitle()
+        {
+            const string path = "Example Show - tt39551287 - tvdb-24680/Season 1/Example Show - S01E07.mkv";
+            Assert.AreEqual("Example Show", MediaPathParser.Parse(path, MediaType.Series).Title);
+            Assert.AreEqual("Example Movie", MediaPathParser.Parse("Example Movie - tmdb-603 - tt0133093.mkv", MediaType.Movie).Title);
+            Assert.AreEqual("Example Movie", MediaPathParser.Parse("Example Movie - tt0133093 - tmdb-603.mkv", MediaType.Movie).Title);
+        }
+
+        [TestMethod]
+        public void Parser_PlexMatch_ExplicitInstructionsOverrideFilenameAndSeasonDefaults()
+        {
+            var parsed = MediaPathParser.Parse("Example Show/Season 1/Example Show - S01E07.mkv", MediaType.Series);
+            var wrong = MediaPathParser.ParsePlexMatch("episode: S01E08: Season 1/Example Show - S01E07.mkv");
+            var matched = MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv", wrong, MediaPathParser.ParsePlexMatch(""));
+            Assert.AreEqual(WorkUnitType.Episode, matched.WorkUnitTypeId);
+            Assert.AreEqual((1m, 8m), (matched.ParentUnitNumber, matched.UnitNumber));
+
+            var wrongSeason = MediaPathParser.ParsePlexMatch("Season: 2");
+            var mismatchedSeason = MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv",
+                MediaPathParser.ParsePlexMatch(""), wrongSeason);
+            Assert.AreEqual((2m, 7m), (mismatchedSeason.ParentUnitNumber, mismatchedSeason.UnitNumber));
+
+            var conflicting = MediaPathParser.ParsePlexMatch("episode: S01E09: Example Show - S01E07.mkv");
+            Assert.IsNull(MediaPathParser.ApplyPlexMatch(parsed, "Season 1/Example Show - S01E07.mkv", "Example Show - S01E07.mkv", wrong, conflicting).WorkUnitTypeId);
+        }
+
+        [TestMethod]
+        public void Parser_NfoIdentity_RejectsConflictsAndExternalEntities()
+        {
+            var (ids, conflicted) = MediaPathParser.ParseNfo(
+                """<tvshow><uniqueid type="imdb">tt39551287</uniqueid><tvdbid>24680</tvdbid></tvshow>""", MediaType.Series);
+            Assert.IsFalse(conflicted);
+            Assert.AreEqual("tt39551287", ids["imdb"]);
+            Assert.AreEqual("24680", ids["tvdb"]);
+            Assert.IsFalse(MediaPathParser.ParseNfo("\uFEFF" + """<tvshow><imdbid>tt39551287</imdbid></tvshow>""", MediaType.Series).Conflicted);
+
+            Assert.IsTrue(MediaPathParser.ParseNfo(
+                """<tvshow><imdbid>tt39551287</imdbid><uniqueid type="imdb">tt12345678</uniqueid></tvshow>""", MediaType.Series).Conflicted);
+            Assert.IsTrue(MediaPathParser.ParseNfo(
+                """<!DOCTYPE tvshow [<!ENTITY ex SYSTEM "file:///etc/passwd">]><tvshow><imdbid>&ex;</imdbid></tvshow>""", MediaType.Series).Conflicted);
+        }
+
+        [TestMethod]
+        public async Task Scan_NfoIdentifiesSeriesWithDifferentFolderTitle()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Localized Folder", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(Directory.GetParent(folder)!.FullName, "tvshow.nfo"),
+                """<tvshow><uniqueid type="imdb">tt39551287</uniqueid></tvshow>""");
+            File.WriteAllText(Path.Combine(folder, "Localized Folder - S01E07.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Original Name') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public void Parser_PlexMatch_ReadsSeriesAndExplicitEpisodeHints()
+        {
+            var hints = MediaPathParser.ParsePlexMatch("""
+                # Series folder
+                show: A Different Series Title
+                year: 2020
+                imdbid: 39551287
+                tvdbid: 24680
+                ep: S01E07: Season 1/Unusual File.mkv
+                """);
+            Assert.IsFalse(hints.Conflicted);
+            Assert.AreEqual("tt39551287", hints.Ids["imdb"]);
+            Assert.AreEqual("24680", hints.Ids["tvdb"]);
+            var parsed = MediaPathParser.ApplyPlexMatch(
+                MediaPathParser.Parse("Unmatched Folder/Season 1/Unusual File.mkv", MediaType.Series),
+                "Season 1/Unusual File.mkv", "Unusual File.mkv", hints, MediaPathParser.ParsePlexMatch(""));
+            Assert.AreEqual("A Different Series Title", parsed.Title);
+            Assert.AreEqual(2020, parsed.Year);
+            Assert.AreEqual(1m, parsed.ParentUnitNumber);
+            Assert.AreEqual(7m, parsed.UnitNumber);
+            Assert.AreEqual(WorkUnitType.Episode, parsed.WorkUnitTypeId);
+
+            var seasonHint = MediaPathParser.ParsePlexMatch("Season: 2\nEpisode: SP01: Special.mkv");
+            var special = MediaPathParser.ApplyPlexMatch(parsed, "Season 2/Special.mkv", "Special.mkv", hints, seasonHint);
+            Assert.AreEqual(0m, special.ParentUnitNumber);
+            Assert.AreEqual(1m, special.UnitNumber);
+
+            Assert.IsTrue(MediaPathParser.ParsePlexMatch("imdbid: tt39551287\nimdbid: tt12345678").Conflicted);
+            Assert.IsTrue(MediaPathParser.ParsePlexMatch("Pattern: Show {se} {ep}").Conflicted);
+        }
+
+        [TestMethod]
+        public async Task Scan_PlexMatchIdentifiesSeriesAndUnnumberedEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var series = Path.Combine(storage.Path, mountId.ToString(), "Series", "Unrelated Folder");
+            var folder = Path.Combine(series, "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(series, ".plexmatch"), """
+                imdbid: tt39551287
+                episode: S01E07: Season 1/Unnumbered.mkv
+                """);
+            File.WriteAllText(Path.Combine(folder, "Unnumbered.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Canonical Show') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+        }
+
+        [TestMethod]
+        public async Task Scan_SeasonPlexMatchOverridesUnnumberedEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Different Title", "Season Two");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, ".plexmatch"), "Season: 2\nTVDBID: 13579\nEP: 07: Episode Seven.mkv");
+            File.WriteAllText(Path.Combine(folder, "Episode Seven.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Canonical Name') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'tvdb', '13579' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+        }
+
+        [TestMethod]
+        public async Task Scan_UnsupportedPlexMatchPattern_DoesNotGuessAnEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Canonical Name", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(Directory.GetParent(folder)!.FullName, ".plexmatch"), "Pattern: Show Part {se} - {ep} - *");
+            File.WriteAllText(Path.Combine(folder, "Canonical Name - S01E01.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Canonical Name');
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND NOT "IsSubtitle" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_MovieNfoMatchesAnUnrelatedFolderName()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", "Arbitrary Folder");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "movie.nfo"), """<movie><uniqueid type="imdb">tt12345678</uniqueid></movie>""");
+            File.WriteAllText(Path.Combine(folder, "Unknown Title.mkv"), "movie");
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Canonical Film') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt12345678' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+        }
+
+        [TestMethod]
+        public async Task Scan_ConflictingNfoIdentity_DoesNotAssociateMovie()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", "Canonical Film - tt12345678");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "movie.nfo"), """<movie><imdbid>tt39551287</imdbid></movie>""");
+            File.WriteAllText(Path.Combine(folder, "Canonical Film - tt12345678.mkv"), "movie");
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Canonical Film') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt12345678' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_CaseDistinctFolders_KeepTheirOwnNfoIdentity()
+        {
+            using var storage = new TemporaryDirectory();
+            Directory.CreateDirectory(Path.Combine(storage.Path, "CaseProbe"));
+            if (Directory.Exists(Path.Combine(storage.Path, "caseprobe")))
+            {
+                Assert.Inconclusive("This regression needs a case-sensitive filesystem; Linux CI exercises it.");
+            }
+
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            foreach (var (folderName, imdb) in new[] { ("Film", "tt12345678"), ("film", "tt39551287") })
+            {
+                var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", folderName);
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, "movie.nfo"), "<movie><imdbid>" + imdb + "</imdbid></movie>");
+                File.WriteAllText(Path.Combine(folder, "Film.mkv"), "movie");
+            }
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'First Film'), (1, 'Second Film') RETURNING "Id", "CanonicalTitle"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', CASE "CanonicalTitle" WHEN 'First Film' THEN 'tt12345678' ELSE 'tt39551287' END FROM work;
+                """);
+            await ScanAsync(host, rootId);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(2L, await host.ScalarAsync("""
+                SELECT count(DISTINCT asset."WorkId") FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId";
+                """));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+        }
+
+        [TestMethod]
+        [DataRow("Series/Season 1/Series - S01E01-E02.mkv", 1, 1, 2)]
+        [DataRow("Series/Season 1/Series - S01E01E03.mkv", 1, 1, 3)]
+        [DataRow("Series/Season 1/Series - S01E01-03.mkv", 1, 1, 3)]
+        [DataRow("Series/Season 1/Series - 1x01-02.mkv", 1, 1, 2)]
+        [DataRow("Series/Season 0/Series - S00E01-E02.mkv", 0, 1, 2)]
+        public void Parser_EpisodeRange_ProvidesAllContiguousEpisodes(string path, int season, int first, int last)
+        {
+            var range = MediaPathParser.ParseEpisodeRange(path);
+            Assert.IsNotNull(range, path);
+            Assert.AreEqual((decimal)season, range.Season);
+            CollectionAssert.AreEqual(Enumerable.Range(first, last - first + 1).Select(number => (decimal)number).ToArray(), range.Episodes.ToArray());
+            Assert.IsNull(MediaPathParser.Parse(path, MediaType.Series).WorkUnitTypeId, path);
+        }
+
+        [TestMethod]
+        [DataRow("Series/Season 2/Series - S01E01-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E00-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01-E02-E03.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01E02E04.mkv")]
+        [DataRow("Series/Season 1/Series - S01E05-E01.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01-E09.mkv")]
+        [DataRow("Series/Season 1/Series - 1x03-01.mkv")]
+        [DataRow("Series/Season 1/Series - 2024-10-17.mkv")]
+        public void Parser_EpisodeRange_RejectsContradictionsAndUnboundedSpans(string path)
+        {
+            Assert.IsNull(MediaPathParser.ParseEpisodeRange(path));
+        }
+
+        [TestMethod]
+        public async Task MultiEpisodeCoverage_RelationalLinksStayWithinTheirWork()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'One Show') RETURNING "Id"
+                ), season AS (
+                    INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    SELECT work."Id", 1, 1 FROM work RETURNING "Id", "WorkId"
+                )
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                SELECT season."WorkId", season."Id", 2, number
+                FROM season CROSS JOIN generate_series(1, 2) AS number;
+                """);
+            var workId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Works" WHERE "CanonicalTitle" = 'One Show'"""))!;
+            await host.Fixture.RunSqlAsync($"""
+                WITH edition AS (
+                    INSERT INTO "WorkEditions" ("WorkId") VALUES ({workId}) RETURNING "Id", "WorkId"
+                ), version AS (
+                    INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")
+                    SELECT "WorkId", "Id" FROM edition RETURNING "Id", "WorkId"
+                )
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT version."WorkId", version."Id", episode."Id", 1
+                FROM version
+                    JOIN "WorkUnits" AS episode ON episode."WorkId" = version."WorkId"
+                WHERE episode."WorkUnitTypeId" = 2 AND episode."Number" = 1;
+                """);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "MediaAssetAdditionalUnits" ("MediaAssetId", "WorkId", "WorkUnitId")
+                SELECT asset."Id", asset."WorkId", episode."Id"
+                FROM "MediaAssets" AS asset
+                    JOIN "WorkUnits" AS episode ON episode."WorkId" = asset."WorkId"
+                WHERE episode."WorkUnitTypeId" = 2 AND episode."Number" = 2;
+                """);
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+            await host.Fixture.RunSqlAsync("""DELETE FROM "MediaAssets";""");
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetAdditionalUnits" """));
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_MultiEpisodeFile_DoesNotLinkToOnlyTheFirstEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Example Show - tt39551287", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Example Show - S01E01.mkv"), "first");
+            File.WriteAllText(Path.Combine(folder, "Example Show - S01E01-E02.mkv"), "double");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Example Show') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "RelativePath" LIKE '%S01E01-E02.mkv' AND "MediaAssetId" IS NULL """));
+        }
+
+        [TestMethod]
+        public async Task Scan_UnknownImdbId_ResolvesViaTmdbOnceAndImportsEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            var source = new FakeTmdbIdentity();
+            await using var host = await CreateHostAsync(storage.Path, services: services =>
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => source));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1("eyJ-library-identity-token"));
+            Assert.AreEqual(HttpStatusCode.OK, secret.StatusCode, await secret.Content.ReadAsStringAsync());
+
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Example Show - tt39551287", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Example Show - S01E07 - Night tt39551287.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*)
+                FROM "StoredFiles" AS file
+                JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = asset."WorkId"
+                WHERE identity."Namespace" = 'imdb' AND identity."Value" = 'tt39551287';
+                """));
+            Assert.AreEqual(1, source.FindRequests);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1, source.FindRequests);
+        }
+
+        [TestMethod]
+        public async Task Scan_WithoutProviderId_MatchesUniqueLocalizedTitle()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Deutscher Titel (2020)", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Deutscher Titel - S01E07.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (2, 'Original Title', 2020) RETURNING "Id"
+                )
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual")
+                SELECT "Id", 'Deutscher Titel', TRUE FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_UnknownSecondProviderId_DoesNotGuessFromTheFirst()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Example Show - tt39551287 - tvdb-4444", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Example Show - S01E07.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Example Show') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND NOT "IsSubtitle" """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        private sealed class FakeTmdbIdentity : HttpMessageHandler
+        {
+            public int FindRequests { get; private set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                if (path == "/3/find/tt39551287")
+                {
+                    FindRequests++;
+                }
+
+                var json = path switch
+                {
+                    "/3/find/tt39551287" => """{"movie_results":[],"tv_results":[{"id":1399}]}""",
+                    "/3/tv/1399" => """{"id":1399,"name":"Example Show","first_air_date":"2020-01-01","external_ids":{"imdb_id":"tt39551287"},"seasons":[{"season_number":1,"name":"Season 1","episode_count":1}]}""",
+                    "/3/tv/1399/season/1" => """{"episodes":[{"season_number":1,"episode_number":7,"name":"Night"}]}""",
+                    _ => null
+                };
+                return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound) :
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") });
+            }
+        }
+
+        [TestMethod]
+        public void Parser_ProviderIds_MatchAcrossFoldersAndRejectConflicts()
+        {
+            const string path = "Series - tt39551287 - tvdb-12345/Season 1/Series - S01E07 tt39551287.mkv";
+            var (ids, conflicted) = MediaPathParser.ProviderIds(path, MediaType.Series);
+            Assert.IsFalse(conflicted);
+            Assert.AreEqual("tt39551287", ids["imdb"]);
+            Assert.AreEqual("12345", ids["tvdb"]);
+
+            var mismatched = MediaPathParser.ProviderIds(path.Replace("S01E07 tt39551287", "S01E07 tt12345678", StringComparison.Ordinal), MediaType.Series);
+            Assert.IsTrue(mismatched.Conflicted);
+
+            const string plex = "Series [imdbid-tt39551287] [tmdbid-1399] [tvdbid-24680]/Season 1/Series - S01E07.mkv";
+            var (plexIds, plexConflict) = MediaPathParser.ProviderIds(plex, MediaType.Series);
+            Assert.IsFalse(plexConflict);
+            Assert.AreEqual("tt39551287", plexIds["imdb"]);
+            Assert.AreEqual("1399", plexIds["tmdb_tv"]);
+            Assert.AreEqual("24680", plexIds["tvdb"]);
+            Assert.AreEqual("Series", MediaPathParser.Parse(plex, MediaType.Series).Title);
+
+            const string plain = "Movie - imdb-tt1234567.mkv";
+            Assert.AreEqual("Movie", MediaPathParser.Parse(plain, MediaType.Movie).Title);
+            Assert.AreEqual("tt1234567", MediaPathParser.ProviderIds(plain, MediaType.Movie).Ids["imdb"]);
         }
 
         [TestMethod]

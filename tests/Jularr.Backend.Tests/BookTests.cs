@@ -175,7 +175,11 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources, bool razor = false)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, razor, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = downloads }, services: services =>
+            var host = await LibraryTests.CreateHostAsync(storage, razor, settings: new Dictionary<string, string>
+            {
+                ["Storage:DirectDownloadPath"] = downloads,
+                ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+            }, services: services =>
             {
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => sources);

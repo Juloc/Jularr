@@ -1297,12 +1297,12 @@
    "Sin coincidencia clara"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Se buscará"
+   "Will be wanted (paused)",
+   "Se supervisará (en pausa)"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Buscado"
+   "Wanted (paused)",
+   "Supervisión en pausa"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

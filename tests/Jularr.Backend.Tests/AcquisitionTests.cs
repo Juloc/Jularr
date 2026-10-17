@@ -103,7 +103,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(40, wanted.ProgressPercent);
 
             // The completed job is mapped, linked into the library and assigned.
-            var completed = Path.Combine(downloads.Path, Feature);
+            // SABnzbd may organize completed releases into separate category folders.
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
             Directory.CreateDirectory(completed);
             File.WriteAllText(Path.Combine(completed, Feature + ".mkv"), new string('x', 4096));
             File.WriteAllText(Path.Combine(completed, Feature + ".en.srt"), "subtitle");
@@ -142,9 +143,10 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "StartedAt", "LastSeenAt", "EndedAt")
                     VALUES (gen_random_uuid(), 101, 900, 900, 1, now() - interval '1 hour', now(), now());
                 """);
-            usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
+            usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
+            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")), "Jularr must not delete SABnzbd's completed source.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
@@ -1106,6 +1108,72 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Sabnzbd_UsesMatchingMediaTypeCategoryBeforeGenericOrOtherMediaTypes()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sab = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab, razor: true);
+
+            // A series-only connection has better numerical priority than movies.
+            // A movie-only connection has worse numerical priority than the generic
+            // connection, but is explicitly selected for Movie acquisitions.
+            foreach (var data in new[]
+            {
+                new SaveAcquisitionConnectionDataV1("Native news", AcquisitionConnectionType.Usenet, null,
+                    null, true, 1, [], null, null, null, maxConnections: 1, host: "news.example.test", useSsl: false),
+                new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]),
+                new SaveAcquisitionConnectionDataV1("Movie SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 50, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
+            })
+            {
+                using var added = await host.SendAsync(HttpMethod.Post, Connections, data);
+                Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            }
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "films" }, sab.GrabbedCategories.ToArray());
+        }
+
+        [TestMethod]
+        public async Task Sabnzbd_IgnoresOtherMediaTypeConnectionAndFallsBackToGeneric()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sab = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab);
+
+            using var added = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "movies" }, sab.GrabbedCategories.ToArray());
+        }
+
+        [TestMethod]
+        public async Task Sabnzbd_OnlyOtherMediaTypeDoesNotStartADownload()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sab = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"IsEnabled\" = FALSE WHERE \"AcquisitionConnectionTypeId\" = 2");
+            using var added = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, sab.GrabbedCategories.Count);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+        }
+
+        [TestMethod]
         public void Selection_RequestedLanguageWinsAmongEqualQuality()
         {
             var profile = new QualityProfile("1", "Test", ["WEBDL-1080p"], ["WEBDL-1080p"], true, "WEBDL-1080p", null, null) { LanguageOrder = ["de"] };
@@ -1124,6 +1192,7 @@ namespace Jularr.Backend.Tests
         public void Import_PathsStayBelowTheMappingAndUrlsStaySafe()
         {
             Assert.AreEqual("Movie/file.mkv", ImportPlacementLogic.MapRemotePath("/downloads/Movie/file.mkv", "/downloads/"));
+            Assert.AreEqual("movies/Some.Release/film.mkv", ImportPlacementLogic.MapRemotePath("/downloads/movies/Some.Release/film.mkv", "/downloads"));
             Assert.IsNull(ImportPlacementLogic.MapRemotePath("/downloads/../etc/passwd", "/downloads"));
             Assert.IsNull(ImportPlacementLogic.MapRemotePath("/downloadsX/file", "/downloads"));
             Assert.IsNull(ImportPlacementLogic.MapRemotePath("/elsewhere/file", "/downloads"));
@@ -1131,6 +1200,14 @@ namespace Jularr.Backend.Tests
             {
                 Assert.IsTrue(StorageFileSystem.IsMountPoint("/"));
                 Assert.IsFalse(StorageFileSystem.IsMountPoint(Path.GetTempPath()));
+            }
+
+            using (var temporary = new TemporaryDirectory())
+            {
+                Assert.IsTrue(StorageFileSystem.AvailableFreeSpace(temporary.Path) is > 0,
+                    "The temporary directory should have a real filesystem with measurable free space.");
+                Assert.IsNull(StorageFileSystem.AvailableFreeSpace(Path.Combine(temporary.Path, "missing")),
+                    "Unknown destinations must never borrow the VM root's free-space reading.");
             }
 
             Assert.Throws<ArgumentException>(() => new A().Attribute("href", "\u0001javascript:alert(1)"));
@@ -1414,6 +1491,7 @@ namespace Jularr.Backend.Tests
                 """;
 
             public List<string> Grabbed { get; } = [];
+            public List<string?> GrabbedCategories { get; } = [];
             public List<string> IndexerHosts { get; } = [];
             public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
@@ -1462,6 +1540,7 @@ namespace Jularr.Backend.Tests
                 {
                     case "addurl":
                         Grabbed.Add(form["name"]!);
+                        GrabbedCategories.Add(form["cat"]);
                         return Json($$"""{"status":true,"nzo_ids":["SABnzbd_nzo_{{Grabbed.Count}}"]}""");
                     case "queue":
                         return Json(Queue);

@@ -163,7 +163,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return;
             }
 
-            if (clients.Count == 0)
+            // The same SABnzbd endpoint can have separate connections/categories per media type.
+            // Prefer a matching explicit scope, then the existing priority order; an unscoped
+            // connection remains the fallback for existing installations.
+            var client = clients.Where(connection => connection.MediaTypeIds.Contains((int)target.MediaTypeId))
+                .FirstOrDefault() ?? clients.FirstOrDefault(connection => connection.MediaTypeIds.Length == 0);
+            if (client is null)
             {
                 throw new ServiceUnavailableException("acquisition_no_download_client");
             }
@@ -174,7 +179,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
-            if (clients[0].AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
                 _ = _storage.ReadyUsenetDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
             }
@@ -186,7 +191,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // Reserve first so concurrent grabs cannot start a second download.
-            var client = clients[0];
             var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
             var episodes = kind is AcquisitionKind.Tv or AcquisitionKind.Anime
                 ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))

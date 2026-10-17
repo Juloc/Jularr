@@ -12,7 +12,7 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(900_000)]
-        public async Task SonarrTakeover_ItsProfileChoosesTheReleases_AndTheEpisodesPlay()
+        public async Task SonarrTakeover_ExplicitlyResumedMonitoring_ChoosesReleasesAndEpisodesPlay()
         {
             var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
             using var folders = new Folders("Series");
@@ -48,7 +48,19 @@ namespace Jularr.E2E.Tests
                 await TakeOverAsync(page, fakes, apply: true);
                 StringAssert.Contains(await page.Locator("main table").Last.InnerTextAsync(), "Wanted");
 
-                // Without a manual search, the automatic one takes only what the profile allows.
+                // Inventory takeover stays paused across restart until the Owner explicitly takes over automatic acquisition.
+                await page.GotoAsync("about:blank");
+                await jularr.RestartAsync();
+                await page.GotoAsync("/Admin/Wanted");
+                var monitored = page.Locator("main tr", new() { HasText = FakeServices.SeriesTitle });
+                await Assertions.Expect(monitored).ToContainTextAsync("Paused");
+                Assert.AreEqual(0, fakes.Grabbed.Count, "Taking over inventory or restarting must not start downloads.");
+                await Steps.SubmitAsync(page, monitored.Locator("form").Filter(new()
+                {
+                    Has = page.GetByRole(AriaRole.Button, new() { Name = "Resume " + FakeServices.SeriesTitle, Exact = true })
+                }));
+
+                // After explicit release, automatic search takes only what the imported profile allows.
                 await WaitForGrabsAsync(fakes, first, second);
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(first).ToString(), fakes.NzbAddress(second).ToString() }, fakes.Grabbed.ToArray());

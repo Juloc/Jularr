@@ -4,10 +4,6 @@ using Jularr.Integrations.Data.Usenet;
 
 namespace Jularr.Integrations.Logic.Usenet
 {
-    internal sealed class UsenetStorageBudgetException : Exception
-    {
-    }
-
     // Downloads the open articles of a job with several sessions until a deadline; decoded parts are written where they belong.
     internal sealed class UsenetDownloader
     {
@@ -22,6 +18,28 @@ namespace Jularr.Integrations.Logic.Usenet
             var done = new ConcurrentBag<string>();
             var damaged = new ConcurrentBag<string>();
             long downloaded = 0;
+
+            // Completed/resumed files still consume the budget, even with no articles left.
+            long existingBytes = 0;
+            if (maximumJobBytes <= 0)
+            {
+                throw new UsenetStorageBudgetException();
+            }
+
+            foreach (var file in files)
+            {
+                var existing = new FileInfo(Path.Combine(directory, file.FileName));
+                if (existing.Exists)
+                {
+                    if (existing.Length > maximumJobBytes - existingBytes)
+                    {
+                        throw new UsenetStorageBudgetException();
+                    }
+
+                    existingBytes += existing.Length;
+                }
+            }
+
             if (queue.IsEmpty)
             {
                 return new UsenetProgress([], [], 0);
@@ -89,7 +107,7 @@ namespace Jularr.Integrations.Logic.Usenet
 
                         // A part never grows its file beyond what the NZB announced.
                         var limit = item.File.Bytes > 0 ? item.File.Bytes + Slack : MaximumFileBytes;
-                        if (part.Offset < 0 || part.Offset + part.Data.Length > limit || item.Segment.Bytes > 0 && part.Data.Length > item.Segment.Bytes + Slack)
+                        if (part.Offset < 0 || part.Offset > limit - part.Data.Length || item.Segment.Bytes > 0 && part.Data.Length > item.Segment.Bytes + Slack)
                         {
                             damaged.Add(item.Segment.MessageId);
                             continue;

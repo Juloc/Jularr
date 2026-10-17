@@ -86,6 +86,17 @@ jobs:
       # Test films are made and played with FFmpeg, as in a real installation.
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
+      # The test DB is PostgreSQL 18; the runner's default pg_dump may be older.
+      # Backups are part of the E2E path, so match the client major instead of hiding failures.
+      - name: Install PostgreSQL 18 backup client
+        run: |
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo ${VERSION_CODENAME})-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
       - run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg

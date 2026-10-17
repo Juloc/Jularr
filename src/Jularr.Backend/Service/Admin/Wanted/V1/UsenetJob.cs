@@ -4,6 +4,7 @@ using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Usenet;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 
@@ -84,12 +85,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var announced = 0L;
             foreach (var file in files)
             {
-                if (_storage.UsenetMaxJobBytes <= 0 || file.Bytes <= 0 || file.Bytes > _storage.UsenetMaxJobBytes - announced)
+                foreach (var segment in file.Segments)
                 {
-                    return new UsenetPassResult(UsenetPassState.Waiting, 0, 0, 0, "usenet_disk_budget", progressed: false);
-                }
+                    if (_storage.UsenetMaxJobBytes <= 0 || segment.Bytes <= 0 || segment.Bytes > _storage.UsenetMaxJobBytes - announced)
+                    {
+                        return new UsenetPassResult(UsenetPassState.Waiting, 0, 0, 0, "usenet_disk_budget", progressed: false);
+                    }
 
-                announced += file.Bytes;
+                    announced += segment.Bytes;
+                }
             }
 
             // Finished articles are remembered; a leading "!" marks a damaged one.
@@ -106,6 +110,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 return new UsenetPassResult(UsenetPassState.Waiting, 0, announced, 0, "usenet_disk_budget", progressed: false);
             }
+
             await File.AppendAllLinesAsync(statePath, [.. progress.Done, .. progress.Damaged.Select(id => "!" + id)], ct);
             finished.UnionWith(progress.Done);
             finished.UnionWith(progress.Damaged);
@@ -161,12 +166,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_extractor_missing", progressed: false);
             }
 
-            // Unpacking needs about the download's size again.
-            Directory.CreateDirectory(output);
-            if (new DriveInfo(Path.GetPathRoot(Path.GetFullPath(output))!).AvailableFreeSpace < Directory.EnumerateFiles(directory).Sum(path => new FileInfo(path).Length) * 11 / 10)
+            // Require space on the actual mounted download filesystem, not the VM root.
+            // Keep extraction unopened when free space cannot be verified.
+            var unpackBytes = Directory.EnumerateFiles(directory).Sum(path => new FileInfo(path).Length);
+            if (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || available < unpackBytes + unpackBytes / 10)
             {
                 return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_disk_full", progressed: false);
             }
+
+            Directory.CreateDirectory(output);
 
             foreach (var archive in archives)
             {
