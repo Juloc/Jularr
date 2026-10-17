@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
@@ -11,6 +12,36 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
 {
+    [ServiceEndpoint("PUT", "/api/v1/admin/acquisition/connections/{acquisitionConnectionId:long}/categories")]
+    public sealed class UpdateDownloadClientCategoriesV1 : AdminService<AcquisitionConnectionParametersV1, DownloadClientCategoriesV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(AcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var values = new (string Kind, string? Category)[]
+            {
+                ("Movie", Data.Movie),
+                ("Tv", Data.Tv),
+                ("Anime", Data.Anime),
+                ("Book", Data.Book),
+                ("Audiobook", Data.Audiobook),
+                ("Manga", Data.Manga),
+                ("LightNovel", Data.LightNovel),
+                ("Music", Data.Music),
+                ("Game", Data.Game)
+            };
+            var json = JsonSerializer.Serialize(values.Where(value => value.Category is not null)
+                .ToDictionary(value => value.Kind, value => value.Category!, StringComparer.Ordinal));
+
+            await Context.UpdateDownloadCategoryMapAsync(new AcquisitionConnectionCategoryMapData(Parameters.AcquisitionConnectionId, json), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
     // Provider inspection is an Execute operation: the DB read commits before external I/O.
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/connections/{acquisitionConnectionId:long}/dashboard")]
     public sealed class InspectDownloadClientV1 : AdminService<AcquisitionConnectionParametersV1, NoData>
