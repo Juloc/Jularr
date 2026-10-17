@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Sabnzbd;
 
@@ -9,6 +11,18 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class DownloadClientConsoleTests
     {
+        [TestMethod]
+        public void CategoryRouting_KindOverrideOrDefault_IsDeterministic()
+        {
+            const string map = "{\\"Movie\\":\\"movies\\",\\"Tv\\":\\"series\\",\\"Anime\\":\\"anime\\",\\"Manga\\":\\"comics\\"}";
+            Assert.AreEqual("movies", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Movie));
+            Assert.AreEqual("series", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Tv));
+            Assert.AreEqual("anime", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Anime));
+            Assert.AreEqual("comics", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Manga));
+            Assert.AreEqual("fallback", AcquisitionConnectionLogic.ResolveDownloadCategory(map, "fallback", AcquisitionKind.Book));
+            Assert.IsNull(AcquisitionConnectionLogic.ResolveDownloadCategory("{}", null, AcquisitionKind.Music));
+        }
+
         [TestMethod]
         public async Task Console_QueueAndHistory_AreRealProviderSnapshots()
         {
