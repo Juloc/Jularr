@@ -69,6 +69,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.acquisition_query_limit_reached", "The indexer's daily query limit is reached."),
             new("errors.acquisition_invalid_response", "The indexer or download client returned an invalid response."),
             new("errors.acquisition_no_download_client", "No enabled download client is configured."),
+            new("errors.acquisition_download_path_unconfigured", "Download workspace is not configured or is unavailable"),
             new("errors.acquisition_grab_failed", "The download client did not accept the release."),
             new("errors.concurrent_change", "Another change was made at the same time. Please reload and try again."),
             new("errors.internal_error", "An unknown error occurred."),

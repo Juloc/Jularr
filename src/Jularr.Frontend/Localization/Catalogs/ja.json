@@ -6316,6 +6316,10 @@
    "The indexer or download client returned an invalid response.",
    "インデクサーまたはダウンロードクライアントが無効な応答を返しました。"
   ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "ダウンロードの一時保存先が未設定か利用できません"
+  ],
   "errors.acquisition_no_download_client": [
    "No enabled download client is configured.",
    "有効なダウンロードクライアントが設定されていません。"

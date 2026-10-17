@@ -6316,6 +6316,10 @@
    "The indexer or download client returned an invalid response.",
    "De indexer of downloadclient gaf een ongeldig antwoord."
   ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Downloadwerkmap is niet ingesteld of niet beschikbaar"
+  ],
   "errors.acquisition_no_download_client": [
    "No enabled download client is configured.",
    "Er is geen ingeschakelde downloadclient ingesteld."

@@ -6316,6 +6316,10 @@
    "The indexer or download client returned an invalid response.",
    "Der Indexer oder Download-Client hat eine ungültige Antwort geliefert."
   ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"
+  ],
   "errors.acquisition_no_download_client": [
    "No enabled download client is configured.",
    "Es ist kein aktivierter Download-Client eingerichtet."
