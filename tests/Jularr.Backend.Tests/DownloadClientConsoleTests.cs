@@ -57,7 +57,7 @@ namespace Jularr.Backend.Tests
                 var leftovers = Path.Combine(complete, "leftover.nfo");
                 File.WriteAllText(leftovers, "keep");
                 var snapshot = new SabnzbdConsoleSnapshot([], [], null, null, false);
-                var result = DownloadClientFolderInspector.Inspect(complete, snapshot);
+                var result = DownloadClientFolderInspector.Inspect(complete, snapshot, incomplete);
 
                 Assert.IsTrue(result.CompleteAvailable);
                 Assert.IsTrue(result.IncompleteAvailable);
