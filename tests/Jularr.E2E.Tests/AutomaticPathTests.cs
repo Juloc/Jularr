@@ -46,9 +46,16 @@ namespace Jularr.E2E.Tests
                 await TakeOverAsync(page, fakes, apply: false);
                 Assert.AreEqual(1, await page.Locator("[name=RootFolders]:checked").CountAsync(), "The root folder was not suggested for the series library.");
                 await TakeOverAsync(page, fakes, apply: true);
-                StringAssert.Contains(await page.Locator("main table").Last.InnerTextAsync(), "Wanted");
+                StringAssert.Contains(await page.Locator("main table").Last.InnerTextAsync(), "Added (paused)");
 
-                // Without a manual search, the automatic one takes only what the profile allows.
+                // Importing monitored items never starts acquisition. The Owner must explicitly resume the target.
+                await page.GotoAsync("/Admin/Wanted");
+                var takenOver = page.Locator("tr", new() { HasText = FakeServices.SeriesTitle });
+                await Assertions.Expect(takenOver.GetByText("Paused")).ToBeVisibleAsync();
+                Assert.IsFalse(fakes.Grabbed.Any(), "The takeover must not start downloads before explicit approval.");
+                await Steps.SubmitAsync(page, takenOver.Locator("form"));
+
+                // After the Owner resumes it, automatic search takes only what the profile allows.
                 await WaitForGrabsAsync(fakes, first, second);
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(first).ToString(), fakes.NzbAddress(second).ToString() }, fakes.Grabbed.ToArray());

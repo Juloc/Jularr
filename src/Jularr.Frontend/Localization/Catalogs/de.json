@@ -1297,12 +1297,12 @@
    "Kein eindeutiger Treffer"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Wird gesucht"
+   "Will be added (paused)",
+   "Wird pausiert übernommen"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Gesucht"
+   "Added (paused)",
+   "Pausiert übernommen"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

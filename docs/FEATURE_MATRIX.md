@@ -51,7 +51,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Naming and folders | all | tested | `NamingPattern`, `LibraryRenameLogic` | NamingPatternTests, LibraryTests | Patterns for music, books, games | A rename preview moves nothing until confirmed |
 | Protected versions, several releases, recycle modes | all | tested | `ReplacementLogic`, `LibraryRecycleBin` | AcquisitionTests, DeviceTests | – | Delete by default; recycle cleanup touches only registered files |
 | Admin visibility of actions, errors, decisions | all | tested | Wanted, Activity, System pages | AcquisitionTests, StatisticsTests | Indexer log and statistics | Every grab, import and failure is visible with its reason |
-| One-time takeover | Movie, Series, Music, Book | tested (Prowlarr, Sonarr, Radarr, Lidarr, Readarr) | `TakeoverServices`, `ServarrProfileLogic` | TakeoverTests | Live Lidarr/Readarr API checked against fakes only | Takeover is optional; Jularr runs without the old programs |
+| One-time takeover | Movie, Series, Music, Book | tested (Prowlarr, Sonarr, Radarr, Lidarr, Readarr) | `TakeoverServices`, `ServarrProfileLogic`, `WantedLogic` | TakeoverTests, AutomaticPathTests | Live Lidarr/Readarr API checked against fakes only | Imported Wanted targets start paused; explicit Owner resume is required before automatic search. Takeover remains optional. |
 
 ## Radarr, Sonarr, Lidarr, Readarr, Bazarr
 

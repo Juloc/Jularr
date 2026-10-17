@@ -1297,12 +1297,12 @@
    "Tidak ada kecocokan yang jelas"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Akan dicari"
+   "Will be added (paused)",
+   "Akan ditambahkan dalam keadaan dijeda"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Dicari"
+   "Added (paused)",
+   "Ditambahkan dalam keadaan dijeda"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

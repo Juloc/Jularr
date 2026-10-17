@@ -1297,12 +1297,12 @@
    "明確な一致なし"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "欲しいものに追加予定"
+   "Will be added (paused)",
+   "一時停止状態で追加予定"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "欲しいものに追加済み"
+   "Added (paused)",
+   "一時停止状態で追加済み"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

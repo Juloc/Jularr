@@ -64,10 +64,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https://readable.example.test", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Readable'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedApiKey\" IS NULL FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Open'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""), "Taking over a missing movie must never initiate an automatic download.");
             var again = await RunAsync(host, true);
             Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Readable").OutcomeKey);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""), "Repeated takeover must preserve a paused target.");
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Takeover");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());

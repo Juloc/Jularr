@@ -52,19 +52,21 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
         {
-            // A taken-over title becomes a target once, with the profile it had and the library of its root folder, each if one of its type.
+            // A takeover records monitoring intent without starting downloads. The Owner resumes it explicitly.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO "WantedItems" (
                     "WorkId",
                     "AcquisitionProfileId",
-                    "LibraryRootId"
+                    "LibraryRootId",
+                    "IsPaused"
                 )
                 SELECT
                     work."Id",
                     profile."Id",
-                    root."Id"
+                    root."Id",
+                    TRUE
                 FROM
                     "Works" AS work
                     LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = @AcquisitionProfileId
