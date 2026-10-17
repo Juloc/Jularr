@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Usenet;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
@@ -136,12 +137,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_extractor_missing", progressed: false);
             }
 
-            // Unpacking needs about the download's size again.
-            Directory.CreateDirectory(output);
-            if (new DriveInfo(Path.GetPathRoot(Path.GetFullPath(output))!).AvailableFreeSpace < Directory.EnumerateFiles(directory).Sum(path => new FileInfo(path).Length) * 11 / 10)
+            // Require space on the actual mounted download filesystem, not the VM root.
+            // Keep extraction unopened when free space cannot be verified.
+            var unpackBytes = Directory.EnumerateFiles(directory).Sum(path => new FileInfo(path).Length);
+            if (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || available < unpackBytes + unpackBytes / 10)
             {
                 return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_disk_full", progressed: false);
             }
+
+            Directory.CreateDirectory(output);
 
             foreach (var archive in archives)
             {
