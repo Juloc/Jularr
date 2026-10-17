@@ -71,3 +71,10 @@
 - The form posts with the existing antiforgery token to the typed Administrator API, protects concurrent changes via `Version`, and confirms successful saves. It is hidden during initial instance setup and from users without instance settings permission.
 - English localization keys are registered centrally and can be translated through the existing localization pipeline. Browser E2E coverage checks independent settings and a narrow mobile viewport.
 - This UI does not introduce automatic cache eviction or existing-install PostgreSQL migration. Changing configuration affects upcoming scans/exports, not already written NAS files.
+
+## P5c – Bounded cache pruning (stacked PR)
+
+- Cache reconciliation runs under the same process-wide encoder lock before each successful library-scan or export cache warming. It lists indexed WebP/JXL content keys, deletes only **unreferenced** managed `64-hex.webp` and `64-hex.jxl` files, and then retires the oldest remaining renditions if the configured byte budget is exceeded.
+- Indexed renditions are deleted in PostgreSQL **before** their file is unlinked. Native JXL URLs disappear from Library's `<picture>` selection rather than pointing to deleted assets. Full WebP variants may disappear too, while the small PostgreSQL WebP fallback remains durable for offline viewing.
+- A physically missing rendition file causes its stale database pointer to be retired; it can be rebuilt by the next scan when budget allows. Manual NAS artwork, non-artwork files, symlinks, and unrelated cache directories are never deleted. A zero-byte budget retires cached variants while keeping tiny previews.
+- Selection is oldest rendition by creation time, **not** access-based LRU; per-hit database writes are deliberately avoided for resource efficiency. Pruning is local only and does not touch NAS storage. Cross-process concurrent cache writers are not supported by this single-host model.

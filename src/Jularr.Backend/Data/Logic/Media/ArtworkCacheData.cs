@@ -131,6 +131,23 @@ namespace Jularr.Backend.Data.Logic.Media
         public string? FallbackHash { get; }
     }
 
+
+    // Ordered oldest first by the database. Content keys may be shared across Works.
+    internal sealed class ArtworkStoredRenditionData : BaseData
+    {
+        public ArtworkStoredRenditionData(string cacheKey, ArtworkFormat formatId)
+        {
+            CacheKey = cacheKey;
+            FormatId = formatId;
+        }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.CacheKey))]
+        public string CacheKey { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.FormatId))]
+        public ArtworkFormat FormatId { get; }
+    }
+
     internal sealed class ArtworkPreviewData : BaseData
     {
         public ArtworkPreviewData(string? cacheKey, string? jxlCacheKey, byte[]? fallbackBytes)

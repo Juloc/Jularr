@@ -73,6 +73,42 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkRenditions\""));
         }
 
+        [TestMethod]
+        public async Task CacheBudgetDisabled_RetiresRenditionsButPreservesDatabasePreview()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", "Preview");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Preview.mkv"), "video");
+            await File.WriteAllBytesAsync(Path.Combine(folder, "poster.png"), ImageBytes(SKColors.CadetBlue));
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+
+            await LibraryTests.ScanAsync(host, rootId);
+            var storedFileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + storedFileId + "/assignment",
+                new AssignLibraryFileDataV1(null, "Preview", null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode);
+            await LibraryTests.ScanAsync(host, rootId);
+
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Preview'"))!;
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkRenditions\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkFallbacks\""));
+
+            await host.Fixture.RunSqlAsync("UPDATE \"ArtworkSettings\" SET \"CacheLimitBytes\" = 0");
+            await LibraryTests.ScanAsync(host, rootId);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkRenditions\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkFallbacks\""));
+
+            // Never advertise removed variants; the database-sized WebP still works offline.
+            Directory.Move(Path.GetDirectoryName(folder)!, Path.GetDirectoryName(folder)! + ".offline");
+            using var offline = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId + "/artwork/1");
+            Assert.AreEqual(HttpStatusCode.OK, offline.StatusCode, await offline.Content.ReadAsStringAsync());
+            Assert.AreEqual("image/webp", offline.Content.Headers.ContentType?.MediaType);
+            Assert.IsTrue((await offline.Content.ReadAsByteArrayAsync()).Length > 16);
+        }
+
         private static byte[] ImageBytes(SKColor color)
         {
             using var surface = SKSurface.Create(new SKImageInfo(160, 240));
