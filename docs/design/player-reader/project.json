@@ -1,0 +1,112 @@
+{
+  "id": "jularr",
+  "name": "Jularr",
+  "devices": {
+    "desktop": {
+      "values": {},
+      "families": {},
+      "components": {}
+    },
+    "tablet": {
+      "values": {},
+      "families": {
+        "button": {
+          "min-height": "44px"
+        }
+      },
+      "components": {}
+    },
+    "mobile": {
+      "values": {},
+      "families": {
+        "button": {
+          "min-height": "44px"
+        },
+        "field": {
+          "min-height": "44px"
+        }
+      },
+      "components": {}
+    },
+    "tv": {
+      "values": {
+        "font-size": "20px",
+        "spacing": "24px"
+      },
+      "families": {
+        "button": {
+          "min-height": "60px",
+          "gap": "12px"
+        },
+        "field": {
+          "min-height": "52px"
+        }
+      },
+      "components": {}
+    }
+  },
+  "palettes": {},
+  "rules": [
+    "Opaque base controls; Player popovers may use subtle translucency. No bevels or 3D gradients.",
+    "Buttons and single-line fields use the shared pill radius.",
+    "Native legend cutouts, not painted label backgrounds.",
+    "One canonical media card across Discover, Library and Continue.",
+    "Semantic availability colours never follow the accent.",
+    "Pages compose controls. Production permissions and validation remain Backend-owned."
+  ],
+  "values": {
+    "accent-seed": "#7c3aed",
+    "radius-control": "999px",
+    "radius-card": "24px",
+    "radius-panel": "12px",
+    "radius-dialog": "18px",
+    "spacing": "16px",
+    "font-size": "14px",
+    "font-family": "Segoe UI, system-ui, sans-serif",
+    "border-width": "1px"
+  },
+  "families": {
+    "button": {
+      "radius": "{radius-control}",
+      "padding-inline": "15px",
+      "padding-block": "9px",
+      "gap": "8px",
+      "min-height": "44px",
+      "font-weight": "650",
+      "border-width": "{border-width}"
+    },
+    "field": {
+      "radius": "{radius-control}",
+      "padding-inline": "14px",
+      "min-height": "36px"
+    },
+    "card": {
+      "radius": "{radius-card}",
+      "padding-inline": "12px",
+      "padding-block": "8px",
+      "gap": "4px"
+    },
+    "panel": {
+      "radius": "{radius-panel}",
+      "padding-inline": "{spacing}",
+      "padding-block": "{spacing}"
+    },
+    "dialog": {
+      "radius": "{radius-dialog}"
+    },
+    "tag": {
+      "radius": "{radius-control}",
+      "padding-inline": "12px",
+      "padding-block": "5px",
+      "gap": "6px",
+      "font-size": "12px"
+    },
+    "tabs": {
+      "radius": "{radius-control}",
+      "gap": "4px",
+      "padding-inline": "4px",
+      "padding-block": "4px"
+    }
+  },
+  "components": {}
+}
