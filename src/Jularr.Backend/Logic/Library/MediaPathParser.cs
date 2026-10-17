@@ -179,6 +179,179 @@ namespace Jularr.Backend.Logic.Library
             return (identities, conflicted);
         }
 
+        // Plex hints apply only to the containing series or season directory.
+        public static PlexMatchHints ParsePlexMatch(string text)
+        {
+            string? title = null;
+            int? year = null;
+            decimal? season = null;
+            var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var episodes = new Dictionary<string, (decimal? Season, decimal Episode)>(StringComparer.OrdinalIgnoreCase);
+            var conflicted = false;
+            var lines = text.TrimStart('\uFEFF').Split('\n');
+            if (lines.Length > 256)
+            {
+                return new PlexMatchHints(null, null, null, ids, episodes, true);
+            }
+
+            foreach (var original in lines)
+            {
+                var line = original.Trim();
+                if (line.Length == 0 || line.StartsWith('#'))
+                {
+                    continue;
+                }
+
+                var index = line.IndexOf(':');
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var key = line[..index].Trim().ToLowerInvariant();
+                var value = line[(index + 1)..].Trim();
+                if (key is "title" or "show")
+                {
+                    if (value.Length is < 1 or > 500 || title is not null && !title.Equals(value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        conflicted = true;
+                    }
+                    else
+                    {
+                        title = value;
+                    }
+
+                    continue;
+                }
+
+                if (key is "year" or "season")
+                {
+                    if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+                        || key == "year" && number is < 1800 or > 2200
+                        || key == "season" && number is < 0 or > 999
+                        || key == "year" && year is not null && year != number
+                        || key == "season" && season is not null && season != number)
+                    {
+                        conflicted = true;
+                    }
+                    else if (key == "year")
+                    {
+                        year = number;
+                    }
+                    else
+                    {
+                        season = number;
+                    }
+
+                    continue;
+                }
+
+                if (key is "pattern" or "pt")
+                {
+                    // Plex pattern directives may change numbering; do not silently ignore them.
+                    conflicted = true;
+                    continue;
+                }
+
+                if (key is "episode" or "ep")
+                {
+                    var separator = value.IndexOf(':');
+                    if (separator <= 0 || separator == value.Length - 1)
+                    {
+                        conflicted = true;
+                        continue;
+                    }
+
+                    var numbering = PlexEpisode().Match(value[..separator].Trim());
+                    var filename = value[(separator + 1)..].Trim();
+                    var validPath = filename.Length is > 0 and <= 1024 && filename[0] != '/'
+                        && filename.Split('/').All(part => part.Length > 0 && part is not ("." or "..") && !part.Contains('\\'));
+                    if (!numbering.Success || !validPath)
+                    {
+                        conflicted = true;
+                        continue;
+                    }
+
+                    var episode = Number(numbering.Groups["episode"]);
+                    var episodeSeason = numbering.Groups["special"].Success ? 0m
+                        : numbering.Groups["season"].Success ? Number(numbering.Groups["season"]) : (decimal?)null;
+                    if (episodes.TryGetValue(filename, out var existing) && existing != (episodeSeason, episode))
+                    {
+                        conflicted = true;
+                        continue;
+                    }
+
+                    episodes[filename] = (episodeSeason, episode);
+                    continue;
+                }
+
+                var source = key == "guid" ? value.Split("://", 2, StringSplitOptions.None)[0].ToLowerInvariant() : key;
+                var id = key == "guid" ? value.Split("://", 2, StringSplitOptions.None).Last() : value;
+                var @namespace = source switch
+                {
+                    "imdbid" or "imdb" => "imdb",
+                    "tvdbid" or "tvdb" => "tvdb",
+                    "tmdbid" or "tmdb" => "tmdb_tv",
+                    _ => null
+                };
+                if (@namespace is null)
+                {
+                    if (key == "guid")
+                    {
+                        conflicted = true;
+                    }
+
+                    continue;
+                }
+
+                if (@namespace == "imdb" && id.All(char.IsAsciiDigit))
+                {
+                    id = "tt" + id;
+                }
+
+                var valid = @namespace == "imdb" ? ImdbToken().Match(id) is { Success: true, Index: 0 } imdb && imdb.Length == id.Length
+                    : id.Length is > 0 and <= 12 && id.All(char.IsAsciiDigit) && id.Any(digit => digit != '0');
+                if (!valid || ids.TryGetValue(@namespace, out var previous) && !previous.Equals(id, StringComparison.OrdinalIgnoreCase))
+                {
+                    conflicted = true;
+                }
+                else
+                {
+                    ids[@namespace] = @namespace == "imdb" ? id.ToLowerInvariant() : id;
+                }
+            }
+
+            return new PlexMatchHints(title, year, season, ids, episodes, conflicted);
+        }
+
+        public static MediaPathInfo ApplyPlexMatch(MediaPathInfo parsed, string rootRelativePath, string filename, PlexMatchHints series, PlexMatchHints season)
+        {
+            var title = season.Title ?? series.Title ?? parsed.Title;
+            var year = season.Year ?? series.Year ?? parsed.Year;
+            var episode = parsed.UnitNumber;
+            var episodeSeason = parsed.ParentUnitNumber;
+
+            var hasRootEpisode = series.Episodes.TryGetValue(rootRelativePath, out var root);
+            var hasSeasonEpisode = season.Episodes.TryGetValue(filename, out var local);
+            if (hasRootEpisode && hasSeasonEpisode && root != local)
+            {
+                return new MediaPathInfo(title, year, null, null, null);
+            }
+
+            if (hasSeasonEpisode || hasRootEpisode)
+            {
+                var explicitEpisode = hasSeasonEpisode ? local : root;
+                episode = explicitEpisode.Episode;
+                episodeSeason = explicitEpisode.Season ?? season.Season ?? series.Season ?? parsed.ParentUnitNumber ?? 1m;
+            }
+            else if (parsed.WorkUnitTypeId == WorkUnitType.Episode)
+            {
+                episodeSeason = season.Season ?? series.Season ?? parsed.ParentUnitNumber;
+            }
+
+            return new MediaPathInfo(title, year, episode is not null && episodeSeason is not null ? WorkUnitType.Episode : null, episode, episodeSeason);
+        }
+
         public static bool IsSample(string relativePath) => Sample().IsMatch(Path.GetFileNameWithoutExtension(relativePath));
 
         private static string Clean(string name, out int? year)
@@ -214,6 +387,9 @@ namespace Jularr.Backend.Logic.Library
 
         [GeneratedRegex(@"(?<!\d)(?:19|20)\d{2}[ ._-](?:0?[1-9]|1[0-2])[ ._-](?:0?[1-9]|[12]\d|3[01])(?!\d)")]
         private static partial Regex DailyEpisode();
+
+        [GeneratedRegex(@"^(?:S(?<season>\d{1,3})E|(?<special>SP)|E)?(?<episode>\d{1,4})$", RegexOptions.IgnoreCase)]
+        private static partial Regex PlexEpisode();
 
         [GeneratedRegex(@"\b(?:season|staffel|s)[ ._-]*(?<number>\d{1,3})\b", RegexOptions.IgnoreCase)]
         private static partial Regex SeasonFolder();
@@ -257,4 +433,7 @@ namespace Jularr.Backend.Logic.Library
         [GeneratedRegex(@"\s+")]
         private static partial Regex Whitespace();
     }
+    internal sealed record PlexMatchHints(string? Title, int? Year, decimal? Season, IReadOnlyDictionary<string, string> Ids,
+        IReadOnlyDictionary<string, (decimal? Season, decimal Episode)> Episodes, bool Conflicted);
+
 }

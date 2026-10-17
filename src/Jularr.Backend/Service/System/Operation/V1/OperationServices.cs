@@ -315,7 +315,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         private async Task AssignKnownFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
-            var nfoFolders = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            var hintFolders = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
             for (var afterId = 0L; ;)
             {
                 // Top folders linked to exactly one Work.
@@ -367,23 +367,41 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     // Unclear structure stays for manual review.
                     afterId = file.Id;
                     var path = MediaPathParser.Parse(file.RelativePath, mediaType);
-                    var hasNfo = false;
+                    var hasHints = false;
                     if (mediaType == MediaType.Series)
                     {
                         var parent = file.RelativePath.Split('/')[0];
-                        if (!nfoFolders.TryGetValue(parent, out hasNfo))
+                        if (!hintFolders.TryGetValue(parent, out hasHints))
                         {
-                            hasNfo = await storage.GetAsync(StoragePath.Combine(directory, parent + "/tvshow.nfo"), CancellationToken) is not null;
-                            if (nfoFolders.Count >= 10_000)
+                            hasHints = await storage.GetAsync(StoragePath.Combine(directory, parent + "/tvshow.nfo"), CancellationToken) is not null
+                                || await storage.GetAsync(StoragePath.Combine(directory, parent + "/.plexmatch"), CancellationToken) is not null;
+                            if (hintFolders.Count >= 10_000)
                             {
-                                nfoFolders.Clear();
+                                hintFolders.Clear();
                             }
 
-                            nfoFolders[parent] = hasNfo;
+                            hintFolders[parent] = hasHints;
+                        }
+
+                        var containing = file.RelativePath[..file.RelativePath.LastIndexOf('/')];
+                        if (!hasHints && containing != parent)
+                        {
+                            if (!hintFolders.TryGetValue(containing, out var seasonHints))
+                            {
+                                seasonHints = await storage.GetAsync(StoragePath.Combine(directory, containing + "/.plexmatch"), CancellationToken) is not null;
+                                if (hintFolders.Count >= 10_000)
+                                {
+                                    hintFolders.Clear();
+                                }
+
+                                hintFolders[containing] = seasonHints;
+                            }
+
+                            hasHints = seasonHints;
                         }
                     }
 
-                    if (path.WorkUnitTypeId is null || hasNfo || mediaType == MediaType.Series && MediaPathParser.ProviderIds(file.RelativePath, mediaType).Ids.Count > 0)
+                    if (path.WorkUnitTypeId is null || hasHints || mediaType == MediaType.Series && MediaPathParser.ProviderIds(file.RelativePath, mediaType).Ids.Count > 0)
                     {
                         // Explicit provider IDs require catalog validation, not just a matching parent folder.
                         continue;
@@ -408,6 +426,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var providerUnavailable = false;
             var externalLookups = 0;
             var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.OrdinalIgnoreCase);
+            var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.OrdinalIgnoreCase);
+            var emptyHints = MediaPathParser.ParsePlexMatch("");
             for (var afterId = 0L; ;)
             {
                 var files = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -434,13 +454,56 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 {
                     afterId = file.Id;
                     var parsed = MediaPathParser.Parse(file.RelativePath, mediaType);
-                    if (parsed.Title.Length > 500 || (mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode))
+                    var (pathIds, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
+                    var ids = pathIds.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
+
+                    if (mediaType == MediaType.Series && file.RelativePath.Contains('/'))
+                    {
+                        var parts = file.RelativePath.Split('/');
+                        var rootFolder = parts[0];
+                        if (!plexFolders.TryGetValue(rootFolder, out var rootHints))
+                        {
+                            rootHints = await ReadPlexMatchAsync(storage, directory, rootFolder);
+                            if (plexFolders.Count >= 10_000)
+                            {
+                                plexFolders.Clear();
+                            }
+
+                            plexFolders[rootFolder] = rootHints;
+                        }
+
+                        var parent = string.Join('/', parts[..^1]);
+                        var seasonHints = emptyHints;
+                        if (parent != rootFolder && !plexFolders.TryGetValue(parent, out seasonHints))
+                        {
+                            seasonHints = await ReadPlexMatchAsync(storage, directory, parent);
+                            if (plexFolders.Count >= 10_000)
+                            {
+                                plexFolders.Clear();
+                            }
+
+                            plexFolders[parent] = seasonHints;
+                        }
+
+                        conflicted |= rootHints.Conflicted || seasonHints.Conflicted;
+                        foreach (var (source, value) in rootHints.Ids.Concat(seasonHints.Ids))
+                        {
+                            if (ids.TryGetValue(source, out var previous) && !previous.Equals(value, StringComparison.OrdinalIgnoreCase))
+                            {
+                                conflicted = true;
+                                break;
+                            }
+
+                            ids[source] = value;
+                        }
+
+                        parsed = MediaPathParser.ApplyPlexMatch(parsed, file.RelativePath[(rootFolder.Length + 1)..], parts[^1], rootHints, seasonHints);
+                    }
+
+                    if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
                     {
                         continue;
                     }
-
-                    var (pathIds, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
-                    var ids = new Dictionary<string, string>(pathIds, StringComparer.OrdinalIgnoreCase);
                     if (file.RelativePath.Contains('/'))
                     {
                         var folder = file.RelativePath.Split('/')[0];
@@ -628,39 +691,49 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
+        private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)
+        {
+            var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, folder + "/.plexmatch"), 32_768);
+            return invalid ? MediaPathParser.ParsePlexMatch("Pattern: unsupported") : MediaPathParser.ParsePlexMatch(text ?? "");
+        }
+
         private async Task<(IReadOnlyDictionary<string, string> Ids, bool Conflicted)> ReadFolderNfoAsync(StorageFiles storage, string directory, string folder, MediaType mediaType)
         {
-            const int maxBytes = 65_536;
             var name = mediaType == MediaType.Series ? "tvshow.nfo" : "movie.nfo";
-            var path = StoragePath.Combine(directory, folder + "/" + name);
+            var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, folder + "/" + name), 65_536);
+            return invalid
+                ? (new Dictionary<string, string>(), true)
+                : text is null ? (new Dictionary<string, string>(), false) : MediaPathParser.ParseNfo(text, mediaType);
+        }
+
+        private async Task<(string? Text, bool Invalid)> ReadHintTextAsync(StorageFiles storage, string path, int maxBytes)
+        {
             var info = await storage.GetAsync(path, CancellationToken);
             if (info is null)
             {
-                return (new Dictionary<string, string>(), false);
+                return (null, false);
             }
 
             if (info.IsDirectory || info.Length > maxBytes)
             {
-                return (new Dictionary<string, string>(), true);
+                return (null, true);
             }
 
             await using var stream = await storage.OpenReadAsync(path, CancellationToken);
-            var data = new byte[maxBytes + 1];
-            var read = 0;
-            while (read < data.Length)
+            var buffer = new byte[maxBytes + 1];
+            var total = 0;
+            while (total < buffer.Length)
             {
-                var length = await stream.ReadAsync(data.AsMemory(read), CancellationToken);
+                var length = await stream.ReadAsync(buffer.AsMemory(total), CancellationToken);
                 if (length == 0)
                 {
                     break;
                 }
 
-                read += length;
+                total += length;
             }
 
-            return read > maxBytes
-                ? (new Dictionary<string, string>(), true)
-                : MediaPathParser.ParseNfo(Encoding.UTF8.GetString(data, 0, read), mediaType);
+            return total > maxBytes ? (null, true) : (Encoding.UTF8.GetString(buffer, 0, total), false);
         }
 
         private static bool IsStorablePath(string relativePath)

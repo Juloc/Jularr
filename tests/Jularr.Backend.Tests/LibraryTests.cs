@@ -459,6 +459,65 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Parser_PlexMatch_ReadsSeriesAndExplicitEpisodeHints()
+        {
+            var hints = MediaPathParser.ParsePlexMatch("""
+                # Series folder
+                show: A Different Series Title
+                year: 2020
+                imdbid: 39551287
+                tvdbid: 24680
+                ep: S01E07: Season 1/Unusual File.mkv
+                """);
+            Assert.IsFalse(hints.Conflicted);
+            Assert.AreEqual("tt39551287", hints.Ids["imdb"]);
+            Assert.AreEqual("24680", hints.Ids["tvdb"]);
+            var parsed = MediaPathParser.ApplyPlexMatch(
+                MediaPathParser.Parse("Unmatched Folder/Season 1/Unusual File.mkv", MediaType.Series),
+                "Season 1/Unusual File.mkv", "Unusual File.mkv", hints, MediaPathParser.ParsePlexMatch(""));
+            Assert.AreEqual("A Different Series Title", parsed.Title);
+            Assert.AreEqual(2020, parsed.Year);
+            Assert.AreEqual(1m, parsed.ParentUnitNumber);
+            Assert.AreEqual(7m, parsed.UnitNumber);
+            Assert.AreEqual(WorkUnitType.Episode, parsed.WorkUnitTypeId);
+
+            var seasonHint = MediaPathParser.ParsePlexMatch("Season: 2\nEpisode: SP01: Special.mkv");
+            var special = MediaPathParser.ApplyPlexMatch(parsed, "Season 2/Special.mkv", "Special.mkv", hints, seasonHint);
+            Assert.AreEqual(0m, special.ParentUnitNumber);
+            Assert.AreEqual(1m, special.UnitNumber);
+
+            Assert.IsTrue(MediaPathParser.ParsePlexMatch("imdbid: tt39551287\nimdbid: tt12345678").Conflicted);
+            Assert.IsTrue(MediaPathParser.ParsePlexMatch("Pattern: Show {se} {ep}").Conflicted);
+        }
+
+        [TestMethod]
+        public async Task Scan_PlexMatchIdentifiesSeriesAndUnnumberedEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var series = Path.Combine(storage.Path, mountId.ToString(), "Series", "Unrelated Folder");
+            var folder = Path.Combine(series, "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(series, ".plexmatch"), """
+                imdbid: tt39551287
+                episode: S01E07: Season 1/Unnumbered.mkv
+                """);
+            File.WriteAllText(Path.Combine(folder, "Unnumbered.mkv"), "episode");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Canonical Show') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+        }
+
+        [TestMethod]
         public async Task Scan_MovieNfoMatchesAnUnrelatedFolderName()
         {
             using var storage = new TemporaryDirectory();
