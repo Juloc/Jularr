@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.Storage;
 
@@ -18,10 +19,10 @@ namespace Jularr.Backend.Service.Core
 
         public async Task<ArtworkExportResultV1> ExportAsync(LogicContext context, long workId, CancellationToken ct)
         {
-            var (settings, locations, facts) = await context.ExecuteBatchAsync(async (ctx, ct) =>
-                (await ctx.ReadNasExportSettingsAsync(ct),
-                    await ctx.ReadNasExportLocationsAsync(new WorkParametersV1(workId), ct),
-                    await ctx.ReadNasExportFactsAsync(new WorkParametersV1(workId), ct)), ct);
+            var (settings, locations, facts) = await context.ExecuteBatchAsync(async (ctx, batchCt) =>
+                (await ctx.ReadNasExportSettingsAsync(batchCt),
+                    await ctx.ReadNasExportLocationsAsync(new WorkParametersV1(workId), batchCt),
+                    await ctx.ReadNasExportFactsAsync(new WorkParametersV1(workId), batchCt)), ct);
             if (!settings.ExportToNas)
             {
                 return new ArtworkExportResultV1(0, 0);
@@ -53,13 +54,13 @@ namespace Jularr.Backend.Service.Core
                 }
 
                 var target = new ArtworkExportFolderData(workId, location.LibraryRootId, folder);
-                var exclusive = await context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExclusiveNasFolderAsync(target, ct), ct);
+                var exclusive = await context.ExecuteBatchAsync((ctx, batchCt) => ctx.ReadExclusiveNasFolderAsync(target, batchCt), ct);
                 if (!exclusive.IsExclusive)
                 {
                     continue;
                 }
 
-                var mount = await context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(location.StorageMountId, ct), ct);
+                var mount = await context.ExecuteBatchAsync((ctx, batchCt) => ctx.ReadStorageMountAsync(location.StorageMountId, batchCt), ct);
                 if (mount.IsReadOnly)
                 {
                     continue;
@@ -97,9 +98,9 @@ namespace Jularr.Backend.Service.Core
                     var candidate = new ArtworkScanCandidate(relativePath, folder, (short)slot, null);
                     var batch = new ArtworkScanBatchData(location.LibraryRootId, StoredFileLogic.StoredTime(DateTime.UtcNow),
                         JsonSerializer.Serialize(new[] { candidate }));
-                    await context.ExecuteBatchAsync(async (ctx, ct) =>
+                    await context.ExecuteBatchAsync(async (ctx, batchCt) =>
                     {
-                        await ctx.UpsertSidecarsAsync(batch, ct);
+                        await ctx.UpsertSidecarsAsync(batch, batchCt);
                         return true;
                     }, ct);
                     saved++;
