@@ -68,6 +68,17 @@ namespace Jularr.Backend.Logic.Operation
                         WHERE
                             fact."WorkId" = work."Id"
                             AND fact."FactKey" IN ('Poster', 'Backdrop')
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkArtworks" AS artwork
+                                WHERE
+                                    artwork."WorkId" = work."Id"
+                                    AND artwork."WorkUnitId" IS NULL
+                                    AND artwork."SlotId" = CASE fact."FactKey" WHEN 'Poster' THEN 1 ELSE 2 END
+                                    AND artwork."SourceKindId" IN (1, 2)
+                            )
                     )
                 ON CONFLICT ("ArtworkWorkId") WHERE "OperationTypeId" = 4 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING;
                 """;
