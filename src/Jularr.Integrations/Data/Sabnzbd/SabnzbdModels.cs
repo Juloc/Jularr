@@ -153,7 +153,8 @@ namespace Jularr.Integrations.Data.Sabnzbd
     internal sealed class SabnzbdConsoleSnapshot
     {
         public SabnzbdConsoleSnapshot(IReadOnlyList<SabnzbdQueueJob> queue, IReadOnlyList<SabnzbdHistoryJob> history, long? speedBytesPerSecond, long? freeBytes, bool isPaused,
-            long? todayBytes = null, long? weekBytes = null, long? monthBytes = null, long? totalBytes = null, IReadOnlyList<string>? orphanFolders = null)
+            long? todayBytes = null, long? weekBytes = null, long? monthBytes = null, long? totalBytes = null, IReadOnlyList<string>? orphanFolders = null,
+            string? reportedCompletePath = null, string? reportedIncompletePath = null)
         {
             Queue = queue;
             History = history;
@@ -165,6 +166,8 @@ namespace Jularr.Integrations.Data.Sabnzbd
             MonthBytes = monthBytes;
             TotalBytes = totalBytes;
             OrphanFolders = orphanFolders ?? [];
+            ReportedCompletePath = reportedCompletePath;
+            ReportedIncompletePath = reportedIncompletePath;
         }
 
         public IReadOnlyList<SabnzbdQueueJob> Queue { get; }
@@ -177,6 +180,8 @@ namespace Jularr.Integrations.Data.Sabnzbd
         public long? MonthBytes { get; }
         public long? TotalBytes { get; }
         public IReadOnlyList<string> OrphanFolders { get; }
+        public string? ReportedCompletePath { get; }
+        public string? ReportedIncompletePath { get; }
     }
 
     // Messages never contain the API key.
