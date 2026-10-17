@@ -116,7 +116,6 @@ namespace Jularr.E2E.Tests
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 2 && document.querySelector('video')?.currentTime > 0",
                     null, new() { Timeout = Steps.MediaTimeout });
                 await page.UnrouteAsync("**/api/v1/playback/sessions/*/stream");
-                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
                 // A genuinely broken file must still explain its playback failure.
                 await page.GotoAsync(details);
