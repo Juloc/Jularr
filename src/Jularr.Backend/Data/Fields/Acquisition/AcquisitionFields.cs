@@ -25,6 +25,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         // Empty categories use the media type ranges.
         public static readonly IntArrayField Categories = new() { Minimum = 1, Maximum = 999999, MaximumLength = 50, Required = false, IsSet = true };
         public static readonly StringField DownloadCategory = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly StringField DownloadCategoryMap = new() { MaximumLength = 4096, Required = false };
         public static readonly StringField RemotePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField LocalPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField IncompleteRemotePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
