@@ -3848,6 +3848,42 @@
    "Download workspace is not configured or is unavailable",
    "Le dossier temporaire des téléchargements n'est pas configuré ou est indisponible"
   ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "Stockage des téléchargements"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "Chemins configurés (sans vérification du montage ni de l'écriture). Les téléchargements natifs sont suspendus si le stockage est indisponible."
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "Fichiers temporaires Usenet"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "Téléchargements directs de livres"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Limite par tâche Usenet"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "Non configuré"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "Système de fichiers hôte : autorisé explicitement"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "Système de fichiers hôte : bloqué sans stockage monté"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "Pour changer les chemins et la limite, modifiez la configuration du serveur et redémarrez Jularr. La modification dans l'application n'est pas encore disponible."
+  ],
   "acquisition.outcome.usenet_disk_budget": [
    "Download exceeds the configured size limit",
    "Le téléchargement dépasse la limite de taille configurée"

@@ -3848,6 +3848,42 @@
    "Download workspace is not configured or is unavailable",
    "Downloadwerkmap is niet ingesteld of niet beschikbaar"
   ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "Downloadopslag"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "Ingestelde paden (koppeling en schrijfrechten niet gecontroleerd). Ingebouwde downloads pauzeren als opslag niet beschikbaar is."
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "Tijdelijke Usenet-bestanden"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "Directe boekdownloads"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Limiet per Usenet-taak"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "Niet ingesteld"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "Hostbestandssysteem: expliciet toegestaan"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "Hostbestandssysteem: geblokkeerd zonder gekoppelde opslag"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "Pas de serverconfiguratie aan en herstart Jularr om paden en limieten te wijzigen. Bewerken in de app is nog niet mogelijk."
+  ],
   "acquisition.outcome.usenet_disk_budget": [
    "Download exceeds the configured size limit",
    "Download overschrijdt de ingestelde groottelimiet"

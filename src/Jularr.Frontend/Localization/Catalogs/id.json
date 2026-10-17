@@ -3848,6 +3848,42 @@
    "Download workspace is not configured or is unavailable",
    "Folder sementara unduhan belum dikonfigurasi atau tidak tersedia"
   ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "Penyimpanan unduhan"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "Jalur yang dikonfigurasi (belum memeriksa mount atau izin tulis). Unduhan internal dijeda jika penyimpanan tidak tersedia."
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "File sementara Usenet"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "Unduhan buku langsung"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Batas per tugas Usenet"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "Belum dikonfigurasi"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "Sistem file host: diizinkan secara eksplisit"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "Sistem file host: diblokir hingga penyimpanan ter-mount dipilih"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "Untuk mengubah jalur dan batas, perbarui konfigurasi server dan mulai ulang Jularr. Pengeditan di aplikasi belum tersedia."
+  ],
   "acquisition.outcome.usenet_disk_budget": [
    "Download exceeds the configured size limit",
    "Unduhan melebihi batas ukuran yang dikonfigurasi"

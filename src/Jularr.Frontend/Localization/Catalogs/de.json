@@ -3848,6 +3848,42 @@
    "Download workspace is not configured or is unavailable",
    "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"
   ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "Download-Speicherorte"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "Konfigurierte Pfade (keine Prüfung von Mount oder Schreibzugriff). Native Downloads pausieren, wenn der Speicherort nicht verfügbar ist."
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "Usenet-Zwischenspeicher"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "Direkte Buchdownloads"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Limit pro Usenet-Job"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "Nicht eingerichtet"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "Host-Dateisystem: ausdrücklich erlaubt"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "Host-Dateisystem: gesperrt, bis ein eingebundener Speicherort gewählt ist"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "Zum Ändern der Pfade und des Limits die Serverkonfiguration anpassen und Jularr neu starten. Bearbeitung in der App ist noch nicht verfügbar."
+  ],
   "acquisition.outcome.usenet_disk_budget": [
    "Download exceeds the configured size limit",
    "Download überschreitet das konfigurierte Größenlimit"
