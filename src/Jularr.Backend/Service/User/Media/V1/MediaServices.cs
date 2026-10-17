@@ -407,18 +407,29 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."MediaTypeId",
                     visible."Title" AS "Title",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "WorkArtworks" AS art
+                        JOIN "ArtworkRenditions" AS rendition ON rendition."WorkArtworkId" = art."Id" AND rendition."FormatId" = 3
+                        WHERE art."WorkId" = work."Id" AND art."WorkUnitId" IS NULL AND art."SlotId" = 1
+                    ) OR EXISTS (
+                        SELECT 1 FROM "ArtworkFallbacks" AS preview
+                        WHERE preview."WorkId" = work."Id" AND preview."WorkUnitId" IS NULL AND preview."SlotId" = 1
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1'
+                    ELSE (
+                        SELECT fact."Value" FROM "WorkMetadataFacts" AS fact
+                        WHERE fact."WorkId" = work."Id" AND fact."FactKey" = 'Poster'
+                        ORDER BY fact."IsManual" DESC LIMIT 1
+                    ) END AS "PosterUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM "ArtworkSettings" AS settings
+                        JOIN "WorkArtworks" AS art ON art."WorkId" = work."Id"
+                        JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = art."Id" AND native."FormatId" = 4
+                        WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                          AND art."WorkUnitId" IS NULL AND art."SlotId" = 1
+                          AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                              WHERE webp."WorkArtworkId" = art."Id" AND webp."FormatId" = 3)
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1.jxl'
+                    END AS "JxlPosterUrl",
                     state."MediaStateTypeId",
                     TRUE AS "IsWatchlisted"
                 FROM
