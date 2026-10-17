@@ -3,173 +3,155 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Pages.Admin.Profiles;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Profile
 {
-    // One quality profile: its qualities as a ladder, sizes and terms, then its release rules.
-    public sealed class ProfileModel(ReadAcquisitionProfilesV1 profiles, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
-        ReadAcquisitionProfileRulesV1 readRules, AddAcquisitionProfileRuleV1 addRule, UpdateAcquisitionProfileRuleV1 updateRule, DeleteAcquisitionProfileRuleV1 deleteRule,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class ProfileModel(ReadAcquisitionProfileV1 read, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
+        ReadCustomFormatsV1 formats, ReadCustomFormatV1 readFormat, IAntiforgery antiforgery) : JularrPage
     {
         private const string NewId = "New";
         private AcquisitionProfileDetailsV1? _profile;
         private SaveAcquisitionProfileDataV1? _input;
-        private SaveReleaseRuleDataV1? _ruleInput;
-        private IReadOnlyList<ReleaseRuleV1> _rules = [];
+        private PageResult<CustomFormatDetailsV1>? _formats;
 
-        // A profile id, or New with its media type.
-        [BindProperty(SupportsGet = true)]
-        public string Id { get; set; } = "";
-
-        [BindProperty(SupportsGet = true, Name = "type")]
-        public MediaType? NewType { get; set; }
-
-        [BindProperty(SupportsGet = true, Name = "subtype")]
-        public MediaSubtype? NewSubtype { get; set; }
-
-        // The rule being edited.
-        [BindProperty(SupportsGet = true, Name = "rule")]
-        public int? RuleId { get; set; }
-
-        [BindProperty(SupportsGet = true, Name = "delete")]
-        public bool ConfirmDelete { get; set; }
+        [BindProperty(SupportsGet = true)] public string Id { get; set; } = "";
+        [BindProperty(SupportsGet = true, Name = "type")] public MediaType? NewType { get; set; }
+        [BindProperty(SupportsGet = true, Name = "subtype")] public MediaSubtype? NewSubtype { get; set; }
+        [BindProperty] public string? Name { get; set; }
+        [BindProperty] public MediaType MediaTypeId { get; set; }
+        [BindProperty] public MediaSubtype? MediaSubtypeId { get; set; }
+        [BindProperty] public bool IsDefault { get; set; }
+        [BindProperty] public string[]? AllowedQualities { get; set; }
+        [BindProperty] public bool UpgradeAllowed { get; set; }
+        [BindProperty] public string? UpgradeCutoffQuality { get; set; }
+        [BindProperty] public int? MinimumSizeMb { get; set; }
+        [BindProperty] public int? MaximumSizeMb { get; set; }
+        [BindProperty] public long? Version { get; set; }
+        [BindProperty] public string? QualityOrder { get; set; }
+        [BindProperty] public List<GroupRow> QualityGroups { get; set; } = [];
+        [BindProperty] public List<ScoreRow> FormatScores { get; set; } = [];
+        [BindProperty] public int MinimumFormatScore { get; set; }
+        [BindProperty] public int CutoffFormatScore { get; set; }
+        [BindProperty] public int MinimumUpgradeFormatScore { get; set; } = 1;
+        [BindProperty(SupportsGet = true)] public int FormatPage { get; set; } = 1;
 
         private long? ProfileId => long.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
+        private MediaType Scope => _profile?.MediaTypeId ?? NewType ?? MediaType.Movie;
 
         protected override void Define(Page page)
         {
             page.Title("admin.profiles.title", _profile?.Name);
             page.Navigation("nav.admin");
-            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
-            page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", ProfilesModel.Home(Request))).Class("page-actions"));
-            page.Content.Add(ProfileForm(csrf));
-            if (FormError is not null && _input is null && _ruleInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
-            if (_profile is not { } profile) return;
-
-            if (Monitoring(profile) is { Count: > 0 } monitoring) page.Content.Add(new UiSection("profile.monitoring", [new Dl([.. monitoring])]));
-            page.Content.Add(new UiSection("profile.rules", [RulesTable(profile, csrf), RuleForm(profile, csrf)]));
-
-            // The default of a media type stays; deleting asks once more.
-            if (!profile.IsDefault)
+            page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
+            if (SetupWizard.IsActive(Request)) page.Content.Add(new A(new Text("setup.sources.back")).Class("button").Attribute("href", "/Setup/Sources"));
+            page.Content.Add(AcquisitionSettingsNavigation.Frame(Request, "profiles", Scope));
+            page.Content.Add(new A(new Text("common.back")).Class("button").Attribute("href", AcquisitionSettingsNavigation.Address(Request, "profiles", Scope)));
+            if (_formats is null || _profile is null && Id != NewId) return;
+            var input = _input ?? (_profile is { } profile ? FromProfile(profile) : NewProfile(NewType!.Value, NewSubtype));
+            var order = DisplayOrder(input);
+            var choices = order.Select(quality => new SelectOption(quality, input.QualityGroups.FirstOrDefault(group => group.Key == quality)?.Name ?? quality)).ToArray();
+            var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            var form = new Form<SaveAcquisitionProfileDataV1>(fields =>
             {
-                page.Content.Add(ConfirmDelete
-                    ? new Div(new P(new Text("profile.deleteConfirm")), new Form<DeleteAcquisitionProfileParametersV1>(form =>
-                    {
-                        form.Hidden(item => item.Version);
-                        form.Submit("profile.delete");
-                    }, Address(handler: "Delete"), csrf, new DeleteAcquisitionProfileParametersV1(profile.Id, profile.Version)),
-                        new A(new Text("common.back")).Class("button").Attribute("href", Address())).Class("page-actions")
-                    : new A(new Text("profile.delete")).Class("button").Attribute("href", Address() + "?delete=true"));
-            }
-        }
-
-        private Form<SaveAcquisitionProfileDataV1> ProfileForm(string? csrf)
-        {
-            var input = _input ?? (_profile is { } profile
-                ? new SaveAcquisitionProfileDataV1(profile.Name, profile.MediaTypeId, profile.IsDefault, profile.AllowedQualities, profile.UpgradeAllowed, profile.UpgradeCutoffQuality,
-                    profile.MinimumSizeMb, profile.MaximumSizeMb, profile.MustContain, profile.MustNotContain, profile.Version, profile.MediaSubtypeId, profile.DelayMinutes,
-                    profile.FallbackQualities, profile.FallbackAfterHours)
-                : NewProfile(NewType!.Value, NewSubtype));
-            var qualities = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId).Select(quality => new SelectOption(quality, quality)).ToArray();
-            var yesNo = new[] { new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"]) };
-
-            return new Form<SaveAcquisitionProfileDataV1>(form =>
-            {
-                form.Hidden(item => item.MediaTypeId);
-                form.Hidden(item => item.MediaSubtypeId);
-                form.Hidden(item => item.Version);
-                form.Section("profile.section.general", section =>
+                fields.Hidden(item => item.MediaTypeId);
+                fields.Hidden(item => item.MediaSubtypeId);
+                fields.Hidden(item => item.Version);
+                fields.Section("profile.section.general", section =>
                 {
                     section.Text(item => item.Name, "profile.name");
-                    section.Select(item => item.IsDefault, "profile.isDefault", yesNo);
-                    section.Number(item => item.DelayMinutes, "profile.delay");
+                    section.Toggle(item => item.IsDefault, "profile.isDefault");
                 });
-
-                // Best first: what may be taken, where upgrades stop and what is accepted after waiting.
-                form.Section("profile.section.qualities", section =>
+                fields.Section("profile.section.qualities", section =>
                 {
-                    section.ChoiceTable("profile.qualities", qualities, section.Column(item => item.AllowedQualities, "profile.allowed"),
-                        section.Column(item => item.UpgradeCutoffQuality, "profile.cutoff", single: true, noneKey: "profile.noCutoff"),
-                        section.Column(item => item.FallbackQualities, "profile.fallbackQualities"));
-                    section.Select(item => item.UpgradeAllowed, "profile.upgradeAllowed", yesNo);
-                    section.Number(item => item.FallbackAfterHours, "profile.fallbackAfter");
+                    section.ChoiceTable("profile.qualities", choices, [section.Column(item => item.AllowedQualities, "profile.allowed"),
+                        section.Column(item => item.UpgradeCutoffQuality, "profile.cutoff", single: true, noneKey: "profile.noCutoff")],
+                        choice => new Div(Draft("arr.moveUp", "moveUp", choice.Value), Draft("arr.moveDown", "moveDown", choice.Value)));
+                    section.Toggle(item => item.UpgradeAllowed, "profile.upgradeAllowed");
+                    section.Hidden(item => item.QualityOrder);
                 });
-                form.Section("profile.section.size", section =>
+                fields.Section("arr.qualityGroups", section =>
+                {
+                    section.Rows(item => item.QualityGroups, (row, group) =>
+                    {
+                        row.Hidden(item => item.Id);
+                        row.Text(item => item.Name, "profile.name");
+                        row.Text(item => item.Qualities, "profile.qualities");
+                        row.Content(Draft("common.remove", "removeGroupId", group.Id.ToString(CultureInfo.InvariantCulture)));
+                    });
+                    section.Content(Draft("collections.add", "addGroup", "true"));
+                    section.Content(Draft("arr.refreshGroups", "refreshGroups", "true"));
+                });
+                fields.Section("arr.formats", section =>
+                {
+                    section.Number(item => item.MinimumFormatScore, "arr.minimumScore");
+                    section.Number(item => item.CutoffFormatScore, "arr.cutoffScore");
+                    section.Number(item => item.MinimumUpgradeFormatScore, "arr.upgradeScore");
+                    section.Rows(item => item.FormatScores, (row, score) =>
+                    {
+                        row.Hidden(item => item.FormatId);
+                        if (_formats?.Items.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
+                        {
+                            row.Content(new P(new ValueText(named.Name)));
+                            row.Number(item => item.Score, "wanted.search.score");
+                            row.Content(Draft("common.remove", "removeFormatId", score.FormatId.ToString(CultureInfo.InvariantCulture)));
+                        }
+                        else row.Hidden(item => item.Score);
+                    });
+                    if (_formats is { } pageOfFormats)
+                    {
+                        section.Content(new Table<CustomFormatDetailsV1>(pageOfFormats.Items.Where(format => !input.FormatScores.Any(score => score.FormatId == format.Id)).ToArray())
+                            .Text(format => format.Name, "profile.name")
+                            .Content("common.actions", format => Draft("collections.add", "addFormatId", format.Id.ToString(CultureInfo.InvariantCulture))));
+                        if (pageOfFormats.Page > 1) section.Content(Draft("common.previous", "formatPage", (pageOfFormats.Page - 1).ToString(CultureInfo.InvariantCulture)));
+                        if (pageOfFormats.Items.Count == pageOfFormats.PageSize) section.Content(Draft("common.next", "formatPage", (pageOfFormats.Page + 1).ToString(CultureInfo.InvariantCulture)));
+                    }
+                });
+                fields.Section("profile.section.size", section =>
                 {
                     section.Number(item => item.MinimumSizeMb, "profile.minimumSize");
                     section.Number(item => item.MaximumSizeMb, "profile.maximumSize");
-                    section.Text(item => item.MustContain, "profile.mustContain");
-                    section.Text(item => item.MustNotContain, "profile.mustNotContain");
                 });
-                form.Submit("common.save");
-            }, Address(), csrf, input, _input is null ? null : FormError);
-        }
-
-        // What a takeover brought from Lidarr's or Readarr's metadata profile.
-        private static List<IUiComponent> Monitoring(AcquisitionProfileDetailsV1 profile)
-        {
-            var rows = new List<IUiComponent>();
-            if (profile.MonitoredTypes.Length > 0) rows.AddRange([new Dt(new Text("profile.monitoring.types")), new Dd(new ValueText(string.Join(", ", profile.MonitoredTypes)))]);
-            if (profile.MonitoredLanguages.Length > 0) rows.AddRange([new Dt(new Text("profile.monitoring.languages")), new Dd(new ValueText(string.Join(", ", profile.MonitoredLanguages)))]);
-            if (profile.MinimumPages is { } pages) rows.AddRange([new Dt(new Text("profile.monitoring.pages")), new Dd(new ValueText(pages.ToString(CultureInfo.CurrentCulture)))]);
-            return rows;
-        }
-
-        // Require and Reject decide, Prefer and Avoid score, Info only names a match.
-        private IUiComponent RulesTable(AcquisitionProfileDetailsV1 profile, string? csrf) => _rules.Count == 0 ? new P(new Text("profile.rule.none"))
-            : new Table<ReleaseRuleV1>(_rules)
-                .Text(rule => rule.Name, "profile.rule.name")
-                .Content("profile.rule.condition", rule => new Span(new Text("profile.rule.field." + rule.Field), new ValueText(" "), new Text("profile.rule.match." + rule.Match),
-                    new ValueText(" " + rule.Value)))
-                .Content("profile.rule.effect", rule => new Span(new Text("profile.rule.effect." + rule.Effect),
-                    new ValueText(rule.Score == 0 ? "" : " " + rule.Score.ToString("+0;-0", CultureInfo.InvariantCulture))))
-                .Content("common.actions", rule => new Div(
-                    new A(new Text("common.edit")).Class("button").Attribute("href", Address() + "?rule=" + rule.Id.ToString(CultureInfo.InvariantCulture)),
-                    new Form<ReleaseRuleParametersV1>(form =>
-                    {
-                        form.Hidden(item => item.Version);
-                        form.Submit("profile.rule.remove", rule.Name, valueHidden: true);
-                    }, Address(handler: "RemoveRule") + "&ruleId=" + rule.Id.ToString(CultureInfo.InvariantCulture), csrf,
-                        new ReleaseRuleParametersV1(profile.Id, rule.Id, profile.Version))).Class("page-actions"));
-
-        // A new rule, or the chosen one in place.
-        private IUiComponent RuleForm(AcquisitionProfileDetailsV1 profile, string? csrf)
-        {
-            var edited = RuleId is { } ruleId ? _rules.FirstOrDefault(rule => rule.Id == ruleId) : null;
-            var input = _ruleInput ?? (edited is { } rule
-                ? new SaveReleaseRuleDataV1(rule.Name, rule.Field, rule.Match, rule.Value, rule.Effect, Math.Abs(rule.Score), profile.Version)
-                : new SaveReleaseRuleDataV1("", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "", ReleaseRuleEffect.Prefer, 10, profile.Version));
-            return new Form<SaveReleaseRuleDataV1>(form =>
-            {
-                form.Hidden(item => item.Version);
-                form.Section(edited is null ? "request.rule.add" : "profile.rule.edit", section =>
+                if (_profile is { } imported && (imported.MonitoredTypes.Length > 0 || imported.MonitoredLanguages.Length > 0 || imported.MinimumPages is not null))
                 {
-                    section.Text(item => item.Name, "profile.rule.name");
-                    section.Select(item => item.Field, "profile.rule.field", Options<ReleaseRuleField>("profile.rule.field."));
-                    section.Select(item => item.Match, "profile.rule.match", Options<ReleaseRuleMatch>("profile.rule.match."));
-                    section.Text(item => item.Value, "profile.rule.value");
-                    section.Select(item => item.Effect, "profile.rule.effect", Options<ReleaseRuleEffect>("profile.rule.effect."));
-                    section.Number(item => item.Score, "wanted.search.score");
-                });
-                form.Submit(edited is null ? "collections.add" : "common.save");
-            }, Address(handler: "Rule") + (edited is null ? "" : "&rule=" + edited.Id.ToString(CultureInfo.InvariantCulture)), csrf, input, _ruleInput is null ? null : FormError);
+                    fields.Section("profile.monitoring", section =>
+                    {
+                        if (imported.MonitoredTypes.Length > 0) section.Content(new P(new Text("profile.monitoring.types"), new ValueText(": " + string.Join(", ", imported.MonitoredTypes))));
+                        if (imported.MonitoredLanguages.Length > 0) section.Content(new P(new Text("profile.monitoring.languages"), new ValueText(": " + string.Join(", ", imported.MonitoredLanguages))));
+                        if (imported.MinimumPages is { } pages) section.Content(new P(new Text("profile.monitoring.pages"), new ValueText(": " + pages.ToString(CultureInfo.InvariantCulture))));
+                    });
+                }
+                fields.Submit("common.save");
+            }, Address(), token, input, FormError);
+            page.Content.Add(form);
+            if (_profile is { } saved && !saved.IsDefault)
+            {
+                page.Content.Add(new Details(new Summary(new Text("profile.deleteConfirm")), new Form<DeleteAcquisitionProfileParametersV1>(fields =>
+                {
+                    fields.Hidden(item => item.Version);
+                    fields.Submit("profile.delete");
+                }, Address("Delete"), token, new DeleteAcquisitionProfileParametersV1(saved.Id, saved.Version), _input is null ? FormError : null)));
+            }
         }
 
-        // Catalog values travel as their numbers, like the form shows the stored one.
-        private SelectOption[] Options<TEnum>(string prefix) where TEnum : struct, Enum =>
-            [.. Enum.GetValues<TEnum>().Select(value => new SelectOption(Convert.ToByte(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture), texts[prefix + value]))];
+        private IUiComponent Draft(string key, string command, string value) => new Button(new Text(key)).Attribute("type", "submit").Attribute("formaction", Address("Draft"))
+            .Attribute("formnovalidate", "formnovalidate").Attribute("name", command).Attribute("value", value);
 
-        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType mediaType, MediaSubtype? subtype) => new("", mediaType, false,
-            ProfileQualities.StartingQualities(mediaType, subtype), ProfileQualities.StartingCutoff(mediaType) is not null, ProfileQualities.StartingCutoff(mediaType), null, null, [], [], null, subtype);
+        private static SaveAcquisitionProfileDataV1 FromProfile(AcquisitionProfileDetailsV1 profile) => new(profile.Name, profile.MediaTypeId, profile.IsDefault, profile.AllowedQualities,
+            profile.UpgradeAllowed, profile.UpgradeCutoffQuality, profile.MinimumSizeMb, profile.MaximumSizeMb, profile.Version, profile.MediaSubtypeId, profile.QualityOrder,
+            profile.QualityGroups, profile.FormatScores, profile.MinimumFormatScore, profile.CutoffFormatScore, profile.MinimumUpgradeFormatScore);
+
+        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType type, MediaSubtype? subtype) => new("", type, false, ProfileQualities.StartingQualities(type, subtype),
+            ProfileQualities.StartingCutoff(type) is not null, ProfileQualities.StartingCutoff(type), null, null, null, subtype);
+
+        private SaveAcquisitionProfileDataV1 Posted() => new(Name ?? "", MediaTypeId, IsDefault, AllowedQualities ?? [], UpgradeAllowed, UpgradeCutoffQuality, MinimumSizeMb,
+            MaximumSizeMb, Version, MediaSubtypeId, Terms(QualityOrder), new(QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name ?? "", Terms(group.Qualities)))),
+            new(FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -178,69 +160,60 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? name, [BindRequired] bool isDefault, string[]? allowedQualities,
-            [BindRequired] bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, string? mustContain, string? mustNotContain, long? version, int? delayMinutes,
-            string[]? fallbackQualities, int? fallbackAfterHours)
+        public async Task<IActionResult> OnPostAsync()
         {
-            _input = new SaveAcquisitionProfileDataV1(name ?? "", mediaTypeId, isDefault, allowedQualities ?? [], upgradeAllowed, upgradeCutoffQuality, minimumSizeMb, maximumSizeMb,
-                Terms(mustContain), Terms(mustNotContain), version, mediaSubtypeId, delayMinutes ?? 0, fallbackQualities, fallbackAfterHours);
-            if (ProfileId is { } existing)
-            {
-                await update.ExecuteAsync<UpdateResult>(new AcquisitionProfileParametersV1(existing), _input, HttpContext.RequestAborted);
-                return LocalRedirect(Address());
-            }
-
-            var created = await create.ExecuteAsync<CreateAcquisitionProfileResultV1>(new CreateAcquisitionProfileParametersV1(), _input, HttpContext.RequestAborted);
-            Id = created.Id.ToString(CultureInfo.InvariantCulture);
-            return LocalRedirect(Address());
-        }
-
-        public async Task<IActionResult> OnPostRuleAsync([BindRequired] ReleaseRuleField field, [BindRequired] ReleaseRuleMatch match, [BindRequired] ReleaseRuleEffect effect,
-            [BindRequired] long version, string? name, string? value, int? score)
-        {
-            var id = SelectedId();
-            _ruleInput = new SaveReleaseRuleDataV1(name ?? "", field, match, value ?? "", effect, score ?? 0, version);
-            if (RuleId is { } ruleId)
-            {
-                await updateRule.ExecuteAsync<UpdateResult>(new ReleaseRuleKeyParametersV1(id, ruleId), _ruleInput, HttpContext.RequestAborted);
-            }
+            _input = Posted();
+            if (ProfileId is { } id) await update.ExecuteAsync<UpdateResult>(new AcquisitionProfileParametersV1(id), _input, HttpContext.RequestAborted);
             else
             {
-                await addRule.ExecuteAsync<UpdateResult>(new AcquisitionProfileParametersV1(id), _ruleInput, HttpContext.RequestAborted);
+                var created = await create.ExecuteAsync<CreateAcquisitionProfileResultV1>(new CreateAcquisitionProfileParametersV1(), _input, HttpContext.RequestAborted);
+                Id = created.Id.ToString(CultureInfo.InvariantCulture);
             }
 
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostRemoveRuleAsync([BindRequired] int ruleId, [BindRequired] long version)
+        public async Task<IActionResult> OnPostDraftAsync(bool addGroup, long? addFormatId, long? removeFormatId, long? removeGroupId, bool refreshGroups, string? moveUp, string? moveDown)
         {
-            await deleteRule.ExecuteAsync<UpdateResult>(new ReleaseRuleParametersV1(SelectedId(), ruleId, version), default, HttpContext.RequestAborted);
-            return LocalRedirect(Address());
+            if (addGroup && QualityGroups.Count < 32) QualityGroups.Add(new GroupRow(Enumerable.Range(1, 33).Select(value => (long)value).First(id => !QualityGroups.Any(group => group.Id == id)), null, null));
+            if (removeGroupId is { } removedGroup) QualityGroups.RemoveAll(group => group.Id == removedGroup);
+            if (removeFormatId is { } removed) FormatScores.RemoveAll(score => score.FormatId == removed);
+            _input = Posted();
+            await LoadDataAsync();
+            if (addFormatId is { } added && !FormatScores.Any(score => score.FormatId == added))
+            {
+                var format = await readFormat.ExecuteAsync<CustomFormatDetailsV1>(new CustomFormatParametersV1(added), HttpContext.RequestAborted);
+                if (format.MediaTypeId != Scope) throw new KeyNotFoundException("The format does not belong to this media type.");
+                FormatScores.Add(new ScoreRow(added, 0));
+            }
+
+            var order = DisplayOrder(_input).ToList();
+            var moved = moveUp ?? moveDown;
+            if (moved is not null && order.IndexOf(moved) is >= 0 and var position)
+            {
+                var target = Math.Clamp(position + (moveUp is null ? 1 : -1), 0, order.Count - 1);
+                (order[position], order[target]) = (order[target], order[position]);
+            }
+
+            QualityOrder = string.Join(", ", order);
+            _input = Posted();
+            PreparePage();
+            return Page();
         }
 
-        public async Task<IActionResult> OnPostDeleteAsync([BindRequired] long version)
+        public async Task<IActionResult> OnPostDeleteAsync(long version)
         {
-            await delete.ExecuteAsync<UpdateResult>(new DeleteAcquisitionProfileParametersV1(SelectedId(), version), default, HttpContext.RequestAborted);
-            return LocalRedirect(ProfilesModel.Home(Request));
+            await LoadDataAsync();
+            await delete.ExecuteAsync<UpdateResult>(new DeleteAcquisitionProfileParametersV1(ProfileId ?? throw new KeyNotFoundException(), version), default, HttpContext.RequestAborted);
+            return LocalRedirect(AcquisitionSettingsNavigation.Address(Request, "profiles", Scope));
         }
 
         protected override async Task LoadDataAsync()
         {
-            if (ProfileId is { } id)
-            {
-                var all = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), HttpContext.RequestAborted);
-                _profile = all.FirstOrDefault(profile => profile.Id == id) ?? throw new KeyNotFoundException("The profile was not found.");
-                _rules = await readRules.ExecuteAsync<BaseDataList<ReleaseRuleV1>>(new AcquisitionProfileParametersV1(id), HttpContext.RequestAborted);
-            }
-            else if (Id != NewId || NewType is not { } type || !ProfilesModel.Kinds.Contains((type, NewSubtype)))
-            {
-                throw new KeyNotFoundException("The profile was not found.");
-            }
+            if (ProfileId is { } id) _profile = await read.ExecuteAsync<AcquisitionProfileDetailsV1>(new AcquisitionProfileParametersV1(id), HttpContext.RequestAborted);
+            else if (Id != NewId || NewType is not { } type || !ProfilesModel.Kinds.Contains((type, NewSubtype))) throw new KeyNotFoundException("The profile was not found.");
+            _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(Scope, FormatPage, 25), HttpContext.RequestAborted);
         }
-
-        private long SelectedId() => ProfileId ?? throw new KeyNotFoundException("No profile was selected.");
-
-        private static string[] Terms(string? value) => value is null ? [] : [.. value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
 
         private string Address(string? handler = null)
         {
@@ -248,5 +221,18 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             if (ProfileId is null && NewType is { } type) address += "?type=" + type + (NewSubtype is { } subtype ? "&subtype=" + subtype : "");
             return handler is null ? address : address + (address.Contains('?') ? "&" : "?") + "handler=" + handler;
         }
+
+        private static string[] Terms(string? value) => value is null ? [] : value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        private static string[] DisplayOrder(SaveAcquisitionProfileDataV1 input)
+        {
+            var groups = input.QualityGroups.Where(group => !string.IsNullOrWhiteSpace(group.Name) && group.Qualities.Length > 0).ToArray();
+            var grouped = groups.SelectMany(group => group.Qualities).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var available = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId).Where(quality => !grouped.Contains(quality)).Concat(groups.Select(group => group.Key)).ToArray();
+            return input.QualityOrder.Select(quality => groups.FirstOrDefault(group => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))?.Key ?? quality)
+                .Where(available.Contains).Concat(available).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
+        public sealed record GroupRow(long Id, string? Name, string? Qualities);
+        public sealed record ScoreRow(long FormatId, int Score);
     }
 }

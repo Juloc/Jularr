@@ -100,6 +100,7 @@ namespace Jularr.Integrations.Data.Newznab
         public string? InfoUrl { get; }
         public long? SizeBytes { get; }
         public DateTimeOffset? PublishedAt { get; }
+        public IReadOnlyList<string> IndexerFlags { get; init; } = [];
     }
 
     internal enum NewznabFailure : byte

@@ -25,17 +25,17 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void NamingPattern_EmptyPlaceholders_DropWithTheirBrackets()
         {
-            var episode = new NamingValues("Show: Part", 2020, 1, 2.5m, "Pilot", "WEB-1080p", "GRP", null, 2);
-            Assert.AreEqual("Show Part/Season 01/Show Part - S01E02.5 [WEB-1080p]", NamingPattern.Apply(Defaults[MediaType.Series], episode));
-            Assert.AreEqual("Show Part (2020)/S01E02.5 - Pilot [WEB-1080p Proper] - GRP",
+            var episode = new NamingValues("Show: Part", 2020, 1, 2.5m, "Pilot", "WEBDL-1080p", "GRP", null, 2);
+            Assert.AreEqual("Show Part/Season 01/Show Part - S01E02.5 [WEBDL-1080p]", NamingPattern.Apply(Defaults[MediaType.Series], episode));
+            Assert.AreEqual("Show Part (2020)/S01E02.5 - Pilot [WEBDL-1080p Proper] - GRP",
                 NamingPattern.Apply("{Title} ({Year})/S{Season:00}E{Episode:00} - {Episode Title} [{Quality} {Proper}] - {Release Group}", episode));
 
             // Nothing known leaves no empty brackets or separators.
             var bare = new NamingValues("Film", null, null, null, null, null, null, null, 1);
             Assert.AreEqual("Film/Film", NamingPattern.Apply(Defaults[MediaType.Movie], bare));
             Assert.AreEqual("Film", NamingPattern.Apply("{Title} - {Edition} [{Release Group}]", bare));
-            Assert.AreEqual("Film - GRP [WEB-1080p]", NamingPattern.Apply("{Title} - {Edition} - {Release Group} [{Quality} {Proper}]",
-                new NamingValues("Film", null, null, null, null, "WEB-1080p", "GRP", null, 1)));
+            Assert.AreEqual("Film - GRP [WEBDL-1080p]", NamingPattern.Apply("{Title} - {Edition} - {Release Group} [{Quality} {Proper}]",
+                new NamingValues("Film", null, null, null, null, "WEBDL-1080p", "GRP", null, 1)));
             Assert.AreEqual("Film", NamingPattern.Apply("{Edition}/{Title}", bare));
 
             // Titles keep what the cleanup would cut; values cannot open folders.
@@ -69,8 +69,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             var series = (await read.Content.ReadFromJsonAsync<BaseDataList<NamingPatternV1>>())!.Single(pattern => pattern.MediaTypeId == MediaType.Series);
             Assert.AreEqual(Defaults[MediaType.Series], series.Folder + "/" + series.File);
-            Assert.AreEqual("Example Show/Season 01/Example Show - S01E02 [WEB-1080p].mkv", series.Example);
-            StringAssert.Contains(html, "Example Show/Season 01/Example Show - S01E02 [WEB-1080p].mkv");
+            Assert.AreEqual("Example Show/Season 01/Example Show - S01E02 [WEBDL-1080p].mkv", series.Example);
+            StringAssert.Contains(html, "Example Show/Season 01/Example Show - S01E02 [WEBDL-1080p].mkv");
 
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}/S{Season:00}", "{Title} S{Season:00}E{Episode:00}", series.Version));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());

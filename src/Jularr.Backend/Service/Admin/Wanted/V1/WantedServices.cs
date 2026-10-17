@@ -123,6 +123,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
+                    ARRAY(SELECT tagged."TagId" FROM "WorkTags" AS tagged WHERE tagged."WorkId" = wanted_page."WorkId" ORDER BY tagged."TagId") AS "TagIds",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
                     wanted_page."MediaTypeId" = 2 OR wanted_page."MediaSubtypeId" IS NOT DISTINCT FROM 2 AS "HasUnits",
@@ -212,6 +213,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
+                    ARRAY(SELECT tagged."TagId" FROM "WorkTags" AS tagged WHERE tagged."WorkId" = wanted_page."WorkId" ORDER BY tagged."TagId") AS "TagIds",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
                     wanted_page."MediaTypeId" = 2 OR wanted_page."MediaSubtypeId" IS NOT DISTINCT FROM 2 AS "HasUnits",
@@ -339,7 +341,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.MonitorsNewUnits, Data.Version), CancellationToken);
+            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.MonitorsNewUnits, Data.Version, Data.TagIds), CancellationToken);
             return new UpdateResult(true);
         }
     }

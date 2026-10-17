@@ -1,0 +1,18 @@
+.acquisition-settings {
+    display: grid;
+    gap: 1rem;
+    margin-block-end: 1rem;
+
+    &__scope {
+        width: fit-content;
+
+        summary { cursor: pointer; }
+
+        > div {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            padding-block: .75rem;
+        }
+    }
+}

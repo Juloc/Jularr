@@ -162,7 +162,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     continue;
                 }
 
-                var facts = ReleaseFacts.OfPath(file.RelativePath);
+                var facts = ReleaseFacts.OfPath(file.RelativePath, root.MediaTypeId == MediaType.Movie);
                 batch.Add(new ScannedFile(file.RelativePath, file.SizeBytes, file.ModifiedAt, facts?.ReleaseName, facts?.ReleaseGroup, facts?.QualityKey, facts?.Edition, facts?.Revision ?? 1));
                 if (batch.Count == BatchSize)
                 {

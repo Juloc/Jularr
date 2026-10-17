@@ -15,13 +15,15 @@ namespace Jularr.Backend.Logic.Acquisition
                 .Select(candidate => Evaluate(profile, candidate))
                 .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
-                .ThenBy(evaluation => LanguageRank(profile, evaluation.Candidate))
-                .ThenByDescending(evaluation => evaluation.PreferenceScore)
+                .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)
+                .ThenBy(evaluation => UpgradePolicy.LanguageRank(profile, evaluation.Candidate.Languages))
+                .ThenByDescending(evaluation => evaluation.Candidate.ContextScore)
                 .ThenBy(evaluation => evaluation.Candidate.Identity.Confidence)
                 .ThenByDescending(evaluation => evaluation.Candidate.Coverage.Utility)
                 .ThenByDescending(evaluation => evaluation.ReliabilityPoints)
                 .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenByDescending(evaluation => evaluation.Candidate.PublishedAt)
+                .ThenBy(evaluation => PreferredDistance(profile, evaluation))
                 .ThenBy(evaluation => evaluation.Candidate.Id, StringComparer.Ordinal)
                 .ToArray();
 
@@ -30,22 +32,12 @@ namespace Jularr.Backend.Logic.Acquisition
             return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(profile, winner, runnerUp), OutcomeOf(ranked));
         }
 
-        // The best position any language of the candidate has in the profile's language order; a candidate that states no language sits after the listed ones
-        // and one that only has other languages after that. Without a language order the layer decides nothing.
-        private static int LanguageRank(QualityProfile profile, SelectionCandidate candidate)
-        {
-            if (profile.LanguageOrder.Length == 0)
-            {
-                return 0;
-            }
-
-            var best = candidate.Languages
-                .Select(language => Array.FindIndex(profile.LanguageOrder, wanted => language.StartsWith(wanted, StringComparison.OrdinalIgnoreCase) || wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase)))
-                .Where(index => index >= 0)
-                .DefaultIfEmpty(-1)
-                .Min();
-            return best >= 0 ? best : candidate.Languages.Count == 0 ? profile.LanguageOrder.Length : profile.LanguageOrder.Length + 1;
-        }
+        // Closer to the preferred size wins a tie, as in Sonarr.
+        private static decimal PreferredDistance(QualityProfile profile, CandidateEvaluation evaluation) =>
+            profile.RuntimeMinutes is { } minutes && evaluation.Candidate.SizeBytes is { } bytes && evaluation.Score?.QualityKey is { } quality
+            && profile.Sizes.TryGetValue(quality, out var size) && size.Preferred is { } preferred
+                ? Math.Abs(bytes / 1_048_576m - preferred * minutes)
+                : decimal.MaxValue;
 
         private static CandidateEvaluation Evaluate(QualityProfile profile, SelectionCandidate candidate)
         {
@@ -64,7 +56,8 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             // The score is computed for every parsed candidate so Manual Search can show it, but it is only consulted after identity.
-            var score = ReleaseScorer.Score(profile, new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id));
+            var score = ReleaseScorer.Score(profile, new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id)
+                { IndexerId = candidate.IndexerId, IndexerFlags = candidate.IndexerFlags, Languages = candidate.Languages.Count > 0 ? candidate.Languages : null });
             reasons.Add(new SelectionReason(SelectionReasonKind.Identity, candidate.Identity.Code, candidate.Identity.Value));
             if (candidate.Identity.Confidence == IdentityConfidence.Conflict)
             {
@@ -82,7 +75,8 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             // What is no upgrade of the present quality is only taken by hand, as another version.
-            if (candidate.InstalledQuality is { } installed && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey))
+            if (candidate.InstalledQuality is { } installed && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey, false,
+                candidate.InstalledFormatScore, score.FormatScore, candidate.InstalledLanguages, candidate.Languages))
             {
                 reasons.Add(new SelectionReason(SelectionReasonKind.Quality, "NotAnUpgrade", installed));
                 return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
@@ -128,7 +122,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseReason("HigherQuality", winner.Score!.QualityKey);
             }
 
-            if (LanguageRank(profile, winner.Candidate) != LanguageRank(profile, runnerUp.Candidate))
+            if (winner.Score?.FormatScore != runnerUp.Score?.FormatScore)
+            {
+                return new ReleaseReason("HigherPreference", winner.Score!.FormatScore.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            if (UpgradePolicy.LanguageRank(profile, winner.Candidate.Languages) != UpgradePolicy.LanguageRank(profile, runnerUp.Candidate.Languages))
             {
                 return new ReleaseReason("PreferredLanguage");
             }

@@ -97,6 +97,46 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"\bHDTV\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex HdtvRegex();
 
+        // A bare WEB is a web download, as scene names write it.
+        [GeneratedRegex(@"\bWEB\b(?![ ._-]?(?:DL|RIP|SCR))", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex WebRegex();
+
+        [GeneratedRegex(@"\b(?:DVD(?:[ ._-]?RIP)?|DVD[ ._-]?R|DVD[ ._-]?[59]|DVDISO|NTSC|PAL)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex DvdRegex();
+
+        [GeneratedRegex(@"\b(?:DVD[ ._-]?R|DVD[ ._-]?[59]|DVDISO)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex DvdDiscRegex();
+
+        [GeneratedRegex(@"\b(?:SDTV|PDTV|DSR(?:IP)?|TV[ ._-]?RIP|DVB(?:[ ._-]?RIP)?|SAT[ ._-]?RIP)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex SdtvRegex();
+
+        [GeneratedRegex(@"\b(?:CAM(?:[ ._-]?RIP)?|HD[ ._-]?CAM)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex CamRegex();
+
+        [GeneratedRegex(@"\b(?:TELESYNC|HD[ ._-]?TS|PDVD|TS)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex TelesyncRegex();
+
+        [GeneratedRegex(@"\b(?:TELECINE|HD[ ._-]?TC)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex TelecineRegex();
+
+        [GeneratedRegex(@"\bWORKPRINT\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex WorkprintRegex();
+
+        [GeneratedRegex(@"\b(?:DVD[ ._-]?SCR|BD[ ._-]?SCR|WEB[ ._-]?SCR(?:EENER)?|SCREENER|SCR)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex ScreenerRegex();
+
+        [GeneratedRegex(@"\bREMUX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex RemuxRegex();
+
+        [GeneratedRegex(@"\b(?:COMPLETE[ ._-]?(?:UHD[ ._-]?)?BLU[ ._-]?RAY|BDMV|BD[ ._-]?(?:25|50|66|100)|AVC[ ._-]?BD)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex BrDiskRegex();
+
+        [GeneratedRegex(@"\b(?:RAW[ ._-]?HD|MPEG[ ._-]?2)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex RawHdRegex();
+
+        [GeneratedRegex(@"\bR[56]\b", RegexOptions.CultureInvariant)]
+        private static partial Regex RegionalRegex();
+
         [GeneratedRegex(@"\bAV1\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
         private static partial Regex Av1Regex();
 
@@ -417,8 +457,28 @@ namespace Jularr.Backend.Logic.Acquisition
                 imdbId,
                 BuildReleaseKey(rawTitle),
                 confidence,
-                evidence);
+                evidence)
+            {
+                Modifier = DetectModifier(rawTitle, source),
+                Edition = EditionTag().Match(rawTitle[TitleEnd(rawTitle, numberingMatch)..]) is { Success: true } edition ? edition.Value.Replace('.', ' ').Replace('_', ' ') : null,
+                Languages = ReleaseLanguages.Read(rawTitle[TitleEnd(rawTitle, numberingMatch)..], audioLanguages)
+            };
         }
+
+        // Edition tags belong to the technical tail, after the title.
+        [GeneratedRegex(@"(?<![A-Za-z])(Director'?s[ ._]Cut|Extended(?:[ ._](?:Cut|Edition))?|Unrated|Uncut|Theatrical(?:[ ._]Cut)?|Remastered|IMAX|Special[ ._]Edition|Ultimate[ ._](?:Cut|Edition)|Criterion)(?![A-Za-z])", RegexOptions.IgnoreCase)]
+        private static partial Regex EditionTag();
+
+        // Where the title ends: at its numbering, a year or the first technical word.
+        private static int TitleEnd(string rawTitle, Match? numberingMatch)
+        {
+            var year = YearTokenRegex().Match(rawTitle);
+            return new[] { numberingMatch is { Success: true } ? numberingMatch.Index : rawTitle.Length, year.Success ? year.Index : rawTitle.Length,
+                FindTechnicalSuffixStart(rawTitle) }.Min();
+        }
+
+        [GeneratedRegex(@"(?<=[ ._(\[])(?:19|20)\d{2}(?=[ ._)\]]|$)", RegexOptions.CultureInvariant)]
+        private static partial Regex YearTokenRegex();
 
         private static string ExtractSeriesTitle(string rawTitle, Match leadingGroup, Match? numberingMatch)
         {
@@ -454,23 +514,34 @@ namespace Jularr.Backend.Logic.Acquisition
             return matches.Where(match => match.Success).Select(match => match.Index).DefaultIfEmpty(rawTitle.Length).Min();
         }
 
+        // Copies made before a home release name themselves first; a screener is a DVD source.
         private static (ReleaseSource Source, Match Match) DetectSource(string value)
         {
-            var match = WebDlRegex().Match(value);
-            if (match.Success) return (ReleaseSource.WebDl, match);
+            foreach (var (regex, source) in new (Regex, ReleaseSource)[]
+            {
+                (WorkprintRegex(), ReleaseSource.Workprint), (CamRegex(), ReleaseSource.Cam), (TelecineRegex(), ReleaseSource.Telecine), (TelesyncRegex(), ReleaseSource.Telesync),
+                (ScreenerRegex(), ReleaseSource.Dvd), (WebDlRegex(), ReleaseSource.WebDl), (WebRipRegex(), ReleaseSource.WebRip), (WebRegex(), ReleaseSource.WebDl),
+                (BluRayRipRegex(), ReleaseSource.BluRayRip), (BluRayRegex(), ReleaseSource.BluRay), (BrDiskRegex(), ReleaseSource.BluRay), (DvdRegex(), ReleaseSource.Dvd),
+                (SdtvRegex(), ReleaseSource.Sdtv), (HdtvRegex(), ReleaseSource.Hdtv)
+            })
+            {
+                var match = regex.Match(value);
+                if (match.Success)
+                {
+                    return (source, match);
+                }
+            }
 
-            match = WebRipRegex().Match(value);
-            if (match.Success) return (ReleaseSource.WebRip, match);
-
-            match = BluRayRipRegex().Match(value);
-            if (match.Success) return (ReleaseSource.BluRayRip, match);
-
-            match = BluRayRegex().Match(value);
-            if (match.Success) return (ReleaseSource.BluRay, match);
-
-            match = HdtvRegex().Match(value);
-            return match.Success ? (ReleaseSource.Hdtv, match) : (ReleaseSource.Unknown, Match.Empty);
+            return (ReleaseSource.Unknown, Match.Empty);
         }
+
+        private static ReleaseQualityModifier DetectModifier(string value, ReleaseSource source) =>
+            ScreenerRegex().IsMatch(value) ? ReleaseQualityModifier.Screener
+            : BrDiskRegex().IsMatch(value) && !RemuxRegex().IsMatch(value) ? ReleaseQualityModifier.BrDisk
+            : RemuxRegex().IsMatch(value) || source == ReleaseSource.Dvd && DvdDiscRegex().IsMatch(value) ? ReleaseQualityModifier.Remux
+            : RawHdRegex().IsMatch(value) ? ReleaseQualityModifier.RawHd
+            : RegionalRegex().IsMatch(value) ? ReleaseQualityModifier.Regional
+            : ReleaseQualityModifier.None;
 
         private static (ReleaseVideoCodec Codec, Match Match) DetectVideoCodec(string value)
         {
@@ -621,6 +692,9 @@ namespace Jularr.Backend.Logic.Acquisition
             BluRayRegex().IsMatch(value) ||
             BluRayRipRegex().IsMatch(value) ||
             HdtvRegex().IsMatch(value) ||
+            WebRegex().IsMatch(value) ||
+            RemuxRegex().IsMatch(value) ||
+            DvdRegex().IsMatch(value) ||
             Av1Regex().IsMatch(value) ||
             HevcRegex().IsMatch(value) ||
             AvcRegex().IsMatch(value);

@@ -1,17 +1,30 @@
 using Jularr.Backend.Data.Enums.Media;
+using System.Globalization;
 
 namespace Jularr.Backend.Data.Enums.Acquisition
 {
-    // Video quality keys from source and resolution, best first.
-    public static class VideoQualities
+    // Sonarr's qualities for series, best first.
+    public static class SeriesQualities
     {
         public static IReadOnlyList<string> Order { get; } =
         [
-            "BLURAY-2160p", "WEB-2160p", "HDTV-2160p",
-            "BLURAY-1080p", "WEB-1080p", "HDTV-1080p",
-            "BLURAY-720p", "WEB-720p", "HDTV-720p",
-            "BLURAY-576p", "WEB-576p", "HDTV-576p",
-            "BLURAY-480p", "WEB-480p", "HDTV-480p"
+            "Bluray-2160p Remux", "Bluray-2160p", "WEBDL-2160p", "WEBRip-2160p", "HDTV-2160p",
+            "Bluray-1080p Remux", "Bluray-1080p", "WEBDL-1080p", "WEBRip-1080p", "HDTV-1080p", "Raw-HD",
+            "Bluray-720p", "WEBDL-720p", "WEBRip-720p", "HDTV-720p",
+            "Bluray-576p", "Bluray-480p", "WEBDL-480p", "WEBRip-480p", "DVD", "SDTV", "Unknown"
+        ];
+    }
+
+    // Radarr's qualities for films, best first.
+    public static class MovieQualities
+    {
+        public static IReadOnlyList<string> Order { get; } =
+        [
+            "Remux-2160p", "Bluray-2160p", "WEBDL-2160p", "WEBRip-2160p", "HDTV-2160p",
+            "Remux-1080p", "Bluray-1080p", "WEBDL-1080p", "WEBRip-1080p", "HDTV-1080p", "Raw-HD",
+            "Bluray-720p", "WEBDL-720p", "WEBRip-720p", "HDTV-720p", "BR-DISK",
+            "Bluray-576p", "Bluray-480p", "WEBDL-480p", "WEBRip-480p", "DVD-R", "DVD", "SDTV",
+            "DVDSCR", "REGIONAL", "TELECINE", "TELESYNC", "CAM", "WORKPRINT", "Unknown"
         ];
     }
 
@@ -41,21 +54,24 @@ namespace Jularr.Backend.Data.Enums.Acquisition
 
     public static class ProfileQualities
     {
+        public static string Group(long id) => "group:" + id.ToString(CultureInfo.InvariantCulture);
+
         // Media types with release qualities; empty means no profiles.
         public static IReadOnlyList<string> For(MediaType mediaType, MediaSubtype? subtype) => mediaType switch
         {
-            MediaType.Movie or MediaType.Series => VideoQualities.Order,
+            MediaType.Movie => MovieQualities.Order,
+            MediaType.Series => SeriesQualities.Order,
             MediaType.Book => subtype == MediaSubtype.Manga ? MangaQualities.Order : BookQualities.Order,
             MediaType.Music => MusicQualities.Order,
             MediaType.Game => GameQualities.Order,
             _ => []
         };
 
-        // A new profile starts with Blu-ray and web in 1080p and upgrades up to web; other kinds with their best format and no upgrades.
+        // A new profile starts like Sonarr's and Radarr's HD-1080p and upgrades up to a web download; other kinds with their best format and no upgrades.
         public static string[] StartingQualities(MediaType mediaType, MediaSubtype? subtype) => mediaType is MediaType.Movie or MediaType.Series
-            ? ["WEB-1080p", "BLURAY-1080p"]
+            ? ["Bluray-1080p", "WEBDL-1080p", "WEBRip-1080p", "HDTV-1080p"]
             : For(mediaType, subtype).Take(1).ToArray();
 
-        public static string? StartingCutoff(MediaType mediaType) => mediaType is MediaType.Movie or MediaType.Series ? "WEB-1080p" : null;
+        public static string? StartingCutoff(MediaType mediaType) => mediaType is MediaType.Movie or MediaType.Series ? "WEBDL-1080p" : null;
     }
 }

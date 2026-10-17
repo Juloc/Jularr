@@ -71,6 +71,17 @@ namespace Jularr.Backend.Tests
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Takeover");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
+
+            // Hidden source keys are completed inline and protected at rest; they never return in the result.
+            using var keyed = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(TakeoverSourceType.Radarr, "http://radarr.example.test:7878", RadarrKey, true,
+                connectionKeys: new([
+                    new TakeoverConnectionKeyV1(TakeoverItemType.Indexer, "https://hidden.example.test", "inline-indexer-secret"),
+                    new TakeoverConnectionKeyV1(TakeoverItemType.Client, "http://sab.example.test:8080", "inline-client-secret")
+                ])));
+            Assert.AreEqual(HttpStatusCode.OK, keyed.StatusCode, await keyed.Content.ReadAsStringAsync());
+            Assert.IsFalse((await keyed.Content.ReadAsStringAsync()).Contains("inline-", StringComparison.Ordinal));
+            Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\" WHERE \"Name\" IN ('Hidden', 'SAB') AND \"ProtectedApiKey\" IS NOT NULL"));
         }
 
         [TestMethod]
@@ -102,20 +113,21 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("tv", await host.ScalarAsync("SELECT \"DownloadCategory\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
             Assert.AreEqual("takeover_wanted", sonarr.Single(item => item.Name == "Example Show (2020)").OutcomeKey);
 
-            // Its profile keeps the qualities Jularr knows, best first, stops at the best of the cutoff group and gets its custom formats as rules; the title uses it.
+            // Its profile keeps Sonarr's qualities by their names, best first, stops at the best of the cutoff group and gets its custom formats as rules; the title uses it.
             Assert.AreEqual("takeover_added", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Profile).OutcomeKey);
-            Assert.AreEqual("takeover_format_skipped", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Format).OutcomeKey);
-            Assert.AreEqual("Mixed", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Format).Name);
+            Assert.IsFalse(sonarr.Any(item => item.TakeoverItemTypeId == TakeoverItemType.Format));
             var profile = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
                 .Single(item => item.Name == "HD-1080p");
-            CollectionAssert.AreEqual(new[] { "BLURAY-1080p", "WEB-1080p", "HDTV-1080p" }, profile.AllowedQualities);
-            Assert.AreEqual(("WEB-1080p", MediaType.Series), (profile.UpgradeCutoffQuality, profile.MediaTypeId));
-            var rules = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles/" + profile.Id + "/rules")).Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
-            var x265 = rules.Single(rule => rule.Name == "x265");
-            Assert.AreEqual((ReleaseRuleField.RawTitle, ReleaseRuleMatch.Regex, "[xh]\\.?265", ReleaseRuleEffect.Reject), (x265.Field, x265.Match, x265.Value, x265.Effect));
-            var groups = rules.Single(rule => rule.Name == "Good groups");
-            Assert.AreEqual((ReleaseRuleField.ReleaseGroup, ReleaseRuleEffect.Prefer, 1000), (groups.Field, groups.Effect, groups.Score));
-            Assert.IsFalse(rules.Any(rule => rule.Name is "Mixed" or "Unused"));
+            CollectionAssert.AreEqual(new[] { "DVD", "Bluray-1080p", "group:1002", "HDTV-1080p" }, profile.AllowedQualities);
+            Assert.AreEqual(("group:1002", MediaType.Series), (profile.UpgradeCutoffQuality, profile.MediaTypeId));
+            Assert.AreEqual("WEB 1080p", profile.QualityGroups.Single().Name);
+            using var formatsResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/custom-formats?mediaTypeId=2");
+            var formats = (await formatsResponse.Content.ReadFromJsonAsync<PageResult<CustomFormatDetailsV1>>())!.Items;
+            var x265 = formats.Single(item => item.Name == "x265");
+            Assert.AreEqual("[xh]\\.?265", x265.Conditions.Single().Value);
+            Assert.AreEqual(-10000, profile.FormatScores.Single(item => item.FormatId == x265.Id).Score);
+            Assert.AreEqual(1750, profile.FormatScores.Single(item => item.FormatId == formats.Single(format => format.Name == "Good groups").Id).Score);
+            Assert.AreEqual(2, formats.Single(item => item.Name == "Mixed").Conditions.Count);
             Assert.AreEqual(profile.Id, await host.ScalarAsync("SELECT wanted.\"AcquisitionProfileId\" FROM \"WantedItems\" AS wanted JOIN \"Works\" AS work ON work.\"Id\" = wanted.\"WorkId\" WHERE work.\"MediaTypeId\" = 2"));
 
             // A second run finds the profile by its name.
@@ -157,7 +169,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("takeover_no_library", readarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.RootFolder).OutcomeKey);
             using var ebookDetails = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles/" + await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'eBook'"));
             var ebook = (await ebookDetails.Content.ReadFromJsonAsync<AcquisitionProfileDetailsV1>())!;
-            CollectionAssert.AreEqual(new[] { "EPUB", "MOBI" }, ebook.AllowedQualities);
+            CollectionAssert.AreEqual(new[] { "MOBI", "EPUB" }, ebook.AllowedQualities);
             Assert.AreEqual(("en de", 100), (string.Join(" ", ebook.MonitoredLanguages), ebook.MinimumPages));
             Assert.AreEqual("movie:0 series:1 music:1 book:1", await host.ScalarAsync("""
                 SELECT 'movie:' || count(*) FILTER (WHERE work."MediaTypeId" = 1) || ' series:' || count(*) FILTER (WHERE work."MediaTypeId" = 2)
@@ -172,6 +184,62 @@ namespace Jularr.Backend.Tests
             using var response = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(source, address, RadarrKey, apply, rootFolders));
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
             return (await response.Content.ReadFromJsonAsync<BaseDataList<TakeoverItemV1>>())!;
+        }
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task SeriesWithoutId_UseTitleAndYear_AndUnsupportedProfilesBlockTitles(bool unsupported)
+        {
+            var arr = new FakeArrs { WithoutSeriesId = true, UnsupportedProfile = unsupported, WithRootFolder = true };
+            await using var host = await Host.CreateAsync(library: true, services: services =>
+            {
+                services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => arr);
+            });
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            var tmdb = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb' """))!;
+            using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(TmdbToken));
+            var mount = (long)(await host.ScalarAsync("""INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('New import', 3, '/srv/new', FALSE) RETURNING "Id" """))!;
+            var libraries = new BaseDataList<TakeoverLibraryV1>([new("/new", "Imported series", mount, "series")]);
+            using var preview = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989", RadarrKey, false, newLibraries: libraries));
+            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
+            var previewItems = (await preview.Content.ReadFromJsonAsync<BaseDataList<TakeoverItemV1>>())!;
+            Assert.AreEqual(unsupported ? "takeover_profile_unsupported" : "takeover_will_want", previewItems.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Series).OutcomeKey);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "LibraryRoots" """));
+            using var applied = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989", RadarrKey, true, newLibraries: libraries));
+            Assert.AreEqual(HttpStatusCode.OK, applied.StatusCode, await applied.Content.ReadAsStringAsync());
+            Assert.AreEqual(unsupported ? 0L : 1L, await host.ScalarAsync("""SELECT count(*) FROM "WantedItems" """));
+            if (!unsupported)
+            {
+                Assert.AreEqual(true, await host.ScalarAsync("""
+                    SELECT wanted."LibraryRootId" = root."Id" AND wanted."AcquisitionProfileId" IS NOT NULL
+                    FROM "WantedItems" AS wanted CROSS JOIN "LibraryRoots" AS root WHERE root."Name" = 'Imported series'
+                    """));
+            }
+            using var repeated = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989", RadarrKey, true, newLibraries: libraries));
+            Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode, await repeated.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "LibraryRoots" """));
+        }
+
+        [TestMethod]
+        public async Task LidarrMetadataProfiles_SharingOneQualityProfile_RemainSeparateAcrossImports()
+        {
+            var arr = new FakeArrs { MultipleMetadataProfiles = true };
+            await using var host = await Host.CreateAsync(library: true, services: services =>
+                services.AddHttpClient<ServarrApiClient>().ConfigurePrimaryHttpMessageHandler(() => arr));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            var first = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686");
+            Assert.AreEqual(2, first.Count(item => item.TakeoverItemTypeId == TakeoverItemType.Profile && item.OutcomeKey == "takeover_added"));
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles?mediaTypeId=6");
+            var imported = (await read.Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!.Where(item => !item.IsDefault).ToArray();
+            Assert.AreEqual(2, imported.Length);
+            CollectionAssert.AreEquivalent(new[] { "Album", "Single" }, imported.Select(item => item.MonitoredTypes.Single()).ToArray());
+            var repeated = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686");
+            Assert.AreEqual(2, repeated.Count(item => item.TakeoverItemTypeId == TakeoverItemType.Profile && item.OutcomeKey == "takeover_exists"));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "AcquisitionProfileImports" """));
         }
 
         private sealed class FakeRadarr : HttpMessageHandler
@@ -210,7 +278,7 @@ namespace Jularr.Backend.Tests
                         [{"name":"SAB","implementation":"Sabnzbd","enable":true,"priority":1,
                           "fields":[{"name":"host","value":"sab.example.test"},{"name":"port","value":8080},{"name":"useSsl","value":false},{"name":"apiKey","value":"********"},{"name":"movieCategory","value":"movies"}]}]
                         """),
-                    "/api/v3/qualityprofile" or "/api/v3/customformat" or "/api/v3/rootfolder" => Json("[]"),
+                    "/api/v3/qualityprofile" or "/api/v3/customformat" or "/api/v3/rootfolder" or "/api/v3/language" or "/api/v3/indexerflag" or "/api/v3/customformat/schema" => Json("[]"),
                     "/api/v3/movie" => Json("""
                         [
                           {"title":"The Matrix","year":1999,"tmdbId":603,"monitored":true,"hasFile":false},
@@ -229,6 +297,10 @@ namespace Jularr.Backend.Tests
         // Prowlarr, Sonarr, Lidarr and Readarr by their hosts, with the TMDB series Sonarr names.
         private sealed class FakeArrs : HttpMessageHandler
         {
+            public bool WithoutSeriesId { get; init; }
+            public bool UnsupportedProfile { get; init; }
+            public bool WithRootFolder { get; init; }
+            public bool MultipleMetadataProfiles { get; init; }
             private const string Indexer = """[{"name":"NAME","protocol":"usenet","implementation":"Newznab","enable":true,"priority":10,"fields":[{"name":"baseUrl","value":"https://HOST.example.test"},{"name":"apiKey","value":"key"}]}]""";
 
             private static string Client(string category) => """[{"name":"SAB","implementation":"Sabnzbd","enable":true,"priority":1,"fields":[{"name":"host","value":"sab.example.test"},"""
@@ -237,12 +309,26 @@ namespace Jularr.Backend.Tests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var uri = request.RequestUri!;
+                if (uri.Host == "lidarr.example.test" && MultipleMetadataProfiles)
+                {
+                    if (uri.AbsolutePath == "/api/v1/metadataprofile")
+                        return Task.FromResult(Json("""[{"id":2,"name":"Albums","primaryAlbumTypes":[{"albumType":{"id":0,"name":"Album"},"allowed":true}]},{"id":3,"name":"Singles","primaryAlbumTypes":[{"albumType":{"id":2,"name":"Single"},"allowed":true}]}]"""));
+                    if (uri.AbsolutePath == "/api/v1/album")
+                        return Task.FromResult(Json("""[{"title":"Owned album","monitored":true,"artist":{"qualityProfileId":1,"metadataProfileId":2},"statistics":{"trackCount":1,"trackFileCount":1}},{"title":"Owned single","monitored":true,"artist":{"qualityProfileId":1,"metadataProfileId":3},"statistics":{"trackCount":1,"trackFileCount":1}}]"""));
+                }
+                if (uri.Host == "sonarr.example.test" && uri.AbsolutePath == "/api/v3/series" && WithoutSeriesId)
+                    return Task.FromResult(Json("""[{"title":"Example Show","year":2020,"monitored":true,"qualityProfileId":4,"path":"/new/Example Show","statistics":{"episodeFileCount":0,"episodeCount":1}}]"""));
+                if (uri.Host == "sonarr.example.test" && uri.AbsolutePath == "/api/v3/customformat" && UnsupportedProfile)
+                    return Task.FromResult(Json("""[{"id":1,"name":"Unsupported","specifications":[{"implementation":"FutureSpecification","fields":{"value":1}}]}]"""));
+                if (uri.Host == "sonarr.example.test" && uri.AbsolutePath == "/api/v3/rootfolder" && WithRootFolder)
+                    return Task.FromResult(Json("""[{"path":"/new","defaultQualityProfileId":4}]"""));
                 if (uri.Host == "api.themoviedb.org")
                 {
                     return Task.FromResult(uri.AbsolutePath switch
                     {
                         "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","first_air_date":"2020-04-01","seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":1}]}"""),
                         "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01"}]}"""),
+                        "/3/search/tv" => Json("""{"page":1,"total_pages":1,"results":[{"id":1399,"name":"Example Show","first_air_date":"2020-04-01"}]}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                     });
                 }
@@ -275,6 +361,9 @@ namespace Jularr.Backend.Tests
                            {"implementation":"SourceSpecification","negate":false,"required":true,"fields":[{"name":"value","value":7}]}]},
                          {"id":4,"name":"Unused","specifications":[{"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"x"}]}]}]
                         """),
+                    ("sonarr.example.test", "/api/v3/language") => Json("""[{"id":1,"name":"English"}]"""),
+                    ("sonarr.example.test", "/api/v3/indexerflag") => Json("[]"),
+                    ("sonarr.example.test", "/api/v3/customformat/schema") => Json("""[{"implementation":"SourceSpecification","fields":[{"name":"value","selectOptions":[{"value":7,"name":"BlurayRaw"}]}]}]"""),
                     ("lidarr.example.test" or "readarr.example.test", "/api/v1/indexer" or "/api/v1/downloadclient" or "/api/v1/customformat") => Json("[]"),
                     ("lidarr.example.test", "/api/v1/qualityprofile") => Json("""
                         [{"id":1,"name":"Lossless","upgradeAllowed":true,"cutoff":6,"items":[
@@ -303,7 +392,7 @@ namespace Jularr.Backend.Tests
                         [{"id":1,"name":"eBook","upgradeAllowed":false,"cutoff":3,"items":[
                           {"quality":{"id":3,"name":"EPUB"},"items":[],"allowed":true},
                           {"quality":{"id":2,"name":"MOBI"},"items":[],"allowed":true},
-                          {"quality":{"id":10,"name":"MP3"},"items":[],"allowed":true}],"formatItems":[]}]
+                          {"quality":{"id":10,"name":"MP3"},"items":[],"allowed":false}],"formatItems":[]}]
                         """),
                     ("readarr.example.test", "/api/v1/metadataprofile") => Json("""[{"id":1,"name":"Standard","allowedLanguages":"eng, ger","minPages":100}]"""),
                     ("readarr.example.test", "/api/v1/rootfolder") => Json("""[{"path":"/books","defaultQualityProfileId":1,"defaultMetadataProfileId":1}]"""),

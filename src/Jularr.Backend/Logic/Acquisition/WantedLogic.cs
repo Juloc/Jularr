@@ -82,6 +82,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
         {
+            if (data.TagIds is not null) await ctx.RequireAcquisitionTagsAsync(new AcquisitionTagSetData(data.TagIds), ct);
             // Do not alter request decisions; a chosen profile and library fit the type and subtype.
             var sql = new SqlStatement();
             sql.Statement =
@@ -127,6 +128,23 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
+            if (data.TagIds is null) return;
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH target AS MATERIALIZED (
+                    SELECT work."Id" FROM "Works" AS work JOIN "WantedItems" AS wanted ON wanted."WorkId" = work."Id"
+                    WHERE wanted."Id" = @Id FOR UPDATE OF work
+                ), removed AS (
+                    DELETE FROM "WorkTags" AS tagged USING target
+                    WHERE tagged."WorkId" = target."Id" AND NOT (tagged."TagId" = ANY(@TagIds))
+                )
+                INSERT INTO "WorkTags" ("WorkId", "TagId")
+                SELECT target."Id", tag FROM target CROSS JOIN unnest(@TagIds::bigint[]) AS tag
+                ON CONFLICT ("WorkId", "TagId") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         // A season sets all its episodes; units of other Works and other unit types are not touched.

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -16,58 +15,55 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static string BuildDefinition(AcquisitionProfileInputData input, string? existing)
         {
-            // Editor values on top of the stored rules.
-            if (!SupportsProfiles(input.MediaTypeId, input.MediaSubtypeId))
+            input.Validate();
+            if (!SupportsProfiles(input.MediaTypeId, input.MediaSubtypeId)) throw new DataValidationException(nameof(input.MediaTypeId), "unknown_catalog_value");
+            if (input.MinimumSizeMb is { } minimum && input.MaximumSizeMb is { } maximum && minimum > maximum) throw new DataValidationException(nameof(input.MaximumSizeMb), "out_of_range");
+
+            var catalog = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId);
+            var grouped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var groupIds = new HashSet<long>();
+            if (input.QualityGroups.Length > 32) throw new DataValidationException(nameof(input.QualityGroups), "out_of_range");
+            foreach (var group in input.QualityGroups)
             {
-                throw new DataValidationException(nameof(input.MediaTypeId), "unknown_catalog_value");
+                if (string.IsNullOrWhiteSpace(group.Name) || group.Name.Length > 128 || group.Id < 1
+                    || !groupIds.Add(group.Id) || group.Qualities.Length == 0) throw new DataValidationException(nameof(input.QualityGroups), "invalid_transition");
+                foreach (var quality in group.Qualities)
+                {
+                    if (!catalog.Contains(quality, StringComparer.OrdinalIgnoreCase) || !grouped.Add(quality)) throw new DataValidationException(nameof(input.QualityGroups), "unknown_catalog_value");
+                }
             }
 
-            var order = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId);
+            var groups = input.QualityGroups.Select(group => new QualityGroup(group.Id, group.Name, [.. catalog.Where(quality => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))])).ToArray();
+            var expected = catalog.Select(quality => groups.FirstOrDefault(group => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))?.Key ?? quality).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var names = expected.ToDictionary(name => name, StringComparer.OrdinalIgnoreCase);
+            var order = input.QualityOrder.Length == 0 ? expected : input.QualityOrder.Select(item => names.GetValueOrDefault(item) ?? throw new DataValidationException(nameof(input.QualityOrder), "unknown_catalog_value")).ToArray();
+            if (order.Length != expected.Length || order.Distinct(StringComparer.OrdinalIgnoreCase).Count() != expected.Length) throw new DataValidationException(nameof(input.QualityOrder), "invalid_transition");
             var allowed = order.Where(quality => input.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
-            if (allowed.Length == 0 || allowed.Length != input.AllowedQualities.Distinct(StringComparer.OrdinalIgnoreCase).Count())
-            {
-                throw new DataValidationException(nameof(input.AllowedQualities), allowed.Length == 0 ? "required" : "unknown_catalog_value");
-            }
-
+            if (allowed.Length == 0 || allowed.Length != input.AllowedQualities.Length) throw new DataValidationException(nameof(input.AllowedQualities), "unknown_catalog_value");
             var cutoff = input.UpgradeAllowed ? allowed.FirstOrDefault(quality => string.Equals(quality, input.UpgradeCutoffQuality, StringComparison.OrdinalIgnoreCase)) : null;
-            if (input.UpgradeAllowed && cutoff is null)
-            {
-                throw new DataValidationException(nameof(input.UpgradeCutoffQuality), "unknown_catalog_value");
-            }
+            if (input.UpgradeAllowed && cutoff is null) throw new DataValidationException(nameof(input.UpgradeCutoffQuality), "unknown_catalog_value");
 
-            if (input.MinimumSizeMb is { } minimum && input.MaximumSizeMb is { } maximum && minimum > maximum)
-            {
-                throw new DataValidationException(nameof(input.MaximumSizeMb), "out_of_range");
-            }
-
-            // Fallback qualities are other known qualities and need the hours after which they count.
-            var fallback = order.Where(quality => input.FallbackQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
-            if (fallback.Length != input.FallbackQualities.Distinct(StringComparer.OrdinalIgnoreCase).Count() || fallback.Intersect(allowed, StringComparer.OrdinalIgnoreCase).Any())
-            {
-                throw new DataValidationException(nameof(input.FallbackQualities), "unknown_catalog_value");
-            }
-
-            if ((fallback.Length > 0) != (input.FallbackAfterHours is not null))
-            {
-                throw new DataValidationException(nameof(input.FallbackAfterHours), "required");
-            }
+            if (input.FormatScores.Length > 1000 || input.FormatScores.Select(score => score.FormatId).Distinct().Count() != input.FormatScores.Length
+                || input.FormatScores.Any(score => score.FormatId < 1 || score.Score is < -1000000 or > 1000000)) throw new DataValidationException(nameof(input.FormatScores), "invalid_transition");
+            if (input.MinimumUpgradeFormatScore is < 1 or > 1000000 || input.MinimumFormatScore is < -1000000 or > 1000000 || input.CutoffFormatScore is < -1000000 or > 1000000)
+                throw new DataValidationException(nameof(input.MinimumFormatScore), "out_of_range");
 
             var stored = existing is null ? null : JsonSerializer.Deserialize<AcquisitionProfileDefinition>(existing, AcquisitionSelectionLogic.DefinitionOptions);
-            var definition = new AcquisitionProfileDefinition(allowed, [.. order], input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte,
-                Terms(input.MustContain), Terms(input.MustNotContain), stored?.RequiredRegex ?? [], stored?.RejectedRegex ?? [], stored?.ScoreRules ?? [], input.DelayMinutes, fallback,
-                fallback.Length > 0 ? input.FallbackAfterHours : null) { Monitoring = stored?.Monitoring };
-            var profile = new QualityProfile("0", input.Name, definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality,
-                definition.MinimumSizeBytes, definition.MaximumSizeBytes, definition.MustContain, definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules);
-            if (ReleaseScorer.ValidateProfile(profile).Count > 0)
+            var definition = new AcquisitionProfileDefinition(allowed, order, input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte)
             {
-                throw new DataValidationException(nameof(input.AllowedQualities), "invalid_transition");
-            }
-
+                Monitoring = input.Monitoring ?? stored?.Monitoring,
+                QualityGroups = groups,
+                FormatScores = input.FormatScores,
+                MinimumFormatScore = input.MinimumFormatScore,
+                CutoffFormatScore = input.CutoffFormatScore,
+                MinimumUpgradeFormatScore = input.MinimumUpgradeFormatScore
+            };
             return JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions);
         }
 
         public static async Task<long> CreateAcquisitionProfileAsync(this LogicContext ctx, AcquisitionProfileInputData input, CancellationToken ct)
         {
+            await ctx.RequireProfileFormatsAsync(input, ct);
             var row = new AcquisitionProfileRowData(null, input.Name, input.MediaTypeId, input.MediaSubtypeId, input.IsDefault, BuildDefinition(input, null), null);
             await ctx.ClearDefaultProfileAsync(row, ct);
             var sql = new SqlStatement();
@@ -104,6 +100,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(input.IsDefault), "invalid_transition");
             }
 
+            await ctx.RequireProfileFormatsAsync(input, ct);
             var row = new AcquisitionProfileRowData(state.Id, input.Name, input.MediaTypeId, input.MediaSubtypeId, input.IsDefault, BuildDefinition(input, state.Definition), state.Version);
             await ctx.ClearDefaultProfileAsync(row, ct);
             var sql = new SqlStatement();
@@ -129,8 +126,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task DeleteAcquisitionProfileAsync(this LogicContext ctx, AcquisitionProfileKeyData data, CancellationToken ct)
         {
-            // Targets using it fall back to the default.
             var state = await ctx.ReadAcquisitionProfileStateAsync(data.Id, ct);
+            if (state.Version != data.Version) throw new DataValidationException(nameof(data.Version), "outdated_version");
             if (state.IsDefault)
             {
                 throw new DataValidationException("IsDefault", "in_use");
@@ -143,41 +140,18 @@ namespace Jularr.Backend.Logic.Acquisition
                     "AcquisitionProfiles" AS profile
                 WHERE
                     profile."Id" = @Id
-                    AND profile."Version" = @Version;
+                    AND profile."Version" = @Version
+                    AND NOT EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id")
+                    AND NOT EXISTS (SELECT 1 FROM "RequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds"))
+                    AND NOT EXISTS (SELECT 1 FROM "AccountRequestRules" AS rule WHERE profile."Id" = ANY(rule."AcquisitionProfileIds"))
+                    AND NOT EXISTS (SELECT 1 FROM "AcquisitionRequests" AS request WHERE request."AcquisitionProfileId" = profile."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5);
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
-                throw new DataValidationException(nameof(data.Version), "outdated_version");
+                throw new DataValidationException(nameof(data.Id), "in_use");
             }
 
-            // Request rules stop offering it.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "RequestRules" AS rule
-                SET
-                    "AcquisitionProfileIds" = array_remove(rule."AcquisitionProfileIds", @Id),
-                    "Version" = rule."Version" + 1
-                WHERE
-                    @Id = ANY(rule."AcquisitionProfileIds");
-                """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "AccountRequestRules" AS assignment
-                SET
-                    "AcquisitionProfileIds" = array_remove(assignment."AcquisitionProfileIds", @Id)
-                WHERE
-                    @Id = ANY(assignment."AcquisitionProfileIds");
-                """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         private static async Task ClearDefaultProfileAsync(this LogicContext ctx, AcquisitionProfileRowData row, CancellationToken ct)
@@ -206,123 +180,27 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static async Task<IReadOnlyList<ReleaseScoreRule>> ReadProfileRulesAsync(this LogicContext ctx, long id, CancellationToken ct)
+        private static async Task RequireProfileFormatsAsync(this LogicContext ctx, AcquisitionProfileInputData input, CancellationToken ct)
         {
+            if (input.FormatScores.Length == 0) return;
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    profile."Id",
-                    profile."MediaTypeId",
-                    profile."MediaSubtypeId",
-                    profile."IsDefault",
-                    profile."Definition"::text AS "Definition",
-                    profile."Version"
+                    format."Id",
+                    format."MediaTypeId"
                 FROM
-                    "AcquisitionProfiles" AS profile
+                    "CustomFormats" AS format
                 WHERE
-                    profile."Id" = @Id;
+                    format."Id" = ANY(@FormatIds)
+                ORDER BY
+                    format."Id"
+                FOR SHARE;
                 """;
-            sql.Parameters.Add(new AcquisitionProfileKeyData(id));
-            return Definition(await ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct)).ScoreRules;
+            sql.Parameters.Add(new ProfileFormatReferencesData(input.FormatScores.Select(score => score.FormatId).ToArray()));
+            var formats = await ctx.Sql.ReadListAsync<ProfileFormatScopeData>(sql, ct);
+            if (formats.Count != input.FormatScores.Length || formats.Any(format => format.MediaTypeId != input.MediaTypeId)) throw new DataValidationException(nameof(input.FormatScores), "unknown_reference");
         }
-
-        // A profile keeps up to 50 rules.
-        public static Task AddProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, ReleaseScoreRule rule, CancellationToken ct)
-        {
-            var stored = Checked(rule);
-            return ctx.ReplaceProfileRulesAsync(key, rules => rules.Count < 50 ? [.. rules, stored] : throw new DataValidationException("Name", "out_of_range"), ct);
-        }
-
-        // A rule changes in place and keeps its place and id.
-        public static Task UpdateProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int ruleId, ReleaseScoreRule rule, CancellationToken ct)
-        {
-            var stored = Checked(rule);
-            return ctx.ReplaceProfileRulesAsync(key, rules => rules.Any(existing => existing.Id == ruleId)
-                ? [.. rules.Select(existing => existing.Id == ruleId ? new ReleaseScoreRule(stored.Name, stored.Field, stored.Match, stored.Value, stored.Score) { Effect = stored.Effect, Id = ruleId } : existing)]
-                : throw new KeyNotFoundException("The rule was not found."), ct);
-        }
-
-        // Rules taken over with a new profile follow its own, as far as the 50 allow; taken-over monitoring joins its other settings.
-        public static async Task AppendProfileRulesAsync(this LogicContext ctx, long id, IReadOnlyList<ReleaseScoreRule> rules, ReleaseMonitoring? monitoring, CancellationToken ct)
-        {
-            var added = rules.Select(Checked).ToArray();
-            var state = await ctx.ReadAcquisitionProfileStateAsync(id, ct);
-            await ctx.ReplaceProfileRulesAsync(new AcquisitionProfileKeyData(id, state.Version), existing => [.. existing.Concat(added).Take(50)], ct, monitoring);
-        }
-
-        // Prefer scores up and Avoid down; the other effects score nothing.
-        private static ReleaseScoreRule Checked(ReleaseScoreRule rule)
-        {
-            if (rule.EffectiveEffect is ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid && rule.Score == 0)
-            {
-                throw new DataValidationException("Score", "required");
-            }
-
-            if (rule.Match == ReleaseRuleMatch.Regex)
-            {
-                try
-                {
-                    _ = new Regex(rule.Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-                }
-                catch (ArgumentException)
-                {
-                    throw new DataValidationException("Value", "invalid_type");
-                }
-            }
-
-            var score = rule.EffectiveEffect switch
-            {
-                ReleaseRuleEffect.Prefer => Math.Abs(rule.Score),
-                ReleaseRuleEffect.Avoid => -Math.Abs(rule.Score),
-                _ => 0
-            };
-            return new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, score) { Effect = rule.EffectiveEffect };
-        }
-
-        public static Task RemoveProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int ruleId, CancellationToken ct) =>
-            ctx.ReplaceProfileRulesAsync(key, rules => rules.Any(rule => rule.Id == ruleId) ? [.. rules.Where(rule => rule.Id != ruleId)] : throw new KeyNotFoundException("The rule was not found."), ct);
-
-        // New rules take the next free id of their profile.
-        private static ReleaseScoreRule[] Numbered(ReleaseScoreRule[] rules)
-        {
-            var next = rules.Select(rule => rule.Id).DefaultIfEmpty(0).Max();
-            return [.. rules.Select(rule => rule.Id > 0 ? rule
-                : new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, rule.Score) { Effect = rule.Effect, Id = ++next })];
-        }
-
-        private static async Task ReplaceProfileRulesAsync(this LogicContext ctx, AcquisitionProfileKeyData key, Func<IReadOnlyList<ReleaseScoreRule>, ReleaseScoreRule[]> change,
-            CancellationToken ct, ReleaseMonitoring? monitoring = null)
-        {
-            var state = await ctx.ReadAcquisitionProfileStateAsync(key.Id, ct);
-            if (state.Version != key.Version)
-            {
-                throw new DataValidationException("Version", "outdated_version");
-            }
-
-            var stored = Definition(state);
-            var definition = new AcquisitionProfileDefinition(stored.AllowedQualities, stored.QualityOrder, stored.UpgradeAllowed, stored.UpgradeCutoffQuality, stored.MinimumSizeBytes,
-                stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, Numbered(change(stored.ScoreRules)), stored.DelayMinutes,
-                stored.FallbackQualities, stored.FallbackAfterHours) { Monitoring = monitoring ?? stored.Monitoring };
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "AcquisitionProfiles" AS profile
-                SET
-                    "Definition" = @Definition::jsonb,
-                    "Version" = profile."Version" + 1
-                WHERE
-                    profile."Id" = @Id
-                    AND profile."Version" = @Version;
-                """;
-            sql.Parameters.Add(new AcquisitionProfileDefinitionData(state.Id, JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions), state.Version));
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-        }
-
-        private static AcquisitionProfileDefinition Definition(AcquisitionProfileStateData state) =>
-            JsonSerializer.Deserialize<AcquisitionProfileDefinition>(state.Definition, AcquisitionSelectionLogic.DefinitionOptions)
-                ?? throw new InvalidOperationException("The acquisition profile is invalid.");
 
         private static Task<AcquisitionProfileStateData> ReadAcquisitionProfileStateAsync(this LogicContext ctx, long id, CancellationToken ct)
         {
@@ -346,6 +224,5 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct);
         }
 
-        private static string[] Terms(string[] values) => [.. values.Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 }

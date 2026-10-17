@@ -44,8 +44,8 @@ namespace Jularr.Backend.Logic.Library
 
         // A sample film or episode named by the pattern.
         public static string Example(MediaType mediaType, string pattern) => Apply(pattern, mediaType == MediaType.Series
-            ? new NamingValues("Example Show", 2020, 1, 2, "The Second", "WEB-1080p", "GRP", null, 1)
-            : new NamingValues("Example Movie", 1999, null, null, null, "BLURAY-1080p", "GRP", null, 1)) + ".mkv";
+            ? new NamingValues("Example Show", 2020, 1, 2, "The Second", "WEBDL-1080p", "GRP", null, 1)
+            : new NamingValues("Example Movie", 1999, null, null, null, "Bluray-1080p", "GRP", null, 1)) + ".mkv";
 
         // Several releases of one film or episode need a file name that tells them apart.
         public static bool Distinguishes(string pattern) =>

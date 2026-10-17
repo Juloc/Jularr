@@ -103,6 +103,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         // The quality already present; only an upgrade of it can be taken.
         public string? InstalledQuality { get; init; }
+
+        // The indexer entry the release came from, for release profiles bound to one.
+        public long? IndexerId { get; init; }
+        public IReadOnlyList<string> IndexerFlags { get; init; } = [];
+
+        // The format score of the installed release, for upgrades by format.
+        public int? InstalledFormatScore { get; init; }
+        public IReadOnlyList<string>? InstalledLanguages { get; init; }
     }
 
     internal sealed class SelectionReason

@@ -50,6 +50,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField ReleaseIdentity = new(NpgsqlDbType.Varchar) { MaximumLength = 600, AllowBlank = false };
+        public static readonly StringArrayField IndexerFlags = new() { MaximumLength = 32, ItemMaximumLength = 128 };
         public static readonly StringArrayField ReleaseIdentities = new() { ItemMaximumLength = 600 };
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false };
         public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
@@ -79,32 +80,18 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly StringField Definition = new() { MaximumLength = 65536, AllowBlank = false };
         public static readonly BoolField IsDefault = new();
-        public static readonly StringArrayField AllowedQualities = new() { ItemMaximumLength = 64, MaximumLength = 32 };
+        public static readonly StringArrayField AllowedQualities = new() { ItemMaximumLength = 128, MaximumLength = 32 };
         public static readonly BoolField UpgradeAllowed = new();
-        public static readonly StringField UpgradeCutoffQuality = new() { MaximumLength = 64, Required = false };
+        public static readonly StringField UpgradeCutoffQuality = new() { MaximumLength = 128, Required = false };
         public static readonly IntField MinimumSizeMb = new() { Minimum = 0, Maximum = 1_000_000, Required = false };
         public static readonly IntField MaximumSizeMb = new() { Minimum = 1, Maximum = 1_000_000, Required = false };
-        public static readonly StringArrayField MustContain = new() { ItemMaximumLength = 200, MaximumLength = 50 };
-        public static readonly StringArrayField MustNotContain = new() { ItemMaximumLength = 200, MaximumLength = 50 };
         public static readonly IntField WantedCount = new() { Minimum = 0 };
         public static readonly LongField Version = new() { Minimum = 1 };
-        public static readonly IntField DelayMinutes = new() { Minimum = 0, Maximum = 10080 };
-        public static readonly StringArrayField FallbackQualities = new() { ItemMaximumLength = 64, MaximumLength = 32, Required = false };
-        public static readonly IntField FallbackAfterHours = new() { Minimum = 1, Maximum = 720, Required = false };
 
         // Taken-over monitoring: release types and statuses, book languages and least pages.
         public static readonly StringArrayField MonitoredValues = new() { ItemMaximumLength = 64, MaximumLength = 60 };
         public static readonly IntField MinimumPages = new() { Minimum = 1, Required = false };
 
-        // Release rules of a profile, kept in their order.
-        public static readonly IntField RuleId = new() { Minimum = 1 };
-        public static readonly StringField RuleName = new(NpgsqlDbType.Varchar) { MaximumLength = 64, AllowBlank = false, Trim = true };
-        public static readonly EnumField RuleField = new(typeof(ReleaseRuleField));
-        public static readonly EnumField RuleMatch = new(typeof(ReleaseRuleMatch));
-        // Long enough for the expressions of custom formats taken over.
-        public static readonly StringField RuleValue = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false, Trim = true };
-        public static readonly EnumField RuleEffect = new(typeof(ReleaseRuleEffect));
-        public static readonly IntField RuleScore = new() { Minimum = -1000, Maximum = 1000 };
     }
 
     // Suggested sources of the catalog page.

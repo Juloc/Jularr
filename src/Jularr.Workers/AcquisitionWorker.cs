@@ -20,6 +20,7 @@ namespace Jularr.Workers
         {
             // Downloads are tracked often; metadata and due targets are refreshed in small passes.
             await RunAsync<MonitorDownloadsV1>(ct);
+            await RunAsync<RefreshStoredFileFormatsV1>(ct);
             if (Time.GetUtcNow() >= _nextSearch)
             {
                 await RunAsync<RefreshWantedMetadataV1>(ct);

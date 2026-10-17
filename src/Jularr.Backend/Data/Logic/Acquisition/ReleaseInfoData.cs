@@ -81,6 +81,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public double Confidence { get; }
         public IReadOnlyList<ReleaseEvidence> Evidence { get; }
 
+        // Every language the name states, as two letters; English when it states none.
+        public IReadOnlyList<string> Languages { get; init; } = ["en"];
+
+        // A remux, a full disc, raw HD, a regional or screener copy.
+        public ReleaseQualityModifier Modifier { get; init; }
+        public string? Edition { get; init; }
+
         // Optional non-video container/document quality supplied by a media-specific parser.
         public string? DocumentFormat { get; init; }
 

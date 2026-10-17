@@ -205,6 +205,7 @@ namespace Jularr.E2E.Tests
                      "formatItems":[{"format":1,"name":"x265","score":-10000}]}]
                     """),
                 "customformat" => Json("""[{"id":1,"name":"x265","specifications":[{"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"[xh]\\.?265"}]}]}]"""),
+                "language" or "indexerflag" or "customformat/schema" => Json("[]"),
                 _ => Results.NotFound()
             };
         }

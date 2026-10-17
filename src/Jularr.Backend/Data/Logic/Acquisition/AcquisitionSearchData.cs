@@ -123,6 +123,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long? SizeBytes { get; }
         public DateTimeOffset? PublishedAt { get; }
         public IReadOnlyList<string> Stages { get; }
+        public IReadOnlyList<string> IndexerFlags { get; init; } = [];
 
         public string Identity => ConnectionId + ":" + (Guid ?? Title);
     }
@@ -214,8 +215,5 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public IReadOnlyDictionary<string, ReleaseOffer> Offers { get; }
         public bool IndexersUnavailable { get; }
         public string OutcomeKey { get; }
-
-        // An automatic search keeps the winner until then.
-        public DateTime? DelayedUntil { get; init; }
     }
 }

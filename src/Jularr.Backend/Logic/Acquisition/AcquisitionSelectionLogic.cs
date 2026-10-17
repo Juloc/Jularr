@@ -26,21 +26,26 @@ namespace Jularr.Backend.Logic.Acquisition
             _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
         };
 
-        public static QualityProfile ReadProfile(WantedTargetData target, DateTime? now = null)
+        public static QualityProfile ReadProfile(WantedTargetData target)
         {
-            // Validated once per search; requested languages order releases of equal quality; fallback qualities join once the target has waited long enough.
             var definition = JsonSerializer.Deserialize<AcquisitionProfileDefinition>(target.Definition!, DefinitionOptions)
                 ?? throw new InvalidOperationException("The acquisition profile is invalid.");
-            var fallback = definition.FallbackAfterHours is { } hours && now is { } current && target.WantedSince.AddHours(hours) <= current ? definition.FallbackQualities : [];
-            var allowed = definition.QualityOrder.Where(quality => definition.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)
-                || fallback.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
-            var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, allowed,
-                definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes, definition.MustContain,
-                definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules)
+            var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, definition.AllowedQualities,
+                definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes)
             {
                 LanguageOrder = target.RequestedLocales,
-                DelayMinutes = definition.DelayMinutes,
-                FallbackQualities = fallback
+                IsMovie = target.MediaTypeId == MediaType.Movie,
+                IsBook = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga,
+                Formats = Formats(target.Formats, definition.FormatScores),
+                MinimumFormatScore = definition.MinimumFormatScore,
+                CutoffFormatScore = definition.CutoffFormatScore,
+                MinimumUpgradeFormatScore = definition.MinimumUpgradeFormatScore,
+                QualityGroups = definition.QualityGroups,
+                Sizes = (JsonSerializer.Deserialize<QualitySize[]>(target.QualitySizes) ?? []).ToDictionary(size => size.Quality, StringComparer.OrdinalIgnoreCase),
+                RuntimeMinutes = target.RuntimeMinutes,
+                ReleaseProfiles = JsonSerializer.Deserialize<ReleaseTerms[]>(target.ReleaseProfiles) ?? [],
+                OriginalLanguage = target.OriginalLanguage,
+                Year = target.ReleaseYear
             };
             if (ReleaseScorer.ValidateProfile(profile) is { Count: > 0 } errors)
             {
@@ -50,6 +55,28 @@ namespace Jularr.Backend.Logic.Acquisition
             return profile;
         }
 
+        // The profile's scored formats; a format without a score plays no part.
+        private static IReadOnlyList<(CustomFormat Format, int Score)> Formats(string formats, FormatScore[] scores)
+        {
+            var byId = (JsonSerializer.Deserialize<CustomFormat[]>(formats, DefinitionOptions) ?? []).ToDictionary(format => format.Id);
+            return [.. scores.Select(score => (byId.GetValueOrDefault(score.FormatId) ?? throw new InvalidOperationException("A referenced custom format is missing."), score.Score))];
+        }
+
+        // The best present file by the profile's quality order, with the format score of its release name.
+        public static (string Quality, int FormatScore, IReadOnlyList<string> Languages)? Installed(QualityProfile profile, WantedTargetData target, long? workUnitId = null)
+        {
+            var files = JsonSerializer.Deserialize<InstalledFile[]>(target.InstalledFiles) ?? [];
+            var best = files.Where(file => file.WorkUnitId == workUnitId && UpgradePolicy.RankOf(profile, file.Quality) != int.MaxValue)
+                .Select(file => (file.Quality, Candidate: StoredFileFormatLogic.Candidate(file.Facts)))
+                .Select(file => (file.Quality, Score: file.Candidate is { } release ? ReleaseScorer.Score(profile, release).FormatScore : 0,
+                    Languages: file.Candidate?.Languages ?? []))
+                .OrderBy(file => UpgradePolicy.RankOf(profile, file.Quality)).ThenByDescending(file => file.Score)
+                .ThenBy(file => UpgradePolicy.LanguageRank(profile, file.Languages)).Take(1).ToArray();
+            return best.Length == 0 ? null : (best[0].Quality, best[0].Score, best[0].Languages);
+        }
+
+        private sealed record InstalledFile(string Quality, long? WorkUnitId, StoredReleaseEvidence Facts);
+
         // The quality a release is stored with.
         public static string? QualityKey(AcquisitionKind kind, string title, int? igdbPlatform = null) => kind switch
         {
@@ -57,7 +84,7 @@ namespace Jularr.Backend.Logic.Acquisition
             AcquisitionKind.Manga => ReleaseQuality.GetKey(MangaReleaseJudge.Parse(title)),
             AcquisitionKind.Music => ReleaseQuality.GetKey(MusicReleaseJudge.Parse(title)),
             AcquisitionKind.Game => ReleaseQuality.GetKey(GameReleaseJudge.Parse(title, igdbPlatform)),
-            _ => ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null
+            _ => ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed, kind == AcquisitionKind.Movie) : null
         };
 
         public static SearchIntent ReadIntent(WantedTargetData target, AcquisitionKind kind, UnitScope? scope)
@@ -106,6 +133,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers)
         {
+            var installed = scope is null || scope.UnitNumber is not null ? Installed(profile, target, scope?.Unit.Id) : null;
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
@@ -121,38 +149,15 @@ namespace Jularr.Backend.Logic.Acquisition
             SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement) =>
                 new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
                 {
+                    IndexerId = offer.ConnectionId,
+                    IndexerFlags = offer.IndexerFlags,
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection,
                     ContextScore = judgement.ContextScore,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
-                    InstalledQuality = scope is null && target.HasMedia ? target.InstalledQuality : null
+                    InstalledQuality = installed?.Quality,
+                    InstalledFormatScore = installed?.FormatScore,
+                    InstalledLanguages = installed?.Languages
                 };
-        }
-
-        // An automatic grab waits until the winner is as old as the profile's delay, unless it has the best allowed quality.
-        public static DateTime? DelayUntil(QualityProfile profile, CandidateEvaluation winner, DateTime now)
-        {
-            if (profile.DelayMinutes == 0 || winner.Candidate.PublishedAt is not { } published
-                || string.Equals(winner.Score?.QualityKey, profile.QualityOrder.FirstOrDefault(quality => profile.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            var until = published.UtcDateTime.AddMinutes(profile.DelayMinutes);
-            return until > now ? until : null;
-        }
-
-        // A book in none of the requested languages waits as long as the profile's delay since the target became wanted; then it is read translated.
-        public static DateTime? LanguageDelayUntil(QualityProfile profile, WantedTargetData target, CandidateEvaluation winner, DateTime now)
-        {
-            if (target.MediaTypeId != MediaType.Book || target.MediaSubtypeId == MediaSubtype.Manga || profile.DelayMinutes == 0 || target.RequestedLocales.Length == 0
-                || winner.Candidate.Languages.Any(language => target.RequestedLocales.Any(wanted => wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase))))
-            {
-                return null;
-            }
-
-            var until = target.WantedSince.AddMinutes(profile.DelayMinutes);
-            return until > now ? until : null;
         }
 
         // The outcome a target remembers for the next automatic search.
@@ -170,7 +175,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // Missing units of the group are wanted; the target is the asked or first missing one.
             var group = states.Where(state => state.ParentNumber == parentNumber).ToArray();
             var units = group.Select(state => new TargetUnit(state.WorkUnitId, state.ParentNumber, state.Number, state.HasMedia, state.AbsoluteNumber, state.ReleasedOn)).ToArray();
-            var wanted = units.Where(unit => group.Any(state => state.WorkUnitId == unit.Id && state.IsMissing)).ToArray();
+            var wanted = units.Where(unit => group.Any(state => state.WorkUnitId == unit.Id && state.NeedsSearch)).ToArray();
             var target = unitNumber is { } number
                 ? units.FirstOrDefault(unit => unit.Number == number) ?? new TargetUnit(0, parentNumber, number, false)
                 : wanted.FirstOrDefault() ?? units.FirstOrDefault() ?? new TargetUnit(0, parentNumber, 1, false);
@@ -181,7 +186,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             // A group with nothing yet (a fully aired season, a Manga without volumes) is searched as a pack, otherwise unit by unit.
             var group = states.Where(state => state.ParentNumber == parentNumber).ToArray();
-            if (group.FirstOrDefault(state => state.IsMissing) is not { } next)
+            if (group.FirstOrDefault(state => state.NeedsSearch) is not { } next)
             {
                 return null;
             }
@@ -195,8 +200,8 @@ namespace Jularr.Backend.Logic.Acquisition
             var (start, end, pack) = ReadRange(kind, parsed);
             var first = start ?? scope.Unit.Number;
             var last = end ?? first;
-            return states.Select(state => state.IsMissing && state.ParentNumber == scope.ParentNumber && (parsed is null || pack || state.Number >= first && state.Number <= last)
-                ? new UnitStateData(state.WorkUnitId, state.ParentNumber, state.Number, state.IsAvailable, state.HasMedia, true, state.AbsoluteNumber, state.ReleasedOn)
+            return states.Select(state => state.NeedsSearch && state.ParentNumber == scope.ParentNumber && (parsed is null || pack || state.Number >= first && state.Number <= last)
+                ? new UnitStateData(state.WorkUnitId, state.ParentNumber, state.Number, state.IsAvailable, state.HasMedia, true, state.AbsoluteNumber, state.ReleasedOn, state.NeedsUpgrade)
                 : state).ToArray();
         }
 

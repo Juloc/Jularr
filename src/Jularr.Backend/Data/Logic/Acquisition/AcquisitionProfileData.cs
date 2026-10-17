@@ -6,15 +6,11 @@ using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
-    // Editor values; regex and score rules stay in the stored definition.
-    internal sealed class AcquisitionProfileInputData
+    internal sealed class AcquisitionProfileInputData : BaseData
     {
-        public AcquisitionProfileInputData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
-            int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version, int delayMinutes, string[] fallbackQualities, int? fallbackAfterHours)
+        public AcquisitionProfileInputData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities,
+            bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, long? version)
         {
-            DelayMinutes = delayMinutes;
-            FallbackQualities = fallbackQualities;
-            FallbackAfterHours = fallbackAfterHours;
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
@@ -25,27 +21,49 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeMb = minimumSizeMb;
             MaximumSizeMb = maximumSizeMb;
-            MustContain = mustContain;
-            MustNotContain = mustNotContain;
             Version = version;
         }
 
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? Id { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
         public string Name { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
         public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
         public string[] AllowedQualities { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.UpgradeAllowed))]
         public bool UpgradeAllowed { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.UpgradeCutoffQuality))]
         public string? UpgradeCutoffQuality { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MinimumSizeMb))]
         public int? MinimumSizeMb { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MaximumSizeMb))]
         public int? MaximumSizeMb { get; }
-        public string[] MustContain { get; }
-        public string[] MustNotContain { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version), false)]
         public long? Version { get; }
-        public int DelayMinutes { get; }
-        public string[] FallbackQualities { get; }
-        public int? FallbackAfterHours { get; }
+        public string[] QualityOrder { get; init; } = [];
+        public QualityGroup[] QualityGroups { get; init; } = [];
+        public FormatScore[] FormatScores { get; init; } = [];
+        public int MinimumFormatScore { get; init; }
+        public int CutoffFormatScore { get; init; }
+        public int MinimumUpgradeFormatScore { get; init; } = 1;
+        public ReleaseMonitoring? Monitoring { get; init; }
+
     }
 
     internal sealed class AcquisitionProfileRowData : BaseData

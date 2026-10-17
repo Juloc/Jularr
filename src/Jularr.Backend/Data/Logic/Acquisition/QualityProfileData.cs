@@ -6,33 +6,6 @@ using Jularr.Backend.Data.Fields.Acquisition;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
-    internal sealed class ReleaseScoreRule
-    {
-        public ReleaseScoreRule(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, int score)
-        {
-            Name = name;
-            Field = field;
-            Match = match;
-            Value = value;
-            Score = score;
-        }
-
-        // Unique within its profile; edits and removals name it.
-        public int Id { get; init; }
-
-        public string Name { get; }
-        public ReleaseRuleField Field { get; }
-        public ReleaseRuleMatch Match { get; }
-        public string Value { get; }
-        public int Score { get; }
-
-        // The effect of the rule.
-        public ReleaseRuleEffect? Effect { get; init; }
-
-        [JsonIgnore]
-        public ReleaseRuleEffect EffectiveEffect => Effect ?? (Score >= 0 ? ReleaseRuleEffect.Prefer : ReleaseRuleEffect.Avoid);
-    }
-
     // Which indexers an Acquisition Profile may search and which it prefers, by the canonical entry id of the Indexer settings (the profile never copies an indexer's configuration).
     internal sealed class AcquisitionSourcePolicy
     {
@@ -56,7 +29,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class QualityProfile
     {
-        public QualityProfile(string id, string name, string[] allowedQualities, string[] qualityOrder, bool upgradeAllowed, string? upgradeCutoffQuality, long? minimumSizeBytes, long? maximumSizeBytes, string[] mustContain, string[] mustNotContain, string[] requiredRegex, string[] rejectedRegex, ReleaseScoreRule[] scoreRules)
+        public QualityProfile(string id, string name, string[] allowedQualities, string[] qualityOrder, bool upgradeAllowed, string? upgradeCutoffQuality, long? minimumSizeBytes, long? maximumSizeBytes)
         {
             Id = id;
             Name = name;
@@ -66,11 +39,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeBytes = minimumSizeBytes;
             MaximumSizeBytes = maximumSizeBytes;
-            MustContain = mustContain;
-            MustNotContain = mustNotContain;
-            RequiredRegex = requiredRegex;
-            RejectedRegex = rejectedRegex;
-            ScoreRules = scoreRules;
         }
 
         public string Id { get; }
@@ -81,28 +49,39 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? UpgradeCutoffQuality { get; }
         public long? MinimumSizeBytes { get; }
         public long? MaximumSizeBytes { get; }
-        public string[] MustContain { get; }
-        public string[] MustNotContain { get; }
-        public string[] RequiredRegex { get; }
-        public string[] RejectedRegex { get; }
-        public ReleaseScoreRule[] ScoreRules { get; }
-
-        // The least number of quality steps a candidate must be better by to be an upgrade.
         public int UpgradeMinimumQualitySteps { get; init; } = 1;
-
-        // Whether a candidate whose identity is only ambiguous may be taken automatically.
         public bool AllowAmbiguousIdentity { get; init; }
-
-        // The languages the profile wants, best first.
         public string[] LanguageOrder { get; init; } = [];
-
-        public int DelayMinutes { get; init; }
-
-        // Allowed only through the fallback; a release in one of them names it.
-        public string[] FallbackQualities { get; init; } = [];
-
-        // The indexers this profile may search and prefers.
+        public bool IsMovie { get; init; }
+        public bool IsBook { get; init; }
+        public IReadOnlyList<(CustomFormat Format, int Score)> Formats { get; init; } = [];
+        public int MinimumFormatScore { get; init; }
+        public int CutoffFormatScore { get; init; }
+        public int MinimumUpgradeFormatScore { get; init; } = 1;
+        public IReadOnlyList<ReleaseTerms> ReleaseProfiles { get; init; } = [];
+        public IReadOnlyDictionary<string, QualitySize> Sizes { get; init; } = new Dictionary<string, QualitySize>();
+        public int? RuntimeMinutes { get; init; }
+        public QualityGroup[] QualityGroups { get; init; } = [];
+        public string? OriginalLanguage { get; init; }
+        public int? Year { get; init; }
         public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
+
+        public string? Item(string? quality) => quality is null ? null
+            : QualityGroups.FirstOrDefault(group => group.Qualities.Contains(quality, StringComparer.OrdinalIgnoreCase))?.Key ?? quality;
+
+    }
+
+    // A release profile's terms, for one indexer or all.
+    internal sealed record ReleaseTerms(string[] Required, string[] Ignored, long? IndexerId);
+
+    // A quality's size limits in megabytes per minute.
+    internal sealed record QualitySize(string Quality, decimal Minimum, decimal? Preferred, decimal? Maximum);
+
+    // Qualities that rank as one, as Sonarr's profile groups them.
+    internal sealed record QualityGroup(long Id, string Name, string[] Qualities)
+    {
+        [JsonIgnore]
+        public string Key => ProfileQualities.Group(Id);
     }
 
     internal sealed class ReleaseCandidate
@@ -119,6 +98,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long? SizeBytes { get; }
         public string? Indexer { get; }
         public string? SourceId { get; }
+
+        // The indexer entry the release came from.
+        public long? IndexerId { get; init; }
+
+        // The flags the indexer gives the release.
+        public IReadOnlyList<string> IndexerFlags { get; init; } = [];
+        public IReadOnlyList<string>? Languages { get; init; }
     }
 
     internal sealed class ReleaseScoreResult
@@ -144,6 +130,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         // Rules that matched with the Info effect.
         public IReadOnlyList<string> InfoReasons { get; init; } = [];
+
+        // The sum of the matching custom formats' scores.
+        public int FormatScore { get; init; }
     }
 
     internal sealed class UpgradeAssessment
@@ -160,27 +149,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool IsUpgradable => State == UpgradeState.Upgradable;
     }
 
-    // The stored JSON definition of an acquisition profile.
     internal sealed class AcquisitionProfileDefinition
     {
-        public AcquisitionProfileDefinition(string[] allowedQualities, string[] qualityOrder, bool upgradeAllowed, string? upgradeCutoffQuality, long? minimumSizeBytes, long? maximumSizeBytes,
-            string[] mustContain, string[] mustNotContain, string[] requiredRegex, string[] rejectedRegex, ReleaseScoreRule[] scoreRules, int delayMinutes = 0,
-            string[]? fallbackQualities = null, int? fallbackAfterHours = null)
+        public AcquisitionProfileDefinition(string[] allowedQualities, string[] qualityOrder, bool upgradeAllowed, string? upgradeCutoffQuality, long? minimumSizeBytes, long? maximumSizeBytes)
         {
-            DelayMinutes = delayMinutes;
-            FallbackQualities = fallbackQualities ?? [];
-            FallbackAfterHours = fallbackAfterHours;
             AllowedQualities = allowedQualities;
             QualityOrder = qualityOrder;
             UpgradeAllowed = upgradeAllowed;
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeBytes = minimumSizeBytes;
             MaximumSizeBytes = maximumSizeBytes;
-            MustContain = mustContain;
-            MustNotContain = mustNotContain;
-            RequiredRegex = requiredRegex;
-            RejectedRegex = rejectedRegex;
-            ScoreRules = scoreRules;
         }
 
         public string[] AllowedQualities { get; }
@@ -189,21 +167,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? UpgradeCutoffQuality { get; }
         public long? MinimumSizeBytes { get; }
         public long? MaximumSizeBytes { get; }
-        public string[] MustContain { get; }
-        public string[] MustNotContain { get; }
-        public string[] RequiredRegex { get; }
-        public string[] RejectedRegex { get; }
-        public ReleaseScoreRule[] ScoreRules { get; }
-
-        // Automatic grabs wait this long for a better release unless the best allowed quality turns up.
-        public int DelayMinutes { get; }
-
-        // Qualities accepted once the target has been wanted for the given hours.
-        public string[] FallbackQualities { get; }
-        public int? FallbackAfterHours { get; }
-
-        // Which releases of an artist or books of an author count.
         public ReleaseMonitoring? Monitoring { get; init; }
+        public FormatScore[] FormatScores { get; init; } = [];
+        public QualityGroup[] QualityGroups { get; init; } = [];
+        public int MinimumFormatScore { get; init; }
+        public int CutoffFormatScore { get; init; }
+        public int MinimumUpgradeFormatScore { get; init; } = 1;
+
     }
 
     // An artist's release types and statuses, an author's languages and least pages; empty lists allow everything.
@@ -227,21 +197,18 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool AllowsType(string? type) => type is null || PrimaryTypes.Length == 0 || PrimaryTypes.Contains(type, StringComparer.OrdinalIgnoreCase);
     }
 
-    // A Servarr profile as Jularr takes it over, with the custom formats it could not express and the monitoring its metadata profile names.
     internal sealed class TakenOverProfile
     {
-        public TakenOverProfile(AcquisitionProfileInputData input, IReadOnlyList<ReleaseScoreRule> rules, IReadOnlyList<string> skippedFormats, ReleaseMonitoring? monitoring = null)
+        public TakenOverProfile(AcquisitionProfileInputData input, IReadOnlyList<CustomFormatImportData> formats, IReadOnlyList<string> skippedFormats)
         {
-            Monitoring = monitoring;
             Input = input;
-            Rules = rules;
+            Formats = formats;
             SkippedFormats = skippedFormats;
         }
 
         public AcquisitionProfileInputData Input { get; }
-        public IReadOnlyList<ReleaseScoreRule> Rules { get; }
+        public IReadOnlyList<CustomFormatImportData> Formats { get; }
         public IReadOnlyList<string> SkippedFormats { get; }
-        public ReleaseMonitoring? Monitoring { get; }
     }
 
     // What became of a taken-over profile, and the Jularr profile its titles use.
@@ -269,12 +236,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class TakeoverLibraryData : BaseData
     {
-        public TakeoverLibraryData(long id, string name, MediaType mediaTypeId, string relativePath)
+        public TakeoverLibraryData(long id, string name, MediaType mediaTypeId, string relativePath, long storageMountId)
         {
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
             RelativePath = relativePath;
+            StorageMountId = storageMountId;
         }
 
         [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.Id))]
@@ -288,5 +256,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.RelativePath))]
         public string RelativePath { get; }
+        [DataField(typeof(Fields.Storage.StorageMountFields), nameof(Fields.Storage.StorageMountFields.Id))]
+        public long StorageMountId { get; }
     }
 }

@@ -16,7 +16,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 return int.MaxValue;
             }
 
-            var index = Array.FindIndex(profile.QualityOrder, item => item.Equals(quality, StringComparison.OrdinalIgnoreCase));
+            var item = profile.Item(quality);
+            var index = Array.FindIndex(profile.QualityOrder, entry => entry.Equals(item, StringComparison.OrdinalIgnoreCase));
             return index < 0 ? int.MaxValue : index;
         }
 
@@ -60,25 +61,41 @@ namespace Jularr.Backend.Logic.Acquisition
                 : new UpgradeAssessment(UpgradeState.Upgradable, new ReleaseReason("BelowCutoff", installedQuality));
         }
 
-        // Whether a candidate is a meaningful upgrade of what is installed.
-        public static bool IsUpgrade(QualityProfile profile, string? installedQuality, string? candidateQuality, bool upgradeUnknownInstalled = false)
+        // Whether a candidate is a meaningful upgrade of what is installed: a better quality below the cutoff, or as in Sonarr the same quality with
+        // a format score higher by at least the increment while the installed one is below the cutoff score.
+        public static bool IsUpgrade(QualityProfile profile, string? installedQuality, string? candidateQuality, bool upgradeUnknownInstalled = false,
+            int? installedFormatScore = null, int? candidateFormatScore = null, IReadOnlyList<string>? installedLanguages = null, IReadOnlyList<string>? candidateLanguages = null)
         {
             ArgumentNullException.ThrowIfNull(profile);
 
             var installed = RankOf(profile, installedQuality);
             var candidate = RankOf(profile, candidateQuality);
-            if (installed == int.MaxValue && !upgradeUnknownInstalled)
+            if (!profile.UpgradeAllowed || installed == int.MaxValue && !upgradeUnknownInstalled)
             {
                 return false;
             }
 
-            var steps = Math.Max(1, profile.UpgradeMinimumQualitySteps);
-            if (!profile.UpgradeAllowed || IsCutoffMet(profile, installedQuality))
+            var formatUpgrade = installedFormatScore is { } before && candidateFormatScore is { } after
+                && before < profile.CutoffFormatScore && after >= before + Math.Max(1, profile.MinimumUpgradeFormatScore);
+            if (candidate < installed)
             {
-                return false;
+                return formatUpgrade || !IsCutoffMet(profile, installedQuality)
+                    && (installed == int.MaxValue || installed - candidate >= Math.Max(1, profile.UpgradeMinimumQualitySteps));
             }
 
-            return candidate < installed && (installed == int.MaxValue || installed - candidate >= steps);
+            var languageUpgrade = profile.IsBook && installedLanguages is not null && candidateLanguages is not null
+                && candidateFormatScore >= installedFormatScore && LanguageRank(profile, candidateLanguages) < LanguageRank(profile, installedLanguages);
+            return candidate == installed && (formatUpgrade || languageUpgrade);
+        }
+
+        // Requests supply the ordered languages; a quality group and format score still decide before this tie-break.
+        public static int LanguageRank(QualityProfile profile, IReadOnlyList<string> languages)
+        {
+            if (profile.LanguageOrder.Length == 0) return 0;
+            var best = languages.Select(language => Array.FindIndex(profile.LanguageOrder,
+                    wanted => language.StartsWith(wanted, StringComparison.OrdinalIgnoreCase) || wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase)))
+                .Where(index => index >= 0).DefaultIfEmpty(-1).Min();
+            return best >= 0 ? best : languages.Count == 0 ? profile.LanguageOrder.Length : profile.LanguageOrder.Length + 1;
         }
     }
 }

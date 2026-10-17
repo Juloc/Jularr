@@ -73,7 +73,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Now instead of on schedule: the profile chooses as the automatic search does and the best release is taken at once, without its delay.
+            // Now instead of on schedule: the profile chooses as the automatic search does and the best release is taken at once.
             var (target, indexers, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct),
                 await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)), CancellationToken);
             if (target.Definition is null)

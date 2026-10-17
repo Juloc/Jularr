@@ -1312,10 +1312,6 @@
    "No quality Jularr knows",
    "Geen kwaliteit die Jularr kent"
   ],
-  "takeover.outcome.takeover_minimum_score": [
-   "Its minimum format score is not taken over",
-   "De minimale formatscore wordt niet geïmporteerd"
-  ],
   "takeover.outcome.takeover_format_skipped": [
    "Not taken over: conditions Jularr does not support",
    "Niet geïmporteerd: voorwaarden die Jularr niet ondersteunt"
@@ -1375,142 +1371,6 @@
   "sources.availability.ReferenceOnly": [
    "Reference only",
    "Alleen referentie"
-  ],
-  "profile.delay": [
-   "Wait for a better release (minutes)",
-   "Wachten op een betere release (minuten)"
-  ],
-  "profile.fallbackQualities": [
-   "Fallback qualities",
-   "Terugvalkwaliteiten"
-  ],
-  "profile.fallbackAfter": [
-   "Accept the fallback after (hours)",
-   "Terugval accepteren na (uren)"
-  ],
-  "profile.rules": [
-   "Release rules",
-   "Releaseregels"
-  ],
-  "profile.rule.name": [
-   "Rule",
-   "Regel"
-  ],
-  "profile.rule.condition": [
-   "Condition",
-   "Voorwaarde"
-  ],
-  "profile.rule.field": [
-   "Field",
-   "Veld"
-  ],
-  "profile.rule.match": [
-   "Match",
-   "Overeenkomst"
-  ],
-  "profile.rule.value": [
-   "Value",
-   "Waarde"
-  ],
-  "profile.rule.effect": [
-   "Effect",
-   "Effect"
-  ],
-  "profile.rule.remove": [
-   "Remove",
-   "Verwijderen"
-  ],
-  "profile.rule.match.Equals": [
-   "is",
-   "is"
-  ],
-  "profile.rule.match.Contains": [
-   "contains",
-   "bevat"
-  ],
-  "profile.rule.match.Regex": [
-   "matches the pattern",
-   "komt overeen met het patroon"
-  ],
-  "profile.rule.effect.Require": [
-   "Require",
-   "Vereisen"
-  ],
-  "profile.rule.effect.Prefer": [
-   "Prefer",
-   "Voorkeur geven"
-  ],
-  "profile.rule.effect.Avoid": [
-   "Avoid",
-   "Vermijden"
-  ],
-  "profile.rule.effect.Reject": [
-   "Reject",
-   "Afwijzen"
-  ],
-  "profile.rule.effect.Info": [
-   "Note only",
-   "Alleen notitie"
-  ],
-  "profile.rule.field.RawTitle": [
-   "Release name",
-   "Releasenaam"
-  ],
-  "profile.rule.field.ReleaseGroup": [
-   "Release group",
-   "Releasegroep"
-  ],
-  "profile.rule.field.Source": [
-   "Source",
-   "Bron"
-  ],
-  "profile.rule.field.Resolution": [
-   "Resolution",
-   "Resolutie"
-  ],
-  "profile.rule.field.VideoCodec": [
-   "Video codec",
-   "Videocodec"
-  ],
-  "profile.rule.field.BitDepth": [
-   "Bit depth",
-   "Bitdiepte"
-  ],
-  "profile.rule.field.HdrFormat": [
-   "HDR format",
-   "HDR-formaat"
-  ],
-  "profile.rule.field.AudioCodec": [
-   "Audio codec",
-   "Audiocodec"
-  ],
-  "profile.rule.field.AudioLanguage": [
-   "Audio language",
-   "Audiotaal"
-  ],
-  "profile.rule.field.SubtitleLanguage": [
-   "Subtitle language",
-   "Ondertiteltaal"
-  ],
-  "profile.rule.field.DualAudio": [
-   "Dual audio",
-   "Dual audio"
-  ],
-  "profile.rule.field.MultiAudio": [
-   "Multiple audio tracks",
-   "Meerdere audiosporen"
-  ],
-  "profile.rule.field.Proper": [
-   "Proper",
-   "Proper"
-  ],
-  "profile.rule.field.Repack": [
-   "Repack",
-   "Repack"
-  ],
-  "profile.rule.field.Indexer": [
-   "Indexer",
-   "Indexer"
   ],
   "profile.name": [
    "Name",
@@ -1572,25 +1432,9 @@
    "Qualities",
    "Kwaliteiten"
   ],
-  "profile.section.size": [
-   "Size and terms",
-   "Grootte en voorwaarden"
-  ],
   "profile.allowed": [
    "Allowed",
    "Toegestaan"
-  ],
-  "profile.rule.none": [
-   "No release rules yet.",
-   "Nog geen releaseregels."
-  ],
-  "profile.rule.edit": [
-   "Edit rule",
-   "Regel bewerken"
-  ],
-  "profile.deleteConfirm": [
-   "Delete this profile? Titles using it fall back to the default profile.",
-   "Dit profiel verwijderen? Titels die het gebruiken vallen terug op het standaardprofiel."
   ],
   "profile.minimumSize": [
    "Minimum size (MB)",
@@ -1599,14 +1443,6 @@
   "profile.maximumSize": [
    "Maximum size (MB)",
    "Maximale grootte (MB)"
-  ],
-  "profile.mustContain": [
-   "Must contain",
-   "Moet bevatten"
-  ],
-  "profile.mustNotContain": [
-   "Must not contain",
-   "Mag niet bevatten"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -2044,25 +1880,9 @@
    "New requests of this media type use the default profile.",
    "Nieuwe verzoeken van dit mediatype gebruiken het standaardprofiel."
   ],
-  "hint.AcquisitionProfileFields.DelayMinutes.placeholder": [
-   "0",
-   "0"
-  ],
-  "hint.AcquisitionProfileFields.DelayMinutes.info": [
-   "After a good release is published, waits this long for a better one; 0 takes it at once.",
-   "Wacht na het verschijnen van een goede release zo lang op een betere; 0 neemt hem meteen."
-  ],
   "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
    "Replaces a present file with a better quality until the cutoff is reached.",
    "Vervangt een aanwezig bestand door een betere kwaliteit tot het kwaliteitsdoel is bereikt."
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.placeholder": [
-   "Never",
-   "Nooit"
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.info": [
-   "Once the title has been wanted this many hours, the fallback qualities are also taken.",
-   "Zodra de titel zo veel uren gezocht is, worden ook de terugvalkwaliteiten genomen."
   ],
   "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
    "No minimum",
@@ -2079,54 +1899,6 @@
   "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
    "Larger releases are skipped.",
    "Grotere releases worden overgeslagen."
-  ],
-  "hint.AcquisitionProfileFields.MustContain.placeholder": [
-   "German, DL",
-   "German, DL"
-  ],
-  "hint.AcquisitionProfileFields.MustContain.info": [
-   "Words a release name must contain, separated by commas.",
-   "Woorden die een releasenaam moet bevatten, gescheiden door komma's."
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.placeholder": [
-   "CAM, TS",
-   "CAM, TS"
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.info": [
-   "Words that rule a release out, separated by commas.",
-   "Woorden die een release uitsluiten, gescheiden door komma's."
-  ],
-  "hint.AcquisitionProfileFields.RuleName.info": [
-   "Shown in the search results when the rule matches.",
-   "Wordt in de zoekresultaten getoond als de regel overeenkomt."
-  ],
-  "hint.AcquisitionProfileFields.RuleField.info": [
-   "Which part of the release the rule looks at.",
-   "Naar welk deel van de release de regel kijkt."
-  ],
-  "hint.AcquisitionProfileFields.RuleMatch.info": [
-   "Contains finds the text anywhere; a regular expression allows patterns such as [xh]\\.?265.",
-   "Bevat vindt de tekst overal; een reguliere expressie staat patronen toe zoals [xh]\\.?265."
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.placeholder": [
-   "x265",
-   "x265"
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.info": [
-   "The text or pattern to look for.",
-   "De tekst of het patroon waarnaar wordt gezocht."
-  ],
-  "hint.AcquisitionProfileFields.RuleEffect.info": [
-   "Require and Reject decide; Prefer and Avoid add or subtract the score; Info only names the match.",
-   "Vereisen en Afwijzen beslissen; Voorkeur geven en Vermijden tellen de score erbij of trekken die af; Alleen notitie benoemt alleen de overeenkomst."
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.placeholder": [
-   "100",
-   "100"
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.info": [
-   "From -1000 to 1000, added to the release's score.",
-   "Van -1000 tot 1000, opgeteld bij de score van de release."
   ],
   "hint.RequestRuleFields.Description.info": [
    "Shown to users the rule applies to.",
@@ -4016,10 +3788,6 @@
    "Release found",
    "Release gevonden"
   ],
-  "acquisition.outcome.release_delayed": [
-   "Waiting for a better release",
-   "Wachten op een betere release"
-  ],
   "acquisition.outcome.grabbed": [
    "Downloading",
    "Downloaden"
@@ -4203,10 +3971,6 @@
   "acquisition.reason.RuleScore": [
    "Rule score",
    "Regelscore"
-  ],
-  "acquisition.reason.FallbackQuality": [
-   "Fallback quality",
-   "Terugvalkwaliteit"
   ],
   "acquisition.reason.OnlyCandidate": [
    "Only eligible release",
@@ -5393,8 +5157,8 @@
    "De afleveringstitel"
   ],
   "library.naming.token.Quality": [
-   "The quality, such as WEB-1080p",
-   "De kwaliteit, zoals WEB-1080p"
+   "The quality, such as WEBDL-1080p",
+   "De kwaliteit, zoals WEBDL-1080p"
   ],
   "library.naming.token.ReleaseGroup": [
    "The release group",
@@ -6823,6 +6587,234 @@
   "setup.sources.plex": [
    "Plex and other providers",
    "Plex en andere providers"
+  ],
+  "arr.settings": [
+   "Arr+ settings",
+   "Arr+-instellingen"
+  ],
+  "arr.formats": [
+   "Custom formats",
+   "Eigen formaten"
+  ],
+  "arr.sizes": [
+   "Quality sizes",
+   "Kwaliteitsgroottes"
+  ],
+  "arr.releaseProfiles": [
+   "Release profiles",
+   "Releaseprofielen"
+  ],
+  "arr.tags": [
+   "Tags",
+   "Tags"
+  ],
+  "arr.qualityGroups": [
+   "Quality groups",
+   "Kwaliteitsgroepen"
+  ],
+  "arr.refreshGroups": [
+   "Apply group changes",
+   "Groepswijzigingen toepassen"
+  ],
+  "arr.minimumScore": [
+   "Minimum format score",
+   "Minimale formatscore"
+  ],
+  "arr.cutoffScore": [
+   "Upgrade until this format score",
+   "Upgraden tot deze formatscore"
+  ],
+  "arr.upgradeScore": [
+   "Minimum score increase",
+   "Minimale scoreverhoging"
+  ],
+  "arr.moveUp": [
+   "Move up",
+   "Omhoog"
+  ],
+  "arr.moveDown": [
+   "Move down",
+   "Omlaag"
+  ],
+  "arr.anyIndexer": [
+   "Every indexer",
+   "Alle indexers"
+  ],
+  "arr.includeRenaming": [
+   "Include when renaming",
+   "Opnemen bij hernoemen"
+  ],
+  "arr.condition": [
+   "Condition",
+   "Voorwaarde"
+  ],
+  "arr.required": [
+   "Required",
+   "Vereist"
+  ],
+  "arr.negate": [
+   "Negate",
+   "Omkeren"
+  ],
+  "arr.value": [
+   "Value or pattern",
+   "Waarde of patroon"
+  ],
+  "arr.exceptLanguage": [
+   "Any other language",
+   "Elke andere taal"
+  ],
+  "arr.resolution": [
+   "Resolution",
+   "Resolutie"
+  ],
+  "arr.minimum": [
+   "Minimum",
+   "Minimum"
+  ],
+  "arr.maximum": [
+   "Maximum",
+   "Maximum"
+  ],
+  "arr.addCondition": [
+   "Add condition",
+   "Voorwaarde toevoegen"
+  ],
+  "arr.removeCondition": [
+   "Remove last condition",
+   "Laatste voorwaarde verwijderen"
+  ],
+  "arr.importJson": [
+   "Sonarr, Radarr or TRaSH JSON",
+   "Sonarr-, Radarr- of TRaSH-JSON"
+  ],
+  "arr.import": [
+   "Import formats",
+   "Formaten importeren"
+  ],
+  "arr.minimumMb": [
+   "Minimum (MB/min)",
+   "Minimum (MB/min)"
+  ],
+  "arr.preferredMb": [
+   "Preferred (MB/min)",
+   "Voorkeur (MB/min)"
+  ],
+  "arr.maximumMb": [
+   "Maximum (MB/min)",
+   "Maximum (MB/min)"
+  ],
+  "arr.requiredTerms": [
+   "One required term",
+   "Een vereiste term"
+  ],
+  "arr.ignoredTerms": [
+   "Ignored terms",
+   "Uitgesloten termen"
+  ],
+  "arr.condition.ReleaseTitle": [
+   "Release title",
+   "Releasenaam"
+  ],
+  "arr.condition.Edition": [
+   "Edition",
+   "Editie"
+  ],
+  "arr.condition.Language": [
+   "Language",
+   "Taal"
+  ],
+  "arr.condition.ReleaseGroup": [
+   "Release group",
+   "Releasegroep"
+  ],
+  "arr.condition.Source": [
+   "Source",
+   "Bron"
+  ],
+  "arr.condition.Resolution": [
+   "Resolution",
+   "Resolutie"
+  ],
+  "arr.condition.QualityModifier": [
+   "Quality modifier",
+   "Kwaliteitsmodifier"
+  ],
+  "arr.condition.IndexerFlag": [
+   "Indexer flag",
+   "Indexer-vlag"
+  ],
+  "arr.condition.Size": [
+   "Size (GB)",
+   "Grootte (GB)"
+  ],
+  "arr.condition.ReleaseType": [
+   "Release type",
+   "Releasetype"
+  ],
+  "arr.condition.Year": [
+   "Year",
+   "Jaar"
+  ],
+  "takeover.outcome.takeover_profile_unsupported": [
+   "Profile needs review before importing titles",
+   "Profiel controleren voor titelimport"
+  ],
+  "arr.terms.info": [
+   "One term per line. Patterns use /expression/i.",
+   "Eén term per regel. Patronen: /expressie/i."
+  ],
+  "arr.condition.info": [
+   "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
+   "Gebruik een patroon voor titels, edities en groepen; een taalcode van twee letters of original, any, unknown voor talen. Bronnen en modifiers volgen Sonarr of Radarr. Resolutie als getal; grootte en jaar met grenzen."
+  ],
+  "common.remove": [
+   "Remove",
+   "Verwijderen"
+  ],
+  "acquisition.reason.SizeBelowQualityMinimum": [
+   "Below the minimum size for this quality",
+   "Onder de minimumgrootte voor deze kwaliteit"
+  ],
+  "acquisition.reason.SizeAboveQualityMaximum": [
+   "Above the maximum size for this quality",
+   "Boven de maximumgrootte voor deze kwaliteit"
+  ],
+  "acquisition.reason.FormatScore": [
+   "Custom format score",
+   "Formatscore"
+  ],
+  "acquisition.reason.FormatScoreBelowMinimum": [
+   "Format score below minimum",
+   "Formatscore onder minimum"
+  ],
+  "takeover.newLibraries": [
+   "Create libraries from root folders",
+   "Bibliotheken maken uit hoofdmappen"
+  ],
+  "takeover.keepLibrary": [
+   "Use existing library assignment",
+   "Bestaande bibliotheektoewijzing gebruiken"
+  ],
+  "takeover.inlineKeys": [
+   "Complete missing API keys",
+   "Ontbrekende API-sleutels aanvullen"
+  ],
+  "profile.section.size": [
+   "Size",
+   "Grootte"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this unused profile?",
+   "Dit ongebruikte profiel verwijderen?"
+  ],
+  "acquisition.reason.FormatEvaluationFailed": [
+   "Custom format could not be evaluated",
+   "Eigen formaat kon niet worden beoordeeld"
+  ],
+  "arr.applyCondition": [
+   "Apply condition type",
+   "Voorwaardetype toepassen"
   ]
  }
 }

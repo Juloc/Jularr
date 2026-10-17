@@ -7,7 +7,7 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         private static readonly Dictionary<string, string> Languages = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["german"] = "DE", ["deutsch"] = "DE", ["french"] = "FR", ["francais"] = "FR", ["spanish"] = "ES", ["espanol"] = "ES", ["italian"] = "IT", ["japanese"] = "JA"
+            ["english"] = "EN", ["german"] = "DE", ["deutsch"] = "DE", ["french"] = "FR", ["francais"] = "FR", ["spanish"] = "ES", ["espanol"] = "ES", ["italian"] = "IT", ["japanese"] = "JA"
         };
 
         [GeneratedRegex(@"^(?:1[5-9]|20)\d{2}$")]
@@ -21,6 +21,12 @@ namespace Jularr.Backend.Logic.Acquisition
 
         // Untagged releases are English, or a book in the language it was written in.
         public static string[] ReadLanguages(string title, string untagged = "EN") =>
-            Tokens(title).Select(token => Languages.GetValueOrDefault(token)).OfType<string>().Distinct().DefaultIfEmpty(untagged).ToArray();
+            Tokens(title).Select(token => Languages.GetValueOrDefault(token)).OfType<string>()
+                .Concat(CatalogLanguage().Matches(title).Select(match => match.Groups[1].Value.ToUpperInvariant()))
+                .Distinct().DefaultIfEmpty(untagged).ToArray();
+
+        // Direct catalogs append their explicit language immediately before the ebook format; short title words are not language tags.
+        [GeneratedRegex(@"\(([a-z]{2})(?:-[a-z]{2})?\)(?=\s*\((?:epub|pdf|azw3|mobi|cbz|cbr)\)\s*$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex CatalogLanguage();
     }
 }

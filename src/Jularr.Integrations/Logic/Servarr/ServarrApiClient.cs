@@ -106,7 +106,11 @@ namespace Jularr.Integrations.Logic.Servarr
                         var quality = Child(member, "quality");
                         if (quality.ValueKind != JsonValueKind.Object) continue;
                         qualities.Add(new ServarrQuality(Text(quality, "source"), Int(quality, "resolution") ?? 0, allowed || Bool(member, "allowed") == true && members.Length == 0,
-                            groupIsCutoff || members.Length == 0 && Int(quality, "id") == cutoff, Text(quality, "name")));
+                            groupIsCutoff || members.Length == 0 && Int(quality, "id") == cutoff, Text(quality, "name"))
+                        {
+                            GroupId = members.Length > 0 ? Int(entry, "id") : null,
+                            GroupName = members.Length > 0 ? Text(entry, "name") : null
+                        });
                     }
                 }
 
@@ -116,7 +120,11 @@ namespace Jularr.Integrations.Logic.Servarr
                     if (Int(format, "format") is { } id && Int(format, "score") is { } score) scores[id] = score;
                 }
 
-                return new ServarrQualityProfile(Int(item, "id")!.Value, Text(item, "name")!, Bool(item, "upgradeAllowed") ?? false, qualities, scores, Int(item, "minFormatScore") ?? 0);
+                return new ServarrQualityProfile(Int(item, "id")!.Value, Text(item, "name")!, Bool(item, "upgradeAllowed") ?? false, qualities, scores, Int(item, "minFormatScore") ?? 0)
+                {
+                    CutoffFormatScore = Int(item, "cutoffFormatScore") ?? 0,
+                    MinimumUpgradeFormatScore = Int(item, "minUpgradeFormatScore") ?? 1
+                };
             })];
         }
 
@@ -145,15 +153,78 @@ namespace Jularr.Integrations.Logic.Servarr
         public async Task<IReadOnlyList<ServarrCustomFormat>> ReadCustomFormatsAsync(ServarrConnection connection, CancellationToken ct)
         {
             using var document = await GetAsync(connection, "customformat", ct);
-            return [.. Items(document).Where(item => Int(item, "id") is not null && Text(item, "name") is not null).Select(item => new ServarrCustomFormat(Int(item, "id")!.Value, Text(item, "name")!,
-                [.. Array(item, "specifications").Select(condition => new ServarrFormatCondition(Text(condition, "implementation") ?? "", Bool(condition, "negate") ?? false,
-                    Bool(condition, "required") ?? false, Fields(condition).TryGetValue("value", out var value) ? value.ValueKind switch
-                    {
-                        JsonValueKind.String => value.GetString(),
-                        JsonValueKind.Number => value.GetRawText(),
-                        _ => null
-                    } : null))]))];
+            return ParseCustomFormats(document.RootElement);
         }
+
+        public static IReadOnlyList<ServarrCustomFormat> ParseCustomFormats(JsonElement root)
+        {
+            var entries = root.ValueKind == JsonValueKind.Array ? root.EnumerateArray().ToArray() : root.ValueKind == JsonValueKind.Object ? [root]
+                : throw new ServarrException(ServarrFailure.InvalidResponse, "The custom format document is invalid.");
+            if (entries.Length > 1000) throw new ServarrException(ServarrFailure.InvalidResponse, "The custom format document has too many entries.");
+            if (entries.Any(item => item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("specifications", out var conditions)
+                || conditions.ValueKind != JsonValueKind.Array || conditions.GetArrayLength() is < 1 or > 64
+                || conditions.EnumerateArray().Any(condition => condition.ValueKind != JsonValueKind.Object)
+                || item.TryGetProperty("id", out var id) && (id.ValueKind != JsonValueKind.Number || !id.TryGetInt32(out var number) || number < 1)))
+                throw new ServarrException(ServarrFailure.InvalidResponse, "A custom format is invalid.");
+            return entries.Select((item, index) => new ServarrCustomFormat(Int(item, "id") ?? index + 1, Text(item, "name")
+                ?? throw new ServarrException(ServarrFailure.InvalidResponse, "A custom format has no name."),
+                Array(item, "specifications").Select(condition => new ServarrFormatCondition(Text(condition, "name") ?? Text(condition, "implementation") ?? "",
+                    Text(condition, "implementation") ?? "", FormatBool(condition, "negate"), FormatBool(condition, "required"),
+                    FormatFields(condition))).ToArray())
+                { IncludeWhenRenaming = FormatBool(item, "includeCustomFormatWhenRenaming") }).ToArray();
+        }
+
+        private static IReadOnlyDictionary<string, JsonElement> FormatFields(JsonElement condition)
+        {
+            if (!condition.TryGetProperty("fields", out var fields) || fields.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
+                throw new ServarrException(ServarrFailure.InvalidResponse, "Custom format fields are missing.");
+            var result = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+            if (fields.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var field in fields.EnumerateObject())
+                    if (!result.TryAdd(field.Name, field.Value.Clone())) throw new ServarrException(ServarrFailure.InvalidResponse, "Custom format fields repeat.");
+            }
+            else
+            {
+                foreach (var field in fields.EnumerateArray())
+                {
+                    if (Text(field, "name") is not { } name || !field.TryGetProperty("value", out var value) || !result.TryAdd(name, value.Clone()))
+                        throw new ServarrException(ServarrFailure.InvalidResponse, "A custom format field is invalid.");
+                }
+            }
+            return result;
+        }
+
+        private static bool FormatBool(JsonElement item, string name)
+        {
+            if (!item.TryGetProperty(name, out var value)) return false;
+            if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw new ServarrException(ServarrFailure.InvalidResponse, "A custom format boolean is invalid.");
+            return value.GetBoolean();
+        }
+
+        public async Task<ServarrFormatCatalog> ReadFormatCatalogAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var languages = await GetAsync(connection, "language", ct);
+            using var flags = await GetAsync(connection, "indexerflag", ct);
+            using var schema = await GetAsync(connection, "customformat/schema", ct);
+            var options = new Dictionary<string, IReadOnlyDictionary<int, string>>(StringComparer.Ordinal);
+            foreach (var specification in Items(schema))
+            {
+                if (Text(specification, "implementation") is not { } implementation) continue;
+                foreach (var field in Array(specification, "fields"))
+                {
+                    if (Text(field, "name") is not { } name) continue;
+                    options[implementation + "/" + name] = Array(field, "selectOptions").Where(option => Int(option, "value") is not null && Text(option, "name") is not null)
+                        .ToDictionary(option => Int(option, "value")!.Value, option => Text(option, "name")!);
+                }
+            }
+
+            return new ServarrFormatCatalog(Names(languages), Names(flags), options);
+        }
+
+        private static IReadOnlyDictionary<int, string> Names(JsonDocument document) => Items(document)
+            .Where(item => Int(item, "id") is not null && Text(item, "name") is not null).ToDictionary(item => Int(item, "id")!.Value, item => Text(item, "name")!);
 
         private static IEnumerable<JsonElement> Array(JsonElement element, string property) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Array
@@ -200,7 +271,12 @@ namespace Jularr.Integrations.Logic.Servarr
 
         private static Dictionary<string, JsonElement> Fields(JsonElement item)
         {
-            var fields = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            var fields = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+            if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("fields", out var objectFields) && objectFields.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var field in objectFields.EnumerateObject()) fields[field.Name] = field.Value;
+                return fields;
+            }
             if (item.TryGetProperty("fields", out var list) && list.ValueKind == JsonValueKind.Array)
             {
                 foreach (var field in list.EnumerateArray().Where(field => field.ValueKind == JsonValueKind.Object))

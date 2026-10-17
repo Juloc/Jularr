@@ -8,6 +8,25 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         WebRip,
         BluRay,
         BluRayRip,
-        Hdtv
+        Hdtv,
+        Dvd,
+        Sdtv,
+
+        // Copies made before a film's home release.
+        Cam,
+        Telesync,
+        Telecine,
+        Workprint
+    }
+
+    // What a release is beyond its source, as Sonarr and Radarr name it.
+    internal enum ReleaseQualityModifier
+    {
+        None,
+        Remux,
+        BrDisk,
+        RawHd,
+        Regional,
+        Screener
     }
 }

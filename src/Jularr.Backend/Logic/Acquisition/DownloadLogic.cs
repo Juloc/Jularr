@@ -136,22 +136,15 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "Author",
                     platform."Abbreviation" AS "PlatformAbbreviation",
                     platform."IgdbId" AS "PlatformIgdbId",
-                    wanted."CreatedAt" AS "WantedSince",
-                    (
+                    coalesce((
                         SELECT
-                            available."QualityKey"
+                            jsonb_agg(jsonb_build_object('Quality', evidence."QualityKey", 'WorkUnitId', evidence."WorkUnitId", 'Facts', evidence."Evidence"))
                         FROM
-                            "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                            JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
-                                ON lower(quality."Key") = lower(available."QualityKey")
+                            "StoredFileFormatEvidence" AS evidence
                         WHERE
-                            asset."WorkId" = work."Id"
-                            AND asset."WorkUnitId" IS NULL
-                        ORDER BY
-                            quality."Position"
-                        LIMIT 1
-                    ) AS "InstalledQuality",
+                            evidence."WorkId" = work."Id"
+                            AND evidence."QualityKey" IS NOT NULL
+                    ), '[]')::text AS "InstalledFiles",
                     ARRAY(
                         SELECT DISTINCT
                             edition."Title"
@@ -173,7 +166,42 @@ namespace Jularr.Backend.Logic.Acquisition
                             edition."WorkId" = work."Id"
                             AND edition."LanguageCode" = ANY(requested."Languages")
                     ) AS "Isbns",
-                    work."OriginalLanguage"
+                    work."OriginalLanguage",
+                    coalesce((
+                        SELECT
+                            jsonb_agg(jsonb_build_object('Id', format."Id", 'Name', format."Name", 'IncludeWhenRenaming', format."IncludeWhenRenaming", 'Conditions', format."Conditions")
+                                ORDER BY format."Id")
+                        FROM
+                            "CustomFormats" AS format
+                        WHERE
+                            format."MediaTypeId" = work."MediaTypeId"
+                            AND EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(coalesce(profile."Definition"->'FormatScores', '[]'::jsonb)) AS score
+                                WHERE (score->>'FormatId')::bigint = format."Id"
+                            )
+                    ), '[]')::text AS "Formats",
+                    coalesce((
+                        SELECT
+                            jsonb_agg(jsonb_build_object('Quality', size."Quality", 'Minimum', size."MinimumMbPerMinute", 'Preferred', size."PreferredMbPerMinute",
+                                'Maximum', size."MaximumMbPerMinute"))
+                        FROM
+                            "QualityDefinitions" AS size
+                        WHERE
+                            size."MediaTypeId" = work."MediaTypeId"
+                            AND (size."MinimumMbPerMinute" > 0 OR size."PreferredMbPerMinute" IS NOT NULL OR size."MaximumMbPerMinute" IS NOT NULL)
+                    ), '[]')::text AS "QualitySizes",
+                    coalesce(work."RuntimeMinutes", (SELECT round(avg(unit."RuntimeMinutes")) FROM "WorkUnits" AS unit WHERE unit."WorkId" = work."Id"))::integer AS "RuntimeMinutes",
+                    coalesce((
+                        SELECT
+                            jsonb_agg(jsonb_build_object('Required', release."Required", 'Ignored', release."Ignored", 'IndexerId', release."AcquisitionConnectionId"))
+                        FROM
+                            "ReleaseProfiles" AS release
+                        WHERE
+                            release."IsEnabled"
+                            AND (release."MediaTypeId" IS NULL OR release."MediaTypeId" = work."MediaTypeId")
+                            AND (cardinality(release."TagIds") = 0 OR release."TagIds" && ARRAY(SELECT tag."TagId" FROM "WorkTags" AS tag WHERE tag."WorkId" = work."Id"))
+                    ), '[]')::text AS "ReleaseProfiles"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -280,8 +308,7 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
-                        OR work."MediaTypeId" IN (1, 3, 6, 7)
-                        AND EXISTS (
+                        OR EXISTS (
                             SELECT
                                 1
                             FROM
@@ -416,14 +443,15 @@ namespace Jularr.Backend.Logic.Acquisition
                 WITH release AS (
                     INSERT INTO
                         "AcquisitionReleases" ("WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "SourceUrl", "QualityKey", "ParentUnitNumber", "UnitStart", "UnitEnd",
-                            "AcquisitionReleaseStatusTypeId")
+                            "AcquisitionReleaseStatusTypeId", "IndexerFlags")
                     VALUES
-                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @ParentUnitNumber, @UnitStart, @UnitEnd, 1)
+                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @ParentUnitNumber, @UnitStart, @UnitEnd, 1, @IndexerFlags)
                     ON CONFLICT ("WantedItemId", "ReleaseIdentity") DO UPDATE
                     SET
                         "SourceUrl" = EXCLUDED."SourceUrl",
                         "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
                         "Title" = EXCLUDED."Title",
+                        "IndexerFlags" = EXCLUDED."IndexerFlags",
                         "QualityKey" = EXCLUDED."QualityKey",
                         "ParentUnitNumber" = EXCLUDED."ParentUnitNumber",
                         "UnitStart" = EXCLUDED."UnitStart",
@@ -558,7 +586,9 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND season."Number" > 0
                             AND (season."Number", earlier."Number") <= (parent."Number", unit."Number")
                     ) END AS "AbsoluteNumber",
-                    unit."ReleasedOn"
+                    unit."ReleasedOn",
+                    EXISTS (SELECT 1 FROM "WantedUnitsBelowCutoff" AS below
+                        WHERE below."WantedItemId" = wanted."Id" AND below."WorkUnitId" = unit."Id") AS "NeedsUpgrade"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"

@@ -1,4 +1,4 @@
-using Jularr.Backend.Data;
+using System.Text.Json;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
@@ -18,7 +18,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Few profiles; editor values come from the stored definition.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -28,45 +27,21 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."MediaTypeId",
                     profile."MediaSubtypeId",
                     profile."IsDefault",
-                    ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'AllowedQualities')) AS "AllowedQualities",
-                    coalesce((profile."Definition" ->> 'UpgradeAllowed')::boolean, FALSE) AS "UpgradeAllowed",
-                    profile."Definition" ->> 'UpgradeCutoffQuality' AS "UpgradeCutoffQuality",
-                    ((profile."Definition" ->> 'MinimumSizeBytes')::bigint / 1048576)::integer AS "MinimumSizeMb",
-                    ((profile."Definition" ->> 'MaximumSizeBytes')::bigint / 1048576)::integer AS "MaximumSizeMb",
-                    ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustContain')) AS "MustContain",
-                    ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustNotContain')) AS "MustNotContain",
-                    coalesce((profile."Definition" ->> 'DelayMinutes')::integer, 0) AS "DelayMinutes",
-                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'FallbackQualities', '[]'::jsonb))) AS "FallbackQualities",
-                    (profile."Definition" ->> 'FallbackAfterHours')::integer AS "FallbackAfterHours",
-                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'PrimaryTypes', '[]'::jsonb)))
-                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'SecondaryTypes', '[]'::jsonb)))
-                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'ReleaseStatuses', '[]'::jsonb))) AS "MonitoredTypes",
-                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'Languages', '[]'::jsonb))) AS "MonitoredLanguages",
-                    (profile."Definition" -> 'Monitoring' ->> 'MinimumPages')::integer AS "MinimumPages",
-                    (
-                        SELECT
-                            count(*)::integer
-                        FROM
-                            "WantedItems" AS wanted
-                        WHERE
-                            wanted."AcquisitionProfileId" = profile."Id"
-                    ) AS "WantedCount",
+                    profile."Definition"::text AS "Definition",
+                    (SELECT count(*)::integer FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id") AS "WantedCount",
                     profile."Version"
                 FROM
                     "AcquisitionProfiles" AS profile
                 WHERE
-                    @WantedItemId::bigint IS NULL
-                    OR EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WantedItems" AS wanted
+                    (@MediaTypeId::smallint IS NULL OR profile."MediaTypeId" = @MediaTypeId)
+                    AND (@WantedItemId::bigint IS NULL OR EXISTS (
+                        SELECT 1
+                        FROM "WantedItems" AS wanted
                             JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                        WHERE
-                            wanted."Id" = @WantedItemId
+                        WHERE wanted."Id" = @WantedItemId
                             AND profile."MediaTypeId" = work."MediaTypeId"
                             AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
-                    )
+                    ))
                 ORDER BY
                     profile."MediaTypeId",
                     profile."MediaSubtypeId" NULLS FIRST,
@@ -74,8 +49,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."Name",
                     profile."Id";
                 """;
-            sql.Parameters.Add(new WantedItemFilterData(Parameters.WantedItemId));
-            return new BaseDataList<AcquisitionProfileDetailsV1>(await Context.ReadSql.ReadListAsync<AcquisitionProfileDetailsV1>(sql, CancellationToken));
+            sql.Parameters.Add(Parameters);
+            var rows = await Context.ReadSql.ReadListAsync<AcquisitionProfileReadData>(sql, CancellationToken);
+            return new BaseDataList<AcquisitionProfileDetailsV1>(rows.Select(AcquisitionProfileContracts.Read));
         }
     }
 
@@ -97,29 +73,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."MediaTypeId",
                     profile."MediaSubtypeId",
                     profile."IsDefault",
-                    ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'AllowedQualities')) AS "AllowedQualities",
-                    coalesce((profile."Definition" ->> 'UpgradeAllowed')::boolean, FALSE) AS "UpgradeAllowed",
-                    profile."Definition" ->> 'UpgradeCutoffQuality' AS "UpgradeCutoffQuality",
-                    ((profile."Definition" ->> 'MinimumSizeBytes')::bigint / 1048576)::integer AS "MinimumSizeMb",
-                    ((profile."Definition" ->> 'MaximumSizeBytes')::bigint / 1048576)::integer AS "MaximumSizeMb",
-                    ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustContain')) AS "MustContain",
-                    ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustNotContain')) AS "MustNotContain",
-                    coalesce((profile."Definition" ->> 'DelayMinutes')::integer, 0) AS "DelayMinutes",
-                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'FallbackQualities', '[]'::jsonb))) AS "FallbackQualities",
-                    (profile."Definition" ->> 'FallbackAfterHours')::integer AS "FallbackAfterHours",
-                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'PrimaryTypes', '[]'::jsonb)))
-                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'SecondaryTypes', '[]'::jsonb)))
-                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'ReleaseStatuses', '[]'::jsonb))) AS "MonitoredTypes",
-                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'Languages', '[]'::jsonb))) AS "MonitoredLanguages",
-                    (profile."Definition" -> 'Monitoring' ->> 'MinimumPages')::integer AS "MinimumPages",
-                    (
-                        SELECT
-                            count(*)::integer
-                        FROM
-                            "WantedItems" AS wanted
-                        WHERE
-                            wanted."AcquisitionProfileId" = profile."Id"
-                    ) AS "WantedCount",
+                    profile."Definition"::text AS "Definition",
+                    (SELECT count(*)::integer FROM "WantedItems" AS wanted WHERE wanted."AcquisitionProfileId" = profile."Id") AS "WantedCount",
                     profile."Version"
                 FROM
                     "AcquisitionProfiles" AS profile
@@ -127,7 +82,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."Id" = @AcquisitionProfileId;
                 """;
             sql.Parameters.Add(Parameters);
-            return await Context.ReadSql.ReadRequiredAsync<AcquisitionProfileDetailsV1>(sql, CancellationToken);
+            return AcquisitionProfileContracts.Read(await Context.ReadSql.ReadRequiredAsync<AcquisitionProfileReadData>(sql, CancellationToken));
         }
     }
 
@@ -139,8 +94,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override ModuleRequirement GetInstanceModules(CreateAcquisitionProfileParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(CreateAcquisitionProfileParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
-        protected override async Task<IServiceOutput> OnCreate() =>
-            new CreateAcquisitionProfileResultV1(await Context.CreateAcquisitionProfileAsync(AcquisitionProfileInput.Create(null, Data), CancellationToken));
+        protected override async Task<IServiceOutput> OnCreate()
+        {
+            var id = await Context.CreateAcquisitionProfileAsync(AcquisitionProfileContracts.Input(null, Data), CancellationToken);
+            return new CreateAcquisitionProfileResultV1(id);
+        }
     }
 
     [ServiceEndpoint("PUT", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}")]
@@ -153,12 +111,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            if (Data.Version is null)
-            {
-                throw new DataValidationException(nameof(SaveAcquisitionProfileDataV1.Version), "required");
-            }
-
-            await Context.UpdateAcquisitionProfileAsync(AcquisitionProfileInput.Create(Parameters.AcquisitionProfileId, Data), CancellationToken);
+            await Context.UpdateAcquisitionProfileAsync(AcquisitionProfileContracts.Input(Parameters.AcquisitionProfileId, Data), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -178,69 +131,31 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
     }
 
-    [ServiceEndpoint("GET", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules")]
-    public sealed class ReadAcquisitionProfileRulesV1 : AdminService<AcquisitionProfileParametersV1>
+    internal static class AcquisitionProfileContracts
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ReleaseRuleV1>>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionProfileParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(AcquisitionProfileParametersV1 parameters, Type resultType) => new("wanted.read");
+        public static AcquisitionProfileInputData Input(long? id, SaveAcquisitionProfileDataV1 data) =>
+            new(id, data.Name, data.MediaTypeId, data.MediaSubtypeId, data.IsDefault, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality,
+                data.MinimumSizeMb, data.MaximumSizeMb, data.Version)
+            {
+                QualityOrder = data.QualityOrder,
+                QualityGroups = [.. data.QualityGroups.Select(group => new QualityGroup(group.Id, group.Name, group.Qualities))],
+                FormatScores = [.. data.FormatScores.Select(score => new FormatScore(score.FormatId, score.Score))],
+                MinimumFormatScore = data.MinimumFormatScore,
+                CutoffFormatScore = data.CutoffFormatScore,
+                MinimumUpgradeFormatScore = data.MinimumUpgradeFormatScore
+            };
 
-        protected override async Task<IServiceOutput> OnRead() =>
-            new BaseDataList<ReleaseRuleV1>((await Context.ReadProfileRulesAsync(Parameters.AcquisitionProfileId, CancellationToken))
-                .Select(rule => new ReleaseRuleV1(rule.Id, rule.Name, rule.Field, rule.Match, rule.Value, rule.EffectiveEffect, rule.Score)).ToArray());
-    }
-
-    [ServiceEndpoint("POST", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules")]
-    public sealed class AddAcquisitionProfileRuleV1 : AdminService<AcquisitionProfileParametersV1, SaveReleaseRuleDataV1>
-    {
-        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionProfileParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(AcquisitionProfileParametersV1 parameters, Type resultType) => new("acquisition.manage");
-
-        protected override async Task<IServiceOutput> OnCreate()
+        public static AcquisitionProfileDetailsV1 Read(AcquisitionProfileReadData row)
         {
-            await Context.AddProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version),
-                new ReleaseScoreRule(Data.Name, Data.Field, Data.Match, Data.Value, Data.Score) { Effect = Data.Effect }, CancellationToken);
-            return new UpdateResult(true);
+            var definition = JsonSerializer.Deserialize<AcquisitionProfileDefinition>(row.Definition, AcquisitionSelectionLogic.DefinitionOptions)
+                ?? throw new InvalidOperationException("The acquisition profile is invalid.");
+            return new AcquisitionProfileDetailsV1(row.Id, row.Name, row.MediaTypeId, row.IsDefault, definition.AllowedQualities, definition.UpgradeAllowed,
+                definition.UpgradeCutoffQuality, (int?)(definition.MinimumSizeBytes / 1048576), (int?)(definition.MaximumSizeBytes / 1048576), row.MediaSubtypeId,
+                definition.QualityOrder, new BaseDataList<QualityGroupV1>(definition.QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name, group.Qualities))),
+                new BaseDataList<CustomFormatScoreV1>(definition.FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))),
+                definition.MinimumFormatScore, definition.CutoffFormatScore, definition.MinimumUpgradeFormatScore, row.WantedCount, row.Version,
+                [.. (definition.Monitoring?.PrimaryTypes ?? []).Concat(definition.Monitoring?.SecondaryTypes ?? []).Concat(definition.Monitoring?.ReleaseStatuses ?? [])],
+                definition.Monitoring?.Languages ?? [], definition.Monitoring?.MinimumPages);
         }
-    }
-
-    [ServiceEndpoint("PUT", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{ruleId:int}")]
-    public sealed class UpdateAcquisitionProfileRuleV1 : AdminService<ReleaseRuleKeyParametersV1, SaveReleaseRuleDataV1>
-    {
-        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ReleaseRuleKeyParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(ReleaseRuleKeyParametersV1 parameters, Type resultType) => new("acquisition.manage");
-
-        protected override async Task<IServiceOutput> OnUpdate()
-        {
-            await Context.UpdateProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version), Parameters.RuleId,
-                new ReleaseScoreRule(Data.Name, Data.Field, Data.Match, Data.Value, Data.Score) { Effect = Data.Effect }, CancellationToken);
-            return new UpdateResult(true);
-        }
-    }
-
-    [ServiceEndpoint("DELETE", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{ruleId:int}")]
-    public sealed class DeleteAcquisitionProfileRuleV1 : AdminService<ReleaseRuleParametersV1, NoData>
-    {
-        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ReleaseRuleParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(ReleaseRuleParametersV1 parameters, Type resultType) => new("acquisition.manage");
-
-        protected override async Task<IServiceOutput> OnDelete()
-        {
-            await Context.RemoveProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Parameters.Version), Parameters.RuleId, CancellationToken);
-            return new UpdateResult(true);
-        }
-    }
-
-    internal static class AcquisitionProfileInput
-    {
-        public static AcquisitionProfileInputData Create(long? id, SaveAcquisitionProfileDataV1 data) =>
-            new(id, data.Name, data.MediaTypeId, data.MediaSubtypeId, data.IsDefault, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality, data.MinimumSizeMb, data.MaximumSizeMb,
-                data.MustContain, data.MustNotContain, data.Version, data.DelayMinutes, data.FallbackQualities, data.FallbackAfterHours);
     }
 }

@@ -1312,10 +1312,6 @@
    "No quality Jularr knows",
    "Keine Qualität, die Jularr kennt"
   ],
-  "takeover.outcome.takeover_minimum_score": [
-   "Its minimum format score is not taken over",
-   "Die Mindestpunktzahl für Formate wird nicht übernommen"
-  ],
   "takeover.outcome.takeover_format_skipped": [
    "Not taken over: conditions Jularr does not support",
    "Nicht übernommen: Bedingungen, die Jularr nicht unterstützt"
@@ -1375,142 +1371,6 @@
   "sources.availability.ReferenceOnly": [
    "Reference only",
    "Nur Referenz"
-  ],
-  "profile.delay": [
-   "Wait for a better release (minutes)",
-   "Auf besseres Release warten (Minuten)"
-  ],
-  "profile.fallbackQualities": [
-   "Fallback qualities",
-   "Ausweichqualitäten"
-  ],
-  "profile.fallbackAfter": [
-   "Accept the fallback after (hours)",
-   "Ausweichqualität akzeptieren nach (Stunden)"
-  ],
-  "profile.rules": [
-   "Release rules",
-   "Release-Regeln"
-  ],
-  "profile.rule.name": [
-   "Rule",
-   "Regel"
-  ],
-  "profile.rule.condition": [
-   "Condition",
-   "Bedingung"
-  ],
-  "profile.rule.field": [
-   "Field",
-   "Feld"
-  ],
-  "profile.rule.match": [
-   "Match",
-   "Abgleich"
-  ],
-  "profile.rule.value": [
-   "Value",
-   "Wert"
-  ],
-  "profile.rule.effect": [
-   "Effect",
-   "Wirkung"
-  ],
-  "profile.rule.remove": [
-   "Remove",
-   "Entfernen"
-  ],
-  "profile.rule.match.Equals": [
-   "is",
-   "ist"
-  ],
-  "profile.rule.match.Contains": [
-   "contains",
-   "enthält"
-  ],
-  "profile.rule.match.Regex": [
-   "matches the pattern",
-   "entspricht dem Muster"
-  ],
-  "profile.rule.effect.Require": [
-   "Require",
-   "Verlangen"
-  ],
-  "profile.rule.effect.Prefer": [
-   "Prefer",
-   "Bevorzugen"
-  ],
-  "profile.rule.effect.Avoid": [
-   "Avoid",
-   "Vermeiden"
-  ],
-  "profile.rule.effect.Reject": [
-   "Reject",
-   "Ablehnen"
-  ],
-  "profile.rule.effect.Info": [
-   "Note only",
-   "Nur Hinweis"
-  ],
-  "profile.rule.field.RawTitle": [
-   "Release name",
-   "Release-Name"
-  ],
-  "profile.rule.field.ReleaseGroup": [
-   "Release group",
-   "Release-Gruppe"
-  ],
-  "profile.rule.field.Source": [
-   "Source",
-   "Quelle"
-  ],
-  "profile.rule.field.Resolution": [
-   "Resolution",
-   "Auflösung"
-  ],
-  "profile.rule.field.VideoCodec": [
-   "Video codec",
-   "Video-Codec"
-  ],
-  "profile.rule.field.BitDepth": [
-   "Bit depth",
-   "Bittiefe"
-  ],
-  "profile.rule.field.HdrFormat": [
-   "HDR format",
-   "HDR-Format"
-  ],
-  "profile.rule.field.AudioCodec": [
-   "Audio codec",
-   "Audio-Codec"
-  ],
-  "profile.rule.field.AudioLanguage": [
-   "Audio language",
-   "Audiosprache"
-  ],
-  "profile.rule.field.SubtitleLanguage": [
-   "Subtitle language",
-   "Untertitelsprache"
-  ],
-  "profile.rule.field.DualAudio": [
-   "Dual audio",
-   "Dual Audio"
-  ],
-  "profile.rule.field.MultiAudio": [
-   "Multiple audio tracks",
-   "Mehrere Audiospuren"
-  ],
-  "profile.rule.field.Proper": [
-   "Proper",
-   "Proper"
-  ],
-  "profile.rule.field.Repack": [
-   "Repack",
-   "Repack"
-  ],
-  "profile.rule.field.Indexer": [
-   "Indexer",
-   "Indexer"
   ],
   "profile.name": [
    "Name",
@@ -1572,25 +1432,9 @@
    "Qualities",
    "Qualitäten"
   ],
-  "profile.section.size": [
-   "Size and terms",
-   "Größe und Begriffe"
-  ],
   "profile.allowed": [
    "Allowed",
    "Erlaubt"
-  ],
-  "profile.rule.none": [
-   "No release rules yet.",
-   "Noch keine Release-Regeln."
-  ],
-  "profile.rule.edit": [
-   "Edit rule",
-   "Regel bearbeiten"
-  ],
-  "profile.deleteConfirm": [
-   "Delete this profile? Titles using it fall back to the default profile.",
-   "Dieses Profil löschen? Titel, die es nutzen, fallen auf das Standardprofil zurück."
   ],
   "profile.minimumSize": [
    "Minimum size (MB)",
@@ -1599,14 +1443,6 @@
   "profile.maximumSize": [
    "Maximum size (MB)",
    "Maximalgröße (MB)"
-  ],
-  "profile.mustContain": [
-   "Must contain",
-   "Muss enthalten"
-  ],
-  "profile.mustNotContain": [
-   "Must not contain",
-   "Darf nicht enthalten"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -2044,25 +1880,9 @@
    "New requests of this media type use the default profile.",
    "Neue Anfragen dieses Medientyps nutzen das Standardprofil."
   ],
-  "hint.AcquisitionProfileFields.DelayMinutes.placeholder": [
-   "0",
-   "0"
-  ],
-  "hint.AcquisitionProfileFields.DelayMinutes.info": [
-   "After a good release is published, waits this long for a better one; 0 takes it at once.",
-   "Wartet nach der Veröffentlichung eines guten Releases so lange auf ein besseres; 0 nimmt es sofort."
-  ],
   "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
    "Replaces a present file with a better quality until the cutoff is reached.",
    "Ersetzt eine vorhandene Datei durch eine bessere Qualität, bis das Qualitätsziel erreicht ist."
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.placeholder": [
-   "Never",
-   "Nie"
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.info": [
-   "Once the title has been wanted this many hours, the fallback qualities are also taken.",
-   "Sobald der Titel so viele Stunden gesucht wird, werden auch die Ausweichqualitäten genommen."
   ],
   "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
    "No minimum",
@@ -2079,54 +1899,6 @@
   "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
    "Larger releases are skipped.",
    "Größere Releases werden übersprungen."
-  ],
-  "hint.AcquisitionProfileFields.MustContain.placeholder": [
-   "German, DL",
-   "German, DL"
-  ],
-  "hint.AcquisitionProfileFields.MustContain.info": [
-   "Words a release name must contain, separated by commas.",
-   "Wörter, die ein Release-Name enthalten muss, durch Kommas getrennt."
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.placeholder": [
-   "CAM, TS",
-   "CAM, TS"
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.info": [
-   "Words that rule a release out, separated by commas.",
-   "Wörter, die ein Release ausschließen, durch Kommas getrennt."
-  ],
-  "hint.AcquisitionProfileFields.RuleName.info": [
-   "Shown in the search results when the rule matches.",
-   "Wird in den Suchergebnissen angezeigt, wenn die Regel zutrifft."
-  ],
-  "hint.AcquisitionProfileFields.RuleField.info": [
-   "Which part of the release the rule looks at.",
-   "Welchen Teil des Releases die Regel prüft."
-  ],
-  "hint.AcquisitionProfileFields.RuleMatch.info": [
-   "Contains finds the text anywhere; a regular expression allows patterns such as [xh]\\.?265.",
-   "Enthält findet den Text an beliebiger Stelle; ein regulärer Ausdruck erlaubt Muster wie [xh]\\.?265."
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.placeholder": [
-   "x265",
-   "x265"
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.info": [
-   "The text or pattern to look for.",
-   "Der gesuchte Text oder das gesuchte Muster."
-  ],
-  "hint.AcquisitionProfileFields.RuleEffect.info": [
-   "Require and Reject decide; Prefer and Avoid add or subtract the score; Info only names the match.",
-   "Verlangen und Ablehnen entscheiden; Bevorzugen und Vermeiden addieren oder subtrahieren die Punktzahl; Nur Hinweis benennt lediglich den Treffer."
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.placeholder": [
-   "100",
-   "100"
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.info": [
-   "From -1000 to 1000, added to the release's score.",
-   "Von -1000 bis 1000, wird zur Punktzahl des Releases addiert."
   ],
   "hint.RequestRuleFields.Description.info": [
    "Shown to users the rule applies to.",
@@ -4016,10 +3788,6 @@
    "Release found",
    "Release gefunden"
   ],
-  "acquisition.outcome.release_delayed": [
-   "Waiting for a better release",
-   "Wartet auf ein besseres Release"
-  ],
   "acquisition.outcome.grabbed": [
    "Downloading",
    "Wird heruntergeladen"
@@ -4203,10 +3971,6 @@
   "acquisition.reason.RuleScore": [
    "Rule score",
    "Regelpunkte"
-  ],
-  "acquisition.reason.FallbackQuality": [
-   "Fallback quality",
-   "Ausweichqualität"
   ],
   "acquisition.reason.OnlyCandidate": [
    "Only eligible release",
@@ -5393,8 +5157,8 @@
    "Der Folgentitel"
   ],
   "library.naming.token.Quality": [
-   "The quality, such as WEB-1080p",
-   "Die Qualität, etwa WEB-1080p"
+   "The quality, such as WEBDL-1080p",
+   "Die Qualität, etwa WEBDL-1080p"
   ],
   "library.naming.token.ReleaseGroup": [
    "The release group",
@@ -6823,6 +6587,234 @@
   "setup.sources.plex": [
    "Plex and other providers",
    "Plex und weitere Anbieter"
+  ],
+  "arr.settings": [
+   "Arr+ settings",
+   "Arr+-Einstellungen"
+  ],
+  "arr.formats": [
+   "Custom formats",
+   "Eigene Formate"
+  ],
+  "arr.sizes": [
+   "Quality sizes",
+   "Qualitätsgrößen"
+  ],
+  "arr.releaseProfiles": [
+   "Release profiles",
+   "Release-Profile"
+  ],
+  "arr.tags": [
+   "Tags",
+   "Tags"
+  ],
+  "arr.qualityGroups": [
+   "Quality groups",
+   "Qualitätsgruppen"
+  ],
+  "arr.refreshGroups": [
+   "Apply group changes",
+   "Gruppenänderungen anwenden"
+  ],
+  "arr.minimumScore": [
+   "Minimum format score",
+   "Mindest-Format-Score"
+  ],
+  "arr.cutoffScore": [
+   "Upgrade until this format score",
+   "Upgrade bis zu diesem Format-Score"
+  ],
+  "arr.upgradeScore": [
+   "Minimum score increase",
+   "Mindest-Score-Steigerung"
+  ],
+  "arr.moveUp": [
+   "Move up",
+   "Nach oben"
+  ],
+  "arr.moveDown": [
+   "Move down",
+   "Nach unten"
+  ],
+  "arr.anyIndexer": [
+   "Every indexer",
+   "Alle Indexer"
+  ],
+  "arr.includeRenaming": [
+   "Include when renaming",
+   "Beim Umbenennen verwenden"
+  ],
+  "arr.condition": [
+   "Condition",
+   "Bedingung"
+  ],
+  "arr.required": [
+   "Required",
+   "Erforderlich"
+  ],
+  "arr.negate": [
+   "Negate",
+   "Umkehren"
+  ],
+  "arr.value": [
+   "Value or pattern",
+   "Wert oder Muster"
+  ],
+  "arr.exceptLanguage": [
+   "Any other language",
+   "Jede andere Sprache"
+  ],
+  "arr.resolution": [
+   "Resolution",
+   "Auflösung"
+  ],
+  "arr.minimum": [
+   "Minimum",
+   "Minimum"
+  ],
+  "arr.maximum": [
+   "Maximum",
+   "Maximum"
+  ],
+  "arr.addCondition": [
+   "Add condition",
+   "Bedingung hinzufügen"
+  ],
+  "arr.removeCondition": [
+   "Remove last condition",
+   "Letzte Bedingung entfernen"
+  ],
+  "arr.importJson": [
+   "Sonarr, Radarr or TRaSH JSON",
+   "Sonarr-, Radarr- oder TRaSH-JSON"
+  ],
+  "arr.import": [
+   "Import formats",
+   "Formate importieren"
+  ],
+  "arr.minimumMb": [
+   "Minimum (MB/min)",
+   "Minimum (MB/min)"
+  ],
+  "arr.preferredMb": [
+   "Preferred (MB/min)",
+   "Bevorzugt (MB/min)"
+  ],
+  "arr.maximumMb": [
+   "Maximum (MB/min)",
+   "Maximum (MB/min)"
+  ],
+  "arr.requiredTerms": [
+   "One required term",
+   "Einer dieser Begriffe erforderlich"
+  ],
+  "arr.ignoredTerms": [
+   "Ignored terms",
+   "Ausgeschlossene Begriffe"
+  ],
+  "arr.condition.ReleaseTitle": [
+   "Release title",
+   "Release-Titel"
+  ],
+  "arr.condition.Edition": [
+   "Edition",
+   "Edition"
+  ],
+  "arr.condition.Language": [
+   "Language",
+   "Sprache"
+  ],
+  "arr.condition.ReleaseGroup": [
+   "Release group",
+   "Release-Gruppe"
+  ],
+  "arr.condition.Source": [
+   "Source",
+   "Quelle"
+  ],
+  "arr.condition.Resolution": [
+   "Resolution",
+   "Auflösung"
+  ],
+  "arr.condition.QualityModifier": [
+   "Quality modifier",
+   "Qualitätszusatz"
+  ],
+  "arr.condition.IndexerFlag": [
+   "Indexer flag",
+   "Indexer-Flag"
+  ],
+  "arr.condition.Size": [
+   "Size (GB)",
+   "Größe (GB)"
+  ],
+  "arr.condition.ReleaseType": [
+   "Release type",
+   "Release-Typ"
+  ],
+  "arr.condition.Year": [
+   "Year",
+   "Jahr"
+  ],
+  "takeover.outcome.takeover_profile_unsupported": [
+   "Profile needs review before importing titles",
+   "Profil vor Titelübernahme prüfen"
+  ],
+  "arr.terms.info": [
+   "One term per line. Patterns use /expression/i.",
+   "Ein Begriff pro Zeile. Muster als /Ausdruck/i eingeben."
+  ],
+  "arr.condition.info": [
+   "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
+   "Für Titel, Edition und Gruppe ein Muster verwenden; für Sprachen einen Zweibuchstaben-Code oder original, any, unknown. Quellen und Zusätze folgen Sonarr oder Radarr. Auflösung als Zahl; Größe und Jahr über Minimum und Maximum."
+  ],
+  "common.remove": [
+   "Remove",
+   "Entfernen"
+  ],
+  "acquisition.reason.SizeBelowQualityMinimum": [
+   "Below the minimum size for this quality",
+   "Unter der Mindestgröße dieser Qualität"
+  ],
+  "acquisition.reason.SizeAboveQualityMaximum": [
+   "Above the maximum size for this quality",
+   "Über der Maximalgröße dieser Qualität"
+  ],
+  "acquisition.reason.FormatScore": [
+   "Custom format score",
+   "Format-Score"
+  ],
+  "acquisition.reason.FormatScoreBelowMinimum": [
+   "Format score below minimum",
+   "Format-Score unter Minimum"
+  ],
+  "takeover.newLibraries": [
+   "Create libraries from root folders",
+   "Bibliotheken aus Root-Folders erstellen"
+  ],
+  "takeover.keepLibrary": [
+   "Use existing library assignment",
+   "Vorhandene Bibliothekszuordnung verwenden"
+  ],
+  "takeover.inlineKeys": [
+   "Complete missing API keys",
+   "Fehlende API-Keys ergänzen"
+  ],
+  "profile.section.size": [
+   "Size",
+   "Größe"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this unused profile?",
+   "Dieses unbenutzte Profil löschen?"
+  ],
+  "acquisition.reason.FormatEvaluationFailed": [
+   "Custom format could not be evaluated",
+   "Eigenes Format konnte nicht ausgewertet werden"
+  ],
+  "arr.applyCondition": [
+   "Apply condition type",
+   "Bedingungsart anwenden"
   ]
  }
 }

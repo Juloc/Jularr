@@ -113,13 +113,15 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Multiline<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
         {
             var field = Declare(selector, FieldControl.Text, labelKey, help);
-            var input = new HtmlTextarea(new ValueText(Value(field) ?? "")).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
+            var value = _data is not null && field.ReadValue(_data) is string[] lines ? string.Join("\n", lines) : Value(field) ?? "";
+            var input = new HtmlTextarea(new ValueText(value)).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
             Configure(field, input);
             AddField(field, input, wide: true);
             return this;
         }
 
-        public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null)
+        public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null,
+            string? refreshAction = null, string? refreshLabelKey = null)
         {
             var field = Declare(selector, FieldControl.Select, labelKey, help);
             var value = Value(field);
@@ -135,9 +137,11 @@ namespace Jularr.Frontend.Framework
                         .Attribute("name", field.Name).Attribute("value", option.Value);
                     if (option.Value == value) radio.Attribute("checked", "checked");
                     Configure(field, radio);
+                    if (refreshAction is not null) radio.Attribute("data-form-refresh", refreshAction);
                     return new HtmlLabel(radio, new Span(new ValueText(option.Label))).Class("ui-segment");
                 }).ToArray<IUiComponent>();
                 AddField(field, new Div(segments).Class("ui-segments"), segmented: true);
+                RefreshButton(refreshAction, refreshLabelKey);
                 return this;
             }
 
@@ -153,8 +157,18 @@ namespace Jularr.Frontend.Framework
             }).ToArray();
             var select = new HtmlSelect(items).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
             Configure(field, select);
+            if (refreshAction is not null) select.Attribute("data-form-refresh", refreshAction);
             AddField(field, select);
+            RefreshButton(refreshAction, refreshLabelKey);
             return this;
+        }
+
+        private void RefreshButton(string? action, string? labelKey)
+        {
+            if (action is null) return;
+            if (labelKey is null || !action.StartsWith('/') || action.StartsWith("//")) throw new ArgumentException("Refresh requires a local action and a label.");
+            _target.Add(new Button(new Text(labelKey)).Attribute("type", "submit").Attribute("formaction", action)
+                .Attribute("formnovalidate", "formnovalidate").Attribute("data-form-refresh-submit", action));
         }
 
         public Form<TData> Choices<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null)
@@ -212,8 +226,8 @@ namespace Jularr.Frontend.Framework
             return new ChoiceColumn(field.Name, labelKey, single, noneKey, selected);
         }
 
-        // One row per option and one choice per column, such as a quality being allowed, the cutoff or a fallback.
-        public Form<TData> ChoiceTable(string labelKey, IReadOnlyList<SelectOption> rows, params ChoiceColumn[] columns)
+        // One row per option, with optional commands that share the parent form.
+        public Form<TData> ChoiceTable(string labelKey, IReadOnlyList<SelectOption> rows, IReadOnlyList<ChoiceColumn> columns, Func<SelectOption, IUiComponent>? actions = null)
         {
             // Each choice is named by its row and its column.
             string RowId(int index) => _id + "-row-" + index.ToString(CultureInfo.InvariantCulture);
@@ -227,15 +241,16 @@ namespace Jularr.Frontend.Framework
                 return new HtmlCell(input);
             }
 
-            var head = new HtmlRow([new HtmlHeader(new Span()), .. columns.Select(column => new HtmlHeader(new Text(column.LabelKey)).Attribute("id", ColumnId(column)))]);
+            var head = new HtmlRow([new HtmlHeader(new Span()), .. columns.Select(column => new HtmlHeader(new Text(column.LabelKey)).Attribute("id", ColumnId(column))),
+                .. (actions is null ? [] : new[] { new HtmlHeader(new Text("common.actions")) })]);
             var body = rows.Select((row, index) => (IUiComponent)new HtmlRow([new HtmlHeader(new ValueText(row.Label)).Attribute("scope", "row").Attribute("id", RowId(index)),
-                .. columns.Select(column => Choice(column, row.Value, index))])).ToList();
+                .. columns.Select(column => Choice(column, row.Value, index)), .. (actions is null ? [] : new[] { new HtmlCell(actions(row)) })])).ToList();
 
             // A single column without a value, such as no cutoff.
             if (columns.FirstOrDefault(column => column.Single && column.NoneKey is not null) is { } optional)
             {
                 body.Add(new HtmlRow([new HtmlHeader(new Text(optional.NoneKey!)).Attribute("scope", "row").Attribute("id", RowId(rows.Count)),
-                    .. columns.Select(column => column == optional ? Choice(column, "", rows.Count, none: true) : new HtmlCell())]));
+                    .. columns.Select(column => column == optional ? Choice(column, "", rows.Count, none: true) : new HtmlCell()), .. (actions is null ? [] : new[] { new HtmlCell() })]));
             }
 
             var content = new List<IUiComponent>
@@ -312,7 +327,8 @@ namespace Jularr.Frontend.Framework
 
             // Buttons close the form; a single short field, or none, sits beside its buttons.
             if (_actions.Count > 0) content.Add(new Div([.. _actions]).Class("ui-form__actions"));
-            var form = new HtmlForm([.. content]).Class(_visibleFields <= 1 && !_hasWideField ? "ui-form ui-form--inline" : "ui-form");
+            var form = new HtmlForm([.. content]).Class(_visibleFields <= 1 && !_hasWideField ? "ui-form ui-form--inline" : "ui-form")
+                .Attribute("data-form-kind", typeof(TData).FullName!);
             if (_action is not null)
             {
                 form.Attribute("action", _action).Attribute("method", "post");

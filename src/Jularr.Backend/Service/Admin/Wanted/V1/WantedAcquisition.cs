@@ -60,7 +60,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
 
             var now = _time.GetUtcNow().UtcDateTime;
-            var profile = AcquisitionSelectionLogic.ReadProfile(target, now);
+            var profile = AcquisitionSelectionLogic.ReadProfile(target);
             var intent = AcquisitionSelectionLogic.ReadIntent(target, kind, scope);
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
@@ -132,13 +132,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Indexers left out for backoff or limits count as unavailable, not as empty.
             var sources = catalogs.Length + newznab.Length + skipped;
             var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
-            var delayed = automatic && selection.Winner is { } winner
-                ? AcquisitionSelectionLogic.DelayUntil(profile, winner, now) ?? AcquisitionSelectionLogic.LanguageDelayUntil(profile, target, winner, now)
-                : null;
-            return new WantedSearchResult(selection, offers, unavailable, delayed is null ? AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable) : "release_delayed")
-            {
-                DelayedUntil = delayed
-            };
+            return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable));
         }
 
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
@@ -185,7 +179,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
-                requestedByAccountId: accountId);
+                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags] };
             var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
 
             // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
@@ -286,7 +280,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         var items = await _newznab.SearchAsync(connection, new NewznabQuery(query.Mode, query.Text, query.Parameters, query.AnyCategory ? [] : categories, limit, page * limit), timeout.Token);
                         foreach (var item in items)
                         {
-                            var offer = new ReleaseOffer(item.Title, indexer.Id, indexer.Name, indexer.Priority, item.Guid, item.DownloadUri, item.InfoUrl, item.SizeBytes, item.PublishedAt, [query.Stage]);
+                            var offer = new ReleaseOffer(item.Title, indexer.Id, indexer.Name, indexer.Priority, item.Guid, item.DownloadUri, item.InfoUrl, item.SizeBytes, item.PublishedAt, [query.Stage])
+                                { IndexerFlags = item.IndexerFlags };
                             offers.AddOrUpdate(offer.Identity, offer, (_, existing) => AcquisitionSelectionLogic.Merge(existing, offer));
                         }
 

@@ -88,6 +88,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   A page passes `FieldHelp` only where the field means something special there; an empty key shows
   none. Labels stay short: units belong in the label, explanations in the (i).
 - `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
+- `Form.Select` may declare a local draft refresh action and a fallback button label. `Form.entry.ts` replaces only the server-rendered form on a field change; the action preserves the draft and performs no mutation. The native button remains usable without JavaScript. Pages opt into the component asset.
 - Form transport values are invariant, independently of the display language.
   `Form<TData>` emits ASP.NET's `__Invariant` field markers; use normal framework
   binding, not per-page parsing or a parallel binder. Field validation remains

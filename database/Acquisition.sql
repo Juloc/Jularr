@@ -105,14 +105,54 @@ CREATE TABLE "AcquisitionProfiles" (
     FOREIGN KEY ("MediaSubtypeId", "MediaTypeId") REFERENCES "MediaSubtypeParents" ("MediaSubtypeId", "MediaTypeId")
 );
 CREATE UNIQUE INDEX "UX_AcquisitionProfiles_Default" ON "AcquisitionProfiles" ("MediaTypeId", "MediaSubtypeId") NULLS NOT DISTINCT WHERE "IsDefault";
+CREATE TABLE "AcquisitionProfileImports" (
+    "SourceUrl" varchar(500) NOT NULL,
+    "SourceProfileId" bigint NOT NULL CHECK ("SourceProfileId" > 0),
+    "SourceMetadataProfileId" integer NOT NULL DEFAULT 0 CHECK ("SourceMetadataProfileId" >= 0),
+    "AcquisitionProfileId" bigint NOT NULL REFERENCES "AcquisitionProfiles" ("Id") ON DELETE CASCADE,
+    PRIMARY KEY ("SourceUrl", "SourceProfileId", "SourceMetadataProfileId")
+);
 INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "MediaSubtypeId", "IsDefault", "Definition") VALUES
-    ('Movies 1080p', 1, NULL, TRUE, '{"AllowedQualities":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"QualityOrder":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"UpgradeAllowed":true,"UpgradeCutoffQuality":"WEB-1080p","MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Id":1,"Name":"Prefer Proper","Field":"Proper","Match":"Equals","Value":"true","Score":5},{"Id":2,"Name":"Prefer Repack","Field":"Repack","Match":"Equals","Value":"true","Score":5}]}'),
-    ('Series 1080p', 2, NULL, TRUE, '{"AllowedQualities":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"QualityOrder":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"UpgradeAllowed":true,"UpgradeCutoffQuality":"WEB-1080p","MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Id":1,"Name":"Prefer Proper","Field":"Proper","Match":"Equals","Value":"true","Score":5},{"Id":2,"Name":"Prefer Repack","Field":"Repack","Match":"Equals","Value":"true","Score":5}]}'),
-    ('Books', 3, NULL, TRUE, '{"AllowedQualities":["EPUB","AZW3","MOBI","PDF","EBOOK"],"QualityOrder":["EPUB","AZW3","MOBI","PDF","EBOOK"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Id":1,"Name":"Prefer Retail","Field":"RawTitle","Match":"Contains","Value":"retail","Score":5}]}'),
-    ('Manga', 3, 2, TRUE, '{"AllowedQualities":["CBZ","CBR","EPUB","PDF","COMIC"],"QualityOrder":["CBZ","CBR","EPUB","PDF","COMIC"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Id":1,"Name":"Prefer Digital","Field":"RawTitle","Match":"Contains","Value":"digital","Score":5}]}'),
-    ('Music', 6, NULL, TRUE, '{"AllowedQualities":["FLAC-24","FLAC","ALAC","MP3-320","MP3-V0","MP3","AAC","AUDIO"],"QualityOrder":["FLAC-24","FLAC","ALAC","MP3-320","MP3-V0","MP3","AAC","AUDIO"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[]}'),
-    ('Games', 7, NULL, TRUE, '{"AllowedQualities":["GOG","NSP","XCI","ISO","ROM","GAME"],"QualityOrder":["GOG","NSP","XCI","ISO","ROM","GAME"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[]}'),
-    ('Light Novels', 3, 3, TRUE, '{"AllowedQualities":["EPUB","AZW3","MOBI","PDF","EBOOK"],"QualityOrder":["EPUB","AZW3","MOBI","PDF","EBOOK"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Id":1,"Name":"Prefer Retail","Field":"RawTitle","Match":"Contains","Value":"retail","Score":5}]}');
+    ('HD - 720p/1080p', 1, NULL, TRUE, '{"AllowedQualities":["Bluray-1080p","WEBDL-1080p","WEBRip-1080p","HDTV-1080p","Bluray-720p","WEBDL-720p","WEBRip-720p","HDTV-720p"],"QualityOrder":["Remux-2160p","Bluray-2160p","WEBDL-2160p","WEBRip-2160p","HDTV-2160p","Remux-1080p","Bluray-1080p","WEBDL-1080p","WEBRip-1080p","HDTV-1080p","Raw-HD","Bluray-720p","WEBDL-720p","WEBRip-720p","HDTV-720p","BR-DISK","Bluray-576p","Bluray-480p","WEBDL-480p","WEBRip-480p","DVD-R","DVD","SDTV","DVDSCR","REGIONAL","TELECINE","TELESYNC","CAM","WORKPRINT","Unknown"],"UpgradeAllowed":true,"UpgradeCutoffQuality":"WEBDL-1080p","MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[{"FormatId":1,"Score":5},{"FormatId":2,"Score":5}],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":5,"MinimumUpgradeFormatScore":1}'),
+    ('HD - 720p/1080p', 2, NULL, TRUE, '{"AllowedQualities":["Bluray-1080p","WEBDL-1080p","WEBRip-1080p","HDTV-1080p","Bluray-720p","WEBDL-720p","WEBRip-720p","HDTV-720p"],"QualityOrder":["Bluray-2160p Remux","Bluray-2160p","WEBDL-2160p","WEBRip-2160p","HDTV-2160p","Bluray-1080p Remux","Bluray-1080p","WEBDL-1080p","WEBRip-1080p","HDTV-1080p","Raw-HD","Bluray-720p","WEBDL-720p","WEBRip-720p","HDTV-720p","Bluray-576p","Bluray-480p","WEBDL-480p","WEBRip-480p","DVD","SDTV","Unknown"],"UpgradeAllowed":true,"UpgradeCutoffQuality":"WEBDL-1080p","MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[{"FormatId":3,"Score":5},{"FormatId":4,"Score":5}],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":5,"MinimumUpgradeFormatScore":1}'),
+    ('Books', 3, NULL, TRUE, '{"AllowedQualities":["EPUB","AZW3","MOBI","PDF","EBOOK"],"QualityOrder":["EPUB","AZW3","MOBI","PDF","EBOOK"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[{"FormatId":5,"Score":5}],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":5,"MinimumUpgradeFormatScore":1}'),
+    ('Manga', 3, 2, TRUE, '{"AllowedQualities":["CBZ","CBR","EPUB","PDF","COMIC"],"QualityOrder":["CBZ","CBR","EPUB","PDF","COMIC"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[{"FormatId":6,"Score":5}],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":5,"MinimumUpgradeFormatScore":1}'),
+    ('Music', 6, NULL, TRUE, '{"AllowedQualities":["FLAC-24","FLAC","ALAC","MP3-320","MP3-V0","MP3","AAC","AUDIO"],"QualityOrder":["FLAC-24","FLAC","ALAC","MP3-320","MP3-V0","MP3","AAC","AUDIO"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":0,"MinimumUpgradeFormatScore":1}'),
+    ('Games', 7, NULL, TRUE, '{"AllowedQualities":["GOG","NSP","XCI","ISO","ROM","GAME"],"QualityOrder":["GOG","NSP","XCI","ISO","ROM","GAME"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":0,"MinimumUpgradeFormatScore":1}'),
+    ('Light Novels', 3, 3, TRUE, '{"AllowedQualities":["EPUB","AZW3","MOBI","PDF","EBOOK"],"QualityOrder":["EPUB","AZW3","MOBI","PDF","EBOOK"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"FormatScores":[{"FormatId":5,"Score":5}],"QualityGroups":[],"MinimumFormatScore":0,"CutoffFormatScore":5,"MinimumUpgradeFormatScore":1}');
+
+-- Custom formats as Sonarr and Radarr have them, per media type: conditions of several kinds, each required or negated; profiles score them.
+CREATE TABLE "CustomFormats" (
+    "Id" bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    "MediaTypeId" smallint NOT NULL REFERENCES "MediaTypes" ("Id"),
+    "Name" varchar(128) NOT NULL CHECK (length(btrim("Name")) > 0),
+    "IncludeWhenRenaming" boolean NOT NULL DEFAULT FALSE,
+    "Conditions" jsonb NOT NULL CHECK (jsonb_typeof("Conditions") = 'array'),
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
+    UNIQUE ("MediaTypeId", "Name")
+);
+
+INSERT INTO "CustomFormats" ("Id", "MediaTypeId", "Name", "Conditions") VALUES
+    (1, 1, 'Prefer Proper', '[{"Name":"Prefer Proper","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"\\bPROPER\\b"}]'),
+    (2, 1, 'Prefer Repack', '[{"Name":"Prefer Repack","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"\\bREPACK\\b"}]'),
+    (3, 2, 'Prefer Proper', '[{"Name":"Prefer Proper","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"\\bPROPER\\b"}]'),
+    (4, 2, 'Prefer Repack', '[{"Name":"Prefer Repack","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"\\bREPACK\\b"}]'),
+    (5, 3, 'Prefer Retail', '[{"Name":"Prefer Retail","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"retail"}]'),
+    (6, 3, 'Prefer Digital', '[{"Name":"Prefer Digital","Kind":"ReleaseTitle","Negate":false,"Required":true,"Value":"digital"}]');
+SELECT setval(pg_get_serial_sequence('"CustomFormats"', 'Id'), 6);
+
+-- Quality sizes as Sonarr and Radarr define them, in megabytes per minute of runtime; no maximum or preferred size means none.
+CREATE TABLE "QualityDefinitions" (
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
+    "MediaTypeId" smallint NOT NULL REFERENCES "MediaTypes" ("Id"),
+    "Quality" varchar(64) NOT NULL CHECK (length(btrim("Quality")) > 0),
+    "MinimumMbPerMinute" numeric(8, 2) NOT NULL DEFAULT 0 CHECK ("MinimumMbPerMinute" >= 0),
+    "PreferredMbPerMinute" numeric(8, 2) NULL CHECK ("PreferredMbPerMinute" >= "MinimumMbPerMinute"),
+    "MaximumMbPerMinute" numeric(8, 2) NULL CHECK ("MaximumMbPerMinute" >= "MinimumMbPerMinute" AND "MaximumMbPerMinute" >= coalesce("PreferredMbPerMinute", 0)),
+    PRIMARY KEY ("MediaTypeId", "Quality")
+);
+INSERT INTO "QualityDefinitions" ("MediaTypeId", "Quality") SELECT 1, quality FROM unnest(ARRAY['Remux-2160p', 'Bluray-2160p', 'WEBDL-2160p', 'WEBRip-2160p', 'HDTV-2160p', 'Remux-1080p', 'Bluray-1080p', 'WEBDL-1080p', 'WEBRip-1080p', 'HDTV-1080p', 'Raw-HD', 'Bluray-720p', 'WEBDL-720p', 'WEBRip-720p', 'HDTV-720p', 'BR-DISK', 'Bluray-576p', 'Bluray-480p', 'WEBDL-480p', 'WEBRip-480p', 'DVD-R', 'DVD', 'SDTV', 'DVDSCR', 'REGIONAL', 'TELECINE', 'TELESYNC', 'CAM', 'WORKPRINT', 'Unknown']) AS quality;
+INSERT INTO "QualityDefinitions" ("MediaTypeId", "Quality") SELECT 2, quality FROM unnest(ARRAY['Bluray-2160p Remux', 'Bluray-2160p', 'WEBDL-2160p', 'WEBRip-2160p', 'HDTV-2160p', 'Bluray-1080p Remux', 'Bluray-1080p', 'WEBDL-1080p', 'WEBRip-1080p', 'HDTV-1080p', 'Raw-HD', 'Bluray-720p', 'WEBDL-720p', 'WEBRip-720p', 'HDTV-720p', 'Bluray-576p', 'Bluray-480p', 'WEBDL-480p', 'WEBRip-480p', 'DVD', 'SDTV', 'Unknown']) AS quality;
 
 -- The quality a requester chose among those their rule offers.
 ALTER TABLE "AcquisitionRequests" ADD "AcquisitionProfileId" bigint NULL REFERENCES "AcquisitionProfiles" ("Id") ON DELETE SET NULL;
@@ -202,6 +242,7 @@ CREATE TABLE "AcquisitionReleases" (
     "WantedItemId" bigint NOT NULL REFERENCES "WantedItems" ("Id") ON DELETE CASCADE,
     "AcquisitionConnectionId" bigint NULL REFERENCES "AcquisitionConnections" ("Id") ON DELETE SET NULL,
     "ReleaseIdentity" varchar(600) NOT NULL,
+    "IndexerFlags" varchar(128)[] NOT NULL DEFAULT '{}',
     "Title" varchar(1000) NOT NULL,
     "SourceUrl" varchar(2048) NULL CHECK ("SourceUrl" ~ '^https?://'),
     "QualityKey" varchar(64) NULL,
@@ -254,6 +295,21 @@ CREATE TABLE "MutedNotificationTypes" (
     "ProfileId" bigint NOT NULL REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
     "NotificationTypeId" smallint NOT NULL REFERENCES "NotificationTypes" ("Id"),
     PRIMARY KEY ("ProfileId", "NotificationTypeId")
+);
+
+-- Release profiles as Sonarr has them: a release must contain one of the required terms and none of the ignored ones; a term in slashes is a pattern.
+-- Without tags a profile applies to everything, without an indexer to every indexer.
+CREATE TABLE "ReleaseProfiles" (
+    "Id" bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    "MediaTypeId" smallint NULL REFERENCES "MediaTypes" ("Id"),
+    "Name" varchar(128) NOT NULL CHECK (length(btrim("Name")) > 0),
+    "IsEnabled" boolean NOT NULL DEFAULT TRUE,
+    "Required" varchar(500)[] NOT NULL DEFAULT '{}' CHECK (cardinality("Required") <= 100),
+    "Ignored" varchar(500)[] NOT NULL DEFAULT '{}' CHECK (cardinality("Ignored") <= 100),
+    "AcquisitionConnectionId" bigint NULL REFERENCES "AcquisitionConnections" ("Id") ON DELETE CASCADE,
+    "TagIds" bigint[] NOT NULL DEFAULT '{}',
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
+    CHECK (cardinality("Required") + cardinality("Ignored") > 0)
 );
 
 COMMIT;

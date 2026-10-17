@@ -25,14 +25,18 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
-            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default, string? installedQuality = null,
-            string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null)
+            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
+            string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
+            int? runtimeMinutes = null, string? releaseProfiles = null)
         {
+            ReleaseProfiles = releaseProfiles ?? "[]";
+            QualitySizes = qualitySizes ?? "[]";
+            RuntimeMinutes = runtimeMinutes;
+            Formats = formats ?? "[]";
             OriginalLanguage = originalLanguage;
             EditionTitles = editionTitles ?? [];
             Isbns = isbns ?? [];
-            WantedSince = wantedSince;
-            InstalledQuality = installedQuality;
+            InstalledFiles = installedFiles ?? "[]";
             Author = author;
             PlatformAbbreviation = platformAbbreviation;
             PlatformIgdbId = platformIgdbId;
@@ -118,13 +122,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.IgdbId), false)]
         public int? PlatformIgdbId { get; }
 
-        // Fallback qualities count once the target has waited long enough.
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedSince))]
-        public DateTime WantedSince { get; }
-
-        // The best quality of the profile among the Work's own present files; an upgrade must beat it.
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
-        public string? InstalledQuality { get; }
+        // The Work's own present files, their quality and release name as JSON; an upgrade must beat the best of them.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string InstalledFiles { get; }
 
         // The titles and ISBNs of the editions in the requested languages.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.EditionTitles))]
@@ -136,12 +136,28 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The language the Work was made in; an untagged book release is taken to be in it.
         [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
         public string? OriginalLanguage { get; }
+
+        // The custom formats of the media type as JSON.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string Formats { get; }
+
+        // The media type's quality sizes as JSON and the minutes of a film or an episode.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string QualitySizes { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.RuntimeMinutes))]
+        public int? RuntimeMinutes { get; }
+
+        // The release profiles that apply to the title, as JSON.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string ReleaseProfiles { get; }
     }
 
     internal sealed class UnitStateData : BaseData
     {
-        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered, int? absoluteNumber = null, DateOnly? releasedOn = null)
+        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered, int? absoluteNumber = null, DateOnly? releasedOn = null, bool needsUpgrade = false)
         {
+            NeedsUpgrade = needsUpgrade;
             AbsoluteNumber = absoluteNumber;
             ReleasedOn = releasedOn;
             WorkUnitId = workUnitId;
@@ -179,6 +195,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public DateOnly? ReleasedOn { get; }
 
         public bool IsMissing => IsAvailable && !HasMedia && !IsCovered;
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.NeedsUpgrade))]
+        public bool NeedsUpgrade { get; }
+        public bool NeedsSearch => IsAvailable && (!HasMedia || NeedsUpgrade) && !IsCovered;
     }
 
     internal sealed class WantedSearchOutcomeData : BaseData
@@ -202,6 +221,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionGrabData : BaseData
     {
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IndexerFlags))]
+        public string[] IndexerFlags { get; init; } = [];
         public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
             int? unitStart, int? unitEnd, string? sourceUrl = null, long? requestedByAccountId = null)
         {

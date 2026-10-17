@@ -423,6 +423,10 @@ namespace Jularr.Backend.Data.Fields
 
         public long Minimum { get; init; } = long.MinValue;
 
+        public bool IsSet { get; init; }
+
+        public override object? Normalize(object? value) => IsSet && value is long[] values ? values.Distinct().Order().ToArray() : value;
+
         protected override void ValidateValue(object value, string name, int? maximumLength)
         {
             var values = (long[])value;

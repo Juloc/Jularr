@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -122,13 +123,16 @@ namespace Jularr.Backend.Logic.Library
                     earlierMedia."QualityKey" AS "EarlierQualityKey",
                     earlierMedia."Revision" AS "EarlierRevision",
                     replacingMedia."QualityKey" AS "NewQualityKey",
-                    replacingMedia."Revision" AS "NewRevision"
+                    replacingMedia."Revision" AS "NewRevision",
+                    earlierFacts."Evidence"::text AS "EarlierEvidence",
+                    newFacts."Evidence"::text AS "NewEvidence"
                 FROM
                     "MediaAssets" AS replacing
                     JOIN "MediaAssetSiblings" AS sibling ON sibling."MediaAssetId" = replacing."Id"
                     JOIN "MediaAssets" AS earlier ON earlier."Id" = sibling."SiblingMediaAssetId" AND earlier."Id" <> ALL (@MediaAssetIds)
                     JOIN LATERAL (
                         SELECT
+                            main."Id",
                             main."QualityKey",
                             main."Revision"
                         FROM
@@ -142,6 +146,7 @@ namespace Jularr.Backend.Logic.Library
                     ) AS earlierMedia ON TRUE
                     JOIN LATERAL (
                         SELECT
+                            main."Id",
                             main."QualityKey",
                             main."Revision"
                         FROM
@@ -153,6 +158,8 @@ namespace Jularr.Backend.Logic.Library
                             main."Id"
                         LIMIT 1
                     ) AS replacingMedia ON TRUE
+                    LEFT JOIN "StoredFileFormatEvidence" AS earlierFacts ON earlierFacts."StoredFileId" = earlierMedia."Id"
+                    LEFT JOIN "StoredFileFormatEvidence" AS newFacts ON newFacts."StoredFileId" = replacingMedia."Id"
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = earlier."Id"
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
@@ -268,13 +275,30 @@ namespace Jularr.Backend.Logic.Library
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // A new release replaces an earlier one when its quality ranks higher, or the same with a later revision (proper, repack).
+        // An import compares the same quality, format and language evidence as selection; later revisions also replace equal versions.
         // When either quality is unknown to the profile, only the administrator decides.
         public static bool IsBetter(QualityProfile profile, ReplacedFileData file)
         {
             var earlier = UpgradePolicy.RankOf(profile, file.EarlierQualityKey);
             var replacing = UpgradePolicy.RankOf(profile, file.NewQualityKey);
-            return replacing != int.MaxValue && earlier != int.MaxValue && (replacing < earlier || replacing == earlier && file.NewRevision > file.EarlierRevision);
+            if (replacing == int.MaxValue || earlier == int.MaxValue) return false;
+            if (replacing != earlier) return replacing < earlier;
+            if (file.EarlierEvidence is { } earlierJson && file.NewEvidence is { } newJson)
+            {
+                var earlierFacts = JsonSerializer.Deserialize<StoredReleaseEvidence>(earlierJson)!;
+                var newFacts = JsonSerializer.Deserialize<StoredReleaseEvidence>(newJson)!;
+                if (StoredFileFormatLogic.Candidate(earlierFacts) is { } before && StoredFileFormatLogic.Candidate(newFacts) is { } after)
+                {
+                    var beforeScore = ReleaseScorer.Score(profile, before).FormatScore;
+                    var afterScore = ReleaseScorer.Score(profile, after).FormatScore;
+                    if (beforeScore != afterScore) return afterScore > beforeScore;
+                    if (profile.IsBook && UpgradePolicy.LanguageRank(profile, before.Languages ?? []) != UpgradePolicy.LanguageRank(profile, after.Languages ?? []))
+                    {
+                        return UpgradePolicy.LanguageRank(profile, after.Languages ?? []) < UpgradePolicy.LanguageRank(profile, before.Languages ?? []);
+                    }
+                }
+            }
+            return file.NewRevision > file.EarlierRevision;
         }
 
         public static async Task ProtectStoredFileAsync(this LogicContext ctx, StoredFileProtectionData data, CancellationToken ct)

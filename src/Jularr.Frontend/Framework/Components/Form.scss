@@ -7,6 +7,8 @@
     align-items: start;
     gap: 16px 24px;
 
+    [data-form-refresh-submit][hidden] { display: none; }
+
     & > .field-error,
     & > .ui-field--wide,
     & > .ui-form__actions { grid-column: 1 / -1; }

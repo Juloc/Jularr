@@ -94,13 +94,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                // A delayed winner is looked at again when the delay ends.
-                if (result.DelayedUntil is { } until)
-                {
-                    await RecordAsync(target.WantedItemId, result.OutcomeKey, until);
-                    continue;
-                }
-
                 await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.SearchCount));
                 try
                 {
@@ -121,7 +114,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var grabbed = 0;
             var unavailable = false;
             string? outcome = null;
-            foreach (var parentNumber in units.Where(unit => unit.IsMissing).Select(unit => unit.ParentNumber).Distinct().Take(GroupsPerPass).ToArray())
+            foreach (var parentNumber in units.Where(unit => unit.NeedsSearch).Select(unit => unit.ParentNumber).Distinct().Take(GroupsPerPass).ToArray())
             {
                 for (var attempt = 0; attempt < GrabsPerGroup; attempt++)
                 {
@@ -133,12 +126,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     indexers = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), CancellationToken);
                     var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope);
                     unavailable |= result.IndexersUnavailable;
-                    if (result.DelayedUntil is { } until)
-                    {
-                        await RecordAsync(target.WantedItemId, result.OutcomeKey, until);
-                        return;
-                    }
-
                     if (result.Selection.Winner is not { } winner)
                     {
                         outcome ??= result.OutcomeKey;

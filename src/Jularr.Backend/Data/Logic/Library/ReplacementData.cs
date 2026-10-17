@@ -96,8 +96,10 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class ReplacedFileData : BaseData
     {
         public ReplacedFileData(long newMediaAssetId, long storedFileId, long storageMountId, string rootPath,
-            string relativePath, string? earlierQualityKey, int earlierRevision, string? newQualityKey, int newRevision)
+            string relativePath, string? earlierQualityKey, int earlierRevision, string? newQualityKey, int newRevision, string? earlierEvidence = null, string? newEvidence = null)
         {
+            EarlierEvidence = earlierEvidence;
+            NewEvidence = newEvidence;
             EarlierQualityKey = earlierQualityKey;
             EarlierRevision = earlierRevision;
             NewQualityKey = newQualityKey;
@@ -135,6 +137,11 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Revision))]
         public int NewRevision { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload), false)]
+        public string? EarlierEvidence { get; }
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload), false)]
+        public string? NewEvidence { get; }
     }
 
     internal sealed class RetiredFilesData : BaseData

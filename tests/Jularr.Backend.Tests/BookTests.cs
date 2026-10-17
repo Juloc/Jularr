@@ -104,6 +104,8 @@ namespace Jularr.Backend.Tests
             var german = BookReleaseJudge.Judge("Pride and Prejudice", "Jane Austen",
                 new ReleaseOffer("Jane.Austen.Pride.and.Prejudice.German.EPUB", 1, "Indexer", 25, "de", new Uri("https://indexer.example.test/de"), null, 1_000_000, DateTimeOffset.UtcNow, ["title"]));
             CollectionAssert.AreEqual(new[] { "DE" }, german.Languages!.ToArray());
+            CollectionAssert.AreEqual(new[] { "DE" }, ReleaseWords.ReadLanguages("Jane Austen - Pride and Prejudice (DE) (epub)"));
+            CollectionAssert.AreEqual(new[] { "EN" }, ReleaseWords.ReadLanguages("An English Book (pdf)", "JA"));
 
             Assert.AreEqual("AZW3", BookReleaseJudge.Parse("Author - Title (2019) [azw3]").DocumentFormat);
             Assert.AreEqual(BookReleaseJudge.UnknownFormat, BookReleaseJudge.Parse("Author - Title (2019) retail").DocumentFormat);
@@ -243,7 +245,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Book_ReadsInTheProfilesLanguage_AndWithoutAnEditionInItTakesTheOriginalAfterTheProfilesDelay()
+        public async Task Book_ReadsInTheProfilesLanguage_AndWithoutAnEditionInItTakesTheOriginalImmediately()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -259,17 +261,12 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(title, await host.ScalarAsync("SELECT \"Title\" FROM \"ProfileWorks\" WHERE \"ProfileId\" = 101 AND \"WorkId\" = " + work.Id), locale);
             }
 
-            // Asked for in French, which it was never published in: the automatic search waits the profile's delay, then takes the book in its own language.
+            // Asked for in French, which it was never published in: the automatic search takes the book in its own language immediately.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "UiLocales" ("Locale", "Name") VALUES ('fr-FR', 'Français');
-                UPDATE "AcquisitionProfiles" SET "Definition" = jsonb_set("Definition", '{DelayMinutes}', '120') WHERE "MediaTypeId" = 3 AND "MediaSubtypeId" IS NULL;
                 """);
             var wantedId = await CreateWantedAsync(host, work.Id);
             await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr-FR')");
-            await RunAsync<SearchDueWantedV1>(host);
-            Assert.AreEqual("release_delayed", await host.ScalarAsync("SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" = " + wantedId));
-            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"CreatedAt\" = now() - interval '3 hours', \"NextSearchAt\" = NULL WHERE \"Id\" = " + wantedId);
             await RunAsync<SearchDueWantedV1>(host);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"WantedItemId\" = " + wantedId));
 
@@ -277,6 +274,57 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"RequestedByProfileId\" = 101, \"RequestedByAccountId\" = 41");
             using var requests = await host.SendAsync(HttpMethod.Get, "/api/v1/requests");
             StringAssert.Contains(await requests.Content.ReadAsStringAsync(), "\"readsTranslated\":true");
+        }
+
+        [TestMethod]
+        public async Task Book_OriginalArrivesImmediately_AndALaterRequestedLanguageReplacesIt()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            var wantedId = await CreateWantedAsync(host, work.Id);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "AcquisitionProfiles" SET "Definition" = "Definition" ||
+                    '{"UpgradeAllowed":true,"UpgradeCutoffQuality":"EPUB","FormatScores":[],"CutoffFormatScore":0}'::jsonb
+                WHERE "MediaTypeId" = 3 AND "MediaSubtypeId" IS NULL AND "IsDefault";
+                UPDATE "AcquisitionConnections" SET "IsEnabled" = FALSE WHERE "AcquisitionConnectionTypeId" = 1;
+                """);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<MonitorDownloadsV1>(host);
+            await RunAsync<RefreshStoredFileFormatsV1>(host);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedBelowCutoff\""));
+
+            // A request for another language remains searchable even at the quality cutoff.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "AcquisitionRequests" SET "UiLocaleId" = (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'de-DE');
+                UPDATE "WantedItems" SET "NextSearchAt" = NULL;
+                """);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedBelowCutoff\""));
+            sources.CatalogLanguage = "de";
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\""));
+            await RunAsync<MonitorDownloadsV1>(host);
+            await RunAsync<RefreshStoredFileFormatsV1>(host);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedBelowCutoff\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 4"));
+        }
+
+        [TestMethod]
+        public void Book_GroupedFormats_UpgradeByLanguageWithoutOverridingProfileScores()
+        {
+            var profile = new Data.Logic.Acquisition.QualityProfile("1", "Books", ["group:101"], ["group:101"], true, "group:101", null, null)
+            {
+                IsBook = true, LanguageOrder = ["de"],
+                QualityGroups = [new Data.Logic.Acquisition.QualityGroup(101, "Readable books", ["EPUB", "PDF"])]
+            };
+            Assert.IsTrue(UpgradePolicy.IsUpgrade(profile, "EPUB", "PDF", false, 0, 0, ["en"], ["de"]));
+            Assert.IsFalse(UpgradePolicy.IsUpgrade(profile, "PDF", "EPUB", false, 0, 0, ["de"], ["en"]));
+            Assert.IsFalse(UpgradePolicy.IsUpgrade(profile, "EPUB", "PDF", false, 100, 0, ["en"], ["de"]));
         }
 
         [TestMethod]
@@ -346,6 +394,7 @@ namespace Jularr.Backend.Tests
             public int SabGrabs { get; private set; }
             public List<string> HardcoverRequests { get; } = [];
             public byte[] EpubBytes { get; set; } = ReadingTests.BuildEpub("Pride and Prejudice");
+            public string CatalogLanguage { get; set; } = "en";
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -373,6 +422,7 @@ namespace Jularr.Backend.Tests
                         HardcoverRequests.Add(request.Headers.Authorization + " " + await request.Content!.ReadAsStringAsync(cancellationToken));
                         return Json("""{"data":{"editions":[{"book":{"id":5,"book_series":[{"position":2,"series":{"id":77,"name":"Jane Austen's Novels"}}]}}]}}""");
                     case "gutendex.example.test":
+                        if (CatalogLanguage == "de") return Json("""{"results":[{"id":1343,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["de"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1343.epub3.images"}}]}""");
                         return Json("""{"results":[{"id":1342,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1342.epub3.images"}},{"id":7,"title":"Without Epub","authors":[],"languages":["en"],"formats":{"text/plain":"x"}}]}""");
                     case "www.gutenberg.org" when uri.AbsolutePath == "/ebooks/1342.epub3.images":
                         return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://www.gutenberg.org/cache/epub/1342/pg1342-images-3.epub") } };

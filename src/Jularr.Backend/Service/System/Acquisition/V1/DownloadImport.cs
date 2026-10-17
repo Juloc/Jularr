@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
@@ -35,7 +36,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            var facts = ReleaseFacts.Of(download.Title);
+            var parsedFacts = ReleaseFacts.Of(download.Title, download.MediaTypeId == MediaType.Movie);
+            var facts = new ReleaseFact(TextLimit.Cut(download.Title, 500)!, parsedFacts?.ReleaseGroup, download.QualityKey ?? parsedFacts?.QualityKey,
+                parsedFacts?.Edition, parsedFacts?.Revision ?? 1);
 
             // Music follows its tags; ebooks and comics must be what their names say.
             var tags = download.MediaTypeId == MediaType.Music

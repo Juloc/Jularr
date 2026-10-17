@@ -213,15 +213,26 @@ namespace Jularr.E2E.Tests
             await Steps.SubmitAsync(page, form);
         }
 
-        // A profile of its own, made the media type's default.
+        // A profile requires its scored format, made the media type's default.
         private static async Task CreateProfileAsync(IPage page, string type, string name, string mustContain)
         {
+            await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
+            var format = page.Locator("main form", new() { Has = page.Locator("[name=IncludeWhenRenaming]") });
+            await format.Locator("[name=Name]").FillAsync(name);
+            await format.Locator("[name='Conditions[0].Name']").FillAsync(name);
+            await format.Locator("[name='Conditions[0].Value']").FillAsync(mustContain);
+            await format.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
             await page.GotoAsync("/Admin/Acquisition/Profiles/New?type=" + type);
-            var form = page.Locator("main form", new() { Has = page.Locator("[name=MustContain]") });
+            var form = page.Locator("main form", new() { Has = page.Locator("[name=MinimumFormatScore]") });
             await form.Locator("[name=Name]").FillAsync(name);
-            await form.Locator("[name=IsDefault][value=True]").CheckAsync();
-            await form.Locator("[name=MustContain]").FillAsync(mustContain);
-            await Steps.SubmitAsync(page, form);
+            await form.GetByText("Default for its media type", new() { Exact = true }).ClickAsync();
+            await Assertions.Expect(form.GetByRole(AriaRole.Switch, new() { Name = "Default for its media type", Exact = true })).ToBeCheckedAsync();
+            await form.Locator("tr", new() { HasText = name }).GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).ClickAsync();
+            await form.Locator("[name='FormatScores[0].Score']").FillAsync("100");
+            await form.Locator("[name=MinimumFormatScore]").FillAsync("100");
+            await form.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+            await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
         }
 
         // A visitor asks for an account and the Owner enables it; the user signs in.

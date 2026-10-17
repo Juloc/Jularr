@@ -1312,10 +1312,6 @@
    "No quality Jularr knows",
    "Tidak ada kualitas yang dikenal Jularr"
   ],
-  "takeover.outcome.takeover_minimum_score": [
-   "Its minimum format score is not taken over",
-   "Skor format minimumnya tidak diimpor"
-  ],
   "takeover.outcome.takeover_format_skipped": [
    "Not taken over: conditions Jularr does not support",
    "Tidak diimpor: kondisi yang tidak didukung Jularr"
@@ -1375,142 +1371,6 @@
   "sources.availability.ReferenceOnly": [
    "Reference only",
    "Hanya referensi"
-  ],
-  "profile.delay": [
-   "Wait for a better release (minutes)",
-   "Tunggu release yang lebih baik (menit)"
-  ],
-  "profile.fallbackQualities": [
-   "Fallback qualities",
-   "Kualitas cadangan"
-  ],
-  "profile.fallbackAfter": [
-   "Accept the fallback after (hours)",
-   "Terima kualitas cadangan setelah (jam)"
-  ],
-  "profile.rules": [
-   "Release rules",
-   "Aturan release"
-  ],
-  "profile.rule.name": [
-   "Rule",
-   "Aturan"
-  ],
-  "profile.rule.condition": [
-   "Condition",
-   "Kondisi"
-  ],
-  "profile.rule.field": [
-   "Field",
-   "Bidang"
-  ],
-  "profile.rule.match": [
-   "Match",
-   "Pencocokan"
-  ],
-  "profile.rule.value": [
-   "Value",
-   "Nilai"
-  ],
-  "profile.rule.effect": [
-   "Effect",
-   "Efek"
-  ],
-  "profile.rule.remove": [
-   "Remove",
-   "Hapus"
-  ],
-  "profile.rule.match.Equals": [
-   "is",
-   "sama dengan"
-  ],
-  "profile.rule.match.Contains": [
-   "contains",
-   "mengandung"
-  ],
-  "profile.rule.match.Regex": [
-   "matches the pattern",
-   "cocok dengan pola"
-  ],
-  "profile.rule.effect.Require": [
-   "Require",
-   "Wajibkan"
-  ],
-  "profile.rule.effect.Prefer": [
-   "Prefer",
-   "Utamakan"
-  ],
-  "profile.rule.effect.Avoid": [
-   "Avoid",
-   "Hindari"
-  ],
-  "profile.rule.effect.Reject": [
-   "Reject",
-   "Tolak"
-  ],
-  "profile.rule.effect.Info": [
-   "Note only",
-   "Hanya catatan"
-  ],
-  "profile.rule.field.RawTitle": [
-   "Release name",
-   "Nama release"
-  ],
-  "profile.rule.field.ReleaseGroup": [
-   "Release group",
-   "Grup release"
-  ],
-  "profile.rule.field.Source": [
-   "Source",
-   "Sumber"
-  ],
-  "profile.rule.field.Resolution": [
-   "Resolution",
-   "Resolusi"
-  ],
-  "profile.rule.field.VideoCodec": [
-   "Video codec",
-   "Codec video"
-  ],
-  "profile.rule.field.BitDepth": [
-   "Bit depth",
-   "Kedalaman bit"
-  ],
-  "profile.rule.field.HdrFormat": [
-   "HDR format",
-   "Format HDR"
-  ],
-  "profile.rule.field.AudioCodec": [
-   "Audio codec",
-   "Codec audio"
-  ],
-  "profile.rule.field.AudioLanguage": [
-   "Audio language",
-   "Bahasa audio"
-  ],
-  "profile.rule.field.SubtitleLanguage": [
-   "Subtitle language",
-   "Bahasa subtitle"
-  ],
-  "profile.rule.field.DualAudio": [
-   "Dual audio",
-   "Audio ganda"
-  ],
-  "profile.rule.field.MultiAudio": [
-   "Multiple audio tracks",
-   "Beberapa trek audio"
-  ],
-  "profile.rule.field.Proper": [
-   "Proper",
-   "Proper"
-  ],
-  "profile.rule.field.Repack": [
-   "Repack",
-   "Repack"
-  ],
-  "profile.rule.field.Indexer": [
-   "Indexer",
-   "Indexer"
   ],
   "profile.name": [
    "Name",
@@ -1572,25 +1432,9 @@
    "Qualities",
    "Kualitas"
   ],
-  "profile.section.size": [
-   "Size and terms",
-   "Ukuran dan ketentuan"
-  ],
   "profile.allowed": [
    "Allowed",
    "Diizinkan"
-  ],
-  "profile.rule.none": [
-   "No release rules yet.",
-   "Belum ada aturan release."
-  ],
-  "profile.rule.edit": [
-   "Edit rule",
-   "Ubah aturan"
-  ],
-  "profile.deleteConfirm": [
-   "Delete this profile? Titles using it fall back to the default profile.",
-   "Hapus profil ini? Judul yang memakainya beralih ke profil bawaan."
   ],
   "profile.minimumSize": [
    "Minimum size (MB)",
@@ -1599,14 +1443,6 @@
   "profile.maximumSize": [
    "Maximum size (MB)",
    "Ukuran maksimum (MB)"
-  ],
-  "profile.mustContain": [
-   "Must contain",
-   "Harus mengandung"
-  ],
-  "profile.mustNotContain": [
-   "Must not contain",
-   "Tidak boleh mengandung"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -2044,25 +1880,9 @@
    "New requests of this media type use the default profile.",
    "Permintaan baru untuk jenis media ini memakai profil bawaan."
   ],
-  "hint.AcquisitionProfileFields.DelayMinutes.placeholder": [
-   "0",
-   "0"
-  ],
-  "hint.AcquisitionProfileFields.DelayMinutes.info": [
-   "After a good release is published, waits this long for a better one; 0 takes it at once.",
-   "Setelah release yang bagus terbit, menunggu selama ini untuk yang lebih baik; 0 langsung mengambilnya."
-  ],
   "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
    "Replaces a present file with a better quality until the cutoff is reached.",
    "Mengganti file yang ada dengan kualitas lebih baik sampai kualitas target tercapai."
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.placeholder": [
-   "Never",
-   "Tidak pernah"
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.info": [
-   "Once the title has been wanted this many hours, the fallback qualities are also taken.",
-   "Setelah judul dicari selama sekian jam, kualitas cadangan juga diterima."
   ],
   "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
    "No minimum",
@@ -2079,54 +1899,6 @@
   "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
    "Larger releases are skipped.",
    "Release yang lebih besar dilewati."
-  ],
-  "hint.AcquisitionProfileFields.MustContain.placeholder": [
-   "German, DL",
-   "German, DL"
-  ],
-  "hint.AcquisitionProfileFields.MustContain.info": [
-   "Words a release name must contain, separated by commas.",
-   "Kata yang harus ada di nama release, dipisahkan koma."
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.placeholder": [
-   "CAM, TS",
-   "CAM, TS"
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.info": [
-   "Words that rule a release out, separated by commas.",
-   "Kata yang membuat release tersingkir, dipisahkan koma."
-  ],
-  "hint.AcquisitionProfileFields.RuleName.info": [
-   "Shown in the search results when the rule matches.",
-   "Ditampilkan di hasil pencarian saat aturan cocok."
-  ],
-  "hint.AcquisitionProfileFields.RuleField.info": [
-   "Which part of the release the rule looks at.",
-   "Bagian release mana yang diperiksa aturan."
-  ],
-  "hint.AcquisitionProfileFields.RuleMatch.info": [
-   "Contains finds the text anywhere; a regular expression allows patterns such as [xh]\\.?265.",
-   "Mengandung menemukan teks di mana saja; ekspresi reguler memungkinkan pola seperti [xh]\\.?265."
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.placeholder": [
-   "x265",
-   "x265"
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.info": [
-   "The text or pattern to look for.",
-   "Teks atau pola yang dicari."
-  ],
-  "hint.AcquisitionProfileFields.RuleEffect.info": [
-   "Require and Reject decide; Prefer and Avoid add or subtract the score; Info only names the match.",
-   "Wajibkan dan Tolak menentukan; Utamakan dan Hindari menambah atau mengurangi skor; Hanya catatan sekadar menyebutkan kecocokan."
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.placeholder": [
-   "100",
-   "100"
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.info": [
-   "From -1000 to 1000, added to the release's score.",
-   "Dari -1000 sampai 1000, ditambahkan ke skor release."
   ],
   "hint.RequestRuleFields.Description.info": [
    "Shown to users the rule applies to.",
@@ -4016,10 +3788,6 @@
    "Release found",
    "Release ditemukan"
   ],
-  "acquisition.outcome.release_delayed": [
-   "Waiting for a better release",
-   "Menunggu release yang lebih baik"
-  ],
   "acquisition.outcome.grabbed": [
    "Downloading",
    "Mengunduh"
@@ -4203,10 +3971,6 @@
   "acquisition.reason.RuleScore": [
    "Rule score",
    "Skor aturan"
-  ],
-  "acquisition.reason.FallbackQuality": [
-   "Fallback quality",
-   "Kualitas cadangan"
   ],
   "acquisition.reason.OnlyCandidate": [
    "Only eligible release",
@@ -5393,8 +5157,8 @@
    "Judul episode"
   ],
   "library.naming.token.Quality": [
-   "The quality, such as WEB-1080p",
-   "Kualitas, misalnya WEB-1080p"
+   "The quality, such as WEBDL-1080p",
+   "Kualitas, misalnya WEBDL-1080p"
   ],
   "library.naming.token.ReleaseGroup": [
    "The release group",
@@ -6823,6 +6587,234 @@
   "setup.sources.plex": [
    "Plex and other providers",
    "Plex dan penyedia lainnya"
+  ],
+  "arr.settings": [
+   "Arr+ settings",
+   "Pengaturan Arr+"
+  ],
+  "arr.formats": [
+   "Custom formats",
+   "Format khusus"
+  ],
+  "arr.sizes": [
+   "Quality sizes",
+   "Ukuran kualitas"
+  ],
+  "arr.releaseProfiles": [
+   "Release profiles",
+   "Profil rilis"
+  ],
+  "arr.tags": [
+   "Tags",
+   "Tag"
+  ],
+  "arr.qualityGroups": [
+   "Quality groups",
+   "Grup kualitas"
+  ],
+  "arr.refreshGroups": [
+   "Apply group changes",
+   "Terapkan perubahan grup"
+  ],
+  "arr.minimumScore": [
+   "Minimum format score",
+   "Skor format minimum"
+  ],
+  "arr.cutoffScore": [
+   "Upgrade until this format score",
+   "Tingkatkan hingga skor ini"
+  ],
+  "arr.upgradeScore": [
+   "Minimum score increase",
+   "Kenaikan skor minimum"
+  ],
+  "arr.moveUp": [
+   "Move up",
+   "Naik"
+  ],
+  "arr.moveDown": [
+   "Move down",
+   "Turun"
+  ],
+  "arr.anyIndexer": [
+   "Every indexer",
+   "Semua pengindeks"
+  ],
+  "arr.includeRenaming": [
+   "Include when renaming",
+   "Sertakan saat mengganti nama"
+  ],
+  "arr.condition": [
+   "Condition",
+   "Kondisi"
+  ],
+  "arr.required": [
+   "Required",
+   "Wajib"
+  ],
+  "arr.negate": [
+   "Negate",
+   "Balikkan"
+  ],
+  "arr.value": [
+   "Value or pattern",
+   "Nilai atau pola"
+  ],
+  "arr.exceptLanguage": [
+   "Any other language",
+   "Bahasa lain"
+  ],
+  "arr.resolution": [
+   "Resolution",
+   "Resolusi"
+  ],
+  "arr.minimum": [
+   "Minimum",
+   "Minimum"
+  ],
+  "arr.maximum": [
+   "Maximum",
+   "Maksimum"
+  ],
+  "arr.addCondition": [
+   "Add condition",
+   "Tambah kondisi"
+  ],
+  "arr.removeCondition": [
+   "Remove last condition",
+   "Hapus kondisi terakhir"
+  ],
+  "arr.importJson": [
+   "Sonarr, Radarr or TRaSH JSON",
+   "JSON Sonarr, Radarr, atau TRaSH"
+  ],
+  "arr.import": [
+   "Import formats",
+   "Impor format"
+  ],
+  "arr.minimumMb": [
+   "Minimum (MB/min)",
+   "Minimum (MB/menit)"
+  ],
+  "arr.preferredMb": [
+   "Preferred (MB/min)",
+   "Pilihan (MB/menit)"
+  ],
+  "arr.maximumMb": [
+   "Maximum (MB/min)",
+   "Maksimum (MB/menit)"
+  ],
+  "arr.requiredTerms": [
+   "One required term",
+   "Salah satu istilah wajib"
+  ],
+  "arr.ignoredTerms": [
+   "Ignored terms",
+   "Istilah yang diabaikan"
+  ],
+  "arr.condition.ReleaseTitle": [
+   "Release title",
+   "Judul rilis"
+  ],
+  "arr.condition.Edition": [
+   "Edition",
+   "Edisi"
+  ],
+  "arr.condition.Language": [
+   "Language",
+   "Bahasa"
+  ],
+  "arr.condition.ReleaseGroup": [
+   "Release group",
+   "Grup rilis"
+  ],
+  "arr.condition.Source": [
+   "Source",
+   "Sumber"
+  ],
+  "arr.condition.Resolution": [
+   "Resolution",
+   "Resolusi"
+  ],
+  "arr.condition.QualityModifier": [
+   "Quality modifier",
+   "Pengubah kualitas"
+  ],
+  "arr.condition.IndexerFlag": [
+   "Indexer flag",
+   "Penanda pengindeks"
+  ],
+  "arr.condition.Size": [
+   "Size (GB)",
+   "Ukuran (GB)"
+  ],
+  "arr.condition.ReleaseType": [
+   "Release type",
+   "Jenis rilis"
+  ],
+  "arr.condition.Year": [
+   "Year",
+   "Tahun"
+  ],
+  "takeover.outcome.takeover_profile_unsupported": [
+   "Profile needs review before importing titles",
+   "Tinjau profil sebelum mengimpor judul"
+  ],
+  "arr.terms.info": [
+   "One term per line. Patterns use /expression/i.",
+   "Satu istilah per baris. Pola: /ekspresi/i."
+  ],
+  "arr.condition.info": [
+   "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
+   "Gunakan pola untuk judul, edisi, dan grup; kode bahasa dua huruf atau original, any, unknown untuk bahasa. Sumber dan pengubah mengikuti Sonarr atau Radarr. Resolusi berupa angka; ukuran dan tahun memakai batas."
+  ],
+  "common.remove": [
+   "Remove",
+   "Hapus"
+  ],
+  "acquisition.reason.SizeBelowQualityMinimum": [
+   "Below the minimum size for this quality",
+   "Di bawah ukuran minimum kualitas ini"
+  ],
+  "acquisition.reason.SizeAboveQualityMaximum": [
+   "Above the maximum size for this quality",
+   "Di atas ukuran maksimum kualitas ini"
+  ],
+  "acquisition.reason.FormatScore": [
+   "Custom format score",
+   "Skor format khusus"
+  ],
+  "acquisition.reason.FormatScoreBelowMinimum": [
+   "Format score below minimum",
+   "Skor format di bawah minimum"
+  ],
+  "takeover.newLibraries": [
+   "Create libraries from root folders",
+   "Buat pustaka dari folder root"
+  ],
+  "takeover.keepLibrary": [
+   "Use existing library assignment",
+   "Gunakan penetapan pustaka yang ada"
+  ],
+  "takeover.inlineKeys": [
+   "Complete missing API keys",
+   "Lengkapi kunci API yang hilang"
+  ],
+  "profile.section.size": [
+   "Size",
+   "Ukuran"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this unused profile?",
+   "Hapus profil yang tidak digunakan ini?"
+  ],
+  "acquisition.reason.FormatEvaluationFailed": [
+   "Custom format could not be evaluated",
+   "Format khusus tidak dapat dievaluasi"
+  ],
+  "arr.applyCondition": [
+   "Apply condition type",
+   "Terapkan jenis kondisi"
   ]
  }
 }

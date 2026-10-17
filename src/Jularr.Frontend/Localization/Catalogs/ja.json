@@ -1312,10 +1312,6 @@
    "No quality Jularr knows",
    "Jularr が認識できる画質がありません"
   ],
-  "takeover.outcome.takeover_minimum_score": [
-   "Its minimum format score is not taken over",
-   "最小フォーマットスコアはインポートされません"
-  ],
   "takeover.outcome.takeover_format_skipped": [
    "Not taken over: conditions Jularr does not support",
    "インポートしません：Jularr が対応していない条件"
@@ -1375,142 +1371,6 @@
   "sources.availability.ReferenceOnly": [
    "Reference only",
    "参照のみ"
-  ],
-  "profile.delay": [
-   "Wait for a better release (minutes)",
-   "より良いリリースを待つ（分）"
-  ],
-  "profile.fallbackQualities": [
-   "Fallback qualities",
-   "代替の画質"
-  ],
-  "profile.fallbackAfter": [
-   "Accept the fallback after (hours)",
-   "代替を受け入れるまでの時間（時間）"
-  ],
-  "profile.rules": [
-   "Release rules",
-   "リリースルール"
-  ],
-  "profile.rule.name": [
-   "Rule",
-   "ルール"
-  ],
-  "profile.rule.condition": [
-   "Condition",
-   "条件"
-  ],
-  "profile.rule.field": [
-   "Field",
-   "フィールド"
-  ],
-  "profile.rule.match": [
-   "Match",
-   "一致"
-  ],
-  "profile.rule.value": [
-   "Value",
-   "値"
-  ],
-  "profile.rule.effect": [
-   "Effect",
-   "効果"
-  ],
-  "profile.rule.remove": [
-   "Remove",
-   "削除"
-  ],
-  "profile.rule.match.Equals": [
-   "is",
-   "一致する"
-  ],
-  "profile.rule.match.Contains": [
-   "contains",
-   "含む"
-  ],
-  "profile.rule.match.Regex": [
-   "matches the pattern",
-   "パターンに一致"
-  ],
-  "profile.rule.effect.Require": [
-   "Require",
-   "必須"
-  ],
-  "profile.rule.effect.Prefer": [
-   "Prefer",
-   "優先"
-  ],
-  "profile.rule.effect.Avoid": [
-   "Avoid",
-   "避ける"
-  ],
-  "profile.rule.effect.Reject": [
-   "Reject",
-   "除外"
-  ],
-  "profile.rule.effect.Info": [
-   "Note only",
-   "注記のみ"
-  ],
-  "profile.rule.field.RawTitle": [
-   "Release name",
-   "リリース名"
-  ],
-  "profile.rule.field.ReleaseGroup": [
-   "Release group",
-   "リリースグループ"
-  ],
-  "profile.rule.field.Source": [
-   "Source",
-   "ソース"
-  ],
-  "profile.rule.field.Resolution": [
-   "Resolution",
-   "解像度"
-  ],
-  "profile.rule.field.VideoCodec": [
-   "Video codec",
-   "ビデオコーデック"
-  ],
-  "profile.rule.field.BitDepth": [
-   "Bit depth",
-   "ビット深度"
-  ],
-  "profile.rule.field.HdrFormat": [
-   "HDR format",
-   "HDR フォーマット"
-  ],
-  "profile.rule.field.AudioCodec": [
-   "Audio codec",
-   "オーディオコーデック"
-  ],
-  "profile.rule.field.AudioLanguage": [
-   "Audio language",
-   "音声言語"
-  ],
-  "profile.rule.field.SubtitleLanguage": [
-   "Subtitle language",
-   "字幕言語"
-  ],
-  "profile.rule.field.DualAudio": [
-   "Dual audio",
-   "デュアルオーディオ"
-  ],
-  "profile.rule.field.MultiAudio": [
-   "Multiple audio tracks",
-   "複数の音声トラック"
-  ],
-  "profile.rule.field.Proper": [
-   "Proper",
-   "Proper"
-  ],
-  "profile.rule.field.Repack": [
-   "Repack",
-   "Repack"
-  ],
-  "profile.rule.field.Indexer": [
-   "Indexer",
-   "インデクサー"
   ],
   "profile.name": [
    "Name",
@@ -1572,25 +1432,9 @@
    "Qualities",
    "画質"
   ],
-  "profile.section.size": [
-   "Size and terms",
-   "サイズと条件"
-  ],
   "profile.allowed": [
    "Allowed",
    "許可"
-  ],
-  "profile.rule.none": [
-   "No release rules yet.",
-   "リリースルールはまだありません。"
-  ],
-  "profile.rule.edit": [
-   "Edit rule",
-   "ルールを編集"
-  ],
-  "profile.deleteConfirm": [
-   "Delete this profile? Titles using it fall back to the default profile.",
-   "このプロファイルを削除しますか？ 使用しているタイトルは既定のプロファイルに切り替わります。"
   ],
   "profile.minimumSize": [
    "Minimum size (MB)",
@@ -1599,14 +1443,6 @@
   "profile.maximumSize": [
    "Maximum size (MB)",
    "最大サイズ（MB）"
-  ],
-  "profile.mustContain": [
-   "Must contain",
-   "含める語"
-  ],
-  "profile.mustNotContain": [
-   "Must not contain",
-   "含めない語"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -2044,25 +1880,9 @@
    "New requests of this media type use the default profile.",
    "このメディアタイプの新しいリクエストは既定のプロファイルを使います。"
   ],
-  "hint.AcquisitionProfileFields.DelayMinutes.placeholder": [
-   "0",
-   "0"
-  ],
-  "hint.AcquisitionProfileFields.DelayMinutes.info": [
-   "After a good release is published, waits this long for a better one; 0 takes it at once.",
-   "良いリリースが公開されてから、より良いものをこの時間だけ待ちます。0なら即座に取得します。"
-  ],
   "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
    "Replaces a present file with a better quality until the cutoff is reached.",
    "目標画質に達するまで、既存のファイルをより高画質のものに置き換えます。"
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.placeholder": [
-   "Never",
-   "しない"
-  ],
-  "hint.AcquisitionProfileFields.FallbackAfterHours.info": [
-   "Once the title has been wanted this many hours, the fallback qualities are also taken.",
-   "タイトルがこの時間だけ欲しいものになっていた場合、代替の画質も取得対象にします。"
   ],
   "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
    "No minimum",
@@ -2079,54 +1899,6 @@
   "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
    "Larger releases are skipped.",
    "これより大きいリリースはスキップされます。"
-  ],
-  "hint.AcquisitionProfileFields.MustContain.placeholder": [
-   "German, DL",
-   "German, DL"
-  ],
-  "hint.AcquisitionProfileFields.MustContain.info": [
-   "Words a release name must contain, separated by commas.",
-   "リリース名に含まれている必要がある語を、カンマで区切って指定します。"
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.placeholder": [
-   "CAM, TS",
-   "CAM, TS"
-  ],
-  "hint.AcquisitionProfileFields.MustNotContain.info": [
-   "Words that rule a release out, separated by commas.",
-   "リリースを除外する語を、カンマで区切って指定します。"
-  ],
-  "hint.AcquisitionProfileFields.RuleName.info": [
-   "Shown in the search results when the rule matches.",
-   "ルールに一致したとき、検索結果に表示されます。"
-  ],
-  "hint.AcquisitionProfileFields.RuleField.info": [
-   "Which part of the release the rule looks at.",
-   "ルールがリリースのどの部分を見るかを指定します。"
-  ],
-  "hint.AcquisitionProfileFields.RuleMatch.info": [
-   "Contains finds the text anywhere; a regular expression allows patterns such as [xh]\\.?265.",
-   "「含む」はテキストが任意の位置にあれば一致します。正規表現では [xh]\\.?265 のようなパターンも使えます。"
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.placeholder": [
-   "x265",
-   "x265"
-  ],
-  "hint.AcquisitionProfileFields.RuleValue.info": [
-   "The text or pattern to look for.",
-   "探すテキストまたはパターンです。"
-  ],
-  "hint.AcquisitionProfileFields.RuleEffect.info": [
-   "Require and Reject decide; Prefer and Avoid add or subtract the score; Info only names the match.",
-   "「必須」と「除外」は採否を決めます。「優先」と「避ける」はスコアを加減算します。「注記のみ」は一致に名前を付けるだけです。"
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.placeholder": [
-   "100",
-   "100"
-  ],
-  "hint.AcquisitionProfileFields.RuleScore.info": [
-   "From -1000 to 1000, added to the release's score.",
-   "-1000～1000の値で、リリースのスコアに加算されます。"
   ],
   "hint.RequestRuleFields.Description.info": [
    "Shown to users the rule applies to.",
@@ -4016,10 +3788,6 @@
    "Release found",
    "リリースが見つかりました"
   ],
-  "acquisition.outcome.release_delayed": [
-   "Waiting for a better release",
-   "より良いリリースを待機中"
-  ],
   "acquisition.outcome.grabbed": [
    "Downloading",
    "ダウンロード中"
@@ -4203,10 +3971,6 @@
   "acquisition.reason.RuleScore": [
    "Rule score",
    "ルールのスコア"
-  ],
-  "acquisition.reason.FallbackQuality": [
-   "Fallback quality",
-   "代替の画質"
   ],
   "acquisition.reason.OnlyCandidate": [
    "Only eligible release",
@@ -5393,8 +5157,8 @@
    "エピソードのタイトル"
   ],
   "library.naming.token.Quality": [
-   "The quality, such as WEB-1080p",
-   "画質（WEB-1080p など）"
+   "The quality, such as WEBDL-1080p",
+   "画質（WEBDL-1080p など）"
   ],
   "library.naming.token.ReleaseGroup": [
    "The release group",
@@ -6823,6 +6587,234 @@
   "setup.sources.plex": [
    "Plex and other providers",
    "Plex とその他のプロバイダー"
+  ],
+  "arr.settings": [
+   "Arr+ settings",
+   "Arr+設定"
+  ],
+  "arr.formats": [
+   "Custom formats",
+   "カスタムフォーマット"
+  ],
+  "arr.sizes": [
+   "Quality sizes",
+   "品質ごとのサイズ"
+  ],
+  "arr.releaseProfiles": [
+   "Release profiles",
+   "リリースプロファイル"
+  ],
+  "arr.tags": [
+   "Tags",
+   "タグ"
+  ],
+  "arr.qualityGroups": [
+   "Quality groups",
+   "品質グループ"
+  ],
+  "arr.refreshGroups": [
+   "Apply group changes",
+   "グループの変更を適用"
+  ],
+  "arr.minimumScore": [
+   "Minimum format score",
+   "フォーマットの最低スコア"
+  ],
+  "arr.cutoffScore": [
+   "Upgrade until this format score",
+   "このフォーマットスコアまで更新"
+  ],
+  "arr.upgradeScore": [
+   "Minimum score increase",
+   "スコアの最低増加量"
+  ],
+  "arr.moveUp": [
+   "Move up",
+   "上へ"
+  ],
+  "arr.moveDown": [
+   "Move down",
+   "下へ"
+  ],
+  "arr.anyIndexer": [
+   "Every indexer",
+   "すべてのインデクサー"
+  ],
+  "arr.includeRenaming": [
+   "Include when renaming",
+   "名前の変更時に含める"
+  ],
+  "arr.condition": [
+   "Condition",
+   "条件"
+  ],
+  "arr.required": [
+   "Required",
+   "必須"
+  ],
+  "arr.negate": [
+   "Negate",
+   "否定"
+  ],
+  "arr.value": [
+   "Value or pattern",
+   "値またはパターン"
+  ],
+  "arr.exceptLanguage": [
+   "Any other language",
+   "指定以外の言語"
+  ],
+  "arr.resolution": [
+   "Resolution",
+   "解像度"
+  ],
+  "arr.minimum": [
+   "Minimum",
+   "最小値"
+  ],
+  "arr.maximum": [
+   "Maximum",
+   "最大値"
+  ],
+  "arr.addCondition": [
+   "Add condition",
+   "条件を追加"
+  ],
+  "arr.removeCondition": [
+   "Remove last condition",
+   "最後の条件を削除"
+  ],
+  "arr.importJson": [
+   "Sonarr, Radarr or TRaSH JSON",
+   "Sonarr、Radarr、TRaSHのJSON"
+  ],
+  "arr.import": [
+   "Import formats",
+   "フォーマットをインポート"
+  ],
+  "arr.minimumMb": [
+   "Minimum (MB/min)",
+   "最小（MB/分）"
+  ],
+  "arr.preferredMb": [
+   "Preferred (MB/min)",
+   "推奨（MB/分）"
+  ],
+  "arr.maximumMb": [
+   "Maximum (MB/min)",
+   "最大（MB/分）"
+  ],
+  "arr.requiredTerms": [
+   "One required term",
+   "いずれかの必須語句"
+  ],
+  "arr.ignoredTerms": [
+   "Ignored terms",
+   "除外する語句"
+  ],
+  "arr.condition.ReleaseTitle": [
+   "Release title",
+   "リリース名"
+  ],
+  "arr.condition.Edition": [
+   "Edition",
+   "エディション"
+  ],
+  "arr.condition.Language": [
+   "Language",
+   "言語"
+  ],
+  "arr.condition.ReleaseGroup": [
+   "Release group",
+   "リリースグループ"
+  ],
+  "arr.condition.Source": [
+   "Source",
+   "ソース"
+  ],
+  "arr.condition.Resolution": [
+   "Resolution",
+   "解像度"
+  ],
+  "arr.condition.QualityModifier": [
+   "Quality modifier",
+   "品質修飾子"
+  ],
+  "arr.condition.IndexerFlag": [
+   "Indexer flag",
+   "インデクサーフラグ"
+  ],
+  "arr.condition.Size": [
+   "Size (GB)",
+   "サイズ（GB）"
+  ],
+  "arr.condition.ReleaseType": [
+   "Release type",
+   "リリース種別"
+  ],
+  "arr.condition.Year": [
+   "Year",
+   "年"
+  ],
+  "takeover.outcome.takeover_profile_unsupported": [
+   "Profile needs review before importing titles",
+   "タイトルの取り込み前にプロファイルを確認"
+  ],
+  "arr.terms.info": [
+   "One term per line. Patterns use /expression/i.",
+   "語句は1行に1つ入力します。パターンは /式/i で入力します。"
+  ],
+  "arr.condition.info": [
+   "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
+   "タイトル、版、グループにはパターンを指定します。言語には2文字コードまたは original、any、unknown を使います。ソースと修飾子はSonarrまたはRadarrに従います。解像度は数値、サイズと年は上下限を指定します。"
+  ],
+  "common.remove": [
+   "Remove",
+   "削除"
+  ],
+  "acquisition.reason.SizeBelowQualityMinimum": [
+   "Below the minimum size for this quality",
+   "この品質の最小サイズ未満"
+  ],
+  "acquisition.reason.SizeAboveQualityMaximum": [
+   "Above the maximum size for this quality",
+   "この品質の最大サイズ超過"
+  ],
+  "acquisition.reason.FormatScore": [
+   "Custom format score",
+   "カスタムフォーマットのスコア"
+  ],
+  "acquisition.reason.FormatScoreBelowMinimum": [
+   "Format score below minimum",
+   "フォーマットスコアが最低値未満"
+  ],
+  "takeover.newLibraries": [
+   "Create libraries from root folders",
+   "ルートフォルダーからライブラリを作成"
+  ],
+  "takeover.keepLibrary": [
+   "Use existing library assignment",
+   "既存のライブラリ割り当てを使用"
+  ],
+  "takeover.inlineKeys": [
+   "Complete missing API keys",
+   "不足しているAPIキーを入力"
+  ],
+  "profile.section.size": [
+   "Size",
+   "サイズ"
+  ],
+  "profile.deleteConfirm": [
+   "Delete this unused profile?",
+   "この未使用のプロファイルを削除しますか？"
+  ],
+  "acquisition.reason.FormatEvaluationFailed": [
+   "Custom format could not be evaluated",
+   "カスタムフォーマットを評価できませんでした"
+  ],
+  "arr.applyCondition": [
+   "Apply condition type",
+   "条件の種類を適用"
   ]
  }
 }

@@ -32,6 +32,8 @@ CREATE TABLE "StoredFiles" (
     "Container" varchar(64) NULL,
     "DurationMs" bigint NULL CHECK ("DurationMs" >= 0),
     "BitRate" bigint NULL CHECK ("BitRate" >= 0),
+    "ReleaseLanguages" varchar(16)[] NULL,
+    "ReleaseLanguageEvidence" jsonb NULL,
     "Sha1" varchar(40) NULL CHECK ("Sha1" ~ '^[0-9a-f]{40}$'),
     -- What the release name says: group, quality, edition and revision (2 for a proper or repack); the probe reports the streams.
     "ReleaseName" varchar(500) NULL,
@@ -49,6 +51,53 @@ CREATE TABLE "StoredFiles" (
 );
 CREATE INDEX "IX_StoredFiles_Asset" ON "StoredFiles" ("MediaAssetId") WHERE "MediaAssetId" IS NOT NULL;
 CREATE INDEX "IX_StoredFiles_Unmatched" ON "StoredFiles" ("LibraryRootId", "RelativePath") WHERE "MediaAssetId" IS NULL;
+
+-- Matching stays in CustomFormatMatcher. This evidence view is the common input for cached file matches and live installed-file scores.
+CREATE VIEW "StoredFileFormatEvidence" AS
+SELECT file."Id" AS "StoredFileId", work."Id" AS "WorkId", asset."WorkUnitId", work."MediaTypeId", file."QualityKey",
+    jsonb_build_object(
+        'ReleaseName', coalesce(file."ReleaseName", file."RelativePath"),
+        'SizeBytes', file."SizeBytes",
+        'IndexerFlags', coalesce(release."IndexerFlags", '{}'::varchar[]),
+        'Movie', work."MediaTypeId" = 1,
+        'MediaTypeId', work."MediaTypeId",
+        'OriginalLanguage', work."OriginalLanguage",
+        'Year', work."ReleaseYear"
+    ) AS "Evidence"
+FROM "StoredFiles" AS file
+    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+    JOIN "Works" AS work ON work."Id" = asset."WorkId"
+    LEFT JOIN LATERAL (
+        SELECT taken."IndexerFlags"
+        FROM "AcquisitionReleases" AS taken JOIN "WantedItems" AS wanted ON wanted."Id" = taken."WantedItemId"
+        WHERE wanted."WorkId" = work."Id" AND left(taken."Title", 500) = file."ReleaseName"
+        ORDER BY taken."Id" DESC LIMIT 1
+    ) AS release ON TRUE
+WHERE file."MissingSince" IS NULL AND NOT file."IsSubtitle";
+
+CREATE TABLE "StoredFileCustomFormats" (
+    "StoredFileId" bigint NOT NULL REFERENCES "StoredFiles" ("Id") ON DELETE CASCADE,
+    "CustomFormatId" bigint NOT NULL REFERENCES "CustomFormats" ("Id") ON DELETE CASCADE,
+    "FormatVersion" bigint NOT NULL,
+    "Evidence" jsonb NOT NULL,
+    "Matches" boolean NOT NULL,
+    "IsValid" boolean NOT NULL,
+    PRIMARY KEY ("StoredFileId", "CustomFormatId")
+);
+CREATE INDEX "IX_StoredFileCustomFormats_Format" ON "StoredFileCustomFormats" ("CustomFormatId", "StoredFileId");
+
+-- Profile scores remain a relational sum over the canonical matcher's current results. Score changes need no file rescans.
+CREATE VIEW "StoredFileProfileScores" AS
+SELECT evidence."StoredFileId", profile."Id" AS "AcquisitionProfileId",
+    coalesce(sum((score ->> 'Score')::integer) FILTER (WHERE evaluated."Matches"
+        AND evaluated."FormatVersion" = format."Version" AND evaluated."Evidence" = evidence."Evidence"), 0)::integer AS "FormatScore",
+    bool_and(score IS NULL OR coalesce(evaluated."FormatVersion" = format."Version" AND evaluated."Evidence" = evidence."Evidence" AND evaluated."IsValid", FALSE)) AS "IsComplete"
+FROM "StoredFileFormatEvidence" AS evidence
+    JOIN "AcquisitionProfiles" AS profile ON profile."MediaTypeId" = evidence."MediaTypeId"
+    LEFT JOIN LATERAL jsonb_array_elements(coalesce(profile."Definition" -> 'FormatScores', '[]'::jsonb)) AS score ON TRUE
+    LEFT JOIN "CustomFormats" AS format ON format."Id" = (score ->> 'FormatId')::bigint
+    LEFT JOIN "StoredFileCustomFormats" AS evaluated ON evaluated."StoredFileId" = evidence."StoredFileId" AND evaluated."CustomFormatId" = format."Id"
+GROUP BY evidence."StoredFileId", profile."Id";
 
 CREATE TABLE "MediaTrackTypes" (
     "Id" smallint PRIMARY KEY,
@@ -151,7 +200,7 @@ FROM
 WHERE
     asset."MediaAssetTypeId" <> 5
     AND (
-        asset."MediaAssetTypeId" IN (1, 2)
+        asset."MediaAssetTypeId" IN (1, 2, 3)
         OR (SELECT lower(substring(min(main."RelativePath") FROM '\.[^./]+$')) FROM "StoredFiles" AS main WHERE main."MediaAssetId" = asset."Id" AND NOT main."IsSubtitle")
             = (SELECT lower(substring(min(main."RelativePath") FROM '\.[^./]+$')) FROM "StoredFiles" AS main WHERE main."MediaAssetId" = other."Id" AND NOT main."IsSubtitle")
     );
@@ -214,65 +263,69 @@ CREATE TABLE "RecycledFiles" (
 );
 CREATE INDEX "IX_RecycledFiles_Age" ON "RecycledFiles" ("RecycledAt");
 
--- Wanted targets whose file, or a monitored unit's best file, ranks below the cutoff of the target's profile, as UpgradePolicy.Assess decides it;
--- the Wanted list shows them and the automatic search looks for upgrades.
-CREATE VIEW "WantedBelowCutoff" AS
-SELECT
-    wanted."Id" AS "WantedItemId"
-FROM
-    "WantedItems" AS wanted
+-- Targets and monitored units whose best file needs a quality or format-score upgrade.
+-- The Wanted list and automatic searches share this state; selection rechecks candidates with UpgradePolicy.
+CREATE VIEW "WantedUnitsBelowCutoff" AS
+SELECT wanted."Id" AS "WantedItemId", asset."WorkUnitId"
+FROM "WantedItems" AS wanted
     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-WHERE
-    COALESCE((
-        SELECT
-            (profile."Definition" ->> 'UpgradeAllowed')::boolean
-            AND EXISTS (
-                SELECT
-                    1
-                FROM
-                    "MediaAssets" AS asset
-                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                    JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
-                        ON lower(quality."Key") = lower(available."QualityKey")
-                    LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
-                WHERE
-                    asset."WorkId" = wanted."WorkId"
-                    AND (unit."Id" IS NULL OR unit."IsMonitored")
-                    AND (
-                        wanted."GamePlatformId" IS NULL
-                        OR EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                "GameReleases" AS game
-                            WHERE
-                                game."WorkVersionId" = asset."WorkVersionId"
-                                AND game."GamePlatformId" = wanted."GamePlatformId"
-                        )
-                    )
-                GROUP BY
-                    asset."WorkUnitId"
-                HAVING
-                    min(quality."Position") > COALESCE((
-                        SELECT
-                            cutoff."Position"
-                        FROM
-                            jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS cutoff ("Key", "Position")
-                        WHERE
-                            lower(cutoff."Key") = lower(profile."Definition" ->> 'UpgradeCutoffQuality')
-                        LIMIT 1
-                    ), 1)
-            )
-        FROM
-            "AcquisitionProfiles" AS profile
-        WHERE
-            profile."MediaTypeId" = work."MediaTypeId"
-            AND (profile."Id" = wanted."AcquisitionProfileId"
-                OR wanted."AcquisitionProfileId" IS NULL AND profile."IsDefault" AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId"))
-        ORDER BY
-            profile."MediaSubtypeId" IS NULL
+    JOIN LATERAL (
+        SELECT candidate."Id", candidate."Definition"
+        FROM "AcquisitionProfiles" AS candidate
+        WHERE candidate."MediaTypeId" = work."MediaTypeId"
+            AND (candidate."Id" = wanted."AcquisitionProfileId"
+                OR wanted."AcquisitionProfileId" IS NULL AND candidate."IsDefault"
+                    AND (candidate."MediaSubtypeId" IS NULL OR candidate."MediaSubtypeId" = work."MediaSubtypeId"))
+        ORDER BY candidate."MediaSubtypeId" IS NULL
         LIMIT 1
-    ), FALSE);
+    ) AS profile ON TRUE
+    JOIN "MediaAssets" AS asset ON asset."WorkId" = work."Id"
+    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+    JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
+        ON lower(quality."Key") = lower(available."QualityKey")
+        OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(coalesce(profile."Definition" -> 'QualityGroups', '[]'::jsonb)) AS grouped
+                CROSS JOIN jsonb_array_elements_text(grouped -> 'Qualities') AS member ("Key")
+            WHERE 'group:' || (grouped ->> 'Id') = quality."Key"
+                AND lower(member."Key") = lower(available."QualityKey")
+        )
+    LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+    LEFT JOIN "StoredFileProfileScores" AS scores ON scores."StoredFileId" = available."Id" AND scores."AcquisitionProfileId" = profile."Id"
+    CROSS JOIN LATERAL (
+        SELECT EXISTS (
+            SELECT 1 FROM "RequestTargets" AS target
+                JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
+                JOIN "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
+            WHERE target."WantedItemId" = wanted."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
+                AND lower(split_part(locale."Locale", '-', 1)) = ANY(available."ReleaseLanguages")
+        ) AS "IsRequestedLanguage"
+    ) AS preferred
+WHERE (profile."Definition" ->> 'UpgradeAllowed')::boolean
+    AND (unit."Id" IS NULL OR unit."IsMonitored")
+    AND (wanted."GamePlatformId" IS NULL OR EXISTS (
+        SELECT 1 FROM "GameReleases" AS game
+        WHERE game."WorkVersionId" = asset."WorkVersionId" AND game."GamePlatformId" = wanted."GamePlatformId"
+    ))
+GROUP BY wanted."Id", asset."WorkUnitId", profile."Definition", work."MediaTypeId", work."MediaSubtypeId"
+HAVING min(quality."Position") > coalesce((
+    SELECT cutoff."Position"
+    FROM jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS cutoff ("Key", "Position")
+    WHERE lower(cutoff."Key") = lower(profile."Definition" ->> 'UpgradeCutoffQuality')
+    LIMIT 1
+), 1)
+OR bool_and(coalesce(scores."IsComplete", FALSE))
+    AND (array_agg(scores."FormatScore" ORDER BY quality."Position", scores."FormatScore" DESC))[1]
+        < coalesce((profile."Definition" ->> 'CutoffFormatScore')::integer, 0)
+OR work."MediaTypeId" = 3 AND work."MediaSubtypeId" IS DISTINCT FROM 2
+    AND EXISTS (
+        SELECT 1 FROM "RequestTargets" AS target
+            JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
+        WHERE target."WantedItemId" = wanted."Id" AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
+    )
+    AND NOT (array_agg(preferred."IsRequestedLanguage" ORDER BY quality."Position", scores."FormatScore" DESC, preferred."IsRequestedLanguage" DESC))[1];
+
+CREATE VIEW "WantedBelowCutoff" AS SELECT DISTINCT "WantedItemId" FROM "WantedUnitsBelowCutoff";
 
 -- What happened to a Work's media, for the administrators' history and a requester's steps.
 CREATE TABLE "ActivityEventTypes" (

@@ -273,11 +273,16 @@ namespace Jularr.Backend.Logic.Acquisition
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH known_profiles AS MATERIALIZED (
+                    SELECT profile."Id" FROM "AcquisitionProfiles" AS profile
+                    WHERE profile."Id" = ANY(@AcquisitionProfileIds)
+                    ORDER BY profile."Id" FOR SHARE
+                )
                 SELECT
                     EXISTS (SELECT 1 FROM "RequestRules" AS rule WHERE lower(rule."Name") = lower(@Name) AND rule."Id" IS DISTINCT FROM @Id) AS "IsNameTaken",
                     (SELECT count(*) FROM "MediaCategories" AS category WHERE category."Key" = ANY(@AllowedMediaKeys))
                         = (SELECT count(DISTINCT item) FROM unnest(@AllowedMediaKeys) AS item) AS "AreMediaKeysKnown",
-                    (SELECT count(*) FROM "AcquisitionProfiles" AS profile WHERE profile."Id" = ANY(@AcquisitionProfileIds))
+                    (SELECT count(*) FROM known_profiles)
                         = (SELECT count(DISTINCT item) FROM unnest(@AcquisitionProfileIds) AS item) AS "AreProfilesKnown";
                 """;
             sql.Parameters.Add(data);

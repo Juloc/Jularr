@@ -36,8 +36,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class UpdateWantedDataV1 : BaseData
     {
-        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null, long? libraryRootId = null, bool? monitorsNewUnits = null)
+        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null, long? libraryRootId = null, bool? monitorsNewUnits = null, long[]? tagIds = null)
         {
+            TagIds = tagIds;
             MonitorsNewUnits = monitorsNewUnits;
             IsPaused = isPaused;
             Version = version;
@@ -61,13 +62,16 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
+        [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.TagIds), false)]
+        public long[]? TagIds { get; }
     }
 
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null)
         {
+            TagIds = tagIds ?? [];
             HasUnits = hasUnits;
             MonitorsNewUnits = monitorsNewUnits;
             LibraryRootId = libraryRootId;
@@ -139,6 +143,8 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.MonitorsNewUnits))]
         public bool MonitorsNewUnits { get; }
+        [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.TagIds))]
+        public long[] TagIds { get; }
 
         // Series and Manga are monitored unit by unit.
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasUnits))]

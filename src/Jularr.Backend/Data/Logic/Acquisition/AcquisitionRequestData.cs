@@ -121,8 +121,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedItemUpdateData : BaseData
     {
-        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long version)
+        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long version, long[]? tagIds = null)
         {
+            TagIds = tagIds;
             MonitorsNewUnits = monitorsNewUnits;
             Id = id;
             IsPaused = isPaused;
@@ -148,6 +149,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
+        [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.TagIds), false)]
+        public long[]? TagIds { get; }
     }
 
     // One unit's, or a season's, monitoring for a wanted Work.

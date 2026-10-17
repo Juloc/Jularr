@@ -131,6 +131,8 @@ namespace Jularr.Integrations.Data.Servarr
         public string? Name { get; }
         public bool IsAllowed { get; }
         public bool IsCutoff { get; }
+        public int? GroupId { get; init; }
+        public string? GroupName { get; init; }
     }
 
     internal sealed class ServarrQualityProfile
@@ -153,22 +155,26 @@ namespace Jularr.Integrations.Data.Servarr
         // Score per custom format id.
         public IReadOnlyDictionary<int, int> FormatScores { get; }
         public int MinimumFormatScore { get; }
+        public int CutoffFormatScore { get; init; }
+        public int MinimumUpgradeFormatScore { get; init; } = 1;
     }
 
     internal sealed class ServarrFormatCondition
     {
-        public ServarrFormatCondition(string implementation, bool negate, bool required, string? value)
+        public ServarrFormatCondition(string name, string implementation, bool negate, bool required, IReadOnlyDictionary<string, System.Text.Json.JsonElement> fields)
         {
+            Name = name;
             Implementation = implementation;
             Negate = negate;
             Required = required;
-            Value = value;
+            Fields = fields;
         }
 
+        public string Name { get; }
         public string Implementation { get; }
         public bool Negate { get; }
         public bool Required { get; }
-        public string? Value { get; }
+        public IReadOnlyDictionary<string, System.Text.Json.JsonElement> Fields { get; }
     }
 
     internal sealed class ServarrCustomFormat
@@ -183,6 +189,7 @@ namespace Jularr.Integrations.Data.Servarr
         public int Id { get; }
         public string Name { get; }
         public IReadOnlyList<ServarrFormatCondition> Conditions { get; }
+        public bool IncludeWhenRenaming { get; init; }
     }
 
     // Which releases of an artist or which books of an author count (Lidarr's and Readarr's metadata profiles).

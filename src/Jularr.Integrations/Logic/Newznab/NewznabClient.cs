@@ -147,7 +147,12 @@ namespace Jularr.Integrations.Logic.Newznab
                     ? date : (DateTimeOffset?)null;
 
                 // Usenet only: magnet links are never accepted.
-                items.Add(new NewznabItem(title, Text(item, "guid"), link is null ? null : ResolveUri(baseUrl, link), Text(item, "comments") ?? Text(item, "link"), size, published));
+                items.Add(new NewznabItem(title, Text(item, "guid"), link is null ? null : ResolveUri(baseUrl, link), Text(item, "comments") ?? Text(item, "link"), size, published)
+                {
+                    IndexerFlags = attributes.TryGetValue("indexerflags", out var flags)
+                        ? flags.Split([',', '|'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).Take(32).ToArray()
+                        : []
+                });
             }
 
             return items;

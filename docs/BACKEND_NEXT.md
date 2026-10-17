@@ -190,14 +190,20 @@ clients, manual search and grab, automatic search for missing movies with backof
 download monitoring (tracked job ids, reserved grabs recovered after interruptions),
 failed-release exclusion, mapped and link-free import paths and hardlink/copy import
 into the first writable library of the media type without taking over existing files.
-Requested languages order releases of equal quality. TMDB (key in the Providers
+Releases rank by quality, custom format score and requested language. TMDB (key in the Providers
 registry) creates movies and series with tmdb/tvdb/imdb mappings and the episode
 catalog. Wanted series are searched per season: a fully aired, empty season as a
 pack, otherwise episode by episode, several downloads in parallel; requests complete
 once every aired regular episode exists. Books and Light Novels come through Open Library and
 direct sources; Manga through AniList with volumes as units on the same unit pass as series
-episodes; Music through MusicBrainz with the album as the Work and its tracks as units. Prowlarr, Sonarr and Radarr can be taken over once (indexers, clients, missing
-titles). Games: IGDB metadata with shared platforms (G1), Arr+ per requested platform (G2) and
+episodes; Music through MusicBrainz with the album as the Work and its tracks as units. Prowlarr, Sonarr, Radarr, Lidarr and Readarr can be taken over once. Profiles retain
+quality groups, format conditions and score thresholds; source quality/metadata profile pairs track repeated
+imports. Missing keys are entered inline, root folders can create libraries on an explicitly
+chosen configured storage connection, and series without provider IDs are matched uniquely
+by title and year. Arr+ administration has five tabs for profiles, custom formats,
+quality sizes, release profiles and shared tags. Pasted Sonarr/Radarr/TRaSH JSON uses
+the same format writer. Profile fallback qualities and legacy single-field rules are removed.
+Releases are grabbed immediately; improvements use the profile's upgrade rules, including requested book languages within equal quality groups. The simpler Jularr view over the same data remains a later task. Games: IGDB metadata with shared platforms (G1), Arr+ per requested platform (G2) and
 ROM identification by hash against the libretro No-Intro DATs (G3) are connected; ScreenScraper
 (developer account) and artwork/PC enrichment (G4) follow, as does the remaining profile editing. The
 remaining modules are not advertised as available. Tracking must be rebuilt from

@@ -127,7 +127,7 @@ namespace Jularr.Backend.Tests
             // An existing library file is kept; the import takes a free name.
             var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
             Directory.CreateDirectory(library);
-            File.WriteAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv"), "existing");
+            File.WriteAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv"), "existing");
 
             // The film's worse earlier release, already played, is replaced: in simple mode it waits in the library's recycle folder.
             File.WriteAllText(Path.Combine(library, "Example Movie (2020) [DVD].mkv"), "earlier");
@@ -138,28 +138,28 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
                 INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
                     SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020) [DVD].mkv', 7, now(), now(), 900 FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
-                UPDATE "StoredFiles" SET "QualityKey" = 'WEB-720p' WHERE "Id" = 900;
+                UPDATE "StoredFiles" SET "QualityKey" = 'WEBDL-720p' WHERE "Id" = 900;
                 INSERT INTO "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "StartedAt", "LastSeenAt", "EndedAt")
                     VALUES (gen_random_uuid(), 101, 900, 900, 1, now() - interval '1 hour', now(), now());
                 """);
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
+            Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("Movies/.jularr-recycle", await host.ScalarAsync("SELECT \"FolderPath\" FROM \"RecycledFiles\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"Id\" = 900"));
-            Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [WEB-1080p] (2).mkv", await host.ScalarAsync(
+            Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [WEBDL-1080p] (2).mkv", await host.ScalarAsync(
                 "SELECT file.\"RelativePath\" FROM \"PlaybackSessions\" AS session JOIN \"StoredFiles\" AS file ON file.\"Id\" = session.\"StoredFileId\""));
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).mkv")));
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).en.srt")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p] (2).mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p] (2).en.srt")));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
 
             // The grabbed release names the imported file's facts.
             Assert.AreEqual("GRP", await host.ScalarAsync("SELECT \"ReleaseGroup\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%(2).mkv'"));
-            Assert.AreEqual("WEB-1080p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%(2).mkv'"));
+            Assert.AreEqual("WEBDL-1080p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%(2).mkv'"));
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 1 AND \"OperationStatusTypeId\" = 1"));
             using var history = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId + "/releases");
@@ -175,10 +175,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, events.StatusCode, await events.Content.ReadAsStringAsync());
             var happened = (await events.Content.ReadFromJsonAsync<PageResult<ActivityEventV1>>())!.Items.Reverse().ToArray();
             CollectionAssert.AreEqual(new[] { ActivityEventType.Grabbed, ActivityEventType.Imported, ActivityEventType.Upgraded }, happened.Select(item => item.ActivityEventTypeId).ToArray());
-            Assert.AreEqual((Feature, "WEB-1080p", "SAB"), (happened[0].ReleaseTitle, happened[0].QualityKey, happened[0].ClientName));
+            Assert.AreEqual((Feature, "WEBDL-1080p", "SAB"), (happened[0].ReleaseTitle, happened[0].QualityKey, happened[0].ClientName));
             Assert.IsNotNull(happened[0].AccountName);
-            StringAssert.EndsWith(happened[1].Path, "Example Movie (2020) [WEB-1080p] (2).mkv");
-            Assert.AreEqual(("WEB-720p", "Example Movie"), (happened[2].QualityKey, happened[2].WorkTitle));
+            StringAssert.EndsWith(happened[1].Path, "Example Movie (2020) [WEBDL-1080p] (2).mkv");
+            Assert.AreEqual(("WEBDL-720p", "Example Movie"), (happened[2].QualityKey, happened[2].WorkTitle));
             StringAssert.EndsWith(happened[2].Path, "Example Movie (2020) [DVD].mkv");
 
             // The requester sees the steps of their request, without releases, indexers or paths.
@@ -252,7 +252,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
                 INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
-                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020).mkv', 7, now(), now(), 900, 'WEB-1080p' FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
+                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020).mkv', 7, now(), now(), 900, 'WEBDL-1080p' FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
                 """);
 
             async Task<long> CutoffUnmetAsync()
@@ -267,7 +267,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await CutoffUnmetAsync());
 
             // Below it, an equal release is no upgrade and left to a person; the automatic search takes the better one.
-            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"QualityKey\" = 'WEB-720p' WHERE \"Id\" = 900");
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"QualityKey\" = 'WEBDL-720p' WHERE \"Id\" = 900");
             Assert.AreEqual(1L, await CutoffUnmetAsync());
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
@@ -314,34 +314,33 @@ namespace Jularr.Backend.Tests
             var movies = seeded.Single(profile => profile.MediaTypeId == MediaType.Movie);
             var series = seeded.Single(profile => profile.MediaTypeId == MediaType.Series);
             Assert.IsTrue(movies.IsDefault);
-            CollectionAssert.Contains(movies.AllowedQualities, "WEB-1080p");
+            CollectionAssert.Contains(movies.AllowedQualities, "WEBDL-1080p");
 
             // A cutoff outside the allowed qualities is rejected.
             using var invalid = await host.SendAsync(HttpMethod.Post, Profiles,
-                new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, false, ["WEB-2160p"], true, "WEB-1080p", null, null, [], []));
+                new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, false, ["WEBDL-2160p"], true, "WEBDL-1080p", null, null));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
 
             // A new default replaces the old one; the old default keeps its score rules.
             using var created = await host.SendAsync(HttpMethod.Post, Profiles,
-                new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, true, ["WEB-2160p", "BLURAY-2160p"], true, "BLURAY-2160p", 1000, 80000, ["HDR"], ["CAM"]));
+                new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, true, ["WEBDL-2160p", "Bluray-2160p"], true, "Bluray-2160p", 1000, 80000));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var uhdId = (await created.Content.ReadFromJsonAsync<CreateAcquisitionProfileResultV1>())!.Id;
             var current = await ReadProfilesAsync(host);
             var uhd = current.Single(profile => profile.Id == uhdId);
             Assert.IsTrue(uhd.IsDefault);
-            CollectionAssert.AreEqual(new[] { "BLURAY-2160p", "WEB-2160p" }, uhd.AllowedQualities);
+            CollectionAssert.AreEqual(new[] { "Bluray-2160p", "WEBDL-2160p" }, uhd.AllowedQualities);
             Assert.AreEqual(1000, uhd.MinimumSizeMb);
-            CollectionAssert.AreEqual(new[] { "CAM" }, uhd.MustNotContain);
             movies = current.Single(profile => profile.Id == movies.Id);
             Assert.IsFalse(movies.IsDefault);
-            using var renamed = await host.SendAsync(HttpMethod.Put, Profiles + "/" + movies.Id, new SaveAcquisitionProfileDataV1("HD", MediaType.Movie, false, ["WEB-1080p"], false, null,
-                null, null, [], [], movies.Version));
+            using var renamed = await host.SendAsync(HttpMethod.Put, Profiles + "/" + movies.Id, new SaveAcquisitionProfileDataV1("HD", MediaType.Movie, false, ["WEBDL-1080p"], false, null,
+                null, null, movies.Version));
             Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
-            StringAssert.Contains((string)(await host.ScalarAsync("SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = " + movies.Id))!, "Prefer Proper");
+            Assert.AreEqual(0, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).FormatScores.Count);
 
             // A default is replaced, never removed or deleted.
-            using var undefault = await host.SendAsync(HttpMethod.Put, Profiles + "/" + uhdId, new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, false, ["WEB-2160p"], false, null,
-                null, null, [], [], uhd.Version));
+            using var undefault = await host.SendAsync(HttpMethod.Put, Profiles + "/" + uhdId, new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, false, ["WEBDL-2160p"], false, null,
+                null, null, uhd.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, undefault.StatusCode);
             using var deleteDefault = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + uhdId + "?version=" + uhd.Version);
             Assert.AreEqual(HttpStatusCode.BadRequest, deleteDefault.StatusCode);
@@ -359,35 +358,35 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, currentTab.StatusCode, currentHtml);
             StringAssert.Contains(currentHtml, "value=\"" + movies.Id + "\" selected=\"selected\"");
 
-            // The chosen profile drives the search: only WEB-1080p is eligible.
+            // The chosen profile drives the search: only WEBDL-1080p is eligible.
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
             Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
             Assert.AreEqual(ReleaseDecisionType.Rejected, candidates.Single(candidate => candidate.Title == Lower).ReleaseDecisionTypeId);
 
-            // Deleting a used profile returns its targets to the default.
+            // Deleting a used profile preserves its targets and requires reassignment first.
             movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
             using var deleted = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + movies.Id + "?version=" + movies.Version);
-            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
-            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"WantedItems\""));
+            Assert.AreEqual(HttpStatusCode.BadRequest, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(movies.Id, await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"WantedItems\""));
 
             // The editor renders the stored values and saves through the same service.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + uhdId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "value=\"BLURAY-2160p\" checked=\"checked\"");
-            StringAssert.Contains(html, "value=\"CAM\"");
+            StringAssert.Contains(html, "value=\"Bluray-2160p\" checked=\"checked\"");
+            Assert.IsFalse(html.Contains("FallbackQualities", StringComparison.Ordinal));
             using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + uhdId, new FormUrlEncodedContent(
             [
                 new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", uhd.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new("Name", "UHD"), new("IsDefault", "True"), new("AllowedQualities", "WEB-2160p"), new("AllowedQualities", "WEB-1080p"), new("UpgradeAllowed", "True"),
-                new("UpgradeCutoffQuality", "WEB-2160p"), new("MustContain", "HDR, DV"), new("MustNotContain", "")
+                new("Name", "UHD"), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-2160p"), new("AllowedQualities", "WEBDL-1080p"), new("UpgradeAllowed", "True"),
+                new("UpgradeCutoffQuality", "WEBDL-2160p")
             ]));
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             uhd = (await ReadProfilesAsync(host)).Single(profile => profile.Id == uhdId);
             Assert.AreEqual("UHD", uhd.Name);
-            CollectionAssert.AreEqual(new[] { "WEB-2160p", "WEB-1080p" }, uhd.AllowedQualities);
-            CollectionAssert.AreEqual(new[] { "HDR", "DV" }, uhd.MustContain);
+            CollectionAssert.AreEqual(new[] { "WEBDL-2160p", "WEBDL-1080p" }, uhd.AllowedQualities);
+            Assert.AreEqual(0, uhd.FormatScores.Count);
         }
 
         [TestMethod]
@@ -447,7 +446,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId", "IsProtected") SELECT asset, "Id", asset, 1, asset = 901 FROM "Works", unnest(ARRAY[900, 901, 902, 903]) AS asset;
                 INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
                     SELECT item.id, root."Id", 'Example Movie (2020)/Example Movie (2020) [' || item.name || '].mkv', 3, now(), now(), item.id, item.quality
-                    FROM "LibraryRoots" AS root, (VALUES (900, 'DVD', 'WEB-720p'), (901, 'Manual', NULL), (902, 'Bluray', 'BLURAY-1080p'), (903, 'Unknown', NULL)) AS item(id, name, quality)
+                    FROM "LibraryRoots" AS root, (VALUES (900, 'DVD', 'WEBDL-720p'), (901, 'Manual', NULL), (902, 'Bluray', 'Bluray-1080p'), (903, 'Unknown', NULL)) AS item(id, name, quality)
                     WHERE root."RelativePath" = 'Movies';
                 """);
 
@@ -463,7 +462,7 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
 
             // Deleted by default: only the worse automatic release; the manual, the better and the unknown one stay.
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [Manual].mkv")));
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [Bluray].mkv")));
@@ -471,7 +470,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle")));
 
             // Keeping only the new version is the administrator's confirmation.
-            var newFile = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%WEB-1080p].mkv'"))!;
+            var newFile = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%WEBDL-1080p].mkv'"))!;
             using var files = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/files?onlyUnmatched=false");
             Assert.IsTrue((await files.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.Admin.Library.V1.LibraryFileDetailsV1>>())!.Items.Single(file => file.Id == newFile).HasOtherVersions);
             using var protectedNew = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + newFile + "/protection",
@@ -686,7 +685,7 @@ namespace Jularr.Backend.Tests
 
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Pack","status":"Completed","storage":"/downloads/Example.Show.S01.1080p.WEB-DL.H264-GRP"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Movies", "Example Show", "Season 01", "Example Show - S01E03 [WEB-1080p].mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Movies", "Example Show", "Season 01", "Example Show - S01E03 [WEBDL-1080p].mkv")));
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkUnitId\" IS NOT NULL"));
             Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
             Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
@@ -703,7 +702,9 @@ namespace Jularr.Backend.Tests
             // Manual search can target one episode.
             using var manual = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/600/search", new SearchWantedDataV1(2, 1));
             var candidates = (await manual.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
-            Assert.AreEqual("Example.Show.S02E01.1080p.WEB-DL.H264-GRP", candidates.First(candidate => candidate.ReleaseDecisionTypeId == ReleaseDecisionType.Eligible).Title);
+            var installedEpisode = candidates.Single(candidate => candidate.Title == "Example.Show.S02E01.1080p.WEB-DL.H264-GRP");
+            Assert.AreEqual("NotAnUpgrade", installedEpisode.ReasonCode);
+            Assert.AreEqual(ReleaseDecisionType.ManualReview, installedEpisode.ReleaseDecisionTypeId);
             Assert.AreEqual("WrongSeason", candidates.Single(candidate => candidate.Title == "Example.Show.S01E01.1080p.WEB-DL.H264-GRP").ReasonCode);
         }
 
@@ -907,7 +908,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 1 FROM "Works" WHERE "Id" BETWEEN 702 AND 705;
                 INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
                     SELECT root."Id", 'Film ' || item.id || '.mkv', 1, now(), now(), item.id, item.quality
-                    FROM (SELECT "Id" FROM "LibraryRoots" ORDER BY "Id" LIMIT 1) AS root, (VALUES (702, 'HDTV-720p'), (703, 'web-1080p'), (704, 'WEB-720p'), (705, NULL)) AS item (id, quality);
+                    FROM (SELECT "Id" FROM "LibraryRoots" ORDER BY "Id" LIMIT 1) AS root, (VALUES (702, 'HDTV-720p'), (703, 'webdl-1080p'), (704, 'WEBDL-720p'), (705, NULL)) AS item (id, quality);
                 """);
 
             async Task<string[]> ListAsync(WantedViewType view)
@@ -921,8 +922,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Missing Film" }, await ListAsync(WantedViewType.Missing));
             var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
                 (string)(await host.ScalarAsync("SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!, AcquisitionSelectionLogic.DefinitionOptions)!;
-            var profile = new QualityProfile("1", "Movies", definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, null, null, [], [], [], [], []);
-            var expected = new[] { ("Low Film", "HDTV-720p"), ("Good Film", "web-1080p"), ("Unknown Film", (string?)null) }
+            var profile = new QualityProfile("1", "Movies", definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, null, null);
+            var expected = new[] { ("Low Film", "HDTV-720p"), ("Good Film", "webdl-1080p"), ("Unknown Film", (string?)null) }
                 .Where(film => UpgradePolicy.Assess(profile, film.Item2).State == UpgradeState.Upgradable).Select(film => film.Item1).Order().ToArray();
             CollectionAssert.AreEqual(new[] { "Low Film" }, expected);
             CollectionAssert.AreEqual(expected, await ListAsync(WantedViewType.CutoffUnmet));
@@ -1013,75 +1014,40 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ReleaseRules_DecideByTheirEffect_AndNameThemselves()
+        public async Task FormatsAndReleaseProfiles_DriveSearchThroughTheCanonicalContracts()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
             var wantedId = await CreateWantedMovieAsync(host);
-            var profileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!;
-            var rules = "/api/v1/admin/acquisition/profiles/" + profileId + "/rules";
+            var profile = (await ReadProfilesAsync(host)).Single(item => item.MediaTypeId == MediaType.Movie && item.IsDefault);
+            using var created = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/custom-formats",
+                new SaveCustomFormatDataV1(null, MediaType.Movie, "GRP bonus", false,
+                    new([new FormatConditionV1("Group", FormatConditionKind.ReleaseGroup, false, true, "^GRP$", false, null, null, null)]), null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var format = (await created.Content.ReadFromJsonAsync<SavedCustomFormatV1>())!;
+            using var updated = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + profile.Id,
+                new SaveAcquisitionProfileDataV1(profile.Name, profile.MediaTypeId, true, profile.AllowedQualities, profile.UpgradeAllowed,
+                    profile.UpgradeCutoffQuality, null, null, profile.Version, formatScores: new([new CustomFormatScoreV1(format.Id, 500)]), minimumFormatScore: 500));
+            Assert.AreEqual(HttpStatusCode.OK, updated.StatusCode, await updated.Content.ReadAsStringAsync());
+            using var terms = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/release-profiles",
+                new SaveReleaseProfileDataV1(null, MediaType.Movie, "Ignore 720p", true, [], ["720p"], null, [], null));
+            Assert.AreEqual(HttpStatusCode.OK, terms.StatusCode, await terms.Content.ReadAsStringAsync());
 
-            async Task<HttpStatusCode> AddAsync(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long? version = null)
-            {
-                var current = version ?? (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-                using var added = await host.SendAsync(HttpMethod.Post, rules, new SaveReleaseRuleDataV1(name, field, match, value, effect, score, current));
-                return added.StatusCode;
-            }
-
-            // Prefer and Avoid need a score, patterns must be valid, an old version is refused.
-            Assert.AreEqual(HttpStatusCode.BadRequest, await AddAsync("Nothing", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "x", ReleaseRuleEffect.Avoid, 0));
-            Assert.AreEqual(HttpStatusCode.BadRequest, await AddAsync("Broken", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Regex, "([", ReleaseRuleEffect.Reject, 0));
-            Assert.AreEqual(HttpStatusCode.BadRequest, await AddAsync("Stale", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "x", ReleaseRuleEffect.Info, 0, version: 1_000));
-            Assert.AreEqual(HttpStatusCode.OK, await AddAsync("No 720p", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "720p", ReleaseRuleEffect.Reject, 0));
-            Assert.AreEqual(HttpStatusCode.OK, await AddAsync("Group GRP", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "GRP", ReleaseRuleEffect.Require, 0));
-            Assert.AreEqual(HttpStatusCode.OK, await AddAsync("Not other", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "Other", ReleaseRuleEffect.Avoid, 5));
-            using var listed = await host.SendAsync(HttpMethod.Get, rules);
-            var stored = (await listed.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
-            CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "No 720p", "Group GRP", "Not other" }, stored.Select(rule => rule.Name).ToArray());
-            Assert.AreEqual(-5, stored[4].Score);
-            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, stored.Select(rule => rule.Id).ToArray());
-
-            // The rejected release names its rule.
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
             var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
             var lower = candidates.Single(candidate => candidate.Title == Lower);
             Assert.AreEqual(ReleaseDecisionType.Rejected, lower.ReleaseDecisionTypeId);
-            Assert.AreEqual(("MatchesRejectRule", "No 720p"), (lower.ReasonCode, lower.ReasonValue));
-            Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
-
-            // The page lists the rules; removing one by its id keeps the others in order.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
-            var html = await page.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "Release rules");
-            StringAssert.Contains(html, "Avoid -5");
-            var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId + "?handler=RemoveRule&ruleId=" + stored[2].Id,
-                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture) });
-            Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
-            using var after = await host.SendAsync(HttpMethod.Get, rules);
-            var kept = (await after.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
-            CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "Group GRP", "Not other" }, kept.Select(rule => rule.Name).ToArray());
-
-            // A rule changes in place and keeps its position and id; a removed id is gone.
-            var group = kept[2];
-            version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-            using var gone = await host.SendAsync(HttpMethod.Put, rules + "/" + stored[2].Id, new SaveReleaseRuleDataV1("Again", group.Field, group.Match, group.Value, ReleaseRuleEffect.Prefer, 5, version));
-            Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
-            using var changed = await host.SendAsync(HttpMethod.Put, rules + "/" + group.Id, new SaveReleaseRuleDataV1("Group GRP first", group.Field, group.Match, group.Value, ReleaseRuleEffect.Prefer, 50, version));
-            Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
-            using var edited = await host.SendAsync(HttpMethod.Get, rules);
-            var rule = (await edited.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())![2];
-            Assert.AreEqual(("Group GRP first", 50, group.Id), (rule.Name, rule.Score, rule.Id));
-            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId + "?rule=" + group.Id);
-            var editorHtml = await editor.Content.ReadAsStringAsync();
-            StringAssert.Contains(editorHtml, "Edit rule");
-            StringAssert.Contains(editorHtml, "<option value=\"" + (byte)group.Field + "\" selected=\"selected\">");
+            Assert.AreEqual("ContainsRejectedTerm", lower.ReasonCode);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profile.Id);
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "GRP bonus");
         }
 
         [TestMethod]
-        public async Task Profiles_DelayWaitsForABetterRelease_FallbackQualitiesJoinAfterTheirHours()
+        public async Task Profiles_GrabFreshAllowedReleaseImmediately_AndNeverAddDisallowedQualities()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -1090,38 +1056,27 @@ namespace Jularr.Backend.Tests
             var wantedId = await CreateWantedMovieAsync(host);
             var profileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!;
 
-            async Task<HttpResponseMessage> SaveAsync(string[] allowed, int delay, string[]? fallback = null, int? hours = null)
+            async Task<HttpResponseMessage> SaveAsync(string[] allowed)
             {
                 var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
                 return await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + profileId, new SaveAcquisitionProfileDataV1("Movies", MediaType.Movie, true, allowed,
-                    false, null, null, null, [], [], version, null, delay, fallback, hours));
+                    false, null, null, null, version));
             }
 
-            // A fresh release below the best allowed quality waits for the delay; the target looks again when it ends.
-            using (var saved = await SaveAsync(["BLURAY-1080p", "WEB-1080p"], 120)) Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            // A newly published release is taken immediately, even when a better allowed quality may appear later.
+            using (var saved = await SaveAsync(["Bluray-1080p", "WEBDL-1080p"])) Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             await RunAsync<SearchDueWantedV1>(host);
-            Assert.AreEqual(0, usenet.Grabbed.Count);
-            Assert.AreEqual("release_delayed", await host.ScalarAsync($"SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = {wantedId}"));
-            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"NextSearchAt\" BETWEEN now() + interval '100 minutes' AND now() + interval '111 minutes' FROM \"WantedItems\" WHERE \"Id\" = {wantedId}"));
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            Assert.AreEqual("grabbed", await host.ScalarAsync($"SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = {wantedId}"));
 
-            // Fallback qualities are other known qualities with the hours after which they count.
-            using (var noHours = await SaveAsync(["BLURAY-1080p"], 0, ["WEB-720p"])) Assert.AreEqual(HttpStatusCode.BadRequest, noHours.StatusCode);
-            using (var overlap = await SaveAsync(["BLURAY-1080p"], 0, ["BLURAY-1080p"], 1)) Assert.AreEqual(HttpStatusCode.BadRequest, overlap.StatusCode);
-
-            // Before its hours the fallback quality is refused; afterwards it is grabbed and says why.
-            using (var saved = await SaveAsync(["BLURAY-1080p"], 0, ["WEB-720p"], 1)) Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
-            await RunAsync<SearchDueWantedV1>(host);
-            Assert.AreEqual(0, usenet.Grabbed.Count);
-            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL, \"CreatedAt\" = now() - interval '2 hours'");
+            // A release remains disallowed regardless of the target's age.
+            using (var saved = await SaveAsync(["Bluray-1080p"])) Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL, \"CreatedAt\" = now() - interval '2 days'");
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
-            var lower = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.Title == Lower);
-            Assert.AreEqual(ReleaseDecisionType.Eligible, lower.ReleaseDecisionTypeId);
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            Assert.IsTrue(candidates.All(candidate => candidate.ReleaseDecisionTypeId == ReleaseDecisionType.Rejected));
             await RunAsync<SearchDueWantedV1>(host);
-            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/lower" }, usenet.Grabbed);
-
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Accept the fallback after (hours)");
+            Assert.AreEqual(1, usenet.Grabbed.Count);
         }
 
         [TestMethod]
@@ -1153,7 +1108,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Selection_RequestedLanguageWinsAmongEqualQuality()
         {
-            var profile = new QualityProfile("1", "Test", ["WEB-1080p"], ["WEB-1080p"], true, "WEB-1080p", null, null, [], [], [], [], []) { LanguageOrder = ["de"] };
+            var profile = new QualityProfile("1", "Test", ["WEBDL-1080p"], ["WEBDL-1080p"], true, "WEBDL-1080p", null, null) { LanguageOrder = ["de"] };
             var offers = new[] { Offer("Example.Movie.2020.1080p.WEB-DL.H264-AAA", "english"), Offer("Example.Movie.2020.German.DL.1080p.WEB-DL.H264-ZZZ", "german") };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
@@ -1229,7 +1184,7 @@ namespace Jularr.Backend.Tests
             Assert.AreNotEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 02 [1080p]"));
 
             // The import places an absolute file as its episode.
-            var placed = ImportPlacementLogic.Plan(MediaType.Series, MediaSubtype.Anime, "Example Show", 2020, "WEB-1080p", [new StorageFile("[Grp] Example Show - 04 [1080p].mkv", 1000, DateTime.UtcNow)],
+            var placed = ImportPlacementLogic.Plan(MediaType.Series, MediaSubtype.Anime, "Example Show", 2020, "WEBDL-1080p", [new StorageFile("[Grp] Example Show - 04 [1080p].mkv", 1000, DateTime.UtcNow)],
                 NamingPatternTests.Defaults, null, episodes: episodes).Single();
             Assert.AreEqual(((decimal?)2, (decimal?)1), (placed.ParentUnitNumber, placed.UnitNumber));
         }
@@ -1237,8 +1192,10 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Selection_NeverLetsAPreferenceRepairAWrongIdentity()
         {
-            var profile = new QualityProfile("1", "Test", ["WEB-1080p", "WEB-720p"], ["WEB-1080p", "WEB-720p"], true, "WEB-1080p", null, null, [], [], [], [],
-                [new ReleaseScoreRule("Group", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "GRP", 500)]);
+            var profile = new QualityProfile("1", "Test", ["WEBDL-1080p", "WEBDL-720p"], ["WEBDL-1080p", "WEBDL-720p"], true, "WEBDL-1080p", null, null)
+            {
+                Formats = [(new CustomFormat(1, "Group", false, [new FormatCondition("Group", FormatConditionKind.ReleaseGroup, false, true) { Value = "^GRP$" }]), 500)]
+            };
             var offers = new[]
             {
                 Offer("Other.Movie.2020.1080p.WEB-DL.H264-GRP", "wrong"),

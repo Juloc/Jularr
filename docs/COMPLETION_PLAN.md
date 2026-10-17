@@ -46,7 +46,7 @@ Packages of the mandate of 14 October, after K24b, from the gaps in the feature 
 | B4 | E2E failure cases: database restart, NAS outage, download retry, restart mid-operation, missing metadata, ambiguous release, permissions, tracks, transcoding error, upgrade, HTTP 5xx and script errors | Each ends visible and recoverable; failures keep screenshots and logs |
 | C1 | Monitoring of seasons, episodes, specials, volumes, albums and tracks; missing and cutoff-unmet lists; new-release detection tested | Unmonitored units are never searched |
 | C2 | Indexers (#864): keyless Newznab, presets, health with backoff, limits, media scope | A failing indexer backs off while others search |
-| C3 | Release rules (#865): rule effects, fallback ladder, identity confidence, delay | Every decision names its rule |
+| C3 | Release rules (#865): custom formats, quality groups, score thresholds, identity confidence, immediate grabs and upgrades | Every decision names its rule |
 | C4 | Discover and requests for music, books, manga, light novels, games and anime | A user finds and requests each enabled type |
 | C5 | Music (#1022): artists, discographies, editions and media, multi-format, tags, retag preview, duplicates | An artist's new album is found and imported with correct tags |
 | C6 | Books: authors, series, editions, format upgrades; audiobooks as Book subtype | A series' new volume is found; an audiobook plays by chapter |

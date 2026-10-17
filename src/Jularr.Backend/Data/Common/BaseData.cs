@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -278,6 +279,23 @@ namespace Jularr.Backend.Data.Common
                 }
 
                 item.Validate();
+            }
+        }
+
+        public void Validate(string field)
+        {
+            for (var index = 0; index < _items.Length; index++)
+            {
+                var prefix = field + "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
+                if (_items[index] is null) throw new DataValidationException(prefix, "required");
+                try
+                {
+                    _items[index].Validate();
+                }
+                catch (DataValidationException exception)
+                {
+                    throw new DataValidationException(prefix + "." + exception.Field, exception.Code);
+                }
             }
         }
 

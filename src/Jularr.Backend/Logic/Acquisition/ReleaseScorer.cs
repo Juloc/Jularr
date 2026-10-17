@@ -15,19 +15,16 @@ namespace Jularr.Backend.Logic.Acquisition
             ArgumentNullException.ThrowIfNull(candidate);
             ArgumentNullException.ThrowIfNull(candidate.Release);
 
-            var qualityKey = ReleaseQuality.GetKey(candidate.Release);
-            var qualityRank = IndexOf(profile.QualityOrder, qualityKey);
+            var qualityKey = ReleaseQuality.GetKey(candidate.Release, profile.IsMovie);
+            var item = profile.Item(qualityKey);
+            var qualityRank = IndexOf(profile.QualityOrder, item);
             var rejections = new List<ReleaseReason>();
             var scoreReasons = new List<ReleaseReason>();
 
             if (profile.AllowedQualities.Length > 0 &&
-                !profile.AllowedQualities.Contains(qualityKey, StringComparer.OrdinalIgnoreCase))
+                !profile.AllowedQualities.Contains(item, StringComparer.OrdinalIgnoreCase))
             {
                 rejections.Add(new ReleaseReason("QualityNotAllowed", qualityKey));
-            }
-            else if (profile.FallbackQualities.Contains(qualityKey, StringComparer.OrdinalIgnoreCase))
-            {
-                scoreReasons.Add(new ReleaseReason("FallbackQuality", qualityKey));
             }
 
             if ((profile.MinimumSizeBytes is not null || profile.MaximumSizeBytes is not null) &&
@@ -52,64 +49,64 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
 
-            foreach (var required in profile.MustContain)
+            // Quality sizes scale with the runtime and the episodes a release holds; a season pack's length is unknown here.
+            if (profile.RuntimeMinutes is { } minutes && candidate.SizeBytes is { } bytes && profile.Sizes.TryGetValue(qualityKey, out var size) && !candidate.Release.IsSeasonPack)
             {
-                if (!candidate.Release.RawTitle.Contains(required, StringComparison.OrdinalIgnoreCase))
+                var episodes = candidate.Release.EpisodeStart is { } first && candidate.Release.EpisodeEnd is { } last && last >= first ? last - first + 1 : 1;
+                var megabytes = bytes / 1_048_576m;
+                var length = minutes * episodes;
+                if (megabytes < size.Minimum * length)
                 {
-                    rejections.Add(new ReleaseReason("MissingRequiredTerm", required));
+                    rejections.Add(new ReleaseReason("SizeBelowQualityMinimum", qualityKey));
+                }
+                else if (size.Maximum is { } maximum && megabytes > maximum * length)
+                {
+                    rejections.Add(new ReleaseReason("SizeAboveQualityMaximum", qualityKey));
                 }
             }
 
-            foreach (var rejected in profile.MustNotContain)
+            // Release profiles as in Sonarr: one required term must appear, no ignored term may.
+            foreach (var terms in profile.ReleaseProfiles.Where(terms => terms.IndexerId is null || terms.IndexerId == candidate.IndexerId))
             {
-                if (candidate.Release.RawTitle.Contains(rejected, StringComparison.OrdinalIgnoreCase))
+                if (terms.Required.Length > 0 && !terms.Required.Any(term => Contains(candidate.Release.RawTitle, term)))
                 {
-                    rejections.Add(new ReleaseReason("ContainsRejectedTerm", rejected));
+                    rejections.Add(new ReleaseReason("MissingRequiredTerm", string.Join(", ", terms.Required)));
+                }
+
+                foreach (var ignored in terms.Ignored.Where(term => Contains(candidate.Release.RawTitle, term)))
+                {
+                    rejections.Add(new ReleaseReason("ContainsRejectedTerm", ignored));
                 }
             }
 
-            foreach (var pattern in profile.RequiredRegex)
-            {
-                if (!Regex.IsMatch(candidate.Release.RawTitle, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout))
-                {
-                    rejections.Add(new ReleaseReason("MissingRequiredPattern", pattern));
-                }
-            }
-
-            foreach (var pattern in profile.RejectedRegex)
-            {
-                if (Regex.IsMatch(candidate.Release.RawTitle, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout))
-                {
-                    rejections.Add(new ReleaseReason("MatchesRejectedPattern", pattern));
-                }
-            }
-
-            var score = 0;
             var infoReasons = new List<string>();
-            foreach (var rule in profile.ScoreRules)
+
+            // Custom formats add their profile scores; the sum must reach the profile's minimum.
+            var context = new FormatContext(profile.IsMovie, profile.OriginalLanguage, profile.Year);
+            var formatScore = 0;
+            foreach (var (format, points) in profile.Formats)
             {
-                var matched = Matches(rule, candidate);
-                switch (rule.EffectiveEffect)
+                if (!CustomFormatMatcher.TryMatch(format, candidate, context, out var matches))
                 {
-                    case ReleaseRuleEffect.Require when !matched:
-                        rejections.Add(new ReleaseReason("MissingRequiredRule", rule.Name));
-                        break;
-                    case ReleaseRuleEffect.Reject when matched:
-                        rejections.Add(new ReleaseReason("MatchesRejectRule", rule.Name));
-                        break;
-                    case ReleaseRuleEffect.Info when matched:
-                        infoReasons.Add(rule.Name);
-                        break;
-                    case ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid when matched:
-                        score += rule.Score;
-                        scoreReasons.Add(new ReleaseReason("RuleScore", $"{rule.Name}: {(rule.Score >= 0 ? "+" : "")}{rule.Score}"));
-                        break;
+                    rejections.Add(new ReleaseReason("FormatEvaluationFailed", format.Name));
+                }
+                else if (matches)
+                {
+                    formatScore += points;
+                    scoreReasons.Add(new ReleaseReason("FormatScore", $"{format.Name}: {(points >= 0 ? "+" : "")}{points}"));
                 }
             }
 
+            if (formatScore < profile.MinimumFormatScore)
+            {
+                rejections.Add(new ReleaseReason("FormatScoreBelowMinimum", formatScore.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
+
+            var score = formatScore;
             return new ReleaseScoreResult(candidate, rejections.Count == 0, score, qualityKey, qualityRank, rejections, scoreReasons)
             {
-                InfoReasons = infoReasons
+                InfoReasons = infoReasons,
+                FormatScore = formatScore
             };
         }
 
@@ -128,12 +125,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             if (profile.AllowedQualities is null ||
-                profile.QualityOrder is null ||
-                profile.MustContain is null ||
-                profile.MustNotContain is null ||
-                profile.RequiredRegex is null ||
-                profile.RejectedRegex is null ||
-                profile.ScoreRules is null)
+                profile.QualityOrder is null)
             {
                 errors.Add("Profile collections must not be null.");
                 return errors;
@@ -177,82 +169,31 @@ namespace Jularr.Backend.Logic.Acquisition
                 errors.Add($"Upgrade cutoff '{profile.UpgradeCutoffQuality}' is missing from quality order.");
             }
 
-            foreach (var pattern in profile.RequiredRegex.Concat(profile.RejectedRegex))
-            {
-                ValidateRegex(pattern, errors);
-            }
-
             if (profile.UpgradeMinimumQualitySteps < 1)
             {
                 errors.Add("The upgrade quality steps must be at least 1.");
             }
 
-            foreach (var rule in profile.ScoreRules)
-            {
-                if (string.IsNullOrWhiteSpace(rule.Name))
-                {
-                    errors.Add("Score rule name is required.");
-                }
-
-                if (string.IsNullOrWhiteSpace(rule.Value))
-                {
-                    errors.Add($"Score rule '{rule.Name}' value is required.");
-                }
-
-                if (rule.Match == ReleaseRuleMatch.Regex)
-                {
-                    ValidateRegex(rule.Value, errors);
-                }
-            }
-
             return errors;
         }
 
-        private static bool Matches(ReleaseScoreRule rule, ReleaseCandidate candidate)
+        // A term in slashes is a pattern, as Sonarr writes /x26[45]/i; otherwise it is a phrase in any case.
+        private static bool Contains(string title, string term)
         {
-            var values = GetValues(rule.Field, candidate.Release, candidate.Indexer);
-            return values.Any(value => rule.Match switch
+            if (term.Length > 2 && term[0] == '/' && term.LastIndexOf('/') is > 0 and var end)
             {
-                ReleaseRuleMatch.Equals =>
-                    value.Equals(rule.Value, StringComparison.OrdinalIgnoreCase),
-                ReleaseRuleMatch.Contains =>
-                    value.Contains(rule.Value, StringComparison.OrdinalIgnoreCase),
-                ReleaseRuleMatch.Regex =>
-                    Regex.IsMatch(
-                        value,
-                        rule.Value,
-                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                        RegexTimeout),
-                _ => false
-            });
+                try
+                {
+                    return Regex.IsMatch(title, term[1..end], RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+                }
+                catch (Exception exception) when (exception is ArgumentException or RegexMatchTimeoutException)
+                {
+                    return false;
+                }
+            }
+
+            return title.Contains(term, StringComparison.OrdinalIgnoreCase);
         }
-
-        private static IEnumerable<string> GetValues(ReleaseRuleField field, ReleaseInfo release, string? indexer) =>
-            field switch
-            {
-                ReleaseRuleField.RawTitle => [release.RawTitle],
-                ReleaseRuleField.ReleaseGroup =>
-                    Value(release.ReleaseGroup),
-                ReleaseRuleField.Source => [release.Source.ToString()],
-                ReleaseRuleField.Resolution =>
-                    release.Resolution is int resolution ? [resolution.ToString()] : [],
-                ReleaseRuleField.VideoCodec => [release.VideoCodec.ToString()],
-                ReleaseRuleField.BitDepth =>
-                    release.BitDepth is int bitDepth ? [bitDepth.ToString()] : [],
-                ReleaseRuleField.HdrFormat => [release.HdrFormat.ToString()],
-                ReleaseRuleField.AudioCodec => [release.AudioCodec.ToString()],
-                ReleaseRuleField.AudioLanguage => release.AudioLanguages,
-                ReleaseRuleField.SubtitleLanguage => release.SubtitleLanguages,
-                ReleaseRuleField.DualAudio => [release.IsDualAudio.ToString()],
-                ReleaseRuleField.MultiAudio => [release.IsMultiAudio.ToString()],
-                ReleaseRuleField.Proper => [release.IsProper.ToString()],
-                ReleaseRuleField.Repack => [release.IsRepack.ToString()],
-                ReleaseRuleField.Indexer => Value(indexer),
-                _ => []
-            };
-
-        private static IEnumerable<string> Value(string? value) =>
-            string.IsNullOrWhiteSpace(value) ? [] : [value];
 
         private static int IndexOf(IReadOnlyList<string> values, string? value)
         {
@@ -272,22 +213,5 @@ namespace Jularr.Backend.Logic.Acquisition
             return int.MaxValue;
         }
 
-        private static void ValidateRegex(string pattern, ICollection<string> errors)
-        {
-            if (string.IsNullOrWhiteSpace(pattern))
-            {
-                errors.Add("Regex pattern must not be empty.");
-                return;
-            }
-
-            try
-            {
-                _ = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-            }
-            catch (ArgumentException)
-            {
-                errors.Add($"Invalid regex '{pattern}'.");
-            }
-        }
     }
 }

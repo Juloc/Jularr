@@ -13,6 +13,7 @@ documents need not be reread for every task.
 - Async methods use `Async` when naming is under our control. Framework hooks retain their declared names, such as `OnRead` and `OnUpdate`.
 - Prefer `string`, `long`, `bool` and other C# aliases; use `var` when the initializer makes the type clear.
 - Use nullable types accurately; do not hide missing values with defaults or unjustified null-forgiving operators.
+- Clarify open product decisions with the Owner in a short interview before implementing dependent behavior; continue independent work. Explicit owner decisions take precedence over old plans.
 - Obtain owner approval before adding third-party libraries or native dependencies. Discuss framework limitations instead of building workaround layers.
 - Keep coherent control flow together. No forwarding wrappers, artificial mini-methods, speculative interfaces or dependencies.
 - Keep straightforward method/constructor signatures, class declarations and calls on one line up to a 240-character guideline (including indentation). Do not wrap a short parameter list merely because it has several arguments. Wrap genuinely long signatures/inheritance or complex expressions at logical boundaries; keep Allman body braces and meaningful section spacing. The backend/integration EditorConfig uses the same limit.
@@ -49,6 +50,10 @@ use the same services through the shared API adapter.
 - `PublicService` is the fourth service area, not an Account role. It requires no existing session, grants no protected resource scope and still uses the shared validation/transaction lifecycle. Login/session business rules belong to its concrete service and Logic; public exposure alone does not authenticate credentials.
 - `database/`: explicit PostgreSQL schema definitions. `tests/Jularr.Backend.Tests`: focused behavior and integration tests.
 - Extend existing owners before adding new helpers or configuration paths. Remove superseded code and stale docs when replacing a path; no compatibility layer without a supported requirement.
+
+## Acquisition
+
+- Arr+ grabs the best allowed release immediately. No release waiting periods, postponement profiles, Usenet holding period, language waiting or time-based substitute qualities. Improvements come only through upgrades. Technical retry and backoff for unavailable services remain separate.
 
 ## SQL and transaction rules
 

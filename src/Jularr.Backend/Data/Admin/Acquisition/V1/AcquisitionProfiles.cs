@@ -1,6 +1,7 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Acquisition;
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
 
@@ -8,20 +9,21 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadAcquisitionProfilesParametersV1 : BaseParameters
     {
-        public ReadAcquisitionProfilesParametersV1(long? wantedItemId = null)
+        public ReadAcquisitionProfilesParametersV1(long? wantedItemId = null, MediaType? mediaTypeId = null)
         {
             WantedItemId = wantedItemId;
+            MediaTypeId = mediaTypeId;
         }
 
-        // Only the profiles that fit this target's type and subtype.
-        [DataField(typeof(Fields.Acquisition.WantedItemFields), nameof(Fields.Acquisition.WantedItemFields.Id), false)]
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
         public long? WantedItemId { get; }
-    }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+    }
     public sealed class CreateAcquisitionProfileParametersV1 : BaseParameters
     {
     }
-
     public sealed class AcquisitionProfileParametersV1 : BaseParameters
     {
         public AcquisitionProfileParametersV1(long acquisitionProfileId)
@@ -32,7 +34,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
         public long AcquisitionProfileId { get; }
     }
-
     public sealed class DeleteAcquisitionProfileParametersV1 : BaseParameters
     {
         public DeleteAcquisitionProfileParametersV1(long acquisitionProfileId, long version)
@@ -47,28 +48,64 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
         public long Version { get; }
     }
+    public sealed class CustomFormatScoreV1 : BaseData
+    {
+        public CustomFormatScoreV1(long formatId, int score)
+        {
+            FormatId = formatId;
+            Score = score;
+        }
 
+        [DataField(typeof(CustomFormatFields), nameof(CustomFormatFields.Id))]
+        public long FormatId { get; }
+
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.Score))]
+        public int Score { get; }
+    }
+    public sealed class QualityGroupV1 : BaseData
+    {
+        public QualityGroupV1(long id, string name, string[] qualities)
+        {
+            Id = id;
+            Name = name;
+            Qualities = qualities;
+        }
+
+        [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.Id))]
+        public long Id { get; }
+
+        [JsonIgnore]
+        public string Key => ProfileQualities.Group(Id);
+
+        [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.GroupName))]
+        public string Name { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
+        public string[] Qualities { get; }
+    }
     public sealed class SaveAcquisitionProfileDataV1 : BaseData
     {
-        public SaveAcquisitionProfileDataV1(string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb,
-            int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version = null, MediaSubtype? mediaSubtypeId = null, int delayMinutes = 0,
-            string[]? fallbackQualities = null, int? fallbackAfterHours = null)
+        public SaveAcquisitionProfileDataV1(string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
+            int? minimumSizeMb, int? maximumSizeMb, long? version = null, MediaSubtype? mediaSubtypeId = null, string[]? qualityOrder = null,
+            BaseDataList<QualityGroupV1>? qualityGroups = null, BaseDataList<CustomFormatScoreV1>? formatScores = null,
+            int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1)
         {
-            DelayMinutes = delayMinutes;
-            FallbackQualities = fallbackQualities ?? [];
-            FallbackAfterHours = fallbackAfterHours;
             Name = name;
             MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeMb = minimumSizeMb;
             MaximumSizeMb = maximumSizeMb;
-            MustContain = mustContain;
-            MustNotContain = mustNotContain;
             Version = version;
+            MediaSubtypeId = mediaSubtypeId;
+            QualityOrder = qualityOrder ?? [];
+            QualityGroups = qualityGroups ?? new([]);
+            FormatScores = formatScores ?? new([]);
+            MinimumFormatScore = minimumFormatScore;
+            CutoffFormatScore = cutoffFormatScore;
+            MinimumUpgradeFormatScore = minimumUpgradeFormatScore;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
@@ -76,9 +113,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }
@@ -98,51 +132,65 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MaximumSizeMb))]
         public int? MaximumSizeMb { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MustContain))]
-        public string[] MustContain { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MustNotContain))]
-        public string[] MustNotContain { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DelayMinutes))]
-        public int DelayMinutes { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackQualities))]
-        public string[] FallbackQualities { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackAfterHours))]
-        public int? FallbackAfterHours { get; }
-
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version), false)]
         public long? Version { get; }
-    }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
+        public string[] QualityOrder { get; }
+
+        public BaseDataList<QualityGroupV1> QualityGroups { get; }
+
+        public BaseDataList<CustomFormatScoreV1> FormatScores { get; }
+
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.Score))]
+        public int MinimumFormatScore { get; }
+
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.Score))]
+        public int CutoffFormatScore { get; }
+
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.MinimumUpgrade))]
+        public int MinimumUpgradeFormatScore { get; }
+        public override void Validate()
+        {
+            base.Validate();
+            if (FormatScores.Count > 1000 || QualityGroups.Count > 32) throw new DataValidationException(nameof(FormatScores), "out_of_range");
+            FormatScores.Validate(nameof(FormatScores));
+            QualityGroups.Validate(nameof(QualityGroups));
+            if (FormatScores.Select(item => item.FormatId).Distinct().Count() != FormatScores.Count) throw new DataValidationException(nameof(FormatScores), "duplicate_value");
+        }
+
+    }
     public sealed class AcquisitionProfileDetailsV1 : BaseResponse
     {
-        public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
-            int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, int wantedCount, long version, int delayMinutes = 0, string[]? fallbackQualities = null,
-            int? fallbackAfterHours = null, string[]? monitoredTypes = null, string[]? monitoredLanguages = null, int? minimumPages = null)
+        public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
+            int? minimumSizeMb, int? maximumSizeMb, MediaSubtype? mediaSubtypeId, string[]? qualityOrder, BaseDataList<QualityGroupV1>? qualityGroups,
+            BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
+            int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages)
         {
-            MonitoredTypes = monitoredTypes ?? [];
-            MonitoredLanguages = monitoredLanguages ?? [];
-            MinimumPages = minimumPages;
-            DelayMinutes = delayMinutes;
-            FallbackQualities = fallbackQualities ?? [];
-            FallbackAfterHours = fallbackAfterHours;
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
             UpgradeCutoffQuality = upgradeCutoffQuality;
             MinimumSizeMb = minimumSizeMb;
             MaximumSizeMb = maximumSizeMb;
-            MustContain = mustContain;
-            MustNotContain = mustNotContain;
+            MediaSubtypeId = mediaSubtypeId;
+            QualityOrder = qualityOrder ?? [];
+            QualityGroups = qualityGroups ?? new([]);
+            FormatScores = formatScores ?? new([]);
+            MinimumFormatScore = minimumFormatScore;
+            CutoffFormatScore = cutoffFormatScore;
+            MinimumUpgradeFormatScore = minimumUpgradeFormatScore;
             WantedCount = wantedCount;
             Version = version;
+            MonitoredTypes = monitoredTypes;
+            MonitoredLanguages = monitoredLanguages;
+            MinimumPages = minimumPages;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
@@ -154,9 +202,6 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }
 
@@ -175,22 +220,31 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MaximumSizeMb))]
         public int? MaximumSizeMb { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MustContain))]
-        public string[] MustContain { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MustNotContain))]
-        public string[] MustNotContain { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.AllowedQualities))]
+        public string[] QualityOrder { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DelayMinutes))]
-        public int DelayMinutes { get; }
+        public BaseDataList<QualityGroupV1> QualityGroups { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackQualities))]
-        public string[] FallbackQualities { get; }
+        public BaseDataList<CustomFormatScoreV1> FormatScores { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackAfterHours))]
-        public int? FallbackAfterHours { get; }
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.Score))]
+        public int MinimumFormatScore { get; }
 
-        // An artist's release types and statuses, an author's languages and least pages, as taken over; empty allows everything.
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.Score))]
+        public int CutoffFormatScore { get; }
+
+        [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.MinimumUpgrade))]
+        public int MinimumUpgradeFormatScore { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
+        public int WantedCount { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
+        public long Version { get; }
+
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MonitoredValues))]
         public string[] MonitoredTypes { get; }
 
@@ -199,119 +253,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MinimumPages))]
         public int? MinimumPages { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
-        public int WantedCount { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
-        public long Version { get; }
     }
-
-    // A release rule; Require and Reject decide, Prefer and Avoid score, Info only names a match.
-    public sealed class ReleaseRuleV1 : BaseResponse
-    {
-        public ReleaseRuleV1(int id, string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score)
-        {
-            Id = id;
-            Name = name;
-            Field = field;
-            Match = match;
-            Value = value;
-            Effect = effect;
-            Score = score;
-        }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleId))]
-        public int Id { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleName))]
-        public string Name { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleField))]
-        public ReleaseRuleField Field { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleMatch))]
-        public ReleaseRuleMatch Match { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleValue))]
-        public string Value { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleEffect))]
-        public ReleaseRuleEffect Effect { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleScore))]
-        public int Score { get; }
-    }
-
-    public sealed class SaveReleaseRuleDataV1 : BaseData
-    {
-        public SaveReleaseRuleDataV1(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long version)
-        {
-            Name = name;
-            Field = field;
-            Match = match;
-            Value = value;
-            Effect = effect;
-            Score = score;
-            Version = version;
-        }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleName))]
-        public string Name { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleField))]
-        public ReleaseRuleField Field { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleMatch))]
-        public ReleaseRuleMatch Match { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleValue))]
-        public string Value { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleEffect))]
-        public ReleaseRuleEffect Effect { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleScore))]
-        public int Score { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
-        public long Version { get; }
-    }
-
-    public sealed class ReleaseRuleKeyParametersV1 : BaseParameters
-    {
-        public ReleaseRuleKeyParametersV1(long acquisitionProfileId, int ruleId)
-        {
-            AcquisitionProfileId = acquisitionProfileId;
-            RuleId = ruleId;
-        }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
-        public long AcquisitionProfileId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleId))]
-        public int RuleId { get; }
-    }
-
-    public sealed class ReleaseRuleParametersV1 : BaseParameters
-    {
-        public ReleaseRuleParametersV1(long acquisitionProfileId, int ruleId, long version)
-        {
-            AcquisitionProfileId = acquisitionProfileId;
-            RuleId = ruleId;
-            Version = version;
-        }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
-        public long AcquisitionProfileId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleId))]
-        public int RuleId { get; }
-
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
-        public long Version { get; }
-    }
-
     public sealed class CreateAcquisitionProfileResultV1 : BaseResponse
     {
         public CreateAcquisitionProfileResultV1(long id)

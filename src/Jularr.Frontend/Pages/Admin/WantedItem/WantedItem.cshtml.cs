@@ -18,13 +18,17 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
     // One target in Arr+: its state and searches, profile and library, seasons and episodes, and its releases.
     public sealed class WantedItemModel(ReadWantedItemV1 readItem, UpdateWantedV1 update, SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 releases,
         MarkWantedReleaseV1 mark, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries, ReadWantedUnitsV1 readUnits, UpdateWantedUnitV1 updateUnit,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private WantedDetailsV1? _item;
         private IReadOnlyList<WantedReleaseV1> _history = [];
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private IReadOnlyList<WantedLibraryV1> _libraries = [];
         private IReadOnlyList<WantedUnitV1> _units = [];
+        private PageResult<AcquisitionTagDetailsV1>? _tags;
+        private SelectOption[] _tagChoices = [];
+        private UpdateWantedDataV1? _choice;
+        [BindProperty(SupportsGet = true)] public int TagPage { get; set; } = 1;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -94,8 +98,15 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                 .. _profiles.Select(profile => new SelectOption(profile.Id.ToString(CultureInfo.InvariantCulture), profile.Name))]);
             form.Select(data => data.LibraryRootId, "wanted.library", [new SelectOption("", texts["wanted.library.default"]),
                 .. _libraries.Select(library => new SelectOption(library.Id.ToString(CultureInfo.InvariantCulture), library.Name))]);
+            form.Choices(data => data.TagIds, "arr.tags", _tagChoices);
+            form.Content(new Input().Attribute("type", "hidden").Attribute("name", "saveTags").Attribute("value", "true"));
+            if (_tags is { } tagPage)
+            {
+                if (tagPage.Page > 1) form.Content(TagPaging("common.previous", tagPage.Page - 1));
+                if (tagPage.Items.Count == tagPage.PageSize) form.Content(TagPaging("common.next", tagPage.Page + 1));
+            }
             form.Submit("common.save");
-        }, Address("Choice"), csrf, new UpdateWantedDataV1(item.IsPaused, item.Version, item.AcquisitionProfileId, item.LibraryRootId));
+        }, Address("Choice"), csrf, _choice ?? new UpdateWantedDataV1(item.IsPaused, item.Version, item.AcquisitionProfileId, item.LibraryRootId, tagIds: item.TagIds));
 
         // Seasons open their episodes; every row is monitored and searched on its own.
         private List<IUiComponent> Units(WantedDetailsV1 item, string? csrf)
@@ -196,9 +207,12 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             return Page();
         }
 
-        public async Task<IActionResult> OnPostChoiceAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId)
+        public async Task<IActionResult> OnPostChoiceAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId,
+            long[]? tagIds, bool saveTags = false, bool draft = false)
         {
-            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(Id), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId), HttpContext.RequestAborted);
+            _choice = new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId, tagIds: saveTags ? tagIds ?? [] : null);
+            if (draft) { await LoadDataAsync(); PreparePage(); return Page(); }
+            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(Id), _choice, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
 
@@ -241,6 +255,11 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             {
                 _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(Id), ct);
                 _libraries = await libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(Id), ct);
+                _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(TagPage), ct);
+                var choices = _tags.Items.ToList();
+                foreach (var id in (_choice?.TagIds ?? _item.TagIds).Where(id => !choices.Any(item => item.Id == id)).Take(100))
+                    choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), ct));
+                _tagChoices = choices.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
             }
         }
 
@@ -255,6 +274,10 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         private bool CanAcquire => texts.CanAcquire();
 
         private string SearchAddress() => WantedStatus.Home(Id) + "/Search?handler=Search";
+
+        private IUiComponent TagPaging(string key, int target) => new Button(new Text(key)).Attribute("type", "submit")
+            .Attribute("formaction", Address("Choice") + "&draft=true&TagPage=" + target.ToString(CultureInfo.InvariantCulture))
+            .Attribute("formnovalidate", "formnovalidate");
 
         // The open season stays open across actions.
         private string Address(string? handler = null)
