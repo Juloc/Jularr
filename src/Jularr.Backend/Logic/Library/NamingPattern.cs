@@ -198,8 +198,8 @@ namespace Jularr.Backend.Logic.Library
 
         private static string FilterLanguages(string value, string format)
         {
-            var exclusions = format.StartsWith('-', StringComparison.Ordinal);
-            var placeholders = format.EndsWith('+', StringComparison.Ordinal);
+            var exclusions = format.StartsWith("-", StringComparison.Ordinal);
+            var placeholders = format.EndsWith("+", StringComparison.Ordinal);
             var permitted = format.TrimStart('-').TrimEnd('+')
                 .Split(exclusions ? '-' : '+', StringSplitOptions.RemoveEmptyEntries)
                 .Select(code => code.ToUpperInvariant()).ToHashSet(StringComparer.Ordinal);
