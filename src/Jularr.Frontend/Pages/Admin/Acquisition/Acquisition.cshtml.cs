@@ -16,8 +16,9 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     // Indexers, download clients and subtitle providers, each kind on its own page.
-    public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
-        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
+    public sealed partial class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
+        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search,
+        InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage, UpdateDownloadClientCategoriesV1 updateCategories, IAntiforgery antiforgery,
         UiText texts, ReadDownloadStorageV1 storage) : JularrPage
     {
         // The kinds each tab adds.
@@ -35,6 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private SearchAcquisitionConnectionDataV1? _searchInput;
         private IReadOnlyList<IndexerReleaseV1>? _releases;
         private DownloadStorageDetailsV1? _downloadStorage;
+        private DownloadClientDashboardV1? _downloadDashboard;
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionConnectionId { get; set; }
@@ -59,6 +61,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        [BindProperty(SupportsGet = true)]
+        public string? Pane { get; set; } = "general";
+
+        [BindProperty(SupportsGet = true)]
+        public string? ConfirmJobId { get; set; }
+
+
         protected override void Define(Page page)
         {
             page.Title("acquisition.role." + Role);
@@ -66,6 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var isSetup = SetupWizard.IsActive(Request);
             if (isSetup) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             page.Navigation("nav.admin");
+            if (Role == AcquisitionConnectionRole.Download) page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
             var type = _selected?.AcquisitionConnectionTypeId ?? Type ?? (isSetup
                 ? Role == AcquisitionConnectionRole.Download ? AcquisitionConnectionType.Sabnzbd : AcquisitionConnectionType.Newznab
                 : (AcquisitionConnectionType?)null);
@@ -116,11 +126,28 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     // A test just run replaces the stored state.
                     if (TempData["AcquisitionTested"] is string tested) split.Secondary.Add(new Strong(new ValueText(tested)).Attribute("role", "status"));
                     else if (_selected is { } selected) split.Secondary.Add(new Strong(Health(selected)).Attribute("role", "status"));
-                    split.Secondary.Add(ConnectionForm(selectedType, csrf));
-                    if (_selected is { } current)
+                    if (Role == AcquisitionConnectionRole.Download && _selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } downloadClient)
                     {
-                        split.Secondary.Add(Actions(current, csrf));
-                        if (current.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab) split.Secondary.Add(SearchSection(current, csrf));
+                        split.Secondary.Add(DownloadClientTabs(downloadClient.Id));
+                        if (Pane is "downloads" or "statistics" or "history" or "files")
+                        {
+                            split.Secondary.Add(DownloadClientPane(downloadClient.Id, csrf));
+                        }
+                        else
+                        {
+                            split.Secondary.Add(ConnectionForm(selectedType, csrf));
+                            split.Secondary.Add(DownloadCategoryForm(downloadClient, csrf));
+                            split.Secondary.Add(Actions(downloadClient, csrf));
+                        }
+                    }
+                    else
+                    {
+                        split.Secondary.Add(ConnectionForm(selectedType, csrf));
+                        if (_selected is { } current)
+                        {
+                            split.Secondary.Add(Actions(current, csrf));
+                            if (current.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab) split.Secondary.Add(SearchSection(current, csrf));
+                        }
                     }
                 }
             });
@@ -201,10 +228,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl)
+            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl,
+            string? incompleteRemotePath, string? incompleteLocalPath)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, isEnabled, priority, Categories(categories),
-                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl);
+                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl, incompleteRemotePath, incompleteLocalPath);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -228,6 +256,20 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             return LocalRedirect(Address(AcquisitionConnectionId));
         }
 
+        public async Task<IActionResult> OnPostJobAsync(string jobId, string action, bool confirmed = false)
+        {
+            await manage.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()), new DownloadClientJobCommandV1(jobId, action, confirmed), HttpContext.RequestAborted);
+            return LocalRedirect(Address(SelectedId()) + "&Pane=" + (action == "removeHistory" ? "history" : action == "removeOrphan" ? "files" : "downloads"));
+        }
+
+        public async Task<IActionResult> OnPostCategoriesAsync(string? movie, string? tv, string? anime, string? book, string? audiobook,
+            string? manga, string? lightNovel, string? music, string? game)
+        {
+            var data = new DownloadClientCategoriesV1(movie, tv, anime, book, audiobook, manga, lightNovel, music, game);
+            await updateCategories.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()), data, HttpContext.RequestAborted);
+            return LocalRedirect(Address(SelectedId()) + "&Pane=general");
+        }
+
         public async Task<IActionResult> OnPostSearchAsync(string? query)
         {
             _searchInput = new SearchAcquisitionConnectionDataV1(query ?? "");
@@ -246,6 +288,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         protected override async Task LoadDataAsync()
         {
+            Pane ??= "general";
+
             // The address names the kind; an opened connection keeps its own.
             Role = Request.Path.Value?.EndsWith("/Downloads", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Download
                 : Request.Path.Value?.EndsWith("/Subtitles", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Subtitles
@@ -262,6 +306,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             {
                 _downloadStorage = await storage.ExecuteAsync<DownloadStorageDetailsV1>(new ReadDownloadStorageParametersV1(), HttpContext.RequestAborted);
             }
+
+            if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd } downloadClient
+                && Role == AcquisitionConnectionRole.Download && Pane is "downloads" or "statistics" or "history" or "files")
+            {
+                _downloadDashboard = await inspect.ExecuteAsync<DownloadClientDashboardV1>(new AcquisitionConnectionParametersV1(downloadClient.Id), default, HttpContext.RequestAborted);
+            }
         }
 
         private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf)
@@ -269,7 +319,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
                     selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl)
+                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl,
+                    selected.IncompleteRemotePath, selected.IncompleteLocalPath)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
@@ -342,6 +393,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
                     form.Text(item => item.RemotePath, "acquisition.connection.remotePath");
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
+                    form.Text(item => item.IncompleteRemotePath, "console.incompleteRemotePath");
+                    form.Text(item => item.IncompleteLocalPath, "console.incompleteLocalPath");
                 }
 
                 form.Submit("common.save");

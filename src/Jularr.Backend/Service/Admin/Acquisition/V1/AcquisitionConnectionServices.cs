@@ -48,8 +48,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Priority",
                     connection."Categories",
                     connection."DownloadCategory",
+                    connection."DownloadCategoryMap"::text AS "DownloadCategoryMap",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."Username",
                     connection."MaxConnections",
                     connection."CheckedAt",
@@ -108,8 +111,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Priority",
                     connection."Categories",
                     connection."DownloadCategory",
+                    connection."DownloadCategoryMap"::text AS "DownloadCategoryMap",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."IncompleteRemotePath",
+                    connection."IncompleteLocalPath",
                     connection."Username",
                     connection."MaxConnections",
                     connection."CheckedAt",
@@ -367,7 +373,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 data.Categories, data.DownloadCategory, data.RemotePath, data.LocalPath,
                 data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
-                data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl);
+                data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl,
+                data.IncompleteRemotePath, data.IncompleteLocalPath);
         }
 
         // Keyless indexers send no key.

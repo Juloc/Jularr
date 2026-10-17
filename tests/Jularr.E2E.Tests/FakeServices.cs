@@ -38,6 +38,7 @@ namespace Jularr.E2E.Tests
         private readonly ConcurrentQueue<string> _grabbed = new();
         private readonly ConcurrentDictionary<string, FakeRelease> _completed = new();
         private readonly ConcurrentDictionary<string, FakeRelease> _held = new();
+        private readonly ConcurrentDictionary<string, bool> _paused = new();
         private volatile FakeRelease[] _offered = [];
 
         private FakeServices(WebApplication app, Uri address, string downloads)
@@ -255,6 +256,12 @@ namespace Jularr.E2E.Tests
 
             switch (form["mode"].ToString())
             {
+                case "get_cats":
+                    return Json("""{"categories":["movies","tv"]}""");
+                case "server_stats":
+                    return Json("""{"day":0,"week":0,"month":0,"total":0}""");
+                case "status":
+                    return Json("""{"status":{"folders":[],"completedir":"/downloads","downloaddir":"/downloads/incomplete"}}""");
                 case "addurl":
                     // The job finishes at once: its file appears, then the history reports it.
                     var address = form["name"].ToString();
@@ -275,8 +282,33 @@ namespace Jularr.E2E.Tests
 
                     return Json("{\"status\":true,\"nzo_ids\":[\"SABnzbd_nzo_" + release.Guid + "\"]}");
                 case "queue":
+                    var command = form["name"].ToString();
+                    if (command is "pause" or "resume" or "delete")
+                    {
+                        const string prefix = "SABnzbd_nzo_";
+                        var job = form["value"].ToString();
+                        if (!job.StartsWith(prefix, StringComparison.Ordinal) || !_held.ContainsKey(job[prefix.Length..]))
+                        {
+                            return Json("""{"status":false,"error":"Unknown job"}""");
+                        }
+
+                        var id = job[prefix.Length..];
+                        if (command == "delete")
+                        {
+                            _held.TryRemove(id, out _);
+                            _paused.TryRemove(id, out _);
+                        }
+                        else
+                        {
+                            _paused[id] = command == "pause";
+                        }
+
+                        return Json("""{"status":true}""");
+                    }
+
                     var queued = _held.Values.Select(waiting =>
-                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
+                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\""
+                        + (_paused.GetValueOrDefault(waiting.Guid) ? "Paused" : "Downloading") + "\"}");
                     return Json("{\"queue\":{\"paused\":false,\"slots\":[" + string.Join(',', queued) + "]}}");
                 case "history":
                     var slots = _completed.Values.Select(done => FailDownloads
