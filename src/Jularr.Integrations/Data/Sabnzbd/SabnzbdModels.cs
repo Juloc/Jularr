@@ -140,6 +140,33 @@ namespace Jularr.Integrations.Data.Sabnzbd
         public IReadOnlyList<SabnzbdHistoryJob> Jobs { get; }
     }
 
+
+    internal enum SabnzbdJobCommand
+    {
+        Pause,
+        Resume,
+        RemoveFromQueue,
+        RemoveFromHistory
+    }
+
+    internal sealed class SabnzbdConsoleSnapshot
+    {
+        public SabnzbdConsoleSnapshot(IReadOnlyList<SabnzbdQueueJob> queue, IReadOnlyList<SabnzbdHistoryJob> history, long? speedBytesPerSecond, long? freeBytes, bool isPaused)
+        {
+            Queue = queue;
+            History = history;
+            SpeedBytesPerSecond = speedBytesPerSecond;
+            FreeBytes = freeBytes;
+            IsPaused = isPaused;
+        }
+
+        public IReadOnlyList<SabnzbdQueueJob> Queue { get; }
+        public IReadOnlyList<SabnzbdHistoryJob> History { get; }
+        public long? SpeedBytesPerSecond { get; }
+        public long? FreeBytes { get; }
+        public bool IsPaused { get; }
+    }
+
     // Messages never contain the API key.
     internal sealed class SabnzbdException(string message, Exception? innerException = null) : Exception(message, innerException);
 }
