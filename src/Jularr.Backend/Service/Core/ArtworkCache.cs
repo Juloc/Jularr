@@ -39,7 +39,8 @@ namespace Jularr.Backend.Service.Core
                 foreach (var candidate in candidates)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (candidate.SourceSizeBytes is null or <= 0 or > MaxSourceBytes || used >= settings.CacheLimitBytes) break;
+                    if (used >= settings.CacheLimitBytes) break;
+                    if (candidate.SourceSizeBytes is null or <= 0 or > MaxSourceBytes) continue;
 
                     try
                     {
