@@ -103,6 +103,27 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
+        public static async Task UpdateDownloadCategoryMapAsync(this LogicContext ctx, AcquisitionConnectionCategoryMapData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionConnections" AS connection
+                SET
+                    "DownloadCategoryMap" = @CategoryMap::jsonb,
+                    "Version" = connection."Version" + 1
+                WHERE
+                    connection."Id" = @AcquisitionConnectionId
+                    AND connection."AcquisitionConnectionTypeId" = 2;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.AcquisitionConnectionId), "invalid_transition");
+            }
+        }
+
         // An indexer serves its media types, and automatic searches only when it is not manual-only.
         public static bool Serves(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic) =>
             (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
