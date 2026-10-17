@@ -87,7 +87,7 @@ namespace Jularr.Backend.Service.Core
                             }
                         }
 
-                        var result = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId, candidate.SlotId,
+                        var result = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId, candidate.WorkUnitId, candidate.SlotId,
                             ArtworkFormat.Webp, false, value.Width, value.Height,
                             key, sourceHash, hash, value.WebpBytes.Length, settings.CacheQualityId, value.FallbackBytes,
                             value.FallbackBytes is { } fallbackBytes ? Convert.ToHexStringLower(SHA256.HashData(fallbackBytes)) : null);
@@ -125,7 +125,7 @@ namespace Jularr.Backend.Service.Core
                                 }
 
                                 var jxlRendition = new ArtworkRenditionSaveData(candidate.ArtworkId, candidate.WorkId,
-                                    candidate.SlotId, ArtworkFormat.Jxl, settings.ProgressiveJxl, value.Width, value.Height,
+                                    candidate.WorkUnitId, candidate.SlotId, ArtworkFormat.Jxl, settings.ProgressiveJxl, value.Width, value.Height,
                                     jxlKey, sourceHash, jxlHash, jxlBytes.Length, settings.CacheQualityId, null, null);
                                 await context.ExecuteBatchAsync(async (ctx, token) =>
                                 {

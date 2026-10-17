@@ -48,6 +48,21 @@ namespace Jularr.Backend.Logic.Media
             };
             if (slot is not null)
             {
+                // Plex/Kodi also place generic poster/fanart files within Season NN.
+                // These belong to that season, not to the parent series.
+                if (segments.Length > 1)
+                {
+                    var folder = segments[^2].ToLowerInvariant();
+                    var number = folder.StartsWith("season ", StringComparison.Ordinal) ? folder.AsSpan(7) : ReadOnlySpan<char>.Empty;
+                    if (number.Length > 0 && int.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out var seasonNumber)
+                        && seasonNumber is >= 0 and <= 999)
+                    {
+                        return new ArtworkSidecar(slot.Value, seasonNumber);
+                    }
+
+                    if (folder == "specials") return new ArtworkSidecar(slot.Value, 0);
+                }
+
                 return new ArtworkSidecar(slot.Value);
             }
 

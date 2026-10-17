@@ -408,11 +408,12 @@ namespace Jularr.Backend.Data.User.Media.V1
     // A season with its poster, year and how much of it is here.
     public sealed class WorkSeasonV1 : BaseResponse
     {
-        public WorkSeasonV1(int seasonNumber, string? title, string? imageUrl, int? releaseYear, int episodeCount, int availableCount)
+        public WorkSeasonV1(int seasonNumber, string? title, string? imageUrl, int? releaseYear, int episodeCount, int availableCount, string? jxlImageUrl = null)
         {
             SeasonNumber = seasonNumber;
             Title = title;
             ImageUrl = imageUrl;
+            JxlImageUrl = jxlImageUrl;
             ReleaseYear = releaseYear;
             EpisodeCount = episodeCount;
             AvailableCount = availableCount;
@@ -426,6 +427,9 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
         public string? ImageUrl { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl), false)]
+        public string? JxlImageUrl { get; }
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleaseYear))]
         public int? ReleaseYear { get; }

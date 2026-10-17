@@ -7,14 +7,37 @@ namespace Jularr.Backend.Data.User.Artwork.V1
 {
     public sealed class ArtworkReadParametersV1 : BaseParameters
     {
-        public ArtworkReadParametersV1(long workId, ArtworkSlot slotId)
+        public ArtworkReadParametersV1(long workId, ArtworkSlot slotId, long? workUnitId = null)
         {
             WorkId = workId;
+            SlotId = slotId;
+            WorkUnitId = workUnitId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(ArtworkFields), nameof(ArtworkFields.SlotId))]
+        public ArtworkSlot SlotId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id), false)]
+        public long? WorkUnitId { get; }
+    }
+
+    public sealed class ArtworkUnitReadParametersV1 : BaseParameters
+    {
+        public ArtworkUnitReadParametersV1(long workId, long workUnitId, ArtworkSlot slotId)
+        {
+            WorkId = workId;
+            WorkUnitId = workUnitId;
             SlotId = slotId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long WorkUnitId { get; }
 
         [DataField(typeof(ArtworkFields), nameof(ArtworkFields.SlotId))]
         public ArtworkSlot SlotId { get; }

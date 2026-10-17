@@ -85,3 +85,11 @@
 - Home's Recently Added and Continue shelves pass the known JXL poster to the shared `MediaCard`. The featured Discover hero can use its Work's local backdrop and real JXL source via `MediaHero`, keeping a fixed 1280x720 image box. Details loads local Poster/Backdrop when cached and uses the optional JXL backdrop. All views retain provider fallbacks when local artwork is not available.
 - Backend selection is performed in existing authorized Work/profile SQL reads rather than extra per-card NAS or database calls. MediaImage's original `<img>` dimensions and browser WebP fallback stay unchanged.
 - Integration coverage checks that a cached NAS poster appears in both the Work Details API and the local Discover search results. Catalog-only titles without a known Work remain provider-driven. Season/episode visuals and all media-type feeds require further audit; this slice does not claim universal image coverage.
+
+## P6b – Season artwork based on canonical WorkUnits
+
+- `Season NN/poster.png`, `Season NN/fanart.jxl`, `Specials/cover.jpg`, and series-root `seasonNN-poster.jpg` resolve to canonical *season* `WorkUnitId`, not the parent Work. Unknown seasons are not invented by the artwork scan.
+- The existing bounded NAS cache worker now also indexes season-unit sidecars: WebP and (when configured) native JXL renditions, with tiny WebP fallbacks keyed by `(WorkId, WorkUnitId, SlotId)`. Per-work and per-season images cannot overwrite each other.
+- Authorized unit endpoints `GET /api/v1/works/{workId}/units/{workUnitId}/artwork/{slotId}` and `.jxl` return only local cached bytes (or PostgreSQL fallback). A profile must be allowed to read the Work. The WorkUnit mapping in `WorkArtworks` and `ArtworkFallbacks` is constrained to that same Work.
+- Work Seasons in Details prefer the season's local poster when indexed; the same MediaImage component can offer JXL/WebP source alternatives with fixed dimensions. Existing metadata URLs remain as fallback, and an unavailable NAS never blocks a previously generated preview.
+- Regression tests cover season folder recognition, canonical WorkUnit ownership, isolated series-vs-season image endpoints, and NAS-offline delivery. Episode-still scanning and provider-native season media remain separate next tasks.

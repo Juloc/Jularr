@@ -128,6 +128,51 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue((await offline.Content.ReadAsByteArrayAsync()).Length > 16);
         }
 
+        [TestMethod]
+        public async Task SeriesSeasonPoster_UsesSeasonUnitCacheAndKeepsPreviewWhenNasSleeps()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            var mount = await LibraryTests.CreateMountAsync(host);
+            var seasonFolder = Path.Combine(storage.Path, mount.ToString(), "Series", "Example Show", "Season 1");
+            Directory.CreateDirectory(seasonFolder);
+            File.WriteAllText(Path.Combine(seasonFolder, "Show - S01E01.mkv"), "video");
+            await File.WriteAllBytesAsync(Path.Combine(seasonFolder, "poster.png"), ImageBytes(SKColors.MediumPurple));
+            var root = await LibraryTests.CreateRootAsync(host, mount, "Series", MediaType.Series);
+            await LibraryTests.ScanAsync(host, root);
+            var stored = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
+            using var assignment = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + stored + "/assignment",
+                new AssignLibraryFileDataV1(null, "Example Show", WorkUnitType.Episode, 1m, 1m));
+            Assert.AreEqual(HttpStatusCode.OK, assignment.StatusCode, await assignment.Content.ReadAsStringAsync());
+            await LibraryTests.ScanAsync(host, root);
+
+            var work = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Example Show'"))!;
+            var season = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WorkUnits\" WHERE \"WorkId\" = " + work + " AND \"WorkUnitTypeId\" = 1"))!;
+            Assert.AreEqual(season, await host.ScalarAsync("SELECT \"WorkUnitId\" FROM \"WorkArtworks\" WHERE \"SourceKey\" LIKE '%poster.png'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkRenditions\" AS r JOIN \"WorkArtworks\" AS art ON art.\"Id\" = r.\"WorkArtworkId\" WHERE art.\"WorkUnitId\" = " + season));
+
+            using (var result = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work + "/seasons"))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, result.StatusCode, await result.Content.ReadAsStringAsync());
+                var seasons = (await result.Content.ReadFromJsonAsync<BaseDataList<WorkSeasonV1>>())!.ToArray();
+                Assert.AreEqual("/api/v1/works/" + work + "/units/" + season + "/artwork/1", seasons.Single().ImageUrl);
+            }
+
+            var uri = "/api/v1/works/" + work + "/units/" + season + "/artwork/1";
+            using (var image = await host.SendAsync(HttpMethod.Get, uri))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, image.StatusCode, await image.Content.ReadAsStringAsync());
+                Assert.AreEqual("image/webp", image.Content.Headers.ContentType?.MediaType);
+            }
+            // Season artwork must not replace the series-level poster.
+            using (var seriesImage = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work + "/artwork/1"))
+                Assert.AreEqual(HttpStatusCode.NotFound, seriesImage.StatusCode);
+
+            Directory.Move(Path.GetDirectoryName(seasonFolder)!, Path.GetDirectoryName(seasonFolder)! + ".offline");
+            using var offline = await host.SendAsync(HttpMethod.Get, uri);
+            Assert.AreEqual(HttpStatusCode.OK, offline.StatusCode);
+        }
+
         private static byte[] ImageBytes(SKColor color)
         {
             using var surface = SKSurface.Create(new SKImageInfo(160, 240));
