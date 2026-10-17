@@ -146,6 +146,7 @@ async function start(player: HTMLElement): Promise<void> {
     // Conversions use HLS: native where available, otherwise hls.js on demand.
     async function attach(next: PlaybackPlan, position: number, shouldPlay = true): Promise<void> {
         if (signal.aborted) return;
+        const rate = video.playbackRate;
         metadataListener?.abort();
         metadataListener = new AbortController();
         hls?.destroy();
@@ -196,7 +197,6 @@ async function start(player: HTMLElement): Promise<void> {
         }
 
         // A new source resets the speed; the chosen one stays.
-        const rate = video.playbackRate;
         video.addEventListener("loadedmetadata", () => {
             timeline.max = String(Math.floor(video.duration));
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
