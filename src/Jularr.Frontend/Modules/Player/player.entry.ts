@@ -1,7 +1,7 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
 import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
-import { applyFit, normalizedSpeed, selectSettingsPane, shiftTextCues } from "./PlayerSettings";
+import { applyFit, normalizedSpeed, selectSettingsPane, shiftTextCues, hlsFallbackCapabilities } from "./PlayerSettings";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -126,12 +126,15 @@ async function start(player: HTMLElement): Promise<void> {
     async function requestPlan(audioStreamIndex: number | null, forceHls = false): Promise<PlaybackPlan | null> {
         for (let attempt = 0; ; attempt++) {
             if (signal.aborted) return null;
+            const device = capabilities();
+            const offered = forceHls ? hlsFallbackCapabilities(device) : device;
+            if (!offered) return null;
             const response = await fetch(player.dataset.startUrl!, {
                 method: "POST",
                 signal,
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-                body: JSON.stringify({ ...capabilities(), ...(forceHls ? { containers: ["hls"] } : {}), audioStreamIndex })
+                body: JSON.stringify({ ...offered, audioStreamIndex })
             });
             if (response.ok) {
                 status.hidden = true;
@@ -292,7 +295,7 @@ async function start(player: HTMLElement): Promise<void> {
     async function recoverDirectPlay(): Promise<void> {
         hideBuffering();
         if (signal.aborted || recoveringDirectPlay) return;
-        if (fallbackTried || plan?.playbackModeTypeId !== 1 || !capabilities().containers.includes("hls")) {
+        if (fallbackTried || plan?.playbackModeTypeId !== 1 || !hlsFallbackCapabilities(capabilities())) {
             show("failed");
             return;
         }
@@ -301,17 +304,19 @@ async function start(player: HTMLElement): Promise<void> {
         const position = Number.isFinite(video.currentTime) ? video.currentTime : plan.resumePositionMs / 1000;
         const shouldPlay = !video.paused || video.readyState === 0;
         if (buffering) buffering.hidden = false;
+        let attached = false;
         try {
             const next = await requestPlan(null, true);
             if (!next || signal.aborted) return;
             report(true, false);
             plan = next;
             await attach(next, position, shouldPlay);
+            attached = !signal.aborted;
         } catch {
             if (!signal.aborted) show("failed");
         } finally {
             recoveringDirectPlay = false;
-            if (signal.aborted || !plan || plan.playbackModeTypeId === 1) hideBuffering();
+            if (!attached || signal.aborted || plan?.playbackModeTypeId === 1) hideBuffering();
         }
     }
     video.addEventListener("error", () => { void recoverDirectPlay(); }, { signal });
