@@ -2,6 +2,8 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Data.Logic.Operation;
+using Jularr.Backend.Logic.Operation;
 
 namespace Jularr.Backend.Logic.Media
 {
@@ -541,6 +543,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.QueueArtworkForWorkAsync(new ArtworkWorkQueueData(workId.Value), ct);
             return workId.Value;
         }
 

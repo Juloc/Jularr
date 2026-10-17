@@ -219,7 +219,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 return new UpdateResult(false);
             }
 
-            await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.QueueArtworkForRootAsync(new ArtworkRootQueueData(root.Id), ct);
+                await ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct);
+                return true;
+            }, CancellationToken);
             return new UpdateResult(true);
         }
 

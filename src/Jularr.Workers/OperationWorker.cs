@@ -69,9 +69,17 @@ namespace Jularr.Workers
                 {
                     await services.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
                 }
-                else
+                else if (claimed.OperationTypeId == OperationType.ArtworkExport)
+                {
+                    await services.GetRequiredService<ExecuteArtworkExportV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else if (claimed.OperationTypeId == OperationType.LibraryScan)
                 {
                     await services.GetRequiredService<ExecuteLibraryScanV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else
+                {
+                    throw new InvalidOperationException("Unexpected operation type.");
                 }
             }
             catch (Exception exception) when (!ct.IsCancellationRequested)
