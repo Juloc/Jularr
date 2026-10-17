@@ -126,16 +126,24 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         public static Snapshot Inspect(string? mappedPath, SabnzbdConsoleSnapshot snapshot, string? incompleteMappedPath = null)
         {
-            if (string.IsNullOrWhiteSpace(mappedPath) || !Path.IsPathFullyQualified(mappedPath))
-            {
-                return new Snapshot(null, null, false, false, []);
-            }
-
-            var complete = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mappedPath));
+            var complete = !string.IsNullOrWhiteSpace(mappedPath) && Path.IsPathFullyQualified(mappedPath)
+                ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(mappedPath)) : null;
             var incomplete = !string.IsNullOrWhiteSpace(incompleteMappedPath) && Path.IsPathFullyQualified(incompleteMappedPath)
                 ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(incompleteMappedPath)) : null;
-            bool SafeDirectory(string? path) => path is not null && Directory.Exists(path)
-                && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0;
+
+            static bool SafeDirectory(string? path)
+            {
+                if (path is null) return false;
+                try
+                {
+                    return Directory.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    return false;
+                }
+            }
+
             var completeAvailable = SafeDirectory(complete);
             var incompleteAvailable = SafeDirectory(incomplete);
 
@@ -145,25 +153,35 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 .Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var entries = new List<DownloadClientFolderEntryV1>();
 
-            void Scan(string? path, string folder, bool available)
+            bool Scan(string? path, string folder, bool available)
             {
-                if (!available || path is null) return;
-                foreach (var entry in Directory.EnumerateFileSystemEntries(path).Take(100))
+                if (!available || path is null) return false;
+                try
                 {
-                    var name = Path.GetFileName(entry);
-                    if (name.Length is 0 or > 256) continue;
-                    var attributes = File.GetAttributes(entry);
-                    if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
-                    var size = (attributes & FileAttributes.Directory) != 0 ? null : (long?)new FileInfo(entry).Length;
-                    var assignment = folder == "incomplete" && orphans.Contains(name) ? "orphan"
-                        : queue.Contains(name) ? "queue" : history.Contains(name) ? "history"
-                        : snapshot.Queue.Count >= 200 || snapshot.History.Count >= 200 ? "unchecked" : "unassigned";
-                    entries.Add(new DownloadClientFolderEntryV1(folder, name, size, assignment));
+                    foreach (var entry in Directory.EnumerateFileSystemEntries(path).Take(100))
+                    {
+                        var name = Path.GetFileName(entry);
+                        if (name.Length is 0 or > 256) continue;
+                        var attributes = File.GetAttributes(entry);
+                        if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
+                        var size = (attributes & FileAttributes.Directory) != 0 ? null : (long?)new FileInfo(entry).Length;
+                        var assignment = folder == "incomplete" && orphans.Contains(name) ? "orphan"
+                            : queue.Contains(name) ? "queue" : history.Contains(name) ? "history"
+                            : snapshot.Queue.Count >= 200 || snapshot.History.Count >= 200 ? "unchecked" : "unassigned";
+                        entries.Add(new DownloadClientFolderEntryV1(folder, name, size, assignment));
+                    }
+
+                    return true;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    entries.RemoveAll(entry => entry.Folder == folder);
+                    return false;
                 }
             }
 
-            Scan(complete, "complete", completeAvailable);
-            Scan(incomplete, "incomplete", incompleteAvailable);
+            completeAvailable = Scan(complete, "complete", completeAvailable);
+            incompleteAvailable = Scan(incomplete, "incomplete", incompleteAvailable);
             return new Snapshot(complete, incomplete, completeAvailable, incompleteAvailable, entries);
         }
     }
