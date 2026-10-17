@@ -5872,6 +5872,14 @@
    "Off",
    "Desativadas"
   ],
+  "player.subtitle.delay": [
+   "Subtitle delay (seconds)",
+   "Atraso das legendas (segundos)"
+  ],
+  "player.subtitle.reset": [
+   "Reset delay",
+   "Redefinir atraso"
+  ],
   "player.subtitles.forced": [
    "forced",
    "forçada"
