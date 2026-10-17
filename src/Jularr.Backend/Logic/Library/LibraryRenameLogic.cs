@@ -158,7 +158,7 @@ namespace Jularr.Backend.Logic.Library
         private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
             new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
             {
-                MediaType = file.MediaTypeId,
+                MediaTypeId = file.MediaTypeId,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
                 OriginalFilename = Path.GetFileName(file.RelativePath)
             };
