@@ -117,7 +117,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     })).Class(item.Assignment == "unassigned" ? "download-console__state download-console__state--warning" : "download-console__state"))
                     .Content("console.actions", item => item.Assignment == "orphan" ? OrphanActions(connectionId, item.Name, csrf) : new Span());
 
-                return new Section(new H2(new ValueText(name)),
+                return new Section(new H2(new Text(name == "complete" ? "console.complete" : "console.incomplete")),
                     new P(new ValueText(path ?? "—")).Class("download-console__note"),
                     !available ? new P(new Text("console.notMapped"))
                         : files.Length == 0 ? new P(new Text("console.filesEmpty")) : table)
