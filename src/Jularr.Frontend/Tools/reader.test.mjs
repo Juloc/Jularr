@@ -16,7 +16,7 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
     const content = {
         querySelectorAll: () => [block], querySelector: () => null, addEventListener() {},
         clientWidth: 600, scrollWidth: 1800, scrollLeft: 0,
-        scrollBy: options => scrolled.push(options.left),
+        scrollTo: options => scrolled.push(options.left),
         getBoundingClientRect: () => ({ left: 0, right: 600, width: 600, bottom })
     };
     const button = { dataset: { setting: 'size', value: 'larger' }, setAttribute() {}, addEventListener: (name, action) => buttons[name] = action };
@@ -36,6 +36,7 @@ function reader(stored = '{}', blocked = false, direction = 'ltr') {
         exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
         document: { querySelector: () => element, addEventListener: (name, action) => events[name] = action },
         HTMLElement: class HTMLElement {},
+        getComputedStyle: () => ({ columnGap: '32px' }),
         window: { innerHeight: 900, matchMedia: () => ({ matches: true }), addEventListener: (name, action) => events[name] = action },
         location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
@@ -125,5 +126,5 @@ test('typography and viewport changes restore the same canonical block', () => {
 test('RTL paged navigation advances toward negative horizontal scroll positions', () => {
     const ui = reader('{"mode":"paged"}', false, 'rtl');
     ui.key('PageDown');
-    assert.deepEqual(ui.scrolled, [-600]);
+    assert.deepEqual(ui.scrolled, [-632]);
 });
