@@ -199,15 +199,18 @@ if (reader?.querySelector("[data-role=content]")) {
         if (settings.mode !== "paged") return;
         event.preventDefault();
         const width = content.clientWidth;
+        const gap = Number.parseFloat(getComputedStyle(content).columnGap) || 0;
+        const spreadWidth = width + gap;
         const directionOfContent = direction();
-        const atEnd = Math.abs(content.scrollLeft) + width >= content.scrollWidth - 4;
-        const atStart = Math.abs(content.scrollLeft) <= 4;
-        if (step > 0 && atEnd) {
+        const offset = Math.abs(content.scrollLeft);
+        const maximum = Math.max(0, content.scrollWidth - width);
+        if (step > 0 && offset >= maximum - 4) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=next]")?.click();
-        } else if (step < 0 && atStart) {
+        } else if (step < 0 && offset <= 4) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=previous]")?.click();
         } else {
-            content.scrollBy({ left: step * width * (directionOfContent === "rtl" ? -1 : 1),
+            const target = Math.max(0, Math.min(maximum, (Math.round(offset / spreadWidth) + step) * spreadWidth));
+            content.scrollTo({ left: target * (directionOfContent === "rtl" ? -1 : 1),
                 behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
         }
     }
