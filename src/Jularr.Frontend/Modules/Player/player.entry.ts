@@ -1,6 +1,7 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
 import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
+import { applyFit, normalizedSpeed, selectSettingsPane } from "./PlayerSettings";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -272,7 +273,8 @@ async function start(player: HTMLElement): Promise<void> {
         speed: () => panel("speed"),
         audio: () => panel("audio"),
         subtitles: () => panel("subtitles"),
-        more: () => panel("more"),
+        more: () => panel("info"),
+        "settings-close": () => panel(null),
         close: () => report(true, false),
         previous: () => go("previous"),
         next: () => go("next"),
@@ -303,6 +305,21 @@ async function start(player: HTMLElement): Promise<void> {
             return;
         }
 
+        const tab = target.closest<HTMLButtonElement>("[data-settings-tab]");
+        if (tab) {
+            selectSettingsTab(tab.dataset.settingsTab!);
+            return;
+        }
+
+        const fit = target.closest<HTMLButtonElement>("[data-fit]");
+        if (fit) {
+            if (applyFit(video, fit.dataset.fit)) {
+                player.querySelectorAll<HTMLButtonElement>("[data-fit]").forEach(button =>
+                    button.setAttribute("aria-pressed", String(button === fit)));
+            }
+            return;
+        }
+
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
         if (action && actions[action]) actions[action]();
         else if (target === video) actions.toggle();
@@ -311,8 +328,8 @@ async function start(player: HTMLElement): Promise<void> {
     const speedControl = player.querySelector<HTMLInputElement>("[data-role=speed-control]");
     speedControl?.addEventListener("input", () => setSpeed(Number(speedControl.value)));
     function setSpeed(value: number): void {
-        if (!Number.isFinite(value)) return;
-        const speed = Math.min(4, Math.max(0.25, Math.round(value * 20) / 20));
+        const speed = normalizedSpeed(value);
+        if (speed === null) return;
         video.playbackRate = speed;
         const label = Number(speed.toFixed(2)).toString() + "×";
         player.querySelector("[data-role=speed-label]")!.textContent = label;
@@ -398,15 +415,40 @@ async function start(player: HTMLElement): Promise<void> {
         }, IdleDelay);
     }
 
-    function panel(name: string | null): void {
-        player.querySelectorAll<HTMLElement>("[data-panel]").forEach(item => { item.hidden = item.dataset.panel !== name || !item.hidden; });
-        player.querySelectorAll<HTMLElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
-            .forEach(button => button.setAttribute("aria-expanded", String(!player.querySelector<HTMLElement>(`[data-panel=${button.dataset.action}]`)!.hidden)));
+    let currentSettingsTab = "speed";
+
+    // One live settings dialog, selected by the direct audio/subtitle/speed shortcuts.
+    function selectSettingsTab(name: string): void {
+        const settings = player.querySelector<HTMLElement>("[data-panel=settings]")!;
+        if (!selectSettingsPane(settings, name)) return;
+        currentSettingsTab = name;
+        player.querySelectorAll<HTMLButtonElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
+            .forEach(button => button.setAttribute("aria-expanded",
+                String((button.dataset.action === "more" ? "info" : button.dataset.action) === name)));
         wake();
     }
 
+    function panel(name: string | null): void {
+        const settings = player.querySelector<HTMLElement>("[data-panel=settings]")!;
+        if (!name || !settings.hidden && currentSettingsTab === name) {
+            const restoreFocus = settings.contains(document.activeElement);
+            settings.hidden = true;
+            player.querySelectorAll<HTMLButtonElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
+                .forEach(button => button.setAttribute("aria-expanded", "false"));
+            if (restoreFocus) {
+                const action = currentSettingsTab === "info" ? "more" : currentSettingsTab;
+                player.querySelector<HTMLButtonElement>(`[data-action="${action}"]`)?.focus();
+            }
+            wake();
+            return;
+        }
+        selectSettingsTab(name);
+        player.querySelector<HTMLButtonElement>(`[data-settings-tab="${name}"]`)?.focus();
+    }
+
     function choose(attribute: string, chosen: HTMLElement): void {
-        player.querySelectorAll(`[${attribute}]`).forEach(item => item.setAttribute("aria-checked", String(item === chosen)));
+        player.querySelectorAll(`[${attribute}]`).forEach(item =>
+            item.setAttribute("aria-pressed", String(item === chosen)));
         panel(null);
     }
 

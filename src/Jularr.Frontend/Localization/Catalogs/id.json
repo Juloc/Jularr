@@ -5908,6 +5908,26 @@
    "More",
    "Lainnya"
   ],
+  "player.settings": [
+   "Player settings",
+   "Pengaturan pemutar"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Ukuran gambar"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Sesuaikan"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Penuhi"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Asli"
+  ],
   "player.delivery": [
    "Delivery",
    "Pengiriman"

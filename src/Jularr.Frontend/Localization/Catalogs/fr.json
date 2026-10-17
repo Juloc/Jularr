@@ -5908,6 +5908,26 @@
    "More",
    "Plus"
   ],
+  "player.settings": [
+   "Player settings",
+   "Paramètres du lecteur"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Taille de l'image"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Adapter"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Remplir"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Original"
+  ],
   "player.delivery": [
    "Delivery",
    "Diffusion"

@@ -192,7 +192,57 @@
         p { margin: 0; }
     }
 
-    &__panel--speed { width: min(340px, calc(100vw - 40px)); }
+    // The preview's compact settings become one real surface with shared panes.
+    &__panel--settings {
+        width: min(420px, calc(100vw - 24px));
+        max-height: min(68dvh, 650px);
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid rgb(255 255 255 / 18%);
+        box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
+    }
+
+    &__settings-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 54px;
+        padding: 8px 14px;
+    }
+
+    &__settings-title { margin: 0; font-size: 1rem; font-weight: 650; }
+    &__settings-close { min-width: 40px; min-height: 40px; background: transparent; }
+    &__settings-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 0 10px 10px; }
+    &__settings-tab {
+        min-width: 0;
+        min-height: 40px;
+        padding: 4px;
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-control);
+        color: inherit;
+        font: inherit;
+        font-size: .78rem;
+        cursor: pointer;
+        &[aria-pressed="true"] { color: var(--accent-contrast); background: var(--accent); }
+        &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    }
+    &__settings-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px 16px; }
+    &__settings-pane { display: grid; gap: 14px; &[hidden] { display: none; } }
+    &__settings-group {
+        display: grid;
+        gap: 8px;
+        padding-top: 12px;
+        border-top: 1px solid rgb(255 255 255 / 15%);
+        p { margin: 0; }
+    }
+    &__fit-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    &__fit-options .player__option { min-width: 0; padding: 4px; font-size: .82rem; text-align: center; }
+
 
     &__speed-adjust { display: flex; align-items: center; gap: 12px; padding: 4px; }
     &__speed-range { flex: 1; min-width: 0; accent-color: var(--accent); }
@@ -251,6 +301,7 @@
 }
 
 @media (max-width: 600px) {
+    .player__panel--settings { right: 12px; bottom: 104px; max-height: calc(100dvh - 170px); }
     .player__bottom { padding: 12px; }
     .player__volume { display: none; }
     .player__transport { gap: 8px; }

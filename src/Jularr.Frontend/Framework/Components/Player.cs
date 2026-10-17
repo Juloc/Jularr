@@ -13,7 +13,6 @@ namespace Jularr.Frontend.Framework
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
         private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "play_gesture_required", "failed"];
-        private static readonly string[] Speeds = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4"];
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -75,23 +74,7 @@ namespace Jularr.Frontend.Framework
                             ]).Class("player__options")
                         ).Class("player__actions")
                     ).Class("player__bottom"),
-                    new Div(
-                        new Div(new Input().Class("player__speed-range").Attribute("type", "range").Attribute("min", "0.25").Attribute("max", "4")
-                            .Attribute("step", "0.05").Attribute("value", "1").Attribute("data-role", "speed-control").Attribute("aria-label", texts["player.speed"]),
-                            new Span(new ValueText("1×")).Class("player__speed-current").Attribute("data-role", "speed-current")).Class("player__speed-adjust"),
-                        new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
-                            .Attribute("data-speed", speed).Attribute("aria-pressed", speed == "1" ? "true" : "false"))]).Class("player__speed-presets")
-                    ).Class("player__panel player__panel--speed").Attribute("data-panel", "speed").Attribute("role", "group")
-                        .Attribute("aria-label", texts["player.speed"]).Attribute("hidden", "hidden"),
-                    TrackPanel("audio", "player.audio", Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))),
-                    TrackPanel("subtitles", "player.subtitles", [
-                        Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),
-                        .. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))
-                    ]),
-                    new Div(
-                        new P(new Text("player.delivery")),
-                        new P().Attribute("data-role", "mode")
-                    ).Class("player__panel").Attribute("data-panel", "more").Attribute("hidden", "hidden")
+                    new UiPlayerSettings(source, assets)
                 ).Class("player__chrome"),
                 new P().Class("player__status").Attribute("role", "status").Attribute("data-role", "status").Attribute("hidden", "hidden"),
                 new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
@@ -113,22 +96,12 @@ namespace Jularr.Frontend.Framework
             HtmlElement Action(string action, string labelKey, string icon) => new Button(Icon(icon)).Class("player__button")
                 .Attribute("data-action", action).Attribute("aria-label", texts[labelKey]);
 
-            // Direct actions open their own part of the shared settings panels.
+            // Direct actions select the corresponding section of the shared settings panel.
             IEnumerable<IUiComponent> Choice(string action, string labelKey, IUiComponent icon, bool visible) => visible
                 ? [new Button(icon).Class("player__button").Attribute("data-action", action).Attribute("aria-label", texts[labelKey]).Attribute("aria-expanded", "false")]
                 : [];
 
-            HtmlElement TrackPanel(string name, string labelKey, IEnumerable<IUiComponent> options) => new Div([.. options]).Class("player__panel")
-                .Attribute("data-panel", name).Attribute("role", "menu").Attribute("aria-label", texts[labelKey]).Attribute("hidden", "hidden");
 
-            HtmlElement Option(string kind, string key, IUiComponent label, bool isChecked, bool isSupported, string? language)
-            {
-                var option = new Button(label).Class("player__option").Attribute("data-" + kind, key).Attribute("role", "menuitemradio")
-                    .Attribute("aria-checked", isChecked ? "true" : "false");
-                if (language is not null) option.Attribute("data-language", language);
-                if (!isSupported) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
-                return option;
-            }
         }
 
         private IReadOnlyList<PlayerTrack> Audio => source.AudioTracks ?? [];

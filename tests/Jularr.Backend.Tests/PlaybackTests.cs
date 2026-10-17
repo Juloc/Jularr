@@ -131,6 +131,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-role=\"buffered\"");
             StringAssert.Contains(html, "data-speed=\"0.25\"");
             StringAssert.Contains(html, "data-speed=\"4\"");
+            StringAssert.Contains(html, "data-panel=\"settings\"");
+            StringAssert.Contains(html, "data-settings-tab=\"audio\"");
+            StringAssert.Contains(html, "data-settings-tab=\"subtitles\"");
+            StringAssert.Contains(html, "data-settings-tab=\"info\"");
+            StringAssert.Contains(html, "data-fit=\"cover\"");
             StringAssert.Contains(html, "data-status=\"play_gesture_required\"");
             StringAssert.Contains(html, ">Film</h1>");
             Assert.IsFalse(html.Contains("Film.mp4", StringComparison.Ordinal));

@@ -5908,6 +5908,26 @@
    "More",
    "Meer"
   ],
+  "player.settings": [
+   "Player settings",
+   "Spelerinstellingen"
+  ],
+  "player.fit": [
+   "Picture size",
+   "Beeldgrootte"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "Passend"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "Vullen"
+  ],
+  "player.fit.original": [
+   "Original",
+   "Origineel"
+  ],
   "player.delivery": [
    "Delivery",
    "Levering"

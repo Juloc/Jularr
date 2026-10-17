@@ -5908,6 +5908,26 @@
    "More",
    "その他"
   ],
+  "player.settings": [
+   "Player settings",
+   "プレーヤー設定"
+  ],
+  "player.fit": [
+   "Picture size",
+   "映像サイズ"
+  ],
+  "player.fit.inside": [
+   "Fit",
+   "全体表示"
+  ],
+  "player.fit.fill": [
+   "Fill",
+   "画面いっぱい"
+  ],
+  "player.fit.original": [
+   "Original",
+   "オリジナル"
+  ],
   "player.delivery": [
    "Delivery",
    "配信方式"
