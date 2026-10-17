@@ -52,6 +52,10 @@ namespace Jularr.Backend.Tests
             {
                 Assert.IsFalse(StorageFileSystem.IsDownloadWorkspaceMount("/dev/shm"),
                     "RAM-backed mounts cannot be accepted for persistent native downloads.");
+                options.DirectDownloadPath = "/dev/shm";
+                Assert.IsNull(options.ReadyUsenetDownloadPath());
+                options.AllowDirectDownloadOnHostFilesystem = true;
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "Host opt-in must not allow RAM-backed staging.");
             }
 
             options.AllowDirectDownloadOnHostFilesystem = true;
@@ -67,6 +71,25 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(Path.GetFullPath(books.Path), options.ReadyDirectSourceDownloadPath());
             Assert.AreEqual(Path.Combine(Path.GetFullPath(books.Path), "43"), WantedAcquisition.DirectStaging(options, 43));
             Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath(), "Book download configuration must not change NNTP staging.");
+        }
+
+        [TestMethod]
+        public void NativeDownload_RejectsSymbolicWorkspaceAncestors()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("Linux CI verifies symbolic mount aliases without Windows developer-mode permissions.");
+            }
+
+            using var directory = new TemporaryDirectory();
+            using var target = new TemporaryDirectory();
+            var alias = Path.Combine(directory.Path, "alias");
+            Directory.CreateSymbolicLink(alias, target.Path);
+            var options = new StorageOptions { DirectDownloadPath = alias, AllowDirectDownloadOnHostFilesystem = true };
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Directory.CreateDirectory(Path.Combine(target.Path, "nested"));
+            options.DirectDownloadPath = Path.Combine(alias, "nested");
+            Assert.IsNull(options.ReadyDirectSourceDownloadPath());
         }
 
         [TestMethod]

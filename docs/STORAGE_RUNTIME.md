@@ -204,6 +204,8 @@ enabling acquisition.
 `proc` and other operating-system pseudo filesystems even if Docker reports
 a mount point. A separate bind mount can still target VM-local storage:
 verify its physical source explicitly before enabling downloads.
+The nearest mount is authoritative: an unsafe nested mount cannot inherit its
+parent's approval, and host-filesystem opt-in does not permit RAM/overlay storage.
 
 ## Space checks for native Usenet unpacking
 
