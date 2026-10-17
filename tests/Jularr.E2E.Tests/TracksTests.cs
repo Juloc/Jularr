@@ -110,7 +110,7 @@ namespace Jularr.E2E.Tests
                     Body = "Native decoder rejected stream"
                 }));
                 var recovered = await page.RunAndWaitForResponseAsync(() => pilot.ClickAsync(),
-                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\\"containers\\":[\\"hls\\"]", StringComparison.Ordinal) == true,
+                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"containers\":[\"hls\"]", StringComparison.Ordinal) == true,
                     new() { Timeout = Steps.MediaTimeout });
                 Assert.IsTrue(recovered.Ok, "The native decoder failed, but the HLS fallback plan was not offered.");
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 2 && document.querySelector('video')?.currentTime > 0",
