@@ -1,0 +1,18 @@
+.card-experiment {
+    flex: 0 0 230px;
+
+    // Small presentation variations only.
+    &--inset .media-card__content { margin-inline: 6px; }
+    &--editorial .media-card__title { font-size: 22px; letter-spacing: -.4px; }
+    &--rail .media-card__meta { justify-content: space-between; }
+    &--frame .media-card__surface { border-radius: 18px; }
+    &--frame .media-card__content { border-top: 1px solid var(--accent); }
+    &--centered .media-card__title { text-align: center; }
+    &--centered .media-card__meta { justify-content: center; }
+
+    &--cinema {
+        .media-card__content { background: #101820; }
+        .media-card__title a { color: #fff; }
+        .media-card__meta { color: #c8d1da; }
+    }
+}

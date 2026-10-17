@@ -16,7 +16,7 @@ async function visit(folder) {
     }
 }
 
-for (const folder of ["Assets/Icons", "Modules", "Pages", "Framework/Components"]) {
+for (const folder of ["Assets/Icons", "Assets/Flags", "Modules", "Pages", "Framework/Components"]) {
     const file = join(root, folder);
     try { await visit(file); }
     catch (error) { if (error.code !== "ENOENT") throw error; }

@@ -33,6 +33,14 @@ namespace Jularr.Frontend.Pages.Development.Design
                 items.Add(new P(new Text("design.introduction")));
                 items.Add(new Appearance());
             }));
+            if (_pane is "cover" or "library-continue" or "card-experiments")
+            {
+                page.Content.Add(new NavigationTabs([
+                    new("design.study.baseline", "/Design?pane=cover#media-variants", _pane == "cover"),
+                    new("design.study.title", "/Design?pane=library-continue#library-variants", _pane == "library-continue"),
+                    new("design.experiment.title", "/Design?pane=card-experiments#library-variants", _pane == "card-experiments")
+                ], "nav.tabs"));
+            }
             if (_pane == "concepts")
             {
                 DefineMediaConcepts(page);
@@ -41,6 +49,11 @@ namespace Jularr.Frontend.Pages.Development.Design
             if (_pane == "cover")
             {
                 DefineCoverPreview(page);
+                return;
+            }
+            if (_pane is "library-continue" or "card-experiments")
+            {
+                DefineLibraryContinue(page, _pane == "card-experiments");
                 return;
             }
             page.Content.Add(new NavigationTabs([
@@ -306,10 +319,115 @@ namespace Jularr.Frontend.Pages.Development.Design
             }
         }
 
+        private void DefineLibraryContinue(Page page, bool fresh)
+        {
+            if (fresh)
+            {
+                DefineIndicatorRows(page);
+                return;
+            }
+
+            var route = "/Design?pane=" + _pane;
+            page.Content.Add(new P(new Text("design.study.notice")));
+            page.Content.Add(new NavigationTabs([
+                new("nav.library", route + "#library-variants", false),
+                new("discover.continueWatching", route + "#continue-variants", false)
+            ], "nav.tabs"));
+
+            // Same card, local compositions.
+            foreach (var kind in new[] { "library", "continue" })
+            {
+                var layouts = kind == "library" ? new[] { "edge", "capsule", "side", "footer", "stack" } : new[] { "edge", "dock", "timeline", "focus", "minimal" };
+                var samples = layouts.Select((layout, index) =>
+                {
+                    var preferred = index is 0 or 2 or 4 ? new MediaLanguage("flag-de", "design.languageGerman") : null;
+                    var availability = kind == "library" && index == 2 ? MediaAvailabilityState.Partial : MediaAvailabilityState.Available;
+                    var card = new MediaCard("Your Name.", route + "#" + kind + "-variants",
+                        assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress")
+                        .SeriesStatus("media.series.Ended", new Icon("calendar", assets)).Availability(new MediaAvailability(assets, availability, availability == MediaAvailabilityState.Partial ? 18 : 24, 24))
+                        .Information(texts["design.conceptSummary"], "8.4").Continue(1800000, 5400000).Trailer("k4xGqY5IDBE")
+                        .Languages(assets, preferred, 3, index == 4 ? null : preferred, 6)
+                        .Genres(new Tag(new Icon("reading", assets), new Text("design.genreDrama")).Tone("blue"),
+                            new Tag(new Icon("star", assets), new Text("design.genreRomance")).Tone("pink"))
+                        .Actions(new Button(new Icon("player-play", assets), new Text(kind == "continue" ? "media.continue" : "player.play")).Primary().Disabled(),
+                            new Button(new Icon("bookmark", assets)).Disabled().Attribute("aria-label", texts["nav.watchlist"]));
+
+                    var key = "design.study." + kind + "." + layout;
+                    return (IUiComponent)new Section(
+                        new H3(new ValueText((index + 1).ToString("00", CultureInfo.InvariantCulture) + " · "), new Text(key)),
+                        new P(new Text(key + ".hint")),
+                        new Div(card).Class("card-study__sample card-study__sample--" + kind + " card-study__sample--" + kind + "-" + layout)
+                    ).Class("card-study__option");
+                }).ToArray();
+                page.Content.Add(new Div(new UiSection(kind == "library" ? "nav.library" : "discover.continueWatching",
+                    [new Div(samples).Class("card-study__grid")])).Attribute("id", kind + "-variants"));
+            }
+        }
+
+        private void DefineIndicatorRows(Page page)
+        {
+            page.Asset("Pages/Development/Design/Design.entry.ts");
+            page.Content.Add(new P(new Text("design.experiment.notice")));
+            var layouts = new[] { "combined", "inset", "editorial", "cinema", "rail", "frame", "centered" };
+
+            // Explicit sample states, no business data.
+            var examples = new (MediaAvailabilityState State, int Available, long Watched)[]
+            {
+                (MediaAvailabilityState.ProfileAudio, 24, 1800000),
+                (MediaAvailabilityState.OtherAudio, 24, 900000),
+                (MediaAvailabilityState.Partial, 12, 0),
+                (MediaAvailabilityState.PartialOtherAudio, 12, 0),
+                (MediaAvailabilityState.Downloading, 6, 0),
+                (MediaAvailabilityState.Searching, 0, 0),
+                (MediaAvailabilityState.Requested, 0, 0),
+                (MediaAvailabilityState.Missing, 0, 0)
+            };
+            var rows = layouts.Select(layout =>
+            {
+                var cards = examples.Select(example =>
+                {
+                    var previewId = "experiment-preview-" + example.State;
+                    var card = new MediaCard("Your Name.", "/Design?pane=card-experiments#library-variants",
+                        assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested")
+                        .Minimal().Preview(previewId)
+                        .Availability(new MediaAvailability(assets, example.State, example.Available, 24))
+                        .Information(null, "8.4").Trailer("k4xGqY5IDBE")
+                        .Actions(new Button(new Icon(example.Available > 0 ? "player-play" : "requests", assets),
+                                new Text(example.Watched > 0 ? "media.continue" : example.Available > 0 ? "player.play" : "media.request"))
+                                .Primary().Compact()
+                                .Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog"),
+                            new Button(new Icon("library", assets), new Text("media.details")).Compact().Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog"))
+                        .Bookmark(new Button(new Icon("bookmark", assets)).IconOnly(texts["nav.watchlist"])
+                            .Attribute("data-design-bookmark", "").Attribute("aria-pressed", "false"));
+
+                    // One card, supplied optional context.
+                    if (example.Watched > 0) card.Continue(example.Watched, 5400000);
+
+                    return (IUiComponent)new Div(card).Class("card-experiment card-experiment--" + layout);
+                }).ToArray();
+                return (IUiComponent)new Div(
+                    new MediaShelf(assets, "design.experiment." + layout, null, cards),
+                    new P(new Text("design.experiment." + layout + ".hint"))
+                ).Attribute("id", "indicator-" + layout);
+            }).ToArray();
+            page.Content.Add(new Div(rows).Attribute("id", "library-variants"));
+
+            // Reuse real preview interaction.
+            page.Content.Add(MediaPreview.Host(assets, texts));
+            foreach (var example in examples)
+            {
+                page.Content.Add(new MediaPreview("experiment-preview-" + example.State, assets, "Your Name.",
+                    assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"),
+                    assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), "2016 · 8.4", texts["design.cardSynopsis"])
+                    .Trailer("k4xGqY5IDBE").Content(new P(new Text("design.experiment.previewNotice")),
+                        new MediaAvailability(assets, example.State, example.Available, 24)));
+            }
+        }
+
         public IActionResult OnGet(string? pane)
         {
             if (!environment.IsDevelopment()) return NotFound();
-            if (pane is not null and not ("components" or "layouts" or "concepts" or "cover")) return NotFound();
+            if (pane is not null and not ("components" or "layouts" or "concepts" or "cover" or "library-continue" or "card-experiments")) return NotFound();
 
             _pane = pane ?? "components";
             PreparePage();

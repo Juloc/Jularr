@@ -1,6 +1,7 @@
 @use "MediaImage";
 @use "MediaAvailability";
 @use "IconInfo";
+@use "Flag";
 
 .media-card {
     position: relative;
@@ -16,8 +17,9 @@
     &__placeholder { display: grid; height: 100%; place-items: center; padding: 16px; color: var(--muted); text-align: center; }
     &__series {
         position: absolute;
-        top: 12px;
+        top: 40px;
         left: 12px;
+        z-index: 3;
         opacity: 0;
         visibility: hidden;
         transition: opacity .25s;
@@ -28,8 +30,8 @@
         position: absolute;
         inset: auto 0 0;
         display: grid;
-        gap: 10px;
-        padding: 16px;
+        gap: 4px;
+        padding: 10px 12px 14px;
         border-radius: 24px;
         background: var(--surface);
         opacity: 0;
@@ -37,15 +39,20 @@
         transform: translateY(18px);
         transition: opacity .25s, transform .3s;
     }
-    &__title { margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+    &__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    &__title { flex: 1; min-width: 0; margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+    &__primary-action { flex: none; form { margin: 0; } }
+    &__original-title { display: none; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
     &__title a { color: var(--text); text-decoration: none; }
     &__meta { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; }
-    &__overview { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+    &__overview { display: none; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
     &__state { color: var(--muted); font-size: 12px; }
-    &__actions { position: absolute; left: 16px; bottom: calc(100% + 12px); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: calc(100% - 32px); }
-    &__actions .button { padding: 8px 12px; font-size: 12px; }
+    &__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0; }
+    &__bookmark { position: absolute; top: 6px; right: 6px; z-index: 3; }
     &__actions form { margin: 0; }
     &__genres, &__languages { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+    &__languages { justify-content: space-between; }
+    &__genres { display: none; }
     &__genres .tag { height: 24px; padding: 4px 8px; font-size: 11px; line-height: 16px; }
     &__language { display: inline-flex; align-items: center; gap: 6px; > .ui-icon { width: 18px; height: 18px; flex: 0 0 auto; } }
     &__languages .icon-info { .icon-info__label, .icon-info__trigger::after { top: auto; bottom: 100%; } }
@@ -53,8 +60,12 @@
     &__trailer { position: absolute; inset: 0 0 auto; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 24px 24px 0 0; pointer-events: none; }
     &__trailer iframe { display: block; width: 100%; height: 100%; border: 0; }
     &__progress {
+        position: absolute;
+        bottom: 4px;
+        left: 16px;
+        z-index: 3;
         appearance: none;
-        width: 100%;
+        width: calc(100% - 32px);
         height: 4px;
         border: 0;
         border-radius: var(--radius-control);
@@ -70,6 +81,12 @@
         z-index: 2;
         .media-card__content { opacity: 1; visibility: visible; transform: none; }
         .media-card__series { opacity: 1; visibility: visible; }
+    }
+
+    // Extra context on explicit expansion.
+    &__surface[data-open], &__surface[data-expanded] {
+        .media-card__original-title, .media-card__overview { display: block; }
+        .media-card__genres { display: flex; }
     }
 
     // Float above scrolling shelves.
@@ -95,10 +112,25 @@
     }
     @media (hover: none), (pointer: coarse) {
         &__content { opacity: 1; visibility: visible; transform: none; }
-        &__overview, &__genres, &__languages { display: none; }
-        &__surface[data-open] { .media-card__overview, .media-card__genres, .media-card__languages { display: flex; } }
     }
     @media (prefers-reduced-motion: reduce) { &__content, &__series { transition: none; } }
+
+    // Clipped review presentation.
+    &--minimal {
+        .media-card__surface { overflow: hidden; }
+        .media-card__content { padding: 8px 12px 20px; border-radius: 0; }
+        .media-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; margin: 0; }
+        .media-card__progress { inset: auto 0 0; width: 100%; height: 12px; border-radius: 0; background: rgb(255 255 255 / 65%); }
+        .media-card__progress::-webkit-progress-bar { background: transparent; border-radius: 0; }
+        .media-card__progress::-webkit-progress-value { border-radius: 999px; }
+        .media-card__progress::-moz-progress-bar { border-radius: 999px; }
+        .media-availability-badge__hint { max-width: 200px; }
+
+        // Trailer uses the existing height.
+        .media-card__surface[data-expanded] { height: var(--preview-height); display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+        .media-card__surface[data-expanded] .media-card__trailer { height: 100%; aspect-ratio: auto; }
+        .media-card__surface[data-expanded] .media-card__content { border-radius: 0; }
+    }
 }
 
 .media-grid {

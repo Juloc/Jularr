@@ -7,7 +7,7 @@ function stop(): void {
     if (!current) return;
     current.querySelector('[data-hover-trailer]')?.replaceChildren();
     delete current.dataset.expanded;
-    for (const name of ['--preview-left', '--preview-top', '--preview-width']) current.style.removeProperty(name);
+    for (const name of ['--preview-left', '--preview-top', '--preview-width', '--preview-height']) current.style.removeProperty(name);
     current = undefined;
 }
 
@@ -39,6 +39,7 @@ document.addEventListener('pointerover', event => {
         card.style.setProperty('--preview-left', `${left}px`);
         card.style.setProperty('--preview-top', `${slot.top}px`);
         card.style.setProperty('--preview-width', `${width}px`);
+        card.style.setProperty('--preview-height', `${slot.height}px`);
         card.dataset.expanded = 'true';
     }, 2000);
 });

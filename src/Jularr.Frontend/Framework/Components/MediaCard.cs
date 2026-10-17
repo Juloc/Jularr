@@ -16,14 +16,30 @@ namespace Jularr.Frontend.Framework
         private decimal? _progression;
         private string? _previewId;
         private string? _overview;
+        private string? _originalTitle;
         private string? _rating;
         private string? _trailerId;
         private IUiComponent[] _actions = [];
+        private IUiComponent? _bookmark;
+        private bool _minimal;
 
-        public MediaCard Information(string? overview, string? rating = null)
+        public MediaCard Minimal()
+        {
+            _minimal = true;
+            return this;
+        }
+
+        public MediaCard Information(string? overview, string? rating = null, string? originalTitle = null)
         {
             _overview = overview;
             _rating = rating;
+            _originalTitle = originalTitle;
+            return this;
+        }
+
+        public MediaCard Bookmark(IUiComponent action)
+        {
+            _bookmark = action;
             return this;
         }
 
@@ -100,7 +116,7 @@ namespace Jularr.Frontend.Framework
             if (_trailerId is not null) content.Add(new Div().Class("media-card__trailer").Attribute("data-hover-trailer", "true"));
 
             // Independent corner links.
-            if (_seriesStatusKey is not null)
+            if (!_minimal && _seriesStatusKey is not null)
             {
                 var tag = new Tag(_seriesIcon is null ? [new Text(_seriesStatusKey)] : [_seriesIcon, new Text(_seriesStatusKey)]).Neutral();
                 IUiComponent series = _previewId is null
@@ -113,8 +129,9 @@ namespace Jularr.Frontend.Framework
             {
                 content.Add(_availability.Badge(href, _previewId));
             }
+            if (_bookmark is not null) content.Add(new Div(_bookmark).Class("media-card__bookmark"));
 
-            // Actions above the title.
+            // Supplied actions, same services.
             var information = new List<IUiComponent>();
             var actions = new List<IUiComponent>();
             if (actionKey is not null)
@@ -125,33 +142,40 @@ namespace Jularr.Frontend.Framework
                 actions.Add(action);
             }
             actions.AddRange(_actions);
-            if (actions.Count > 0) information.Add(new Div([.. actions]).Class("media-card__actions"));
 
             // Supplied metadata only.
-            information.Add(new H3(new A(new ValueText(title)).Attribute("href", href)).Class("media-card__title"));
+            var heading = new List<IUiComponent>
+            {
+                new H3(new A(new ValueText(title)).Attribute("href", href)).Class("media-card__title")
+            };
+            if (!_minimal && actions.Count > 0) heading.Add(new Div(actions[0]).Class("media-card__primary-action"));
+            information.Add(new Div([.. heading]).Class("media-card__heading"));
+            if (!_minimal && _originalTitle is { Length: > 0 } && !string.Equals(_originalTitle, title, StringComparison.Ordinal))
+                information.Add(new Span(new ValueText(_originalTitle)).Class("media-card__original-title"));
             var metadata = new List<IUiComponent>();
             if (meta is not null) metadata.Add(new Span(new ValueText(meta)));
             if (_rating is not null) metadata.Add(new Span(new ValueText(_rating)).Attribute("aria-label", texts["media.rating"] + ": " + _rating));
             if (metadata.Count > 0) information.Add(new Div([.. metadata]).Class("media-card__meta"));
-            if (_overview is not null) information.Add(new P(new ValueText(_overview)).Class("media-card__overview"));
-            if (_genres.Length > 0) information.Add(new Div(_genres).Class("media-card__genres"));
-            if (_languages is not null) information.Add(_languages);
+            if (!_minimal)
+            {
+                if (_overview is not null) information.Add(new P(new ValueText(_overview)).Class("media-card__overview"));
+                if (_genres.Length > 0) information.Add(new Div(_genres).Class("media-card__genres"));
+            }
+            if (actions.Count > (_minimal ? 0 : 1)) information.Add(new Div(_minimal ? [.. actions] : [.. actions.Skip(1)]).Class("media-card__actions"));
+            if (!_minimal && _languages is not null) information.Add(_languages);
 
             // Informational resume progress.
             if (_positionMs is { } position && _durationMs is > 0 and { } duration)
             {
                 var boundedPosition = Math.Clamp(position, 0, duration);
-                information.Add(new Progress().Attribute("max", duration.ToString(CultureInfo.InvariantCulture))
+                content.Add(new Progress().Attribute("max", duration.ToString(CultureInfo.InvariantCulture))
                     .Attribute("value", boundedPosition.ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", texts["media.progress"]).Class("media-card__progress"));
-                information.Add(new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["media.minutesLeft"],
-                    Math.Ceiling((duration - boundedPosition) / 60000m)))).Class("media-card__meta"));
             }
             else if (_progression is { } share)
             {
                 var percent = ReadPercent(share);
-                information.Add(new Progress().Attribute("max", "100").Attribute("value", percent.ToString(CultureInfo.InvariantCulture))
+                content.Add(new Progress().Attribute("max", "100").Attribute("value", percent.ToString(CultureInfo.InvariantCulture))
                     .Attribute("aria-label", texts["media.readProgress"]).Class("media-card__progress"));
-                information.Add(new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["media.percentRead"], percent))).Class("media-card__meta"));
             }
 
             // Unknown detail keeps coarse status.
@@ -163,6 +187,7 @@ namespace Jularr.Frontend.Framework
             if (_trailerId is not null) surface.Attribute("data-trailer-id", _trailerId).Attribute("data-trailer-label", texts["media.preview.playTrailer"]);
 
             var variant = _positionMs is not null ? " media-card--continue" : _availability is not null ? " media-card--library" : "";
+            if (_minimal) variant += " media-card--minimal";
             new Div(surface).Class("media-card" + variant).WriteTo(writer, encoder, texts);
         }
 

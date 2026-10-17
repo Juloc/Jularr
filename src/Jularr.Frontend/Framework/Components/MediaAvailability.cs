@@ -11,7 +11,10 @@ namespace Jularr.Frontend.Framework
         Missing,
         Downloading,
         Searching,
-        Requested
+        Requested,
+        ProfileAudio,
+        OtherAudio,
+        PartialOtherAudio
     }
 
     public sealed class MediaAvailability(FrontendAssets assets, MediaAvailabilityState state, int availableUnits = 0, int monitoredUnits = 0) : IUiComponent
@@ -20,6 +23,7 @@ namespace Jularr.Frontend.Framework
         private MediaAvailabilityState State { get; } = state;
         private int AvailableUnits { get; } = availableUnits;
         private int MonitoredUnits { get; } = monitoredUnits;
+        private bool IsPartial => state is MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio;
 
         public IUiComponent Badge(string href, string? previewId = null) => new AvailabilityBadge(this, href, previewId);
 
@@ -32,7 +36,7 @@ namespace Jularr.Frontend.Framework
         internal string GetLabel(UiText texts)
         {
             var label = texts["media.availability." + state];
-            return state == MediaAvailabilityState.Partial
+            return IsPartial
                 ? string.Format(CultureInfo.CurrentCulture, label, availableUnits, monitoredUnits)
                 : label;
         }
@@ -41,7 +45,7 @@ namespace Jularr.Frontend.Framework
 
         private void WriteSymbol(TextWriter writer, HtmlEncoder encoder, UiText texts, bool compact)
         {
-            var percentage = state == MediaAvailabilityState.Partial
+            var percentage = IsPartial
                 ? monitoredUnits > 0 ? Math.Clamp(availableUnits * 100m / monitoredUnits, 0, 100) : 0
                 : 100;
             var symbol = new List<IUiComponent>
@@ -56,7 +60,8 @@ namespace Jularr.Frontend.Framework
             // Distinct symbols, stable colors.
             var icon = state switch
             {
-                MediaAvailabilityState.Available => "check",
+                MediaAvailabilityState.Available or MediaAvailabilityState.ProfileAudio => "check",
+                MediaAvailabilityState.OtherAudio or MediaAvailabilityState.PartialOtherAudio => "player-volume",
                 MediaAvailabilityState.Missing => "close",
                 MediaAvailabilityState.Downloading => "download",
                 MediaAvailabilityState.Searching => "search",
@@ -78,7 +83,7 @@ namespace Jularr.Frontend.Framework
                 if (symbol.State == MediaAvailabilityState.Missing) return;
                 var label = symbol.GetLabel(texts);
                 var badgeLabel = texts["media.availability.badge." + symbol.State];
-                if (symbol.State == MediaAvailabilityState.Partial) badgeLabel = string.Format(CultureInfo.CurrentCulture, badgeLabel, symbol.AvailableUnits, symbol.MonitoredUnits);
+                if (symbol.IsPartial) badgeLabel = string.Format(CultureInfo.CurrentCulture, badgeLabel, symbol.AvailableUnits, symbol.MonitoredUnits);
                 var link = new A(new Span(new CompactSymbol(symbol), new Span(new ValueText(badgeLabel)).Class("media-availability-badge__label"))
                     .Class("media-availability-badge__body"), new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))
                     .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant())

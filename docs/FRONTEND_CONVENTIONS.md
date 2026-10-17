@@ -206,7 +206,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   `Pages/**/<Page>.cshtml.cs`; assets belonging to an optional feature module
   live under `Modules/<Module>/`; assets for a reusable component live beside
   its `Framework/Components/<Component>.cs`. Shared shell tokens/icons and
-  global styles live in `Assets/Shared/` and `Assets/Icons/`.
+  global styles live in `Assets/Shared/` and `Assets/Icons/`; country flag SVGs
+  live in `Assets/Flags/`, rendered by `Flag` in their fixed colors through the same sprite.
   Add `.ts`, `.scss` or `.svg` files **only when needed**; do not create
   empty entry points or broad feature-sized Framework components.
 - Styles use **SCSS modules** (`@use`, no legacy `@import`) and **BEM**
@@ -283,20 +284,34 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   keep controls functional when browser storage is unavailable. Focused playback
   controls stay visible; honor reduced motion and prefer wrapping over truncation.
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
+  Disabled buttons remain opaque and use muted surface/text colors, not reduced opacity.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
-- Media cards use the canonical `MediaCard`: a portrait cover, hover/focus information
-  panel from the title downward and actions over the artwork. Native links/forms
-  remain usable without JavaScript; touch reveals important actions without hover.
-  Series lifecycle appears top-left on reveal. Availability is a top-right dot
-  with a small contrast halo, expanding into a compact icon/text capsule:
-  green complete, proportional yellow partial, purple downloading, blue
-  searching/queued, gray requested, no dot for missing. Never infer monitored-unit
-  completeness from coarse availability. Use at most three Backend-ordered genres,
-  shared icon/semantic-color Tags and supplied preferred language flags or distinct
-  language counts; never infer a country from a language code.
-  Shelves hide native scrollbars and use shared local chevrons while retaining
-  native touch/keyboard scrolling, without navigation-only server reads.
+  Keep CSS minimal: reuse inherited rules and omit declarations without a visible
+  or behavioral effect. Fix the owning rule rather than stacking compensating overrides.
+- Media cards use the canonical `MediaCard`. The local `Minimal()` review keeps
+  the portrait height when the trailer opens and clips artwork/progress through
+  the rounded surface. Progress is full width, 12px high and flush with the bottom;
+  its white translucent track has a fully rounded fill edge.
+  No extra border, shadow, time text or surrounding capsule.
+  Hover/focus shows title, year/rating and two matching icon/text Buttons above
+  the progress in equal-width columns: Play/Continue/Read/Request left, Details right. Touch keeps actions
+  reachable. Language capsules, series lifecycle, genres and descriptions belong
+  in Details, not the minimal card markup.
+  The top-left availability dot is green only for confirmed local audio in the
+  profile locale and all monitored units are available. Yellow means complete in
+  other audio languages; orange means partial with profile audio; a yellow–orange
+  dot means partial in other audio languages. Expanded partial symbols retain the
+  supplied available/monitored counts. This is a review projection, not a change
+  to the legacy count-only availability contract.
+  Subtitles do not influence it. Purple downloading, blue searching/queued,
+  gray requested and no dot for missing remain separate states.
+  The Backend must supply this classification; do not infer language from a flag,
+  UI text, episode counts or coarse availability. Current list contracts do not
+  yet supply it: workshop examples are explicit samples, not production integration.
+  Existing callers retain their current contracts until the reviewed presentation
+  is integrated. Bookmark remains top-right. Shared shelves keep native touch/
+  keyboard scrolling with local chevrons and no navigation-only server reads.
 - Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by
   `overflow: hidden`) must expose its complete value through the owning shared
   component, at minimum a localized tooltip usable by pointer, keyboard and touch.
@@ -305,7 +320,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   and layout containers without hidden text do not need tooltips.
 - Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
   accessibility. Full Player and minimized Now Playing are presentations of the
-  same playback session; keep the media element outside exchanged page content.
+  same playback session. Reduced-motion resets must disable transitions with zero
+  duration, never enable tiny positioning transitions on otherwise static elements.
+  Keep the media element outside exchanged page content.
   Learning remains out of the current implementation scope.
 - Display the skin names as **Original** and **Clean**. Clean is neutral with a purple
   accent and no ornamental artwork; Original uses the restored ink/paper/blossom
@@ -317,12 +334,13 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   and semantic status colors do not. Current choices are device-local; do not
   imply implemented instance/profile policy or persistence.
 - Development-only design workshops may show explicitly labeled sample data and
-  disabled component states. They must not start library playback or pretend to
+  disabled component states. Enabled sample actions must identify their local-only
+  behavior (preview dialog or unpersisted selection). They must not start library playback or pretend to
   perform business actions. An explicitly requested promotional trailer may load
   its official provider embed after Play, without a playback session or progress.
 - The approved shared Card may start a supplied official trailer after a two-second
-  mouse hover, muted. Its landscape surface replaces the poster entirely; actions
-  stay over video and the information panel starts below it. Use viewport-bounded
+  mouse hover, muted. Its landscape surface replaces the poster entirely;
+  the same information panel with its actions starts below it. Use viewport-bounded
   positioning above scrolling shelves, leaving their slots unchanged. Leaving,
   scrolling, resizing, hiding or unloading releases the embed. Missing trailer or
   metadata contracts must not cause per-card provider requests or fabricated data.

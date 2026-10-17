@@ -23,11 +23,11 @@ function preview(viewportWidth = 1280, slotLeft = 100) {
         clearTimeout: id => pending.delete(id)
     });
     return { document, events, frames, pending,
-        card() {
+        card(height = 345) {
             const target = { children: [], replaceChildren(...children) { this.children = children; } };
             const card = Object.assign(new Element(), {
                 isConnected: true, dataset: { trailerId: 'k4xGqY5IDBE', trailerLabel: 'Play trailer' }, target,
-                parentElement: { getBoundingClientRect: () => ({ left: slotLeft, top: 80, width: 260 }) },
+                parentElement: { getBoundingClientRect: () => ({ left: slotLeft, top: 80, width: 260, height }) },
                 style: { values: {}, setProperty(name, value) { this.values[name] = value; }, removeProperty(name) { delete this.values[name]; } },
                 querySelector: () => target, closest() { return this; }, contains(element) { return element === this; }
             });
@@ -88,10 +88,10 @@ test('touch, missing or invalid trailers and removed fragments never start playb
     assert.equal(view.frames.length, 0);
 });
 
-test('expanded previews fit both viewport edges and clean up on movement or navigation', () => {
-    for (const [viewportWidth, slotLeft] of [[390, 65], [1280, 24], [1280, 960]]) {
+test('expanded previews retain slot height, fit viewport edges and clean up on navigation', () => {
+    for (const [viewportWidth, slotLeft, slotHeight] of [[390, 65, 345], [1280, 24, 390], [1280, 960, 480]]) {
         const view = preview(viewportWidth, slotLeft);
-        const card = view.card();
+        const card = view.card(slotHeight);
         for (const event of ['scroll', 'resize', 'pagehide', 'visibilitychange']) {
             view.enter(card);
             view.advance();
@@ -100,6 +100,7 @@ test('expanded previews fit both viewport edges and clean up on movement or navi
             assert.ok(left >= 24 && left + width <= viewportWidth - 24);
             assert.ok(width > 260);
             assert.equal(card.style.values['--preview-top'], '80px');
+            assert.equal(card.style.values['--preview-height'], `${slotHeight}px`);
             view.document.hidden = true;
             view.events[event]();
             assert.equal(card.target.children.length, 0);

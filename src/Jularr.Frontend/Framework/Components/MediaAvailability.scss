@@ -1,3 +1,18 @@
+// Shared status palette.
+.media-availability, .media-availability-badge {
+    &--available, &--profileaudio { --status-color: light-dark(#16a34a, #22c55e); }
+    &--otheraudio { --status-color: light-dark(#ac8000, #facc15); }
+    &--partial, &--partialotheraudio { --status-color: light-dark(#e66a0a, #fb923c); }
+    &--partialotheraudio {
+        --status-alternate: light-dark(#ac8000, #facc15);
+        --status-dot: linear-gradient(135deg, var(--status-alternate) 50%, var(--status-color) 50%);
+    }
+    &--missing { --status-color: light-dark(#dc3545, #fb5969); }
+    &--downloading { --status-color: light-dark(#7c3aed, #a855f7); }
+    &--searching { --status-color: light-dark(#1672e8, #3b82f6); }
+    &--requested { --status-color: light-dark(#73737e, #a1a1aa); }
+}
+
 .media-availability {
     position: relative;
     display: block;
@@ -6,13 +21,7 @@
     padding: 2px;
     border-radius: 50%;
     background: var(--surface-hover);
-
-    &--available { color: light-dark(#16834a, #73dca0); }
-    &--partial { color: light-dark(#946400, #f2c557); }
-    &--missing { color: light-dark(#bc3346, #ff94a2); }
-    &--downloading { color: light-dark(#7c3aed, #b99aff); }
-    &--searching { color: light-dark(#2476c5, #83bdff); }
-    &--requested { color: light-dark(#676772, #c0c0ca); }
+    color: var(--status-color);
 
     > svg { display: block; width: 28px; height: 28px; }
     > .ui-icon {
@@ -25,6 +34,7 @@
     }
 
     &__track { color: var(--border); }
+    &--partialotheraudio &__track { color: var(--status-alternate); }
 
     // Symbol for compact tags.
     &--compact {
@@ -41,7 +51,8 @@
 .media-availability-badge {
     position: absolute;
     top: 2px;
-    right: 2px;
+    left: 2px;
+    z-index: 3;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -49,11 +60,6 @@
     height: 44px;
     padding: 10px;
     text-decoration: none;
-    &--available { --status-color: #16834a; }
-    &--partial { --status-color: #bd8b00; }
-    &--downloading { --status-color: #7c3aed; }
-    &--searching { --status-color: #2476c5; }
-    &--requested { --status-color: #85858d; }
     &__body {
         display: flex;
         align-items: center;
@@ -63,7 +69,7 @@
         height: 12px;
         border-radius: 999px;
         overflow: hidden;
-        background: var(--status-color);
+        background: var(--status-dot, var(--status-color));
         box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--text) 18%, transparent);
         transition: max-width .35s, height .35s, padding .35s, background .25s;
         > * { opacity: 0; transition: opacity .2s; }
@@ -73,7 +79,7 @@
     &__hint {
         position: absolute;
         top: 100%;
-        right: 0;
+        left: 0;
         z-index: 2;
         display: none;
         width: max-content;

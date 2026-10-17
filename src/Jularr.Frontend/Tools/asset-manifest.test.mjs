@@ -89,6 +89,20 @@ test("media preview bounds its hero width and uses full-width mobile context", (
     assert.ok(css.includes('max-width:none'));
 });
 
+test("country flags keep their colors and rectangular size in the shared sprite", () => {
+    assert.equal(icons.symbols["flag-de"], "icon-flag-de");
+    const sprite = readFileSync(join(build, icons.file), "utf8");
+    const flag = sprite.match(/<symbol\b[^>]*id="icon-flag-de"[\s\S]*?<\/symbol>/)?.[0];
+    assert.ok(flag, "missing German flag");
+    assert.match(flag, /viewBox="0 0 30 18"/);
+    // Black is the SVG default.
+    for (const color of ["#d00", "#ffce00"]) assert.ok(flag.includes(color), color);
+    assert.doesNotMatch(flag, /currentColor/);
+
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.ui-flag\{[^}]*width:20px;height:12px;[^}]*border-radius:2px/);
+});
+
 test("shared base styles cover forms, tables and capsule navigation on every page", () => {
     const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
     for (const selector of [".ui-form", ".ui-field__control>legend", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
@@ -139,7 +153,7 @@ test("icon hints remain painted on closed summaries and language hints open abov
 test("media badges share quiet surfaces without painting their larger touch targets", () => {
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
     assert.match(css, /\.media-availability-badge\{[^}]*min-width:44px;height:44px;padding:10px/);
-    assert.match(css, /\.media-availability\{position:relative;display:block;width:32px;height:32px;padding:2px;border-radius:50%;background:var\(--surface-hover\)\}/);
+    assert.match(css, /\.media-availability\{position:relative;display:block;width:32px;height:32px;padding:2px;border-radius:50%;background:var\(--surface-hover\);color:var\(--status-color\)\}/);
     assert.match(css, /\.media-availability>svg\{display:block;width:28px;height:28px\}/);
     assert.match(css, /\.media-availability--compact\{width:16px;height:16px;padding:0;background:none\}/);
     assert.match(css, /\.media-availability--compact>\.ui-icon\{width:9px;height:9px\}/);
@@ -153,14 +167,14 @@ test("media badges share quiet surfaces without painting their larger touch targ
     assert.match(shell, /\.tag--neutral\{border-color:transparent;background:var\(--surface-hover\);color:var\(--text\)\}/);
 });
 
-test("shared cards replace artwork with a floating landscape trailer and keep actions over video", () => {
+test("shared cards replace artwork with a floating landscape trailer and retain panel actions", () => {
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
     assert.match(css, /\.media-availability-badge__body\{[^}]*box-shadow:0 0 0 2px var\(--surface\),0 0 0 3px color-mix/);
     assert.match(css, /\.media-card__surface\[data-expanded\]\{position:fixed;z-index:20;inset:auto;top:var\(--preview-top\);left:var\(--preview-left\);width:var\(--preview-width\);height:auto\}/);
     assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__art\{display:none\}/);
     assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__trailer\{position:relative;inset:auto\}/);
     assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__content\{position:relative;inset:auto;border-radius:0 0 24px 24px\}/);
-    assert.match(css, /\.media-card__actions\{[^}]*bottom:calc\(100% \+ 12px\)/);
+    assert.match(css, /\.media-card__actions\{display:flex;[^}]*gap:6px/);
     assert.doesNotMatch(css, /\.design-cover__/);
 });
 
@@ -168,4 +182,51 @@ test("manifest URLs are relative and cannot escape the asset root", () => {
     for (const file of [...files, icons.file]) {
         assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);
     }
+});
+
+test("review variants inherit the shared progress and trailer layout", () => {
+    const studies = readFileSync(join(root, "Pages/Development/Design/CardExperiments.scss"), "utf8");
+    assert.doesNotMatch(studies, /media-card__progress|data-expanded|media-card__languages|media-card__genres|media-card__series/);
+    for (const variant of ["inset", "editorial", "cinema", "rail", "frame", "centered"]) assert.ok(studies.includes(`&--${variant}`));
+});
+
+test("minimal cards clip full-width progress and retain the trailer height", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.ok(css.includes(".media-card--minimal .media-card__surface{overflow:hidden}"));
+    assert.match(css, /\.media-card--minimal \.media-card__progress\{inset:auto 0 0;width:100%;height:12px;border-radius:0;background:#ffffffa6\}/);
+    assert.ok(css.includes(".media-card--minimal .media-card__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;margin:0}"));
+    assert.ok(css.includes(".media-card--minimal .media-card__progress::-webkit-progress-value{border-radius:999px}"));
+    assert.ok(css.includes(".media-card--minimal .media-card__progress::-moz-progress-bar{border-radius:999px}"));
+    assert.ok(css.includes(".media-card--minimal .media-card__surface[data-expanded]{height:var(--preview-height);display:grid;grid-template-rows:minmax(0,1fr) auto}"));
+    assert.ok(css.includes(".media-card--minimal .media-card__surface[data-expanded] .media-card__trailer{height:100%;aspect-ratio:auto}"));
+});
+
+test("availability dots and symbols share vivid status colors", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /--status-color:\s*light-dark\(#16a34a,\s*#22c55e\)/);
+    assert.match(css, /--status-color:\s*light-dark\(#e66a0a,\s*#fb923c\)/);
+    assert.match(css, /--status-color:\s*light-dark\(#ac8000,\s*#facc15\)/);
+    assert.match(css, /--status-dot:\s*linear-gradient\(135deg, var\(--status-alternate\) 50%, var\(--status-color\) 50%\)/);
+    assert.ok(css.includes(".media-availability--partialotheraudio .media-availability__track{color:var(--status-alternate)}"));
+    assert.match(css, /--status-color:\s*light-dark\(#1672e8,\s*#3b82f6\)/);
+    assert.match(css, /--status-color:\s*light-dark\(#7c3aed,\s*#a855f7\)/);
+});
+
+test("normal card hover stays minimal and icon actions retain touch sizing", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-card__overview\{display:none/);
+    assert.match(css, /\.media-card__original-title\{display:none/);
+    assert.match(css, /\.media-card__genres\{display:none\}/);
+    assert.match(css, /\.media-card__surface\[data-expanded\] \.media-card__overview\{display:block\}/);
+    const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(shell, /\.button--icon\{width:36px;min-height:36px;padding:0;border-radius:50%/);
+    assert.match(shell, /\.button--compact\{min-height:32px;padding:5px 10px;font-size:12px\}/);
+    assert.match(shell, /@media\(pointer:coarse\)\{\.button--compact\{min-height:44px\}\.button--icon\{width:44px;min-height:44px\}/);
+    assert.match(shell, /\.button:disabled\{opacity:1;background:var\(--surface-hover\);border-color:var\(--border\);color:var\(--muted\);cursor:not-allowed\}/);
+    assert.doesNotMatch(shell, /\.button:disabled\{[^}]*opacity:\.65/);
+});
+
+test("reduced motion never introduces a positioning transition", () => {
+    const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(shell, /@media\(prefers-reduced-motion:reduce\)\{[^}]*transition-duration:0s/);
 });

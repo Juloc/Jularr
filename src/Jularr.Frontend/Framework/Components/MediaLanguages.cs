@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Framework
             // Preference or distinct language count.
             IUiComponent Language(string icon, string key, MediaLanguage? preferred, int count)
             {
-                IUiComponent value = preferred is null ? new ValueText(count.ToString(CultureInfo.CurrentCulture)) : new Icon(preferred.FlagIcon, assets);
+                IUiComponent value = preferred is null ? new ValueText(count.ToString(CultureInfo.CurrentCulture)) : new Flag(preferred.FlagIcon, assets);
                 var label = preferred is null
                     ? string.Format(CultureInfo.CurrentCulture, texts["media.languageCount"], texts[key], count)
                     : string.Format(CultureInfo.CurrentCulture, texts["media.languagePreferred"], texts[key], texts[preferred.LabelKey]);
