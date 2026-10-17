@@ -204,12 +204,16 @@ namespace Jularr.Backend.Data.Logic.Media
     // Viewer state of a provider title that already is a Work.
     internal sealed class DiscoverOverlayData : BaseData
     {
-        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl)
+        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl = null, string? backdropUrl = null, string? jxlPosterUrl = null, string? jxlBackdropUrl = null)
         {
             Value = value;
             WorkId = workId;
             MediaStateTypeId = mediaStateTypeId;
             PlexUrl = plexUrl;
+            PosterUrl = posterUrl;
+            BackdropUrl = backdropUrl;
+            JxlPosterUrl = jxlPosterUrl;
+            JxlBackdropUrl = jxlBackdropUrl;
         }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
@@ -223,6 +227,18 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
         public string? PlexUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlPosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlBackdropUrl { get; }
     }
 
     internal sealed class LibraryFilterData : BaseData

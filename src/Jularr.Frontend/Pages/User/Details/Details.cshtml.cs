@@ -77,7 +77,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
                     work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null, work.Genres, work.Studio,
                     work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }
-                    .Where(part => part is not null)), work.Overview, actionKey, actionHref));
+                    .Where(part => part is not null)), work.Overview, actionKey, actionHref, jxlBackdropUrl: work.JxlBackdropUrl));
 
                 // Each author, artist or studio leads to their other titles.
                 var creators = new List<IUiComponent>();

@@ -1,4 +1,8 @@
 using System.Net;
+using System.Net.Http.Json;
+using Jularr.Backend.Data.User.Media.V1;
+using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Enums.Media;
 using SkiaSharp;
@@ -31,6 +35,21 @@ namespace Jularr.Backend.Tests
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Film'"))!;
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkRenditions\" WHERE \"FormatId\" = 3"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ArtworkFallbacks\""));
+            using (var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, details.StatusCode);
+                var work = (await details.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+                Assert.AreEqual("/api/v1/works/" + workId + "/artwork/1", work.PosterUrl);
+            }
+
+            using (var search = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Film")))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, search.StatusCode, await search.Content.ReadAsStringAsync());
+                var results = (await search.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.ToArray();
+                var local = results.Single(item => item.WorkId == workId);
+                Assert.AreEqual("/api/v1/works/" + workId + "/artwork/1", local.PosterUrl);
+            }
+
             Assert.AreEqual("image/webp", (await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId + "/artwork/1")).Content.Headers.ContentType?.MediaType);
 
             using var first = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId + "/artwork/1");
