@@ -15,6 +15,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.invalid_antiforgery_token", "Please reload the page and try again."),
             new("errors.invalid_request", "The request could not be processed."),
             new("errors.provider_unavailable", "The external provider is currently unavailable."),
+            new("errors.artwork_jxl_not_ready", "JPEG XL artwork export is not available on this server yet."),
             new("errors.storage_unavailable", "The storage is not reachable. Check that the NAS is on and the share is mounted."),
             new("errors.storage_waking", "The storage device is waking up. Please try again shortly."),
             new("errors.playback_conversion_unavailable", "This file cannot be played directly, and conversion is not available yet."),

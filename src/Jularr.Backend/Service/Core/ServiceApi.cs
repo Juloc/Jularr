@@ -286,6 +286,7 @@ namespace Jularr.Backend.Service.Core
                 handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<ArtworkImageDownloader>(services, 20, 8, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);
             AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover);
             AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId);

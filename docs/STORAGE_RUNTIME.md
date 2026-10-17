@@ -79,7 +79,7 @@ fingerprints all match one album goes to that album. Everything else waits for m
 identification under `/Admin/Library`.
 Profiles read the stored availability only.
 
-After the media identity pass, Artwork's second bounded scan searches for conventional JPG/PNG/WebP/JXL sidecars, not playable files. It associates artwork only when the containing folder maps to exactly one already-identified Work through StoredFiles/MediaAssets; season posters additionally require a matching season WorkUnit. An incomplete/offline image traversal preserves previously indexed sidecars. This discovery currently records candidates in `WorkArtworks` but does not yet generate cache derivatives or export NAS images; see [Artwork](ARTWORK.md).
+After the media identity pass, Artwork's second bounded scan searches for conventional JPG/PNG/WebP/JXL sidecars, not playable files. It associates artwork only when the containing folder maps to exactly one already-identified Work through StoredFiles/MediaAssets; season posters additionally require a matching season WorkUnit. An incomplete/offline image traversal preserves previously indexed sidecars. This discovery records candidates in `WorkArtworks` but does not generate cache derivatives. An Owner may explicitly export a Work's existing provider poster/backdrop as JPEG through the versioned Artwork export service; it checks the containing folder's canonical identity, read-only mounts and all existing local cover names and uses create-only atomic writes. JXL export and automatic export scheduling are not yet available; see [Artwork](ARTWORK.md).
 
 The Rename tab there previews moving identified files into the import layout
 (subtitles follow their video, a trailing `[quality]` tag stays, taken names get a
