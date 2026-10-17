@@ -268,10 +268,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
                 throw new DataValidationException(nameof(MaxConnections), "invalid_transition");
             }
 
-            // Media scope, manual-only and limits belong to indexers.
-            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab && (MediaTypeIds.Length > 0 || !SearchesAutomatically || QueryLimit is not null || GrabLimit is not null))
+            // SABnzbd connections can be scoped by media type for category routing.
+            // Search scheduling and indexer limits still belong only to indexers.
+            if (AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd) && MediaTypeIds.Length > 0)
             {
                 throw new DataValidationException(nameof(MediaTypeIds), "invalid_transition");
+            }
+
+            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab && (!SearchesAutomatically || QueryLimit is not null || GrabLimit is not null))
+            {
+                throw new DataValidationException(nameof(SearchesAutomatically), "invalid_transition");
             }
 
             if (MediaTypeIds.Any(id => !Enum.IsDefined((MediaType)id)))
