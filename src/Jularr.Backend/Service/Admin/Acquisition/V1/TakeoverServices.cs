@@ -240,10 +240,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }));
             }
 
-            // Import existing titles without starting downloads; missing monitored titles become wanted.
+            // Import existing movies/series without starting downloads; missing monitored titles of every media type become wanted.
             // Previously imported provider ids never use the limited catalog-import budget.
             var taken = 0;
-            foreach (var title in titles.OrderByDescending(item => item.IsMonitored && item.IsMissing))
+            foreach (var title in titles.Where(item => item.IsMonitored && item.IsMissing || mediaType is MediaType.Movie or MediaType.Series)
+                .OrderByDescending(item => item.IsMonitored && item.IsMissing))
             {
                 var wantsDownload = title.IsMonitored && title.IsMissing;
                 var name = Limit(title.Year is { } year ? title.Title + " (" + year + ")" : title.Title, 500);
