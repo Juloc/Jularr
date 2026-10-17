@@ -89,6 +89,12 @@ namespace Jularr.Backend.Tests
                 var unmatched = DownloadClientFolderInspector.Inspect(complete, snapshot, incomplete, "/unrelated", "/data/incomplete");
                 Assert.IsFalse(unmatched.CompleteAvailable);
                 Assert.IsTrue(unmatched.IncompleteAvailable);
+
+                var parentMapped = DownloadClientFolderInspector.Inspect(root, snapshot, root, "/data", "/data");
+                Assert.IsTrue(parentMapped.CompleteAvailable);
+                Assert.IsTrue(parentMapped.IncompleteAvailable);
+                Assert.AreEqual(complete, parentMapped.CompletePath);
+                Assert.AreEqual(incomplete, parentMapped.IncompletePath);
             }
             finally
             {
