@@ -374,6 +374,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(parent is null ? null : decimal.Parse(parent, System.Globalization.CultureInfo.InvariantCulture), parsed.ParentUnitNumber);
         }
 
+        [DataTestMethod]
+        [DataRow("Series/Season 1/Series - S01E01-E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01E02.mkv")]
+        [DataRow("Series/Season 1/Series - S01E01-02.mkv")]
+        [DataRow("Series/Season 1/Series - 1x01-02.mkv")]
+        [DataRow("Series/Season 2/Series - S01E07.mkv")]
+        [DataRow("Series/Season 1/Series - 2024.10.17.mkv")]
+        [DataRow("Series/Season 1/Series - 2024-10-17.mkv")]
+        public void Parser_AmbiguousEpisodePaths_NeedManualReview(string path)
+        {
+            var parsed = MediaPathParser.Parse(path, MediaType.Series);
+            Assert.IsNull(parsed.WorkUnitTypeId, path);
+        }
+
         [TestMethod]
         public async Task Scan_MatchesImportedSeriesAndKeepsAmbiguousFilesUnassigned()
         {
@@ -401,6 +415,30 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND "RelativePath" LIKE 'Duplicate Show%' """));
             await ScanAsync(host, rootId);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_MultiEpisodeFile_DoesNotLinkToOnlyTheFirstEpisode()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Series", "Example Show - tt39551287", "Season 1");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Example Show - S01E01.mkv"), "first");
+            File.WriteAllText(Path.Combine(folder, "Example Show - S01E01-E02.mkv"), "double");
+            var rootId = await CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Example Show') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt39551287' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "RelativePath" LIKE '%S01E01-E02.mkv' AND "MediaAssetId" IS NULL """));
         }
 
         [TestMethod]

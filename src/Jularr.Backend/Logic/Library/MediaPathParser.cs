@@ -19,12 +19,30 @@ namespace Jularr.Backend.Logic.Library
             switch (mediaType)
             {
                 case MediaType.Series:
-                    if (SeasonEpisode().Match(fileName) is { Success: true } marked)
+                    // A file that represents several episodes or one daily broadcast must not be assigned to only its first parsed unit.
+                    if (MultiEpisode().IsMatch(fileName) || DailyEpisode().IsMatch(fileName))
                     {
-                        return new MediaPathInfo(title, year, WorkUnitType.Episode, Number(marked.Groups["episode"]), Number(marked.Groups["season"]));
+                        return new MediaPathInfo(title, year, null, null, null);
                     }
 
-                    var season = SeasonFolder().Match(folders) is { Success: true } folder ? Number(folder.Groups["number"]) : 1m;
+                    var folderSeasons = SeasonFolder().Matches(folders).Select(match => Number(match.Groups["number"])).Distinct().Take(2).ToArray();
+                    if (folderSeasons.Length > 1)
+                    {
+                        return new MediaPathInfo(title, year, null, null, null);
+                    }
+
+                    if (SeasonEpisode().Match(fileName) is { Success: true } marked)
+                    {
+                        var seasonNumber = Number(marked.Groups["season"]);
+                        if (folderSeasons.Length == 1 && folderSeasons[0] != seasonNumber)
+                        {
+                            return new MediaPathInfo(title, year, null, null, null);
+                        }
+
+                        return new MediaPathInfo(title, year, WorkUnitType.Episode, Number(marked.Groups["episode"]), seasonNumber);
+                    }
+
+                    var season = folderSeasons.Length == 1 ? folderSeasons[0] : 1m;
                     return EpisodeOnly().Match(fileName) is { Success: true } episode
                         ? new MediaPathInfo(title, year, WorkUnitType.Episode, Number(episode.Groups["number"]), season)
                         : new MediaPathInfo(title, year, null, null, null);
@@ -130,6 +148,12 @@ namespace Jularr.Backend.Logic.Library
 
         [GeneratedRegex(@"[Ss](?<season>\d{1,3})[ ._-]*[Ee](?<episode>\d{1,4})|\b(?<season>\d{1,2})x(?<episode>\d{2,3})\b")]
         private static partial Regex SeasonEpisode();
+
+        [GeneratedRegex(@"(?:[Ss]\d{1,3}[ ._-]*[Ee]\d{1,4}(?:[ ._-]*[Ee]\d{1,4}|-\d{2,4})|\b\d{1,2}x\d{2,3}-\d{2,3}\b)")]
+        private static partial Regex MultiEpisode();
+
+        [GeneratedRegex(@"(?<!\d)(?:19|20)\d{2}[ ._-](?:0?[1-9]|1[0-2])[ ._-](?:0?[1-9]|[12]\d|3[01])(?!\d)")]
+        private static partial Regex DailyEpisode();
 
         [GeneratedRegex(@"\b(?:season|staffel|s)[ ._-]*(?<number>\d{1,3})\b", RegexOptions.IgnoreCase)]
         private static partial Regex SeasonFolder();

@@ -365,8 +365,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     // Unclear structure stays for manual review.
                     afterId = file.Id;
                     var path = MediaPathParser.Parse(file.RelativePath, mediaType);
-                    if (path.WorkUnitTypeId is null)
+                    if (path.WorkUnitTypeId is null || mediaType == MediaType.Series && MediaPathParser.ProviderIds(file.RelativePath, mediaType).Ids.Count > 0)
                     {
+                        // Explicit provider IDs require catalog validation, not just a matching parent folder.
                         continue;
                     }
 
