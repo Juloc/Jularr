@@ -185,10 +185,35 @@ namespace Jularr.Backend.Logic.Library
                 _ => ""
             };
 
+            if (format.Length > 0 && name is "MediaInfo Full" or "MediaInfo AudioLanguages" or "MediaInfo AudioLanguagesAll" or "MediaInfo SubtitleLanguages")
+            {
+                value = FilterLanguages(value, format);
+            }
+
             return format.Length > 0 && int.TryParse(format, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var limit)
                 && (name.Contains("Title", StringComparison.OrdinalIgnoreCase) || name is "Release Group" or "Edition Tags")
                 ? TruncateUtf8(value, limit)
                 : value;
+        }
+
+        private static string FilterLanguages(string value, string format)
+        {
+            var exclusions = format.StartsWith('-', StringComparison.Ordinal);
+            var placeholders = format.EndsWith('+', StringComparison.Ordinal);
+            var permitted = format.TrimStart('-').TrimEnd('+')
+                .Split(exclusions ? '-' : '+', StringSplitOptions.RemoveEmptyEntries)
+                .Select(code => code.ToUpperInvariant()).ToHashSet(StringComparer.Ordinal);
+            return LanguageGroup().Replace(value, match =>
+            {
+                var codes = match.Groups["codes"].Value.Split('+');
+                var accepted = codes.Where(code => exclusions ? !permitted.Contains(code) : permitted.Contains(code)).ToList();
+                if (placeholders && codes.Length > accepted.Count)
+                {
+                    accepted.AddRange(Enumerable.Repeat("--", codes.Length - accepted.Count));
+                }
+
+                return accepted.Count == 0 ? "" : "[" + string.Join('+', accepted) + "]";
+            }).Trim();
         }
 
         private static string Id(NamingValues values, string @namespace) => values.ProviderIds?.GetValueOrDefault(@namespace) ?? "";
@@ -254,8 +279,11 @@ namespace Jularr.Backend.Logic.Library
         [GeneratedRegex(@"^[a-z_]{2,16}$", RegexOptions.IgnoreCase)]
         private static partial Regex Namespace();
 
-        [GeneratedRegex(@"^[A-Za-z]{2}(?:[+-][A-Za-z]{2})*[+]?$")]
+        [GeneratedRegex(@"^(?:[A-Za-z]{2}(?:[+-][A-Za-z]{2})*[+]?|-[A-Za-z]{2}(?:-[A-Za-z]{2})*)$")]
         private static partial Regex LanguageFilter();
+
+        [GeneratedRegex(@"\[(?<codes>[A-Z]{2}(?:\+[A-Z]{2})*)\]")]
+        private static partial Regex LanguageGroup();
 
         [GeneratedRegex(@"\(\s*\)|\[\s*\]|\{\s*\}")]
         private static partial Regex EmptyBrackets();

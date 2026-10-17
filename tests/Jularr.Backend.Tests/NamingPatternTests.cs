@@ -83,6 +83,9 @@ namespace Jularr.Backend.Tests
             const string template = "{Movie Title} {[Quality Full]} {[Custom Formats]} {Custom Format:Surround Sound x264} {MediaInfo VideoCodec}";
             NamingPattern.Validate(MediaType.Movie, template, "Pattern");
             Assert.AreEqual("Film [Bluray-1080p] [Surround Sound x264] Surround Sound x264 hevc", NamingPattern.Apply(template, movie));
+            Assert.AreEqual("Film [EN]", NamingPattern.Apply("{Movie Title} {MediaInfo AudioLanguagesAll:EN+DE}", movie));
+            Assert.AreEqual("Film [JA]", NamingPattern.Apply("{Movie Title} {MediaInfo AudioLanguagesAll:-EN}", movie));
+            Assert.AreEqual("Film [EN+--]", NamingPattern.Apply("{Movie Title} {MediaInfo AudioLanguagesAll:EN+}", movie));
         }
 
         [TestMethod]
