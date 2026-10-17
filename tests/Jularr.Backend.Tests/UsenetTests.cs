@@ -10,10 +10,13 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Wanted.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Usenet;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
@@ -25,6 +28,132 @@ namespace Jularr.Backend.Tests
     {
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
+
+        [TestMethod]
+        public void NativeDownload_RequiresConfirmedWorkspaceAndNeverUsesImplicitTemp()
+        {
+            using var directory = new TemporaryDirectory();
+            var options = new StorageOptions();
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Assert.Throws<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
+
+            options.DirectDownloadPath = "relative/downloads";
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            options.DirectDownloadPath = Path.Combine(directory.Path, "unmounted");
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+
+            options.DirectDownloadPath = directory.Path;
+            if (OperatingSystem.IsLinux() && !StorageFileSystem.IsMountPoint(directory.Path))
+            {
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                Assert.IsFalse(StorageFileSystem.IsDownloadWorkspaceMount("/dev/shm"),
+                    "RAM-backed mounts cannot be accepted for persistent native downloads.");
+                options.DirectDownloadPath = "/dev/shm";
+                Assert.IsNull(options.ReadyUsenetDownloadPath());
+                options.AllowDirectDownloadOnHostFilesystem = true;
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "Host opt-in must not allow RAM-backed staging.");
+            }
+
+            options.AllowDirectDownloadOnHostFilesystem = true;
+            options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
+            Assert.IsNull(options.ReadyUsenetDownloadPath(), "A filesystem root is not a staging workspace.");
+            options.DirectDownloadPath = directory.Path;
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath());
+            Assert.AreEqual(Path.Combine(Path.GetFullPath(directory.Path), "42"), WantedAcquisition.Staging(options, 42));
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectSourceDownloadPath(), "An explicitly set shared workspace remains compatible.");
+
+            using var books = new TemporaryDirectory();
+            options.DirectSourceDownloadPath = books.Path;
+            Assert.AreEqual(Path.GetFullPath(books.Path), options.ReadyDirectSourceDownloadPath());
+            Assert.AreEqual(Path.Combine(Path.GetFullPath(books.Path), "43"), WantedAcquisition.DirectStaging(options, 43));
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath(), "Book download configuration must not change NNTP staging.");
+        }
+
+        [TestMethod]
+        public async Task Usenet_JobLimitStopsDownloadBeforeCreatingArticleFiles()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[300_000], 3);
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(news.Nzb(Feature + ".mkv")), news.Port, maxJobBytes: 1_024);
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<DownloadUsenetV1>(host);
+
+            Assert.AreEqual("usenet_disk_budget", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*.mkv", SearchOption.AllDirectories).Any(),
+                "An over-budget NZB must not start writing article files.");
+        }
+
+        [TestMethod]
+        public async Task Usenet_ConcurrentArticleExtentCannotExceedConfiguredJobBudget()
+        {
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            var bytes = Enumerable.Range(0, 6_000).Select(index => (byte)index).ToArray();
+            news.Publish("quota.mkv", bytes, 3);
+            var files = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(news.Nzb("quota.mkv"))));
+            var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 3);
+            var downloader = new UsenetDownloader();
+
+            await Assert.ThrowsAsync<UsenetStorageBudgetException>(async () =>
+                await downloader.DownloadAsync(server, files, staging.Path, new HashSet<string>(), DateTimeOffset.UtcNow.AddSeconds(15), 2_500, CancellationToken.None));
+            Assert.IsTrue(new FileInfo(Path.Combine(staging.Path, "quota.mkv")).Length <= 2_500,
+                "Even valid, overlapping yEnc writes must never grow the article file beyond the quota.");
+        }
+
+        [TestMethod]
+        public async Task Usenet_FinishedArticlesStillCountTowardTheJobBudget()
+        {
+            using var staging = new TemporaryDirectory();
+            File.WriteAllBytes(Path.Combine(staging.Path, "finished.mkv"), new byte[3_000]);
+            var file = new NzbFile("finished.mkv", [new NzbSegment(1, 2_000, "finished@example.test")]);
+            var server = new UsenetServer("127.0.0.1", 1, false, null, null, 1);
+            await Assert.ThrowsAsync<UsenetStorageBudgetException>(async () => await new UsenetDownloader().DownloadAsync(server, [file], staging.Path,
+                new HashSet<string> { "finished@example.test" }, DateTimeOffset.UtcNow.AddSeconds(1), 2_500, CancellationToken.None));
+            Assert.AreEqual(3_000, new FileInfo(Path.Combine(staging.Path, "finished.mkv")).Length);
+        }
+
+        [TestMethod]
+        public async Task Usenet_OverflowingNzbSizeWaitsWithoutCreatingArticleFiles()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            news.Publish(Feature + ".mkv", new byte[300_000], 3);
+            var nzb = System.Text.RegularExpressions.Regex.Replace(news.Nzb(Feature + ".mkv"), "bytes=\"[0-9]+\"", "bytes=\"9223372036854775807\"");
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(nzb), news.Port);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<DownloadUsenetV1>(host);
+            Assert.AreEqual("usenet_disk_budget", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.IsFalse(Directory.EnumerateFiles(staging.Path, "*.mkv", SearchOption.AllDirectories).Any());
+        }
+
+        [TestMethod]
+        public void NativeDownload_RejectsSymbolicWorkspaceAncestors()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("Linux CI verifies symbolic mount aliases without Windows developer-mode permissions.");
+            }
+
+            using var directory = new TemporaryDirectory();
+            using var target = new TemporaryDirectory();
+            var alias = Path.Combine(directory.Path, "alias");
+            Directory.CreateSymbolicLink(alias, target.Path);
+            var options = new StorageOptions { DirectDownloadPath = alias, AllowDirectDownloadOnHostFilesystem = true };
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Directory.CreateDirectory(Path.Combine(target.Path, "nested"));
+            options.DirectDownloadPath = Path.Combine(alias, "nested");
+            Assert.IsNull(options.ReadyDirectSourceDownloadPath());
+        }
 
         [TestMethod]
         public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
@@ -124,9 +253,14 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "good@example.test" }, file.Segments.Select(segment => segment.MessageId).ToArray());
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort)
+        private static async Task<Host> CreateHostAsync(string storage, string staging, FakeIndexer indexer, int newsPort, long? maxJobBytes = null)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = staging },
+            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string>
+                {
+                    ["Storage:DirectDownloadPath"] = staging,
+                    ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true",
+                    ["Storage:UsenetMaxJobBytes"] = (maxJobBytes ?? 20L * 1024 * 1024 * 1024).ToString(CultureInfo.InvariantCulture)
+                },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");

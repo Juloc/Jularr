@@ -1297,12 +1297,12 @@
    "明確な一致なし"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "欲しいものに追加予定"
+   "Will be wanted (paused)",
+   "監視対象になります（一時停止）"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "欲しいものに追加済み"
+   "Wanted (paused)",
+   "監視を一時停止"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -3843,6 +3843,14 @@
   "acquisition.outcome.acquisition_limit_reached": [
    "Indexer grab limit reached",
    "インデクサーの取得上限に達しました"
+  ],
+  "acquisition.outcome.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "ダウンロードの一時保存先が未設定か利用できません"
+  ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "ダウンロードが設定されたサイズ制限を超えています"
   ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",

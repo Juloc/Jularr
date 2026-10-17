@@ -1297,12 +1297,12 @@
    "Tidak ada kecocokan yang jelas"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Akan dicari"
+   "Will be wanted (paused)",
+   "Akan dipantau (dijeda)"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Dicari"
+   "Wanted (paused)",
+   "Pemantauan dijeda"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -3843,6 +3843,14 @@
   "acquisition.outcome.acquisition_limit_reached": [
    "Indexer grab limit reached",
    "Batas grab indexer tercapai"
+  ],
+  "acquisition.outcome.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Folder sementara unduhan belum dikonfigurasi atau tidak tersedia"
+  ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "Unduhan melebihi batas ukuran yang dikonfigurasi"
   ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",

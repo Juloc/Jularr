@@ -352,7 +352,11 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeSources sources)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = downloads }, services: services =>
+            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string>
+            {
+                ["Storage:DirectDownloadPath"] = downloads,
+                ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+            }, services: services =>
             {
                 services.AddHttpClient<OpdsClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<AnnasArchiveClient>().ConfigurePrimaryHttpMessageHandler(() => sources);

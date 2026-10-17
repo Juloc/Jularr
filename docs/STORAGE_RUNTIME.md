@@ -196,3 +196,68 @@ no grab. A generic high-priority SAB connection must not override an explicit
 category for a selected media type. The configured category name must exist
 in SABnzbd; further live category/path validation and storage limits are
 separate pre-release requirements (#1209).
+
+## Native/direct download staging safety (pre-release R03 slice)
+
+Jularr's native Usenet downloader and direct-source book downloader accept
+independent `Storage:UsenetDownloadPath` and `Storage:DirectSourceDownloadPath`
+workspaces. For existing explicitly configured installations, each falls back
+to the shared `Storage:DirectDownloadPath` setting when its own setting is
+absent. None has a built-in default: unconfigured,
+missing, relative or symlinked paths are rejected before native/direct grabs.
+Jobs already active are put into attention rather than silently writing into
+`/tmp` or the container's overlay filesystem. The SABnzbd download directory
+is a **separate service**; its completed files use `RemotePath` / `LocalPath`
+mapping in the SABnzbd acquisition connection.
+
+For example, mount a persistent storage volume at `/downloads/staging` in
+the Jularr container, then set `Storage__UsenetDownloadPath=/downloads/staging`. Direct-source book
+downloads can separately use `Storage__DirectSourceDownloadPath=/downloads/books`,
+with that path also mounted before Jularr starts.
+The directory must already exist. On Linux, Jularr requires this path to be
+inside a non-root mounted filesystem (a nested folder is accepted) unless the
+owner deliberately sets `Storage__AllowDirectDownloadOnHostFilesystem=true`
+for an explicitly configured local/VM workspace. This is **not** a quota
+override: disk reservations, capacity checks and UI confirmation are still
+required before release in #1209. If a NAS mount disappears, Jularr must not
+fall back to VM-local storage; check the actual mounts and free space before
+enabling acquisition.
+
+
+## Native NNTP job size ceiling
+
+`Storage__UsenetMaxJobBytes` controls the maximum allocated article-file bytes
+for any single NNTP job (default: **20 GiB**, independently configurable per
+installation). The worker validates the parsed NZB's total declared size
+before opening article files; the downloader additionally reserves actual
+file-growth extents across concurrent NNTP sessions before each write. An
+invalid, unknown or over-budget NZB waits with `usenet_disk_budget`, preserving
+its staging data instead of exceeding the configured job limit. Lowering the
+limit below an existing partial job pauses it on the next pass.
+
+**This is a job-size limit, not the total workspace size**, and it does not
+reserve disk across downloads, cap PAR2/7-Zip extraction, protect other
+processes sharing the filesystem, or cover direct-source books. Those remain
+separate prerequisites of release issue #1209; do not expose this as a
+complete hard workspace quota.
+NZB segment sizes are checked before summing to reject numeric overflow. Existing
+article files count against the job limit even when every article is finished,
+so a restart or lower configured limit cannot bypass the extraction preflight.
+
+**Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
+`proc` and other operating-system pseudo filesystems even if Docker reports
+a mount point. A separate bind mount can still target VM-local storage:
+verify its physical source explicitly before enabling downloads.
+The nearest mount is authoritative: an unsafe nested mount cannot inherit its
+parent's approval, and host-filesystem opt-in does not permit RAM/overlay storage.
+
+## Space checks for native Usenet unpacking
+
+Before extracting archives, the native worker checks free space on the **actual
+filesystem containing the staging files** and reserves a rough 10% overhead
+above the compressed input size for the next extraction. Linux mount identity
+is read from `/proc/self/mountinfo`; if the filesystem cannot be resolved
+to a ready mount, extraction enters the existing `usenet_disk_full` wait state
+rather than using a misleading VM-root free-space number. This is a preflight
+safeguard, **not a hard quota**; capacity reservation across jobs and checks
+during extraction are still part of #1209.

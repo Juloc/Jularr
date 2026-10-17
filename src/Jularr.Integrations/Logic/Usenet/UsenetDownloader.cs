@@ -11,13 +11,35 @@ namespace Jularr.Integrations.Logic.Usenet
         private const long Slack = 1024 * 1024;
 
         public async Task<UsenetProgress> DownloadAsync(UsenetServer server, IReadOnlyList<NzbFile> files, string directory, IReadOnlySet<string> finished, DateTimeOffset until,
-            CancellationToken ct)
+            long maximumJobBytes, CancellationToken ct)
         {
             var queue = new ConcurrentQueue<(NzbFile File, NzbSegment Segment)>(files.SelectMany(file => file.Segments.Where(segment => !finished.Contains(segment.MessageId))
                 .Select(segment => (file, segment))));
             var done = new ConcurrentBag<string>();
             var damaged = new ConcurrentBag<string>();
             long downloaded = 0;
+
+            // Completed/resumed files still consume the budget, even with no articles left.
+            long existingBytes = 0;
+            if (maximumJobBytes <= 0)
+            {
+                throw new UsenetStorageBudgetException();
+            }
+
+            foreach (var file in files)
+            {
+                var existing = new FileInfo(Path.Combine(directory, file.FileName));
+                if (existing.Exists)
+                {
+                    if (existing.Length > maximumJobBytes - existingBytes)
+                    {
+                        throw new UsenetStorageBudgetException();
+                    }
+
+                    existingBytes += existing.Length;
+                }
+            }
+
             if (queue.IsEmpty)
             {
                 return new UsenetProgress([], [], 0);
@@ -26,6 +48,8 @@ namespace Jularr.Integrations.Logic.Usenet
             // The first session proves the server; further sessions are a bonus.
             var sessions = new List<NntpConnection> { await NntpConnection.OpenAsync(server, ct) };
             var handles = new Dictionary<string, SafeFileHandle>(StringComparer.Ordinal);
+            var fileLengths = new Dictionary<string, long>(StringComparer.Ordinal);
+            long allocated = 0;
             try
             {
                 for (var index = 1; index < Math.Clamp(server.Connections, 1, 50) && index < queue.Count; index++)
@@ -42,7 +66,16 @@ namespace Jularr.Integrations.Logic.Usenet
 
                 foreach (var file in files)
                 {
-                    handles[file.FileName] = File.OpenHandle(Path.Combine(directory, file.FileName), FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, FileOptions.Asynchronous);
+                    var handle = File.OpenHandle(Path.Combine(directory, file.FileName), FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, FileOptions.Asynchronous);
+                    handles[file.FileName] = handle;
+                    var existingLength = RandomAccess.GetLength(handle);
+                    if (maximumJobBytes <= 0 || existingLength > maximumJobBytes - allocated)
+                    {
+                        throw new UsenetStorageBudgetException();
+                    }
+
+                    fileLengths[file.FileName] = existingLength;
+                    allocated += existingLength;
                 }
 
                 await Task.WhenAll(sessions.Select(async session =>
@@ -74,10 +107,25 @@ namespace Jularr.Integrations.Logic.Usenet
 
                         // A part never grows its file beyond what the NZB announced.
                         var limit = item.File.Bytes > 0 ? item.File.Bytes + Slack : MaximumFileBytes;
-                        if (part.Offset < 0 || part.Offset + part.Data.Length > limit || item.Segment.Bytes > 0 && part.Data.Length > item.Segment.Bytes + Slack)
+                        if (part.Offset < 0 || part.Offset > limit - part.Data.Length || item.Segment.Bytes > 0 && part.Data.Length > item.Segment.Bytes + Slack)
                         {
                             damaged.Add(item.Segment.MessageId);
                             continue;
+                        }
+
+                        // Reserve the resulting physical file extent under a shared lock, before
+                        // concurrent NNTP sessions write. Files can arrive out of offset order.
+                        lock (fileLengths)
+                        {
+                            var end = part.Offset + part.Data.Length;
+                            var growth = Math.Max(0, end - fileLengths[item.File.FileName]);
+                            if (growth > maximumJobBytes - allocated)
+                            {
+                                throw new UsenetStorageBudgetException();
+                            }
+
+                            allocated += growth;
+                            fileLengths[item.File.FileName] = Math.Max(fileLengths[item.File.FileName], end);
                         }
 
                         await RandomAccess.WriteAsync(handles[item.File.FileName], part.Data, part.Offset, ct);

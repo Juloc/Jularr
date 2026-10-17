@@ -1,5 +1,12 @@
 namespace Jularr.Integrations.Data.Usenet
 {
+    internal sealed class UsenetStorageBudgetException : Exception
+    {
+        public UsenetStorageBudgetException() : base("The configured Usenet job storage limit was exceeded.")
+        {
+        }
+    }
+
     internal enum UsenetFailure : byte
     {
         Unavailable,

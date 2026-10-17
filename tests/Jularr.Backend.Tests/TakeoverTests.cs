@@ -4,6 +4,7 @@ using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -25,7 +26,7 @@ namespace Jularr.Backend.Tests
         private const string TmdbToken = "eyJ-takeover-token";
 
         [TestMethod]
-        public async Task Takeover_RadarrPreviewThenApply_AddsReadableIndexersAndWantsMissingMovies()
+        public async Task Takeover_RadarrPreviewThenApply_ImportsInventoryAndPausesNewMonitoringUntilExplicitRelease()
         {
             var radarr = new FakeRadarr();
             await using var host = await Host.CreateAsync(razor: true, library: true, services: services =>
@@ -52,7 +53,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("takeover_needs_key", preview.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Client).OutcomeKey);
             Assert.AreEqual("takeover_will_want", preview.Single(item => item.Name == "The Matrix (1999)").OutcomeKey);
             Assert.AreEqual("takeover_no_id", preview.Single(item => item.Name == "Unknown (2001)").OutcomeKey);
-            Assert.IsFalse(preview.Any(item => item.Name.StartsWith("Owned", StringComparison.Ordinal) || item.Name.StartsWith("Ignored", StringComparison.Ordinal)));
+            Assert.AreEqual("takeover_will_add", preview.Single(item => item.Name == "Owned (2000)").OutcomeKey);
+            Assert.AreEqual("takeover_will_add", preview.Single(item => item.Name == "Ignored (2000)").OutcomeKey);
             Assert.IsFalse(preview.Any(item => item.Name == "Tracker"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
 
@@ -61,13 +63,25 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("takeover_added", applied.Single(item => item.Name == "Readable").OutcomeKey);
             Assert.AreEqual("takeover_added", applied.Single(item => item.Name == "Open").OutcomeKey);
             Assert.AreEqual("takeover_wanted", applied.Single(item => item.Name == "The Matrix (1999)").OutcomeKey);
+            Assert.AreEqual("takeover_added", applied.Single(item => item.Name == "Owned (2000)").OutcomeKey);
+            Assert.AreEqual("takeover_added", applied.Single(item => item.Name == "Ignored (2000)").OutcomeKey);
+            Assert.AreEqual(3L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
             Assert.AreEqual("https://readable.example.test", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Readable'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedApiKey\" IS NULL FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Open'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""), "Takeover alone must not start automatic acquisition.");
             var again = await RunAsync(host, true);
             Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Readable").OutcomeKey);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\""));
+
+            // Explicitly releasing monitoring uses the existing target editor; a repeated takeover must preserve that choice.
+            var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\""))!;
+            using var released = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, 1));
+            Assert.AreEqual(HttpStatusCode.OK, released.StatusCode, await released.Content.ReadAsStringAsync());
+            await RunAsync(host, true);
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Takeover");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
@@ -252,6 +266,8 @@ namespace Jularr.Backend.Tests
                     return Task.FromResult(request.Headers.Authorization?.Parameter != TmdbToken ? new HttpResponseMessage(HttpStatusCode.Unauthorized) : uri.AbsolutePath switch
                     {
                         "/3/movie/603" => Json("""{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","external_ids":{"imdb_id":"tt0133093"}}"""),
+                        "/3/movie/604" => Json("""{"id":604,"title":"Owned","release_date":"2000-01-01"}"""),
+                        "/3/movie/605" => Json("""{"id":605,"title":"Ignored","release_date":"2000-01-01"}"""),
                         _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                     });
                 }

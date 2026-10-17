@@ -45,6 +45,71 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void NamingPattern_RadarrSonarrAliasesAndProviderIds()
+        {
+            var episode = new NamingValues("The Series", 2020, 1, 7, "Midnight", "HDTV-1080p", "DKB", null, 1)
+            {
+                MediaTypeId = MediaType.Series,
+                ProviderIds = new Dictionary<string, string> { ["imdb"] = "tt39551287", ["tmdb_tv"] = "123456", ["tvdb"] = "78910" }
+            };
+            const string series = "{Series Title} - {ImdbId}/Season {Season:00}/{Series CleanTitle} - S{Season:00}E{Episode:00} - {Episode Title} {[Quality Full]}{-Release Group}";
+            NamingPattern.Validate(MediaType.Series, series, "Pattern");
+            Assert.AreEqual("The Series - tt39551287/Season 01/The Series - S01E07 - Midnight [HDTV-1080p]-DKB", NamingPattern.Apply(series, episode));
+            Assert.AreEqual("The.Series.(2020)/78910/123456", NamingPattern.Apply("{Series.TitleYear}/{TvdbId}/{ProviderId:tmdb_tv}", episode));
+
+            var movie = new NamingValues("The Movie", 2010, null, null, null, "Bluray-1080p", "EVOLVE", "Extended", 2)
+            {
+                ProviderIds = new Dictionary<string, string> { ["imdb"] = "tt1234567", ["tmdb_movie"] = "9876" }
+            };
+            const string template = "{Movie Title} ({Release Year}) - {Edition Tags} {[Quality Full]}{-Release Group} - {ImdbId}";
+            NamingPattern.Validate(MediaType.Movie, template, "Pattern");
+            Assert.AreEqual("The Movie (2010) - Extended [Bluray-1080p Proper]-EVOLVE - tt1234567", NamingPattern.Apply(template, movie));
+            Assert.AreEqual("The Movie/9876", NamingPattern.Apply("{Movie CleanTitle}/{TmdbId}", movie));
+        }
+
+        [TestMethod]
+        public void NamingPattern_OriginalFilename_ExcludesTheExtension()
+        {
+            var values = new NamingValues("Movie", 2020, null, null, null, null, null, null, 1)
+            {
+                OriginalFilename = "Movie.2020.1080p-GROUP"
+            };
+            Assert.AreEqual("Movie.2020.1080p-GROUP", NamingPattern.Apply("{Original Filename}", values));
+        }
+
+        [TestMethod]
+        public void NamingPattern_MediaInfoAndCustomFormatTokens_RenderOnlyKnownData()
+        {
+            var movie = new NamingValues("Film", 2010, null, null, null, "Bluray-1080p", "EVOLVE", null, 1)
+            {
+                MediaInfo = new Dictionary<string, string>
+                {
+                    ["MediaInfo VideoCodec"] = "hevc",
+                    ["MediaInfo AudioCodec"] = "dts",
+                    ["MediaInfo AudioLanguagesAll"] = "[JA+EN]"
+                },
+                CustomFormats = new Dictionary<string, string> { ["Surround Sound x264"] = "Surround Sound x264" }
+            };
+            const string template = "{Movie Title} {[Quality Full]} {[Custom Formats]} {Custom Format:Surround Sound x264} {MediaInfo VideoCodec}";
+            NamingPattern.Validate(MediaType.Movie, template, "Pattern");
+            Assert.AreEqual("Film [Bluray-1080p] [Surround Sound x264] Surround Sound x264 hevc", NamingPattern.Apply(template, movie));
+            Assert.AreEqual("Film [EN]", NamingPattern.Apply("{Movie Title} {MediaInfo AudioLanguagesAll:EN+DE}", movie));
+            Assert.AreEqual("Film [JA]", NamingPattern.Apply("{Movie Title} {MediaInfo AudioLanguagesAll:-EN}", movie));
+            Assert.AreEqual("Film [EN+--]", NamingPattern.Apply("{Movie Title} {MediaInfo AudioLanguagesAll:EN+}", movie));
+        }
+
+        [TestMethod]
+        public void NamingPattern_LocalizedTitle_UsesStoredLocaleAndFallsBackToCanonical()
+        {
+            var values = new NamingValues("The Film", 2010, null, null, null, null, null, null, 1)
+            {
+                LocalizedTitles = new Dictionary<string, string> { ["de"] = "Der Film" }
+            };
+            NamingPattern.Validate(MediaType.Movie, "{Movie Title:DE}/{Movie Title:FR} - {ImdbId}", "Pattern");
+            Assert.AreEqual("Der Film/The Film", NamingPattern.Apply("{Movie Title:DE}/{Movie Title:FR} - {ImdbId}", values));
+        }
+
+        [TestMethod]
         public void NamingPattern_UnknownOrIncomplete_IsRejected()
         {
             Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {Studio}", "Pattern")).Code);

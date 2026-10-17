@@ -1297,12 +1297,12 @@
    "Kein eindeutiger Treffer"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Wird gesucht"
+   "Will be wanted (paused)",
+   "Wird überwacht (pausiert)"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Gesucht"
+   "Wanted (paused)",
+   "Überwachung pausiert"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
@@ -3843,6 +3843,14 @@
   "acquisition.outcome.acquisition_limit_reached": [
    "Indexer grab limit reached",
    "Grab-Limit des Indexers erreicht"
+  ],
+  "acquisition.outcome.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Download-Zwischenspeicher nicht eingerichtet oder nicht verfügbar"
+  ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "Download überschreitet das konfigurierte Größenlimit"
   ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
