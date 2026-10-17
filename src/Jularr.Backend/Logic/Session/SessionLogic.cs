@@ -224,21 +224,66 @@ namespace Jularr.Backend.Logic.Session
 
         public static async Task<SessionAuthenticationData> ReadSessionAsync(this LogicContext ctx, SessionParameters parameters, CancellationToken ct)
         {
+            // Account, session, then profile; foreign-key readers may proceed.
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH lockedAccount AS MATERIALIZED (
+                    SELECT
+                        account."Id",
+                        account."AccountRoleTypeId",
+                        account."CredentialRevision"
+                    FROM
+                        "Accounts" AS account
+                    WHERE
+                        account."IsEnabled" = TRUE
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "AccountSessions" AS session
+                            WHERE
+                                session."AccountId" = account."Id"
+                                AND session."PublicId" = @SessionPublicId
+                                AND session."RotationRevision" = @SessionRevision
+                                AND session."TokenHash" = @SessionTokenHash
+                                AND session."RevokedAt" IS NULL
+                                AND session."ExpiresAt" > statement_timestamp()
+                                AND session."CredentialRevision" = account."CredentialRevision"
+                        )
+                    FOR NO KEY UPDATE OF
+                        account
+                ), lockedSession AS MATERIALIZED (
+                    SELECT
+                        session."AccountId",
+                        session."ActiveProfileId",
+                        session."DevicePlatform",
+                        session."ExpiresAt",
+                        account."AccountRoleTypeId"
+                    FROM
+                        lockedAccount AS account
+                    INNER JOIN
+                        "AccountSessions" AS session ON session."AccountId" = account."Id"
+                    WHERE
+                        session."PublicId" = @SessionPublicId
+                        AND session."RotationRevision" = @SessionRevision
+                        AND session."TokenHash" = @SessionTokenHash
+                        AND session."RevokedAt" IS NULL
+                        AND session."ExpiresAt" > statement_timestamp()
+                        AND session."CredentialRevision" = account."CredentialRevision"
+                    FOR NO KEY UPDATE OF
+                        session
+                )
                 SELECT
-                    account."Id" AS "AccountId",
-                    account."AccountRoleTypeId",
+                    session."AccountId",
+                    session."AccountRoleTypeId",
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId",
                     session."DevicePlatform" IS NOT NULL AS "IsDevice",
                     session."ExpiresAt"
                 FROM
-                    "AccountSessions" AS session
-                INNER JOIN
-                    "Accounts" AS account ON account."Id" = session."AccountId"
+                    lockedSession AS session
                 LEFT JOIN LATERAL (
                     SELECT
                         profile."Id",
@@ -249,22 +294,13 @@ namespace Jularr.Backend.Logic.Session
                     INNER JOIN
                         "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
                     WHERE
-                        accountProfile."AccountId" = account."Id"
+                        accountProfile."AccountId" = session."AccountId"
                         AND accountProfile."ProfileId" = session."ActiveProfileId"
-                    FOR UPDATE OF
+                    FOR NO KEY UPDATE OF
                         accountProfile, profile
                 ) AS profile ON TRUE
                 WHERE
-                    session."PublicId" = @SessionPublicId
-                    AND session."RotationRevision" = @SessionRevision
-                    AND session."TokenHash" = @SessionTokenHash
-                    AND session."RevokedAt" IS NULL
-                    AND session."ExpiresAt" > statement_timestamp()
-                    AND session."CredentialRevision" = account."CredentialRevision"
-                    AND account."IsEnabled" = TRUE
-                    AND (session."ActiveProfileId" IS NULL OR profile."Id" IS NOT NULL)
-                FOR UPDATE OF
-                    account, session;
+                    session."ActiveProfileId" IS NULL OR profile."Id" IS NOT NULL;
                 """;
             sql.Parameters.Add(parameters);
 

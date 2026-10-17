@@ -3848,6 +3848,42 @@
    "Download workspace is not configured or is unavailable",
    "ダウンロードの一時保存先が未設定か利用できません"
   ],
+  "acquisition.workspace.title": [
+   "Download storage",
+   "ダウンロード保存先"
+  ],
+  "acquisition.workspace.hint": [
+   "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
+   "設定済みのパスです（マウントや書き込み可否は未確認）。保存先が利用できない場合、内蔵ダウンロードは一時停止します。"
+  ],
+  "acquisition.workspace.usenet": [
+   "Usenet temporary files",
+   "Usenet 一時ファイル"
+  ],
+  "acquisition.workspace.direct": [
+   "Direct book downloads",
+   "書籍の直接ダウンロード"
+  ],
+  "acquisition.workspace.limit": [
+   "Per-Usenet-job limit",
+   "Usenet ジョブごとの上限"
+  ],
+  "acquisition.workspace.unset": [
+   "Not configured",
+   "未設定"
+  ],
+  "acquisition.workspace.hostAllow": [
+   "Host filesystem: explicitly allowed",
+   "ホストのファイルシステム: 明示的に許可"
+  ],
+  "acquisition.workspace.hostDeny": [
+   "Host filesystem: blocked unless a mounted workspace is selected",
+   "ホストのファイルシステム: マウント済み保存先が選択されるまで禁止"
+  ],
+  "acquisition.workspace.manageHint": [
+   "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
+   "パスや上限を変更するにはサーバー設定を更新し、Jularr を再起動してください。アプリ内での編集にはまだ対応していません。"
+  ],
   "acquisition.outcome.usenet_disk_budget": [
    "Download exceeds the configured size limit",
    "ダウンロードが設定されたサイズ制限を超えています"

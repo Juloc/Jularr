@@ -1404,6 +1404,19 @@ namespace Jularr.Backend.Tests
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "Add download client");
+            StringAssert.Contains(html, "Download storage");
+            StringAssert.Contains(html, "Usenet temporary files");
+            StringAssert.Contains(html, "Direct book downloads");
+            StringAssert.Contains(html, "20 GiB");
+            StringAssert.Contains(html, "Not configured");
+            StringAssert.Contains(html, "In-app editing is not available yet.");
+            using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads");
+            Assert.AreEqual(HttpStatusCode.OK, storagePolicy.StatusCode, await storagePolicy.Content.ReadAsStringAsync());
+            var downloadStorage = await storagePolicy.Content.ReadFromJsonAsync<Jularr.Backend.Data.Admin.Storage.V1.DownloadStorageDetailsV1>();
+            Assert.IsNull(downloadStorage!.UsenetDownloadPath);
+            Assert.IsNull(downloadStorage.DirectSourceDownloadPath);
+            Assert.AreEqual(20L * 1024 * 1024 * 1024, downloadStorage.UsenetMaxJobBytes);
+            Assert.IsFalse(downloadStorage.AllowDirectDownloadOnHostFilesystem);
             Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
 
             // A news server is entered as server, port and SSL; the fields show their form and explain themselves behind the (i).
