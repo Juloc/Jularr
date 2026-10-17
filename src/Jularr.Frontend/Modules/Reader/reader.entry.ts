@@ -46,11 +46,12 @@ if (reader?.querySelector("[data-role=content]")) {
 
     // Translation where the instance offers it, in the language the profile chose for this book; the choice follows it to every device.
     const translate = reader.dataset.translationUrl
-        ? translator(reader, content, createTranslationWorker)
+        ? translator(reader, content, createTranslationWorker, () => { scrollToBlock(anchorBlock); updatePageButtons(); })
         : undefined;
     let reading = reader.dataset.readingLanguage ?? "original";
     if (translate) void translate(reading === "original" ? "" : reading);
     reader.querySelectorAll<HTMLButtonElement>("[data-language-choice]").forEach(button => button.addEventListener("click", () => {
+        anchorBlock = current();
         reading = button.dataset.languageChoice!;
         reader!.querySelectorAll<HTMLButtonElement>("[data-language-choice]").forEach(choice => choice.setAttribute("aria-pressed", String(choice === button)));
         const opener = reader!.querySelector<HTMLButtonElement>("[data-action=language]");
