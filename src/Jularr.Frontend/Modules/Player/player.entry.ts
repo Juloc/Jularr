@@ -190,6 +190,7 @@ async function start(player: HTMLElement): Promise<void> {
                     instance.recoverMediaError();
                     return;
                 }
+                hideBuffering();
                 show("failed");
             });
             instance.loadSource(next.streamUrl);
