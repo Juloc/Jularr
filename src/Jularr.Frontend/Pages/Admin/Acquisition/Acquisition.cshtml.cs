@@ -283,12 +283,18 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 form.Number(item => item.Priority, "acquisition.connection.priority");
                 form.Select(item => item.IsEnabled, "acquisition.connection.enabled", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
 
-                // Indexer categories (empty uses the media type defaults), the media it serves (none: all), automatic searches and daily limits.
+                // Empty media scope serves all types. SABnzbd connections can use separate
+                // categories per type while sharing the same SAB server and path mapping.
+                if (type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd)
+                {
+                    form.Choices(item => item.MediaTypeIds, "acquisition.connection.mediaTypes", Enum.GetValues<MediaType>()
+                        .Select(media => new SelectOption(((int)media).ToString(CultureInfo.InvariantCulture), texts[MediaTypeLabel.Key(media, null)])));
+                }
+
+                // Indexer categories (empty uses the media type defaults), automatic searches and daily limits.
                 if (type == AcquisitionConnectionType.Newznab)
                 {
                     form.Text(item => item.Categories, "acquisition.connection.categories");
-                    form.Choices(item => item.MediaTypeIds, "acquisition.connection.mediaTypes", Enum.GetValues<MediaType>()
-                        .Select(media => new SelectOption(((int)media).ToString(CultureInfo.InvariantCulture), texts[MediaTypeLabel.Key(media, null)])));
                     form.Select(item => item.SearchesAutomatically, "acquisition.connection.searches",
                         [new SelectOption("True", texts["acquisition.connection.automatic"]), new SelectOption("False", texts["acquisition.connection.manualOnly"])]);
                     form.Number(item => item.QueryLimit, "acquisition.connection.queryLimit");

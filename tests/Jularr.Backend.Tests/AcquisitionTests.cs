@@ -1106,6 +1106,52 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Sabnzbd_UsesMatchingMediaTypeCategoryBeforeGenericOrOtherMediaTypes()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sab = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab, razor: true);
+
+            // A series-only connection has better numerical priority than movies.
+            // A movie-only connection has worse numerical priority than the generic
+            // connection, but is explicitly selected for Movie acquisitions.
+            foreach (var data in new[]
+            {
+                new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]),
+                new SaveAcquisitionConnectionDataV1("Movie SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 50, [], "films", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Movie])
+            })
+            {
+                using var added = await host.SendAsync(HttpMethod.Post, Connections, data);
+                Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            }
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "films" }, sab.GrabbedCategories.ToArray());
+        }
+
+        [TestMethod]
+        public async Task Sabnzbd_IgnoresOtherMediaTypeConnectionAndFallsBackToGeneric()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sab = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab);
+
+            using var added = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("Series SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    FakeUsenet.ClientKey, true, 1, [], "tv", "/downloads", downloads.Path, mediaTypeIds: [(int)MediaType.Series]));
+            Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "movies" }, sab.GrabbedCategories.ToArray());
+        }
+
+        [TestMethod]
         public void Selection_RequestedLanguageWinsAmongEqualQuality()
         {
             var profile = new QualityProfile("1", "Test", ["WEBDL-1080p"], ["WEBDL-1080p"], true, "WEBDL-1080p", null, null) { LanguageOrder = ["de"] };
@@ -1408,6 +1454,7 @@ namespace Jularr.Backend.Tests
                 """;
 
             public List<string> Grabbed { get; } = [];
+            public List<string?> GrabbedCategories { get; } = [];
             public List<string> IndexerHosts { get; } = [];
             public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
@@ -1456,6 +1503,7 @@ namespace Jularr.Backend.Tests
                 {
                     case "addurl":
                         Grabbed.Add(form["name"]!);
+                        GrabbedCategories.Add(form["cat"]);
                         return Json($$"""{"status":true,"nzo_ids":["SABnzbd_nzo_{{Grabbed.Count}}"]}""");
                     case "queue":
                         return Json(Queue);
