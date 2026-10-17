@@ -131,7 +131,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 return new Snapshot(null, null, false, false, []);
             }
 
-            var complete = Path.GetFullPath(mappedPath);
+            var complete = Path.TrimEndingDirectorySeparator(Path.GetFullPath(mappedPath));
             var parent = Path.GetDirectoryName(complete);
             var incomplete = Path.GetFileName(complete).Equals("complete", StringComparison.OrdinalIgnoreCase) && parent is not null
                 ? Path.Combine(parent, "incomplete") : null;
