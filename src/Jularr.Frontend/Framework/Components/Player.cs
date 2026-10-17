@@ -76,6 +76,11 @@ namespace Jularr.Frontend.Framework
                     ).Class("player__bottom"),
                     new UiPlayerSettings(source, assets)
                 ).Class("player__chrome"),
+                new Div(
+                    new Span().Class("player__buffering-ring").Attribute("aria-hidden", "true"),
+                    new Span(new Text("player.buffering"))
+                ).Class("player__buffering").Attribute("data-role", "buffering").Attribute("role", "status")
+                    .Attribute("aria-live", "polite").Attribute("hidden", "hidden"),
                 new P().Class("player__status").Attribute("role", "status").Attribute("data-role", "status").Attribute("hidden", "hidden"),
                 new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
                 new Div([
