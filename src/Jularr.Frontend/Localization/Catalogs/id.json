@@ -6280,6 +6280,10 @@
    "The indexer or download client returned an invalid response.",
    "Indexer atau klien unduhan mengembalikan respons yang tidak valid."
   ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "Folder sementara unduhan belum dikonfigurasi atau tidak tersedia"
+  ],
   "errors.acquisition_no_download_client": [
    "No enabled download client is configured.",
    "Tidak ada klien unduhan aktif yang dikonfigurasi."

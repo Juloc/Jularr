@@ -6280,6 +6280,10 @@
    "The indexer or download client returned an invalid response.",
    "El indexador o el cliente de descargas devolvió una respuesta no válida."
   ],
+  "errors.acquisition_download_path_unconfigured": [
+   "Download workspace is not configured or is unavailable",
+   "La carpeta temporal de descargas no está configurada o no está disponible"
+  ],
   "errors.acquisition_no_download_client": [
    "No enabled download client is configured.",
    "No hay ningún cliente de descargas activado."
