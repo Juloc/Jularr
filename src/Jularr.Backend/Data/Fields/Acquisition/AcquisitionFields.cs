@@ -27,6 +27,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField DownloadCategory = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField RemotePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField LocalPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly StringField IncompleteRemotePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly StringField IncompleteLocalPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly IntField MaxConnections = new() { Minimum = 1, Maximum = 50, Required = false };
         public static readonly StringField Capabilities = new() { Required = false };
         public static readonly StringArrayField SearchModes = new() { ItemMaximumLength = 32 };
