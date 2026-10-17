@@ -102,13 +102,15 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private readonly MediaProbeClient _probe;
         private readonly GameRomIdentification _roms;
         private readonly MusicTagIdentification _music;
+        private readonly ArtworkCache _artworkCache;
 
-        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, ArtworkCache artworkCache)
         {
             _storage = storage;
             _probe = probe;
             _roms = roms;
             _music = music;
+            _artworkCache = artworkCache;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -218,6 +220,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     Parameters.OperationId, processed, OperationStatusType.Failed, "scan_incomplete"), ct), CancellationToken);
                 return new UpdateResult(false);
             }
+
+            // Build WebP display variants without modifying the NAS.
+            await _artworkCache.WarmAsync(Context, storage, directory, root.Id, CancellationToken);
 
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {

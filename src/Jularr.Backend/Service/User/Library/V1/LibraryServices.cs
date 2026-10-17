@@ -29,18 +29,26 @@ namespace Jularr.Backend.Service.User.Library.V1
                     work."MediaTypeId",
                     visible."Title" AS "Title",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl",
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM "WorkArtworks" AS art
+                            JOIN "ArtworkRenditions" AS variant ON variant."WorkArtworkId" = art."Id" AND variant."FormatId" = 3
+                            WHERE art."WorkId" = work."Id" AND art."WorkUnitId" IS NULL AND art."SlotId" = 1
+                        ) OR EXISTS (
+                            SELECT 1
+                            FROM "ArtworkFallbacks" AS fallback
+                            WHERE fallback."WorkId" = work."Id" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 1
+                        )
+                        THEN '/api/v1/works/' || work."Id"::text || '/artwork/1'
+                        ELSE (
+                            SELECT fact."Value"
+                            FROM "WorkMetadataFacts" AS fact
+                            WHERE fact."WorkId" = work."Id" AND fact."FactKey" = 'Poster'
+                            ORDER BY fact."IsManual" DESC
+                            LIMIT 1
+                        )
+                    END AS "PosterUrl",
                     state."MediaStateTypeId",
                     EXISTS (
                         SELECT
@@ -120,18 +128,26 @@ namespace Jularr.Backend.Service.User.Library.V1
                     asset."Id" AS "MediaAssetId",
                     work."MediaTypeId",
                     visible."Title" AS "Title",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl",
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM "WorkArtworks" AS art
+                            JOIN "ArtworkRenditions" AS variant ON variant."WorkArtworkId" = art."Id" AND variant."FormatId" = 3
+                            WHERE art."WorkId" = work."Id" AND art."WorkUnitId" IS NULL AND art."SlotId" = 1
+                        ) OR EXISTS (
+                            SELECT 1
+                            FROM "ArtworkFallbacks" AS fallback
+                            WHERE fallback."WorkId" = work."Id" AND fallback."WorkUnitId" IS NULL AND fallback."SlotId" = 1
+                        )
+                        THEN '/api/v1/works/' || work."Id"::text || '/artwork/1'
+                        ELSE (
+                            SELECT fact."Value"
+                            FROM "WorkMetadataFacts" AS fact
+                            WHERE fact."WorkId" = work."Id" AND fact."FactKey" = 'Poster'
+                            ORDER BY fact."IsManual" DESC
+                            LIMIT 1
+                        )
+                    END AS "PosterUrl",
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     parent."Number" AS "ParentUnitNumber",

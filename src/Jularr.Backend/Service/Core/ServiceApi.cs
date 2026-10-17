@@ -109,6 +109,7 @@ namespace Jularr.Backend.Service.Core
                 throw new InvalidOperationException("DataPath and DataProtection:KeyDirectory must be absolute persistent paths.");
             }
 
+            services.AddSingleton(new ArtworkCache(data));
             var protection = services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
             if (OperatingSystem.IsWindows())
             {

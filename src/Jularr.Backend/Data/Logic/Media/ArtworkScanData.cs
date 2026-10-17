@@ -3,7 +3,7 @@ using Jularr.Backend.Data.Fields.Library;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
-    internal sealed record ArtworkScanCandidate(string RelativePath, string Folder, short SlotId, int? SeasonNumber);
+    internal sealed record ArtworkScanCandidate(string RelativePath, string Folder, short SlotId, int? SeasonNumber, long? SizeBytes = null, DateTime? ModifiedAt = null);
 
     internal sealed class ArtworkScanBatchData : BaseData
     {

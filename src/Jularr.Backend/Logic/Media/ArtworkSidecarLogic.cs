@@ -17,10 +17,12 @@ namespace Jularr.Backend.Logic.Media
                         input."RelativePath",
                         input."Folder",
                         input."SlotId",
-                        input."SeasonNumber"
+                        input."SeasonNumber",
+                        input."SizeBytes",
+                        input."ModifiedAt"
                     FROM
                         jsonb_to_recordset(@Candidates::jsonb) AS input(
-                            "RelativePath" text, "Folder" text, "SlotId" smallint, "SeasonNumber" integer
+                            "RelativePath" text, "Folder" text, "SlotId" smallint, "SeasonNumber" integer, "SizeBytes" bigint, "ModifiedAt" timestamptz
                         )
                     WHERE
                         length(input."RelativePath") BETWEEN 1 AND 2048
@@ -32,6 +34,8 @@ namespace Jularr.Backend.Logic.Media
                         image."RelativePath",
                         image."SlotId",
                         image."SeasonNumber",
+                        image."SizeBytes",
+                        image."ModifiedAt",
                         matched."WorkId"
                     FROM
                         candidates AS image
@@ -55,7 +59,9 @@ namespace Jularr.Backend.Logic.Media
                         image."WorkId",
                         unit."Id" AS "WorkUnitId",
                         image."RelativePath",
-                        image."SlotId"
+                        image."SlotId",
+                        image."SizeBytes",
+                        image."ModifiedAt"
                     FROM
                         identified AS image
                         LEFT JOIN "WorkUnits" AS unit
@@ -67,16 +73,26 @@ namespace Jularr.Backend.Logic.Media
                         image."SeasonNumber" IS NULL OR unit."Id" IS NOT NULL
                 )
                 INSERT INTO
-                    "WorkArtworks" ("WorkId", "WorkUnitId", "SlotId", "SourceKindId", "SourceKey", "LibraryRootId", "LastSeenAt")
+                    "WorkArtworks" ("WorkId", "WorkUnitId", "SlotId", "SourceKindId", "SourceKey", "LibraryRootId", "LastSeenAt", "SourceSizeBytes", "SourceModifiedAt")
                 SELECT
-                    image."WorkId", image."WorkUnitId", image."SlotId", 2, image."RelativePath", @LibraryRootId, @SeenAt
+                    image."WorkId", image."WorkUnitId", image."SlotId", 2, image."RelativePath", @LibraryRootId, @SeenAt, image."SizeBytes", image."ModifiedAt"
                 FROM
                     resolved AS image
                 ON CONFLICT ("WorkId", "WorkUnitId", "SlotId", "Locale", "SourceKindId", "SourceKey", "LibraryRootId")
                 DO UPDATE SET
-                    "LastSeenAt" = EXCLUDED."LastSeenAt"
+                    "LastSeenAt" = EXCLUDED."LastSeenAt",
+                    "SourceSizeBytes" = EXCLUDED."SourceSizeBytes",
+                    "SourceModifiedAt" = EXCLUDED."SourceModifiedAt",
+                    "UpdatedAt" = CASE
+                        WHEN "WorkArtworks"."SourceSizeBytes" IS DISTINCT FROM EXCLUDED."SourceSizeBytes"
+                            OR "WorkArtworks"."SourceModifiedAt" IS DISTINCT FROM EXCLUDED."SourceModifiedAt"
+                        THEN now()
+                        ELSE "WorkArtworks"."UpdatedAt"
+                    END
                 WHERE
-                    "WorkArtworks"."LastSeenAt" IS DISTINCT FROM EXCLUDED."LastSeenAt";
+                    "WorkArtworks"."LastSeenAt" IS DISTINCT FROM EXCLUDED."LastSeenAt"
+                    OR "WorkArtworks"."SourceSizeBytes" IS DISTINCT FROM EXCLUDED."SourceSizeBytes"
+                    OR "WorkArtworks"."SourceModifiedAt" IS DISTINCT FROM EXCLUDED."SourceModifiedAt";
                 """;
             sql.Parameters.Add(batch);
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
