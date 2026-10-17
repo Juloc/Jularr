@@ -82,6 +82,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Usenet_ConcurrentArticleExtentCannotExceedConfiguredJobBudget()
+        {
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            var bytes = Enumerable.Range(0, 6_000).Select(index => (byte)index).ToArray();
+            news.Publish("quota.mkv", bytes, 3);
+            var files = NzbReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(news.Nzb("quota.mkv"))));
+            var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 1);
+            var downloader = new UsenetDownloader();
+
+            await Assert.ThrowsExceptionAsync<UsenetStorageBudgetException>(async () =>
+                await downloader.DownloadAsync(server, files, staging.Path, new HashSet<string>(), DateTimeOffset.UtcNow.AddSeconds(15), 2_500, CancellationToken.None));
+            Assert.IsTrue(new FileInfo(Path.Combine(staging.Path, "quota.mkv")).Length <= 2_500,
+                "Even valid, overlapping yEnc writes must never grow the article file beyond the quota.");
+        }
+
+        [TestMethod]
         public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
         {
             using var storage = new TemporaryDirectory();

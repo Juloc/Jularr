@@ -1047,6 +1047,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.acquisition_grab_failed", "Download client refused"),
             new("acquisition.outcome.acquisition_limit_reached", "Indexer grab limit reached"),
             new("acquisition.outcome.acquisition_download_path_unconfigured", "Download workspace is not configured or is unavailable"),
+            new("acquisition.outcome.usenet_disk_budget", "Download exceeds the configured size limit"),
             new("acquisition.outcome.import_path_unmapped", "Download folder is not mapped to storage"),
             new("acquisition.outcome.import_no_library", "No library path for this media type"),
             new("acquisition.outcome.import_source_unavailable", "Download folder is unreachable"),

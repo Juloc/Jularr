@@ -3848,6 +3848,10 @@
    "Download workspace is not configured or is unavailable",
    "Pasta temporária de downloads não configurada ou indisponível"
   ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "O download excede o limite de tamanho configurado"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "A pasta de download não está mapeada para o armazenamento"

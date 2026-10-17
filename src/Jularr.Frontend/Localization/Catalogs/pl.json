@@ -3848,6 +3848,10 @@
    "Download workspace is not configured or is unavailable",
    "Folder tymczasowy pobierania nie jest skonfigurowany lub jest niedostępny"
   ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "Pobieranie przekracza ustawiony limit rozmiaru"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "Folder pobierania nie jest zmapowany na magazyn"

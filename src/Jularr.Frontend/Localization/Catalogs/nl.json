@@ -3848,6 +3848,10 @@
    "Download workspace is not configured or is unavailable",
    "Downloadwerkmap is niet ingesteld of niet beschikbaar"
   ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "Download overschrijdt de ingestelde groottelimiet"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "Downloadmap is niet gekoppeld aan opslag"

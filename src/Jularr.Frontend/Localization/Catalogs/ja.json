@@ -3848,6 +3848,10 @@
    "Download workspace is not configured or is unavailable",
    "ダウンロードの一時保存先が未設定か利用できません"
   ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "ダウンロードが設定されたサイズ制限を超えています"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "ダウンロードフォルダーがストレージにマッピングされていません"

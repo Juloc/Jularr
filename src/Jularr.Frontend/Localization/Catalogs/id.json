@@ -3848,6 +3848,10 @@
    "Download workspace is not configured or is unavailable",
    "Folder sementara unduhan belum dikonfigurasi atau tidak tersedia"
   ],
+  "acquisition.outcome.usenet_disk_budget": [
+   "Download exceeds the configured size limit",
+   "Unduhan melebihi batas ukuran yang dikonfigurasi"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "Folder unduhan belum dipetakan ke penyimpanan"

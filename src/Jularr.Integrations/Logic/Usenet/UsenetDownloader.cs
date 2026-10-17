@@ -4,7 +4,9 @@ using Jularr.Integrations.Data.Usenet;
 
 namespace Jularr.Integrations.Logic.Usenet
 {
-    internal sealed class UsenetStorageBudgetException : Exception;
+    internal sealed class UsenetStorageBudgetException : Exception
+    {
+    }
 
     // Downloads the open articles of a job with several sessions until a deadline; decoded parts are written where they belong.
     internal sealed class UsenetDownloader
