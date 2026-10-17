@@ -5,7 +5,7 @@ namespace Jularr.Frontend.Framework
     // Minimal server-side HTML DSL, not a browser DOM or client-side framework.
     public class HtmlElement : IUiComponent
     {
-        private static readonly HashSet<string> VoidTags = ["input", "img", "br", "hr"];
+        private static readonly HashSet<string> VoidTags = ["input", "img", "source", "br", "hr"];
         private readonly string _tag;
         private readonly IUiComponent[] _children;
         private readonly List<(string Name, string Value)> _attributes = [];
@@ -131,6 +131,8 @@ namespace Jularr.Frontend.Framework
     public sealed class Input() : HtmlElement("input");
     public sealed class TextArea() : HtmlElement("textarea");
     public sealed class Img() : HtmlElement("img");
+    public sealed class Picture(params IUiComponent[] children) : HtmlElement("picture", children);
+    public sealed class Source() : HtmlElement("source");
     public sealed class TableElement(params IUiComponent[] children) : HtmlElement("table", children);
     public sealed class Thead(params IUiComponent[] children) : HtmlElement("thead", children);
     public sealed class Tbody(params IUiComponent[] children) : HtmlElement("tbody", children);

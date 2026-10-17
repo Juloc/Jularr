@@ -49,6 +49,17 @@ namespace Jularr.Backend.Service.User.Library.V1
                             LIMIT 1
                         )
                     END AS "PosterUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM "ArtworkSettings" AS settings
+                        JOIN "WorkArtworks" AS art ON art."WorkId" = work."Id"
+                        JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = art."Id" AND native."FormatId" = 4
+                        WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                            AND art."WorkUnitId" IS NULL AND art."SlotId" = 1
+                            AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                WHERE webp."WorkArtworkId" = art."Id" AND webp."FormatId" = 3)
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1.jxl'
+                    END AS "JxlPosterUrl",
                     state."MediaStateTypeId",
                     EXISTS (
                         SELECT
@@ -148,6 +159,17 @@ namespace Jularr.Backend.Service.User.Library.V1
                             LIMIT 1
                         )
                     END AS "PosterUrl",
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM "ArtworkSettings" AS settings
+                        JOIN "WorkArtworks" AS art ON art."WorkId" = work."Id"
+                        JOIN "ArtworkRenditions" AS native ON native."WorkArtworkId" = art."Id" AND native."FormatId" = 4
+                        WHERE settings."Id" = 1 AND settings."CacheFormatId" = 2
+                            AND art."WorkUnitId" IS NULL AND art."SlotId" = 1
+                            AND EXISTS (SELECT 1 FROM "ArtworkRenditions" AS webp
+                                WHERE webp."WorkArtworkId" = art."Id" AND webp."FormatId" = 3)
+                    ) THEN '/api/v1/works/' || work."Id"::text || '/artwork/1.jxl'
+                    END AS "JxlPosterUrl",
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     parent."Number" AS "ParentUnitNumber",

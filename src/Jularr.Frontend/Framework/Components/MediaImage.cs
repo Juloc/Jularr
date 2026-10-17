@@ -9,7 +9,7 @@ namespace Jularr.Frontend.Framework
     public sealed class MediaImage(
         string url, string alt, int width, int height,
         IReadOnlyList<ImageVariant>? variants = null, string? sizes = null,
-        bool priority = false) : IUiComponent
+        bool priority = false, string? jxlUrl = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -40,7 +40,21 @@ namespace Jularr.Frontend.Framework
                 image.Attribute("sizes", sizes ?? "100vw");
             }
 
-            image.WriteTo(writer, encoder, texts);
+            // Only advertise JPEG XL when the backend confirmed an actual JXL rendition.
+            // Browser selects image/jxl when supported; the existing WebP/JPEG <img> stays
+            // the safe fallback, including while native decoding is unavailable.
+            if (jxlUrl is not null)
+            {
+                ValidateUrl(jxlUrl);
+                new Picture(
+                    new Source().Attribute("type", "image/jxl").Attribute("srcset", jxlUrl),
+                    image
+                ).WriteTo(writer, encoder, texts);
+            }
+            else
+            {
+                image.WriteTo(writer, encoder, texts);
+            }
         }
 
         private static void ValidateUrl(string url)

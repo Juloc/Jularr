@@ -6,3 +6,8 @@
     height: auto;
     object-fit: cover;
 }
+
+// <picture> must not introduce a second layout box. The img owns all dimensions.
+picture {
+    display: contents;
+}
