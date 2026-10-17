@@ -39,6 +39,7 @@ async function start(player: HTMLElement): Promise<void> {
     const signal = lifetime.signal;
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
+    let metadataListener: AbortController | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     let idle = 0;
@@ -141,6 +142,8 @@ async function start(player: HTMLElement): Promise<void> {
     // Conversions use HLS: native where available, otherwise hls.js on demand.
     async function attach(next: PlaybackPlan, position: number, shouldPlay = true): Promise<void> {
         if (signal.aborted) return;
+        metadataListener?.abort();
+        metadataListener = new AbortController();
         hls?.destroy();
         hls = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
@@ -165,7 +168,20 @@ async function start(player: HTMLElement): Promise<void> {
                     }
                 }
             });
-            instance.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
+            let networkRecoveries = 0;
+            let mediaRecoveries = 0;
+            instance.on(Hls.Events.ERROR, (_, data) => {
+                if (!data.fatal || signal.aborted || hls !== instance) return;
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && networkRecoveries++ < 2) {
+                    instance.startLoad();
+                    return;
+                }
+                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++ < 1) {
+                    instance.recoverMediaError();
+                    return;
+                }
+                show("failed");
+            });
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
@@ -183,7 +199,7 @@ async function start(player: HTMLElement): Promise<void> {
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
             if (shouldPlay) play();
-        }, { once: true, signal });
+        }, { once: true, signal: metadataListener.signal });
     }
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.
@@ -402,6 +418,7 @@ async function start(player: HTMLElement): Promise<void> {
         if (signal.aborted) return;
         report(true, false);
         lifetime.abort();
+        metadataListener?.abort();
         window.clearInterval(progressInterval);
         window.clearTimeout(idle);
         video.pause();
