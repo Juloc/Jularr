@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -122,6 +123,18 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.AcquisitionConnectionId), "invalid_transition");
             }
+        }
+
+        public static string? ResolveDownloadCategory(string? mappingJson, string? defaultCategory, AcquisitionKind kind)
+        {
+            if (mappingJson is null) return defaultCategory;
+            using var document = JsonDocument.Parse(mappingJson);
+            if (document.RootElement.TryGetProperty(kind.ToString(), out var category) && category.ValueKind == JsonValueKind.String)
+            {
+                return category.GetString() ?? defaultCategory;
+            }
+
+            return defaultCategory;
         }
 
         // An indexer serves its media types, and automatic searches only when it is not manual-only.
