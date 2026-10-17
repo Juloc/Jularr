@@ -7,8 +7,14 @@ namespace Jularr.Backend.Data.Logic.Instance
     {
         public InstanceSettingsUpdateData(string name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks, bool? usersConfirmSources, int? libraryScanIntervalHours,
             int? historyRetentionDays, int? historyMegabytes, int? collectionLimit, int? unitGroupLimit, string[]? subtitleLanguages, string? publicUrl,
-            string[]? trustedProxies)
+            string[]? trustedProxies,
+            int? metadataTrendingHours = null, int? metadataRatingsHours = null, int? metadataFreshDays = null, int? discoveryCacheEntries = null, int? discoveryCacheMegabytes = null)
         {
+            MetadataTrendingHours = metadataTrendingHours;
+            MetadataRatingsHours = metadataRatingsHours;
+            MetadataFreshDays = metadataFreshDays;
+            DiscoveryCacheEntries = discoveryCacheEntries;
+            DiscoveryCacheMegabytes = discoveryCacheMegabytes;
             TrustedProxies = trustedProxies;
             PublicUrl = publicUrl;
             SubtitleLanguages = subtitleLanguages;
@@ -24,6 +30,21 @@ namespace Jularr.Backend.Data.Logic.Instance
             ReadingCacheMegabytes = readingCacheMegabytes;
             ReadingCacheWorks = readingCacheWorks;
         }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.MetadataTrendingHours), false)]
+        public int? MetadataTrendingHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.MetadataRatingsHours), false)]
+        public int? MetadataRatingsHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.MetadataFreshDays), false)]
+        public int? MetadataFreshDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.DiscoveryCacheEntries), false)]
+        public int? DiscoveryCacheEntries { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.DiscoveryCacheMegabytes), false)]
+        public int? DiscoveryCacheMegabytes { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheMegabytes), false)]
         public int? ReadingCacheMegabytes { get; }

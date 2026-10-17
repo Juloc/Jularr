@@ -11,6 +11,11 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly IntField ReadingCacheMegabytes = new() { Minimum = 0, Maximum = 1_048_576 };
         public static readonly IntField ReadingCacheWorks = new() { Minimum = 0, Maximum = 10_000 };
+        public static readonly IntField MetadataTrendingHours = new() { Minimum = 1, Maximum = 8760 };
+        public static readonly IntField MetadataRatingsHours = new() { Minimum = 1, Maximum = 8760 };
+        public static readonly IntField MetadataFreshDays = new() { Minimum = 30, Maximum = 365 };
+        public static readonly IntField DiscoveryCacheEntries = new() { Minimum = 20, Maximum = 200000 };
+        public static readonly IntField DiscoveryCacheMegabytes = new() { Minimum = 1, Maximum = 4096 };
         public static readonly BoolField UsersConfirmSources = new();
         public static readonly IntField LibraryScanIntervalHours = new() { Minimum = 0, Maximum = 720 };
         public static readonly IntField HistoryRetentionDays = new() { Minimum = 1, Maximum = 3650 };

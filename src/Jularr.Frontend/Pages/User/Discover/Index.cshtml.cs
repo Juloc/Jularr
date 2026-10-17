@@ -118,7 +118,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Local content arrives first.
+            // Hero and all first rows are part of the same initial response.
             var featured = new Page();
             DefineFeatured(featured);
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
@@ -138,20 +138,15 @@ namespace Jularr.Frontend.Pages.User.Discover
                     HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(assets, item.Title,
                         "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]),
-                    _ => Recommendations(selected?.Slug)
+                    _ => Recommendations()
                 });
             }
         }
 
-        private IUiComponent Recommendations(string? slug)
+        private IUiComponent Recommendations()
         {
             var recommendations = new Page();
             DefineRecommendations(recommendations);
-            if (_shelves.Count == 0 && _catalogShelves.Count == 0 && !_providerUnavailable)
-            {
-                recommendations.Content.Add(new A(new Text("discover.loadRecommendations")).Class("button").Attribute("data-discover-recommendations", "true")
-                    .Attribute("href", Address(slug, null, 1) + (slug is null ? "?" : "&") + "handler=Recommendations"));
-            }
 
             return new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations");
         }
@@ -174,6 +169,11 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var (actionKey, actionHref) = Action(featured);
                 page.Content.Add(new MediaHero(featured.Title, featured.BackdropUrl, featured.ReleaseYear?.ToString(CultureInfo.InvariantCulture), featured.Overview,
                     actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured)));
+            }
+            else
+            {
+                // Reserve the same geometry before provider data or artwork arrives.
+                page.Content.Add(new MediaHero("", null, null, null));
             }
         }
 
@@ -214,28 +214,6 @@ namespace Jularr.Frontend.Pages.User.Discover
             await LoadDataAsync();
             PreparePage();
             return Partial("_UiComponent", Definition.Content[0]);
-        }
-
-        public async Task<IActionResult> OnGetRecommendationsAsync()
-        {
-            if (!texts.CanReadMedia()) return Forbid();
-            await LoadRecommendationsAsync();
-
-            // Native navigation keeps full SSR.
-            if (Request.Headers["X-Jularr-Fragment"] != "recommendations")
-            {
-                await LoadDataAsync();
-                PreparePage();
-                return Page();
-            }
-
-            var featured = new Page();
-            var recommendations = new Page();
-            DefineFeatured(featured);
-            DefineRecommendations(recommendations);
-            return Partial("_UiComponent", new Div(
-                new Div([.. featured.Content]).Attribute("id", "discover-featured"),
-                new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations")));
         }
 
         protected override async Task LoadDataAsync()
@@ -284,7 +262,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Local shelves never wait for the provider.
+            // The initial response includes the needed provider rows. Only a genuinely cold snapshot waits for the provider.
             if (texts.CanArrangeHome())
             {
                 _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
@@ -301,6 +279,11 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected?.MediaTypeId, pageSize: 20), HttpContext.RequestAborted)).Items;
             }
+
+            if (shown.Contains(HomeShelfType.Recommendations))
+            {
+                await LoadRecommendationsAsync();
+            }
         }
 
         private async Task LoadListedAsync() =>
@@ -308,30 +291,49 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private async Task LoadRecommendationsAsync()
         {
+            if (_shelves.Count > 0 || _catalogShelves.Count > 0)
+            {
+                return;
+            }
             await LoadListedAsync();
             var selected = Selected;
-            foreach (var scope in Listed.Where(type => selected is null || type.Slug == selected.Slug))
+            var jobs = Listed.Where(type => selected is null || type.Slug == selected.Slug)
+                .SelectMany(scope => scope.Feeds.Select(feed => (Scope: scope, Feed: feed))).ToArray();
+            // Keep provider concurrency bounded by the shared cache while preserving the configured row order.
+            var loaded = await Task.WhenAll(jobs.Select(async job =>
             {
-                foreach (var feed in scope.Feeds)
+                IReadOnlyList<DiscoverItemV1>? items = null;
+                IReadOnlyList<DiscoverCatalogItemV1>? catalog = null;
+                var unavailable = false;
+                try
                 {
-                    try
+                    if (job.Scope.IsCatalog)
                     {
-                        if (scope.IsCatalog)
-                        {
-                            _catalogShelves.Add((scope, feed, await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, feed, scope.MediaSubtypeId),
-                                HttpContext.RequestAborted)));
-                        }
-                        else
-                        {
-                            _shelves.Add((scope.MediaTypeId, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, feed), HttpContext.RequestAborted)));
-                        }
+                        catalog = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(job.Scope.MediaTypeId, job.Feed, job.Scope.MediaSubtypeId),
+                            HttpContext.RequestAborted);
                     }
-                    catch (ServiceUnavailableException)
+                    else
                     {
-                        _providerUnavailable = true;
-                        // Other shelves remain useful.
+                        items = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(job.Scope.MediaTypeId, job.Feed), HttpContext.RequestAborted);
                     }
                 }
+                catch (Exception exception) when (exception is ServiceUnavailableException or KeyNotFoundException)
+                {
+                    unavailable = true;
+                }
+                return (job.Scope, job.Feed, Items: items, Catalog: catalog, Unavailable: unavailable);
+            }));
+            foreach (var row in loaded)
+            {
+                if (row.Items is { } items)
+                {
+                    _shelves.Add((row.Scope.MediaTypeId, row.Feed, items));
+                }
+                if (row.Catalog is { } catalog)
+                {
+                    _catalogShelves.Add((row.Scope, row.Feed, catalog));
+                }
+                _providerUnavailable |= row.Unavailable;
             }
         }
 

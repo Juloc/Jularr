@@ -107,7 +107,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             else
             {
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                await _metadata.ImportAsync(Context, connection, work.MediaTypeId, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                await _metadata.ImportAsync(Context, connection, work.MediaTypeId, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken, forceRefresh: true);
             }
             return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct), CancellationToken);
         }

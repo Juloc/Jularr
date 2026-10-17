@@ -6815,6 +6815,26 @@
   "arr.applyCondition": [
    "Apply condition type",
    "Bedingungsart anwenden"
+  ],
+  "admin.instance.metadataTrendingHours": [
+   "Trending freshness (hours)",
+   "Trending-Aktualität (Stunden)"
+  ],
+  "admin.instance.metadataRatingsHours": [
+   "Ratings and search freshness (hours)",
+   "Bewertungs- und Suchaktualität (Stunden)"
+  ],
+  "admin.instance.metadataFreshDays": [
+   "Basic metadata freshness (days)",
+   "Aktualität der Grundmetadaten (Tage)"
+  ],
+  "admin.instance.discoveryCacheEntries": [
+   "Discovery cache: maximum entries",
+   "Discovery-Cache: maximale Einträge"
+  ],
+  "admin.instance.discoveryCacheMegabytes": [
+   "Discovery cache budget (MiB)",
+   "Discovery-Cache-Budget (MiB)"
   ]
  }
 }

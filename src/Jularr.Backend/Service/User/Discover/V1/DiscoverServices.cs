@@ -53,7 +53,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             }
 
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-            var results = await _metadata.ReadFeedAsync(connection, Data.MediaTypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
+            var results = await _metadata.ReadFeedAsync(Context, connection, Data.MediaTypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
             var overlay = await DiscoverQueries.ReadOverlayAsync(Context, Data.MediaTypeId, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
             return new BaseDataList<DiscoverItemV1>(results.Select(result => DiscoverQueries.ToItem(Data.MediaTypeId, result, overlay)).ToArray());
         }
@@ -170,7 +170,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         continue;
                     }
 
-                    var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
+                    var results = await _metadata.SearchAsync(Context, connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
                     var overlay = await DiscoverQueries.ReadOverlayAsync(Context, mediaType, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
                     var localIds = items.Where(item => item.MediaTypeId == mediaType && item.TmdbId is not null).Select(item => item.TmdbId!.Value).ToHashSet();
                     items.AddRange(results.Where(result => !localIds.Contains(result.Id)).Select(result => DiscoverQueries.ToItem(mediaType, result, overlay)));
@@ -204,7 +204,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             // A provider title before it becomes a Work, of a type the profile may use.
             await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-            var work = await _metadata.ReadWorkAsync(connection, Parameters.MediaTypeId, Parameters.TmdbId, CancellationToken);
+            var work = await _metadata.ReadWorkAsync(Context, connection, Parameters.MediaTypeId, Parameters.TmdbId, CancellationToken);
             var overlay = await DiscoverQueries.ReadOverlayAsync(Context, Parameters.MediaTypeId, [work.Id], Auth.ProfileId!.Value, CancellationToken);
             var result = new TmdbSearchResult(work.Id, work.Title, work.OriginalTitle, work.Year, work.Overview, work.PosterPath, work.BackdropPath);
             return DiscoverQueries.ToItem(Parameters.MediaTypeId, result, overlay);
@@ -288,7 +288,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             IReadOnlyList<TmdbSearchResult> results;
             try
             {
-                results = await _metadata.ReadRecommendationsAsync(connection, mediaType, tmdbId, CancellationToken);
+                results = await _metadata.ReadRecommendationsAsync(Context, connection, mediaType, tmdbId, CancellationToken);
             }
             catch (KeyNotFoundException)
             {

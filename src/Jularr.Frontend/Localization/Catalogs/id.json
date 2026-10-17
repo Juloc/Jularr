@@ -6815,6 +6815,26 @@
   "arr.applyCondition": [
    "Apply condition type",
    "Terapkan jenis kondisi"
+  ],
+  "admin.instance.metadataTrendingHours": [
+   "Trending freshness (hours)",
+   "Kesegaran tren (jam)"
+  ],
+  "admin.instance.metadataRatingsHours": [
+   "Ratings and search freshness (hours)",
+   "Kesegaran penilaian dan pencarian (jam)"
+  ],
+  "admin.instance.metadataFreshDays": [
+   "Basic metadata freshness (days)",
+   "Kesegaran metadata dasar (hari)"
+  ],
+  "admin.instance.discoveryCacheEntries": [
+   "Discovery cache: maximum entries",
+   "Cache penemuan: entri maksimum"
+  ],
+  "admin.instance.discoveryCacheMegabytes": [
+   "Discovery cache budget (MiB)",
+   "Batas cache penemuan (MiB)"
   ]
  }
 }

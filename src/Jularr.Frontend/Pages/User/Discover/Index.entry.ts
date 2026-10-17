@@ -14,39 +14,11 @@ if (searchForm && searchInput && results) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let loading = false;
     let observer: IntersectionObserver | undefined;
-    let recommendationRequest: AbortController | undefined;
-
-    // Provider shelves never block local HTML.
-    async function recommendations(): Promise<void> {
-        const link = results!.querySelector<HTMLAnchorElement>('[data-discover-recommendations]');
-        if (!link) return;
-        recommendationRequest?.abort();
-        recommendationRequest = new AbortController();
-        const signal = recommendationRequest.signal;
-        const current = generation;
-        try {
-            const response = await fetch(link.href, { signal, headers: { Accept: 'text/html', 'X-Jularr-Fragment': 'recommendations' } });
-            if (!response.ok || response.redirected) throw new Error('Unavailable recommendations');
-            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-            const featured = page.querySelector('#discover-featured');
-            const shelves = page.querySelector('#discover-recommendations');
-            if (!featured || !shelves) throw new Error('Missing recommendations');
-            if (current !== generation || signal.aborted) return;
-            results!.querySelector('#discover-featured')?.replaceWith(featured);
-            results!.querySelector('#discover-recommendations')?.replaceWith(shelves);
-            initializeShelves(results!);
-        } catch {
-            if (signal.aborted || current !== generation) return;
-            const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
-            if (feedback) feedback.textContent = results!.dataset.loadError ?? '';
-        }
-    }
-
+    let pagingEnabled = false;
     // Only HTML from this route.
     async function load(address: URL, append: boolean): Promise<void> {
         if (append && loading) return;
         request?.abort();
-        recommendationRequest?.abort();
         request = new AbortController();
         const current = ++generation;
         const signal = request.signal;
@@ -70,7 +42,7 @@ if (searchForm && searchInput && results) {
             if (append) {
                 const grid = results!.querySelector('.media-grid');
                 if (!grid) return;
-                const known = new Set(Array.from(grid.querySelectorAll<HTMLAnchorElement>('.media-card__link'), link => link.getAttribute('href')));
+                const known = new Set(Array.from(grid.querySelectorAll<HTMLAnchorElement>('.media-card__art'), link => link.getAttribute('href')));
                 for (const card of Array.from(incoming.querySelectorAll('.media-grid .media-card'))) {
                     const identity = card.querySelector('a')?.getAttribute('href');
                     if (!identity || known.has(identity)) continue;
@@ -93,7 +65,6 @@ if (searchForm && searchInput && results) {
 
             // Repeated pages require deliberate navigation.
             if (!append || appended > 0) observeNext();
-            if (!append) void recommendations();
         } catch (error) {
             if (signal.aborted || current !== generation) return;
             const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
@@ -107,9 +78,10 @@ if (searchForm && searchInput && results) {
         }
     }
 
-    // Fill tall viewports progressively.
+    // Scrolling may load the next page, without unsolicited page growth after the first paint.
     function observeNext(): void {
         observer?.disconnect();
+        if (!pagingEnabled) return;
         const next = results!.querySelector<HTMLAnchorElement>('[data-discover-next]');
         if (!next || !('IntersectionObserver' in window)) return;
         observer = new IntersectionObserver(entries => {
@@ -117,6 +89,13 @@ if (searchForm && searchInput && results) {
         }, { rootMargin: '600px' });
         observer.observe(next);
     }
+
+    window.addEventListener('scroll', () => {
+        if (!pagingEnabled && window.scrollY > 0) {
+            pagingEnabled = true;
+            observeNext();
+        }
+    }, { passive: true });
 
     function searchAddress(): URL {
         const address = new URL(searchForm!.action);
@@ -129,8 +108,6 @@ if (searchForm && searchInput && results) {
     // Cancel at the next keystroke.
     searchInput.addEventListener('input', () => {
         request?.abort();
-        recommendationRequest?.abort();
-        recommendationRequest?.abort();
         ++generation;
         loading = false;
         observer?.disconnect();
@@ -148,9 +125,9 @@ if (searchForm && searchInput && results) {
         const next = (event.target as Element | null)?.closest<HTMLAnchorElement>('[data-discover-next]');
         if (!next || !(event instanceof MouseEvent) || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
+        pagingEnabled = true;
         void load(new URL(next.href), true);
     });
 
     observeNext();
-    void recommendations();
 }

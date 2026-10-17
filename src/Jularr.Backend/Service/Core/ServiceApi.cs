@@ -164,6 +164,8 @@ namespace Jularr.Backend.Service.Core
         {
             // Recent warnings and errors for the Owner's system page.
             services.TryAddSingleton<RecentLogs>();
+            services.TryAddSingleton(providers);
+            services.TryAddSingleton<DiscoverySnapshots>();
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());

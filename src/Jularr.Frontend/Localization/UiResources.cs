@@ -8,6 +8,11 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("admin.instance.metadataTrendingHours", "Trending freshness (hours)"),
+            new("admin.instance.metadataRatingsHours", "Ratings and search freshness (hours)"),
+            new("admin.instance.metadataFreshDays", "Basic metadata freshness (days)"),
+            new("admin.instance.discoveryCacheEntries", "Discovery cache: maximum entries"),
+            new("admin.instance.discoveryCacheMegabytes", "Discovery cache budget (MiB)"),
             new("acquisition.reason.FormatEvaluationFailed", "Custom format could not be evaluated"),
             new("common.remove", "Remove"),
             new("acquisition.reason.SizeBelowQualityMinimum", "Below the minimum size for this quality"),

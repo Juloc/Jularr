@@ -22,6 +22,7 @@ namespace Jularr.Backend.Tests
             var settings = (await read.Content.ReadFromJsonAsync<InstanceSettingsDetailsV1>())!;
             Assert.AreEqual("Jularr", settings.Name);
             Assert.AreEqual(1L, settings.Version);
+            Assert.AreEqual((24, 48, 30, 2000, 64), (settings.MetadataTrendingHours, settings.MetadataRatingsHours, settings.MetadataFreshDays, settings.DiscoveryCacheEntries, settings.DiscoveryCacheMegabytes));
             Assert.AreEqual(settings.UiLocaleId, await host.ScalarAsync("SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'en'"));
 
             // Field validation precedes writes.
@@ -31,13 +32,19 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, longName.StatusCode);
             using var incomplete = await host.SendAsync(HttpMethod.Put, Route, new { name = "Missing version", uiLocaleId = 1 });
             Assert.AreEqual(HttpStatusCode.BadRequest, incomplete.StatusCode);
+            using var tooShort = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Jularr", 1, 1, metadataFreshDays: 29));
+            Assert.AreEqual(HttpStatusCode.BadRequest, tooShort.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""));
 
             // Commit the shared configuration.
-            using var changed = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Home", 1, 1, libraryScanIntervalHours: 12, historyMegabytes: 25, collectionLimit: 3));
+            using var changed = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Home", 1, 1, libraryScanIntervalHours: 12, historyMegabytes: 25, collectionLimit: 3,
+                metadataTrendingHours: 12, metadataRatingsHours: 72, metadataFreshDays: 60, discoveryCacheEntries: 500, discoveryCacheMegabytes: 32));
             Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
             Assert.AreEqual((short)12, await host.ScalarAsync("SELECT \"LibraryScanIntervalHours\" FROM \"InstanceSettings\""));
             Assert.AreEqual(25, await host.ScalarAsync("SELECT \"HistoryMegabytes\" FROM \"InstanceSettings\""));
+            using var saved = await host.SendAsync(HttpMethod.Get, Route);
+            var policy = (await saved.Content.ReadFromJsonAsync<InstanceSettingsDetailsV1>())!;
+            Assert.AreEqual((12, 72, 60, 500, 32), (policy.MetadataTrendingHours, policy.MetadataRatingsHours, policy.MetadataFreshDays, policy.DiscoveryCacheEntries, policy.DiscoveryCacheMegabytes));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"CollectionLimit\" FROM \"InstanceSettings\""));
             Assert.AreEqual((short)100, await host.ScalarAsync("SELECT \"UnitGroupLimit\" FROM \"InstanceSettings\""));
             Assert.AreEqual((short)30, await host.ScalarAsync("SELECT \"HistoryRetentionDays\" FROM \"InstanceSettings\""));

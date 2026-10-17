@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
             catch (OpenLibraryException exception)
             {
-                throw Translate(exception);
+                throw exception.Failure == OpenLibraryFailure.NotFound ? new ServiceUnavailableException("metadata_unavailable") : Translate(exception);
             }
         }
 

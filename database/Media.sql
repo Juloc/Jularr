@@ -537,4 +537,16 @@ CREATE TABLE "WorkTags" (
     PRIMARY KEY ("WorkId", "TagId")
 );
 
+-- Public provider candidates, not durable Works or profile overlays. Expiry requests refresh; it does not delete usable data.
+CREATE TABLE "DiscoverySnapshots" (
+    "Key" varchar(64) PRIMARY KEY,
+    "Request" jsonb NOT NULL CHECK (octet_length("Request"::text) <= 4096),
+    "Payload" jsonb NOT NULL CHECK (octet_length("Payload"::text) <= 1048576),
+    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+    "RefreshAfter" timestamptz NOT NULL,
+    "RetryAfter" timestamptz NOT NULL DEFAULT now(),
+    "LastUsedAt" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX "IX_DiscoverySnapshots_Due" ON "DiscoverySnapshots" ("RetryAfter", "RefreshAfter");
+
 COMMIT;

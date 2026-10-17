@@ -42,6 +42,15 @@ and commit together. No migration, active-database installation or extra server.
   system mounts when they are necessary or better for streaming/imports; direct
   SMB/NFS remains possible. Make mount options, permissions and platform support
   explicit. Compose paths are a separate supported input.
+- Public discovery/search and basic metadata use bounded PostgreSQL snapshots before
+  profile/local overlays. Defaults: trending 24 hours, ratings/search 48 hours, basic
+  metadata 30 days minimum; the Owner can edit freshness and the count/byte budget in
+  Instance settings. Freshness never deletes data: stale snapshots remain readable
+  during provider failure and refresh in bounded worker batches with retry backoff.
+  Initial Discover rows and the fixed Hero arrive together in SSR; scrolling still
+  loads later result pages. A new query/page/locale, an empty installation or an
+  entry evicted by the configured budget can require a cold fetch. Library Works
+  and their facts are durable independently. Age-specific refresh remains deferred.
 - NAS failure must not block account/admin/catalog browsing. Retain compressed
   display covers in PostgreSQL and interoperable artwork beside the media on NAS
   for Plex coexistence and a later return to Sonarr. NAS stores one standard cover;

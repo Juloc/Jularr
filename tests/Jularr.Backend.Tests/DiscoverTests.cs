@@ -1,4 +1,5 @@
 using System.Net;
+using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -12,6 +13,8 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Backend.Data.System.Media.V1;
+using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Data.Tmdb;
@@ -25,6 +28,59 @@ namespace Jularr.Backend.Tests
     public sealed class DiscoverTests
     {
         private const string Token = "eyJ-discover-token";
+
+        [TestMethod]
+        public async Task Snapshots_ConcurrentColdReadsAndProviderOutage_RetainPublicDataAndRefreshSeparately()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(tmdb: tmdb);
+            var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+                host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending))));
+            foreach (var response in responses)
+            {
+                using (response) Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
+            Assert.AreEqual(1, tmdb.Requests.Count(uri => uri.AbsolutePath == "/3/trending/movie/week"), "Concurrent cold readers must share one provider fetch.");
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"DiscoverySnapshots\""));
+            Assert.AreEqual(24L, await host.ScalarAsync("SELECT round(extract(epoch FROM (\"RefreshAfter\" - \"CreatedAt\")) / 3600)::bigint FROM \"DiscoverySnapshots\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""), "Public snapshots must not import a provider catalog as Works.");
+
+            await host.Fixture.RunSqlAsync("UPDATE \"DiscoverySnapshots\" SET \"RefreshAfter\" = now() - interval '1 hour', \"RetryAfter\" = now() - interval '1 hour'");
+            tmdb.Fail = true;
+            using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
+            Assert.AreEqual("The Matrix", (await stale.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            Assert.AreEqual(1, tmdb.Requests.Count);
+
+            using var scope = host.Services.CreateScope();
+            var refresh = scope.ServiceProvider.GetRequiredService<RefreshDiscoverySnapshotsV1>();
+            await refresh.ExecuteAsync<UpdateResult>(new RefreshDiscoverySnapshotsParametersV1(), default);
+            Assert.AreEqual(2, tmdb.Requests.Count);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"DiscoverySnapshots\" WHERE \"RetryAfter\" > now() AND \"RefreshAfter\" < now()"));
+            using var stillUseful = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, stillUseful.StatusCode);
+            Assert.AreEqual(2, tmdb.Requests.Count, "Reading stale data must not trigger another synchronous provider retry.");
+
+            tmdb.Fail = false;
+            await host.Fixture.RunSqlAsync("UPDATE \"DiscoverySnapshots\" SET \"RetryAfter\" = now() - interval '1 hour'");
+            await refresh.ExecuteAsync<UpdateResult>(new RefreshDiscoverySnapshotsParametersV1(), default);
+            Assert.AreEqual(3, tmdb.Requests.Count);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"DiscoverySnapshots\" WHERE \"RefreshAfter\" > now()"));
+
+            // Pages and instance locales are distinct public snapshots; ratings/search and basic works have separate freshness.
+            using var next = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending, page: 2));
+            Assert.AreEqual(HttpStatusCode.OK, next.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'de-DE')");
+            using var localized = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, localized.StatusCode);
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"DiscoverySnapshots\""));
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix", MediaType.Movie));
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode);
+            using var work = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603");
+            Assert.AreEqual(HttpStatusCode.OK, work.StatusCode, await work.Content.ReadAsStringAsync());
+            Assert.AreEqual(48L, await host.ScalarAsync("SELECT round(extract(epoch FROM (\"RefreshAfter\" - \"CreatedAt\")) / 3600)::bigint FROM \"DiscoverySnapshots\" WHERE \"Request\"->>'Operation' = 'tmdb.search'"));
+            Assert.AreEqual(720L, await host.ScalarAsync("SELECT round(extract(epoch FROM (\"RefreshAfter\" - \"CreatedAt\")) / 3600)::bigint FROM \"DiscoverySnapshots\" WHERE \"Request\"->>'Operation' = 'tmdb.work'"));
+        }
 
         [TestMethod]
         public async Task Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork()
@@ -50,6 +106,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
             Assert.AreEqual("A hacker learns the truth.", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Overview'"));
             Assert.AreEqual("1999-03-31", await host.ScalarAsync("SELECT \"ReleasedOn\"::text FROM \"Works\""));
+            using var updatedFeed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual(MediaStateType.Requested, (await updatedFeed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().MediaStateTypeId,
+                "A cached public list must receive the current local state.");
 
             using var item = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603");
             var details = (await item.Content.ReadFromJsonAsync<DiscoverItemV1>())!;
@@ -155,7 +214,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New }, anime.Feeds);
 
             // The anime tab ranks AniList seasons.
-            using var tab = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
+            using var tab = await host.SendAsync(HttpMethod.Get, "/?type=anime");
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "The Matrix Show Season 2");
@@ -190,11 +249,11 @@ namespace Jularr.Backend.Tests
             using var home = await host.SendAsync(HttpMethod.Get, "/");
             var html = await home.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode, html);
-            StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
-            Assert.IsFalse(html.Contains("The Matrix", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("data-discover-recommendations", StringComparison.Ordinal));
+            StringAssert.Contains(html, "The Matrix");
 
             // Native recommendation route stays usable.
-            using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
+            using var recommendations = await host.SendAsync(HttpMethod.Get, "/");
             html = await recommendations.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
@@ -361,9 +420,9 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(list, "Use this match");
         }
 
-        private static async Task<Host> CreateHostAsync(bool razor = false)
+        private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? tmdb = null)
         {
-            var tmdb = new FakeTmdb();
+            tmdb ??= new FakeTmdb();
             var aniList = new FakeAniList();
             var host = await Host.CreateAsync(razor: razor, library: true, services: services =>
             {
@@ -396,14 +455,16 @@ namespace Jularr.Backend.Tests
 
         private sealed class FakeTmdb : HttpMessageHandler
         {
-            public List<Uri> Requests { get; } = [];
+            public ConcurrentQueue<Uri> Requests { get; } = new();
+            public bool Fail { get; set; }
             private const string MovieDetails = """ "genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}],"runtime":136,"production_companies":[{"name":"Village Roadshow"}],"videos":{"results":[{"site":"YouTube","type":"Teaser","key":"aaaaaaaaaaa"},{"site":"YouTube","type":"Trailer","key":"vKQi3bBA1y8","official":true}]},"credits":{"cast":[{"id":6384,"name":"Keanu Reeves","character":"Neo","profile_path":"/neo.jpg"}],"crew":[{"id":9339,"name":"Lana Wachowski","job":"Director"},{"id":1,"name":"Someone","job":"Gaffer"}]} """;
             private const string Movie = """{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}""";
             private const string Show = """{"id":1399,"name":"The Matrix Show","original_name":"The Matrix Show","first_air_date":"2020-01-01","overview":"A show.","poster_path":"/show.jpg"}""";
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                Requests.Add(request.RequestUri!);
+                Requests.Enqueue(request.RequestUri!);
+                if (Fail) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
                 if (request.Headers.Authorization?.Parameter != Token) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
                 if (QueryHelpers.ParseQuery(request.RequestUri!.Query).GetValueOrDefault("query") == "PagedOnly")
                 {

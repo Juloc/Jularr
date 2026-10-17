@@ -13,7 +13,6 @@ using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Caching.Memory;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
@@ -22,14 +21,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     internal sealed class WorkMetadata
     {
         private readonly TmdbClient _tmdb;
-        private static readonly TimeSpan FeedLifetime = TimeSpan.FromMinutes(3);
         private readonly IDataProtector _protector;
-        private readonly IMemoryCache _cache;
+        private readonly DiscoverySnapshots _snapshots;
+        private readonly ProviderOptions _providers;
 
-        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache)
+        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, DiscoverySnapshots snapshots, ProviderOptions providers)
         {
             _tmdb = tmdb;
-            _cache = cache;
+            _snapshots = snapshots;
+            _providers = providers;
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
@@ -78,11 +78,38 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(TmdbConnection connection, MediaType mediaType, string query, int? year, CancellationToken ct, int page = 1)
+        public Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, string query, int? year, CancellationToken ct, int page = 1) =>
+            ReadSnapshotAsync<IReadOnlyList<TmdbSearchResult>>(context, new DiscoverySnapshotRequest { Operation = "tmdb.search", Origin = _providers.Tmdb.AbsoluteUri,
+                MediaType = mediaType, Language = connection.Language, Query = query.Trim(), Year = year, Page = page }, connection, ct);
+
+        public Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, DiscoverFeedType feed, int page, CancellationToken ct) =>
+            ReadSnapshotAsync<IReadOnlyList<TmdbSearchResult>>(context, new DiscoverySnapshotRequest { Operation = "tmdb.feed", Origin = _providers.Tmdb.AbsoluteUri,
+                MediaType = mediaType, Language = connection.Language, Feed = feed, Page = page }, connection, ct);
+
+        public Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct) =>
+            ReadSnapshotAsync<IReadOnlyList<TmdbSearchResult>>(context, new DiscoverySnapshotRequest { Operation = "tmdb.recommendations", Origin = _providers.Tmdb.AbsoluteUri,
+                MediaType = mediaType, Language = connection.Language, Id = tmdbId }, connection, ct);
+
+        public Task<TmdbWork> ReadWorkAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct, bool forceRefresh = false) =>
+            ReadSnapshotAsync<TmdbWork>(context, new DiscoverySnapshotRequest { Operation = "tmdb.work", Origin = _providers.Tmdb.AbsoluteUri,
+                MediaType = mediaType, Language = connection.Language, Id = tmdbId }, connection, ct, forceRefresh);
+
+        private Task<T> ReadSnapshotAsync<T>(LogicContext context, DiscoverySnapshotRequest request, TmdbConnection connection, CancellationToken ct, bool forceRefresh = false) =>
+            _snapshots.ReadAsync(context, request, async token => (T)await FetchSnapshotAsync(request, connection, token), ct, forceRefresh);
+
+        internal async Task<object> FetchSnapshotAsync(DiscoverySnapshotRequest request, TmdbConnection connection, CancellationToken ct)
         {
             try
             {
-                return await _tmdb.SearchAsync(connection, Kind(mediaType), query, year, ct, page);
+                var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
+                return request.Operation switch
+                {
+                    "tmdb.search" => await _tmdb.SearchAsync(connection, Kind(request.MediaType), request.Query!, request.Year, ct, request.Page),
+                    "tmdb.feed" => await _tmdb.ReadFeedAsync(connection, Kind(request.MediaType), (TmdbFeed)request.Feed!.Value, region, request.Page, ct),
+                    "tmdb.recommendations" => await _tmdb.ReadRecommendationsAsync(connection, Kind(request.MediaType), request.Id!.Value, ct),
+                    "tmdb.work" => await _tmdb.ReadWorkAsync(connection, Kind(request.MediaType), request.Id!.Value, ct),
+                    _ => throw new InvalidOperationException("Unknown TMDB snapshot request.")
+                };
             }
             catch (TmdbException exception)
             {
@@ -90,62 +117,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, MediaType mediaType, DiscoverFeedType feed, int page, CancellationToken ct)
-        {
-            // Ranked lists change slowly; a short shared cache spares the provider.
-            var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
-            var key = $"metadata.feed.{mediaType}.{feed}.{page}.{connection.Language}.{DateTime.UtcNow:yyyy-MM-dd}";
-            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
-            {
-                return cached!;
-            }
-
-            try
-            {
-                var results = await _tmdb.ReadFeedAsync(connection, Kind(mediaType), (TmdbFeed)feed, region, page, ct);
-                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FeedLifetime, Size = Math.Max(1, results.Count) });
-                return results;
-            }
-            catch (TmdbException exception)
-            {
-                throw Translate(exception);
-            }
-        }
-
-        // Similar titles change slowly; a shared cache of half a day spares the provider.
-        public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
-        {
-            var key = $"metadata.recommendations.{mediaType}.{tmdbId.ToString(CultureInfo.InvariantCulture)}.{connection.Language}";
-            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
-            {
-                return cached!;
-            }
-
-            try
-            {
-                var results = await _tmdb.ReadRecommendationsAsync(connection, Kind(mediaType), tmdbId, ct);
-                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12), Size = Math.Max(1, results.Count) });
-                return results;
-            }
-            catch (TmdbException exception)
-            {
-                throw Translate(exception);
-            }
-        }
-
-        public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
-        {
-            try
-            {
-                return await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
-            }
-            catch (TmdbException exception)
-            {
-                throw Translate(exception);
-            }
-        }
-
-        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct)
+        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct, bool forceRefresh = false)
         {
             // Read everything before the short write batch.
             TmdbWork work;
@@ -153,7 +125,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var people = new List<object>();
             try
             {
-                work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
+                work = await ReadWorkAsync(context, connection, mediaType, tmdbId, ct, forceRefresh);
                 foreach (var season in work.Seasons)
                 {
                     units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = TextLimit.Cut(season.Name, 500), ReleasedOn = season.AirDate, Overview = (string?)null,

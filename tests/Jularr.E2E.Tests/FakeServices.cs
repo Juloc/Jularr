@@ -64,6 +64,9 @@ namespace Jularr.E2E.Tests
         public string Downloads { get; }
 
         public IReadOnlyCollection<string> Grabbed => _grabbed;
+        private readonly ConcurrentQueue<string> _metadataRequests = new();
+        public IReadOnlyCollection<string> MetadataRequests => _metadataRequests.ToArray();
+        public bool FailMetadata { get; set; }
 
         private volatile bool _holdDownloads;
         private volatile bool _failDownloads;
@@ -85,7 +88,7 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        public static async Task<FakeServices> StartAsync(string downloads)
+        public static async Task<FakeServices> StartAsync(string downloads, bool artwork = false)
         {
             var port = FreePort();
             var builder = WebApplication.CreateSlimBuilder();
@@ -107,7 +110,11 @@ namespace Jularr.E2E.Tests
                     throw;
                 }
             });
-            app.MapGet("/tmdb/3/{**path}", Tmdb);
+            app.MapGet("/tmdb/3/{**path}", (HttpContext http, string path) =>
+            {
+                services._metadataRequests.Enqueue(path);
+                return services.FailMetadata ? Results.StatusCode(503) : Tmdb(http, path, artwork);
+            });
             app.MapGet("/musicbrainz/ws/2/{**path}", MusicBrainzAnswer);
             app.MapGet("/openlibrary/{**path}", OpenLibraryAnswer);
             app.MapPost("/anilist/", AniListAnswer);
@@ -126,7 +133,7 @@ namespace Jularr.E2E.Tests
 
         public ValueTask DisposeAsync() => _app.DisposeAsync();
 
-        private static IResult Tmdb(HttpContext http, string path)
+        private static IResult Tmdb(HttpContext http, string path, bool artwork)
         {
             if (http.Request.Headers.Authorization.ToString() != "Bearer " + TmdbToken)
             {
@@ -134,18 +141,19 @@ namespace Jularr.E2E.Tests
             }
 
             var query = http.Request.Query["query"].ToString();
+            var movie = artwork ? Movie[..^1] + ",\"poster_path\":\"/real-poster.jpg\",\"backdrop_path\":\"/real-backdrop.jpg\"}" : Movie;
             return path switch
             {
-                "search/movie" => Json(query.Contains("Bunny", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + Movie + "]}" : "{\"results\":[]}"),
+                "search/movie" => Json(query.Contains("Bunny", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + movie + "]}" : "{\"results\":[]}"),
                 "search/tv" => Json(query.Contains("Test Series", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + Series + "]}"
                     : query.Contains("Anime", StringComparison.OrdinalIgnoreCase) ? "{\"results\":[" + AnimeSeries + "]}" : "{\"results\":[]}"),
                 "tv/99002" => Json(AnimeSeries),
                 "tv/99002/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"Beginning","air_date":"2021-01-05"},{"season_number":1,"episode_number":2,"name":"Ending","air_date":"2021-01-12"}]}"""),
-                "movie/10378" => Json(Movie),
+                "movie/10378" => Json(movie),
                 "tv/99001" => Json(Series),
                 "tv/99001/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"Pilot","air_date":"2020-04-01"},{"season_number":1,"episode_number":2,"name":"Second","air_date":"2020-04-08"}]}"""),
                 _ when path.StartsWith("trending/", StringComparison.Ordinal) || path.StartsWith("discover/", StringComparison.Ordinal) || path.EndsWith("/top_rated", StringComparison.Ordinal)
-                    || path == "movie/upcoming" => Json(path.Contains("movie", StringComparison.Ordinal) ? "{\"results\":[" + Movie + "]}" : "{\"results\":[" + Series + "]}"),
+                    || path == "movie/upcoming" => Json(path.Contains("movie", StringComparison.Ordinal) ? "{\"results\":[" + movie + "]}" : "{\"results\":[" + Series + "]}"),
                 _ => Results.NotFound()
             };
         }
@@ -163,6 +171,7 @@ namespace Jularr.E2E.Tests
         // A classic novel and a one-volume manga series.
         private static IResult OpenLibraryAnswer(HttpRequest request, string path) => path switch
         {
+            "trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813}]}"""),
             "search.json" when request.Query["q"].ToString().Contains("Manga", StringComparison.OrdinalIgnoreCase) || request.Query["title"].ToString().Contains("Manga", StringComparison.OrdinalIgnoreCase)
                 => Json("""{"docs":[{"key":"/works/OL9W","title":"Example Manga","author_name":["Mika Example"],"first_publish_year":2019}]}"""),
             "search.json" => Json("""{"docs":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813}]}"""),

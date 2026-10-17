@@ -44,6 +44,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                     form.Number(item => item.ReadingCacheMegabytes, "admin.instance.readingCacheMegabytes");
                     form.Number(item => item.ReadingCacheWorks, "admin.instance.readingCacheWorks");
+                    form.Number(item => item.MetadataTrendingHours, "admin.instance.metadataTrendingHours");
+                    form.Number(item => item.MetadataRatingsHours, "admin.instance.metadataRatingsHours");
+                    form.Number(item => item.MetadataFreshDays, "admin.instance.metadataFreshDays");
+                    form.Number(item => item.DiscoveryCacheEntries, "admin.instance.discoveryCacheEntries");
+                    form.Number(item => item.DiscoveryCacheMegabytes, "admin.instance.discoveryCacheMegabytes");
                     form.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
@@ -59,7 +64,8 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
                         settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes, settings.CollectionLimit,
-                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl, settings.TrustedProxies), _moduleId is null && _mediaInput is null ? FormError : null));
+                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl, settings.TrustedProxies,
+                        settings.MetadataTrendingHours, settings.MetadataRatingsHours, settings.MetadataFreshDays, settings.DiscoveryCacheEntries, settings.DiscoveryCacheMegabytes), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
@@ -116,12 +122,14 @@ namespace Jularr.Frontend.Pages.Admin.Instance
 
         public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks,
             bool? usersConfirmSources, int? libraryScanIntervalHours, int? historyRetentionDays, int? historyMegabytes,
-            int? collectionLimit, int? unitGroupLimit, string? subtitleLanguages, string? publicUrl)
+            int? collectionLimit, int? unitGroupLimit, string? subtitleLanguages, string? publicUrl,
+            int? metadataTrendingHours, int? metadataRatingsHours, int? metadataFreshDays, int? discoveryCacheEntries, int? discoveryCacheMegabytes)
         {
             // Save through the service.
             _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours,
                 historyRetentionDays, historyMegabytes, collectionLimit, unitGroupLimit,
-                subtitleLanguages is null ? null : [subtitleLanguages], publicUrl);
+                subtitleLanguages is null ? null : [subtitleLanguages], publicUrl, null,
+                metadataTrendingHours, metadataRatingsHours, metadataFreshDays, discoveryCacheEntries, discoveryCacheMegabytes);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
             return LocalRedirect(Home);

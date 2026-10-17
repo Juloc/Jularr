@@ -3,7 +3,7 @@
 .media-hero {
     position: relative;
     overflow: hidden;
-    min-height: 260px;
+    height: clamp(320px, 32vw, 400px);
     margin-bottom: 24px;
     border-radius: 16px;
     background: var(--surface);
@@ -20,7 +20,8 @@
         flex-direction: column;
         gap: 8px;
         max-width: 640px;
-        min-height: 260px;
+        height: 100%;
+        overflow: hidden;
         justify-content: flex-end;
         padding: 24px;
         background: linear-gradient(90deg, rgb(0 0 0 / 75%), rgb(0 0 0 / 0%));
@@ -30,16 +31,27 @@
     &__title {
         margin: 0;
         font-size: 28px;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
     }
 
     &__meta {
         margin: 0;
         opacity: 0.85;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     &__overview {
         margin: 0;
         line-height: 1.45;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
     }
 
     &__actions {
@@ -50,6 +62,8 @@
     }
 
     &--placeholder &__body { background: var(--surface-hover); color: var(--text); }
+
+    @media (max-width: 600px) { height: 360px; }
 }
 
 // Original's fallback composition.
@@ -83,7 +97,6 @@ html[data-skin="original"] .media-hero--placeholder {
     @media (max-width: 600px) {
         &::after { inset: 0 0 35% auto; width: 45%; }
         .media-hero__body {
-            min-height: 320px;
             padding-top: 120px;
             background: linear-gradient(0deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 95%, transparent) 60%, transparent);
 

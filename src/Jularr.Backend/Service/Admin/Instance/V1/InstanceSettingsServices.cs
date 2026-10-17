@@ -27,6 +27,11 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     settings."Version",
                     (settings."ReadingCacheBytes" / 1048576)::integer AS "ReadingCacheMegabytes",
                     settings."ReadingCacheWorks",
+                    settings."MetadataTrendingHours",
+                    settings."MetadataRatingsHours",
+                    settings."MetadataFreshDays",
+                    settings."DiscoveryCacheEntries",
+                    settings."DiscoveryCacheMegabytes",
                     settings."UsersConfirmSources",
                     settings."LibraryScanIntervalHours",
                     settings."HistoryRetentionDays",
@@ -66,7 +71,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
             // Use the canonical writer; the stored proxies apply once committed.
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks,
                 Data.UsersConfirmSources, Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes,
-                Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages, Data.PublicUrl, Data.TrustedProxies), CancellationToken);
+                Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages, Data.PublicUrl, Data.TrustedProxies,
+                Data.MetadataTrendingHours, Data.MetadataRatingsHours, Data.MetadataFreshDays, Data.DiscoveryCacheEntries, Data.DiscoveryCacheMegabytes), CancellationToken);
             _saved = await Context.ReadTrustedProxiesAsync(CancellationToken);
             return new UpdateResult(true);
         }

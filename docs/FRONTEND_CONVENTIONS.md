@@ -280,6 +280,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   sized `srcset/sizes` when the Backend returns variants. The critical
   first visible Hero/LCP image must use eager/high priority and should not
   be lazy-loaded. Do not lazy-load other above-the-fold critical assets.
+  A missing image URL renders no image or invented image placeholder. A valid
+  reference whose source fails gets its decodable fallback from the canonical
+  Backend image endpoint, never an `onerror` replacement in Frontend (#924).
   Images must be authorized where necessary; the **Backend image service**
   owns thumbnail conversion, cache/storage budgets, ETags and secure
   response headers. Do not proxy arbitrary providers in Frontend or
@@ -295,9 +298,16 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Avoid N+1 calls, unbounded lists, repeated field metadata reflection,
   unnecessary allocations/extra requests, speculative caching and heavy JS.
   Keep the view HTML server-rendered and the language cache bounded.
-- Local content must not wait for optional external recommendations. Load their
-  server-rendered fragments independently, retaining usable native links and
-  visible failures. Do not parallelize operations over one shared SQL transaction.
+- Owner decision 17 Oct: no unexpected layout shifts on any page. Reserve Hero,
+  image, status and feedback geometry before first paint; Hover and provider
+  completion never permit layout changes. Discover always reserves its Hero slot.
+- Discover's initial HTML includes the needed first rows from a shared, bounded,
+  persistent provider cache. Refresh stale data sparingly in the background.
+  Vertical infinite scroll and horizontal row scrolling may load the next needed
+  results while preserving existing card identities, focus and scroll anchors.
+  Do not replace scrolling with mandatory manual refresh. Local content must not
+  wait for optional live recommendations. Do not parallelize operations over one
+  shared SQL transaction.
 - Paging uses returned item count only. Empty later pages keep Previous and the
   current filter/sort scope; every bounded editable collection remains navigable.
 - Playback and Reading are independent capabilities. Continue reads and actions
@@ -315,14 +325,13 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations
   and fix the owning style instead of stacking compensating overrides.
-- All catalog/Continue cards use the same canonical `MediaCard`: portrait cover,
-  availability top-left, bookmark top-right. Hover/focus shows title, supplied
-  year/rating and matching icon/text actions in equal-width columns immediately
-  above progress: Play/Continue/Read/Request left, Details right. Touch keeps these
-  actions reachable. A missing real primary action leaves only Details; do not
-  fabricate playback or requests. Series lifecycle, genres, descriptions and
-  language capsules belong in Details, not the cover. Unknown coarse state stays
-  readable in the hover content, never becomes a fabricated completeness dot.
+- Owner decision 17 Oct (#1212): all catalog/Continue cards use the same canonical
+  `MediaCard`. Normal covers stay portrait; Continue may retain its distinct shape.
+  The title is always visible below the cover in a reserved two-line area. At most
+  one permitted contextual Play/Read/Request action plus Details is shown; no fake
+  actions. A compact Backend-supplied status capsule remains visible without Hover
+  tooltips. Bookmark remains a separate quiet corner control. Mouse, keyboard and
+  touch share the same hierarchy; no cover-blocking text panel or Hover expansion.
 - Progress is flush at the bottom, full-width and 12px high, with a translucent
   white track and rounded fill; the rounded card clips it. No time text, border,
   shadow or surrounding capsule. It must not affect other content's layout.
@@ -330,13 +339,12 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   audio; yellow means complete in other audio languages; orange means partial
   with profile audio; yellow–orange means partial in other audio languages.
   Subtitles do not change this classification. Purple downloading, blue searching/
-  queued, gray requested and no dot for missing stay distinct. Hover expands the
-  dot into a compact icon/text capsule; partial rings retain supplied unit counts.
+  queued, gray requested and no dot for missing stay distinct. A compact icon/text
+  capsule stays stable; partial rings retain supplied unit counts.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
-- Supplied trailers start muted after sustained mouse hover, widen the card without
-  increasing its height, replace its cover and stop on leave, Escape, scrolling,
-  hidden document or page navigation. Use one official embed, no eager player.
+- Cards never expand or turn into trailers on Hover. An explicitly opened preview
+  may use one official trailer embed after Play; no eager player.
   The cached component module owns delegated handlers once across app-shell visits.
   No trailer identifier means no preview request. Production list contracts still
   lack trailer IDs; workshop samples are explicitly labeled, not library records.
@@ -368,7 +376,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Development-only design workshops may show explicitly labeled sample data and
   disabled component states. They must not start library playback or pretend to
   perform business actions. An explicitly requested promotional trailer may load
-  its official provider embed after Play or sustained hover, without a playback session or progress.
+  its official provider embed after Play, without a playback session or progress.
   Reuse real components and approved references, not copies.
 - Before completing a change, check the
   [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),

@@ -13,6 +13,7 @@ function discover(landing = false) {
     const inputEvents = {};
     const formEvents = {};
     const documentEvents = {};
+    const windowEvents = {};
     const input = { value: '', addEventListener: (name, action) => { inputEvents[name] = action; } };
     const form = { action: 'https://jularr.test/', querySelector: () => input, addEventListener: (name, action) => { formEvents[name] = action; } };
     const requests = [];
@@ -59,7 +60,7 @@ function discover(landing = false) {
             return { initializeShelves() {} };
         },
         document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; } },
-        window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
+        window: { IntersectionObserver: Observer, scrollY: 1, addEventListener: (name, action) => { windowEvents[name] = action; } }, IntersectionObserver: Observer,
         AbortController, URL, Set, Error,
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
         DOMParser: class { parseFromString(key) { return { querySelector: selector => {
@@ -78,7 +79,7 @@ function discover(landing = false) {
         get active() { return active; }, get address() { return address; }, get observing() { return !!observed; },
         type(value) { input.value = value; inputEvents.input(); },
         flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(action => action()); },
-        intersect() { if (observed) observerAction([{ isIntersecting: true }]); },
+        intersect() { windowEvents.scroll(); if (observed) observerAction([{ isIntersecting: true }]); },
         async answer(index, incoming) {
             const key = String(index);
             pages.set(key, incoming);
@@ -112,6 +113,7 @@ test('live search debounces, cancels and discards obsolete responses without rep
 
 test('viewport paging appends unique cards, retains existing identities and stops on an empty page', async () => {
     const ui = discover();
+    assert.equal(ui.observing, false, 'initial rendering must not automatically grow the grid');
     const first = ui.active.cards[0];
     ui.intersect();
     ui.intersect();
@@ -150,20 +152,8 @@ test('a repeated provider page cannot create an automatic loading loop', async (
     assert.equal(ui.active.querySelector('[data-discover-next]').href, 'https://jularr.test/?q=Matrix&p=3');
 });
 
-test('recommendation fragments preserve local content and obsolete responses are discarded', async () => {
+test('landing content is delivered together without an unsolicited recommendation request', () => {
     const ui = discover(true);
-    const local = ui.active;
-    assert.equal(ui.requests.length, 1);
-    assert.equal(ui.requests[0].options.headers['X-Jularr-Fragment'], 'recommendations');
-    const providers = { featured: {}, shelves: {} };
-    await ui.answer(0, providers);
-    assert.equal(ui.active, local);
-    assert.equal(local.cards.length, 2);
-    assert.equal(local.slots.featured, providers.featured);
-
-    const obsolete = discover(true);
-    obsolete.type('Matrix');
-    assert.equal(obsolete.requests[0].options.signal.aborted, true);
-    await obsolete.answer(0, providers);
-    assert.equal(obsolete.active.slots.featured, undefined);
+    assert.equal(ui.requests.length, 0);
+    assert.equal(ui.active.cards.length, 2);
 });

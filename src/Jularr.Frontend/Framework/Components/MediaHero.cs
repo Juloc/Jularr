@@ -18,7 +18,8 @@ namespace Jularr.Frontend.Framework
                 actions.Add(new A(new Text("media.details")).Class("button").Attribute("href", detailsHref));
             }
 
-            var body = new List<IUiComponent> { new H2(new ValueText(title)).Class("media-hero__title") };
+            var body = new List<IUiComponent>();
+            if (!string.IsNullOrWhiteSpace(title)) body.Add(new H2(new ValueText(title)).Class("media-hero__title"));
             if (meta is not null) body.Add(new P(new ValueText(meta)).Class("media-hero__meta"));
             if (overview is not null) body.Add(new P(new ValueText(overview)).Class("media-hero__overview"));
             if (actions.Count > 0) body.Add(new Div([.. actions]).Class("media-hero__actions"));
@@ -26,7 +27,9 @@ namespace Jularr.Frontend.Framework
             var parts = new List<IUiComponent>();
             if (backdropUrl is not null) parts.Add(new MediaImage(backdropUrl, "", 1280, 720, priority: true));
             parts.Add(new Div([.. body]).Class("media-hero__body"));
-            new Section([.. parts]).Class(backdropUrl is null ? "media-hero media-hero--placeholder" : "media-hero").WriteTo(writer, encoder, texts);
+            var hero = new Section([.. parts]).Class(backdropUrl is null ? "media-hero media-hero--placeholder" : "media-hero");
+            if (string.IsNullOrWhiteSpace(title)) hero.Attribute("aria-hidden", "true");
+            hero.WriteTo(writer, encoder, texts);
         }
     }
 }

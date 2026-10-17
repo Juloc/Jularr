@@ -6815,6 +6815,26 @@
   "arr.applyCondition": [
    "Apply condition type",
    "条件の種類を適用"
+  ],
+  "admin.instance.metadataTrendingHours": [
+   "Trending freshness (hours)",
+   "トレンドの更新間隔（時間）"
+  ],
+  "admin.instance.metadataRatingsHours": [
+   "Ratings and search freshness (hours)",
+   "評価・検索の更新間隔（時間）"
+  ],
+  "admin.instance.metadataFreshDays": [
+   "Basic metadata freshness (days)",
+   "基本メタデータの更新間隔（日）"
+  ],
+  "admin.instance.discoveryCacheEntries": [
+   "Discovery cache: maximum entries",
+   "ディスカバリーキャッシュ：最大件数"
+  ],
+  "admin.instance.discoveryCacheMegabytes": [
+   "Discovery cache budget (MiB)",
+   "ディスカバリーキャッシュ容量（MiB）"
   ]
  }
 }

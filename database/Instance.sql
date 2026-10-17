@@ -6,6 +6,11 @@ CREATE TABLE "InstanceSettings" (
     "UiLocaleId" bigint NOT NULL REFERENCES "UiLocales" ("Id") ON DELETE RESTRICT,
     "ReadingCacheBytes" bigint NOT NULL DEFAULT 2147483648 CHECK ("ReadingCacheBytes" >= 0),
     "ReadingCacheWorks" integer NOT NULL DEFAULT 100 CHECK ("ReadingCacheWorks" BETWEEN 0 AND 10000),
+    "MetadataTrendingHours" integer NOT NULL DEFAULT 24 CHECK ("MetadataTrendingHours" BETWEEN 1 AND 8760),
+    "MetadataRatingsHours" integer NOT NULL DEFAULT 48 CHECK ("MetadataRatingsHours" BETWEEN 1 AND 8760),
+    "MetadataFreshDays" integer NOT NULL DEFAULT 30 CHECK ("MetadataFreshDays" BETWEEN 30 AND 365),
+    "DiscoveryCacheEntries" integer NOT NULL DEFAULT 2000 CHECK ("DiscoveryCacheEntries" BETWEEN 20 AND 200000),
+    "DiscoveryCacheMegabytes" integer NOT NULL DEFAULT 64 CHECK ("DiscoveryCacheMegabytes" BETWEEN 1 AND 4096),
     "UsersConfirmSources" boolean NOT NULL DEFAULT FALSE,
     "LibraryScanIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("LibraryScanIntervalHours" BETWEEN 0 AND 720),
     -- Finished activity leaves after this many days or once it takes more room than this.
