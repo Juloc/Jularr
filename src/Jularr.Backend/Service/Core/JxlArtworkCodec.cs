@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Core
                     ArtworkQuality.Lossless => "0",
                     _ => "1"
                 }),
-                ...(progressive ? new[] { "--progressive" } : Array.Empty<string>()),
+                ..(progressive ? new[] { "--progressive" } : Array.Empty<string>()),
                 "--quiet"
             ];
 
