@@ -7,9 +7,14 @@ this package. An existing unversioned database is left unchanged at startup.
 
 ## Startup contract
 
+Stop the previous Jularr process before starting the replacement image against the
+same database. Serialized concurrent starts do not permit mixed application/schema
+versions to serve requests against one database at the same time.
+
 - `DatabaseBaseline` is the single installation and upgrade owner. Before other
-  hosted workers start, a PostgreSQL transaction-scoped advisory lock serializes
-  concurrent installers and upgraders in the same database.
+  hosted workers start, a PostgreSQL session advisory lock serializes concurrent
+  installers and upgraders in the same database. Backup I/O runs outside a database
+  transaction; the migration transaction revalidates the schema afterward.
 - Fresh installation applies the embedded baselines, schema history and any
   registered ordered migrations in one transaction. A second start is idempotent.
 - `DatabaseSchemaVersions` records every applied version and its cumulative SQL
@@ -20,7 +25,8 @@ this package. An existing unversioned database is left unchanged at startup.
   custom-format dump, key ring and manifest through the existing backup owner.
   The manifest identifies the **source** schema version and fingerprint. The
   `Backup:Path`, `Backup:Passphrase` and persistent key directory remain canonical.
-  Missing tools, a failed dump, inaccessible backup storage or failed key copying
+  Existing accounts require an available, nonempty persistent key ring. Missing
+  tools, a failed dump, inaccessible backup storage or failed key copying
   abort the upgrade. No schema migration or new version entry has run at that point.
 - Migrations and version entries commit together. Failure rolls back their DDL and
   data changes; the completed pre-upgrade backup remains available. Startup can retry.

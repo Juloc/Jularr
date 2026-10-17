@@ -58,11 +58,16 @@ namespace Jularr.Backend.Service.Core
             File.WriteAllTextAsync(Path.Combine(folder, ManifestName), JsonSerializer.Serialize(new BackupManifest(fingerprint, createdAt, schemaVersion)), ct);
 
         // Startup upgrades and scheduled backups publish the same complete folder format.
-        public static async Task CreateAsync(BackupOptions options, PostgresBackupTools tools, DateTime now, int schemaVersion, string fingerprint, CancellationToken ct)
+        public static async Task CreateAsync(BackupOptions options, PostgresBackupTools tools, DateTime now, int schemaVersion, string fingerprint, CancellationToken ct, bool requiresKeys = false)
         {
             if (!Path.IsPathFullyQualified(options.Path))
             {
                 throw new InvalidOperationException("The backup directory must be an absolute persistent path.");
+            }
+
+            if (requiresKeys && (options.KeyDirectory is null || !Directory.Exists(options.KeyDirectory) || !Directory.EnumerateFiles(options.KeyDirectory, "*.xml").Any()))
+            {
+                throw new InvalidDataException("The pre-upgrade backup requires the instance's persistent key ring. No schema changes were applied.");
             }
 
             var name = NewName(now);

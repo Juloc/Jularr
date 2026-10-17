@@ -45,62 +45,98 @@ namespace Jularr.Backend.Service.Core
         {
             await using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync(cancellationToken);
-            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-            // Serialize concurrent starts before inspecting or changing the schema.
-            await using (var schemaLock = new NpgsqlCommand("SELECT pg_advisory_xact_lock(1247104082);", connection, transaction))
+            // Keep the startup lock while backing up, without a long database transaction.
+            await using (var schemaLock = new NpgsqlCommand("SELECT pg_advisory_lock(1247104082);", connection))
             {
                 await schemaLock.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            bool isEmpty;
-            await using (var empty = new NpgsqlCommand("SELECT NOT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname = current_schema());", connection, transaction))
+            try
             {
-                isEmpty = (bool)(await empty.ExecuteScalarAsync(cancellationToken))!;
-            }
-
-            if (!isEmpty)
-            {
-                await using var marker = new NpgsqlCommand("SELECT to_regclass('\"DatabaseSchemaVersions\"') IS NOT NULL;", connection, transaction);
-                if (!(bool)(await marker.ExecuteScalarAsync(cancellationToken))!)
+                int installedVersion;
+                bool requiresKeys;
+                await using (var transaction = await connection.BeginTransactionAsync(cancellationToken))
                 {
-                    // No adoption, reset or migration of existing pre-release installations.
-                    return;
-                }
-            }
-
-            if (isEmpty)
-            {
-                foreach (var name in Baselines)
-                {
-                    using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!);
-                    var text = await reader.ReadToEndAsync(cancellationToken);
-                    if (Wrapper().Count(text) != 2 || text.Split("COMMIT;").Length != 2)
+                    bool isEmpty;
+                    await using (var empty = new NpgsqlCommand("SELECT NOT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname = current_schema());", connection, transaction))
                     {
-                        throw new InvalidDataException("The " + name + " baseline must be exactly one BEGIN ... COMMIT block.");
+                        isEmpty = (bool)(await empty.ExecuteScalarAsync(cancellationToken))!;
                     }
 
-                    await using var baseline = new NpgsqlCommand(Wrapper().Replace(text, ""), connection, transaction);
-                    await baseline.ExecuteNonQueryAsync(cancellationToken);
+                    if (isEmpty)
+                    {
+                        await InstallFreshAsync(connection, transaction, cancellationToken);
+                        await ApplyMigrationsAsync(connection, transaction, 1, cancellationToken);
+                        await transaction.CommitAsync(cancellationToken);
+                        return;
+                    }
+
+                    await using var marker = new NpgsqlCommand("SELECT to_regclass('\"DatabaseSchemaVersions\"') IS NOT NULL;", connection, transaction);
+                    if (!(bool)(await marker.ExecuteScalarAsync(cancellationToken))!)
+                    {
+                        // No adoption, reset or migration of existing pre-release installations.
+                        return;
+                    }
+
+                    installedVersion = await ReadVersionAsync(connection, transaction, cancellationToken);
+                    if (installedVersion == 1 + _migrations.Count)
+                    {
+                        return;
+                    }
+
+                    await using var accounts = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM \"Accounts\");", connection, transaction);
+                    requiresKeys = (bool)(await accounts.ExecuteScalarAsync(cancellationToken))!;
+                    await transaction.CommitAsync(cancellationToken);
                 }
 
-                await RecordVersionAsync(connection, transaction, 1, cancellationToken);
-            }
+                await BackupFiles.CreateAsync(_backup, _tools, DateTime.UtcNow, installedVersion, Fingerprint(installedVersion, _migrations), cancellationToken, requiresKeys);
 
-            var installedVersion = await ReadVersionAsync(connection, transaction, cancellationToken);
-            if (!isEmpty && installedVersion < 1 + _migrations.Count)
+                await using var migrationTransaction = await connection.BeginTransactionAsync(cancellationToken);
+                if (await ReadVersionAsync(connection, migrationTransaction, cancellationToken) != installedVersion)
+                {
+                    throw new InvalidDataException("The database schema changed during its pre-upgrade backup. No migrations were applied.");
+                }
+
+                await ApplyMigrationsAsync(connection, migrationTransaction, installedVersion, cancellationToken);
+                await migrationTransaction.CommitAsync(cancellationToken);
+            }
+            finally
             {
-                await BackupFiles.CreateAsync(_backup, _tools, DateTime.UtcNow, installedVersion, Fingerprint(installedVersion, _migrations), cancellationToken);
+                if (connection.State == global::System.Data.ConnectionState.Open)
+                {
+                    await using var unlock = new NpgsqlCommand("SELECT pg_advisory_unlock(1247104082);", connection);
+                    await unlock.ExecuteNonQueryAsync(CancellationToken.None);
+                }
+            }
+        }
+
+        private async Task InstallFreshAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+        {
+            foreach (var name in Baselines)
+            {
+                using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!);
+                var text = await reader.ReadToEndAsync(ct);
+                if (Wrapper().Count(text) != 2 || text.Split("COMMIT;").Length != 2)
+                {
+                    throw new InvalidDataException("The " + name + " baseline must be exactly one BEGIN ... COMMIT block.");
+                }
+
+                await using var baseline = new NpgsqlCommand(Wrapper().Replace(text, ""), connection, transaction);
+                await baseline.ExecuteNonQueryAsync(ct);
             }
 
+            await RecordVersionAsync(connection, transaction, 1, ct);
+        }
+
+        private async Task ApplyMigrationsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int installedVersion, CancellationToken ct)
+        {
             foreach (var migration in _migrations.Where(migration => migration.Version > installedVersion))
             {
                 await using var command = new NpgsqlCommand(migration.Statement, connection, transaction);
-                await command.ExecuteNonQueryAsync(cancellationToken);
-                await RecordVersionAsync(connection, transaction, migration.Version, cancellationToken);
+                await command.ExecuteNonQueryAsync(ct);
+                await RecordVersionAsync(connection, transaction, migration.Version, ct);
             }
-
-            await transaction.CommitAsync(cancellationToken);
         }
 
         private async Task<int> ReadVersionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)

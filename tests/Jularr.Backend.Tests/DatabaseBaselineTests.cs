@@ -89,6 +89,22 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Upgrade_ExistingAccountsAndMissingKeyRing_AbortsBeforeSchemaChanges()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ExistingAccountsAndMissingKeyRing_AbortsBeforeSchemaChanges));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, "INSERT INTO \"Accounts\" (\"Id\", \"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES (41, 'keys@example.test', 'Keys Owner', 1);");
+            var options = new BackupOptions { Path = folder.Path, KeyDirectory = Path.Combine(folder.Path, "missing-keys") };
+            var next = new DatabaseBaseline(cs, options, migrations: [new DatabaseMigration(2, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
+            var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => next.StartAsync(CancellationToken.None));
+            StringAssert.Contains(error.Message, "key ring");
+            Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'Accounts' AND column_name = 'UpgradeProbe';"));
+            Assert.AreEqual(0, Directory.GetFileSystemEntries(folder.Path).Length);
+        }
+
+        [TestMethod]
         public async Task FreshInstall_FailedMigration_RollsBackTheEntireInstallation()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(FreshInstall_FailedMigration_RollsBackTheEntireInstallation));
