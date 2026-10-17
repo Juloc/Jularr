@@ -6971,6 +6971,34 @@
   "console.refresh": [
    "Refresh",
    "Refresh"
+  ],
+  "console.orphan": [
+   "SABnzbd orphan",
+   "SABnzbd orphan"
+  ],
+  "console.removeOrphan": [
+   "Clean up orphan",
+   "Clean up orphan"
+  ],
+  "console.removeOrphanConfirm": [
+   "Let SABnzbd delete this verified orphan folder?",
+   "Let SABnzbd delete this verified orphan folder?"
+  ],
+  "console.today": [
+   "Today",
+   "Today"
+  ],
+  "console.week": [
+   "This week",
+   "This week"
+  ],
+  "console.month": [
+   "This month",
+   "This month"
+  ],
+  "console.total": [
+   "Total downloads",
+   "Total downloads"
   ]
  }
 }
