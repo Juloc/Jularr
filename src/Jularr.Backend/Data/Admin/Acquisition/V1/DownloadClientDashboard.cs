@@ -8,6 +8,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public DownloadClientDashboardV1(long? speedBytesPerSecond, long? freeBytes, bool isPaused, bool queueLimited, bool historyLimited,
             BaseDataList<DownloadClientQueueItemV1> queue, BaseDataList<DownloadClientHistoryItemV1> history, string[] categories,
+            long? todayBytes, long? weekBytes, long? monthBytes, long? totalBytes, string[] orphanFolders,
             string? completePath, string? incompletePath, bool completeAvailable, bool incompleteAvailable, BaseDataList<DownloadClientFolderEntryV1> files)
         {
             SpeedBytesPerSecond = speedBytesPerSecond;
@@ -18,6 +19,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             Queue = queue;
             History = history;
             Categories = categories;
+            TodayBytes = todayBytes;
+            WeekBytes = weekBytes;
+            MonthBytes = monthBytes;
+            TotalBytes = totalBytes;
+            OrphanFolders = orphanFolders;
             CompletePath = completePath;
             IncompletePath = incompletePath;
             CompleteAvailable = completeAvailable;
@@ -45,6 +51,21 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Categories))]
         public string[] Categories { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
+        public long? TodayBytes { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
+        public long? WeekBytes { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
+        public long? MonthBytes { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Bytes))]
+        public long? TotalBytes { get; }
+
+        [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Categories))]
+        public string[] OrphanFolders { get; }
 
         [DataField(typeof(DownloadClientConsoleFields), nameof(DownloadClientConsoleFields.Path))]
         public string? CompletePath { get; }
