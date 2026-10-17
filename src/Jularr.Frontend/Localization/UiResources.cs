@@ -1639,6 +1639,13 @@ namespace Jularr.Frontend.Localization
             new("console.inHistory", "In SABnzbd history"),
             new("console.filesNote", "Files are shown read-only. Unassigned does not mean safe to delete."),
             new("console.refresh", "Refresh"),
+            new("console.orphan", "SABnzbd orphan"),
+            new("console.removeOrphan", "Clean up orphan"),
+            new("console.removeOrphanConfirm", "Let SABnzbd delete this verified orphan folder?"),
+            new("console.today", "Today"),
+            new("console.week", "This week"),
+            new("console.month", "This month"),
+            new("console.total", "Total downloads"),
         ];
     }
 }
