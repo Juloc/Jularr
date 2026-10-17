@@ -63,6 +63,11 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(result.IncompleteAvailable);
                 Assert.AreEqual("unassigned", result.Entries.Single().Assignment);
                 Assert.IsTrue(File.Exists(leftovers));
+
+                var onlyIncomplete = DownloadClientFolderInspector.Inspect(null, snapshot, incomplete);
+                Assert.IsFalse(onlyIncomplete.CompleteAvailable);
+                Assert.IsTrue(onlyIncomplete.IncompleteAvailable);
+                Assert.IsNull(onlyIncomplete.CompletePath);
             }
             finally
             {
