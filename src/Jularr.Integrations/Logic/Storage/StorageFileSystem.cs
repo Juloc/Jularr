@@ -90,6 +90,31 @@ namespace Jularr.Integrations.Logic.Storage
             return false;
         }
 
+        // A separate Linux mount is not sufficient when it is RAM-backed or a container overlay.
+        public static bool IsDownloadWorkspaceMount(string path)
+        {
+            if (!OperatingSystem.IsLinux()) return false;
+            var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            foreach (var line in File.ReadLines("/proc/self/mountinfo"))
+            {
+                var fields = line.Split(' ');
+                var separator = Array.IndexOf(fields, "-");
+                if (fields.Length < 6 || separator < 0 || separator + 1 >= fields.Length) continue;
+
+                var mount = Regex.Replace(fields[4], @"\\([0-7]{3})",
+                    match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString());
+                if (!string.Equals(target, mount, StringComparison.Ordinal)) continue;
+
+                // A bind mount on an ext4 VM disk can still be non-NAS: this blocks only
+                // known unsafe pseudo filesystems. Physical storage identity needs a separate check.
+                return fields[separator + 1] is not ("overlay" or "tmpfs" or "ramfs" or "devtmpfs"
+                    or "proc" or "sysfs" or "cgroup" or "cgroup2" or "squashfs" or "autofs"
+                    or "mqueue" or "securityfs" or "debugfs" or "tracefs" or "fusectl"
+                    or "pstore" or "hugetlbfs" or "configfs");
+            }
+            return false;
+        }
+
         // Without extensions every file counts.
         public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string>? extensions, StorageScanState state, CancellationToken ct)
         {

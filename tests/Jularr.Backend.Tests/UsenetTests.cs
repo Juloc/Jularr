@@ -48,6 +48,12 @@ namespace Jularr.Backend.Tests
                 Assert.IsNull(options.ReadyUsenetDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
             }
 
+            if (OperatingSystem.IsLinux())
+            {
+                Assert.IsFalse(StorageFileSystem.IsDownloadWorkspaceMount("/dev/shm"),
+                    "RAM-backed mounts cannot be accepted for persistent native downloads.");
+            }
+
             options.AllowDirectDownloadOnHostFilesystem = true;
             options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
             Assert.IsNull(options.ReadyUsenetDownloadPath(), "A filesystem root is not a staging workspace.");

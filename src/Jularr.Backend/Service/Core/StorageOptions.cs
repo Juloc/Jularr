@@ -73,7 +73,7 @@ namespace Jularr.Backend.Service.Core
             {
                 for (var current = directory; current.Parent is not null; current = current.Parent)
                 {
-                    if (StorageFileSystem.IsMountPoint(current.FullName))
+                    if (StorageFileSystem.IsDownloadWorkspaceMount(current.FullName))
                     {
                         return directory.FullName;
                     }

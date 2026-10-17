@@ -198,3 +198,9 @@ override: disk reservations, capacity checks and UI confirmation are still
 required before release in #1209. If a NAS mount disappears, Jularr must not
 fall back to VM-local storage; check the actual mounts and free space before
 enabling acquisition.
+
+
+**Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
+`proc` and other operating-system pseudo filesystems even if Docker reports
+a mount point. A separate bind mount can still target VM-local storage:
+verify its physical source explicitly before enabling downloads.
