@@ -48,6 +48,16 @@ namespace Jularr.Backend.Tests
                 Assert.IsNull(options.ReadyUsenetDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
             }
 
+            if (OperatingSystem.IsLinux())
+            {
+                Assert.IsFalse(StorageFileSystem.IsDownloadWorkspaceMount("/dev/shm"),
+                    "RAM-backed mounts cannot be accepted for persistent native downloads.");
+                options.DirectDownloadPath = "/dev/shm";
+                Assert.IsNull(options.ReadyUsenetDownloadPath());
+                options.AllowDirectDownloadOnHostFilesystem = true;
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "Host opt-in must not allow RAM-backed staging.");
+            }
+
             options.AllowDirectDownloadOnHostFilesystem = true;
             options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
             Assert.IsNull(options.ReadyUsenetDownloadPath(), "A filesystem root is not a staging workspace.");
@@ -96,6 +106,25 @@ namespace Jularr.Backend.Tests
                 await downloader.DownloadAsync(server, files, staging.Path, new HashSet<string>(), DateTimeOffset.UtcNow.AddSeconds(15), 2_500, CancellationToken.None));
             Assert.IsTrue(new FileInfo(Path.Combine(staging.Path, "quota.mkv")).Length <= 2_500,
                 "Even valid, overlapping yEnc writes must never grow the article file beyond the quota.");
+        }
+
+        [TestMethod]
+        public void NativeDownload_RejectsSymbolicWorkspaceAncestors()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Assert.Inconclusive("Linux CI verifies symbolic mount aliases without Windows developer-mode permissions.");
+            }
+
+            using var directory = new TemporaryDirectory();
+            using var target = new TemporaryDirectory();
+            var alias = Path.Combine(directory.Path, "alias");
+            Directory.CreateSymbolicLink(alias, target.Path);
+            var options = new StorageOptions { DirectDownloadPath = alias, AllowDirectDownloadOnHostFilesystem = true };
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Directory.CreateDirectory(Path.Combine(target.Path, "nested"));
+            options.DirectDownloadPath = Path.Combine(alias, "nested");
+            Assert.IsNull(options.ReadyDirectSourceDownloadPath());
         }
 
         [TestMethod]

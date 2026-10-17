@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Media;
@@ -43,6 +44,33 @@ namespace Jularr.Backend.Logic.Library
                     file."ReleaseGroup",
                     file."Edition",
                     file."Revision",
+                    coalesce((SELECT jsonb_object_agg(identity."Namespace", identity."Value")::text FROM "WorkExternalIdentities" AS identity
+                        WHERE identity."WorkId" = work."Id"), '{}') AS "ProviderIds",
+                    coalesce((SELECT jsonb_agg(jsonb_build_object('MediaTrackTypeId', track."MediaTrackTypeId", 'Codec', track."Codec",
+                        'Language', track."Language", 'Channels', track."Channels") ORDER BY track."StreamIndex")::text
+                        FROM "MediaTracks" AS track WHERE track."StoredFileId" = file."Id"), '[]') AS "MediaTracks",
+                    coalesce((SELECT jsonb_object_agg(format."Name", format."Name")::text
+                        FROM "StoredFileCustomFormats" AS evaluated
+                        JOIN "CustomFormats" AS format ON format."Id" = evaluated."CustomFormatId"
+                        JOIN "StoredFileFormatEvidence" AS evidence ON evidence."StoredFileId" = evaluated."StoredFileId"
+                        WHERE evaluated."StoredFileId" = file."Id" AND evaluated."Matches" AND evaluated."IsValid"
+                            AND evaluated."FormatVersion" = format."Version" AND evaluated."Evidence" = evidence."Evidence"
+                            AND format."IncludeWhenRenaming"), '{}') AS "CustomFormats",
+                    file."ReleaseName",
+                    franchise."Name" AS "Collection",
+                    coalesce((
+                        SELECT jsonb_object_agg(translation."Locale", translation."Title")::text
+                        FROM (
+                            SELECT DISTINCT ON (lower(split_part(locale."Locale", '-', 1)))
+                                lower(split_part(locale."Locale", '-', 1)) AS "Locale",
+                                title."Title"
+                            FROM "WorkTitles" AS title
+                            JOIN "UiLocales" AS locale ON locale."Id" = title."UiLocaleId"
+                            WHERE title."WorkId" = work."Id"
+                            ORDER BY lower(split_part(locale."Locale", '-', 1)),
+                                title."IsManual" DESC, title."UpdatedAt" DESC, title."Id" DESC
+                        ) AS translation
+                    ), '{}') AS "LocalizedTitles",
                     (
                         SELECT
                             max(track."Width")
@@ -57,6 +85,7 @@ namespace Jularr.Backend.Logic.Library
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
                     LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId"
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                 WHERE
@@ -153,7 +182,57 @@ namespace Jularr.Backend.Logic.Library
         }
 
         private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
-            new(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision);
+            new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
+            {
+                MediaTypeId = file.MediaTypeId,
+                ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
+                OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath),
+                OriginalReleaseTitle = file.ReleaseName,
+                Collection = file.Collection,
+                CustomFormats = JsonSerializer.Deserialize<Dictionary<string, string>>(file.CustomFormats),
+                MediaInfo = MediaDetails(file.MediaTracks),
+                LocalizedTitles = JsonSerializer.Deserialize<Dictionary<string, string>>(file.LocalizedTitles)
+            };
+
+        private static IReadOnlyDictionary<string, string> MediaDetails(string json)
+        {
+            var tracks = JsonSerializer.Deserialize<NamingTrack[]>(json) ?? [];
+            var video = tracks.FirstOrDefault(track => track.MediaTrackTypeId == 1);
+            var audio = tracks.FirstOrDefault(track => track.MediaTrackTypeId == 2);
+            var languages = tracks.Where(track => track.MediaTrackTypeId == 2)
+                .Select(track => Jularr.Backend.Logic.Media.LanguageCodes.ToTwoLetter(track.Language)?.ToUpperInvariant())
+                .OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+            var subtitles = tracks.Where(track => track.MediaTrackTypeId == 3)
+                .Select(track => Jularr.Backend.Logic.Media.LanguageCodes.ToTwoLetter(track.Language)?.ToUpperInvariant())
+                .OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+            var videoCodec = video?.Codec ?? "";
+            var audioCodec = audio?.Codec ?? "";
+            var allAudio = languages.Length > 0 ? "[" + string.Join('+', languages) + "]" : "";
+            var subtitleText = subtitles.Length > 0 ? "[" + string.Join('+', subtitles) + "]" : "";
+            var channels = audio?.Channels switch
+            {
+                1 => "1.0",
+                2 => "2.0",
+                6 => "5.1",
+                8 => "7.1",
+                { } count => count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _ => ""
+            };
+
+            return new Dictionary<string, string>
+            {
+                ["MediaInfo VideoCodec"] = videoCodec,
+                ["MediaInfo AudioCodec"] = audioCodec,
+                ["MediaInfo AudioChannels"] = channels,
+                ["MediaInfo AudioLanguages"] = languages is ["EN"] ? "" : allAudio,
+                ["MediaInfo AudioLanguagesAll"] = allAudio,
+                ["MediaInfo SubtitleLanguages"] = subtitleText,
+                ["MediaInfo Simple"] = string.Join(' ', new[] { videoCodec, audioCodec }.Where(value => value.Length > 0)),
+                ["MediaInfo Full"] = string.Join(' ', new[] { videoCodec, audioCodec, allAudio, subtitleText }.Where(value => value.Length > 0))
+            };
+        }
+
+        private sealed record NamingTrack(int MediaTrackTypeId, string? Codec, string? Language, int? Channels);
 
         // The stored release quality, else a tag only an older name carries, else the analysed width, wide formats included.
         private static string? QualityOf(LibraryRenameFileData file) => file.QualityKey

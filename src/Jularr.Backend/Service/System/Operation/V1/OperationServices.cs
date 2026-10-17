@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
@@ -6,11 +7,14 @@ using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Logic.Library;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Service.Admin.Media.V1;
+using Jularr.Integrations.Data.Tmdb;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -98,17 +102,20 @@ namespace Jularr.Backend.Service.System.Operation.V1
     {
         private const int BatchSize = 500;
         private const int CandidateBatchSize = 100;
+        private const int ExternalLookupsPerScan = 16;
         private readonly StorageAccess _storage;
         private readonly MediaProbeClient _probe;
         private readonly GameRomIdentification _roms;
         private readonly MusicTagIdentification _music;
+        private readonly WorkMetadata _metadata;
 
-        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata)
         {
             _storage = storage;
             _probe = probe;
             _roms = roms;
             _music = music;
+            _metadata = metadata;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -207,7 +214,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
             // Folders already identified keep growing.
             if (root.MediaTypeId is not (MediaType.Movie or MediaType.Game))
             {
-                await AssignKnownFoldersAsync(root.Id, root.MediaTypeId);
+                await AssignKnownFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
+            }
+
+            // Link completely new folders to their catalog identity without moving files.
+            if (root.MediaTypeId is MediaType.Movie or MediaType.Series)
+            {
+                await AssignCatalogFoldersAsync(root.Id, root.MediaTypeId, storage, directory);
             }
 
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Completed), ct), CancellationToken);
@@ -300,8 +313,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private async Task AssignKnownFoldersAsync(long libraryRootId, MediaType mediaType)
+        private async Task AssignKnownFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
         {
+            var hintFolders = new Dictionary<string, bool>(StringComparer.Ordinal);
             for (var afterId = 0L; ;)
             {
                 // Top folders linked to exactly one Work.
@@ -353,8 +367,43 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     // Unclear structure stays for manual review.
                     afterId = file.Id;
                     var path = MediaPathParser.Parse(file.RelativePath, mediaType);
-                    if (path.WorkUnitTypeId is null)
+                    var hasHints = false;
+                    if (mediaType == MediaType.Series)
                     {
+                        var parent = file.RelativePath.Split('/')[0];
+                        if (!hintFolders.TryGetValue(parent, out hasHints))
+                        {
+                            hasHints = await storage.GetAsync(StoragePath.Combine(directory, parent + "/tvshow.nfo"), CancellationToken) is not null
+                                || await storage.GetAsync(StoragePath.Combine(directory, parent + "/.plexmatch"), CancellationToken) is not null;
+                            if (hintFolders.Count >= CandidateBatchSize)
+                            {
+                                hintFolders.Clear();
+                            }
+
+                            hintFolders[parent] = hasHints;
+                        }
+
+                        var containing = file.RelativePath[..file.RelativePath.LastIndexOf('/')];
+                        if (!hasHints && containing != parent)
+                        {
+                            if (!hintFolders.TryGetValue(containing, out var seasonHints))
+                            {
+                                seasonHints = await storage.GetAsync(StoragePath.Combine(directory, containing + "/.plexmatch"), CancellationToken) is not null;
+                                if (hintFolders.Count >= CandidateBatchSize)
+                                {
+                                    hintFolders.Clear();
+                                }
+
+                                hintFolders[containing] = seasonHints;
+                            }
+
+                            hasHints = seasonHints;
+                        }
+                    }
+
+                    if (path.WorkUnitTypeId is null || hasHints || mediaType == MediaType.Series && MediaPathParser.ProviderIds(file.RelativePath, mediaType).Ids.Count > 0)
+                    {
+                        // Explicit provider IDs require catalog validation, not just a matching parent folder.
                         continue;
                     }
 
@@ -367,6 +416,337 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     {
                     }
                 }
+            }
+        }
+
+        private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType, StorageFiles storage, string directory)
+        {
+            var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
+            TmdbConnection? provider = null;
+            var providerUnavailable = false;
+            var externalLookups = 0;
+            var nfoFolders = new Dictionary<string, (IReadOnlyDictionary<string, string> Ids, bool Conflicted)>(StringComparer.Ordinal);
+            var plexFolders = new Dictionary<string, PlexMatchHints>(StringComparer.Ordinal);
+            var emptyHints = MediaPathParser.ParsePlexMatch("");
+            for (var afterId = 0L; ;)
+            {
+                var files = await Context.ExecuteBatchAsync((ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT file."Id", file."RelativePath", file."SizeBytes", file."ModifiedAt", NULL::bigint AS "WorkId"
+                        FROM "StoredFiles" AS file
+                        WHERE file."LibraryRootId" = @LibraryRootId AND file."Id" > @AfterId
+                            AND file."MediaAssetId" IS NULL AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        ORDER BY file."Id"
+                        LIMIT 100;
+                        """;
+                    sql.Parameters.Add(new StoredFileCursorData(libraryRootId, afterId));
+                    return ctx.ReadSql.ReadListAsync<StoredFileCandidateData>(sql, ct);
+                }, CancellationToken);
+                if (files.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var file in files)
+                {
+                    afterId = file.Id;
+                    var parsed = MediaPathParser.Parse(file.RelativePath, mediaType);
+                    var (pathIds, conflicted) = MediaPathParser.ProviderIds(file.RelativePath, mediaType);
+                    var ids = pathIds.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
+
+                    if (mediaType == MediaType.Series && file.RelativePath.Contains('/'))
+                    {
+                        var parts = file.RelativePath.Split('/');
+                        var rootFolder = parts[0];
+                        if (!plexFolders.TryGetValue(rootFolder, out var rootHints))
+                        {
+                            rootHints = await ReadPlexMatchAsync(storage, directory, rootFolder);
+                            if (plexFolders.Count >= CandidateBatchSize)
+                            {
+                                plexFolders.Clear();
+                            }
+
+                            plexFolders[rootFolder] = rootHints;
+                        }
+
+                        var parent = string.Join('/', parts[..^1]);
+                        var seasonHints = emptyHints;
+                        if (parent != rootFolder && !plexFolders.TryGetValue(parent, out seasonHints))
+                        {
+                            seasonHints = await ReadPlexMatchAsync(storage, directory, parent);
+                            if (plexFolders.Count >= CandidateBatchSize)
+                            {
+                                plexFolders.Clear();
+                            }
+
+                            plexFolders[parent] = seasonHints;
+                        }
+
+                        conflicted |= rootHints.Conflicted || seasonHints.Conflicted;
+                        foreach (var (source, value) in rootHints.Ids.Concat(seasonHints.Ids))
+                        {
+                            if (ids.TryGetValue(source, out var previous) && !previous.Equals(value, StringComparison.OrdinalIgnoreCase))
+                            {
+                                conflicted = true;
+                                break;
+                            }
+
+                            ids[source] = value;
+                        }
+
+                        parsed = MediaPathParser.ApplyPlexMatch(parsed, file.RelativePath[(rootFolder.Length + 1)..], parts[^1], rootHints, seasonHints);
+                    }
+
+                    if (parsed.Title.Length > 500 || mediaType == MediaType.Series && parsed.WorkUnitTypeId != WorkUnitType.Episode)
+                    {
+                        continue;
+                    }
+                    if (file.RelativePath.Contains('/'))
+                    {
+                        var folder = file.RelativePath.Split('/')[0];
+                        if (!nfoFolders.TryGetValue(folder, out var nfo))
+                        {
+                            nfo = await ReadFolderNfoAsync(storage, directory, folder, mediaType);
+                            if (nfoFolders.Count >= CandidateBatchSize)
+                            {
+                                nfoFolders.Clear();
+                            }
+
+                            nfoFolders[folder] = nfo;
+                        }
+
+                        conflicted |= nfo.Conflicted;
+                        foreach (var (source, value) in nfo.Ids)
+                        {
+                            if (ids.TryGetValue(source, out var existing) && !existing.Equals(value, StringComparison.OrdinalIgnoreCase))
+                            {
+                                conflicted = true;
+                                break;
+                            }
+
+                            ids[source] = value;
+                        }
+                    }
+
+                    if (conflicted)
+                    {
+                        continue;
+                    }
+
+                    var supplied = JsonSerializer.Serialize(ids.OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new { Namespace = item.Key, Value = item.Value }));
+                    var key = (parsed.Title.ToUpperInvariant(), parsed.Year, supplied);
+                    if (!matches.TryGetValue(key, out var workId))
+                    {
+                        var candidates = await Context.ExecuteBatchAsync((ctx, ct) =>
+                        {
+                            var sql = new SqlStatement();
+                            sql.Statement =
+                                """
+                                SELECT work."Id"
+                                FROM "Works" AS work
+                                WHERE work."MediaTypeId" = @MediaTypeId
+                                    AND (
+                                        (
+                                            jsonb_array_length(@ProviderIds::jsonb) > 0
+                                            AND NOT EXISTS (
+                                                SELECT
+                                                    1
+                                                FROM
+                                                    jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
+                                                WHERE
+                                                    NOT EXISTS (
+                                                        SELECT
+                                                            1
+                                                        FROM
+                                                            "WorkExternalIdentities" AS identity
+                                                        WHERE
+                                                            identity."WorkId" = work."Id"
+                                                            AND identity."Namespace" = expected."Namespace"
+                                                            AND identity."Value" = expected."Value"
+                                                    )
+                                            )
+                                        )
+                                        OR (
+                                            jsonb_array_length(@ProviderIds::jsonb) = 0
+                                            AND (
+                                                lower(work."CanonicalTitle") = lower(@CanonicalTitle)
+                                                OR EXISTS (
+                                                    SELECT
+                                                        1
+                                                    FROM
+                                                        "WorkTitles" AS title
+                                                    WHERE
+                                                        title."WorkId" = work."Id"
+                                                        AND lower(title."Title") = lower(@CanonicalTitle)
+                                                )
+                                            )
+                                            AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" = @ReleaseYear)
+                                        )
+                                    )
+                                ORDER BY work."Id"
+                                LIMIT 2;
+                                """;
+                            sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
+                            return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                        }, CancellationToken);
+                        workId = candidates.Count == 1 ? candidates[0].Id : null;
+
+                        // A partial identity match may belong to an existing Work. Do not create a duplicate catalog entry.
+                        var hasKnownIdentity = false;
+                        if (workId is null && ids.Count > 0)
+                        {
+                            var owners = await Context.ExecuteBatchAsync((ctx, ct) =>
+                            {
+                                var sql = new SqlStatement();
+                                sql.Statement =
+                                    """
+                                    SELECT DISTINCT
+                                        identity."WorkId" AS "Id"
+                                    FROM
+                                        jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
+                                        JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
+                                            AND identity."Value" = expected."Value"
+                                    LIMIT 1;
+                                    """;
+                                sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
+                                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                            }, CancellationToken);
+                            hasKnownIdentity = owners.Count > 0;
+                        }
+
+                        // An unknown provider identity is never resolved by title alone.
+                        if (workId is null && !hasKnownIdentity && ids.Count > 0 && !providerUnavailable && externalLookups < ExternalLookupsPerScan
+                            && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
+                            && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
+                        {
+                            externalLookups++;
+                            try
+                            {
+                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
+                                int? tmdbId = null;
+                                var verified = true;
+                                foreach (var (source, value) in ids)
+                                {
+                                    int? resolved = source switch
+                                    {
+                                        "tmdb_movie" when mediaType == MediaType.Movie => int.TryParse(value, out var movieId) && movieId > 0 ? movieId : null,
+                                        "tmdb_tv" when mediaType == MediaType.Series => int.TryParse(value, out var seriesId) && seriesId > 0 ? seriesId : null,
+                                        "imdb" or "tvdb" => await _metadata.FindExternalAsync(provider, mediaType, source, value, CancellationToken),
+                                        _ => null
+                                    };
+                                    if (resolved is null || tmdbId is not null && tmdbId != resolved)
+                                    {
+                                        verified = false;
+                                        break;
+                                    }
+
+                                    tmdbId = resolved;
+                                }
+
+                                if (verified && tmdbId is { } id)
+                                {
+                                    var details = await _metadata.ReadWorkAsync(provider, mediaType, id, CancellationToken);
+                                    if ((ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
+                                        && (ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
+                                    {
+                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken);
+                                    }
+                                }
+                            }
+                            catch (ServiceUnavailableException)
+                            {
+                                providerUnavailable = true;
+                            }
+                            catch (KeyNotFoundException)
+                            {
+                                // Unresolved IDs remain available for manual identification.
+                            }
+                        }
+
+                        if (matches.Count < 10000)
+                        {
+                            matches[key] = workId;
+                        }
+                    }
+
+                    if (workId is null)
+                    {
+                        continue;
+                    }
+
+                    var assignment = new StoredFileAssignmentData(file.Id, workId, null, parsed.WorkUnitTypeId, parsed.UnitNumber, parsed.ParentUnitNumber, null, false);
+                    try
+                    {
+                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);
+                    }
+                    catch (DataValidationException)
+                    {
+                        // Incomplete episode structure remains available for manual review.
+                    }
+                }
+            }
+        }
+
+        private async Task<PlexMatchHints> ReadPlexMatchAsync(StorageFiles storage, string directory, string folder)
+        {
+            var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, folder + "/.plexmatch"), 32_768);
+            return invalid
+                ? new PlexMatchHints(null, null, null, new Dictionary<string, string>(), new Dictionary<string, (decimal?, decimal)>(), true)
+                : MediaPathParser.ParsePlexMatch(text ?? "");
+        }
+
+        private async Task<(IReadOnlyDictionary<string, string> Ids, bool Conflicted)> ReadFolderNfoAsync(StorageFiles storage, string directory, string folder, MediaType mediaType)
+        {
+            var name = mediaType == MediaType.Series ? "tvshow.nfo" : "movie.nfo";
+            var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, folder + "/" + name), 65_536);
+            return invalid
+                ? (new Dictionary<string, string>(), true)
+                : text is null ? (new Dictionary<string, string>(), false) : MediaPathParser.ParseNfo(text, mediaType);
+        }
+
+        private async Task<(string? Text, bool Invalid)> ReadHintTextAsync(StorageFiles storage, string path, int maxBytes)
+        {
+            var info = await storage.GetAsync(path, CancellationToken);
+            if (info is null)
+            {
+                return (null, false);
+            }
+
+            if (info.IsDirectory || info.Length > maxBytes)
+            {
+                return (null, true);
+            }
+
+            await using var stream = await storage.OpenReadAsync(path, CancellationToken);
+            var buffer = new byte[maxBytes + 1];
+            var total = 0;
+            while (total < buffer.Length)
+            {
+                var length = await stream.ReadAsync(buffer.AsMemory(total), CancellationToken);
+                if (length == 0)
+                {
+                    break;
+                }
+
+                total += length;
+            }
+
+            if (total > maxBytes)
+            {
+                return (null, true);
+            }
+
+            try
+            {
+                return (new UTF8Encoding(false, true).GetString(buffer, 0, total), false);
+            }
+            catch (DecoderFallbackException)
+            {
+                return (null, true);
             }
         }
 

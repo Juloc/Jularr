@@ -1297,12 +1297,12 @@
    "Brak jednoznacznego dopasowania"
   ],
   "takeover.outcome.takeover_will_want": [
-   "Will be wanted",
-   "Zostanie dodane do poszukiwanych"
+   "Will be wanted (paused)",
+   "Będzie monitorowane (wstrzymane)"
   ],
   "takeover.outcome.takeover_wanted": [
-   "Wanted",
-   "Poszukiwane"
+   "Wanted (paused)",
+   "Monitorowanie wstrzymane"
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",

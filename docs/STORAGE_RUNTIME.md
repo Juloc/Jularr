@@ -216,3 +216,21 @@ reserve disk across downloads, cap PAR2/7-Zip extraction, protect other
 processes sharing the filesystem, or cover direct-source books. Those remain
 separate prerequisites of release issue #1209; do not expose this as a
 complete hard workspace quota.
+
+**Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
+`proc` and other operating-system pseudo filesystems even if Docker reports
+a mount point. A separate bind mount can still target VM-local storage:
+verify its physical source explicitly before enabling downloads.
+The nearest mount is authoritative: an unsafe nested mount cannot inherit its
+parent's approval, and host-filesystem opt-in does not permit RAM/overlay storage.
+
+## Space checks for native Usenet unpacking
+
+Before extracting archives, the native worker checks free space on the **actual
+filesystem containing the staging files** and reserves a rough 10% overhead
+above the compressed input size for the next extraction. Linux mount identity
+is read from `/proc/self/mountinfo`; if the filesystem cannot be resolved
+to a ready mount, extraction enters the existing `usenet_disk_full` wait state
+rather than using a misleading VM-root free-space number. This is a preflight
+safeguard, **not a hard quota**; capacity reservation across jobs and checks
+during extraction are still part of #1209.

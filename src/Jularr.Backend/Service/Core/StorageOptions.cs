@@ -10,9 +10,7 @@ namespace Jularr.Backend.Service.Core
         // Where Docker mounts NAS volumes, one folder per connection.
         public string MountRoot { get; set; } = "/mnt/jularr";
 
-        // Large native Usenet/direct-source downloads require an explicitly chosen persistent workspace.
-        // Never silently write them to the container overlay or the VM's /tmp.
-        // Explicit shared legacy staging path, retained for existing configured deployments.
+        // Explicit shared workspace; independent downloader paths take precedence.
         public string? DirectDownloadPath { get; set; }
 
         // Independent workspaces override the shared path for each native downloader.
@@ -24,7 +22,6 @@ namespace Jularr.Backend.Service.Core
         public long UsenetMaxJobBytes { get; set; } = 20L * 1024 * 1024 * 1024;
 
         // Deliberate opt-in for workspaces on the host filesystem rather than a Docker/NAS mount.
-        // Host limits and reservations are a separate required release gate (#1209).
         public bool AllowDirectDownloadOnHostFilesystem { get; set; }
 
         internal string? ReadyUsenetDownloadPath() => ReadyDownloadPath(UsenetDownloadPath ?? DirectDownloadPath);
@@ -37,53 +34,40 @@ namespace Jularr.Backend.Service.Core
                 return null;
             }
 
-            DirectoryInfo directory;
             try
             {
-                directory = new DirectoryInfo(Path.GetFullPath(configured));
-            }
-            catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
-            {
-                return null;
-            }
-
-            if (!directory.Exists || directory.Parent is null)
-            {
-                return null;
-            }
-
-            // A symlinked workspace can bypass an otherwise valid mount and end up on the VM.
-            for (DirectoryInfo? current = directory; current is not null; current = current.Parent)
-            {
-                if (current.LinkTarget is not null)
+                var directory = new DirectoryInfo(Path.GetFullPath(configured));
+                if (!directory.Exists || directory.Parent is null)
                 {
                     return null;
                 }
-            }
 
-            if (AllowDirectDownloadOnHostFilesystem)
-            {
-                return directory.FullName;
-            }
+                // Reject links even when their targets do not exist.
+                for (DirectoryInfo? current = directory; current is not null; current = current.Parent)
+                {
+                    if (current.LinkTarget is not null)
+                    {
+                        return null;
+                    }
+                }
 
-            if (!OperatingSystem.IsLinux())
-            {
-                return null;
-            }
+                if (!OperatingSystem.IsLinux())
+                {
+                    return AllowDirectDownloadOnHostFilesystem ? directory.FullName : null;
+                }
 
-            // The workspace may be a subfolder of a real Docker bind/NAS mount, but the
-            // container's own root mount is never enough to enable native downloads.
-            try
-            {
-                for (var current = directory; current.Parent is not null; current = current.Parent)
+                // Only the nearest mount contains the workspace. An unsafe child mount
+                // cannot inherit approval from a persistent ancestor.
+                for (var current = directory; current is not null; current = current.Parent)
                 {
                     if (StorageFileSystem.IsMountPoint(current.FullName))
                     {
-                        return directory.FullName;
+                        return StorageFileSystem.IsDownloadWorkspaceMount(current.FullName)
+                            && (current.Parent is not null || AllowDirectDownloadOnHostFilesystem) ? directory.FullName : null;
                     }
                 }
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
                 return null;
             }
