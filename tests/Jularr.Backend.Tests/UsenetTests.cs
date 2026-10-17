@@ -34,26 +34,33 @@ namespace Jularr.Backend.Tests
         {
             using var directory = new TemporaryDirectory();
             var options = new StorageOptions();
-            Assert.IsNull(options.ReadyDirectDownloadPath());
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
             Assert.ThrowsException<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
 
             options.DirectDownloadPath = "relative/downloads";
-            Assert.IsNull(options.ReadyDirectDownloadPath());
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
             options.DirectDownloadPath = Path.Combine(directory.Path, "unmounted");
-            Assert.IsNull(options.ReadyDirectDownloadPath());
+            Assert.IsNull(options.ReadyUsenetDownloadPath());
 
             options.DirectDownloadPath = directory.Path;
             if (OperatingSystem.IsLinux() && !StorageFileSystem.IsMountPoint(directory.Path))
             {
-                Assert.IsNull(options.ReadyDirectDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
+                Assert.IsNull(options.ReadyUsenetDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
             }
 
             options.AllowDirectDownloadOnHostFilesystem = true;
             options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
-            Assert.IsNull(options.ReadyDirectDownloadPath(), "A filesystem root is not a staging workspace.");
+            Assert.IsNull(options.ReadyUsenetDownloadPath(), "A filesystem root is not a staging workspace.");
             options.DirectDownloadPath = directory.Path;
-            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectDownloadPath());
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath());
             Assert.AreEqual(Path.Combine(Path.GetFullPath(directory.Path), "42"), WantedAcquisition.Staging(options, 42));
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectSourceDownloadPath(), "An explicitly set shared workspace remains compatible.");
+
+            using var books = new TemporaryDirectory();
+            options.DirectSourceDownloadPath = books.Path;
+            Assert.AreEqual(Path.GetFullPath(books.Path), options.ReadyDirectSourceDownloadPath());
+            Assert.AreEqual(Path.Combine(Path.GetFullPath(books.Path), "43"), WantedAcquisition.DirectStaging(options, 43));
+            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath(), "Book download configuration must not change NNTP staging.");
         }
 
         [TestMethod]

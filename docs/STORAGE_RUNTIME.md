@@ -175,8 +175,11 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 
 ## Native/direct download staging safety (pre-release R03 slice)
 
-Jularr's native Usenet downloader and direct-source book downloader share the
-`Storage:DirectDownloadPath` workspace. It has **no default**: unconfigured,
+Jularr's native Usenet downloader and direct-source book downloader accept
+independent `Storage:UsenetDownloadPath` and `Storage:DirectSourceDownloadPath`
+workspaces. For existing explicitly configured installations, each falls back
+to the shared `Storage:DirectDownloadPath` setting when its own setting is
+absent. None has a built-in default: unconfigured,
 missing, relative or symlinked paths are rejected before native/direct grabs.
 Jobs already active are put into attention rather than silently writing into
 `/tmp` or the container's overlay filesystem. The SABnzbd download directory
@@ -184,7 +187,9 @@ is a **separate service**; its completed files use `RemotePath` / `LocalPath`
 mapping in the SABnzbd acquisition connection.
 
 For example, mount a persistent storage volume at `/downloads/staging` in
-the Jularr container, then set `Storage__DirectDownloadPath=/downloads/staging`.
+the Jularr container, then set `Storage__UsenetDownloadPath=/downloads/staging`. Direct-source book
+downloads can separately use `Storage__DirectSourceDownloadPath=/downloads/books`,
+with that path also mounted before Jularr starts.
 The directory must already exist. On Linux, Jularr requires this path to be
 inside a non-root mounted filesystem (a nested folder is accepted) unless the
 owner deliberately sets `Storage__AllowDirectDownloadOnHostFilesystem=true`

@@ -12,15 +12,23 @@ namespace Jularr.Backend.Service.Core
 
         // Large native Usenet/direct-source downloads require an explicitly chosen persistent workspace.
         // Never silently write them to the container overlay or the VM's /tmp.
+        // Explicit shared legacy staging path, retained for existing configured deployments.
         public string? DirectDownloadPath { get; set; }
+
+        // Independent workspaces override the shared path for each native downloader.
+        public string? UsenetDownloadPath { get; set; }
+        public string? DirectSourceDownloadPath { get; set; }
 
         // Deliberate opt-in for workspaces on the host filesystem rather than a Docker/NAS mount.
         // Host limits and reservations are a separate required release gate (#1209).
         public bool AllowDirectDownloadOnHostFilesystem { get; set; }
 
-        internal string? ReadyDirectDownloadPath()
+        internal string? ReadyUsenetDownloadPath() => ReadyDownloadPath(UsenetDownloadPath ?? DirectDownloadPath);
+        internal string? ReadyDirectSourceDownloadPath() => ReadyDownloadPath(DirectSourceDownloadPath ?? DirectDownloadPath);
+
+        private string? ReadyDownloadPath(string? configured)
         {
-            if (string.IsNullOrWhiteSpace(DirectDownloadPath) || !Path.IsPathFullyQualified(DirectDownloadPath))
+            if (string.IsNullOrWhiteSpace(configured) || !Path.IsPathFullyQualified(configured))
             {
                 return null;
             }
@@ -28,7 +36,7 @@ namespace Jularr.Backend.Service.Core
             DirectoryInfo directory;
             try
             {
-                directory = new DirectoryInfo(Path.GetFullPath(DirectDownloadPath));
+                directory = new DirectoryInfo(Path.GetFullPath(configured));
             }
             catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
             {

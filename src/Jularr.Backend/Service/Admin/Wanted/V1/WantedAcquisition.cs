@@ -46,7 +46,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // Where Jularr's own downloads wait until the import.
         public static string Staging(StorageOptions storage, long operationId) =>
-            Path.Combine(storage.ReadyDirectDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured"),
+            Path.Combine(storage.ReadyUsenetDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured"),
+                operationId.ToString(CultureInfo.InvariantCulture));
+
+        public static string DirectStaging(StorageOptions storage, long operationId) =>
+            Path.Combine(storage.ReadyDirectSourceDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured"),
                 operationId.ToString(CultureInfo.InvariantCulture));
 
         // Automatic searches leave out manual-only, backed-off and exhausted indexers; every indexer asked records its use.
@@ -147,7 +151,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // before creating an operation; a missing mount must never fall back to the VM.
             if (DirectSources.IsDirectOffer(offer.Guid) && offer.DownloadUri is { } source)
             {
-                _ = _storage.ReadyDirectDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
+                _ = _storage.ReadyDirectSourceDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
                     source.ToString(), accountId);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
@@ -172,7 +176,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Refuse native downloads before reserving an operation or using an indexer grab.
             if (clients[0].AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                _ = _storage.ReadyDirectDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
+                _ = _storage.ReadyUsenetDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
             }
 
             // A grab counts against its indexer's daily limit.

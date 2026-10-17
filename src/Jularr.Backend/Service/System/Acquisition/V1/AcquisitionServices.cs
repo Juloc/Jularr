@@ -297,7 +297,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                if (_options.ReadyDirectDownloadPath() is null)
+                if (_options.ReadyUsenetDownloadPath() is null)
                 {
                     foreach (var download in group)
                     {
@@ -435,7 +435,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     foreach (var download in group.Take(DirectPerCycle))
                     {
-                        if (_options.ReadyDirectDownloadPath() is null)
+                        if (_options.ReadyDirectSourceDownloadPath() is null)
                         {
                             await _import.AttentionAsync(Context, download.OperationId, "acquisition_download_path_unconfigured", null, CancellationToken);
                             continue;
@@ -623,7 +623,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.
         private async Task DownloadDirectAsync(DownloadData download, AcquisitionConnectionData connection)
         {
-            var staging = WantedAcquisition.Staging(_options, download.OperationId);
+            var staging = WantedAcquisition.DirectStaging(_options, download.OperationId);
             var name = "book." + DirectSources.Format(download.ExternalId ?? "");
             var path = Path.Combine(staging, name);
             if (!File.Exists(path))
