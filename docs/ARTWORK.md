@@ -41,3 +41,10 @@
 - Authorized `GET /api/v1/works/{workId}/artwork/{slotId}.jxl` serves `image/jxl`, independently of the WebP `GET /api/v1/works/{workId}/artwork/{slotId}`. Both endpoints read persistent local storage only. The frontend must opt into a JXL source only after an actual rendition exists; this PR does not yet activate unconditional `<picture>` sources.
 - Native JXL progressive *codestream* support does not by itself guarantee that a browser progressively renders partial downloads. Browser support and first-frame behavior require live E2E verification. On unsupported browsers Jularr's WebP remains the fallback.
 - The separate JXL file is not a renamed WebP file. Native codec failures leave the WebP rendition usable. JXL NAS exports and runtime settings UI remain outstanding.
+
+## P4a – Browser JXL selection (stacked PR)
+
+- Library and Continue return an optional `JxlPosterUrl` only when the local artwork index has **both** a native JPEG XL rendition and a corresponding WebP rendition for the same Work/slot. Other pages and unknown/provider-only artwork continue using their existing URL.
+- The `MediaImage` primitive writes `<picture><source type="image/jxl" srcset="…"><img src="…"></picture>` only when Jularr has a verified indexed JXL variant. The `img` always keeps explicit width and height to prevent layout shifts; it remains the WebP fallback.
+- When the cache is set to WebP or a native codec is unavailable, no JXL source is advertised. Image source URL validation applies to both variants, and all image endpoints remain profile-authorized.
+- This does not assert browser incremental-render support; the progressive JXL bitstream must be validated in browser E2E. It does not create a JXL rendition for remote provider-only artwork.

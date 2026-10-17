@@ -313,7 +313,7 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class ContinueItemV1 : BaseResponse
     {
         public ContinueItemV1(long workId, long mediaAssetId, MediaType mediaTypeId, string title, string? posterUrl, WorkUnitType? workUnitTypeId, decimal? unitNumber,
-            decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId)
+            decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId, string? jxlPosterUrl = null)
         {
             Progression = progression;
             MediaAssetTypeId = mediaAssetTypeId;
@@ -322,6 +322,7 @@ namespace Jularr.Backend.Data.User.Discover.V1
             MediaTypeId = mediaTypeId;
             Title = title;
             PosterUrl = posterUrl;
+            JxlPosterUrl = jxlPosterUrl;
             WorkUnitTypeId = workUnitTypeId;
             UnitNumber = unitNumber;
             ParentUnitNumber = parentUnitNumber;
@@ -343,6 +344,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlPosterUrl { get; }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId), false)]
         public WorkUnitType? WorkUnitTypeId { get; }

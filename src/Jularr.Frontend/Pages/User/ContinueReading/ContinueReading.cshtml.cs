@@ -21,7 +21,7 @@ namespace Jularr.Frontend.Pages.User.ContinueReading
             var asset = item.MediaAssetId.ToString(CultureInfo.InvariantCulture);
             var key = asset + ":" + item.Progression?.ToString(CultureInfo.InvariantCulture);
             return Partial("_UiComponent", new ContinueReadingBar(assets, item.Title, item.PosterUrl,
-                MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), item.Progression, "/Read/" + asset, key));
+                MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), item.Progression, "/Read/" + asset, key, item.JxlPosterUrl));
         }
     }
 }

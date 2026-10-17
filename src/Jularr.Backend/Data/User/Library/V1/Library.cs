@@ -36,13 +36,14 @@ namespace Jularr.Backend.Data.User.Library.V1
 
     public sealed class LibraryItemV1 : BaseResponse
     {
-        public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted)
+        public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, string? jxlPosterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
             Title = title;
             ReleaseYear = releaseYear;
             PosterUrl = posterUrl;
+            JxlPosterUrl = jxlPosterUrl;
             MediaStateTypeId = mediaStateTypeId;
             IsWatchlisted = isWatchlisted;
         }
@@ -61,6 +62,9 @@ namespace Jularr.Backend.Data.User.Library.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl), false)]
+        public string? JxlPosterUrl { get; }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
         public MediaStateType MediaStateTypeId { get; }

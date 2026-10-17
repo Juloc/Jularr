@@ -4,7 +4,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // The way back to the saved reading position: identity, read share, one action and Dismiss; no reader controls.
-    public sealed class ContinueReadingBar(FrontendAssets assets, string title, string? posterUrl, string? unit, decimal? progression, string href, string key) : IUiComponent
+    public sealed class ContinueReadingBar(FrontendAssets assets, string title, string? posterUrl, string? unit, decimal? progression, string href, string key, string? jxlPosterUrl = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Framework
                     .Attribute("aria-label", texts["media.readProgress"]).Class("continue-bar__progress"));
             }
 
-            IUiComponent cover = posterUrl is null ? new Icon("reading", assets) : new MediaImage(posterUrl, "", 92, 138);
+            IUiComponent cover = posterUrl is null ? new Icon("reading", assets) : new MediaImage(posterUrl, "", 92, 138, jxlUrl: jxlPosterUrl);
             // Cover and title continue as well; the action is the one keyboard stop.
             children.Add(new A(new Span(cover).Class("continue-bar__cover"), new Span([.. details]).Class("continue-bar__details"))
                 .Class("continue-bar__identity").Attribute("href", href).Attribute("tabindex", "-1").Attribute("aria-hidden", "true"));

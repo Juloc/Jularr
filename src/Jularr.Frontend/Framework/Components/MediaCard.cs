@@ -12,9 +12,16 @@ namespace Jularr.Frontend.Framework
         private decimal? _progression;
         private string? _previewId;
         private string? _rating;
+        private string? _jxlPosterUrl;
         private string? _trailerId;
         private IUiComponent[] _actions = [];
         private IUiComponent? _bookmark;
+
+        public MediaCard Jxl(string? url)
+        {
+            _jxlPosterUrl = url;
+            return this;
+        }
 
         public MediaCard Rating(string? rating)
         {
@@ -74,7 +81,7 @@ namespace Jularr.Frontend.Framework
         {
             IUiComponent art = posterUrl is null
                 ? new Div(new Span(new ValueText(title))).Class("media-card__placeholder")
-                : new MediaImage(posterUrl, title, 342, 513);
+                : new MediaImage(posterUrl, title, 342, 513, jxlUrl: _jxlPosterUrl);
             var content = new List<IUiComponent>
             {
                 new A(art).Class("media-card__art").Attribute("href", href).Attribute("aria-label", title)
