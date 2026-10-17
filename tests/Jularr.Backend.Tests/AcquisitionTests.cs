@@ -103,7 +103,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(40, wanted.ProgressPercent);
 
             // The completed job is mapped, linked into the library and assigned.
-            var completed = Path.Combine(downloads.Path, Feature);
+            // SABnzbd may organize completed releases into separate category folders.
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
             Directory.CreateDirectory(completed);
             File.WriteAllText(Path.Combine(completed, Feature + ".mkv"), new string('x', 4096));
             File.WriteAllText(Path.Combine(completed, Feature + ".en.srt"), "subtitle");
@@ -142,9 +143,10 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "StartedAt", "LastSeenAt", "EndedAt")
                     VALUES (gen_random_uuid(), 101, 900, 900, 1, now() - interval '1 hour', now(), now());
                 """);
-            usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
+            usenet.History = $$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
+            Assert.IsTrue(File.Exists(Path.Combine(completed, Feature + ".mkv")), "Jularr must not delete SABnzbd's completed source.");
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEBDL-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
@@ -1124,6 +1126,7 @@ namespace Jularr.Backend.Tests
         public void Import_PathsStayBelowTheMappingAndUrlsStaySafe()
         {
             Assert.AreEqual("Movie/file.mkv", ImportPlacementLogic.MapRemotePath("/downloads/Movie/file.mkv", "/downloads/"));
+            Assert.AreEqual("movies/Some.Release/film.mkv", ImportPlacementLogic.MapRemotePath("/downloads/movies/Some.Release/film.mkv", "/downloads"));
             Assert.IsNull(ImportPlacementLogic.MapRemotePath("/downloads/../etc/passwd", "/downloads"));
             Assert.IsNull(ImportPlacementLogic.MapRemotePath("/downloadsX/file", "/downloads"));
             Assert.IsNull(ImportPlacementLogic.MapRemotePath("/elsewhere/file", "/downloads"));
