@@ -105,7 +105,7 @@ namespace Jularr.Integrations.Logic.Sabnzbd
 
             return new SabnzbdConsoleSnapshot(ParseQueueResponse(queueJson).Jobs, ParseHistoryResponse(historyJson).Jobs,
                 speedKb is >= 0 and < 1e9 ? (long?)Math.Round(speedKb.Value * 1024) : null,
-                diskMb is >= 0 and < 1e9 ? (long?)Math.Round(diskMb.Value * 1024 * 1024) : null,
+                diskMb is >= 0 and < 1e6 ? (long?)Math.Round(diskMb.Value * 1024 * 1024 * 1024) : null,
                 ReadBool(queue, "paused") is true);
         }
 
@@ -122,10 +122,10 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             var id = ValidateNzoId(nzoId);
             KeyValuePair<string, string?>[] fields = command switch
             {
-                SabnzbdJobCommand.Pause => [new("mode", "pause"), new("value", id)],
-                SabnzbdJobCommand.Resume => [new("mode", "resume"), new("value", id)],
+                SabnzbdJobCommand.Pause => [new("mode", "queue"), new("name", "pause"), new("value", id)],
+                SabnzbdJobCommand.Resume => [new("mode", "queue"), new("name", "resume"), new("value", id)],
                 SabnzbdJobCommand.RemoveFromQueue => [new("mode", "queue"), new("name", "delete"), new("value", id), new("del_files", "1")],
-                SabnzbdJobCommand.RemoveFromHistory => [new("mode", "history"), new("name", "delete"), new("value", id), new("del_files", "0")],
+                SabnzbdJobCommand.RemoveFromHistory => [new("mode", "history"), new("name", "delete"), new("value", id), new("archive", "0"), new("del_files", "0")],
                 _ => throw new ArgumentOutOfRangeException(nameof(command))
             };
 
