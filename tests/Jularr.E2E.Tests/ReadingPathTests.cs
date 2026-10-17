@@ -68,6 +68,17 @@ namespace Jularr.E2E.Tests
                 // Reading on saves the position in each.
                 await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter One");
+
+                // Reader appearance works on the real EPUB and stays independent from progress.
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.Locator("[data-setting=preset][data-value=light-novel]").ClickAsync();
+                Assert.AreEqual("34rem", await page.Locator(".reader").EvaluateAsync<string>("element => element.style.getPropertyValue('--reader-width')"));
+                Assert.AreEqual("true", await page.Locator("[data-setting=preset][data-value=light-novel]").GetAttributeAsync("aria-pressed"));
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Focus on text" }).ClickAsync();
+                Assert.IsTrue(await page.Locator(".reader").EvaluateAsync<bool>("element => element.classList.contains('reader--focused')"));
+                await page.Keyboard.PressAsync("Escape");
+                Assert.IsFalse(await page.Locator(".reader").EvaluateAsync<bool>("element => element.classList.contains('reader--focused')"));
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.OpenReaderAsync(page, mangaDetails);
                 await Steps.TurnAsync(page);
