@@ -101,7 +101,28 @@ if (reader?.querySelector("[data-role=content]")) {
         if (event.key === "PageDown") page(1, event);
         if (event.key === "PageUp") page(-1, event);
     });
+    // Horizontal touch gestures turn a spread; vertical movement and selections remain native.
+    let pointer: { x: number; y: number } | null = null;
+    let swiped = false;
+    content.addEventListener("pointerdown", event => {
+        if (settings.mode !== "paged" || !(event.target instanceof Element) ||
+            event.target.closest('a, button, input, select, textarea, mark, [contenteditable="true"]')) return;
+        pointer = { x: event.clientX, y: event.clientY };
+        swiped = false;
+    });
+    content.addEventListener("pointerup", event => {
+        if (!pointer) return;
+        const dx = event.clientX - pointer.x;
+        const dy = event.clientY - pointer.y;
+        pointer = null;
+        if (settings.mode !== "paged" || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.4 ||
+            window.getSelection()?.toString()) return;
+        swiped = true;
+        page((dx < 0 ? 1 : -1) * (direction() === "rtl" ? -1 : 1), event);
+    });
+    content.addEventListener("pointercancel", () => { pointer = null; });
     content.addEventListener("click", event => {
+        if (swiped) { swiped = false; return; }
         if (settings.mode !== "paged" || !(event.target instanceof Element) ||
             event.target.closest('a, button, input, select, textarea, mark, [contenteditable="true"]') ||
             window.getSelection()?.toString()) return;
