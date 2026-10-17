@@ -48,7 +48,19 @@ namespace Jularr.Frontend.Framework
                         .Select(track => Track("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))]),
                     Pane("subtitles", "player.subtitles", [
                         Track("subtitle", "", new Text("player.subtitles.off"), true, true, null),
-                        .. (source.Subtitles ?? []).Select(track => Track("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))
+                        .. (source.Subtitles ?? []).Select(track => Track("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language)),
+                        new Div(
+                            new P(new Text("player.subtitle.delay")),
+                            new Div(
+                                new Input().Class("player__speed-range").Attribute("type", "range")
+                                    .Attribute("min", "-10").Attribute("max", "10").Attribute("step", "0.05")
+                                    .Attribute("value", "0").Attribute("data-role", "subtitle-delay")
+                                    .Attribute("aria-label", texts["player.subtitle.delay"]).Attribute("disabled", "disabled"),
+                                new Span(new ValueText("0 s")).Class("player__speed-current").Attribute("data-role", "subtitle-delay-label"),
+                                new Button(new Text("player.subtitle.reset")).Class("player__option").Attribute("type", "button")
+                                    .Attribute("data-action", "subtitle-delay-reset").Attribute("disabled", "disabled")
+                            ).Class("player__speed-adjust")
+                        ).Class("player__settings-group")
                     ]),
                     Pane("info", "player.delivery", [
                         new Div(
