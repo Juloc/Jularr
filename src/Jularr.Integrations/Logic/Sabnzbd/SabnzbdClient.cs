@@ -89,6 +89,54 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             return new SabnzbdHistorySnapshot(jobs);
         }
 
+
+        // Bounded full queue/history reads for the admin console. Tracked-job reads remain unchanged.
+        public async Task<SabnzbdConsoleSnapshot> ReadConsoleAsync(SabnzbdConnection connection, CancellationToken ct)
+        {
+            using var queueResponse = await SendAsync(connection, [new("mode", "queue"), new("start", "0"), new("limit", PageSize)], ct);
+            var queueJson = await RequireBodyAsync(queueResponse, ct);
+            using var queueDocument = JsonDocument.Parse(queueJson);
+            var queue = queueDocument.RootElement.GetProperty("queue");
+            var speedKb = ReadDouble(queue, "kbpersec");
+            var diskMb = ReadDouble(queue, "diskspace1");
+
+            using var historyResponse = await SendAsync(connection, [new("mode", "history"), new("start", "0"), new("limit", PageSize)], ct);
+            var historyJson = await RequireBodyAsync(historyResponse, ct);
+
+            return new SabnzbdConsoleSnapshot(ParseQueueResponse(queueJson).Jobs, ParseHistoryResponse(historyJson).Jobs,
+                speedKb is >= 0 and < 1e9 ? (long?)Math.Round(speedKb.Value * 1024) : null,
+                diskMb is >= 0 and < 1e9 ? (long?)Math.Round(diskMb.Value * 1024 * 1024) : null,
+                ReadBool(queue, "paused") is true);
+        }
+
+        public async Task<IReadOnlyList<string>> ReadCategoriesAsync(SabnzbdConnection connection, CancellationToken ct)
+        {
+            using var response = await SendAsync(connection, [new("mode", "get_cats")], ct);
+            using var document = JsonDocument.Parse(await RequireBodyAsync(response, ct));
+            return ReadStringArray(document.RootElement, "categories");
+        }
+
+        // Never accept a provider mode from user input; destructive operations have explicit branches.
+        public async Task ControlJobAsync(SabnzbdConnection connection, string nzoId, SabnzbdJobCommand command, CancellationToken ct)
+        {
+            var id = ValidateNzoId(nzoId);
+            KeyValuePair<string, string?>[] fields = command switch
+            {
+                SabnzbdJobCommand.Pause => [new("mode", "pause"), new("value", id)],
+                SabnzbdJobCommand.Resume => [new("mode", "resume"), new("value", id)],
+                SabnzbdJobCommand.RemoveFromQueue => [new("mode", "queue"), new("name", "delete"), new("value", id), new("del_files", "1")],
+                SabnzbdJobCommand.RemoveFromHistory => [new("mode", "history"), new("name", "delete"), new("value", id), new("del_files", "0")],
+                _ => throw new ArgumentOutOfRangeException(nameof(command))
+            };
+
+            using var response = await SendAsync(connection, fields, ct);
+            using var document = JsonDocument.Parse(await RequireBodyAsync(response, ct));
+            if (ReadBool(document.RootElement, "status") is not true)
+            {
+                throw new SabnzbdException("SABnzbd did not accept the requested action.");
+            }
+        }
+
         public async Task<string?> FindJobAsync(SabnzbdConnection connection, string name, CancellationToken ct)
         {
             // Recovers a job whose id was never stored.
