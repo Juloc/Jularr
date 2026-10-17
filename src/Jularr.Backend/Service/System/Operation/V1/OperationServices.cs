@@ -12,6 +12,8 @@ using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Service.Admin.Media.V1;
+using Jularr.Integrations.Data.Tmdb;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
@@ -99,17 +101,20 @@ namespace Jularr.Backend.Service.System.Operation.V1
     {
         private const int BatchSize = 500;
         private const int CandidateBatchSize = 100;
+        private const int ExternalLookupsPerScan = 16;
         private readonly StorageAccess _storage;
         private readonly MediaProbeClient _probe;
         private readonly GameRomIdentification _roms;
         private readonly MusicTagIdentification _music;
+        private readonly WorkMetadata _metadata;
 
-        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music)
+        internal ExecuteLibraryScanV1(StorageAccess storage, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music, WorkMetadata metadata)
         {
             _storage = storage;
             _probe = probe;
             _roms = roms;
             _music = music;
+            _metadata = metadata;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -380,6 +385,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private async Task AssignCatalogFoldersAsync(long libraryRootId, MediaType mediaType)
         {
             var matches = new Dictionary<(string Title, int? Year, string Ids), long?>();
+            TmdbConnection? provider = null;
+            var providerUnavailable = false;
+            var externalLookups = 0;
             for (var afterId = 0L; ;)
             {
                 var files = await Context.ExecuteBatchAsync((ctx, ct) =>
@@ -433,18 +441,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
                                     AND (
                                         (
                                             jsonb_array_length(@ProviderIds::jsonb) > 0
-                                            AND EXISTS (
-                                                SELECT 1
-                                                FROM jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
-                                                JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
-                                                    AND identity."Value" = expected."Value" AND identity."WorkId" = work."Id"
-                                            )
                                             AND NOT EXISTS (
-                                                SELECT 1
-                                                FROM jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
-                                                JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
-                                                    AND identity."WorkId" = work."Id"
-                                                WHERE identity."Value" <> expected."Value"
+                                                SELECT
+                                                    1
+                                                FROM
+                                                    jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
+                                                WHERE
+                                                    NOT EXISTS (
+                                                        SELECT
+                                                            1
+                                                        FROM
+                                                            "WorkExternalIdentities" AS identity
+                                                        WHERE
+                                                            identity."WorkId" = work."Id"
+                                                            AND identity."Namespace" = expected."Namespace"
+                                                            AND identity."Value" = expected."Value"
+                                                    )
                                             )
                                         )
                                         OR (
@@ -460,6 +472,56 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
                         }, CancellationToken);
                         workId = candidates.Count == 1 ? candidates[0].Id : null;
+
+                        // An unknown provider identity is never resolved by title alone.
+                        if (workId is null && ids.Count > 0 && !providerUnavailable && externalLookups < ExternalLookupsPerScan
+                            && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
+                            && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
+                        {
+                            externalLookups++;
+                            try
+                            {
+                                provider ??= await _metadata.ConnectAsync(Context, CancellationToken);
+                                int? tmdbId = null;
+                                var verified = true;
+                                foreach (var (source, value) in ids)
+                                {
+                                    int? resolved = source switch
+                                    {
+                                        "tmdb_movie" when mediaType == MediaType.Movie => int.TryParse(value, out var movieId) && movieId > 0 ? movieId : null,
+                                        "tmdb_tv" when mediaType == MediaType.Series => int.TryParse(value, out var seriesId) && seriesId > 0 ? seriesId : null,
+                                        "imdb" or "tvdb" => await _metadata.FindExternalAsync(provider, mediaType, source, value, CancellationToken),
+                                        _ => null
+                                    };
+                                    if (resolved is null || tmdbId is not null && tmdbId != resolved)
+                                    {
+                                        verified = false;
+                                        break;
+                                    }
+
+                                    tmdbId = resolved;
+                                }
+
+                                if (verified && tmdbId is { } id)
+                                {
+                                    var details = await _metadata.ReadWorkAsync(provider, mediaType, id, CancellationToken);
+                                    if ((ids.GetValueOrDefault("imdb") is not { } imdb || details.ImdbId is null || details.ImdbId.Equals(imdb, StringComparison.OrdinalIgnoreCase))
+                                        && (ids.GetValueOrDefault("tvdb") is not { } tvdb || details.TvdbId is null || details.TvdbId.ToString() == tvdb))
+                                    {
+                                        workId = await _metadata.ImportAsync(Context, provider, mediaType, null, id, CancellationToken);
+                                    }
+                                }
+                            }
+                            catch (ServiceUnavailableException)
+                            {
+                                providerUnavailable = true;
+                            }
+                            catch (KeyNotFoundException)
+                            {
+                                // Unresolved IDs remain available for manual identification.
+                            }
+                        }
+
                         if (matches.Count < 10000)
                         {
                             matches[key] = workId;
