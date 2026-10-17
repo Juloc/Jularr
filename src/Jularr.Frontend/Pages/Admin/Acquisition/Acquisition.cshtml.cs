@@ -15,7 +15,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     // Indexers, download clients and subtitle providers, each kind on its own page.
     public sealed partial class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
-        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage, IAntiforgery antiforgery,
+        UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, InspectDownloadClientV1 inspect, ManageDownloadClientJobV1 manage, UpdateDownloadClientCategoriesV1 updateCategories, IAntiforgery antiforgery,
         UiText texts) : JularrPage
     {
         // The kinds each tab adds.
@@ -114,6 +114,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         else
                         {
                             split.Secondary.Add(ConnectionForm(selectedType, csrf));
+                            split.Secondary.Add(DownloadCategoryForm(downloadClient, csrf));
                             split.Secondary.Add(Actions(downloadClient, csrf));
                         }
                     }
@@ -234,6 +235,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if ((action is "cancel" or "removeHistory" or "removeOrphan") && !confirmed) return BadRequest();
             await manage.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()), new DownloadClientJobCommandV1(jobId, action), HttpContext.RequestAborted);
             return LocalRedirect(Address(SelectedId()) + "&Pane=" + (action == "removeHistory" ? "history" : action == "removeOrphan" ? "files" : "downloads"));
+        }
+
+        public async Task<IActionResult> OnPostCategoriesAsync(string? movie, string? tv, string? anime, string? book, string? audiobook,
+            string? manga, string? lightNovel, string? music, string? game)
+        {
+            var data = new DownloadClientCategoriesV1(movie, tv, anime, book, audiobook, manga, lightNovel, music, game);
+            await updateCategories.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(SelectedId()), data, HttpContext.RequestAborted);
+            return LocalRedirect(Address(SelectedId()) + "&Pane=general");
         }
 
         public async Task<IActionResult> OnPostSearchAsync(string? query)
