@@ -49,7 +49,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     job.SizeBytes, job.RemainingBytes, job.TimeLeftSeconds))]),
                 new BaseDataList<DownloadClientHistoryItemV1>([.. snapshot.History.Select(job => new DownloadClientHistoryItemV1(job.NzoId,
                     TextLimit.Cut(job.Name, 1000)!, job.Status, TextLimit.Cut(job.StoragePath, 2048), job.IsFailed))]),
-                [.. categories.Take(200).Select(category => TextLimit.Cut(category, 64)!)], files.CompletePath, files.IncompletePath,
+                [.. categories.Take(200).Select(category => TextLimit.Cut(category, 64)!)],
+                snapshot.TodayBytes, snapshot.WeekBytes, snapshot.MonthBytes, snapshot.TotalBytes,
+                [.. snapshot.OrphanFolders.Where(name => name.Length <= 200).Take(200)],
+                files.CompletePath, files.IncompletePath,
                 files.CompleteAvailable, files.IncompleteAvailable, new BaseDataList<DownloadClientFolderEntryV1>(files.Entries));
         }
     }
@@ -85,21 +88,32 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 "resume" => SabnzbdJobCommand.Resume,
                 "cancel" => SabnzbdJobCommand.RemoveFromQueue,
                 "removeHistory" => SabnzbdJobCommand.RemoveFromHistory,
+                "removeOrphan" => SabnzbdJobCommand.RemoveOrphan,
                 _ => throw new DataValidationException(nameof(Data.Action), "invalid_type")
             };
 
             var connection = new SabnzbdConnection(client.HttpAddress, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
             var snapshot = await _client.ReadConsoleAsync(connection, CancellationToken);
-            var present = action == SabnzbdJobCommand.RemoveFromHistory
-                ? snapshot.History.Any(job => job.NzoId == Data.JobId)
-                : snapshot.Queue.Any(job => job.NzoId == Data.JobId);
+            var present = action switch
+            {
+                SabnzbdJobCommand.RemoveFromHistory => snapshot.History.Any(job => job.NzoId == Data.JobId),
+                SabnzbdJobCommand.RemoveOrphan => snapshot.OrphanFolders.Contains(Data.JobId, StringComparer.Ordinal),
+                _ => snapshot.Queue.Any(job => job.NzoId == Data.JobId)
+            };
             if (!present)
             {
                 throw new DataValidationException(nameof(Data.JobId), "invalid_transition");
             }
 
             // Cancel removes temporary files; history removal only removes the provider's record.
-            await _client.ControlJobAsync(connection, Data.JobId, action, CancellationToken);
+            if (action == SabnzbdJobCommand.RemoveOrphan)
+            {
+                await _client.RemoveOrphanAsync(connection, Data.JobId, CancellationToken);
+            }
+            else
+            {
+                await _client.ControlJobAsync(connection, Data.JobId, action, CancellationToken);
+            }
             return new UpdateResult(true);
         }
     }
@@ -127,6 +141,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var incompleteAvailable = SafeDirectory(incomplete);
 
             var queue = snapshot.Queue.Select(job => job.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var orphans = snapshot.OrphanFolders.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var history = snapshot.History.Select(job => Path.GetFileName(job.StoragePath?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)))
                 .Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var entries = new List<DownloadClientFolderEntryV1>();
@@ -141,7 +156,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     var attributes = File.GetAttributes(entry);
                     if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
                     var size = (attributes & FileAttributes.Directory) != 0 ? null : (long?)new FileInfo(entry).Length;
-                    var assignment = queue.Contains(name) ? "queue" : history.Contains(name) ? "history"
+                    var assignment = folder == "incomplete" && orphans.Contains(name) ? "orphan"
+                        : queue.Contains(name) ? "queue" : history.Contains(name) ? "history"
                         : snapshot.Queue.Count >= 200 || snapshot.History.Count >= 200 ? "unchecked" : "unassigned";
                     entries.Add(new DownloadClientFolderEntryV1(folder, name, size, assignment));
                 }
