@@ -1327,6 +1327,12 @@ namespace Jularr.Backend.Tests
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "Add download client");
+            StringAssert.Contains(html, "Download storage");
+            StringAssert.Contains(html, "Usenet temporary files");
+            StringAssert.Contains(html, "Direct book downloads");
+            StringAssert.Contains(html, "20 GiB");
+            StringAssert.Contains(html, "Not configured");
+            StringAssert.Contains(html, "In-app editing is not available yet.");
             Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
 
             // A news server is entered as server, port and SSL; the fields show their form and explain themselves behind the (i).
