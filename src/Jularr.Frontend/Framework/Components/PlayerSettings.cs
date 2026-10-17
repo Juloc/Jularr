@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Framework
                     new H2(new Text("player.settings")).Class("player__settings-title"),
                     new Button(new Icon("close", assets)).Class("player__button player__settings-close")
                         .Attribute("type", "button").Attribute("data-action", "settings-close")
-                        .Attribute("aria-label", texts["common.close"])
+                        .Attribute("aria-label", texts["player.settings.close"])
                 ).Class("player__settings-header"),
                 new Div(
                     Tab("speed", "player.speed", true),
@@ -84,7 +84,7 @@ namespace Jularr.Frontend.Framework
                     .Attribute("data-" + kind, key).Attribute("aria-pressed", selected ? "true" : "false");
                 if (language is not null) button.Attribute("data-language", language);
                 if (!supported) button.Attribute("disabled", "disabled")
-                    .Attribute("aria-label", texts["player.track.unsupported"]);
+                    .Attribute("aria-description", texts["player.track.unsupported"]);
                 return button;
             }
         }

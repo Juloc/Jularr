@@ -5912,6 +5912,10 @@
    "Player settings",
    "Ustawienia odtwarzacza"
   ],
+  "player.settings.close": [
+   "Close settings",
+   "Zamknij ustawienia"
+  ],
   "player.fit": [
    "Picture size",
    "Rozmiar obrazu"

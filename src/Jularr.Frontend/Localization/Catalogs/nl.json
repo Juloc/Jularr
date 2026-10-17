@@ -5912,6 +5912,10 @@
    "Player settings",
    "Spelerinstellingen"
   ],
+  "player.settings.close": [
+   "Close settings",
+   "Instellingen sluiten"
+  ],
   "player.fit": [
    "Picture size",
    "Beeldgrootte"

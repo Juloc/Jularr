@@ -1570,6 +1570,7 @@ namespace Jularr.Frontend.Localization
             new("player.fullscreen", "Fullscreen"),
             new("player.more", "More"),
             new("player.settings", "Player settings"),
+            new("player.settings.close", "Close settings"),
             new("player.fit", "Picture size"),
             new("player.fit.inside", "Fit"),
             new("player.fit.fill", "Fill"),
