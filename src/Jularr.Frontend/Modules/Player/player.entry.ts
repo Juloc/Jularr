@@ -302,7 +302,8 @@ async function start(player: HTMLElement): Promise<void> {
         }
         fallbackTried = true;
         recoveringDirectPlay = true;
-        const position = Number.isFinite(video.currentTime) ? video.currentTime : plan.resumePositionMs / 1000;
+        const position = video.readyState >= HTMLMediaElement.HAVE_METADATA && Number.isFinite(video.currentTime)
+            ? video.currentTime : plan.resumePositionMs / 1000;
         const shouldPlay = !video.paused || video.readyState === 0;
         if (buffering) buffering.hidden = false;
         let attached = false;
