@@ -87,7 +87,7 @@ async function start(player: HTMLElement): Promise<void> {
         const url = player.dataset.trickplayUrl;
         const preview = player.querySelector<HTMLElement>("[data-role=preview]");
         if (!url || !preview) return;
-        const response = await fetch(url, { credentials: "same-origin" }).catch(() => null);
+        const response = await fetch(url, { credentials: "same-origin", signal }).catch(() => null);
         if (!response?.ok) return;
         const layout = await (response.json() as Promise<{ intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number }>).catch(() => null);
         if (!layout || layout.frames < 1) return;
@@ -118,8 +118,10 @@ async function start(player: HTMLElement): Promise<void> {
     // Planning needs the real browser capabilities; another audio track asks for a new plan.
     async function requestPlan(audioStreamIndex: number | null): Promise<PlaybackPlan | null> {
         for (let attempt = 0; ; attempt++) {
+            if (signal.aborted) return null;
             const response = await fetch(player.dataset.startUrl!, {
                 method: "POST",
+                signal,
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
                 body: JSON.stringify({ ...capabilities(), audioStreamIndex })
@@ -138,6 +140,7 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Conversions use HLS: native where available, otherwise hls.js on demand.
     async function attach(next: PlaybackPlan, position: number, shouldPlay = true): Promise<void> {
+        if (signal.aborted) return;
         hls?.destroy();
         hls = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
@@ -147,6 +150,7 @@ async function start(player: HTMLElement): Promise<void> {
         });
         if (next.playbackModeTypeId !== 1 && video.canPlayType("application/vnd.apple.mpegurl") === "") {
             const { default: Hls } = await import("hls.js/light");
+            if (signal.aborted) return;
             // The server holds a segment until FFmpeg has it (up to two minutes) and answers a passing stall with 503: wait that long and try
             // again instead of giving up, and keep a minute ahead so a slow moment of the storage does not stop the picture.
             const instance = new Hls({
@@ -190,7 +194,7 @@ async function start(player: HTMLElement): Promise<void> {
             const position = video.currentTime;
             const shouldPlay = !video.paused;
             const next = await requestPlan(streamIndex);
-            if (!next) return;
+            if (!next || signal.aborted) return;
             report(true, false);
             plan = next;
             await attach(next, position, shouldPlay);
@@ -290,7 +294,8 @@ async function start(player: HTMLElement): Promise<void> {
         const target = event.target as Element;
         const audio = target.closest<HTMLButtonElement>("[data-audio]");
         if (audio && !audio.disabled && !switching) {
-            void switchAudio(Number(audio.dataset.audio), audio).catch(() => show("failed"));
+            if (audio.getAttribute("aria-pressed") === "true") { panel(null); return; }
+            void switchAudio(Number(audio.dataset.audio), audio).catch(() => { if (!signal.aborted) show("failed"); });
             return;
         }
 
