@@ -17,5 +17,6 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField TimeLeftSeconds = new() { Minimum = 0, Required = false };
         public static readonly BoolField Flag = new();
         public static readonly StringArrayField Categories = new() { MaximumLength = 200, ItemMaximumLength = 64 };
+        public static readonly StringArrayField OrphanFolders = new() { MaximumLength = 200, ItemMaximumLength = 200 };
     }
 }
