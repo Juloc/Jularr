@@ -649,10 +649,33 @@ namespace Jularr.Backend.Tests
                 FROM season CROSS JOIN generate_series(1, 2) AS number;
                 """);
             var workId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Works" WHERE "CanonicalTitle" = 'One Show'"""))!;
-            // The coverage table and view are installed as one part of the new schema.
+            await host.Fixture.RunSqlAsync($"""
+                WITH edition AS (
+                    INSERT INTO "WorkEditions" ("WorkId") VALUES ({workId}) RETURNING "Id", "WorkId"
+                ), version AS (
+                    INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")
+                    SELECT "WorkId", "Id" FROM edition RETURNING "Id", "WorkId"
+                )
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT version."WorkId", version."Id", episode."Id", 1
+                FROM version
+                    JOIN "WorkUnits" AS episode ON episode."WorkId" = version."WorkId"
+                WHERE episode."WorkUnitTypeId" = 2 AND episode."Number" = 1;
+                """);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "MediaAssetAdditionalUnits" ("MediaAssetId", "WorkId", "WorkUnitId")
+                SELECT asset."Id", asset."WorkId", episode."Id"
+                FROM "MediaAssets" AS asset
+                    JOIN "WorkUnits" AS episode ON episode."WorkId" = asset."WorkId"
+                WHERE episode."WorkUnitTypeId" = 2 AND episode."Number" = 2;
+                """);
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssets" """));
+            await host.Fixture.RunSqlAsync("""DELETE FROM "MediaAssets";""");
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetAdditionalUnits" """));
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "MediaAssetUnitCoverage" """));
-            Assert.AreEqual(2L, await host.ScalarAsync($"""SELECT count(*) FROM "WorkUnits" WHERE "WorkId" = {workId} AND "WorkUnitTypeId" = 2"""));
         }
 
         [TestMethod]
