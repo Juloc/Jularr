@@ -58,7 +58,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
             DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search, string? host = null,
-            int? port = null, bool? useSsl = null, string? incompleteRemotePath = null, string? incompleteLocalPath = null)
+            int? port = null, bool? useSsl = null, string? incompleteRemotePath = null, string? incompleteLocalPath = null, string? downloadCategoryMap = null)
         {
             Host = host;
             Port = port;
@@ -87,6 +87,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             LocalPath = localPath;
             IncompleteRemotePath = incompleteRemotePath;
             IncompleteLocalPath = incompleteLocalPath;
+            DownloadCategoryMap = downloadCategoryMap;
             CheckedAt = checkedAt;
             ErrorKey = errorKey;
             Version = version;
@@ -144,6 +145,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
         public string? IncompleteLocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategoryMap))]
+        public string? DownloadCategoryMap { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.CheckedAt))]
         public DateTime? CheckedAt { get; }
@@ -215,6 +219,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             LocalPath = localPath;
             IncompleteRemotePath = incompleteRemotePath;
             IncompleteLocalPath = incompleteLocalPath;
+            DownloadCategoryMap = downloadCategoryMap;
         }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
@@ -262,6 +267,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IncompleteLocalPath))]
         public string? IncompleteLocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategoryMap))]
+        public string? DownloadCategoryMap { get; }
 
         public override void Validate()
         {
