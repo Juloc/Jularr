@@ -362,7 +362,11 @@ async function start(player: HTMLElement): Promise<void> {
 
     function play(): void {
         void video.play().catch(error => {
-            if (error instanceof DOMException && error.name === "AbortError") return;
+            if (signal.aborted || recoveringDirectPlay || error instanceof DOMException && error.name === "AbortError") return;
+            if (error instanceof DOMException && error.name === "NotSupportedError" && plan?.playbackModeTypeId === 1) {
+                void recoverDirectPlay();
+                return;
+            }
             show(error instanceof DOMException && error.name === "NotAllowedError" ? "play_gesture_required" : "failed");
         });
     }
