@@ -68,6 +68,16 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void NamingPattern_OriginalFilename_ExcludesTheExtension()
+        {
+            var values = new NamingValues("Movie", 2020, null, null, null, null, null, null, 1)
+            {
+                OriginalFilename = "Movie.2020.1080p-GROUP"
+            };
+            Assert.AreEqual("Movie.2020.1080p-GROUP", NamingPattern.Apply("{Original Filename}", values));
+        }
+
+        [TestMethod]
         public void NamingPattern_MediaInfoAndCustomFormatTokens_RenderOnlyKnownData()
         {
             var movie = new NamingValues("Film", 2010, null, null, null, "Bluray-1080p", "EVOLVE", null, 1)

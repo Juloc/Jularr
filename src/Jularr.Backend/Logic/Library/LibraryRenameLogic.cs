@@ -186,7 +186,7 @@ namespace Jularr.Backend.Logic.Library
             {
                 MediaTypeId = file.MediaTypeId,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
-                OriginalFilename = Path.GetFileName(file.RelativePath),
+                OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath),
                 OriginalReleaseTitle = file.ReleaseName,
                 Collection = file.Collection,
                 CustomFormats = JsonSerializer.Deserialize<Dictionary<string, string>>(file.CustomFormats),
