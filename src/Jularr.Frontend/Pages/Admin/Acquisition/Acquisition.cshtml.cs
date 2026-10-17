@@ -61,7 +61,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         public string Pane { get; set; } = "general";
 
         [BindProperty(SupportsGet = true)]
-        public string? ConfirmJobId { get; set; };
+        public string? ConfirmJobId { get; set; }
 
 
         protected override void Define(Page page)
