@@ -12,7 +12,7 @@ namespace Jularr.Backend.Service.Core
         private static partial Regex Wrapper();
 
         // The order of a new installation.
-        public static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback"];
+        public static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback", "Artwork"];
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
