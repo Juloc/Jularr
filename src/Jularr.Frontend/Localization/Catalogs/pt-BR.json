@@ -7007,6 +7007,46 @@
   "console.incompleteLocalPath": [
    "Same incomplete folder path visible to Jularr",
    "Same incomplete folder path visible to Jularr"
+  ],
+  "console.mappingTitle": [
+   "Categories by media type (blank uses default)",
+   "Categories by media type (blank uses default)"
+  ],
+  "console.kind.movie": [
+   "Movies",
+   "Movies"
+  ],
+  "console.kind.tv": [
+   "Series",
+   "Series"
+  ],
+  "console.kind.anime": [
+   "Anime",
+   "Anime"
+  ],
+  "console.kind.book": [
+   "Books",
+   "Books"
+  ],
+  "console.kind.audiobook": [
+   "Audiobooks (not routed separately yet)",
+   "Audiobooks (not routed separately yet)"
+  ],
+  "console.kind.manga": [
+   "Manga / comics",
+   "Manga / comics"
+  ],
+  "console.kind.lightNovel": [
+   "Light novels",
+   "Light novels"
+  ],
+  "console.kind.music": [
+   "Music",
+   "Music"
+  ],
+  "console.kind.game": [
+   "Games",
+   "Games"
   ]
  }
 }
