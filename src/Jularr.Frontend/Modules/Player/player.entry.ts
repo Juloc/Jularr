@@ -44,6 +44,8 @@ async function start(player: HTMLElement): Promise<void> {
     let metadataListener: AbortController | null = null;
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
+    let recoveringDirectPlay = false;
+    let fallbackTried = false;
     let idle = 0;
     let subtitleDelay = 0;
     const cueTimes = new WeakMap<TextTrackCue, { start: number; end: number }>();
@@ -121,7 +123,7 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     // Planning needs the real browser capabilities; another audio track asks for a new plan.
-    async function requestPlan(audioStreamIndex: number | null): Promise<PlaybackPlan | null> {
+    async function requestPlan(audioStreamIndex: number | null, forceHls = false): Promise<PlaybackPlan | null> {
         for (let attempt = 0; ; attempt++) {
             if (signal.aborted) return null;
             const response = await fetch(player.dataset.startUrl!, {
@@ -129,7 +131,7 @@ async function start(player: HTMLElement): Promise<void> {
                 signal,
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-                body: JSON.stringify({ ...capabilities(), audioStreamIndex })
+                body: JSON.stringify({ ...capabilities(), ...(forceHls ? { containers: ["hls"] } : {}), audioStreamIndex })
             });
             if (response.ok) {
                 status.hidden = true;
@@ -202,6 +204,7 @@ async function start(player: HTMLElement): Promise<void> {
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
+            hideBuffering();
             if (shouldPlay) play();
         }, { once: true, signal: metadataListener.signal });
     }
@@ -284,7 +287,34 @@ async function start(player: HTMLElement): Promise<void> {
         video.addEventListener(name, watchBuffering, { signal });
     for (const name of ["canplay", "playing", "seeked", "pause", "ended", "emptied"])
         video.addEventListener(name, hideBuffering, { signal });
-    video.addEventListener("error", () => { hideBuffering(); show("failed"); }, { signal });
+    // Browser probes are advisory: when Direct Play really fails, retry once through the server's
+    // existing Remux/Transcode planner. An unavailable FFmpeg/HLS path still fails visibly.
+    async function recoverDirectPlay(): Promise<void> {
+        hideBuffering();
+        if (signal.aborted || recoveringDirectPlay) return;
+        if (fallbackTried || plan?.playbackModeTypeId !== 1 || !capabilities().containers.includes("hls")) {
+            show("failed");
+            return;
+        }
+        fallbackTried = true;
+        recoveringDirectPlay = true;
+        const position = Number.isFinite(video.currentTime) ? video.currentTime : plan.resumePositionMs / 1000;
+        const shouldPlay = !video.paused || video.readyState === 0;
+        if (buffering) buffering.hidden = false;
+        try {
+            const next = await requestPlan(null, true);
+            if (!next || signal.aborted) return;
+            report(true, false);
+            plan = next;
+            await attach(next, position, shouldPlay);
+        } catch {
+            if (!signal.aborted) show("failed");
+        } finally {
+            recoveringDirectPlay = false;
+            if (signal.aborted || !plan || plan.playbackModeTypeId === 1) hideBuffering();
+        }
+    }
+    video.addEventListener("error", () => { void recoverDirectPlay(); }, { signal });
 
     // The real decoded/buffered ranges are read from the media element; no client-side guessing.
     const bufferBar = player.querySelector<HTMLElement>("[data-role=buffered]");
