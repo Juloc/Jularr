@@ -195,19 +195,19 @@ if (reader?.querySelector("[data-role=content]")) {
         scrollToBlock(Number(block));
     }
 
-    function page(direction: number, event: Event) {
+    function page(step: number, event: Event) {
         if (settings.mode !== "paged") return;
         event.preventDefault();
         const width = content.clientWidth;
         const directionOfContent = direction();
         const atEnd = Math.abs(content.scrollLeft) + width >= content.scrollWidth - 4;
         const atStart = Math.abs(content.scrollLeft) <= 4;
-        if (direction > 0 && atEnd) {
+        if (step > 0 && atEnd) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=next]")?.click();
-        } else if (direction < 0 && atStart) {
+        } else if (step < 0 && atStart) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=previous]")?.click();
         } else {
-            content.scrollBy({ left: direction * width * (directionOfContent === "rtl" ? -1 : 1),
+            content.scrollBy({ left: step * width * (directionOfContent === "rtl" ? -1 : 1),
                 behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
         }
     }
