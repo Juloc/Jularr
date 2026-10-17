@@ -98,7 +98,7 @@ namespace Jularr.Backend.Tests
 
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 2 WHERE \"Id\" = 41");
             using var unauthorized = await host.SendAsync(HttpMethod.Post, Route + workId + "/artwork/export");
-            Assert.AreEqual(HttpStatusCode.Forbidden, unauthorized.StatusCode);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
         }
 
         [TestMethod]
