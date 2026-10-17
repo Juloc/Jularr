@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 
@@ -6,6 +7,32 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
     public sealed partial class AcquisitionModel
     {
+        private IUiComponent DownloadCategoryForm(AcquisitionConnectionDetailsV1 connection, string? csrf)
+        {
+            var map = JsonSerializer.Deserialize<Dictionary<string, string>>(connection.DownloadCategoryMap ?? "{}") ?? [];
+            string? Read(string kind) => map.GetValueOrDefault(kind);
+
+            var input = new DownloadClientCategoriesV1(Read("Movie"), Read("Tv"), Read("Anime"), Read("Book"), Read("Audiobook"),
+                Read("Manga"), Read("LightNovel"), Read("Music"), Read("Game"));
+
+            return new Form<DownloadClientCategoriesV1>(form =>
+            {
+                form.Section("console.mappingTitle", fields =>
+                {
+                    fields.Text(item => item.Movie, "console.kind.movie");
+                    fields.Text(item => item.Tv, "console.kind.tv");
+                    fields.Text(item => item.Anime, "console.kind.anime");
+                    fields.Text(item => item.Book, "console.kind.book");
+                    fields.Text(item => item.Audiobook, "console.kind.audiobook");
+                    fields.Text(item => item.Manga, "console.kind.manga");
+                    fields.Text(item => item.LightNovel, "console.kind.lightNovel");
+                    fields.Text(item => item.Music, "console.kind.music");
+                    fields.Text(item => item.Game, "console.kind.game");
+                });
+                form.Submit("common.save");
+            }, Address(connection.Id, handler: "Categories"), csrf, input);
+        }
+
         private IUiComponent DownloadClientTabs(long connectionId)
         {
             var tabs = new[]
