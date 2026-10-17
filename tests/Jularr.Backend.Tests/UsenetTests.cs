@@ -35,7 +35,7 @@ namespace Jularr.Backend.Tests
             using var directory = new TemporaryDirectory();
             var options = new StorageOptions();
             Assert.IsNull(options.ReadyUsenetDownloadPath());
-            Assert.ThrowsException<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
+            Assert.Throws<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
 
             options.DirectDownloadPath = "relative/downloads";
             Assert.IsNull(options.ReadyUsenetDownloadPath());
@@ -92,7 +92,7 @@ namespace Jularr.Backend.Tests
             var server = new UsenetServer("127.0.0.1", news.Port, false, "reader", "news-secret", 3);
             var downloader = new UsenetDownloader();
 
-            await Assert.ThrowsExceptionAsync<UsenetStorageBudgetException>(async () =>
+            await Assert.ThrowsAsync<UsenetStorageBudgetException>(async () =>
                 await downloader.DownloadAsync(server, files, staging.Path, new HashSet<string>(), DateTimeOffset.UtcNow.AddSeconds(15), 2_500, CancellationToken.None));
             Assert.IsTrue(new FileInfo(Path.Combine(staging.Path, "quota.mkv")).Length <= 2_500,
                 "Even valid, overlapping yEnc writes must never grow the article file beyond the quota.");
