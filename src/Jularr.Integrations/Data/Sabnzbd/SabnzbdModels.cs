@@ -146,18 +146,25 @@ namespace Jularr.Integrations.Data.Sabnzbd
         Pause,
         Resume,
         RemoveFromQueue,
-        RemoveFromHistory
+        RemoveFromHistory,
+        RemoveOrphan
     }
 
     internal sealed class SabnzbdConsoleSnapshot
     {
-        public SabnzbdConsoleSnapshot(IReadOnlyList<SabnzbdQueueJob> queue, IReadOnlyList<SabnzbdHistoryJob> history, long? speedBytesPerSecond, long? freeBytes, bool isPaused)
+        public SabnzbdConsoleSnapshot(IReadOnlyList<SabnzbdQueueJob> queue, IReadOnlyList<SabnzbdHistoryJob> history, long? speedBytesPerSecond, long? freeBytes, bool isPaused,
+            long? todayBytes = null, long? weekBytes = null, long? monthBytes = null, long? totalBytes = null, IReadOnlyList<string>? orphanFolders = null)
         {
             Queue = queue;
             History = history;
             SpeedBytesPerSecond = speedBytesPerSecond;
             FreeBytes = freeBytes;
             IsPaused = isPaused;
+            TodayBytes = todayBytes;
+            WeekBytes = weekBytes;
+            MonthBytes = monthBytes;
+            TotalBytes = totalBytes;
+            OrphanFolders = orphanFolders ?? [];
         }
 
         public IReadOnlyList<SabnzbdQueueJob> Queue { get; }
@@ -165,6 +172,11 @@ namespace Jularr.Integrations.Data.Sabnzbd
         public long? SpeedBytesPerSecond { get; }
         public long? FreeBytes { get; }
         public bool IsPaused { get; }
+        public long? TodayBytes { get; }
+        public long? WeekBytes { get; }
+        public long? MonthBytes { get; }
+        public long? TotalBytes { get; }
+        public IReadOnlyList<string> OrphanFolders { get; }
     }
 
     // Messages never contain the API key.
