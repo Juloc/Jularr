@@ -114,7 +114,7 @@ namespace Jularr.Backend.Tests
         {
             // Small opaque PNG; the production image converter must return actual JPEG bytes.
             private static readonly byte[] Png = Convert.FromBase64String(
-                "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGN067nEwMDAxMDAwMDAAAATTgGo4Zf9BgAAAABJRU5ErkJggg==");
+                "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPUqNjCwMDAxMDAwMDAAAAPjgFYnAaHkgAAAABJRU5ErkJggg==");
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
             {
