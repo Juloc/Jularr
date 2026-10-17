@@ -135,7 +135,7 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     // Conversions use HLS: native where available, otherwise hls.js on demand.
-    async function attach(next: PlaybackPlan, position: number): Promise<void> {
+    async function attach(next: PlaybackPlan, position: number, shouldPlay = true): Promise<void> {
         hls?.destroy();
         hls = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
@@ -176,21 +176,23 @@ async function start(player: HTMLElement): Promise<void> {
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
-            play();
+            if (shouldPlay) play();
         }, { once: true });
     }
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.
-    async function switchAudio(streamIndex: number): Promise<void> {
+    async function switchAudio(streamIndex: number, selected: HTMLButtonElement): Promise<void> {
         if (switching) return;
         switching = true;
         try {
             const position = video.currentTime;
+            const shouldPlay = !video.paused;
             const next = await requestPlan(streamIndex);
             if (!next) return;
             report(true, false);
             plan = next;
-            await attach(next, position);
+            await attach(next, position, shouldPlay);
+            choose("data-audio", selected);
         } finally {
             switching = false;
         }
@@ -286,8 +288,7 @@ async function start(player: HTMLElement): Promise<void> {
         const target = event.target as Element;
         const audio = target.closest<HTMLButtonElement>("[data-audio]");
         if (audio && !audio.disabled && !switching) {
-            choose("data-audio", audio);
-            void switchAudio(Number(audio.dataset.audio));
+            void switchAudio(Number(audio.dataset.audio), audio).catch(() => show("failed"));
             return;
         }
 
@@ -343,7 +344,8 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
-        if (event.target instanceof HTMLInputElement && event.target.type !== "range") return;
+        if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement &&
+            event.target.closest('a, button, input, select, textarea, [contenteditable="true"]')) return;
         if (player.classList.contains("player--mini") && !player.contains(event.target as Node)) return;
         const keys: Record<string, () => void> = {
             " ": actions.toggle, k: actions.toggle, ArrowLeft: () => seek(-10), j: () => seek(-10), ArrowRight: () => seek(30), l: () => seek(30),
