@@ -87,6 +87,17 @@ namespace Jularr.E2E.Tests
                     null, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual("Hello from the subtitle file.", await page.Locator("video").EvaluateAsync<string>(
                     "video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].text"));
+
+                // Delay adjusts the real text cue and reset recovers its original timestamps.
+                await page.Locator("[data-action=subtitles]").ClickAsync();
+                var delay = page.Locator("[data-role=subtitle-delay]");
+                await Assertions.Expect(delay).ToBeEnabledAsync();
+                await delay.EvaluateAsync("input => { input.value = '1.5'; input.dispatchEvent(new Event('input', { bubbles: true })); }");
+                Assert.AreEqual(1.5, await page.Locator("video").EvaluateAsync<double>(
+                    "video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].startTime"), 0.01);
+                await page.Locator("[data-action=subtitle-delay-reset]").ClickAsync();
+                Assert.AreEqual(0, await page.Locator("video").EvaluateAsync<double>(
+                    "video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].startTime"), 0.01);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
                 // The broken file stops with the player's general failure, not silently.
