@@ -484,8 +484,31 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         }, CancellationToken);
                         workId = candidates.Count == 1 ? candidates[0].Id : null;
 
+                        // A partial identity match may belong to an existing Work. Do not create a duplicate catalog entry.
+                        var hasKnownIdentity = false;
+                        if (workId is null && ids.Count > 0)
+                        {
+                            var owners = await Context.ExecuteBatchAsync((ctx, ct) =>
+                            {
+                                var sql = new SqlStatement();
+                                sql.Statement =
+                                    """
+                                    SELECT DISTINCT
+                                        identity."WorkId" AS "Id"
+                                    FROM
+                                        jsonb_to_recordset(@ProviderIds::jsonb) AS expected("Namespace" text, "Value" text)
+                                        JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = expected."Namespace"
+                                            AND identity."Value" = expected."Value"
+                                    LIMIT 1;
+                                    """;
+                                sql.Parameters.Add(new WorkFolderMatchData(mediaType, parsed.Title, parsed.Year, supplied));
+                                return ctx.ReadSql.ReadListAsync<WorkIdData>(sql, ct);
+                            }, CancellationToken);
+                            hasKnownIdentity = owners.Count > 0;
+                        }
+
                         // An unknown provider identity is never resolved by title alone.
-                        if (workId is null && ids.Count > 0 && !providerUnavailable && externalLookups < ExternalLookupsPerScan
+                        if (workId is null && !hasKnownIdentity && ids.Count > 0 && !providerUnavailable && externalLookups < ExternalLookupsPerScan
                             && ids.Keys.All(name => name is "imdb" or "tvdb" or "tmdb_movie" or "tmdb_tv")
                             && (mediaType == MediaType.Series || !ids.ContainsKey("tvdb")))
                         {

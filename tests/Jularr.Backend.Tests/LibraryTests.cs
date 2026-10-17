@@ -476,6 +476,7 @@ namespace Jularr.Backend.Tests
 
             await ScanAsync(host, rootId);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL AND NOT "IsSubtitle" """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
         private sealed class FakeTmdbIdentity : HttpMessageHandler
