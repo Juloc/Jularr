@@ -35,7 +35,7 @@ namespace Jularr.Backend.Tests
             using var directory = new TemporaryDirectory();
             var options = new StorageOptions();
             Assert.IsNull(options.ReadyUsenetDownloadPath());
-            Assert.ThrowsException<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
+            Assert.Throws<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
 
             options.DirectDownloadPath = "relative/downloads";
             Assert.IsNull(options.ReadyUsenetDownloadPath());
