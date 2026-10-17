@@ -262,7 +262,7 @@
         padding: 0 12px;
         cursor: pointer;
 
-        &[aria-checked=true] { background-color: var(--accent); color: var(--accent-contrast); }
+        &[aria-pressed=true] { background-color: var(--accent); color: var(--accent-contrast); }
         &:focus-visible { outline: 2px solid #fff; }
     }
 
