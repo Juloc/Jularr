@@ -128,7 +128,7 @@ namespace Jularr.Backend.Logic.Library
             var conflicted = false;
             try
             {
-                using var reader = XmlReader.Create(new StringReader(xml), new XmlReaderSettings
+                using var reader = XmlReader.Create(new StringReader(xml.TrimStart('\uFEFF')), new XmlReaderSettings
                 {
                     DtdProcessing = DtdProcessing.Prohibit,
                     XmlResolver = null,

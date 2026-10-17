@@ -425,6 +425,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(conflicted);
             Assert.AreEqual("tt39551287", ids["imdb"]);
             Assert.AreEqual("24680", ids["tvdb"]);
+            Assert.IsFalse(MediaPathParser.ParseNfo("\uFEFF" + """<tvshow><imdbid>tt39551287</imdbid></tvshow>""", MediaType.Series).Conflicted);
 
             Assert.IsTrue(MediaPathParser.ParseNfo(
                 """<tvshow><imdbid>tt39551287</imdbid><uniqueid type="imdb">tt12345678</uniqueid></tvshow>""", MediaType.Series).Conflicted);
@@ -454,6 +455,53 @@ namespace Jularr.Backend.Tests
 
             await ScanAsync(host, rootId);
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
+        }
+
+        [TestMethod]
+        public async Task Scan_MovieNfoMatchesAnUnrelatedFolderName()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", "Arbitrary Folder");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "movie.nfo"), """<movie><uniqueid type="imdb">tt12345678</uniqueid></movie>""");
+            File.WriteAllText(Path.Combine(folder, "Unknown Title.mkv"), "movie");
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Canonical Film') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt12345678' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NOT NULL """));
+        }
+
+        [TestMethod]
+        public async Task Scan_ConflictingNfoIdentity_DoesNotAssociateMovie()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", "Canonical Film - tt12345678");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "movie.nfo"), """<movie><imdbid>tt39551287</imdbid></movie>""");
+            File.WriteAllText(Path.Combine(folder, "Canonical Film - tt12345678.mkv"), "movie");
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Canonical Film') RETURNING "Id"
+                )
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                SELECT "Id", 'imdb', 'tt12345678' FROM work;
+                """);
+
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "StoredFiles" WHERE "MediaAssetId" IS NULL """));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Works" """));
         }
 
