@@ -87,6 +87,10 @@ if (reader?.querySelector("[data-role=content]")) {
         try { localStorage.setItem(SettingsKey, JSON.stringify(settings)); } catch { /* Optional device storage. */ }
     }));
 
+    // Paged transport is available without gesture or keyboard shortcuts.
+    reader.querySelectorAll<HTMLButtonElement>("[data-page-step]").forEach(button =>
+        button.addEventListener("click", event => page(Number(button.dataset.pageStep), event)));
+
     // Paged mode turns pages; the edges continue to the neighbouring section.
     document.addEventListener("keydown", event => {
         if (event.key === "Escape" && reader!.classList.contains("reader--focused")) {
@@ -131,9 +135,9 @@ if (reader?.querySelector("[data-role=content]")) {
         page(right === (direction() === "rtl") ? -1 : 1, event);
     });
 
-    content.addEventListener("scroll", schedule, { passive: true });
+    content.addEventListener("scroll", () => { updatePageButtons(); schedule(); }, { passive: true });
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", () => scrollToBlock(anchorBlock));
+    window.addEventListener("resize", () => { scrollToBlock(anchorBlock); updatePageButtons(); });
     window.addEventListener("pagehide", () => report(true));
 
     function load(): ReaderSettings {
@@ -165,6 +169,7 @@ if (reader?.querySelector("[data-role=content]")) {
             const active = button.dataset.value === selected;
             button.setAttribute("aria-pressed", String(active));
         });
+        updatePageButtons();
     }
 
     function setFocusMode(enabled: boolean): void {
@@ -214,6 +219,18 @@ if (reader?.querySelector("[data-role=content]")) {
         const block = linked ?? (match && Number(match[1]) === section ? match[2] : null);
         if (location.hash || block === null) return;
         scrollToBlock(Number(block));
+    }
+
+    function updatePageButtons(): void {
+        const paged = settings.mode === "paged";
+        const offset = Math.abs(content.scrollLeft);
+        const atEnd = offset + content.clientWidth >= content.scrollWidth - 4;
+        reader!.querySelectorAll<HTMLButtonElement>("[data-page-step]").forEach(button => {
+            button.hidden = !paged;
+            const step = Number(button.dataset.pageStep);
+            button.disabled = paged && (step < 0 ? offset <= 4 && !reader!.querySelector("[data-role=previous]")
+                : atEnd && !reader!.querySelector("[data-role=next]"));
+        });
     }
 
     function page(step: number, event: Event) {
