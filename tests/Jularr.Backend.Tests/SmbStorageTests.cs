@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Playback.V1;
@@ -13,10 +13,10 @@ using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Tests
 {
@@ -328,7 +328,7 @@ namespace Jularr.Backend.Tests
             var sought = await transcodes.GetSegmentAsync(session, 7, 1, CancellationToken.None);
             Assert.IsTrue(new FileInfo(first).Length > 188);
             Assert.IsTrue(new FileInfo(sought).Length > 188);
-            Assert.AreEqual(0x47, File.ReadAllBytes(sought)[0]);
+            Assert.AreEqual((byte)0x47, File.ReadAllBytes(sought)[0]);
             transcodes.Stop(session);
             Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
         }
