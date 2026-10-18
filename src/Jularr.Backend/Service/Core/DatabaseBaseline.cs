@@ -13,6 +13,7 @@ namespace Jularr.Backend.Service.Core
 
         // The order of a new installation.
         public static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback"];
+        public static readonly string[] FreshMigrations = ["20261018_01_DiscoverySnapshots"];
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
@@ -27,14 +28,16 @@ namespace Jularr.Backend.Service.Core
                 }
             }
 
-            foreach (var name in Baselines)
+            // Both ordinary baselines and versioned additions are installed only when empty.
+            // A database that already has tables is never modified by this host.
+            foreach (var resource in Baselines.Select(name => "Jularr.Database." + name + ".sql")
+                .Concat(FreshMigrations.Select(name => "Jularr.Database.Migrations." + name + ".up.sql")))
             {
-                // Each baseline is its own transaction when applied alone; here they share one.
-                using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!);
+                using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream(resource)!);
                 var text = await reader.ReadToEndAsync(cancellationToken);
                 if (Wrapper().Count(text) != 2 || text.Split("COMMIT;").Length != 2)
                 {
-                    throw new InvalidDataException("The " + name + " baseline must be exactly one BEGIN ... COMMIT block.");
+                    throw new InvalidDataException("The " + resource + " SQL resource must be exactly one BEGIN ... COMMIT block.");
                 }
 
                 var baseline = Wrapper().Replace(text, "");

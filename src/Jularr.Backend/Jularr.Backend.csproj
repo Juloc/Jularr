@@ -18,5 +18,7 @@
     <EmbeddedResource Include="../../database/Storage.sql" LogicalName="Jularr.Database.Storage.sql" />
     <EmbeddedResource Include="../../database/Library.sql" LogicalName="Jularr.Database.Library.sql" />
     <EmbeddedResource Include="../../database/Playback.sql" LogicalName="Jularr.Database.Playback.sql" />
+    <EmbeddedResource Include="../../database/migrations/20261018_01_DiscoverySnapshots.up.sql" LogicalName="Jularr.Database.Migrations.20261018_01_DiscoverySnapshots.up.sql" />
+    <EmbeddedResource Include="../../database/migrations/20261018_01_DiscoverySnapshots.down.sql" LogicalName="Jularr.Database.Migrations.20261018_01_DiscoverySnapshots.down.sql" />
   </ItemGroup>
 </Project>
