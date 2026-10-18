@@ -308,6 +308,10 @@ namespace Jularr.Frontend.Pages.User.Discover
             foreach (var item in _continue.Where(item => selected is null
                 || selected.MediaSubtypeId is null && item.MediaTypeId == selected.MediaTypeId))
             {
+                // Continue results have no subtype. Only use a genuinely visible
+                // base-media scope until work/subtype identity is part of the payload.
+                var mediaScope = Listed.FirstOrDefault(scope => !scope.IsCatalog && scope.MediaTypeId == item.MediaTypeId);
+                if (mediaScope is null) continue;
                 var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
                 if (readable ? !texts.CanRead() : !texts.CanPlay()) continue;
 
@@ -315,7 +319,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var details = "/Details/" + workId;
                 var action = (readable ? "/Read/" : "/Player/")
                     + item.MediaAssetId.ToString(CultureInfo.InvariantCulture);
-                var hero = new MediaHero(item.Title, item.PosterUrl, null, null,
+                var hero = new MediaHero(item.Title, item.PosterUrl, texts["discover.type." + mediaScope.Slug], null,
                     "media.continue", action, details);
                 candidates.Add(new HeroCandidate<MediaHero>("work:" + workId,
                     item.MediaTypeId.ToString(), null, true, hero));
@@ -342,7 +346,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                                 item.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
                                     : item.Namespace + ":" + item.ExternalId,
                                 scope.Slug, DiscoverFeedType.Trending, false,
-                                new MediaHero(item.Title, item.PosterUrl, null, null,
+                                new MediaHero(item.Title, item.PosterUrl, texts["discover.type." + scope.Slug], null,
                                     requestable ? "request.create" : "media.details",
                                     href, requestable ? href : null)));
                         }
@@ -359,8 +363,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                                 item.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
                                     : "tmdb:" + item.MediaTypeId + ":" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
                                 scope.Slug, DiscoverFeedType.Trending, false,
-                                new MediaHero(item.Title, item.BackdropUrl ?? item.PosterUrl, null,
-                                    item.Overview, actionKey ?? "media.details", actionHref ?? details,
+                                new MediaHero(item.Title, item.BackdropUrl ?? item.PosterUrl,
+                                    texts["discover.type." + scope.Slug], item.Overview, actionKey ?? "media.details", actionHref ?? details,
                                     actionKey is null ? null : details)));
                         }
                     }
