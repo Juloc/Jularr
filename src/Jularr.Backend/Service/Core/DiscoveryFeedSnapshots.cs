@@ -115,7 +115,8 @@ namespace Jularr.Backend.Service.Core
         private async Task<IReadOnlyList<T>> FetchAndSaveAsync<T>(string key, string providerKey, TimeSpan freshFor,
             TimeSpan retainFor, Func<CancellationToken, Task<IReadOnlyList<T>>> fetch, CancellationToken ct)
         {
-            var items = await fetch(ct);
+            // A provider that ignores cancellation must not hold the single-flight gate forever.
+            var items = await fetch(ct).WaitAsync(FetchTimeout, ct);
             if (items.Count == 0)
             {
                 // An empty or partial provider response must never wipe last-known-good.
