@@ -278,8 +278,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
-            if ((texts.CanPlay() || texts.CanRead())
-                && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading]))
+            // The Hero can contain recent progress even if the corresponding
+            // Continue shelf is hidden in the user's home layout.
+            if (texts.CanPlay() || texts.CanRead())
             {
                 _continue = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
             }
@@ -298,66 +299,82 @@ namespace Jularr.Frontend.Pages.User.Discover
         private async Task LoadListedAsync() =>
             _scopes ??= await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
 
-        // Read a real permitted feed before first paint. The shared persisted feed read will
-        // replace this single-source selection when the discovery snapshot contract is ready.
+        // A bounded first-render candidate pool. Only the currently used Trending feed
+        // is consulted here, so this slice adds no new provider calls to the home path.
+        // Cross-type warm-only feeds are wired in a subsequent Backend slice.
         private async Task LoadFeaturedAsync(DiscoverScopeV1? selected)
         {
+            var candidates = new List<HeroCandidate<MediaHero>>();
+            foreach (var item in _continue.Where(item => selected is null
+                || selected.MediaSubtypeId is null && item.MediaTypeId == selected.MediaTypeId))
+            {
+                var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
+                if (readable ? !texts.CanRead() : !texts.CanPlay()) continue;
+
+                var workId = item.WorkId.ToString(CultureInfo.InvariantCulture);
+                var details = "/Details/" + workId;
+                var action = (readable ? "/Read/" : "/Player/")
+                    + item.MediaAssetId.ToString(CultureInfo.InvariantCulture);
+                var hero = new MediaHero(item.Title, item.PosterUrl, null, null,
+                    "media.continue", action, details);
+                candidates.Add(new HeroCandidate<MediaHero>("work:" + workId,
+                    item.MediaTypeId.ToString(), null, true, hero));
+            }
+
             var scope = Listed.FirstOrDefault(type => (selected is null || type.Slug == selected.Slug)
                 && type.Feeds.Contains(DiscoverFeedType.Trending));
-            if (scope is null)
+            if (scope is not null)
             {
-                return;
-            }
-
-            try
-            {
-                if (scope.IsCatalog)
+                try
                 {
-                    var items = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
-                        new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), HttpContext.RequestAborted);
-                    // A random, unique choice per visit from the genuine authorized feed.
-                    // The full eight-slide collection will be fed by the shared warm-snapshot reader.
-                    var catalogPicks = HeroSelection.Choose(items
-                        .Where(value => !string.IsNullOrWhiteSpace(value.Namespace) && !string.IsNullOrWhiteSpace(value.ExternalId))
-                        .Select(value => new HeroCandidate<DiscoverCatalogItemV1>(
-                            value.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
-                                : value.Namespace + ":" + value.ExternalId,
-                            scope.Slug, DiscoverFeedType.Trending, false, value)));
-                    var item = catalogPicks.FirstOrDefault()?.Content;
-                    if (item is null)
+                    if (scope.IsCatalog)
                     {
-                        return;
+                        var items = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
+                            new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), HttpContext.RequestAborted);
+                        foreach (var item in items.Where(value => !string.IsNullOrWhiteSpace(value.Namespace)
+                            && !string.IsNullOrWhiteSpace(value.ExternalId)))
+                        {
+                            var href = item.WorkId is { } workId
+                                ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
+                                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
+                            var requestable = item.WorkId is null && texts.CanRequest();
+                            candidates.Add(new HeroCandidate<MediaHero>(
+                                item.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
+                                    : item.Namespace + ":" + item.ExternalId,
+                                scope.Slug, DiscoverFeedType.Trending, false,
+                                new MediaHero(item.Title, item.PosterUrl, null, null,
+                                    requestable ? "request.create" : "media.details",
+                                    href, requestable ? href : null)));
+                        }
                     }
-
-                    var href = item.WorkId is { } workId
-                        ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-                        : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-                    var requestable = item.WorkId is null && texts.CanRequest();
-                    _featured = new MediaHero(item.Title, item.PosterUrl, null, null, requestable ? "request.create" : "media.details", href,
-                        requestable ? href : null);
-                    return;
+                    else
+                    {
+                        var items = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(
+                            new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), HttpContext.RequestAborted);
+                        foreach (var item in items.Where(value => value.WorkId is not null || value.TmdbId is not null))
+                        {
+                            var (actionKey, actionHref) = Action(item);
+                            var details = DetailsHref(item);
+                            candidates.Add(new HeroCandidate<MediaHero>(
+                                item.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
+                                    : "tmdb:" + item.MediaTypeId + ":" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
+                                scope.Slug, DiscoverFeedType.Trending, false,
+                                new MediaHero(item.Title, item.BackdropUrl ?? item.PosterUrl, null,
+                                    item.Overview, actionKey ?? "media.details", actionHref ?? details,
+                                    actionKey is null ? null : details)));
+                        }
+                    }
                 }
-
-                var results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(
-                    new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), HttpContext.RequestAborted);
-                var picks = HeroSelection.Choose(results.Where(item => item.WorkId is not null || item.TmdbId is not null)
-                    .Select(item => new HeroCandidate<DiscoverItemV1>(
-                        item.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
-                            : "tmdb:" + item.MediaTypeId + ":" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
-                        scope.Slug, DiscoverFeedType.Trending, false, item)));
-                var featured = picks.FirstOrDefault()?.Content;
-                if (featured is null)
+                catch (ServiceUnavailableException)
                 {
-                    return;
+                    // Optional source can fail without suppressing local Continue slides.
                 }
-
-                var (actionKey, actionHref) = Action(featured);
-                _featured = new MediaHero(featured.Title, featured.BackdropUrl ?? featured.PosterUrl, null, featured.Overview,
-                    actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured));
             }
-            catch (ServiceUnavailableException)
+
+            var selectedSlides = HeroSelection.Choose(candidates);
+            if (selectedSlides.Count > 0)
             {
-                // An optional Hero must never prevent local shelves from rendering.
+                _featured = new MediaHeroCarousel(assets, [.. selectedSlides.Select(item => item.Content)]);
             }
         }
 
