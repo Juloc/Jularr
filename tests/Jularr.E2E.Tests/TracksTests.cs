@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -68,6 +70,14 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-pressed"));
                 var languages = new[] { await audio.Nth(0).GetAttributeAsync("data-language"), await audio.Nth(1).GetAttributeAsync("data-language") };
                 Assert.IsTrue(languages.All(language => !string.IsNullOrEmpty(language)) && languages[0] != languages[1], string.Join(", ", languages));
+                // A source swap must not save the new session at zero when the old video pauses.
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 2", null, new() { Timeout = Steps.MediaTimeout });
+                var progressRequests = new ConcurrentQueue<(string Url, string Body)>();
+                page.Request += (_, request) =>
+                {
+                    if (request.Method == "PUT" && request.Url.Contains("/api/v1/playback/sessions/", StringComparison.Ordinal))
+                        progressRequests.Enqueue((request.Url, request.PostData ?? ""));
+                };
                 var stream = await audio.Nth(1).GetAttributeAsync("data-audio");
                 var source = await page.Locator("video").EvaluateAsync<string>("video => video.currentSrc");
                 var plan = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
@@ -77,6 +87,13 @@ namespace Jularr.E2E.Tests
                 await page.WaitForFunctionAsync("source => document.querySelector('video').currentSrc !== source", source, new() { Timeout = Steps.MediaTimeout });
                 var switchedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", switchedAt, new() { Timeout = Steps.MediaTimeout });
+                using (var planData = JsonDocument.Parse(await plan.TextAsync()))
+                {
+                    var newSession = planData.RootElement.GetProperty("playbackSessionId").GetString()!;
+                    Assert.IsFalse(progressRequests.Any(update => update.Url.Contains(newSession, StringComparison.OrdinalIgnoreCase)
+                        && JsonDocument.Parse(update.Body).RootElement.GetProperty("positionMs").GetInt64() < 1000),
+                        "Changing the source must not overwrite the new session with zero progress before metadata loads.");
+                }
 
                 // The subtitle file beside it is the only subtitle, in English, with its own text.
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
