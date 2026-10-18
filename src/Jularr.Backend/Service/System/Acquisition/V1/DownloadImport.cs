@@ -15,6 +15,7 @@ using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
@@ -25,8 +26,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
     internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time)
     {
-        public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
+        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, string sourceDirectory, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
+            if (!isComplete)
+            {
+                await AttentionAsync(context, download.OperationId, "import_source_unavailable", null, ct);
+                return;
+            }
+
             var (root, patterns, target, units) = await context.ExecuteBatchAsync(async (ctx, token) =>
                 (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token), await ctx.ReadWantedTargetAsync(download.WantedItemId, token),
                     download.MediaTypeId == MediaType.Series ? await ctx.ReadUnitStatesAsync(download.WantedItemId, token) : []), ct);
@@ -41,16 +48,36 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 parsedFacts?.Edition, parsedFacts?.Revision ?? 1);
 
             // Music follows its tags; ebooks and comics must be what their names say.
-            var tags = download.MediaTypeId == MediaType.Music
-                ? await Task.Run(() => files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Audio)
-                    .Select(file => (file.RelativePath, Tags: AudioTagReader.Read(StorageFileSystem.ResolveFile(source, file.RelativePath))))
-                    .Where(file => file.Tags is not null).ToDictionary(file => file.RelativePath, file => file.Tags!, StringComparer.Ordinal), ct)
-                : null;
-            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, patterns, facts,
-                    download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units), tags)
-                .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
-                .ToArray();
-            if (placements.Length == 0)
+            Dictionary<string, AudioTags>? tags = download.MediaTypeId == MediaType.Music ? new(StringComparer.Ordinal) : null;
+            var placements = new List<ImportPlacementData>();
+            try
+            {
+                if (tags is not null)
+                {
+                    foreach (var file in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Audio))
+                    {
+                        await using var audio = await source.OpenReadAsync(StoragePath.Combine(sourceDirectory, file.RelativePath), ct);
+                        if (AudioTagReader.Read(StoragePath.Name(file.RelativePath), audio) is { } trackTags) tags[file.RelativePath] = trackTags;
+                    }
+                }
+
+                foreach (var placement in ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey,
+                    files, patterns, facts, download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units), tags))
+                {
+                    if (!placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic)
+                        || await IsDocumentAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), placement.Extension, ct))
+                    {
+                        placements.Add(placement);
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                await AttentionAsync(context, download.OperationId, "import_source_unavailable", null, ct);
+                return;
+            }
+
+            if (placements.Count == 0)
             {
                 if (isComplete)
                 {
@@ -81,19 +108,27 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             var imported = new List<ImportedFile>();
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
-            foreach (var group in placements.GroupBy(placement => placement.Group))
+            try
             {
-                var stem = await FreeStemAsync(library, directory, group.First().TargetStem, group.Select(placement => placement.Extension).ToArray(), ct);
-                foreach (var placement in group)
+                foreach (var group in placements.GroupBy(placement => placement.Group))
                 {
-                    var relativePath = stem + placement.Extension;
-                    var placed = await StorageFileTransfer.PlaceAsync(StorageFileSystem.ResolveFile(source, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct);
-                    imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), facts));
-                    if (placement.IsMedia)
+                    var stem = await FreeStemAsync(library, directory, group.First().TargetStem, group.Select(placement => placement.Extension).ToArray(), ct);
+                    foreach (var placement in group)
                     {
-                        media.Add((relativePath, placement));
+                        var relativePath = stem + placement.Extension;
+                        var placed = await StorageFileTransfer.PlaceAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct);
+                        imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), facts));
+                        if (placement.IsMedia)
+                        {
+                            media.Add((relativePath, placement));
+                        }
                     }
                 }
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                await AttentionAsync(context, download.OperationId, "import_storage_unavailable", null, ct);
+                return;
             }
 
             var assets = await context.ExecuteBatchAsync(async (ctx, token) =>
@@ -141,12 +176,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
         }
 
-        private static bool IsDocument(string source, ImportPlacementData placement)
+        private static async Task<bool> IsDocumentAsync(StorageFiles source, string path, string extension, CancellationToken ct)
         {
             var header = new byte[128];
-            using var stream = File.OpenRead(StorageFileSystem.ResolveFile(source, placement.SourcePath));
-            var read = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
-            return LibraryFileTypes.IsDocumentContent(placement.Extension, header.AsSpan(0, read));
+            await using var stream = await source.OpenReadAsync(path, ct);
+            var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, ct);
+            return LibraryFileTypes.IsDocumentContent(extension, header.AsSpan(0, read));
         }
 
         public Task AttentionAsync(LogicContext context, long operationId, string attentionKey, string? attentionUrl, CancellationToken ct) =>

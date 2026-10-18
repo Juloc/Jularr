@@ -3,6 +3,9 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Storage;
+using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
@@ -29,6 +32,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
@@ -71,6 +75,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."DownloadStorageMountId",
                     connection."Username",
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
@@ -227,9 +232,26 @@ namespace Jularr.Backend.Logic.Acquisition
         // Download clients and subtitle providers need a key; indexers, catalogs and news servers may be open.
         private static bool NeedsKey(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl;
 
+        private static void ValidateDownloadMapping(AcquisitionConnectionSaveData data)
+        {
+            if (data.DownloadStorageMountId is not null)
+            {
+                try
+                {
+                    StoragePath.Check(data.LocalPath ?? "");
+                }
+                catch (NasMountException)
+                {
+                    throw new DataValidationException(nameof(data.LocalPath), "invalid_path");
+                }
+            }
+        }
+
         public static async Task<long> CreateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
             ValidateAddress(data);
+            ValidateDownloadMapping(data);
+            if (data.DownloadStorageMountId is { } mountId) await ctx.ReadStorageMountAsync(mountId, ct);
 
             if (data.ProtectedApiKey is null && NeedsKey(data.AcquisitionConnectionTypeId))
             {
@@ -242,10 +264,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "Host", "Port", "UseSsl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories",
-                        "DownloadCategory", "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
+                        "DownloadCategory", "RemotePath", "LocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
                 VALUES
                     (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath,
-                        @LocalPath, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
+                        @LocalPath, @DownloadStorageMountId, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
                 RETURNING
                     "Id";
                 """;
@@ -256,6 +278,8 @@ namespace Jularr.Backend.Logic.Acquisition
         public static async Task UpdateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
             ValidateAddress(data);
+            ValidateDownloadMapping(data);
+            if (data.DownloadStorageMountId is { } mountId) await ctx.ReadStorageMountAsync(mountId, ct);
 
             // A stored key stays only with its type.
             if (data.ProtectedApiKey is null && NeedsKey(data.AcquisitionConnectionTypeId)
@@ -287,6 +311,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "DownloadCategory" = @DownloadCategory,
                     "RemotePath" = @RemotePath,
                     "LocalPath" = @LocalPath,
+                    "DownloadStorageMountId" = @DownloadStorageMountId,
                     "Username" = @Username,
                     "MaxConnections" = @MaxConnections,
                     "MediaTypeIds" = @MediaTypeIds,

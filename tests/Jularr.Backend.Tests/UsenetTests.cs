@@ -6,9 +6,11 @@ using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
@@ -156,7 +158,9 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports(bool directSmbTarget)
         {
             using var storage = new TemporaryDirectory();
             using var staging = new TemporaryDirectory();
@@ -165,6 +169,13 @@ namespace Jularr.Backend.Tests
             news.Publish(Feature + ".mkv", movie, 3);
             var indexer = new FakeIndexer(news.Nzb(Feature + ".mkv"));
             await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, news.Port);
+            if (directSmbTarget)
+            {
+                using var updatedMount = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/storage/mounts/1",
+                    new SaveStorageMountDataV1("Library NAS", StorageProtocolType.Smb, "nas.test", "/media", "3.1.1", "jularr", null, false, "secret"));
+                Assert.AreEqual(HttpStatusCode.OK, updatedMount.StatusCode, await updatedMount.Content.ReadAsStringAsync());
+                host.Services.GetRequiredService<SmbShares>().Get(1, 2, () => new SmbSession(new FakeSmbStore(Path.Combine(storage.Path, "1")), () => { }));
+            }
 
             // A login and one command prove the news server; the password is never shown again.
             using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");

@@ -9,9 +9,25 @@ document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker =>
     const field = picker.closest('form')?.querySelector<HTMLInputElement>(`input[name="${CSS.escape(picker.dataset.folderField ?? '')}"]`);
     if (!dialog || !content || !status || !opener || !field) return;
     picker.dataset.folderReady = 'true';
-    picker.querySelector<HTMLElement>('[data-folder-fallback]')?.setAttribute('hidden', 'hidden');
     let pending: AbortController | undefined;
     let currentUrl = opener.dataset.folderUrl ?? '';
+    const mount = picker.dataset.folderMountField
+        ? picker.closest('form')?.querySelector<HTMLSelectElement>(`select[name="${CSS.escape(picker.dataset.folderMountField)}"]`) : null;
+    if (mount) {
+        picker.hidden = !mount.value;
+        mount.addEventListener('change', () => {
+            pending?.abort();
+            if (dialog.open) dialog.close();
+            picker.hidden = !mount.value;
+            field.value = '';
+            const selection = picker.querySelector<HTMLElement>('[data-folder-selection]');
+            if (selection) selection.textContent = '/';
+            const url = new URL(opener.dataset.folderUrl ?? '', location.href);
+            url.searchParams.set('storageMountId', mount.value);
+            url.searchParams.set('path', '');
+            currentUrl = url.href;
+        });
+    }
 
     async function load(address: string): Promise<void> {
         const url = new URL(address, location.href);

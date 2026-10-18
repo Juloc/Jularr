@@ -162,7 +162,7 @@ namespace Jularr.Backend.Logic.Storage
 
         public static async Task DeleteStorageMountAsync(this LogicContext ctx, StorageMountParameters data, CancellationToken ct)
         {
-            // Libraries keep their connection.
+            // Libraries and completed download mappings keep their connection.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -203,6 +203,14 @@ namespace Jularr.Backend.Logic.Storage
                             "InstanceSettings" AS settings
                         WHERE
                             settings."RecycleStorageMountId" = mount."Id"
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "AcquisitionConnections" AS connection
+                        WHERE
+                            connection."DownloadStorageMountId" = mount."Id"
                     );
                 """;
             sql.Parameters.Add(data);

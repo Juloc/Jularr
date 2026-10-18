@@ -156,7 +156,8 @@ Wake-on-LAN. A probe that hangs in the kernel keeps its thread until the kernel 
 up; callers continue after five seconds.
 
 Playback wakes sleeping storage on demand (per the connection's policy) and Arr+
-imports completed downloads into the first writable library of the media type.
+imports completed downloads into the target's selected writable library, or the
+first writable library matching its media type and subtype when none was selected.
 Connection paths of SMB/NFS mounts must be actual mount points (`Storage:RequireMountPoint`,
 default on), so a stale empty mount point is never read as an empty library or
 written to; a scan that skipped unreadable folders fails as `scan_incomplete`
@@ -177,10 +178,16 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 
 SABnzbd controls its own temporary and completed download directories, including
 category subfolders such as `complete/movies` and `complete/tv`. Jularr does
-**not** change SABnzbd's physical paths. Add the same completed directory as
-a read-accessible container mount, then configure each SAB connection's
-`RemotePath` (SAB history path prefix) and `LocalPath` (Jularr's container
-path prefix). All category and release subfolders stay underneath the mapping.
+**not** change SABnzbd's physical paths. On the download connection, set
+`RemotePath` to the completed path prefix reported by SAB history. Choose an
+existing storage connection (`DownloadStorageMountId`) and browse its corresponding
+completed folder (`LocalPath`, relative to that connection; empty means its root).
+This also works with a direct SMB connection without a container mount.
+Alternatively, leave the connection unset and enter an absolute `LocalPath`
+visible inside Jularr's container. All category and release subfolders stay
+underneath the mapping. Source reads and target writes use the same canonical
+storage abstraction. An unreadable source or a copy failure keeps the import
+waiting; SAB completion alone never completes the acquisition request.
 The original SAB completed files are retained after successful library import.
 
 To send different media types to distinct SABnzbd categories, configure one

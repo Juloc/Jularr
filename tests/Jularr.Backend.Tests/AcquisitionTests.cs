@@ -8,12 +8,14 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.User.Library.V1;
@@ -41,6 +43,93 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
         private const string Lower = "Example.Movie.2020.720p.WEB-DL.H264-GRP";
+
+        [TestMethod]
+        [DataRow(false, false)]
+        [DataRow(true, false)]
+        [DataRow(false, true)]
+        [DataRow(true, true)]
+        public async Task SabDownload_DirectSmbSourceImportsIntoTheSelectedLibrary(bool directSmbTarget, bool connectionRoot)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            var share = Path.Combine(storage.Path, "share");
+            var completed = Path.Combine(share, "downloads", "complete", "movies", Feature);
+            Directory.CreateDirectory(Path.GetDirectoryName(completed)!);
+            using var sourceMount = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                new SaveStorageMountDataV1("Download NAS", StorageProtocolType.Smb, "nas.test", connectionRoot ? "/media/downloads/complete" : "/media", "3.1.1", "jularr", null, true, "secret"));
+            Assert.AreEqual(HttpStatusCode.OK, sourceMount.StatusCode, await sourceMount.Content.ReadAsStringAsync());
+            var sourceMountId = (await sourceMount.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
+            var sourceStore = new FakeSmbStore(share);
+            host.Services.GetRequiredService<SmbShares>().Get(sourceMountId, 1, () => new SmbSession(sourceStore, () => { }));
+            if (directSmbTarget)
+            {
+                Directory.CreateDirectory(Path.Combine(share, "library", "Movies"));
+                using var targetMount = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/storage/mounts/1",
+                    new SaveStorageMountDataV1("Library NAS", StorageProtocolType.Smb, "nas.test", "/media/library", "3.1.1", "jularr", null, false, "secret"));
+                Assert.AreEqual(HttpStatusCode.OK, targetMount.StatusCode, await targetMount.Content.ReadAsStringAsync());
+                host.Services.GetRequiredService<SmbShares>().Get(1, 2, () => new SmbSession(new FakeSmbStore(share), () => { }));
+            }
+
+            using var mapped = await host.SendAsync(HttpMethod.Put, Connections + "/2", new
+            {
+                Name = "SAB", AcquisitionConnectionTypeId = AcquisitionConnectionType.Sabnzbd, BaseUrl = "https://sab.example.test",
+                ApiKey = (string?)null, IsEnabled = true, Priority = 10, Categories = Array.Empty<int>(), DownloadCategory = "movies",
+                RemotePath = "/downloads", LocalPath = connectionRoot ? null : "downloads/complete", DownloadStorageMountId = sourceMountId
+            });
+            Assert.AreEqual(HttpStatusCode.OK, mapped.StatusCode, await mapped.Content.ReadAsStringAsync());
+            using var removed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/storage/mounts/{sourceMountId}/removal", new RemoveStorageMountDataV1(1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            StringAssert.Contains(await removed.Content.ReadAsStringAsync(), "in_use");
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // A completed SAB job is not a completed import: keep it waiting until its source is readable.
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, Feature + ".mkv"), new byte[4096]);
+            var restricted = Directory.CreateDirectory(Path.Combine(completed, "Restricted")).FullName;
+            File.WriteAllBytes(Path.Combine(restricted, "extra.mkv"), new byte[1024]);
+            sourceStore.DeniedDirectory = restricted;
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            sourceStore.DeniedDirectory = null;
+            File.Delete(Path.Combine(restricted, "extra.mkv"));
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var library = directSmbTarget ? Path.Combine(share, "library", "Movies") : Path.Combine(storage.Path, "1", "Movies");
+            var file = Directory.EnumerateFiles(library, "*.mkv", SearchOption.AllDirectories).Single();
+            Assert.AreEqual(4096, new FileInfo(file).Length);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            using var wanted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId);
+            Assert.IsFalse((await wanted.Content.ReadFromJsonAsync<WantedDetailsV1>())!.IsDownloading);
+        }
+
+        [TestMethod]
+        [DataRow("../outside")]
+        [DataRow("C:\\outside")]
+        [DataRow("folder/../../outside")]
+        public async Task SabDownload_StorageMappingRejectsPathsOutsideTheConnection(string localPath)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            using var response = await host.SendAsync(HttpMethod.Put, Connections + "/2",
+                new SaveAcquisitionConnectionDataV1("SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test", null, true, 10, [],
+                    "movies", "/downloads", localPath, downloadStorageMountId: 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
+            using var unchanged = await host.SendAsync(HttpMethod.Get, Connections + "/2");
+            Assert.IsNull((await unchanged.Content.ReadFromJsonAsync<AcquisitionConnectionDetailsV1>())!.DownloadStorageMountId);
+        }
 
         [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()

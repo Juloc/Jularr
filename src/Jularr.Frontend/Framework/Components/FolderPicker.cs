@@ -3,16 +3,17 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Jularr.Frontend.Framework
 {
-    public sealed class FolderPicker(string browseUrl, string selectedPath, string fieldName, string fallbackUrl, IReadOnlyList<IUiComponent>? fallback = null) : IUiComponent
+    public sealed class FolderPicker(string browseUrl, string selectedPath, string fieldName, string fallbackUrl, IReadOnlyList<IUiComponent>? fallback = null,
+        string? storageMountFieldName = null, bool isVisible = true) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            new Div(
+            var picker = new Div(
                 new P(new Strong(new Text("storage.paths.selected")), new ValueText(": "),
                     new Span(new ValueText("/" + selectedPath)).Attribute("data-folder-selection", "")),
                 new A(new Text("storage.paths.browse")).Class("button").Attribute("href", fallbackUrl)
                     .Attribute("data-folder-open", "").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath)),
-                new Div([.. fallback ?? []]).Attribute("data-folder-fallback", ""),
+                new NoScript(new Div([.. fallback ?? []])),
                 new Dialog(
                     new Div(new H2(new Text("storage.paths.browse")),
                         new Button(new Text("folderPicker.close")).Attribute("data-folder-close", "")).Class("folder-picker__heading"),
@@ -20,8 +21,10 @@ namespace Jularr.Frontend.Framework
                     new Div().Attribute("data-folder-content", "")
                 ).Class("folder-picker__dialog").Attribute("aria-label", texts["storage.paths.browse"])
             ).Class("folder-picker").Attribute("data-folder-picker", "").Attribute("data-folder-field", fieldName)
-                .Attribute("data-folder-error", texts["folderPicker.failed"]).Attribute("data-folder-loading", texts["folderPicker.loading"])
-                .WriteTo(writer, encoder, texts);
+                .Attribute("data-folder-mount-field", storageMountFieldName ?? "")
+                .Attribute("data-folder-error", texts["folderPicker.failed"]).Attribute("data-folder-loading", texts["folderPicker.loading"]);
+            if (!isVisible) picker.Attribute("hidden", "hidden");
+            picker.WriteTo(writer, encoder, texts);
         }
 
         public static IUiComponent Directories(string browseUrl, string path, IReadOnlyList<string> names, UiText texts, string? afterName = null, bool hasMore = false)
@@ -55,5 +58,6 @@ namespace Jularr.Frontend.Framework
         }
 
         private sealed class Dialog(params IUiComponent[] content) : HtmlElement("dialog", content);
+        private sealed class NoScript(params IUiComponent[] content) : HtmlElement("noscript", content);
     }
 }

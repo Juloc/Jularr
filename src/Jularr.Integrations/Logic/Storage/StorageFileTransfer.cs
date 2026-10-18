@@ -9,28 +9,29 @@ namespace Jularr.Integrations.Logic.Storage
     internal static class StorageFileTransfer
     {
         // The placed file as the library shows it; a taken name fails.
-        public static async Task<StorageEntry> PlaceAsync(string sourcePath, StorageFiles target, string targetPath, CancellationToken ct)
+        public static async Task<StorageEntry> PlaceAsync(StorageFiles sourceFiles, string sourcePath, StorageFiles target, string targetPath, CancellationToken ct)
         {
-            if (target is LocalStorageFiles local)
+            await target.CreateDirectoryAsync(StoragePath.Parent(targetPath), ct);
+            if (sourceFiles is LocalStorageFiles localSource && target is LocalStorageFiles local)
             {
-                await target.CreateDirectoryAsync(StoragePath.Parent(targetPath), ct);
                 var destination = Path.Combine(local.ResolveDirectory(StoragePath.Parent(targetPath)), StoragePath.Name(targetPath));
-                await Task.Run(() => HardlinkOrCopy(sourcePath, destination), ct);
+                await Task.Run(() => HardlinkOrCopy(localSource.ResolveFile(sourcePath), destination), ct);
             }
             else
             {
                 // Written beside the target and published only when complete.
-                var partial = targetPath + ".jularr-partial";
-                if (await target.ExistsAsync(partial, ct)) await target.DeleteFileAsync(partial, ct);
+                var original = await sourceFiles.GetAsync(sourcePath, ct) ?? throw new IOException("The import source is missing.");
+                var partial = targetPath + "." + Guid.NewGuid().ToString("N") + ".jularr-partial";
                 try
                 {
-                    await using (var source = File.OpenRead(sourcePath))
+                    await using (var source = await sourceFiles.OpenReadAsync(sourcePath, ct))
                     await using (var copy = await target.CreateAsync(partial, ct) ?? throw new IOException("The library already contains a file at the destination."))
                     {
                         await source.CopyToAsync(copy, 1024 * 1024, ct);
                     }
 
-                    if ((await target.GetAsync(partial, ct))?.Length != new FileInfo(sourcePath).Length)
+                    var current = await sourceFiles.GetAsync(sourcePath, ct);
+                    if ((await target.GetAsync(partial, ct))?.Length != original.Length || current is null || current.Length != original.Length || current.ModifiedAt != original.ModifiedAt)
                     {
                         throw new IOException("The copied file is incomplete.");
                     }
@@ -63,10 +64,10 @@ namespace Jularr.Integrations.Logic.Storage
             }
 
             // Copy beside the target and publish it only when complete.
-            var partial = destinationPath + ".jularr-partial";
+            var partial = destinationPath + "." + Guid.NewGuid().ToString("N") + ".jularr-partial";
             try
             {
-                File.Copy(sourcePath, partial, overwrite: true);
+                File.Copy(sourcePath, partial, overwrite: false);
                 if (new FileInfo(partial).Length != new FileInfo(sourcePath).Length)
                 {
                     throw new IOException("The copied file is incomplete.");

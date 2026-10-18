@@ -17,6 +17,7 @@ CREATE TABLE "LibraryRoots" (
 
 -- Wanted targets may name their library (Acquisition is installed first).
 ALTER TABLE "WantedItems" ADD FOREIGN KEY ("LibraryRootId") REFERENCES "LibraryRoots" ("Id") ON DELETE SET NULL;
+ALTER TABLE "AcquisitionConnections" ADD FOREIGN KEY ("DownloadStorageMountId") REFERENCES "StorageMounts" ("Id") ON DELETE RESTRICT;
 
 -- Inventory survives offline storage; missing files are only marked by complete scans.
 CREATE TABLE "StoredFiles" (

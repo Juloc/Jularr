@@ -13,6 +13,7 @@ using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
@@ -374,7 +375,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 default:
                     var state = new StorageScanState();
                     var files = StorageFileSystem.EnumerateFiles(pass.OutputPath!, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken).ToArray();
-                    await _import.PlaceAsync(Context, download, pass.OutputPath!, files, state.IsComplete, CancellationToken);
+                    await _import.PlaceAsync(Context, download, new LocalStorageFiles(pass.OutputPath!), "", files, state.IsComplete, CancellationToken);
                     break;
             }
 
@@ -408,9 +409,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private readonly TimeProvider _time;
         private readonly DownloadImport _import;
         private readonly DirectSources _direct;
+        private readonly StorageAccess _storage;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DirectSources direct, DownloadImport import, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DirectSources direct, DownloadImport import, IDataProtectionProvider protection, IOptions<StorageOptions> options,
+            TimeProvider time, StorageAccess storage)
         {
+            _storage = storage;
             _direct = direct;
             _sabnzbd = sabnzbd;
             _import = import;
@@ -584,7 +588,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private async Task ImportAsync(DownloadData download, AcquisitionConnectionData connection, string? storagePath)
         {
             // Only mapped client folders are read; otherwise the download waits for the Owner.
-            if (storagePath is null || connection.RemotePath is null || connection.LocalPath is null
+            if (storagePath is null || connection.RemotePath is null || connection.LocalPath is null && connection.DownloadStorageMountId is null
                 || ImportPlacementLogic.MapRemotePath(storagePath, connection.RemotePath) is not { } relative)
             {
                 await _import.AttentionAsync(Context, download.OperationId, "import_path_unmapped", null, CancellationToken);
@@ -593,31 +597,49 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // Read the job below the mapped folder without following links.
             IReadOnlyList<StorageFile> files;
-            string source;
+            StorageFiles source;
+            string sourceDirectory;
             var state = new StorageScanState();
             try
             {
-                var mapped = StorageFileSystem.ResolveDirectory(connection.LocalPath, "");
-                var full = Path.GetFullPath(Path.Combine(mapped, relative));
-                if (File.Exists(full))
+                var prefix = "";
+                if (connection.DownloadStorageMountId is { } storageMountId)
                 {
-                    source = StorageFileSystem.ResolveDirectory(mapped, Path.GetDirectoryName(relative) ?? "");
-                    var file = new FileInfo(StorageFileSystem.ResolveFile(source, Path.GetFileName(full)));
-                    files = [new StorageFile(file.Name, file.Length, file.LastWriteTimeUtc)];
+                    var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(storageMountId, ct), CancellationToken);
+                    source = _storage.Open(mount);
+                    prefix = connection.LocalPath ?? "";
                 }
                 else
                 {
-                    source = StorageFileSystem.ResolveDirectory(mapped, relative);
-                    files = StorageFileSystem.EnumerateFiles(source, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken).ToArray();
+                    source = new LocalStorageFiles(StorageFileSystem.ResolveDirectory(connection.LocalPath!, ""));
+                }
+
+                var path = StoragePath.Combine(prefix, relative);
+                var entry = await source.GetAsync(path, CancellationToken) ?? throw new NasMountException("storage_unavailable");
+                if (!entry.IsDirectory)
+                {
+                    sourceDirectory = StoragePath.Parent(path);
+                    files = [new StorageFile(entry.Name, entry.Length, entry.ModifiedAt)];
+                }
+                else
+                {
+                    sourceDirectory = path;
+                    var found = new List<StorageFile>();
+                    await foreach (var file in source.EnumerateFilesAsync(path, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken))
+                    {
+                        found.Add(file);
+                    }
+
+                    files = found;
                 }
             }
-            catch (NasMountException)
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
                 await _import.AttentionAsync(Context, download.OperationId, "import_source_unavailable", null, CancellationToken);
                 return;
             }
 
-            await _import.PlaceAsync(Context, download, source, files, state.IsComplete, CancellationToken);
+            await _import.PlaceAsync(Context, download, source, sourceDirectory, files, state.IsComplete, CancellationToken);
         }
 
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.
@@ -650,7 +672,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             var file = new FileInfo(path);
-            await _import.PlaceAsync(Context, download, staging, [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
+            await _import.PlaceAsync(Context, download, new LocalStorageFiles(staging), "", [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
 
             // Staging is kept only while the import waits for the Owner.
             var finished = await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadFinishedAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken);
