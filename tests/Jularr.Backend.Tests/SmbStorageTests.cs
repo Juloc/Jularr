@@ -5,10 +5,14 @@ using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.TestHost;
 
 namespace Jularr.Backend.Tests
 {
@@ -232,6 +236,58 @@ namespace Jularr.Backend.Tests
             await LibraryTests.ScanAsync(host, rootId);
             Assert.AreEqual("Film (2020)/Film (2020).mkv", await host.ScalarAsync("SELECT \"RelativePath\" FROM \"StoredFiles\""));
             Assert.AreEqual(5000L, await host.ScalarAsync("SELECT \"SizeBytes\" FROM \"StoredFiles\""));
+        }
+
+
+        [TestMethod]
+        public async Task Playback_DirectSmbShare_StreamsRangesAndPreservesResume()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                new SaveStorageMountDataV1("NAS", StorageProtocolType.Smb, "nas.test", "/media/library", "3.1.1", "jularr", null, true, "secret"));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var mountId = (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
+
+            // The same direct SMB path is used for scanning, planning and browser range requests.
+            var share = Path.Combine(storage.Path, "share");
+            var movie = Path.Combine(share, "library", "Movies", "Film (2020)");
+            Directory.CreateDirectory(movie);
+            File.WriteAllBytes(Path.Combine(movie, "Film.mp4"), Film);
+            host.Services.GetRequiredService<SmbShares>().Get(mountId, 1, () => new SmbSession(new FakeSmbStore(share), () => { }));
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
+
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment",
+                new AssignLibraryFileDataV1(null, "Film", null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            var assetId = (await assigned.Content.ReadFromJsonAsync<AssignLibraryFileResultV1>())!.MediaAssetId;
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
+            Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, await player.Content.ReadAsStringAsync());
+
+            var capabilities = new StartPlaybackDataV1(["mp4"], ["h264"], ["aac"]);
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", capabilities);
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            var plan = (await started.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            Assert.AreEqual(PlaybackModeType.DirectPlay, plan.PlaybackModeTypeId);
+
+            using var client = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl);
+            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            request.Headers.Range = new RangeHeaderValue(1000, 1999);
+            using var partial = await client.SendAsync(request);
+            Assert.AreEqual(HttpStatusCode.PartialContent, partial.StatusCode, await partial.Content.ReadAsStringAsync());
+            Assert.AreEqual("bytes 1000-1999/5000", partial.Content.Headers.ContentRange?.ToString());
+            Assert.AreEqual("video/mp4", partial.Content.Headers.ContentType?.MediaType);
+            CollectionAssert.AreEqual(Film[1000..2000], await partial.Content.ReadAsByteArrayAsync());
+
+            using var progress = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId,
+                new UpdatePlaybackDataV1(2_500, 13_500, false, false));
+            Assert.AreEqual(HttpStatusCode.OK, progress.StatusCode, await progress.Content.ReadAsStringAsync());
+            using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", capabilities);
+            Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            Assert.AreEqual(2_500L, (await resumed.Content.ReadFromJsonAsync<PlaybackPlanV1>())!.ResumePositionMs);
         }
 
         private sealed class Clock : TimeProvider
