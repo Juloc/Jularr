@@ -40,7 +40,8 @@ namespace Jularr.Frontend.Framework
                 if (selected.Count == MaximumContinue) break;
             }
 
-            var groupCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var groupCounts = selected.GroupBy(item => item.MediaGroup, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
             var feedCounts = new Dictionary<DiscoverFeedType, int>();
             var feeds = available.Where(item => !item.IsContinue && item.Feed is not null).ToList();
 
