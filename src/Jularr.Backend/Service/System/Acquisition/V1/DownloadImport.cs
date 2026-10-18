@@ -168,7 +168,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 assets = await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, StoredFileLogic.StoredTime(DateTime.UtcNow), JsonSerializer.Serialize(imported)), token);
-                var assigned = new List<long>();
+                    var assigned = new List<long>();
                     foreach (var (relativePath, placement) in media)
                     {
                         var file = await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token);
@@ -185,7 +185,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
                     await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), token);
 
-                // The scan analyses the new streams.
+                    // The scan analyses the new streams.
                     await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), token);
                     return assigned;
                 }, ct);
