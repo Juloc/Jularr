@@ -1,8 +1,10 @@
 import { initializeShelves } from '../../../Framework/Components/MediaShelf';
 import { initializeCards } from '../../../Framework/Components/MediaCard';
+import { initializeHeroCarousels } from '../../../Framework/Components/MediaHeroCarousel';
 
 initializeShelves();
 initializeCards();
+initializeHeroCarousels();
 
 const searchForm = document.querySelector<HTMLFormElement>('.app-header .search-box');
 const searchInput = searchForm?.querySelector<HTMLInputElement>('input[type="search"]');
@@ -33,6 +35,7 @@ if (searchForm && searchInput && results) {
             if (current !== generation || signal.aborted) return;
             results!.querySelector('#discover-recommendations')?.replaceWith(shelves);
             initializeShelves(results!);
+            initializeHeroCarousels(results!);
         } catch {
             if (signal.aborted || current !== generation) return;
             const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
@@ -88,6 +91,7 @@ if (searchForm && searchInput && results) {
             }
 
             initializeShelves(results!);
+            initializeHeroCarousels(results!);
 
             // Repeated pages require deliberate navigation.
             if (!append || appended > 0) observeNext();
