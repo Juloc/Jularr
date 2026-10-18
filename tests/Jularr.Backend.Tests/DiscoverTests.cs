@@ -14,6 +14,7 @@ using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Data.Tmdb;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
@@ -361,7 +362,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(list, "Use this match");
         }
 
-        private static async Task<Host> CreateHostAsync(bool razor = false)
+        private static async Task<Host> CreateHostAsync(bool razor = false, FakeOpenLibrary? openLibrary = null)
         {
             var tmdb = new FakeTmdb();
             var aniList = new FakeAniList();
@@ -369,6 +370,7 @@ namespace Jularr.Backend.Tests
             {
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                if (openLibrary is not null) services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => openLibrary);
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
@@ -377,6 +379,51 @@ namespace Jularr.Backend.Tests
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             return host;
+        }
+
+        [TestMethod]
+        public async Task OpenLibrary_Trending_UsesSharedPersistentSnapshot()
+        {
+            var fake = new FakeOpenLibrary();
+            await using var host = await CreateHostAsync(openLibrary: fake);
+            using var stream = typeof(Jularr.Backend.Service.Core.DatabaseBaseline).Assembly.GetManifestResourceStream(
+                "Jularr.Database.Migrations.20261018_01_DiscoverySnapshots.up.sql")!;
+            using var reader = new StreamReader(stream);
+            await host.Fixture.RunSqlAsync(await reader.ReadToEndAsync());
+
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed",
+                new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            var books = (await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!;
+            Assert.IsTrue(books.Any(book => book.ExternalId == "OL123W"));
+            Assert.AreEqual(1, fake.Calls);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"DiscoverySnapshots\" WHERE \"ProviderKey\" = 'openlibrary'"));
+
+            using var second = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed",
+                new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, second.StatusCode, await second.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, fake.Calls);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+        }
+
+        private sealed class FakeOpenLibrary : HttpMessageHandler
+        {
+            public int Calls { get; private set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            {
+                Calls++;
+                if (request.RequestUri!.AbsolutePath != "/trending/weekly.json")
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+                }
+
+                const string body = """{"works":[{"key":"/works/OL123W","title":"Example Book","first_publish_year":2026}]}""";
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body, Encoding.UTF8, "application/json")
+                });
+            }
         }
 
         // The Matrix Show on AniList: a first season and a second with its own trailer and cover but no banner.
