@@ -379,6 +379,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Form_Color_ReusesTypedValueAndExistingWriteGuard(bool editable)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+            var form = new Form<Jularr.Frontend.Modules.Reader.ReaderSettingsData>(fields => fields.Color(item => item.Colour, "reader.colour"),
+                editable ? "/Settings" : null, editable ? "test-antiforgery-token" : null, new Jularr.Frontend.Modules.Reader.ReaderSettingsData());
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+            StringAssert.Contains(html, "name=\"Colour\" type=\"color\"");
+            StringAssert.Contains(html, "value=\"#f7f3ec\"");
+            StringAssert.Contains(html, "minlength=\"7\"");
+            Assert.AreEqual(!editable, html.Contains("disabled=\"disabled\"", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        public async Task Form_Local_ReusesMetadataWithoutSubmissionOrServerActions()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+            var form = new Form<Jularr.Frontend.Modules.Reader.ReaderSettingsData>(fields => fields
+                .Color(item => item.Colour, "reader.colour").Number(item => item.Size, "reader.sizePixels"),
+                data: new Jularr.Frontend.Modules.Reader.ReaderSettingsData(), local: true);
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+            StringAssert.StartsWith(html, "<div");
+            StringAssert.Contains(html, "data-form-local=\"\"");
+            StringAssert.Contains(html, "min=\"14\" max=\"40\"");
+            Assert.IsFalse(html.Contains("disabled=", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("<form", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("__RequestVerificationToken", StringComparison.Ordinal));
+            Assert.ThrowsExactly<ArgumentException>(() => new Form<LoginDataV1>(_ => { }, "/Account/Login", "token", local: true));
+            Assert.ThrowsExactly<InvalidOperationException>(() => new Form<LoginDataV1>(fields => fields.Submit("account.login"), local: true));
+        }
+
+        [TestMethod]
         [DataRow(3, true, false)]
         [DataRow(1, true, true)]
         [DataRow(2, false, false)]

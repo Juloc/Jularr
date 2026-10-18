@@ -90,6 +90,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
 - `Form.Select` may declare a local draft refresh action and a fallback button label. `Form.entry.ts` replaces only the server-rendered form on a field change; the action preserves the draft and performs no mutation. The native button remains usable without JavaScript. Pages opt into the component asset.
 - Form transport values are invariant, independently of the display language.
+  Explicit device-only settings may opt into `Form<T>(..., local: true)`: the same
+  typed fields render as an editable group, not a form. Local mode rejects server
+  actions, antiforgery tokens, refresh and Submit; it never implies profile saving.
   `Form<TData>` emits ASP.NET's `__Invariant` field markers; use normal framework
   binding, not per-page parsing or a parallel binder. Field validation remains
   Backend-owned. Hidden-field errors must be visible at form level; failed reads

@@ -246,7 +246,7 @@ namespace Jularr.E2E.Tests
         {
             await page.Locator("[data-role=next]").First.ClickAsync();
             await page.WaitForURLAsync(url => url.Contains("s=1", StringComparison.Ordinal));
-            await page.Locator("[data-role=content]").HoverAsync();
+            await page.Locator(".reader__canvas").HoverAsync();
             await page.RunAndWaitForResponseAsync(() => page.Mouse.WheelAsync(0, 800),
                 response => response.Request.Method == "PUT" && response.Ok, new() { Timeout = MediaTimeout });
         }

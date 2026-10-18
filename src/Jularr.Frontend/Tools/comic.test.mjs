@@ -4,60 +4,89 @@ import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('../Modules/Reader/comic.entry.ts', import.meta.url), 'utf8').replace('import "./comic.scss";', '');
+const source = readFileSync(new URL('../Modules/Reader/ComicPages.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const exports = {};
+runInNewContext(script, { exports, require: () => ({}) });
 
-// A comic of five pages in a minimal DOM.
-function comic(settings, direction = 'rtl') {
-    const saved = [], keys = {}, controls = {};
-    const stage = { dataset: {}, shown: [], replaceChildren: (...images) => stage.shown = images.map(image => image.page), addEventListener() {}, getBoundingClientRect: () => ({ left: 0 }), clientWidth: 100 };
-    const position = { textContent: '' };
-    const control = name => ({ setAttribute() {}, addEventListener: (_, action) => controls[name] = action });
-    const element = {
-        dataset: { count: '5', page: '0', pages: '/pages?path=', direction, progressUrl: '/progress', antiforgery: 'token', pageLabel: 'Page' },
-        querySelector: selector => selector === '[data-role=stage]' ? stage : selector === '[data-role=position]' ? position
-            : selector.startsWith('[data-action=') ? control(selector.slice(13, -1)) : selector.startsWith('[data-role=') && selector !== '[data-role=save-error]' ? { hidden: false, addEventListener() {} } : null
+test('shared Reader image adapter keeps covers and wide pages alone', () => {
+    const spread = (page, two = true, wide = []) => [...exports.comicSpread(page, 5, two, new Set(wide))];
+    assert.deepEqual(spread(0), [0]);
+    assert.deepEqual(spread(1), [1, 2]);
+    assert.deepEqual(spread(3), [3, 4]);
+    assert.deepEqual(spread(4), [4]);
+    assert.deepEqual(spread(1, false), [1]);
+    assert.deepEqual(spread(1, true, [1]), [1]);
+    assert.deepEqual(spread(1, true, [2]), [1]);
+});
+
+test('scroll Reader completes only at the loaded final image bottom, including within-page scrolling and leaving', () => {
+    const saves = [];
+    const events = {};
+    const stage = {
+        children: [], clientWidth: 500, clientHeight: 600, scrollTop: 0, offsetTop: 0,
+        get scrollHeight() { return this.children.length * 1000; },
+        getBoundingClientRect: () => ({ top: 0, bottom: 600 }),
+        addEventListener: (name, handler) => { events[name] = handler; },
+        replaceChildren(...children) { this.children = children; },
+        querySelectorAll() { return this.children; },
+        contains(image) { return this.children.includes(image); }
     };
-    class Image {
+    class TestImage {
+        dataset = {};
+        complete = true;
+        naturalWidth = 500;
+        naturalHeight = 1000;
+        get offsetTop() { return Number(this.dataset.index) * 1000; }
+        getBoundingClientRect() { return { top: this.offsetTop - stage.scrollTop, bottom: this.offsetTop + 1000 - stage.scrollTop }; }
         addEventListener() {}
-        set src(value) { this.page = Number(decodeURIComponent(value).slice(-5)); }
     }
-
+    const reader = {
+        dataset: { count: '3', page: '0', pages: '/pages/', progressUrl: '/progress', antiforgery: 'test' },
+        style: { setProperty() {} },
+        querySelector: selector => selector === '[data-role=stage]' ? stage : { addEventListener() {} },
+        querySelectorAll: () => [],
+        addEventListener() {}
+    };
+    const settings = { mode: 'scroll', layout: 'single', direction: 'ltr', animation: 'off' };
+    const adapter = {};
     runInNewContext(script, {
-        exports: {}, require: () => ({ progressReporter: () => value => saved.push(value) }), Image, encodeURIComponent, String, Number, Math,
-        document: { querySelector: () => element, addEventListener: (name, action) => keys[name] = action },
-        window: { addEventListener() {}, matchMedia: () => ({ matches: false }) },
-        history: { replaceState() {} }, URL, location: { href: 'https://jularr.test/Read/1?p=0' },
-        localStorage: { getItem: () => JSON.stringify(settings), setItem() {} }
+        exports: adapter,
+        require: name => name.includes('Progress')
+            ? { progressReporter: () => (value, leaving) => saves.push({ ...value, leaving }) }
+            : { initializeReaderSettings: () => settings },
+        Image: TestImage, URL,
+        location: { href: 'https://reader.test/read' }, history: { replaceState() {} },
+        matchMedia: () => ({ matches: false, addEventListener() {} }),
+        requestAnimationFrame: callback => callback(),
+        ResizeObserver: class { observe() {} },
+        window: { addEventListener: (name, handler) => { events[name] = handler; } }
     });
-    const press = key => keys.keydown({ key, target: null, preventDefault() {} });
-    return { stage, position, saved, press, keys };
-}
-
-test('two-page mode keeps the cover alone and pairs the following pages', () => {
-    const ui = comic({ spread: true });
-    assert.deepEqual(ui.stage.shown, [0]);
-    ui.press('ArrowLeft');
-    assert.deepEqual(ui.stage.shown, [1, 2]);
-    assert.equal(ui.position.textContent, '2–3 / 5');
-    ui.press('ArrowLeft');
-    assert.deepEqual(ui.stage.shown, [3, 4]);
-    assert.deepEqual({ ...ui.saved.at(-1) }, { locator: 'p3', progression: 1, isCompleted: true });
-    ui.press('ArrowRight');
-    assert.deepEqual(ui.stage.shown, [1, 2]);
-});
-
-test('left-to-right comics turn forward with the right arrow', () => {
-    const ui = comic({ spread: false }, 'ltr');
-    ui.press('ArrowRight');
-    assert.deepEqual(ui.stage.shown, [1]);
-    assert.deepEqual({ ...ui.saved.at(-1) }, { locator: 'p1', progression: 0.4, isCompleted: false });
-});
-
-test('modified keys are left to the browser', () => {
-    const ui = comic({ spread: true });
-    ui.press('ArrowLeft');
-    assert.deepEqual(ui.stage.shown, [1, 2]);
-    ui.keys.keydown({ key: 'ArrowLeft', altKey: true, target: null, preventDefault() { throw new Error('History navigation was blocked'); } });
-    assert.deepEqual(ui.stage.shown, [1, 2]);
+    adapter.initializeComicPages(reader);
+    const scroll = top => { stage.scrollTop = top; events.scroll(); return saves.at(-1); };
+    let saved = scroll(2000);
+    assert.equal(saved.locator, 'p2');
+    assert.equal(saved.isCompleted, false, 'seeing the last page is not completion');
+    assert.ok(saved.progression < 1);
+    events.pagehide();
+    assert.equal(saves.at(-1).isCompleted, false, 'leaving midway must not complete the book');
+    assert.equal(scroll(2398).isCompleted, false, 'unread content below the viewport still counts');
+    const finalImage = stage.children.at(-1);
+    finalImage.complete = false;
+    assert.equal(scroll(2400).isCompleted, false, 'a pending image is not read');
+    finalImage.complete = true;
+    finalImage.naturalHeight = 0;
+    assert.equal(scroll(2400).isCompleted, false, 'a broken image is not read');
+    finalImage.naturalHeight = 1000;
+    saved = scroll(2400);
+    assert.equal(saved.locator, 'p2');
+    assert.equal(saved.isCompleted, true, 'reaching the bottom without changing page must save completion');
+    assert.equal(saved.progression, 1);
+    events.pagehide();
+    assert.equal(saves.at(-1).isCompleted, true);
+    assert.equal(saves.at(-1).leaving, true);
+    assert.equal(scroll(2100).isCompleted, false);
+    settings.mode = 'paged';
+    events.pagehide();
+    assert.equal(saves.at(-1).isCompleted, true, 'paged completion is unchanged');
 });
