@@ -199,7 +199,7 @@ namespace Jularr.Backend.Tests
             html = await recommendations.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
-            Assert.IsFalse(html.Contains("class=\"media-hero", StringComparison.Ordinal));
+            StringAssert.Contains(html, "class=\"media-hero");
             StringAssert.Contains(html, "/Discover/movies/603");
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
