@@ -15,6 +15,14 @@ namespace Jularr.Integrations.Logic.Storage
             ReturnSpecialDirectories = false
         };
 
+        private static readonly EnumerationOptions DownloadOptions = new()
+        {
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            IgnoreInaccessible = false,
+            RecurseSubdirectories = false,
+            ReturnSpecialDirectories = false
+        };
+
         public static string ResolveDirectory(string connectionPath, string relativePath)
         {
             // Stay below the configured connection.
@@ -125,6 +133,42 @@ namespace Jularr.Integrations.Logic.Storage
             return false;
         }
 
+        // Stable across remounts, but different when a missing NAS reveals its local parent.
+        public static string? DownloadFilesystemIdentity(string directory, bool includeDirectory = true, bool includeMountPoint = false)
+        {
+            if (!Directory.Exists(directory)) return null;
+            var path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+            for (var current = new DirectoryInfo(path); current is not null; current = current.Parent)
+            {
+                if (current.LinkTarget is not null) return null;
+            }
+            if (!OperatingSystem.IsLinux())
+            {
+                var drive = new DriveInfo(Path.GetPathRoot(path)!);
+                return drive.IsReady ? drive.DriveFormat + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(drive.Name + (includeDirectory ? "\n" + path : "")))) : null;
+            }
+
+            string? identity = null;
+            var longest = -1;
+            foreach (var line in File.ReadLines("/proc/self/mountinfo"))
+            {
+                var fields = line.Split(' ');
+                var separator = Array.IndexOf(fields, "-");
+                if (fields.Length < 6 || separator < 0 || separator + 2 >= fields.Length) continue;
+                var mount = Regex.Replace(fields[4], @"\\([0-7]{3})", match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString());
+                if (mount.Length <= longest || path != mount && !path.StartsWith(mount == "/" ? "/" : mount + "/", StringComparison.Ordinal)) continue;
+                longest = mount.Length;
+                identity = IsDownloadWorkspaceMount(mount)
+                    ? fields[separator + 1] + ":" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(fields[separator + 2] + (includeMountPoint ? "\n" + fields[4] + "\n" + fields[3] : "")
+                            + (includeDirectory ? "\n" + fields[3] + "\n" + path : ""))))
+                    : null;
+            }
+
+            return identity;
+        }
+
         // Disk reservations must inspect the filesystem holding the actual output,
         // not Path.GetPathRoot(output), which would always be "/" on Linux.
         // If mountinfo and DriveInfo disagree, no free-space claim is trustworthy.
@@ -168,7 +212,7 @@ namespace Jularr.Integrations.Logic.Storage
         }
 
         // Without extensions every file counts.
-        public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string>? extensions, StorageScanState state, CancellationToken ct)
+        public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string>? extensions, StorageScanState state, CancellationToken ct, bool includeHidden = false)
         {
             var pending = new Stack<string>();
             pending.Push("");
@@ -179,7 +223,7 @@ namespace Jularr.Integrations.Logic.Storage
                 FileSystemInfo[] entries;
                 try
                 {
-                    entries = current.GetFileSystemInfos("*", Options);
+                    entries = current.GetFileSystemInfos("*", includeHidden ? DownloadOptions : Options);
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
@@ -202,6 +246,7 @@ namespace Jularr.Integrations.Logic.Storage
                     }
                     else if (entry is FileInfo file && (extensions is null || extensions.Contains(file.Extension.ToLowerInvariant())))
                     {
+                        if (includeHidden) file.Refresh();
                         yield return new StorageFile(path, file.Length, file.LastWriteTimeUtc);
                     }
                 }

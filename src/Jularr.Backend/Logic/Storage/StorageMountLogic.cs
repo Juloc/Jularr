@@ -211,6 +211,15 @@ namespace Jularr.Backend.Logic.Storage
                             "AcquisitionConnections" AS connection
                         WHERE
                             connection."DownloadStorageMountId" = mount."Id"
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "DownloadStorageSettings" AS settings
+                        WHERE
+                            settings."IncompleteStorageMountId" = mount."Id"
+                            OR settings."CompleteStorageMountId" = mount."Id"
                     );
                 """;
             sql.Parameters.Add(data);

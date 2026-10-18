@@ -73,6 +73,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("/Setup/Storage", resumed.Headers.Location!.OriginalString);
             using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
             Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, await storage.Content.ReadAsStringAsync());
+            var storageHtml = await storage.Content.ReadAsStringAsync();
+            using var downloadStep = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("SetupStepTypeId", "9")));
+            Assert.AreEqual("/Setup/DownloadStorage", downloadStep.Headers.Location!.OriginalString);
+            using var earlierStep = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("SetupStepTypeId", "2")));
+            using var downloadResume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/DownloadStorage", downloadResume.Headers.Location!.OriginalString);
+            using var downloadPage = await host.SendAsync(HttpMethod.Get, "/Setup/DownloadStorage");
+            using var sourceStep = await host.SendAsync(HttpMethod.Post, "/Setup/DownloadStorage?handler=Next", Token(await downloadPage.Content.ReadAsStringAsync()));
+            Assert.AreEqual("/Setup/Sources", sourceStep.Headers.Location!.OriginalString);
+            using var sourceResume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Sources", sourceResume.Headers.Location!.OriginalString);
 
             // Source editors remain inside the Sources step and keep their links inside the wizard.
             using var profiles = await host.SendAsync(HttpMethod.Get, "/Setup/Profiles");
@@ -164,7 +175,10 @@ namespace Jularr.Backend.Tests
             var nextHtml = await nextPage.Content.ReadAsStringAsync();
             var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
             using var next = await host.SendAsync(HttpMethod.Post, "/Setup/Storage?handler=Next", Token(nextHtml, ("Version", version.ToString())));
-            Assert.AreEqual("/Setup/Sources", next.Headers.Location!.OriginalString, await next.Content.ReadAsStringAsync());
+            Assert.AreEqual("/Setup/DownloadStorage", next.Headers.Location!.OriginalString, await next.Content.ReadAsStringAsync());
+            using var downloadStorage = await host.SendAsync(HttpMethod.Get, "/Setup/DownloadStorage");
+            using var proceed = await host.SendAsync(HttpMethod.Post, "/Setup/DownloadStorage?handler=Next", Token(await downloadStorage.Content.ReadAsStringAsync()));
+            Assert.AreEqual("/Setup/Sources", proceed.Headers.Location!.OriginalString);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTypes\" WHERE \"IsEnabled\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaSubtypes\" WHERE \"IsEnabled\""));
             using var sources = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");

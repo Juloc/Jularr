@@ -12,8 +12,8 @@ document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker =>
     let pending: AbortController | undefined;
     let currentUrl = opener.dataset.folderUrl ?? '';
     const mount = picker.dataset.folderMountField
-        ? picker.closest('form')?.querySelector<HTMLSelectElement>(`select[name="${CSS.escape(picker.dataset.folderMountField)}"]`) : null;
-    if (mount) {
+        ? picker.closest('form')?.querySelector<HTMLSelectElement | HTMLInputElement>(`[name="${CSS.escape(picker.dataset.folderMountField)}"]`) : null;
+    if (mount && picker.dataset.folderChoosesStorage !== 'true') {
         picker.hidden = !mount.value;
         mount.addEventListener('change', () => {
             pending?.abort();
@@ -90,9 +90,13 @@ document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker =>
         const choose = event.target.closest<HTMLElement>('[data-folder-choose]');
         if (choose && !content.inert) {
             field.value = choose.dataset.folderChoose ?? '';
+            if (mount && picker.dataset.folderChoosesStorage === 'true') {
+                mount.value = choose.dataset.folderMountId ?? '';
+                mount.dispatchEvent(new Event('change', { bubbles: true }));
+            }
             field.dispatchEvent(new Event('change', { bubbles: true }));
             const selection = picker.querySelector<HTMLElement>('[data-folder-selection]');
-            if (selection) selection.textContent = '/' + field.value;
+            if (selection) selection.textContent = choose.dataset.folderLabel ?? '/' + field.value;
             dialog.close();
         }
     });

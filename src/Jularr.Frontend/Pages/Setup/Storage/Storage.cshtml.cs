@@ -39,7 +39,8 @@ namespace Jularr.Frontend.Pages.Setup.Storage
         public async Task<IActionResult> OnPostNextAsync(long version)
         {
             await next.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new CompleteSetupDataV1(version), HttpContext.RequestAborted);
-            return LocalRedirect("/Setup/Sources");
+            var state = await readProgress.ExecuteAsync<SetupProgressV1>(cancellationToken: HttpContext.RequestAborted);
+            return LocalRedirect(SetupWizard.ResumePath(state.SetupStepTypeId));
         }
     }
 }

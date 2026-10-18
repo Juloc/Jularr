@@ -1494,18 +1494,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "Add download client");
             StringAssert.Contains(html, "Download storage");
-            StringAssert.Contains(html, "Usenet temporary files");
-            StringAssert.Contains(html, "Direct book downloads");
-            StringAssert.Contains(html, "No size limit");
-            StringAssert.Contains(html, "Not configured");
-            StringAssert.Contains(html, "In-app editing is not available yet.");
-            using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads");
+            StringAssert.Contains(html, "Configure download storage");
+            using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/1");
             Assert.AreEqual(HttpStatusCode.OK, storagePolicy.StatusCode, await storagePolicy.Content.ReadAsStringAsync());
-            var downloadStorage = await storagePolicy.Content.ReadFromJsonAsync<Jularr.Backend.Data.Admin.Storage.V1.DownloadStorageDetailsV1>();
-            Assert.IsNull(downloadStorage!.UsenetDownloadPath);
-            Assert.IsNull(downloadStorage.DirectSourceDownloadPath);
-            Assert.IsNull(downloadStorage.UsenetMaxJobBytes);
-            Assert.IsFalse(downloadStorage.AllowDirectDownloadOnHostFilesystem);
+            var downloadStorage = await storagePolicy.Content.ReadFromJsonAsync<Jularr.Backend.Data.Admin.Storage.V1.DownloadStorageSettingsV1>();
+            Assert.IsNull(downloadStorage!.IncompleteStorageMountId);
+            Assert.IsNull(downloadStorage.CompleteStorageMountId);
+            Assert.IsNull(downloadStorage.MaxJobBytes);
+            Assert.IsNull(downloadStorage.FreeSpaceReserveBytes);
             Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
 
             // A news server is entered as server, port and SSL; the fields show their form and explain themselves behind the (i).

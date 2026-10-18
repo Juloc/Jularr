@@ -14,6 +14,8 @@
     & > .ui-form__actions { grid-column: 1 / -1; }
 
     &__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+    &__size { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 8px; }
+    &__size > input, &__size > select { min-width: 0; }
 
     &--inline {
         display: flex;
@@ -46,7 +48,8 @@
         overflow-wrap: anywhere;
     }
 
-    &__control > :is(input, select, textarea) {
+    &__control > :is(input, select, textarea),
+    &__control > .ui-form__size > :is(input, select) {
         width: 100%;
         min-height: 44px;
         padding: 8px 6px;

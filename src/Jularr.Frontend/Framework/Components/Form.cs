@@ -98,6 +98,19 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        public Form<TData> ByteSize<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
+        {
+            var field = Declare(selector, FieldControl.Number, labelKey, help);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "number")
+                .Attribute("value", Value(field) ?? "").Attribute("data-byte-input", "");
+            Configure(field, input);
+            var units = new HtmlSelect([.. new[] { ("1", "B"), ("1048576", "MiB"), ("1073741824", "GiB"), ("1099511627776", "TiB") }
+                .Select(unit => new HtmlOption(new ValueText(unit.Item2)).Attribute("value", unit.Item1))])
+                .Attribute("disabled", "disabled").Attribute("data-byte-unit", "").TextAttribute("aria-label", "form.sizeUnit");
+            AddField(field, new Div(input, units).Class("ui-form__size").Attribute("data-byte-size", "").TextAttribute("data-byte-invalid", "form.invalid_type"));
+            return this;
+        }
+
         // A file field makes the form a multipart upload.
         public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
         {
