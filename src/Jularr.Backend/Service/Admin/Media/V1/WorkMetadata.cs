@@ -22,14 +22,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     internal sealed class WorkMetadata
     {
         private readonly TmdbClient _tmdb;
-        private static readonly TimeSpan FeedLifetime = TimeSpan.FromMinutes(3);
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _cache;
+        private readonly DiscoveryFeedSnapshots _snapshots;
 
-        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache)
+        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache, DiscoveryFeedSnapshots snapshots)
         {
             _tmdb = tmdb;
             _cache = cache;
+            _snapshots = snapshots;
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
@@ -92,24 +93,25 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, MediaType mediaType, DiscoverFeedType feed, int page, CancellationToken ct)
         {
-            // Ranked lists change slowly; a short shared cache spares the provider.
             var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
-            var key = $"metadata.feed.{mediaType}.{feed}.{page}.{connection.Language}.{DateTime.UtcNow:yyyy-MM-dd}";
-            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
-            {
-                return cached!;
-            }
-
-            try
-            {
-                var results = await _tmdb.ReadFeedAsync(connection, Kind(mediaType), (TmdbFeed)feed, region, page, ct);
-                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FeedLifetime, Size = Math.Max(1, results.Count) });
-                return results;
-            }
-            catch (TmdbException exception)
-            {
-                throw Translate(exception);
-            }
+            // A stable key is shared by every profile viewing this provider, language and ranking.
+            // No calendar-day suffix: the stored snapshot survives midnight and restarts.
+            var key = $"metadata.feed.tmdb.{mediaType}.{feed}.{page}.{connection.Language}.{region ?? "global"}";
+            // Read through the retention-aware shared snapshot owner. A separate RAM
+            // feed entry could outlive the provider's legal retention boundary.
+            var results = await _snapshots.ReadAsync(key, "tmdb", TimeSpan.FromHours(6), TimeSpan.FromDays(90),
+                async token =>
+                {
+                    try
+                    {
+                        return await _tmdb.ReadFeedAsync(connection, Kind(mediaType), (TmdbFeed)feed, region, page, token);
+                    }
+                    catch (TmdbException exception)
+                    {
+                        throw Translate(exception);
+                    }
+                }, ct);
+            return results;
         }
 
         // Positive and negative identity lookups share one cache across scans.
