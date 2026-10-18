@@ -21,7 +21,7 @@
 
 ## Legacy feature preservation
 
-- Old Phase A/Phase B/clean-cut milestones are historical planning labels, not authorization gates or automatic implementation requirements. Plan and prioritize by owner-approved features, issues and acceptance criteria, not the former phases.
+- Development is driven only by owner-approved features, GitHub issues and acceptance criteria. Historical implementation schedules and milestone labels do not authorize or block work.
 - Before retiring any old plan or deleting/closing its associated issue, PR, branch or document, inventory the relevant functionality and approved decisions from the previous Jularr code (including `dev`/`main`) and historic specifications; compare each capability with `clean-start`. Record a verifiable mapping: implemented and tested in `clean-start`, or missing/partial with an open, linked GitHub issue. Preserve prior decisions and dependencies, and get owner confirmation where intent is ambiguous.
 - Do not declare legacy feature preservation complete until the audit identifies no untracked functionality or agreed feature. Record missing items as issues without automatically implementing them; owner separately prioritizes and approves implementation.
 
