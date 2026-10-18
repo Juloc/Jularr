@@ -228,7 +228,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
             StringAssert.Contains(html, "data-media-card=\"true\"");
-            StringAssert.Contains(html, "media-card__actions");
+            StringAssert.Contains(html, "media-card__title");
+            StringAssert.Contains(html, "media-card__details");
             StringAssert.Contains(html, "data-shelf-direction=\"next\"");
             StringAssert.Contains(html, "class=\"media-shelf__items\" tabindex=\"0\" role=\"region\"");
             foreach (var state in new[] { MediaAvailabilityState.Available, MediaAvailabilityState.Partial, MediaAvailabilityState.Missing, MediaAvailabilityState.Downloading, MediaAvailabilityState.Searching })
@@ -236,7 +237,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
             Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
             StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
-            StringAssert.Contains(html, "data-trailer-id=\"k4xGqY5IDBE\"");
+            Assert.IsFalse(html.Contains("data-trailer-id=", StringComparison.Ordinal));
             StringAssert.Contains(html, "#icon-close");
             Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
             StringAssert.Contains(html, "Request status");
