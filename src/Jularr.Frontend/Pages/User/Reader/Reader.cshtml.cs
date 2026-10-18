@@ -10,6 +10,7 @@ using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Modules.Reader;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -17,7 +18,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, IAntiforgery antiforgery, UiText texts)
+        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
         : JularrPage
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
@@ -63,7 +64,7 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             if (_document is { ReadingFormatTypeId: ReadingFormatType.Comic } comic)
             {
-                page.Asset("Modules/Reader/comic.entry.ts");
+                page.Asset("Modules/Reader/reader.entry.ts");
                 page.Content.Add(ComicView(comic));
                 return;
             }
@@ -81,21 +82,19 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             var asset = Id.ToString(CultureInfo.InvariantCulture);
             var index = current.SectionIndex;
-            var top = new Div(
-                new A(new Text("common.back")).Class("button").Attribute("href", "/Details/" + document.WorkId.ToString(CultureInfo.InvariantCulture)),
-                new Div(new H1(new ValueText(document.Title)).Class("reader__title"), new P(new ValueText(current.Title ?? "")).Class("reader__chapter")).Class("reader__heading"),
-                new Button(new Text("reader.contents")).Class("button").Attribute("data-action", "contents").Attribute("aria-expanded", "false"),
-                new Button(new Text("reader.notes")).Class("button").Attribute("data-action", "notes").Attribute("aria-expanded", NotesPage > 1 ? "true" : "false"),
-                new Button(new Text("reader.search")).Class("button").Attribute("data-action", "search").Attribute("aria-expanded", _hits is null ? "false" : "true"),
-                new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false"),
+            var top = Header(document.Title, current.Title ?? "", document.WorkId, [
+                Tool("library", "reader.contents", "contents"),
+                Tool("bookmark", "reader.notes", "notes"),
+                Tool("search", "reader.search", "search"),
+                new Button(new Icon("text-select", assets)).IconOnly(texts["reader.selectText"]).Attribute("data-reader-select", "").Attribute("aria-pressed", "false"),
+                Tool("reading", "reader.settings", "settings"),
                 _languages.Length > 0
-                    ? new Button(new ValueText(LanguageName(Chosen(document)))).Class("button").Attribute("data-action", "language").Attribute("aria-expanded", "false")
-                        .Attribute("aria-label", texts["reader.language"])
+                    ? Tool("globe", "reader.language", "language")
                     : new Span(),
                 _source?.ReadingFormatTypeId == ReadingFormatType.Pdf || document.TranslatedLanguages.Length > 0
-                    ? new Button(new Text("reader.download")).Class("button").Attribute("data-action", "download").Attribute("aria-expanded", "false")
+                    ? Tool("download", "reader.download", "download")
                     : new Span()
-            ).Class("reader__top");
+            ]);
 
             // A converted PDF downloads as EPUB beside the original; a finished translation as its own EPUB.
             var ebook = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/ebook";
@@ -118,11 +117,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("aria-label", texts["reader.contents"]);
             var notes = Notes(index);
             var searching = Search(index);
-            var settings = new Div(
-                Setting("reader.fontSize", [("smaller", "reader.smaller"), ("larger", "reader.larger")], "size"),
-                Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
-                Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode")
-            ).Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden");
+            var settings = Settings(false);
             var languages = new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
                 .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false"))]).Class("reader__panel reader__choices")
                 .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
@@ -136,20 +131,19 @@ namespace Jularr.Frontend.Pages.User.Reader
                 ? new A(new Text("reader.next")).Class("button button--primary").Attribute("href", "?s=" + (index + 1).ToString(CultureInfo.InvariantCulture)).Attribute("data-role", "next")
                 : new Span(new Text("reader.end")));
 
-            var view = new Div(
-                top,
-                contents,
+            navigation.Insert(1, new Span().Attribute("data-role", "pages").Attribute("aria-live", "polite"));
+            navigation.Add(new Button(new Icon("player-fullscreen", assets)).IconOnly(texts["player.fullscreen"]).Attribute("data-reader-fullscreen", ""));
+            var view = new ReaderFrame(assets, texts,
+                top, contents, new ReaderSection(current), new Div([.. navigation]).Class("reader__bottom"),
                 notes,
                 searching,
                 settings,
                 languages,
                 downloads,
-                new ReaderSection(current),
                 Toolbar(),
                 Popover(),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
-                new P().Class("reader__note").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden"),
-                new Div([.. navigation]).Class("reader__bottom")
+                new P().Class("reader__note").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")
             ).Class("reader")
                 .Attribute("data-progress-url", "/api/v1/reading/assets/" + asset + "/progress")
                 .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
@@ -163,7 +157,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-annotations-url", "/api/v1/reading/assets/" + asset + "/annotations")
                 .Attribute("data-annotations", JsonSerializer.Serialize(_marks, Json))
                 .Attribute("data-note-label", texts["reader.note"])
-                .Attribute("data-query", Query ?? "");
+                .Attribute("data-query", Query ?? "")
+                .Attribute("data-page-label", texts["reader.pagePosition"])
+                .Attribute("data-animation-failed", texts["reader.animationUnavailable"]);
             if (texts.CanTranslate())
             {
                 // The section's translations are shared; the files to translate it come with its route.
@@ -189,15 +185,12 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IUiComponent PdfView(ReadingSourceV1 source)
         {
             var file = "/api/v1/reading/assets/" + Id.ToString(CultureInfo.InvariantCulture) + "/file";
-            return new Div(
-                new Div(
-                    new A(new Text("common.back")).Class("button").Attribute("href", "/Details/" + source.WorkId.ToString(CultureInfo.InvariantCulture)),
-                    new Div(new H1(new ValueText(source.Title)).Class("reader__title")).Class("reader__heading"),
+            return new ReaderFrame(assets, texts,
+                Header(source.Title, "", source.WorkId, [
                     new A(new Text("reader.openPdf")).Class("button").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")
-                ).Class("reader__top"),
-                _status is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span(),
-                new Frame().Class("reader__pdf").Attribute("src", file).Attribute("title", source.Title)
-            ).Class("reader reader--pdf");
+                ]), new Span(), new Frame().Class("reader__pdf").Attribute("src", file).Attribute("title", source.Title),
+                _status is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span()
+            ).Class("reader reader--pdf").Attribute("data-format", "pdf");
         }
 
         private sealed class Frame() : HtmlElement("iframe");
@@ -210,36 +203,63 @@ namespace Jularr.Frontend.Pages.User.Reader
                 && int.TryParse(locator[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var saved) ? saved : 0), 0, count - 1);
             var pages = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=";
             string Page(int number) => "?p=" + number.ToString(CultureInfo.InvariantCulture);
-            var top = new Div(
-                new A(new Text("common.back")).Class("button").Attribute("href", "/Details/" + document.WorkId.ToString(CultureInfo.InvariantCulture)),
-                new H1(new ValueText(document.Title)).Class("comic__title"),
-                new Button(new Text("reader.comic.direction")).Class("button").Attribute("data-action", "direction"),
-                new Button(new Text("reader.comic.spread")).Class("button").Attribute("data-action", "spread").Attribute("aria-pressed", "false")
-            ).Class("comic__top");
+            var top = Header(document.Title, "", document.WorkId, [Tool("library", "reader.contents", "contents"), Tool("reading", "reader.settings", "settings")]);
             var previous = new A(new Text("reader.previous")).Class("button").Attribute("href", Page(Math.Max(0, index - 1))).Attribute("data-role", "previous");
             var next = new A(new Text("reader.next")).Class("button button--primary").Attribute("href", Page(Math.Min(count - 1, index + 1))).Attribute("data-role", "next");
             if (index == 0) previous.Attribute("hidden", "hidden");
             if (index + 1 >= count) next.Attribute("hidden", "hidden");
             var bottom = new Div(
                 previous,
-                new Span(new ValueText((index + 1).ToString(CultureInfo.InvariantCulture) + " / " + count.ToString(CultureInfo.InvariantCulture))).Class("comic__position")
+                new Span(new ValueText((index + 1).ToString(CultureInfo.InvariantCulture) + " / " + count.ToString(CultureInfo.InvariantCulture))).Class("reader__position")
                     .Attribute("data-role", "position").Attribute("aria-live", "polite"),
-                next
-            ).Class("comic__bottom");
+                next,
+                new Button(new Icon("player-fullscreen", assets)).IconOnly(texts["player.fullscreen"]).Attribute("data-reader-fullscreen", "")
+            ).Class("reader__bottom");
             var stage = new Div(new Img().Attribute("src", pages + Uri.EscapeDataString(PagePath(index))).Attribute("alt", texts["reader.comic.page"] + " " + (index + 1).ToString(CultureInfo.InvariantCulture)))
-                .Class("comic__stage").Attribute("data-role", "stage");
+                .Class("reader__content reader__images").Attribute("data-role", "stage");
+
+            // Bounded page links; the complete image list is never embedded in the response.
+            var start = Math.Max(0, index - 10);
+            var contents = new Nav([.. Enumerable.Range(start, Math.Min(20, count - start)).Select(number => new A(new ValueText((number + 1).ToString(CultureInfo.InvariantCulture)))
+                .Class("reader__toc-entry" + (number == index ? " is-current" : "")).Attribute("href", Page(number)))])
+                .Class("reader__panel").Attribute("data-panel", "contents").Attribute("aria-label", texts["reader.contents"]);
 
             var note = document.IsCached ? (IUiComponent)new Span() : new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status");
-            return new Div(top, stage, new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"), note, bottom)
-                .Class("comic")
+            return new ReaderFrame(assets, texts, top, contents, stage, bottom, Settings(true),
+                new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"), note)
+                .Class("reader").Attribute("data-format", "comic")
                 .Attribute("data-progress-url", "/api/v1/reading/assets/" + Id.ToString(CultureInfo.InvariantCulture) + "/progress")
                 .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
                 .Attribute("data-pages", pages)
                 .Attribute("data-page", index.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-count", count.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-direction", document.IsRightToLeft ? "rtl" : "ltr")
-                .Attribute("data-page-label", texts["reader.comic.page"]);
+                .Attribute("data-page-label", texts["reader.comic.page"])
+                .Attribute("data-animation-failed", texts["reader.animationUnavailable"]);
         }
+
+        private IUiComponent Header(string title, string chapter, long workId, IUiComponent[] tools) => new Header(
+            new A(new Icon("chevron-left", assets)).Class("button button--icon").Attribute("aria-label", texts["common.back"])
+                .Attribute("href", "/Details/" + workId.ToString(CultureInfo.InvariantCulture)),
+            new Div(new H1(new ValueText(title)).Class("reader__title").Attribute("id", "reader-document-title"), new P(new ValueText(chapter)).Class("reader__chapter")).Class("reader__heading"),
+            new Nav(tools).Class("reader__tools"))
+                .Class("reader__top");
+
+        private IUiComponent Tool(string icon, string key, string action) => new Button(new Icon(icon, assets)).IconOnly(texts[key])
+            .Attribute("data-action", action).Attribute("aria-expanded", "false");
+
+        private IUiComponent Settings(bool images) => new Div(new Form<ReaderSettingsData>(form =>
+        {
+            form.Select(data => data.Preset, "reader.preset", [new("book", texts["reader.preset.book"]), new("novel", texts["reader.preset.novel"]), new("manga", texts["reader.preset.manga"])])
+                .Select(data => data.Mode, "reader.mode", [new("paged", texts["reader.mode.paged"]), new("scroll", texts["reader.mode.scroll"])])
+                .Select(data => data.Layout, "reader.layout", [new("auto", texts["reader.layout.auto"]), new("single", texts["reader.layout.single"]), new("spread", texts["reader.layout.spread"])])
+                .Select(data => data.Direction, "reader.comic.direction", [new("ltr", texts["reader.direction.ltr"]), new("rtl", texts["reader.direction.rtl"])])
+                .Select(data => data.Surface, "reader.surface", [new("clean", texts["reader.surface.clean"]), new("paper", texts["reader.surface.paper"])])
+                .Color(data => data.Colour, "reader.colour")
+                .Select(data => data.Animation, "reader.animation", [new("system", texts["reader.animation.system"]), new("on", texts["reader.animation.on"]), new("off", texts["reader.animation.off"])]);
+            if (!images) form.Number(data => data.Size, "reader.sizePixels").Number(data => data.Spacing, "reader.spacing");
+        }, data: new ReaderSettingsData(), local: true), new P(new Text("reader.animation.hint")))
+            .Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.settings"]);
 
         // The book's highlights in reading order; each leads to its passage and can go without the script.
         private IUiComponent Notes(int index)
@@ -384,10 +404,6 @@ namespace Jularr.Frontend.Pages.User.Reader
 
         private string LanguageName(string code) => code == "original" ? texts["reader.translate.original"]
             : CultureInfo.GetCultureInfo(code) is { } culture ? culture.TextInfo.ToTitleCase(culture.NativeName) : code;
-
-        private IUiComponent Setting(string labelKey, (string Value, string LabelKey)[] options, string name) =>
-            new Div(new Span(new Text(labelKey)), new Div([.. options.Select(option => new Button(new Text(option.LabelKey)).Class("button")
-                .Attribute("data-setting", name).Attribute("data-value", option.Value))]).Class("reader__choices")).Class("reader__setting");
 
         private static string Percent(long before, long total) =>
             total <= 0 ? "" : Math.Clamp((int)Math.Round(before * 100d / total), 0, 100).ToString(CultureInfo.InvariantCulture) + " %";

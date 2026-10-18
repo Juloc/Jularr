@@ -14,6 +14,13 @@ namespace Jularr.Frontend.Framework
     {
         private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
         private static readonly string[] Speeds = ["0.75", "1", "1.25", "1.5", "2"];
+        private IUiComponent? _sidebar;
+
+        public UiPlayer Sidebar(IUiComponent content)
+        {
+            _sidebar = content;
+            return this;
+        }
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -24,17 +31,19 @@ namespace Jularr.Frontend.Framework
             var video = new Video().Class("player__video").Attribute("playsinline", "playsinline").Attribute("preload", "none").Attribute("aria-label", source.Title);
             if (source.PosterUrl is { } poster) video.Attribute("poster", poster);
 
-            new Div(
+            var stage = new Div(
                 video,
                 new Div(
                     new Div(
-                        new A(Icon("close")).Class("player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
-                        new Button(new Icon("chevron-down", assets)).Class("player__button").Attribute("data-action", "minimize").Attribute("aria-label", texts["player.minimize"])
+                        new A(Icon("close")).Class("button button--icon player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
+                        new Button(new Icon("chevron-down", assets)).Class("button button--icon player__button").Attribute("data-action", "minimize").Attribute("aria-label", texts["player.minimize"])
                             .Attribute("hidden", "hidden"),
                         new Div([.. title]).Class("player__heading"),
-                        new Button(new Icon("chevron-up", assets)).Class("player__button player__mini-only").Attribute("data-action", "expand")
+                        new Button(Icon("list")).IconOnly(texts["details.episodes"]).Class("button button--icon player__button")
+                            .Attribute("data-action", "episodes").Attribute("popovertarget", "player-sidebar").Attribute("hidden", "hidden"),
+                        new Button(new Icon("chevron-up", assets)).Class("button button--icon player__button player__mini-only").Attribute("data-action", "expand")
                             .Attribute("aria-label", texts["player.expand"]),
-                        new Button(Icon("close")).Class("player__button player__mini-only").Attribute("data-action", "stop").Attribute("aria-label", texts["player.stop"])
+                        new Button(Icon("close")).Class("button button--icon player__button player__mini-only").Attribute("data-action", "stop").Attribute("aria-label", texts["player.stop"])
                     ).Class("player__top"),
                     new Div(
                         new Div(
@@ -46,7 +55,7 @@ namespace Jularr.Frontend.Framework
                         ).Class("player__progress"),
                         new Div(
                             new Div(
-                                new Button(Icon("volume"), Icon("muted")).Class("player__button").Attribute("data-action", "mute")
+                                new Button(Icon("volume"), Icon("muted")).Class("button button--icon player__button").Attribute("data-action", "mute")
                                     .Attribute("aria-label", texts["player.mute"]).Attribute("aria-pressed", "false"),
                                 new Input().Class("player__volume").Attribute("type", "range").Attribute("min", "0").Attribute("max", "1").Attribute("step", "0.05")
                                     .Attribute("value", "1").Attribute("data-role", "volume").Attribute("aria-label", texts["player.volume"])
@@ -54,35 +63,23 @@ namespace Jularr.Frontend.Framework
                             new Div(
                                 Neighbour(Action("previous", "player.previous", "previous"), source.PreviousHref),
                                 Action("back", "player.back10", "back-10"),
-                                new Button(Icon("play"), Icon("pause")).Class("player__button player__button--primary")
+                                new Button(Icon("play"), Icon("pause")).Class("button button--icon player__button player__button--primary")
                                     .Attribute("data-action", "toggle").Attribute("aria-label", texts["player.play"])
                                     .Attribute("data-label-play", texts["player.play"]).Attribute("data-label-pause", texts["player.pause"]),
                                 Action("forward", "player.forward30", "forward-30"),
                                 Neighbour(Action("next", "player.next", "next"), source.NextHref)
                             ).Class("player__transport"),
                             new Div([
-                                .. Choice("subtitles", "player.subtitles", new Icon("subtitles", assets), Subtitles.Count > 0),
-                                .. Choice("audio", "player.audio", new Icon("headphones", assets), Audio.Count > 1),
-                                new Button(new Span(new ValueText("1×")).Attribute("data-role", "speed-label")).Class("player__button")
-                                    .Attribute("data-action", "speed").Attribute("aria-label", texts["player.speed"]).Attribute("aria-expanded", "false"),
+                                SubtitleToggle(),
+                                new Button(new Icon("settings", assets)).IconOnly(texts["player.settings"]).Class("button button--icon player__button")
+                                    .Attribute("data-action", "settings").Attribute("popovertarget", "player-settings"),
+                                Action("theater", "player.theater", "theater").Attribute("aria-pressed", "false"),
                                 Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
-                                Action("fullscreen", "player.fullscreen", "fullscreen"),
-                                Action("more", "player.more", "more").Attribute("aria-expanded", "false")
+                                Action("fullscreen", "player.fullscreen", "fullscreen")
                             ]).Class("player__options")
                         ).Class("player__actions")
                     ).Class("player__bottom"),
-                    new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
-                        .Attribute("data-speed", speed).Attribute("role", "menuitemradio").Attribute("aria-checked", speed == "1" ? "true" : "false"))])
-                        .Class("player__panel").Attribute("data-panel", "speed").Attribute("role", "menu").Attribute("aria-label", texts["player.speed"]).Attribute("hidden", "hidden"),
-                    TrackPanel("audio", "player.audio", Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))),
-                    TrackPanel("subtitles", "player.subtitles", [
-                        Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),
-                        .. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))
-                    ]),
-                    new Div(
-                        new P(new Text("player.delivery")),
-                        new P().Attribute("data-role", "mode")
-                    ).Class("player__panel").Attribute("data-panel", "more").Attribute("hidden", "hidden")
+                    Settings()
                 ).Class("player__chrome"),
                 new P().Class("player__status").Attribute("role", "status").Attribute("data-role", "status").Attribute("hidden", "hidden"),
                 new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
@@ -90,7 +87,17 @@ namespace Jularr.Frontend.Framework
                     .. Statuses.Select(status => new Span(new Text("player.status." + status)).Attribute("data-status", status)),
                     .. new[] { "DirectPlay", "Remux", "Transcode" }.Select(mode => new Span(new Text("player.mode." + mode)).Attribute("data-mode", mode))
                 ]).Attribute("hidden", "hidden")
-            ).Class("player")
+            ).Class("player__stage");
+
+            var content = new List<IUiComponent> { stage };
+            if (_sidebar is not null)
+            {
+                content.Add(new Div(
+                    new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Class("button button--icon player__sidebar-close")
+                        .Attribute("popovertarget", "player-sidebar").Attribute("popovertargetaction", "hide"),
+                    _sidebar).Class("player__sidebar").Attribute("id", "player-sidebar").Attribute("aria-label", texts["details.episodes"]));
+            }
+            new Div([.. content]).Class("player")
                 .Attribute("data-start-url", source.StartUrl)
                 .Attribute("data-session-url", source.SessionUrl)
                 .Attribute("data-antiforgery", source.AntiforgeryToken)
@@ -101,21 +108,56 @@ namespace Jularr.Frontend.Framework
             // Without a neighbour the button stays visible but inactive.
             static HtmlElement Neighbour(HtmlElement button, string? href) => href is null ? button.Attribute("disabled", "disabled") : button.Attribute("data-href", href);
 
-            HtmlElement Action(string action, string labelKey, string icon) => new Button(Icon(icon)).Class("player__button")
+            HtmlElement Action(string action, string labelKey, string icon) => new Button(Icon(icon)).IconOnly(texts[labelKey]).Class("button button--icon player__button")
                 .Attribute("data-action", action).Attribute("aria-label", texts[labelKey]);
 
-            // Direct actions open their own part of the shared settings panels.
-            IEnumerable<IUiComponent> Choice(string action, string labelKey, IUiComponent icon, bool visible) => visible
-                ? [new Button(icon).Class("player__button").Attribute("data-action", action).Attribute("aria-label", texts[labelKey]).Attribute("aria-expanded", "false")]
-                : [];
+            HtmlElement SubtitleToggle()
+            {
+                var button = new Button(new Icon("subtitles", assets)).IconOnly(texts["player.subtitles"]).Class("button button--icon player__button")
+                    .Attribute("data-action", "subtitle-toggle").Attribute("aria-pressed", "false");
+                if (!Subtitles.Any(track => track.IsSupported)) button.Attribute("disabled", "disabled");
+                return button;
+            }
 
-            HtmlElement TrackPanel(string name, string labelKey, IEnumerable<IUiComponent> options) => new Div([.. options]).Class("player__panel")
-                .Attribute("data-panel", name).Attribute("role", "menu").Attribute("aria-label", texts[labelKey]).Attribute("hidden", "hidden");
+            IUiComponent Settings()
+            {
+                var audio = Audio.Count == 0 ? (IUiComponent)new P(new Text("player.track.unknown"))
+                    : new Div([.. Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))]);
+                var subtitles = new Div(Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),
+                    new Div([.. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))]));
+                var speed = new Div([.. Speeds.Select(value => new Button(new ValueText(value + "×")).Class("button player__option")
+                    .Attribute("data-speed", value).Attribute("aria-pressed", value == "1" ? "true" : "false"))]).Class("player__speeds");
+                var names = new[] { "basic", "audio", "subtitles", "playback", "info" };
+                return new Div(
+                    new Header(new Span(new Text("player.currentPlayback")),
+                        new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
+                    new Div(
+                        Pane("basic", new Div(
+                            Jump("audio", "player.audio", Audio.FirstOrDefault(track => track.IsDefault)?.Label ?? Audio.FirstOrDefault()?.Label),
+                            Jump("subtitles", "player.subtitles", null), Jump("playback", "player.speed", "1×"))),
+                        Pane("audio", audio), Pane("subtitles", subtitles), Pane("playback", new H2(new Text("player.speed")), speed),
+                        Pane("info", new P(new Text("player.delivery")), new P().Attribute("data-role", "mode"),
+                            new P().Attribute("data-role", "resolution"))
+                    ).Class("player__settings-body"),
+                    new Div(new NavigationTabs(names.Select(name => new NavigationTab("player.tab." + name, "#player-" + name, name == "basic")).ToArray(), "player.settings"))
+                        .Attribute("data-player-tabs", "")
+                ).Class("player__settings").Attribute("id", "player-settings").Attribute("popover", "auto")
+                    .Attribute("role", "dialog").Attribute("aria-label", texts["player.settings"]);
+
+                HtmlElement Pane(string name, params IUiComponent[] children)
+                {
+                    var pane = new Div(children).Class("player__settings-pane").Attribute("id", "player-" + name).Attribute("data-panel", name);
+                    if (name != "basic") pane.Attribute("hidden", "hidden");
+                    return pane;
+                }
+                HtmlElement Jump(string pane, string labelKey, string? value) => new Button(new Icon(pane == "audio" ? "headphones" : pane == "subtitles" ? "subtitles" : "settings", assets),
+                    new Span(new Text(labelKey), new Span(value is null ? new Text(pane == "audio" ? "player.track.unknown" : "player.subtitles.off") : new ValueText(value)).Attribute("data-current", pane)),
+                    new Icon("chevron-down", assets)).Class("button player__setting-link").Attribute("data-setting-pane", pane);
+            }
 
             HtmlElement Option(string kind, string key, IUiComponent label, bool isChecked, bool isSupported, string? language)
             {
-                var option = new Button(label).Class("player__option").Attribute("data-" + kind, key).Attribute("role", "menuitemradio")
-                    .Attribute("aria-checked", isChecked ? "true" : "false");
+                var option = new Button(label).Class("button player__option").Attribute("data-" + kind, key).Attribute("aria-pressed", isChecked ? "true" : "false");
                 if (language is not null) option.Attribute("data-language", language);
                 if (!isSupported) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
                 return option;

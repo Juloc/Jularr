@@ -39,8 +39,9 @@ namespace Jularr.Integrations.Logic.Storage
         public async Task<bool> ExistsAsync(string path, CancellationToken ct) => await GetAsync(path, ct) is not null;
 
         // The subfolder names of a folder, sorted.
-        public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string directory, int limit, CancellationToken ct) =>
-            (await ListAsync(directory, ct)).Where(entry => entry.IsDirectory).Select(entry => entry.Name).Order(StringComparer.Ordinal).Take(limit).ToArray();
+        public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string directory, int limit, CancellationToken ct, string? afterName = null) =>
+            (await ListAsync(directory, ct)).Where(entry => entry.IsDirectory).Select(entry => entry.Name)
+                .Where(name => afterName is null || string.CompareOrdinal(name, afterName) > 0).Order(StringComparer.Ordinal).Take(limit).ToArray();
 
         // Every file below a folder, paths relative to it; without extensions every file counts. A folder that cannot be read makes the walk incomplete.
         public async IAsyncEnumerable<StorageFile> EnumerateFilesAsync(string directory, IReadOnlySet<string>? extensions, StorageScanState state,

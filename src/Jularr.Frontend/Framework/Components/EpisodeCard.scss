@@ -66,11 +66,11 @@
         height: 4px;
         border: 0;
         background: rgb(255 255 255 / 35%);
-        color: var(--accent);
+        color: var(--episode-progress, var(--accent));
 
         &::-webkit-progress-bar { background: rgb(255 255 255 / 35%); }
-        &::-webkit-progress-value { background: var(--accent); }
-        &::-moz-progress-bar { background: var(--accent); }
+        &::-webkit-progress-value { background: var(--episode-progress, var(--accent)); }
+        &::-moz-progress-bar { background: var(--episode-progress, var(--accent)); }
     }
 
     &__body {
@@ -96,4 +96,26 @@
     }
 
     .state-chip { margin-top: auto; }
+
+    &--compact {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
+        padding: 6px;
+        border: 0;
+        box-shadow: none;
+        .episode-card__art { border-radius: 8px; }
+        .episode-card__body { min-width: 0; padding: 0; gap: 3px; }
+        .episode-card__runtime { top: 2px; right: 2px; padding: 1px 4px; font-size: 10px; }
+        .episode-card__title { font-size: 13px; }
+        .episode-card__label { color: inherit; }
+        .state-chip { font-size: 11px; }
+        &[aria-current=true] {
+            --episode-progress: light-dark(#25202f, #fff);
+            background: var(--accent);
+            color: var(--accent-contrast);
+            &:hover { background: var(--accent-hover); }
+        }
+    }
 }

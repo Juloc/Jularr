@@ -528,9 +528,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var data = new PlaybackUpdateData(Parameters.PlaybackSessionId, Auth.ProfileId!.Value, Data.PositionMs, Data.DurationMs, Data.IsEnded, Data.IsCompleted);
             await Context.UpdatePlaybackAsync(data, CancellationToken);
 
-            // Ended playback releases its conversion.
-            if (Data.IsEnded) _transcodes.Stop(Parameters.PlaybackSessionId);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            // The conversion must survive any rollback of the session update.
+            if (Data.IsEnded) _transcodes.Stop(Parameters.PlaybackSessionId);
         }
     }
 }

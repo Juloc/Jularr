@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
@@ -18,7 +19,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
     // Indexers, download clients and subtitle providers, each kind on its own page.
     public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
         UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
-        UiText texts, ReadDownloadStorageV1 storage) : JularrPage
+        UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
     {
         // The kinds each tab adds.
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
@@ -34,7 +35,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private SaveAcquisitionConnectionDataV1? _input;
         private SearchAcquisitionConnectionDataV1? _searchInput;
         private IReadOnlyList<IndexerReleaseV1>? _releases;
-        private DownloadStorageDetailsV1? _downloadStorage;
+        private readonly List<StorageMountDetailsV1> _storageMounts = [];
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionConnectionId { get; set; }
@@ -62,6 +63,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         protected override void Define(Page page)
         {
             page.Title("acquisition.role." + Role);
+            if (Role == AcquisitionConnectionRole.Download) page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var isSetup = SetupWizard.IsActive(Request);
             if (isSetup) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
@@ -79,24 +81,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     if (list.Items.Count == list.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
                 }
 
-                // Download workspaces are configured by the server owner, not by SABnzbd.
-                // Surface the effective values without implying that a configured mount is online.
-                if (_downloadStorage is { } configured)
+                if (Role == AcquisitionConnectionRole.Download)
                 {
-                    split.Primary.Add(new UiSection("acquisition.workspace.title",
-                    [
-                        new P(new Text("acquisition.workspace.hint")),
-                        WorkspaceLine("acquisition.workspace.usenet", configured.UsenetDownloadPath),
-                        WorkspaceLine("acquisition.workspace.direct", configured.DirectSourceDownloadPath),
-                        new P(new Strong(new Text("acquisition.workspace.limit")),
-                            new ValueText(": " + ByteSize.Format(configured.UsenetMaxJobBytes) + " (" +
-                                (configured.UsenetMaxJobBytes / (1024d * 1024 * 1024)).ToString("0.##", CultureInfo.CurrentCulture) + " GiB)")),
-                        new P(new Text(configured.AllowDirectDownloadOnHostFilesystem
-                            ? "acquisition.workspace.hostAllow" : "acquisition.workspace.hostDeny")),
-                        new P(new Text("acquisition.workspace.manageHint"))
-                    ]));
+                    split.Primary.Add(new UiSection("downloadStorage.title", [new A(new Text("downloadStorage.configure")).Class("button")
+                        .Attribute("href", isSetup ? "/Setup/DownloadStorage" : "/Admin/DownloadStorage")]));
                 }
-
                 // Indexers also come from a Prowlarr in one step; subtitle providers from the source catalog with their addresses.
                 var additions = Additions[Role].Select(addition => (IUiComponent)new A(new Text(addition.LabelKey)).Class("button").Attribute("href", Address(type: addition.Type))).ToList();
                 if (Role == AcquisitionConnectionRole.Search)
@@ -128,10 +117,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
             if (FormError is not null && _searchInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
-
-        private IUiComponent WorkspaceLine(string titleKey, string? configuredPath) =>
-            new P(new Strong(new Text(titleKey)),
-                new ValueText(": " + (string.IsNullOrWhiteSpace(configuredPath) ? texts["acquisition.workspace.unset"] : configuredPath)));
 
         private Table<AcquisitionConnectionDetailsV1> ConnectionTable(IReadOnlyList<AcquisitionConnectionDetailsV1> items)
         {
@@ -201,10 +186,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl)
+            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit, string? host, int? port, bool? useSsl,
+            long? downloadStorageMountId)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl, apiKey, isEnabled, priority, Categories(categories),
-                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl);
+                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit, host, port, useSsl,
+                downloadStorageMountId);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -215,6 +202,21 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
 
             return LocalRedirect(Address(AcquisitionConnectionId));
+        }
+
+        public async Task<IActionResult> OnGetFoldersAsync([BindRequired] long storageMountId, string? path, string? afterName)
+        {
+            var result = await directories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(storageMountId),
+                new ReadStorageDirectoriesDataV1(path ?? "", afterName), HttpContext.RequestAborted);
+            var address = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Request.Path, new Dictionary<string, string?>
+            {
+                ["handler"] = "Folders", ["storageMountId"] = storageMountId.ToString(CultureInfo.InvariantCulture)
+            });
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            FolderPicker.Directories(address, path ?? "", result.Select(item => item.Name).ToArray(), texts, afterName, result.Count == StorageDirectoryV1.PageSize)
+                .WriteTo(writer, HtmlEncoder.Default, texts);
+            Response.Headers.CacheControl = "no-store";
+            return Content(writer.ToString(), "text/html");
         }
 
         public async Task<IActionResult> OnPostTestAsync()
@@ -260,7 +262,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 HttpContext.RequestAborted);
             if (Role == AcquisitionConnectionRole.Download)
             {
-                _downloadStorage = await storage.ExecuteAsync<DownloadStorageDetailsV1>(new ReadDownloadStorageParametersV1(), HttpContext.RequestAborted);
+                _storageMounts.Clear();
+                for (var mountPage = 1; texts.Can("storage.read"); mountPage++)
+                {
+                    var configured = await mounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(mountPage, 100), HttpContext.RequestAborted);
+                    _storageMounts.AddRange(configured.Items);
+                    if (configured.Items.Count < configured.PageSize) break;
+                }
             }
         }
 
@@ -269,7 +277,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
                     selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
-                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl)
+                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
@@ -340,8 +348,26 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 if (type == AcquisitionConnectionType.Sabnzbd)
                 {
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
-                    form.Text(item => item.RemotePath, "acquisition.connection.remotePath");
+                    // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
+                    if (_selected?.RemotePath is { } detected)
+                        form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));
+                    if (texts.Can("storage.read"))
+                    {
+                        form.Select(item => item.DownloadStorageMountId, "acquisition.connection.downloadStorage", [
+                            new SelectOption("", texts["acquisition.connection.containerStorage"]),
+                            .. _storageMounts.Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name))
+                        ]);
+                    }
+                    else form.Hidden(item => item.DownloadStorageMountId);
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
+                    form.Content(new P(new Text("acquisition.connection.downloadStorageHint")));
+                    var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(AcquisitionConnectionId, type, "Folders"),
+                        "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
+                    if (texts.Can("storage.read"))
+                    {
+                        form.Content(new FolderPicker(browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
+                            storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
+                    }
                 }
 
                 form.Submit("common.save");

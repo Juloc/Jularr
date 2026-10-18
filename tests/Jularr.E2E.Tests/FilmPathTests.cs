@@ -85,8 +85,21 @@ namespace Jularr.E2E.Tests
 
                 await page.GotoAsync(filmDetails);
                 await Steps.PlayAndPauseAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First);
+
+                await AssertPlayerDesignAsync(page);
                 await page.GotoAsync(seriesDetails);
                 await Steps.PlayAndPauseAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First);
+                var selectedEpisode = page.Locator(".episode-card[aria-current=true]");
+                await Assertions.Expect(selectedEpisode).ToBeVisibleAsync();
+                Assert.IsTrue(await selectedEpisode.EvaluateAsync<bool>("card => { const probe = document.createElement('span'); probe.style.background = 'var(--accent)'; card.append(probe); const matches = getComputedStyle(card).backgroundColor === getComputedStyle(probe).backgroundColor; probe.remove(); return matches; }"));
+                await page.Locator("[data-action=settings]").ClickAsync();
+                await Evidence.SaveAsync(page, "player-series-settings-light");
+                await page.EvaluateAsync("document.documentElement.dataset.mode = 'dark'");
+                await Assertions.Expect(page.Locator("[data-setting-pane=audio]")).ToHaveCSSAsync("background-color",
+                    await page.Locator(".player__sidebar").EvaluateAsync<string>("sidebar => getComputedStyle(sidebar).backgroundColor"));
+                await Evidence.SaveAsync(page, "player-series-settings-dark");
+                await page.EvaluateAsync("document.documentElement.dataset.mode = 'light'");
+                await page.Keyboard.PressAsync("Escape");
 
                 // Signed out and in again, both continue where they stopped.
                 await Steps.SignOutAndInAsync(page);
@@ -104,6 +117,88 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "film-path");
                 throw;
             }
+        }
+
+        private static async Task AssertPlayerDesignAsync(IPage page)
+        {
+            var video = page.Locator("video");
+            await video.EvaluateAsync("video => { window.__originalPlayerVideo = video; }");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            var settings = page.Locator("#player-settings");
+            await Assertions.Expect(settings).ToBeVisibleAsync();
+            var size = (await settings.BoundingBoxAsync())!;
+            foreach (var name in new[] { "Basic", "Audio", "Subtitles", "Playback", "Info" })
+            {
+                await settings.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true }).ClickAsync();
+                var bounds = (await settings.BoundingBoxAsync())!;
+                Assert.AreEqual(size.Width, bounds.Width, 1);
+                Assert.AreEqual(size.Height, bounds.Height, 1);
+                Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.paused"));
+            }
+            await settings.GetByRole(AriaRole.Tab, new() { Name = "Playback", Exact = true }).ClickAsync();
+            await settings.Locator("[data-speed='1.25']").ClickAsync();
+            Assert.AreEqual(1.25, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
+            await settings.Locator("[data-speed='1']").ClickAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(settings).ToBeHiddenAsync();
+
+            // The native range moves while the current playback continues; only release seeks.
+            await video.EvaluateAsync("video => { video.currentTime = 1; return video.play(); }");
+            var timeline = page.Locator("[data-role=timeline]");
+            var track = (await timeline.BoundingBoxAsync())!;
+            await page.Mouse.MoveAsync(track.X + track.Width * .1f, track.Y + track.Height / 2);
+            await page.Mouse.DownAsync();
+            await page.Mouse.MoveAsync(track.X + track.Width * .75f, track.Y + track.Height / 2, new() { Steps = 8 });
+            await Task.Delay(3200);
+            Assert.IsTrue(await video.EvaluateAsync<bool>("video => !video.paused && video.currentTime > 2 && video.currentTime < 6"), "Holding the range must continue playback without seeking or pausing.");
+            Assert.IsFalse(await page.Locator(".player").EvaluateAsync<bool>("player => player.classList.contains('player--idle')"), "Holding the seek control must keep the chrome visible.");
+            await page.Mouse.UpAsync();
+            await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 6.5");
+            await video.EvaluateAsync("video => video.pause()");
+            Assert.IsTrue(await timeline.EvaluateAsync<bool>("input => input.style.getPropertyValue('--played').length > 0"));
+
+            await page.Locator("[data-action=mute]").ClickAsync();
+            Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.muted"));
+            await page.Locator("[data-action=mute]").ClickAsync();
+            await page.Locator("[data-action=theater]").ClickAsync();
+            await Assertions.Expect(page.Locator(".player")).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("player--theater"));
+            if (await page.Locator("#player-sidebar").CountAsync() > 0)
+            {
+                await page.Locator("[data-action=episodes]").ClickAsync();
+                await Assertions.Expect(page.Locator("#player-sidebar")).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
+            }
+            await page.Locator("[data-action=theater]").ClickAsync();
+
+            await page.Locator("[data-action=fullscreen]").ClickAsync();
+            await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            await Assertions.Expect(settings).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await page.Locator("[data-action=fullscreen]").ClickAsync();
+            await page.WaitForFunctionAsync("() => !document.fullscreenElement");
+
+            await page.SetViewportSizeAsync(390, 844);
+            await page.Locator("[data-action=settings]").ClickAsync();
+            var mobile = (await settings.BoundingBoxAsync())!;
+            Assert.IsTrue(mobile.X >= 0 && mobile.Y >= 0 && mobile.X + mobile.Width <= 391 && mobile.Y + mobile.Height <= 845);
+            await Evidence.SaveAsync(page, "player-settings-mobile");
+            await settings.GetByRole(AriaRole.Tab, new() { Name = "Info", Exact = true }).ClickAsync();
+            await page.Keyboard.PressAsync("Home");
+            await Assertions.Expect(settings.GetByRole(AriaRole.Tab, new() { Name = "Basic", Exact = true })).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await page.SetViewportSizeAsync(1280, 720);
+
+            await page.Locator(".player__sidebar a[data-action=close]").ClickAsync();
+            await Assertions.Expect(page.Locator(".app-layout")).ToBeVisibleAsync();
+            Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
+            Assert.AreEqual(1, await page.Locator("video").CountAsync());
+            await page.Locator("[data-action=expand]").ClickAsync();
+            Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
+            // Keep the resume contract of the surrounding end-to-end path unchanged.
+            await page.RunAndWaitForResponseAsync(() => video.EvaluateAsync("video => { video.currentTime = 5; return video.play().then(() => video.pause()); }"),
+                response => response.Request.Method == "PUT" && response.Ok);
+            await Evidence.SaveAsync(page, "player-design-desktop");
         }
     }
 }

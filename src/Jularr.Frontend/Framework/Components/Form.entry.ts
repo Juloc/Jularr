@@ -1,5 +1,6 @@
 // Refresh dependent fields from the server without saving the draft. The button remains usable without JavaScript.
 function enhance(form: HTMLFormElement): void {
+    enhanceSizes(form);
     if (form.dataset.refreshReady || !form.querySelector('[data-form-refresh]')) return;
     form.dataset.refreshReady = "true";
     form.querySelectorAll<HTMLButtonElement>('[data-form-refresh-submit]').forEach(button => { button.hidden = true; });
@@ -37,3 +38,60 @@ function enhance(form: HTMLFormElement): void {
 }
 
 document.querySelectorAll<HTMLFormElement>('form').forEach(enhance);
+
+// Unit changes affect presentation only; the typed field is always submitted in bytes.
+function enhanceSizes(form: HTMLFormElement): void {
+form.querySelectorAll<HTMLElement>('[data-byte-size]').forEach(control => {
+    if (control.dataset.byteReady) return;
+    const input = control.querySelector<HTMLInputElement>('[data-byte-input]');
+    const unit = control.querySelector<HTMLSelectElement>('[data-byte-unit]');
+    if (!input || !unit || !input.name) return;
+    control.dataset.byteReady = 'true';
+    const value = document.createElement('input');
+    value.type = 'hidden';
+    value.name = input.name;
+    value.value = input.value;
+    input.removeAttribute('name');
+    input.removeAttribute('min');
+    input.removeAttribute('max');
+    input.step = 'any';
+    control.append(value);
+    let factor = 1n;
+    if (!value.value || BigInt(value.value) === 0n) factor = 1073741824n;
+    else {
+        for (const candidate of [1099511627776n, 1073741824n, 1048576n]) {
+            if (BigInt(value.value) % candidate === 0n) { factor = candidate; break; }
+        }
+    }
+    function show(bytes: string): string {
+        if (!bytes) return '';
+        const size = BigInt(bytes);
+        const whole = size / factor;
+        const remainder = size % factor;
+        if (remainder === 0n) return whole.toString();
+        const fraction = (remainder * (10n ** 40n) / factor).toString().padStart(40, '0').replace(/0+$/, '');
+        return whole.toString() + '.' + fraction;
+    }
+    function sync(): boolean {
+        input!.setCustomValidity('');
+        if (!input!.value) { value.value = ''; return true; }
+        const match = /^(\d+)(?:\.(\d*))?$/.exec(input!.value);
+        if (!match) { input!.setCustomValidity(control.dataset.byteInvalid ?? ''); return false; }
+        const digits = match[2] ?? '';
+        const numerator = BigInt(match[1] + digits) * factor;
+        const denominator = 10n ** BigInt(digits.length);
+        if (numerator % denominator !== 0n) { input!.setCustomValidity(control.dataset.byteInvalid ?? ''); return false; }
+        value.value = (numerator / denominator).toString();
+        return true;
+    }
+    unit.value = factor.toString();
+    input.value = show(value.value);
+    unit.disabled = false;
+    input.addEventListener('input', sync);
+    unit.addEventListener('change', () => {
+        if (!sync()) { unit.value = factor.toString(); return; }
+        factor = BigInt(unit.value);
+        input.value = show(value.value);
+    });
+});
+}

@@ -17,6 +17,7 @@ CREATE TABLE "LibraryRoots" (
 
 -- Wanted targets may name their library (Acquisition is installed first).
 ALTER TABLE "WantedItems" ADD FOREIGN KEY ("LibraryRootId") REFERENCES "LibraryRoots" ("Id") ON DELETE SET NULL;
+ALTER TABLE "AcquisitionConnections" ADD FOREIGN KEY ("DownloadStorageMountId") REFERENCES "StorageMounts" ("Id") ON DELETE RESTRICT;
 
 -- Inventory survives offline storage; missing files are only marked by complete scans.
 CREATE TABLE "StoredFiles" (
@@ -172,6 +173,29 @@ CREATE UNIQUE INDEX "UX_Operations_ActiveBackup" ON "Operations" ("OperationType
 CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;
 CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationTypeId", "OperationStatusTypeId", "CreatedAt", "Id");
 CREATE INDEX "IX_Operations_Recent" ON "Operations" ("CreatedAt" DESC, "Id" DESC);
+
+CREATE TABLE "DownloadStorageSettings" (
+    "DownloadStorageAreaId" smallint PRIMARY KEY CHECK ("DownloadStorageAreaId" IN (1, 2)),
+    "WorkspaceId" uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+    "IncompleteStorageMountId" bigint NULL REFERENCES "StorageMounts" ("Id") ON DELETE RESTRICT,
+    "IncompletePath" varchar(1024) NULL,
+    "IncompleteFilesystemIdentity" varchar(128) NULL,
+    "CompleteStorageMountId" bigint NULL REFERENCES "StorageMounts" ("Id") ON DELETE RESTRICT,
+    "CompletePath" varchar(1024) NULL,
+    "CompleteFilesystemIdentity" varchar(128) NULL,
+    "FreeSpaceReserveBytes" bigint NULL CHECK ("FreeSpaceReserveBytes" >= 0),
+    "MaxJobBytes" bigint NULL CHECK ("MaxJobBytes" > 0),
+    "MaxWorkspaceBytes" bigint NULL CHECK ("MaxWorkspaceBytes" > 0),
+    "MaxParallelJobs" smallint NOT NULL DEFAULT 2 CHECK ("MaxParallelJobs" BETWEEN 1 AND 20),
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
+    CHECK (("IncompleteStorageMountId" IS NULL) = ("IncompletePath" IS NULL)),
+    CHECK (("IncompleteStorageMountId" IS NULL) = ("IncompleteFilesystemIdentity" IS NULL)),
+    CHECK (("IncompleteStorageMountId" IS NULL) = ("CompleteStorageMountId" IS NULL)),
+    CHECK (("CompleteStorageMountId" IS NULL) = ("CompletePath" IS NULL)),
+    CHECK (("CompleteStorageMountId" IS NULL) = ("CompleteFilesystemIdentity" IS NULL)),
+    CHECK (("CompleteStorageMountId" IS NULL) = ("FreeSpaceReserveBytes" IS NULL))
+);
+INSERT INTO "DownloadStorageSettings" ("DownloadStorageAreaId") VALUES (1), (2);
 
 -- The Admin's names for movie and episode files below a library; '/' separates folders, the last part names the file.
 CREATE TABLE "NamingPatterns" (

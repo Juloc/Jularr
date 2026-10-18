@@ -1,0 +1,26 @@
+.folder-picker {
+    min-width: 0;
+    [data-folder-selection] { overflow-wrap: anywhere; }
+
+    &__dialog {
+        width: min(640px, calc(100% - 32px));
+        max-height: calc(100dvh - 32px);
+        padding: 20px;
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+        color: var(--text);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+
+        &::backdrop { background: rgb(0 0 0 / 60%); }
+        [data-folder-content] { min-height: 240px; }
+        [data-folder-status] { overflow-wrap: anywhere; }
+    }
+
+    &__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    &__heading h2 { margin: 0; }
+    &__trail { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; overflow-wrap: anywhere; }
+    &__folders { list-style: none; padding: 0; max-height: 45dvh; overflow-y: auto; }
+    &__folders a { display: block; padding: 10px; min-height: 44px; overflow-wrap: anywhere; }
+}

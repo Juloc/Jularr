@@ -13,8 +13,9 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.AspNetCore.DataProtection;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Logic.Storage;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
@@ -29,29 +30,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly DirectSources _direct;
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
-        private readonly StorageOptions _storage;
         private readonly TimeProvider _time;
+        private readonly DownloadStorage _downloads;
 
-        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers, IOptions<StorageOptions> storage,
-            TimeProvider time)
+        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers,
+            TimeProvider time, DownloadStorage downloads)
         {
+            _downloads = downloads;
             _time = time;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
             _direct = direct;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _offers = offers;
-            _storage = storage.Value;
         }
-
-        // Where Jularr's own downloads wait until the import.
-        public static string Staging(StorageOptions storage, long operationId) =>
-            Path.Combine(storage.ReadyUsenetDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured"),
-                operationId.ToString(CultureInfo.InvariantCulture));
-
-        public static string DirectStaging(StorageOptions storage, long operationId) =>
-            Path.Combine(storage.ReadyDirectSourceDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured"),
-                operationId.ToString(CultureInfo.InvariantCulture));
 
         // Automatic searches leave out manual-only, backed-off and exhausted indexers; every indexer asked records its use.
         public async Task<WantedSearchResult> SearchAsync(LogicContext context, WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, bool automatic,
@@ -151,11 +143,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // before creating an operation; a missing mount must never fall back to the VM.
             if (DirectSources.IsDirectOffer(offer.Guid) && offer.DownloadUri is { } source)
             {
-                _ = _storage.ReadyDirectSourceDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
+                var paths = await _downloads.OpenAsync(context, DownloadStorageArea.Direct, ct);
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
                     source.ToString(), accountId);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
+                    await ctx.RequireDownloadStorageSettingsAsync(paths.Settings, token);
                     var reserved = await ctx.ReserveDownloadAsync(direct, token);
                     await ctx.StartDownloadAsync(new DownloadStartData(reserved, Limit(offer.Guid!, 128)), token);
                     return true;
@@ -179,9 +172,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // Refuse native downloads before reserving an operation or using an indexer grab.
+            DownloadStoragePaths? nativePaths = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                _ = _storage.ReadyUsenetDownloadPath() ?? throw new ServiceUnavailableException("acquisition_download_path_unconfigured");
+                nativePaths = await _downloads.OpenAsync(context, DownloadStorageArea.Usenet, ct);
             }
 
             // A grab counts against its indexer's daily limit.
@@ -198,19 +192,24 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
                 requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags] };
-            var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
+            var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                if (nativePaths is not null) await ctx.RequireDownloadStorageSettingsAsync(nativePaths.Settings, token);
+                return await ctx.ReserveDownloadAsync(grab, token);
+            }, ct);
 
             // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
             string? failure = null;
             string? externalId = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                var staging = Staging(_storage, operationId);
+                var staging = await nativePaths!.PrepareIncompleteAsync(operationId, ct);
                 try
                 {
                     Directory.CreateDirectory(staging);
                     File.Delete(Path.Combine(staging, UsenetJob.NzbName));
-                    await _newznab.DownloadNzbAsync(offer.DownloadUri, Path.Combine(staging, UsenetJob.NzbName), ct);
+                    await _newznab.DownloadNzbAsync(offer.DownloadUri, Path.Combine(staging, UsenetJob.NzbName), ct,
+                        bytes => nativePaths.ReserveWrite(operationId, staging, bytes));
                     externalId = UsenetJob.ExternalId;
                 }
                 catch (NewznabException exception)

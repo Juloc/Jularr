@@ -11,7 +11,6 @@ namespace Jularr.Integrations.Logic.Opds
     // OPDS 1 catalogs (Calibre-Web, Standard Ebooks, Kavita and others) through their OpenSearch description.
     internal sealed class OpdsClient(HttpClient http, ISourceGateResolver gates)
     {
-        public const long MaximumBytes = 500L * 1024 * 1024;
         private const long MaximumFeedBytes = 8L * 1024 * 1024;
 
         private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
@@ -54,10 +53,10 @@ namespace Jularr.Integrations.Logic.Opds
             return [.. (feed.Root?.Elements(Atom + "entry") ?? []).Take(50).Select(entry => ReadEntry(target, entry)).OfType<OpdsBook>()];
         }
 
-        public async Task DownloadAsync(OpdsConnection connection, Uri source, string destination, CancellationToken ct)
+        public async Task DownloadAsync(OpdsConnection connection, Uri source, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
             using var response = await DirectDownload.SendAsync(http, source, Credentials(connection), gates, ct);
-            await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
+            await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
         }
 
         private static OpdsBook? ReadEntry(Uri feed, XElement entry)

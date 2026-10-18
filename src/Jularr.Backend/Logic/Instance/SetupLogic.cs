@@ -103,6 +103,25 @@ namespace Jularr.Backend.Logic.Instance
                         WHERE
                             type."Key" IN ('Sabnzbd', 'Usenet')
                             AND connection."IsEnabled"
+                    )
+                UNION ALL
+                SELECT
+                    'downloadStorage.' || CASE WHEN settings."DownloadStorageAreaId" = 1 THEN 'Usenet' ELSE 'Direct' END,
+                    TRUE
+                FROM
+                    "DownloadStorageSettings" AS settings
+                WHERE
+                    settings."IncompleteStorageMountId" IS NULL
+                    AND EXISTS (SELECT 1 FROM "InstanceModules" AS module WHERE module."Key" = 'Acquisition' AND module."IsEnabled")
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "AcquisitionConnections" AS connection
+                        WHERE
+                            connection."IsEnabled"
+                            AND CASE WHEN settings."DownloadStorageAreaId" = 1 THEN connection."AcquisitionConnectionTypeId" = 6
+                                ELSE connection."AcquisitionConnectionTypeId" IN (3, 4, 5) END
                     );
                 """;
             return ctx.ReadSql.ReadListAsync<SetupCheckData>(sql, ct);
@@ -117,7 +136,11 @@ namespace Jularr.Backend.Logic.Instance
                 UPDATE
                     "InstanceSetupState" AS setup
                 SET
-                    "SetupStepTypeId" = greatest(setup."SetupStepTypeId", @SetupStepTypeId),
+                    "SetupStepTypeId" = CASE
+                        WHEN @SetupStepTypeId = 9 THEN CASE WHEN setup."SetupStepTypeId" IN (1, 2) THEN 9 ELSE setup."SetupStepTypeId" END
+                        WHEN setup."SetupStepTypeId" = 9 THEN CASE WHEN @SetupStepTypeId IN (1, 2) THEN 9 ELSE @SetupStepTypeId END
+                        ELSE greatest(setup."SetupStepTypeId", @SetupStepTypeId)
+                    END,
                     "Version" = setup."Version" + 1
                 WHERE
                     setup."Id" = 1

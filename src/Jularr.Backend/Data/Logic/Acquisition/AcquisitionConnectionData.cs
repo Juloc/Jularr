@@ -10,8 +10,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt,
-            string? host, int? port, bool? useSsl)
+            string? host, int? port, bool? useSsl, long? downloadStorageMountId = null)
         {
+            DownloadStorageMountId = downloadStorageMountId;
             Host = host;
             Port = port;
             UseSsl = useSsl;
@@ -86,6 +87,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
+        public long? DownloadStorageMountId { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Capabilities))]
         public string? Capabilities { get; }
 
@@ -131,8 +135,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, string? host = null, int? port = null,
-            bool? useSsl = null)
+            bool? useSsl = null, long? downloadStorageMountId = null)
         {
+            DownloadStorageMountId = downloadStorageMountId;
             Host = host;
             Port = port;
             UseSsl = useSsl;
@@ -198,6 +203,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
+        public long? DownloadStorageMountId { get; }
 
         // OPDS catalogs and news servers may need an account; the password is the protected key.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Username))]

@@ -68,6 +68,7 @@ namespace Jularr.E2E.Tests
                 // Reading on saves the position in each.
                 await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter One");
+                await AssertPaperReaderAsync(page);
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.OpenReaderAsync(page, mangaDetails);
                 await Steps.TurnAsync(page);
@@ -91,6 +92,53 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "reading-path");
                 throw;
             }
+        }
+
+        private static async Task AssertPaperReaderAsync(IPage page)
+        {
+            var root = page.Locator(".reader");
+            await page.WaitForFunctionAsync("() => Number(document.querySelector('.reader').dataset.pageCount) > 2");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            await page.GetByLabel("Page turn animation", new() { Exact = true }).SelectOptionAsync("on");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.curl === 'true'");
+            Assert.IsTrue(await page.Locator(".reader__leaf").CountAsync() <= 6);
+            var margins = await page.Locator("[data-role=content]").EvaluateAsync<double>("el => el.querySelector('p').getBoundingClientRect().left - el.getBoundingClientRect().left");
+            Assert.IsTrue(margins >= 23, "Each paper page needs its own inner text margin.");
+            var area = (await page.Locator(".reader__curl").BoundingBoxAsync())!;
+            var initial = await root.GetAttributeAsync("data-page");
+            await page.Mouse.MoveAsync(area.X + area.Width - 8, area.Y + area.Height - 12);
+            await page.Mouse.DownAsync();
+            await page.Mouse.MoveAsync(area.X + area.Width * .65f, area.Y + area.Height - 60, new() { Steps = 18 });
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.curlState === 'user_fold'");
+            Assert.AreEqual(initial, await root.GetAttributeAsync("data-page"), "Holding a page must not save an uncommitted turn.");
+            Assert.IsTrue(await page.Locator(".reader__leaf").EvaluateAllAsync<bool>("items => items.some(el => el.style.clipPath.startsWith('polygon('))"));
+            await page.Mouse.MoveAsync(area.X + area.Width - 8, area.Y + area.Height - 12, new() { Steps = 18 });
+            await page.Mouse.UpAsync();
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.curlState === 'read'");
+            Assert.AreEqual(initial, await root.GetAttributeAsync("data-page"));
+            await page.RunAndWaitForResponseAsync(() => page.Locator("[data-turn='1']").ClickAsync(), response => response.Request.Method == "PUT" && response.Ok);
+            Assert.AreNotEqual(initial, await root.GetAttributeAsync("data-page"));
+            await page.Locator("[data-reader-select]").ClickAsync();
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.curl === 'false'");
+            await page.Locator("[data-reader-select]").ClickAsync();
+
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+            await page.Locator("[data-action=settings]").ClickAsync();
+            await page.GetByLabel("Page turn animation", new() { Exact = true }).SelectOptionAsync("system");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.curl === 'false'");
+            await page.SetViewportSizeAsync(390, 844);
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            await page.GetByLabel("Layout", new() { Exact = true }).SelectOptionAsync("scroll");
+            await page.GetByLabel("Paper colour", new() { Exact = true }).FillAsync("#242424");
+            await page.Locator("[data-action=settings]").ClickAsync();
+            Assert.AreEqual("scroll", await root.GetAttributeAsync("data-mode"));
+            Assert.AreEqual("rgb(250, 250, 250)", await root.EvaluateAsync<string>("el => getComputedStyle(el.querySelector('[data-role=content]')).color"));
+            Assert.IsTrue(await page.Locator("[data-role=content]").EvaluateAsync<bool>("el => el.scrollHeight > el.clientHeight"));
+            await page.SetViewportSizeAsync(1280, 720);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.NoPreference });
         }
 
         [TestMethod]

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Win32.SafeHandles;
 using Jularr.Integrations.Data.Usenet;
+using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Integrations.Logic.Usenet
 {
@@ -11,7 +12,7 @@ namespace Jularr.Integrations.Logic.Usenet
         private const long Slack = 1024 * 1024;
 
         public async Task<UsenetProgress> DownloadAsync(UsenetServer server, IReadOnlyList<NzbFile> files, string directory, IReadOnlySet<string> finished, DateTimeOffset until,
-            long maximumJobBytes, CancellationToken ct)
+            long maximumJobBytes, CancellationToken ct, long minimumFreeBytes = 0, Func<long, IDisposable>? reserveWrite = null)
         {
             var queue = new ConcurrentQueue<(NzbFile File, NzbSegment Segment)>(files.SelectMany(file => file.Segments.Where(segment => !finished.Contains(segment.MessageId))
                 .Select(segment => (file, segment))));
@@ -50,6 +51,7 @@ namespace Jularr.Integrations.Logic.Usenet
             var handles = new Dictionary<string, SafeFileHandle>(StringComparer.Ordinal);
             var fileLengths = new Dictionary<string, long>(StringComparer.Ordinal);
             long allocated = 0;
+            long pendingGrowth = 0;
             try
             {
                 for (var index = 1; index < Math.Clamp(server.Connections, 1, 50) && index < queue.Count; index++)
@@ -115,6 +117,8 @@ namespace Jularr.Integrations.Logic.Usenet
 
                         // Reserve the resulting physical file extent under a shared lock, before
                         // concurrent NNTP sessions write. Files can arrive out of offset order.
+                        long reservedGrowth;
+                        IDisposable? reservation;
                         lock (fileLengths)
                         {
                             var end = part.Offset + part.Data.Length;
@@ -124,11 +128,27 @@ namespace Jularr.Integrations.Logic.Usenet
                                 throw new UsenetStorageBudgetException();
                             }
 
+                            if (reserveWrite is null && (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || growth > available - minimumFreeBytes - pendingGrowth))
+                            {
+                                throw new UsenetStorageBudgetException();
+                            }
+
+                            reservation = reserveWrite?.Invoke(growth);
                             allocated += growth;
+                            pendingGrowth += growth;
+                            reservedGrowth = growth;
                             fileLengths[item.File.FileName] = Math.Max(fileLengths[item.File.FileName], end);
                         }
 
-                        await RandomAccess.WriteAsync(handles[item.File.FileName], part.Data, part.Offset, ct);
+                        try
+                        {
+                            await RandomAccess.WriteAsync(handles[item.File.FileName], part.Data, part.Offset, ct);
+                        }
+                        finally
+                        {
+                            reservation?.Dispose();
+                            lock (fileLengths) pendingGrowth -= reservedGrowth;
+                        }
                         Interlocked.Add(ref downloaded, part.Data.Length);
                         (part.IsIntact ? done : damaged).Add(item.Segment.MessageId);
                     }

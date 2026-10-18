@@ -58,8 +58,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
             DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search, string? host = null,
-            int? port = null, bool? useSsl = null)
+            int? port = null, bool? useSsl = null, long? downloadStorageMountId = null)
         {
+            DownloadStorageMountId = downloadStorageMountId;
             Host = host;
             Port = port;
             UseSsl = useSsl;
@@ -137,6 +138,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
+        public long? DownloadStorageMountId { get; }
+
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.CheckedAt))]
         public DateTime? CheckedAt { get; }
 
@@ -183,8 +187,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
             string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
-            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null)
+            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, string? host = null, int? port = null, bool? useSsl = null, long? downloadStorageMountId = null)
         {
+            DownloadStorageMountId = downloadStorageMountId;
             Host = host;
             Port = port;
             UseSsl = useSsl;
@@ -247,19 +252,24 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
 
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadStorageMountId))]
+        public long? DownloadStorageMountId { get; }
+
         public override void Validate()
         {
             base.Validate();
 
             // Download settings belong to download clients; mappings are complete pairs.
-            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd && (DownloadCategory is not null || RemotePath is not null || LocalPath is not null))
+            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd
+                && (DownloadCategory is not null || RemotePath is not null || LocalPath is not null || DownloadStorageMountId is not null))
             {
                 throw new DataValidationException(nameof(DownloadCategory), "invalid_transition");
             }
 
-            if ((RemotePath is null) != (LocalPath is null))
+            // RemotePath is optional when the SAB folder will be discovered from the client API.
+            if (RemotePath is not null && LocalPath is null && DownloadStorageMountId is null)
             {
-                throw new DataValidationException(RemotePath is null ? nameof(RemotePath) : nameof(LocalPath), "required");
+                throw new DataValidationException(nameof(LocalPath), "required");
             }
 
             // Only news servers open several sessions.

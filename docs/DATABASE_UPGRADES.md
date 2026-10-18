@@ -1,7 +1,7 @@
 # Release database upgrades
 
 Upgrade support starts with the first official clean-start release on `main`.
-Current pre-release baselines may still change. Legacy Phase B, importing an old
+Current pre-release baselines may still change. Importing an old
 unversioned database and modifying the Owner's running test database remain outside
 this package. An existing unversioned database is left unchanged at startup.
 

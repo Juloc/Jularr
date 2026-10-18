@@ -236,7 +236,10 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "data-action=\"audio\"");
+            StringAssert.Contains(html, "data-action=\"settings\"");
+            StringAssert.Contains(html, "data-panel=\"audio\"");
+            StringAssert.Contains(html, "data-audio=\"1\"");
+            StringAssert.Contains(html, "data-audio=\"2\"");
             StringAssert.Contains(html, "data-action=\"minimize\" aria-label=\"Minimize\" hidden=\"hidden\"");
             StringAssert.Contains(html, "Deutsch &#xB7; Kommentar &#xB7; Stereo");
             StringAssert.Contains(html, "data-subtitle=\"" + sidecar.Key + "\"");
@@ -322,7 +325,29 @@ namespace Jularr.Backend.Tests
             using var outside = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, segments + "9.ts"));
             Assert.AreEqual(HttpStatusCode.NotFound, outside.StatusCode);
 
-            // Ending playback releases the conversion cache.
+            // A deferred commit failure must leave the stream and its cache available.
+            await host.Fixture.RunSqlAsync(
+                """
+                CREATE FUNCTION "FailSessionEnd"() RETURNS trigger LANGUAGE plpgsql AS '
+                BEGIN
+                    IF NEW."EndedAt" IS NOT NULL THEN
+                        RAISE EXCEPTION ''forced playback commit failure'';
+                    END IF;
+                    RETURN NEW;
+                END;';
+                CREATE CONSTRAINT TRIGGER "FailSessionEndTrigger" AFTER UPDATE ON "PlaybackSessions"
+                    DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "FailSessionEnd"();
+                """);
+            using var rejected = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId,
+                new UpdatePlaybackDataV1(13_000, 13_500, true, true));
+            Assert.AreEqual(HttpStatusCode.InternalServerError, rejected.StatusCode);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"EndedAt\" IS NULL FROM \"PlaybackSessions\" WHERE \"PublicId\" = '" + plan.PlaybackSessionId + "'"));
+            Assert.IsTrue(Directory.Exists(directory));
+            using var retained = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl));
+            Assert.AreEqual(HttpStatusCode.OK, retained.StatusCode);
+            await host.Fixture.RunSqlAsync("DROP TRIGGER \"FailSessionEndTrigger\" ON \"PlaybackSessions\"; DROP FUNCTION \"FailSessionEnd\"()");
+
+            // Ending playback releases the conversion cache only after the update commits.
             using var ended = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId, new UpdatePlaybackDataV1(13_000, 13_500, true, true));
             Assert.AreEqual(HttpStatusCode.OK, ended.StatusCode, await ended.Content.ReadAsStringAsync());
             Assert.IsFalse(Directory.Exists(directory));

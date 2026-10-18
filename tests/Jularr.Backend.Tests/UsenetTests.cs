@@ -6,9 +6,11 @@ using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
@@ -29,48 +31,25 @@ namespace Jularr.Backend.Tests
         private const string Connections = "/api/v1/admin/acquisition/connections";
         private const string Feature = "Example.Movie.2020.1080p.WEB-DL.H264-GRP";
 
+
         [TestMethod]
-        public void NativeDownload_RequiresConfirmedWorkspaceAndNeverUsesImplicitTemp()
+        public async Task Usenet_UnsetJobLimitAllowsReleasesAnnouncingMoreThanTwentyGiB()
         {
-            using var directory = new TemporaryDirectory();
-            var options = new StorageOptions();
-            Assert.IsNull(options.ReadyUsenetDownloadPath());
-            Assert.Throws<ServiceUnavailableException>(() => WantedAcquisition.Staging(options, 42));
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            var bytes = new byte[300_000];
+            news.Publish(Feature + ".mkv", bytes, 3);
+            var nzb = System.Text.RegularExpressions.Regex.Replace(news.Nzb(Feature + ".mkv"), "bytes=\"[0-9]+\"", "bytes=\"32212254720\"");
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(nzb), news.Port);
 
-            options.DirectDownloadPath = "relative/downloads";
-            Assert.IsNull(options.ReadyUsenetDownloadPath());
-            options.DirectDownloadPath = Path.Combine(directory.Path, "unmounted");
-            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<DownloadUsenetV1>(host);
 
-            options.DirectDownloadPath = directory.Path;
-            if (OperatingSystem.IsLinux() && !StorageFileSystem.IsMountPoint(directory.Path))
-            {
-                Assert.IsNull(options.ReadyUsenetDownloadPath(), "The host's root filesystem must not count as a confirmed workspace.");
-            }
-
-            if (OperatingSystem.IsLinux())
-            {
-                Assert.IsFalse(StorageFileSystem.IsDownloadWorkspaceMount("/dev/shm"),
-                    "RAM-backed mounts cannot be accepted for persistent native downloads.");
-                options.DirectDownloadPath = "/dev/shm";
-                Assert.IsNull(options.ReadyUsenetDownloadPath());
-                options.AllowDirectDownloadOnHostFilesystem = true;
-                Assert.IsNull(options.ReadyUsenetDownloadPath(), "Host opt-in must not allow RAM-backed staging.");
-            }
-
-            options.AllowDirectDownloadOnHostFilesystem = true;
-            options.DirectDownloadPath = Path.GetPathRoot(directory.Path);
-            Assert.IsNull(options.ReadyUsenetDownloadPath(), "A filesystem root is not a staging workspace.");
-            options.DirectDownloadPath = directory.Path;
-            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath());
-            Assert.AreEqual(Path.Combine(Path.GetFullPath(directory.Path), "42"), WantedAcquisition.Staging(options, 42));
-            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyDirectSourceDownloadPath(), "An explicitly set shared workspace remains compatible.");
-
-            using var books = new TemporaryDirectory();
-            options.DirectSourceDownloadPath = books.Path;
-            Assert.AreEqual(Path.GetFullPath(books.Path), options.ReadyDirectSourceDownloadPath());
-            Assert.AreEqual(Path.Combine(Path.GetFullPath(books.Path), "43"), WantedAcquisition.DirectStaging(options, 43));
-            Assert.AreEqual(Path.GetFullPath(directory.Path), options.ReadyUsenetDownloadPath(), "Book download configuration must not change NNTP staging.");
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var imported = Directory.EnumerateFiles(storage.Path, "*.mkv", SearchOption.AllDirectories).Single();
+            CollectionAssert.AreEqual(bytes, File.ReadAllBytes(imported));
         }
 
         [TestMethod]
@@ -148,15 +127,16 @@ namespace Jularr.Backend.Tests
             using var target = new TemporaryDirectory();
             var alias = Path.Combine(directory.Path, "alias");
             Directory.CreateSymbolicLink(alias, target.Path);
-            var options = new StorageOptions { DirectDownloadPath = alias, AllowDirectDownloadOnHostFilesystem = true };
-            Assert.IsNull(options.ReadyUsenetDownloadPath());
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity(alias));
             Directory.CreateDirectory(Path.Combine(target.Path, "nested"));
-            options.DirectDownloadPath = Path.Combine(alias, "nested");
-            Assert.IsNull(options.ReadyDirectSourceDownloadPath());
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity(Path.Combine(alias, "nested")));
+            Assert.IsNull(StorageFileSystem.DownloadFilesystemIdentity("/dev/shm"), "RAM-backed filesystems are not persistent download targets.");
         }
 
         [TestMethod]
-        public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports()
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Usenet_OwnDownloaderFetchesTheNzbAndArticlesAndImports(bool directSmbTarget)
         {
             using var storage = new TemporaryDirectory();
             using var staging = new TemporaryDirectory();
@@ -165,6 +145,13 @@ namespace Jularr.Backend.Tests
             news.Publish(Feature + ".mkv", movie, 3);
             var indexer = new FakeIndexer(news.Nzb(Feature + ".mkv"));
             await using var host = await CreateHostAsync(storage.Path, staging.Path, indexer, news.Port);
+            if (directSmbTarget)
+            {
+                using var updatedMount = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/storage/mounts/1",
+                    new SaveStorageMountDataV1("Library NAS", StorageProtocolType.Smb, "nas.test", "/media", "3.1.1", "jularr", null, false, "secret"));
+                Assert.AreEqual(HttpStatusCode.OK, updatedMount.StatusCode, await updatedMount.Content.ReadAsStringAsync());
+                host.Services.GetRequiredService<SmbShares>().Get(1, 2, () => new SmbSession(new FakeSmbStore(Path.Combine(storage.Path, "1")), () => { }));
+            }
 
             // A login and one command prove the news server; the password is never shown again.
             using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/2/test");
@@ -187,7 +174,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(feature));
             CollectionAssert.AreEqual(movie, File.ReadAllBytes(feature));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
-            Assert.AreEqual(0, Directory.GetFileSystemEntries(staging.Path).Length);
+            Assert.AreEqual(0, Directory.EnumerateFiles(staging.Path, "*", SearchOption.AllDirectories).Count());
             Assert.IsTrue(news.Logins.All(login => login == "reader:news-secret"));
         }
 
@@ -204,7 +191,8 @@ namespace Jularr.Backend.Tests
             await RunAsync<SearchDueWantedV1>(host);
             await RunAsync<DownloadUsenetV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
-            Assert.AreEqual(0, Directory.GetFileSystemEntries(staging.Path).Length);
+            Assert.IsTrue(Directory.EnumerateFiles(staging.Path, UsenetJob.NzbName, SearchOption.AllDirectories).Any(),
+                "A failed release retains its own job files until explicit cancellation or a successful import.");
         }
 
         [TestMethod]
@@ -257,9 +245,7 @@ namespace Jularr.Backend.Tests
         {
             var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string>
                 {
-                    ["Storage:DirectDownloadPath"] = staging,
-                    ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true",
-                    ["Storage:UsenetMaxJobBytes"] = (maxJobBytes ?? 20L * 1024 * 1024 * 1024).ToString(CultureInfo.InvariantCulture)
+                    ["Storage:LocalPaths:2"] = staging
                 },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);
@@ -286,6 +272,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             }
 
+            await DownloadStorageTests.ConfigureAsync(host, staging, DownloadStorageArea.Usenet, maxJobBytes);
             return host;
         }
 

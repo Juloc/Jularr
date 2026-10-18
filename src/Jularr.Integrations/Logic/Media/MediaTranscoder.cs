@@ -67,7 +67,7 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file", "-skip_frame", "nokey", "-i", inputPath,
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath), "-skip_frame", "nokey", "-i", inputPath,
                 "-an", "-sn", "-dn", "-vf", string.Create(CultureInfo.InvariantCulture, $"fps=1/{intervalSeconds},scale={width}:{height},tile={columns}x{rows}"),
                 "-q:v", "5", Path.Combine(folder, "%03d.jpg")])
             {
@@ -117,7 +117,7 @@ namespace Jularr.Integrations.Logic.Media
                 CreateNoWindow = true
             };
             // Only local files; a subtitle file is read as what its name says, never sniffed.
-            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file"])
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", InputProtocols(inputPath)])
             {
                 start.ArgumentList.Add(argument);
             }
@@ -168,6 +168,12 @@ namespace Jularr.Integrations.Logic.Media
                 throw new ProviderUnavailableException();
             }
         }
+
+        // Direct SMB inputs are exposed only through Jularr's loopback stream server.
+        // FFmpeg must permit that HTTP transport, but never arbitrary remote URLs.
+        private static string InputProtocols(string inputPath) =>
+            Uri.TryCreate(inputPath, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttp && uri.Host == "127.0.0.1"
+                ? "file,http,tcp" : "file";
 
         internal static IReadOnlyList<string> BuildArguments(TranscodeRequest request)
         {

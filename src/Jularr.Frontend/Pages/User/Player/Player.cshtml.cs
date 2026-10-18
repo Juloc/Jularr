@@ -1,18 +1,24 @@
 using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Playback.V1;
+using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.User.Playback.V1;
+using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Player
 {
-    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes,
+        IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private PlaybackItemV1? _item;
         private IReadOnlyList<PlaybackTrackV1> _tracks = [];
+        private WorkDetailsV1? _work;
+        private IReadOnlyList<WorkEpisodeV1> _episodes = [];
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -37,7 +43,29 @@ namespace Jularr.Frontend.Pages.User.Player
                     item.PreviousMediaAssetId is { } previous ? "/Player/" + previous.ToString(CultureInfo.InvariantCulture) : null,
                     item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null,
                     texts.CanPreviewSeeking() ? "/api/v1/playback/assets/" + asset + "/trickplay" : null);
-                page.Content.Add(new UiPlayer(source, assets));
+                var player = new UiPlayer(source, assets);
+                if (_work is { } work)
+                {
+                    var panes = new List<IUiComponent>();
+                    var tabs = new List<NavigationTab>();
+                    if (_episodes.Count > 0)
+                    {
+                        tabs.Add(new("details.episodes", "#player-episodes", true));
+                        panes.Add(new Div(_episodes.Select(episode => (IUiComponent)new EpisodeCard(
+                            MediaUnitLabel.Format(texts, WorkUnitType.Episode, episode.Number, episode.SeasonNumber, null) ?? "",
+                            episode.Title, null, episode.ImageUrl, episode.RuntimeMinutes, "media.state." + episode.MediaStateTypeId,
+                            episode.MediaAssetId is { } episodeAsset ? "/Player/" + episodeAsset.ToString(CultureInfo.InvariantCulture) : null)
+                            .Progress(episode.IsCompleted ? episode.DurationMs : episode.ResumePositionMs, episode.DurationMs)
+                            .Compact(episode.MediaAssetId == item.MediaAssetId)).ToArray()).Class("player__episodes").Attribute("id", "player-episodes"));
+                    }
+                    tabs.Add(new("media.details", "#player-details", _episodes.Count == 0));
+                    var details = new Div(new H2(new ValueText(work.CanonicalTitle)), new P(new ValueText(work.Overview ?? "")),
+                        new A(new Text("media.details")).Class("button").Attribute("href", source.BackHref).Attribute("data-action", "close")).Attribute("id", "player-details");
+                    if (_episodes.Count > 0) details.Attribute("hidden", "hidden");
+                    panes.Add(details);
+                    player.Sidebar(new Div(new Div(new NavigationTabs(tabs, "nav.tabs")).Attribute("data-player-tabs", ""), new Div([.. panes])));
+                }
+                page.Content.Add(player);
             }
             else if (FormError is not null)
             {
@@ -56,6 +84,14 @@ namespace Jularr.Frontend.Pages.User.Player
         {
             _item = await read.ExecuteAsync<PlaybackItemV1>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
             _tracks = await readTracks.ExecuteAsync<BaseDataList<PlaybackTrackV1>>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
+            if (_item is { } item && texts.Can("profile.media.read", "Library"))
+            {
+                _work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(item.WorkId), HttpContext.RequestAborted);
+                if (item.ParentUnitNumber is { } season && item.WorkUnitTypeId == WorkUnitType.Episode)
+                {
+                    _episodes = await readEpisodes.ExecuteAsync<BaseDataList<WorkEpisodeV1>>(new ReadWorkEpisodesParametersV1(item.WorkId, (int)season), HttpContext.RequestAborted);
+                }
+            }
         }
 
         // Language, then the track's own title and channel layout.

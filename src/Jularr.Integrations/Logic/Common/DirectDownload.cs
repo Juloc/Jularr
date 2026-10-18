@@ -44,27 +44,33 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
-        public static async Task SaveAsync(HttpResponseMessage response, string destination, long maximumBytes, CancellationToken ct)
+        public static async Task SaveAsync(HttpResponseMessage response, string destination, long? maximumBytes, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null)
         {
-            if (response.Content.Headers.ContentLength > maximumBytes)
+            if (maximumBytes is null && reserveWrite is null)
+            {
+                throw new InvalidOperationException("An unlimited download requires a storage reservation before every write.");
+            }
+
+            if (maximumBytes is { } limit && response.Content.Headers.ContentLength > limit)
             {
                 throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The file is too large.");
             }
 
             await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+            await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, useAsync: true);
             var buffer = new byte[81920];
             long total = 0;
             int read;
             while ((read = await source.ReadAsync(buffer, ct)) > 0)
             {
-                total += read;
-                if (total > maximumBytes)
+                if (read > long.MaxValue - total || maximumBytes is { } maximum && read > maximum - total)
                 {
                     throw new DirectDownloadException(DirectDownloadFailure.TooLarge, "The file is too large.");
                 }
 
+                using var reservation = reserveWrite?.Invoke(read);
                 await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                total += read;
             }
         }
 

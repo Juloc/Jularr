@@ -159,7 +159,7 @@ namespace Jularr.Integrations.Logic.Newznab
         }
 
         // The release's own link carries the indexer's access; Jularr keeps the NZB for its own downloader.
-        public async Task DownloadNzbAsync(Uri nzb, string destination, CancellationToken ct)
+        public async Task DownloadNzbAsync(Uri nzb, string destination, CancellationToken ct, Func<long, IDisposable>? reserveWrite = null)
         {
             try
             {
@@ -174,7 +174,7 @@ namespace Jularr.Integrations.Logic.Newznab
                     throw new NewznabException(NewznabFailure.Unavailable, "The indexer did not deliver the NZB.");
                 }
 
-                await DirectDownload.SaveAsync(response, destination, NzbReader.MaximumBytes, ct);
+                await DirectDownload.SaveAsync(response, destination, NzbReader.MaximumBytes, ct, reserveWrite);
             }
             catch (DirectDownloadException exception)
             {

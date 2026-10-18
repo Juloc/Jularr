@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { resolve, sep } from "node:path";
 import { test } from "node:test";
 
-test("Feature pushes preserve merged history but reject new foreign authorship", () => {
+test("Feature and PR checks preserve merged history but reject new foreign authorship", () => {
     const repository = resolve(import.meta.dirname, "..");
     const scratch = resolve(repository, ".scratch");
     mkdirSync(scratch, { recursive: true });
@@ -22,6 +22,11 @@ test("Feature pushes preserve merged history but reject new foreign authorship",
         return result.stdout.trim();
     };
     const verify = (range, base) => run(bash, [resolve(repository, "scripts/verify-authorship.sh"), "--range", range, ...(base ? ["--exclude", base] : [])]);
+    const workflow = readFileSync(resolve(repository, ".github/workflows/authorship.yml"), "utf8").replaceAll("\r\n", "\n");
+    const workflowScript = workflow.match(/        run: \|\n((?:          .*\n?)*)/)[1].replace(/^          /gm, "");
+    const checkPullRequest = (head, eventBase, target) => run(bash, ["-c", workflowScript], {
+        env: { ...owner, EVENT_NAME: "pull_request", BASE_SHA: eventBase, BASE_REF: target, HEAD_SHA: head }
+    });
 
     try {
         git("init", "--quiet");
@@ -35,6 +40,14 @@ test("Feature pushes preserve merged history but reject new foreign authorship",
         git("commit", "--allow-empty", "-m", "New backend integration");
         const good = git("rev-parse", "HEAD");
 
+        // Run the actual CI script with a stale event and the current fetched target.
+        mkdirSync(resolve(directory, "scripts"));
+        copyFileSync(resolve(repository, "scripts/verify-authorship.sh"), resolve(directory, "scripts/verify-authorship.sh"));
+        git("update-ref", "refs/remotes/origin/clean-start", base);
+        assert.equal(checkPullRequest(good, original, "clean-start").status, 0);
+        git("update-ref", "refs/remotes/origin/main", original);
+        assert.equal(checkPullRequest(good, original, "main").status, 1);
+
         assert.equal(verify(good).status, 1);
         assert.equal(verify(good, base).status, 0);
 
@@ -44,12 +57,11 @@ test("Feature pushes preserve merged history but reject new foreign authorship",
         });
         assert.equal(foreign.status, 0, foreign.stderr);
         assert.equal(verify("HEAD", base).status, 1);
+        assert.equal(checkPullRequest(git("rev-parse", "HEAD"), original, "clean-start").status, 1);
 
         // The hook only permits exclusions on feature pushes.
         git("update-ref", "refs/remotes/origin/clean-start", base);
         const hook = resolve(repository, ".githooks/pre-push");
-        mkdirSync(resolve(directory, "scripts"));
-        copyFileSync(resolve(repository, "scripts/verify-authorship.sh"), resolve(directory, "scripts/verify-authorship.sh"));
         const push = (sha, target, previous) => run(bash, [hook, "origin"], {
             input: `refs/heads/codex/test ${sha} refs/heads/${target} ${previous}\n`
         });
@@ -63,6 +75,7 @@ test("Feature pushes preserve merged history but reject new foreign authorship",
         assert.equal(push(git("rev-parse", "HEAD"), "codex/test", good).status, 1);
         assert.equal(push(git("rev-parse", "HEAD"), "fix/test", good).status, 1);
     } finally {
+        assert.ok(resolve(directory).startsWith(scratch + sep));
         rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });

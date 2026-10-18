@@ -1,4 +1,4 @@
-# Instance setup: four steps
+# Instance setup
 
 Owner decision of 16 October 2026 supersedes the older nine-page wizard and the
 separate acquisition-profile step. Setup uses the canonical configuration owners;
@@ -10,8 +10,9 @@ it adds neither its own settings store nor database migrations.
 | --- | --- | --- |
 | 1. Owner and language | /Setup | Public ReadSetupLocalesV1 lists all installed languages, marking generated translations. CreateOwnerV1 atomically enables the selected language, applies it to the instance and the first profile, creates the Owner and signs in. Bootstrap remains exactly once. |
 | 2. Instance and modules | /Setup/Instance | ReadSetupModulesV1 supplies the existing switches and preset membership. SaveSetupModulesV1 saves the instance name, all shown module rows and progress in one transaction, with ID/version checks. |
-| 3. Libraries | /Setup/Storage | The shared Storage editor creates, checks and browses connections and library roots. Its bottom Continue invokes SaveSetupLibrariesV1, disables types/subtypes without a library and advances to Sources atomically. A parent needed by a subtype root stays enabled. |
-| 4. Sources and finish | /Setup/Sources | Tabs for metadata, indexers, downloaders, native quality profiles, takeover and provider connections keep their canonical editors inside this step. SaveSetupSourcesV1 preserves an empty key and saves a supplied key. Save changes stays in Sources; Finish setup also completes setup after the canonical checks pass in the same transaction. |
+| 3. Libraries | /Setup/Storage | The shared Storage editor creates, checks and browses connections and library roots. Continue invokes SaveSetupLibrariesV1, disables types/subtypes without a library and advances to Download storage when Acquisition is enabled, otherwise Sources. A parent needed by a subtype root stays enabled. |
+| 4. Download storage (with Acquisition) | /Setup/DownloadStorage | The canonical download-storage editor selects Incomplete/Complete through the shared dialog and confirms writable targets, reserve and optional limits. Native Usenet and direct sources have separate settings. External-client-only installations can continue without configuring a native workspace. |
+| 5. Sources and finish | /Setup/Sources | Tabs for metadata, indexers, downloaders, native quality profiles, takeover and provider connections keep their canonical editors inside this step. SaveSetupSourcesV1 preserves an empty key and saves a supplied key. Save changes stays in Sources; Finish setup also completes setup after the canonical checks pass in the same transaction. Enabled native/direct connections require confirmed download storage. |
 
 The three presets are Complete, Media server and Requests. Complete includes all
 implemented modules, including local Registration. Media server selects playback,
@@ -32,6 +33,11 @@ connected server. Both kinds of registration remain configurable.
 
 - New connections, library paths, tests and scans use their ordinary canonical
   operations. Continue saves each main step; it is placed below the content.
+- Library folders are selected in the shared native dialog. Folder navigation fetches
+  authorized server-rendered lists without navigating the surrounding page or losing
+  its draft. Escape/Close preserves the prior selection; Use this folder updates the
+  existing form. Large lists have cursor navigation. Without JavaScript the ordinary
+  browse links remain available. The same directory service handles SMB, NFS and local paths.
 - Sources has a shared tab row on every editor, including an individual profile.
   Indexer and downloader tabs open a creation form immediately and keep their
   connection list visible on mobile. Saving returns to that setup editor.
@@ -54,7 +60,7 @@ connected server. Both kinds of registration remain configurable.
   rechecks configuration in its transaction. Secrets remain write-only; a blank
   setup TMDB key keeps the saved credential.
 - Restore remains available at /Setup/Backup for a compatible Jularr backup.
-  Legacy migration remains in stopped Phase B. AI setup is a separate package.
+  Existing-instance migration is tracked separately in [#433](https://github.com/Juloc/Jularr/issues/433). AI setup is a separate package.
 - Only an Owner configures the instance. Permissions, validation, transactions,
   safe paths and provider access remain Backend-owned. NAS outages leave catalog
   and administration browsing usable. No active database is installed or changed.
@@ -65,7 +71,7 @@ SetupTests cover bootstrap concurrency/closure, generated-language selection,
 atomic module edits and rollback, progress, empty libraries and completion.
 AdminProviderTests cover Plex PIN completion, expiry, browser/account/purpose
 binding and replay. AuthenticationTests retain Plex registration access checks.
-SetupWizardTests drive all four steps at desktop and mobile sizes, including
+SetupWizardTests drive the conditional steps at desktop and mobile sizes, including
 presets, source tabs, credential and connection saves without finishing, and
 resume. Existing film/series path tests use the provider disclosure.
 

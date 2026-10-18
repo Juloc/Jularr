@@ -242,7 +242,7 @@ Backend-Fehlerressourcen werden automatisch ergänzt. Widersprüchliches Englisc
 denselben Schlüssel wird abgelehnt. Beim Hoststart werden Ressourcen idempotent
 synchronisiert, nie das Schema installiert/migriert. Neue Texte brauchen keine SQL-Importe;
 entfernte Deklarationen werden nicht gelöscht. Das frische Schema muss ausdrücklich
-installiert sein; bestehende aktive Datenbanken werden während des Clean Cut nicht verändert.
+installiert sein; bestehende aktive Datenbanken werden ohne ausdrücklich genehmigten Migrationsplan nicht verändert.
 
 Razor injiziert `ReadUiTextsV1` aus `Jularr.Backend.Service.Public.Localization.V1`,
 lädt einmal pro Request und verwendet danach synchrone String-Lookups:
@@ -359,7 +359,7 @@ DSM-Zertifikat vertraut Jularr erst, nachdem der Owner seinen Fingerabdruck auf 
 Fehlende Untertitel der gewünschten Sprachen (Modul „Untertitel“, standardmäßig aus) holt Jularr von Anbietern, die wie
 Indexer verwaltet werden (OpenSubtitles.com, SubDL), und legt sie als `<Video>.<Sprache>.srt` neben das Video.
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
-Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
+Razor-Integrationstests verwenden ausschließlich isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
 
 Arr+ betreibt Jularr vollständig selbst. Nativer Downloader und optionale externe

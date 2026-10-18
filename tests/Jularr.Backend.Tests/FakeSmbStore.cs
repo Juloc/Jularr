@@ -21,6 +21,7 @@ namespace Jularr.Backend.Tests
 
         // Set to drop the session the next time the store is used.
         public bool IsLost { get; set; }
+        public string? DeniedDirectory { get; set; }
 
         public int OpenHandles { get; private set; }
 
@@ -31,6 +32,10 @@ namespace Jularr.Backend.Tests
             handle = null!;
             fileStatus = FileStatus.FILE_DOES_NOT_EXIST;
             var full = Full(path);
+            if (DeniedDirectory is { } denied && (full == denied || full.StartsWith(denied + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+            {
+                return NTStatus.STATUS_ACCESS_DENIED;
+            }
             if (!Directory.Exists(Path.GetDirectoryName(full)) && full != root)
             {
                 return NTStatus.STATUS_OBJECT_PATH_NOT_FOUND;

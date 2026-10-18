@@ -34,6 +34,7 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Jularr.Integrations.Logic.Usenet;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -182,6 +183,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<SmbShares>();
             services.TryAddSingleton<StorageStreamServer>();
             services.TryAddSingleton<StorageAccess>();
+            services.TryAddSingleton<DownloadStorage>();
             services.TryAddSingleton<MediaTranscoder>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
@@ -300,6 +302,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<MediaServerClient>(services, 30, 32);
             AddClient<NewznabClient>(services, 30, 16);
             AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb);
+            AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb);
             AddClient<SabnzbdClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);

@@ -121,9 +121,9 @@ Included tables:
 - AccountSessions (paired devices carry their name and platform), DevicePairings and DevicePairingAttempts (wrong codes per account), AccountAuthChallenges and AuthChallengePurposeTypes.
 - InstanceSetupState records first-Owner creation permanently; it is not a second account registry.
 
-The original CLEAN_CUT_DATABASE snapshot supplied by the owner defines the scope;
-the existing Phase-B core and auth-lifecycle drafts supply the exact column and
-constraint definitions. Latest owner decisions take precedence: Account/Profile/
+The owner-approved original schema snapshot defines the historical scope;
+existing database-core and auth-lifecycle drafts provide historical column and
+constraint definitions, subject to current decisions and verification. Latest owner decisions take precedence: Account/Profile/
 Passkey entity IDs remain bigint, without an extra public UUID. Session/challenge
 public identifiers remain UUIDs; their secrets are represented only by hashes.
 WebAuthn Aaguid is protocol metadata, not an entity or session identifier.

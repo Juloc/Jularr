@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -61,12 +63,21 @@ namespace Jularr.E2E.Tests
 
                 // Both audio tracks are offered in their languages; choosing the second asks for a new plan with that stream, and the new source plays.
                 await OpenWithTracksAsync(page, details, pilot);
-                await page.Locator("[data-action=audio]").ClickAsync();
+                await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("[data-setting-pane=audio]").ClickAsync();
                 var audio = page.Locator("[data-panel=audio] [data-audio]");
                 Assert.AreEqual(2, await audio.CountAsync());
-                Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-checked"));
+                Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-pressed"));
                 var languages = new[] { await audio.Nth(0).GetAttributeAsync("data-language"), await audio.Nth(1).GetAttributeAsync("data-language") };
                 Assert.IsTrue(languages.All(language => !string.IsNullOrEmpty(language)) && languages[0] != languages[1], string.Join(", ", languages));
+                // A source swap must not save the new session at zero when the old video pauses.
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 2", null, new() { Timeout = Steps.MediaTimeout });
+                var progressRequests = new ConcurrentQueue<(string Url, string Body)>();
+                page.Request += (_, request) =>
+                {
+                    if (request.Method == "PUT" && request.Url.Contains("/api/v1/playback/sessions/", StringComparison.Ordinal))
+                        progressRequests.Enqueue((request.Url, request.PostData ?? ""));
+                };
                 var stream = await audio.Nth(1).GetAttributeAsync("data-audio");
                 var source = await page.Locator("video").EvaluateAsync<string>("video => video.currentSrc");
                 var plan = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
@@ -76,9 +87,16 @@ namespace Jularr.E2E.Tests
                 await page.WaitForFunctionAsync("source => document.querySelector('video').currentSrc !== source", source, new() { Timeout = Steps.MediaTimeout });
                 var switchedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
                 await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", switchedAt, new() { Timeout = Steps.MediaTimeout });
+                using (var planData = JsonDocument.Parse(await plan.TextAsync()))
+                {
+                    var newSession = planData.RootElement.GetProperty("playbackSessionId").GetString()!;
+                    Assert.IsFalse(progressRequests.Any(update => update.Url.Contains(newSession, StringComparison.OrdinalIgnoreCase)
+                        && JsonDocument.Parse(update.Body).RootElement.GetProperty("positionMs").GetInt64() < 1000),
+                        "Changing the source must not overwrite the new session with zero progress before metadata loads.");
+                }
 
                 // The subtitle file beside it is the only subtitle, in English, with its own text.
-                await page.Locator("[data-action=subtitles]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
                 var subtitles = page.Locator("[data-panel=subtitles] [data-subtitle]:not([data-subtitle=''])");
                 Assert.AreEqual(1, await subtitles.CountAsync());
                 StringAssert.StartsWith(await subtitles.GetAttributeAsync("data-language") ?? "", "en");
@@ -87,6 +105,11 @@ namespace Jularr.E2E.Tests
                     null, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual("Hello from the subtitle file.", await page.Locator("video").EvaluateAsync<string>(
                     "video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].text"));
+                await page.Keyboard.PressAsync("Escape");
+                await page.Locator("[data-action=subtitle-toggle]").ClickAsync();
+                Assert.AreEqual(0, await page.Locator("video track").CountAsync());
+                await page.Locator("[data-action=subtitle-toggle]").ClickAsync();
+                await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues?.length > 0)");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
                 // The broken file stops with the player's general failure, not silently.
@@ -116,7 +139,7 @@ namespace Jularr.E2E.Tests
             while (true)
             {
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
-                if (await page.Locator("[data-action=audio]").CountAsync() > 0)
+                if (await page.Locator("[data-audio]").CountAsync() > 1)
                 {
                     return;
                 }

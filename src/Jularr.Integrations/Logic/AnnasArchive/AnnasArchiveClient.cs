@@ -11,7 +11,6 @@ namespace Jularr.Integrations.Logic.AnnasArchive
     // Search results and member fast downloads; the member key only goes to Anna's Archive itself.
     internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates)
     {
-        public const long MaximumBytes = 500L * 1024 * 1024;
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
 
@@ -71,7 +70,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             return records;
         }
 
-        public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct)
+        public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
             // The member API names a download address; the file is fetched without the key.
             Uri target;
@@ -99,11 +98,11 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "Anna's Archive returned invalid JSON.", exception);
             }
 
-            await DownloadFileAsync(target, destination, ct);
+            await DownloadFileAsync(target, destination, ct, maximumBytes, reserveWrite);
         }
 
         // The public slow download: the page's waiting time is kept, its check is never passed.
-        public async Task SlowDownloadAsync(Uri site, string md5, string destination, TimeSpan maximumWait, CancellationToken ct)
+        public async Task SlowDownloadAsync(Uri site, string md5, string destination, TimeSpan maximumWait, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
             AnnasArchiveException? last = null;
             for (var server = 0; server < SlowServers; server++)
@@ -148,7 +147,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 }
 
                 await Task.Delay(wait, ct);
-                await DownloadFileAsync(link, destination, ct);
+                await DownloadFileAsync(link, destination, ct, maximumBytes, reserveWrite);
                 return;
             }
 
@@ -156,14 +155,14 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         }
 
         // A file link a person obtained after the site's own check; no key is sent.
-        public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct)
+        public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
             try
             {
                 using var response = await DirectDownload.SendAsync(http, file, null, gates, ct);
-                await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
+                await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
             }
-            catch (DirectDownloadException exception)
+            catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
                 throw new AnnasArchiveException(Failure(exception), "The file could not be downloaded.", exception);
             }

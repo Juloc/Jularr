@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Http;
 
 namespace Jularr.Frontend.Framework
 {
-    // Four main steps; source tabs reuse the ordinary editors inside the last step.
+    // Download storage follows library storage when acquisition is enabled.
     public static class SetupWizard
     {
         public static IReadOnlyDictionary<SetupStepType, string> Paths { get; } = new Dictionary<SetupStepType, string>
         {
             [SetupStepType.Instance] = "/Setup/Instance",
             [SetupStepType.Storage] = "/Setup/Storage",
+            [SetupStepType.DownloadStorage] = "/Setup/DownloadStorage",
             [SetupStepType.Indexers] = "/Setup/Indexers",
             [SetupStepType.Downloads] = "/Setup/Downloads",
             [SetupStepType.Providers] = "/Setup/Providers",
@@ -23,6 +24,7 @@ namespace Jularr.Frontend.Framework
         {
             SetupStepType.Instance => "/Setup/Instance",
             SetupStepType.Storage => "/Setup/Storage",
+            SetupStepType.DownloadStorage => "/Setup/DownloadStorage",
             _ => "/Setup/Sources"
         };
 
@@ -31,21 +33,22 @@ namespace Jularr.Frontend.Framework
 
         public static IUiComponent Frame(SetupStepType current, string? sourcePane = null, bool acquisition = true)
         {
-            var items = new List<IUiComponent>
+            var isSource = current >= SetupStepType.Indexers && current != SetupStepType.DownloadStorage;
+            var steps = new List<NavigationTab>
             {
-                new NavigationTabs([
-                    new NavigationTab("setup.step.Owner", "/Setup", false),
-                    new NavigationTab("setup.step.Instance", "/Setup/Instance", current == SetupStepType.Instance),
-                    new NavigationTab("setup.step.Storage", "/Setup/Storage", current == SetupStepType.Storage),
-                    new NavigationTab("setup.step.Sources", "/Setup/Sources", current >= SetupStepType.Indexers)
-                ], "setup.steps")
+                new("setup.step.Owner", "/Setup", false),
+                new("setup.step.Instance", "/Setup/Instance", current == SetupStepType.Instance),
+                new("setup.step.Storage", "/Setup/Storage", current == SetupStepType.Storage)
             };
+            if (acquisition) steps.Add(new("downloadStorage.title", Paths[SetupStepType.DownloadStorage], current == SetupStepType.DownloadStorage));
+            steps.Add(new("setup.step.Sources", "/Setup/Sources", isSource));
+            var items = new List<IUiComponent> { new NavigationTabs(steps, "setup.steps") };
             if (current == SetupStepType.Instance)
             {
                 items.Add(new A(new Text("setup.restore")).Class("button").Attribute("href", "/Setup/Backup"));
             }
 
-            if (current >= SetupStepType.Indexers)
+            if (isSource)
             {
                 var selected = sourcePane ?? current switch
                 {

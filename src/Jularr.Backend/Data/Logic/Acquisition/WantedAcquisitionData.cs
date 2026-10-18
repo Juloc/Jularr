@@ -291,6 +291,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string ExternalId { get; }
     }
 
+    internal sealed class DownloadLookupData(long? operationId) : BaseData
+    {
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
+        public long? OperationId { get; } = operationId;
+    }
+
     internal sealed class DownloadData : BaseData
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,

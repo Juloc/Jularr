@@ -133,7 +133,6 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
     [ServiceEndpoint("POST", "/api/v1/admin/storage/mounts/{storageMountId:long}/directories")]
     public sealed class ReadStorageDirectoriesV1 : AdminService<StorageMountParametersV1, ReadStorageDirectoriesDataV1>
     {
-        private const int Limit = 500;
         private readonly StorageAccess _storage;
 
         internal ReadStorageDirectoriesV1(StorageAccess storage)
@@ -150,7 +149,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
         {
             // Browse only below the connection.
             var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(Parameters.StorageMountId, ct), CancellationToken);
-            var names = await _storage.Open(mount).ListDirectoriesAsync(Data.RelativePath, Limit, CancellationToken);
+            var names = await _storage.Open(mount).ListDirectoriesAsync(Data.RelativePath, StorageDirectoryV1.PageSize, CancellationToken, Data.AfterName);
             return new BaseDataList<StorageDirectoryV1>(names.Select(name => new StorageDirectoryV1(name)).ToArray());
         }
     }

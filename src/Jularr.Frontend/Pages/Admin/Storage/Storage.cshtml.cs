@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
@@ -54,6 +55,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         public string? Browse { get; set; }
 
         [BindProperty(SupportsGet = true)]
+        public string? AfterName { get; set; }
+
+        [BindProperty(SupportsGet = true)]
         public long? LibraryRootId { get; set; }
 
         // A power command waiting for its confirmation.
@@ -65,8 +69,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             page.Title(IsSetup ? "setup.storage.title" : "storage.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Storage/Storage.entry.scss");
+            page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage));
+            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
 
             var split = new Split(content =>
             {
@@ -325,17 +330,25 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 trail.Add(new A(new ValueText(segments[index])).Attribute("href", Address(mount.Id, browse: string.Join('/', segments[..(index + 1)]))));
             }
 
-            items.Add(new Nav([.. trail]).Class("storage__trail").Attribute("aria-label", texts["storage.paths.selected"]));
+            var folderFallback = new List<IUiComponent>
+            {
+                new Nav([.. trail]).Class("storage__trail").Attribute("aria-label", texts["storage.paths.selected"])
+            };
             if (_directories is { } directories)
             {
-                items.Add(directories.Count == 0
-                    ? new P(new Text("storage.paths.noFolders"))
+                folderFallback.Add(directories.Count == 0
+                    ? new P(new Text(AfterName is null ? "storage.paths.noFolders" : "folderPicker.end"))
                     : new Ul([.. directories.Select(directory => new Li(new A(new ValueText(directory.Name))
                         .Attribute("href", Address(mount.Id, browse: path.Length == 0 ? directory.Name : path + "/" + directory.Name))))]));
+                if (AfterName is not null) folderFallback.Add(new A(new Text("folderPicker.first")).Attribute("href", Address(mount.Id, browse: path)));
+                if (directories.Count == StorageDirectoryV1.PageSize)
+                {
+                    folderFallback.Add(new A(new Text("folderPicker.more")).Attribute("href", Address(mount.Id, browse: path, afterName: directories[^1].Name)));
+                }
             }
             else
             {
-                items.Add(new A(new Text("storage.paths.browse")).Attribute("href", Address(mount.Id, browse: path)));
+                folderFallback.Add(new A(new Text("storage.paths.browse")).Attribute("href", Address(mount.Id, browse: path)));
             }
 
             var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
@@ -345,6 +358,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             {
                 form.Hidden(item => item.StorageMountId);
                 form.Hidden(item => item.RelativePath);
+                form.Content(new FolderPicker(Address(mount.Id, handler: "Folders"), path, nameof(CreateLibraryRootDataV1.RelativePath), Address(mount.Id, browse: path), folderFallback));
                 form.Text(item => item.Name, "storage.name");
                 form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
                 form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
@@ -358,6 +372,18 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             await LoadDataAsync();
             PreparePage();
             return Page();
+        }
+
+        public async Task<IActionResult> OnGetFoldersAsync([BindRequired] long storageMountId, string? path, string? afterName)
+        {
+            Response.Headers.CacheControl = "no-store";
+            var directories = await readDirectories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(storageMountId),
+                new ReadStorageDirectoriesDataV1(path ?? "", afterName), HttpContext.RequestAborted);
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            FolderPicker.Directories(Address(storageMountId, handler: "Folders"), path ?? "", directories.Select(directory => directory.Name).ToArray(), texts,
+                afterName, directories.Count == StorageDirectoryV1.PageSize)
+                .WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
         }
 
         public async Task<IActionResult> OnPostAsync(string? name, StorageProtocolType storageProtocolTypeId, string? host, string? sharePath, string? protocolVersion,
@@ -480,11 +506,12 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             if (Request.Query.ContainsKey("browse"))
             {
                 var path = Browse ?? "";
-                _directories = await readDirectories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(id), new ReadStorageDirectoriesDataV1(path), ct);
+                _directories = await readDirectories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(id), new ReadStorageDirectoriesDataV1(path, AfterName), ct);
             }
         }
 
-        private string Address(long? storageMountId = null, StorageProtocolType? protocol = null, int? pageNumber = null, string? handler = null, string? browse = null, long? libraryRootId = null, int? rootPageNumber = null)
+        private string Address(long? storageMountId = null, StorageProtocolType? protocol = null, int? pageNumber = null, string? handler = null, string? browse = null,
+            long? libraryRootId = null, int? rootPageNumber = null, string? afterName = null)
         {
             var query = new Dictionary<string, string?>
             {
@@ -493,6 +520,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 ["storageMountId"] = storageMountId?.ToString(CultureInfo.InvariantCulture),
                 ["protocol"] = protocol?.ToString(),
                 ["handler"] = handler,
+                ["afterName"] = afterName,
                 ["browse"] = browse,
                 ["libraryRootId"] = libraryRootId?.ToString(CultureInfo.InvariantCulture)
             };

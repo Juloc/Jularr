@@ -39,6 +39,37 @@ async function start(player: HTMLElement): Promise<void> {
     let save: (value: object, leaving?: boolean) => void = () => undefined;
     let switching = false;
     let idle = 0;
+    let seeking = false;
+    let sourceReady = false;
+    let sourcePosition = 0;
+    let lastSubtitle: HTMLButtonElement | undefined;
+    const settings = player.querySelector<HTMLElement>('#player-settings')!;
+    const sidebar = player.querySelector<HTMLElement>('#player-sidebar');
+    const narrow = matchMedia('(max-width: 1100px)');
+    player.querySelectorAll<HTMLElement>('[data-player-tabs]').forEach(wrapper => {
+        const nav = wrapper.querySelector<HTMLElement>('nav')!;
+        nav.setAttribute('role', 'tablist');
+        const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a'));
+        selectTab(wrapper, links.find(link => link.hasAttribute('aria-current'))!.hash);
+        nav.addEventListener('click', event => {
+            const link = (event.target as Element).closest<HTMLAnchorElement>('a');
+            if (link) { event.preventDefault(); selectTab(wrapper, link.hash); }
+        });
+        nav.addEventListener('keydown', event => {
+            const index = links.indexOf(document.activeElement as HTMLAnchorElement);
+            const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+            if (!delta && event.key !== 'Home' && event.key !== 'End') return;
+            event.preventDefault();
+            const target = links[event.key === 'Home' ? 0 : event.key === 'End' ? links.length - 1 : (index + delta + links.length) % links.length];
+            selectTab(wrapper, target.hash); target.focus();
+        });
+    });
+    settings.addEventListener('toggle', wake);
+    sidebar?.addEventListener('toggle', wake);
+    narrow.addEventListener('change', layout);
+    document.addEventListener('fullscreenchange', layout);
+    try { player.classList.toggle('player--theater', localStorage.getItem('jularr.player.layout') === 'wide'); } catch { /* Storage is optional. */ }
+    layout();
 
     plan = await requestPlan(null);
     if (!plan) return;
@@ -51,9 +82,9 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
-        if (!plan) return;
+        if (!plan || !sourceReady && !ended) return;
         save({
-            positionMs: Math.floor(video.currentTime * 1000),
+            positionMs: Math.floor((sourceReady ? video.currentTime : sourcePosition) * 1000),
             durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
             isEnded: ended,
             isCompleted: completed
@@ -134,7 +165,10 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     // Conversions use HLS: native where available, otherwise hls.js on demand.
-    async function attach(next: PlaybackPlan, position: number): Promise<void> {
+    async function attach(next: PlaybackPlan, position: number, autoplay = true): Promise<void> {
+        sourceReady = false;
+        sourcePosition = position;
+        const rate = video.playbackRate;
         hls?.destroy();
         hls = null;
         player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
@@ -169,27 +203,34 @@ async function start(player: HTMLElement): Promise<void> {
         }
 
         // A new source resets the speed; the chosen one stays.
-        const rate = video.playbackRate;
         video.addEventListener("loadedmetadata", () => {
             timeline.max = String(Math.floor(video.duration));
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
-            void video.play().catch(() => undefined);
+            sourceReady = true;
+            player.querySelector('[data-role=resolution]')!.textContent = video.videoWidth > 0 ? `${video.videoWidth} × ${video.videoHeight}` : '';
+            if (autoplay) void video.play().catch(() => undefined);
+            else video.pause();
         }, { once: true });
     }
 
     // The new plan comes first; only then the old session ends and playback continues at the same position.
-    async function switchAudio(streamIndex: number): Promise<void> {
-        if (switching) return;
+    async function switchAudio(streamIndex: number): Promise<boolean> {
+        if (switching) return false;
         switching = true;
         try {
             const position = video.currentTime;
+            const playing = !video.paused;
             const next = await requestPlan(streamIndex);
-            if (!next) return;
+            if (!next) return false;
             report(true, false);
             plan = next;
-            await attach(next, position);
+            await attach(next, position, playing);
+            return true;
+        } catch {
+            show('failed');
+            return false;
         } finally {
             switching = false;
         }
@@ -198,6 +239,7 @@ async function start(player: HTMLElement): Promise<void> {
     // Subtitles are WebVTT tracks on the same video; Off removes them.
     function showSubtitle(key: string, language: string | undefined): void {
         video.querySelectorAll("track").forEach(track => track.remove());
+        player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', String(!!key));
         if (!key) return;
         const track = document.createElement("track");
         track.kind = "subtitles";
@@ -210,6 +252,7 @@ async function start(player: HTMLElement): Promise<void> {
             track.remove();
             const off = player.querySelector<HTMLElement>('[data-subtitle=""]');
             if (off) choose("data-subtitle", off);
+            player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', 'false');
         });
         video.append(track);
         track.track.mode = "showing";
@@ -221,31 +264,49 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("play", () => setPlaying(true));
     video.addEventListener("pause", () => setPlaying(false));
     video.addEventListener("timeupdate", () => {
-        timeline.value = String(Math.floor(video.currentTime));
+        if (!seeking) timeline.value = String(Math.floor(video.currentTime));
+        timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
+        const currentProgress = player.querySelector<HTMLProgressElement>('.episode-card[aria-current=true] progress');
+        if (currentProgress && Number.isFinite(video.duration)) { currentProgress.max = video.duration; currentProgress.value = video.currentTime; }
     });
     video.addEventListener("volumechange", () => {
         volume.value = String(video.muted ? 0 : video.volume);
+        volume.style.setProperty('--played', `${Number(volume.value) * 100}%`);
         mute.setAttribute("aria-pressed", String(video.muted));
         player.classList.toggle("player--muted", video.muted);
     });
-    timeline.addEventListener("input", () => { video.currentTime = Number(timeline.value); });
+    timeline.addEventListener('input', () => {
+        seeking = true;
+        timeline.style.setProperty('--played', `${Number(timeline.value) / Math.max(1, Number(timeline.max)) * 100}%`);
+    });
+    timeline.addEventListener('change', () => { video.currentTime = Number(timeline.value); seeking = false; wake(); });
+    timeline.addEventListener('pointercancel', () => { seeking = false; timeline.value = String(Math.floor(video.currentTime)); wake(); });
     void previews();
     volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
     player.querySelector<HTMLElement>("[data-action=pip]")!.hidden = !document.pictureInPictureEnabled;
+    player.querySelector<HTMLElement>('[data-action=fullscreen]')!.hidden = !document.fullscreenEnabled;
+    volume.style.setProperty('--played', `${video.volume * 100}%`);
 
     const actions: Record<string, () => void> = {
         toggle: () => void (video.paused ? video.play() : video.pause()),
         back: () => seek(-10),
         forward: () => seek(30),
         mute: () => { video.muted = !video.muted; },
-        fullscreen: () => void (document.fullscreenElement ? document.exitFullscreen() : player.requestFullscreen()),
-        pip: () => void (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()),
-        speed: () => panel("speed"),
-        audio: () => panel("audio"),
-        subtitles: () => panel("subtitles"),
-        more: () => panel("more"),
-        close: () => report(true, false),
+        fullscreen: () => void (document.fullscreenElement ? document.exitFullscreen() : player.requestFullscreen()).catch(() => show('failed')),
+        pip: () => void (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()).catch(() => show('failed')),
+        theater: () => {
+            const wide = player.classList.toggle('player--theater');
+            try { localStorage.setItem('jularr.player.layout', wide ? 'wide' : 'normal'); } catch { /* Storage is optional. */ }
+            layout();
+        },
+        'subtitle-toggle': () => {
+            const on = player.querySelector('[data-action=subtitle-toggle]')!.getAttribute('aria-pressed') === 'true';
+            const choice = on ? player.querySelector<HTMLButtonElement>('[data-subtitle=""]')
+                : lastSubtitle ?? player.querySelector<HTMLButtonElement>('[data-subtitle]:not([data-subtitle=""]):not(:disabled)');
+            if (choice) { choose('data-subtitle', choice); showSubtitle(choice.dataset.subtitle ?? '', choice.dataset.language); }
+        },
+        close: () => void minimize(),
         previous: () => go("previous"),
         next: () => go("next"),
         minimize: () => void minimize(),
@@ -254,16 +315,22 @@ async function start(player: HTMLElement): Promise<void> {
     };
     player.addEventListener("click", event => {
         const target = event.target as Element;
+        const pane = target.closest<HTMLElement>('[data-setting-pane]')?.dataset.settingPane;
+        if (pane) {
+            selectTab(settings.querySelector('[data-player-tabs]')!, '#player-' + pane);
+            settings.querySelector<HTMLElement>('[role=tab][aria-selected=true]')!.focus();
+            return;
+        }
         const audio = target.closest<HTMLButtonElement>("[data-audio]");
         if (audio && !audio.disabled && !switching) {
-            choose("data-audio", audio);
-            void switchAudio(Number(audio.dataset.audio));
+            void switchAudio(Number(audio.dataset.audio)).then(success => { if (success) choose('data-audio', audio); });
             return;
         }
 
         const subtitle = target.closest<HTMLButtonElement>("[data-subtitle]");
         if (subtitle && !subtitle.disabled) {
             choose("data-subtitle", subtitle);
+            if (subtitle.dataset.subtitle) lastSubtitle = subtitle;
             showSubtitle(subtitle.dataset.subtitle ?? "", subtitle.dataset.language);
             return;
         }
@@ -271,29 +338,28 @@ async function start(player: HTMLElement): Promise<void> {
         const speed = target.closest<HTMLElement>("[data-speed]");
         if (speed) {
             video.playbackRate = Number(speed.dataset.speed);
-            player.querySelector("[data-role=speed-label]")!.textContent = speed.dataset.speed + "×";
-            player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-checked", String(item === speed)));
-            panel(null);
+            player.querySelector('[data-current=playback]')!.textContent = speed.dataset.speed + '×';
+            player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-pressed", String(item === speed)));
             return;
         }
 
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
-        if (action && actions[action]) actions[action]();
+        if (action && actions[action]) { if (action === 'close') event.preventDefault(); actions[action](); }
         else if (target === video) actions.toggle();
     });
     video.addEventListener("dblclick", actions.fullscreen);
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
-        if (event.target instanceof HTMLInputElement && event.target.type !== "range") return;
+        if ((event.target as Element).closest('input,select,textarea,button,a,[role=tablist]')) return;
         if (player.classList.contains("player--mini") && !player.contains(event.target as Node)) return;
         const keys: Record<string, () => void> = {
             " ": actions.toggle, k: actions.toggle, ArrowLeft: () => seek(-10), j: () => seek(-10), ArrowRight: () => seek(30), l: () => seek(30),
             ArrowUp: () => { video.volume = Math.min(1, video.volume + 0.05); }, ArrowDown: () => { video.volume = Math.max(0, video.volume - 0.05); },
-            m: actions.mute, f: actions.fullscreen, Escape: () => panel(null)
+            m: actions.mute, f: actions.fullscreen
         };
         const handler = keys[event.key.length === 1 ? event.key.toLowerCase() : event.key];
-        if (!handler || (event.target instanceof HTMLInputElement && event.key.startsWith("Arrow"))) return;
+        if (!handler) return;
         event.preventDefault();
         handler();
         wake();
@@ -306,7 +372,7 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Minimize keeps the same session in a bar while the app is browsed around it.
     async function minimize(): Promise<void> {
-        panel(null);
+        settings.hidePopover(); sidebar?.hasAttribute('popover') && sidebar.hidePopover();
         player.classList.add("player--mini");
         document.body.classList.add("player-mini");
         document.body.classList.remove("player-page");
@@ -315,7 +381,7 @@ async function start(player: HTMLElement): Promise<void> {
             expand(false);
             return true;
         });
-        if (!document.querySelector(".app-layout")) await navigate(backHref, true);
+        await navigate(backHref, true);
     }
 
     function expand(push: boolean): void {
@@ -351,22 +417,40 @@ async function start(player: HTMLElement): Promise<void> {
         player.classList.remove("player--idle");
         clearTimeout(idle);
         idle = window.setTimeout(() => {
-            if (!video.paused && !player.classList.contains("player--mini") && !player.querySelector(".player__panel:not([hidden])") && !player.contains(document.activeElement)) {
+            if (!video.paused && !seeking && !player.classList.contains("player--mini") && !player.querySelector(':popover-open') && !player.querySelector(':focus-visible')) {
                 player.classList.add("player--idle");
             }
         }, IdleDelay);
     }
 
-    function panel(name: string | null): void {
-        player.querySelectorAll<HTMLElement>("[data-panel]").forEach(item => { item.hidden = item.dataset.panel !== name || !item.hidden; });
-        player.querySelectorAll<HTMLElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
-            .forEach(button => button.setAttribute("aria-expanded", String(!player.querySelector<HTMLElement>(`[data-panel=${button.dataset.action}]`)!.hidden)));
-        wake();
+    function layout(): void {
+        const wide = player.classList.contains('player--theater');
+        player.querySelector('[data-action=theater]')!.setAttribute('aria-pressed', String(wide));
+        const overlay = wide || narrow.matches || document.fullscreenElement === player;
+        player.querySelector<HTMLElement>('[data-action=episodes]')!.hidden = !sidebar || !overlay;
+        if (!sidebar) return;
+        if (sidebar.hasAttribute('popover')) sidebar.hidePopover();
+        sidebar.toggleAttribute('popover', overlay);
+        if (overlay) sidebar.setAttribute('popover', 'auto');
+    }
+
+    function selectTab(wrapper: HTMLElement, hash: string): void {
+        const links = wrapper.querySelectorAll<HTMLAnchorElement>('a');
+        links.forEach(link => {
+            const active = link.hash === hash;
+            link.id = link.hash.slice(1) + '-tab';
+            link.setAttribute('role', 'tab'); link.setAttribute('aria-selected', String(active));
+            link.setAttribute('aria-controls', link.hash.slice(1)); link.removeAttribute('aria-current');
+            link.classList.toggle('navigation-tabs__link--active', active); link.tabIndex = active ? 0 : -1;
+            const pane = wrapper.parentElement!.querySelector<HTMLElement>(link.hash)!;
+            pane.hidden = !active; pane.setAttribute('role', 'tabpanel'); pane.setAttribute('aria-labelledby', link.id);
+        });
     }
 
     function choose(attribute: string, chosen: HTMLElement): void {
-        player.querySelectorAll(`[${attribute}]`).forEach(item => item.setAttribute("aria-checked", String(item === chosen)));
-        panel(null);
+        player.querySelectorAll(`[${attribute}]`).forEach(item => item.setAttribute("aria-pressed", String(item === chosen)));
+        const label = player.querySelector(`[data-current=${attribute === 'data-audio' ? 'audio' : 'subtitles'}]`);
+        if (label) label.textContent = chosen.textContent;
     }
 
     function show(code: string): void {

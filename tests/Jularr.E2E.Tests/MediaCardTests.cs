@@ -7,14 +7,13 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [Timeout(180_000)]
-        public async Task Cover_ResponsiveLayout_KeepsImagesProgressAndEqualActionsInside()
+        public async Task Cover_ResponsiveLayout_KeepsTitleActionStatusAndProgressStable()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var session = await BrowserSession.StartAsync(jularr);
             var page = session.Page;
             await Owner.SetUpAndSignInAsync(page);
 
-            // No external trailer needed.
             await page.GotoAsync("/Design?pane=cards");
             var cards = page.Locator(".media-card");
             await Assertions.Expect(cards).ToHaveCountAsync(8);
@@ -22,30 +21,45 @@ namespace Jularr.E2E.Tests
             {
                 await page.SetViewportSizeAsync(width, 844);
                 var card = cards.First;
-                await card.Locator(".media-card__surface").FocusAsync();
-                var cover = await card.BoundingBoxAsync();
+                var poster = card.Locator(".media-card__surface");
+                var title = card.Locator(".media-card__title a");
+                var action = card.Locator(".media-card__actions > .button");
+                var badge = card.Locator(".media-availability-badge");
+
+                await Assertions.Expect(title).ToBeVisibleAsync();
+                await Assertions.Expect(title).ToHaveAttributeAsync("href", "/Design?pane=cards");
+                await Assertions.Expect(action).ToHaveCountAsync(1);
+                await Assertions.Expect(badge).ToBeVisibleAsync();
+                await Assertions.Expect(card.GetByRole(AriaRole.Button, new() { Name = "Details", Exact = true })).ToHaveCountAsync(0);
+
+                var before = await poster.BoundingBoxAsync();
                 var image = await card.Locator(".media-image").BoundingBoxAsync();
                 var progress = await card.Locator("progress").BoundingBoxAsync();
-                var actions = card.Locator(".media-card__actions > .button");
-                var primary = await actions.Nth(0).BoundingBoxAsync();
-                var details = await actions.Nth(1).BoundingBoxAsync();
-                Assert.IsNotNull(cover);
+                var textBox = await card.Locator(".media-card__details").BoundingBoxAsync();
+                Assert.IsNotNull(before);
                 Assert.IsNotNull(image);
                 Assert.IsNotNull(progress);
-                Assert.IsNotNull(primary);
-                Assert.IsNotNull(details);
-                Assert.AreEqual(cover.Width, image.Width, .5f);
-                Assert.AreEqual(12f, progress.Height, .5f);
-                Assert.AreEqual(cover.Y + cover.Height, progress.Y + progress.Height, .5f);
-                Assert.AreEqual(primary.Width, details.Width, .5f);
-                Assert.AreEqual(primary.Height, details.Height, .5f);
+                Assert.IsNotNull(textBox);
+                Assert.AreEqual(before.Width, image.Width, .5f);
+                Assert.AreEqual(before.Height, image.Height, .5f);
+                Assert.AreEqual(before.Y + before.Height, progress.Y + progress.Height, .5f);
+                Assert.IsTrue(textBox.Y >= before.Y + before.Height - .5f);
+
+                await poster.FocusAsync();
+                await Assertions.Expect(action).ToBeVisibleAsync();
+                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", "152px");
+                var after = await poster.BoundingBoxAsync();
+                Assert.IsNotNull(after);
+                Assert.AreEqual(before.Width, after.Width, .5f);
+                Assert.AreEqual(before.Height, after.Height, .5f);
             }
 
-            // Shared preview and local bookmark.
             var bookmark = cards.First.Locator("[data-design-bookmark]");
             await bookmark.ClickAsync();
             await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "true");
-            await cards.First.GetByRole(AriaRole.Button, new() { Name = "Details", Exact = true }).ClickAsync();
+
+            // The existing status badge retains its preview link and keyboard behavior.
+            await cards.First.Locator(".media-availability-badge").ClickAsync();
             await Assertions.Expect(page.Locator("dialog[open]")).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(page.Locator("dialog[open]")).ToHaveCountAsync(0);

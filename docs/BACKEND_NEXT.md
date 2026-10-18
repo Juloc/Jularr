@@ -20,8 +20,8 @@ Each slice adds its versioned Data, declared Service permissions, static reads,
 canonical Logic writers, fresh-baseline tables/fields/enums where needed, focused
 isolated PostgreSQL tests and updated navigation in one reviewable change.
 External I/O stays outside long database transactions; final mutations revalidate
-and commit together. No legacy Phase-B migration, active-Owner-database installation
-or extra server. Future supported release upgrades use the single
+and commit together. No unapproved legacy database migration or changes to
+an active Owner database. Supported release upgrades use the single
 [backup-first schema owner](DATABASE_UPGRADES.md).
 
 ## Boundaries already decided
@@ -83,7 +83,7 @@ or extra server. Future supported release upgrades use the single
   `DataPath/translation`), with translated sections shared on the server. Retro games play
   through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
-  a Jularr backup restore; legacy migration stays with the stopped Phase B, while
+  a Jularr backup restore; legacy migrations require separate approval, while
   supported release upgrades follow [the versioned startup contract](DATABASE_UPGRADES.md); the AI step waits
   for its own package.
 - Owner decisions of 14 October 2026: order is the running Arr+ packages, then Playwright
@@ -174,8 +174,7 @@ The owner requires the following coverage beyond the first connected pages:
 
 [ALPHA90_RECOVERY_PLAN.md](ALPHA90_RECOVERY_PLAN.md) is the owner's recovery/parity reference, not a complete
 specification of extensions. These targets are not implemented capability claims.
-Latest decisions, fresh schema contracts, dependency approvals and the stopped
-Phase B still apply; legacy parity does not authorize active-database migrations.
+Latest decisions, fresh schema contracts and dependency approvals still apply. Previous implementation schedules are not development requirements; legacy parity alone does not authorize active-database migrations.
 
 ## Remaining decisions and prerequisites
 

@@ -156,7 +156,8 @@ Wake-on-LAN. A probe that hangs in the kernel keeps its thread until the kernel 
 up; callers continue after five seconds.
 
 Playback wakes sleeping storage on demand (per the connection's policy) and Arr+
-imports completed downloads into the first writable library of the media type.
+imports completed downloads into the target's selected writable library, or the
+first writable library matching its media type and subtype when none was selected.
 Connection paths of SMB/NFS mounts must be actual mount points (`Storage:RequireMountPoint`,
 default on), so a stale empty mount point is never read as an empty library or
 written to; a scan that skipped unreadable folders fails as `scan_incomplete`
@@ -175,12 +176,20 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 
 ## SABnzbd completed category folders (first release)
 
+When saving a SAB connection through the regular Admin form, Jularr reads the resolved Complete directory from SAB's status API and the selected category's directory from SAB's config API (including the default '*' category, which can have its own directory). The Owner chooses the exact corresponding category Complete folder visible to Jularr (local mount or direct SMB), not its parent download folder. A missing category, unsafe parent traversal, disabled per-job folder, or unavailable SAB API prevents an automatic mapping; Jularr must not guess. Existing API clients with explicit RemotePath/LocalPath mapping stay compatible. Jularr does not change SAB's folders or cleanup settings.
+
 SABnzbd controls its own temporary and completed download directories, including
 category subfolders such as `complete/movies` and `complete/tv`. Jularr does
-**not** change SABnzbd's physical paths. Add the same completed directory as
-a read-accessible container mount, then configure each SAB connection's
-`RemotePath` (SAB history path prefix) and `LocalPath` (Jularr's container
-path prefix). All category and release subfolders stay underneath the mapping.
+**not** change SABnzbd's physical paths. On the download connection, set
+`RemotePath` to the completed path prefix reported by SAB history. Choose an
+existing storage connection (`DownloadStorageMountId`) and browse its corresponding
+completed folder (`LocalPath`, relative to that connection; empty means its root).
+This also works with a direct SMB connection without a container mount.
+Alternatively, leave the connection unset and enter an absolute `LocalPath`
+visible inside Jularr's container. All category and release subfolders stay
+underneath the mapping. Source reads and target writes use the same canonical
+storage abstraction. An unreadable source or a copy failure keeps the import
+waiting; SAB completion alone never completes the acquisition request.
 The original SAB completed files are retained after successful library import.
 
 To send different media types to distinct SABnzbd categories, configure one
@@ -200,67 +209,50 @@ The fresh schema permits media scopes for SABnzbd and indexers; search schedulin
 and daily query/grab limits remain indexer-only. Workspace validation applies to
 the selected native client, so an unused news server cannot block a scoped SAB job.
 
-## Native/direct download staging safety (pre-release R03 slice)
+## Native and direct download storage
 
-Jularr's native Usenet downloader and direct-source book downloader accept
-independent `Storage:UsenetDownloadPath` and `Storage:DirectSourceDownloadPath`
-workspaces. For existing explicitly configured installations, each falls back
-to the shared `Storage:DirectDownloadPath` setting when its own setting is
-absent. None has a built-in default: unconfigured,
-missing, relative or symlinked paths are rejected before native/direct grabs.
-Jobs already active are put into attention rather than silently writing into
-`/tmp` or the container's overlay filesystem. The SABnzbd download directory
-is a **separate service**; its completed files use `RemotePath` / `LocalPath`
-mapping in the SABnzbd acquisition connection.
+Configure Jularr's own downloads at `/Admin/DownloadStorage`, or at
+`/Setup/DownloadStorage` after library connections when Acquisition is enabled.
+The canonical `DownloadStorageSettings` rows in the fresh Library baseline
+store separate policies for Usenet and direct downloads. Each has Incomplete
+and Complete folders selected through the shared folder dialog, an explicitly
+chosen free-space reserve, optional download/workspace limits and a parallel
+job limit (initially two). Targets and reserve start unset; size ceilings are off.
 
-For example, mount a persistent storage volume at `/downloads/staging` in
-the Jularr container, then set `Storage__UsenetDownloadPath=/downloads/staging`. Direct-source book
-downloads can separately use `Storage__DirectSourceDownloadPath=/downloads/books`,
-with that path also mounted before Jularr starts.
-The directory must already exist. On Linux, Jularr requires this path to be
-inside a non-root mounted filesystem (a nested folder is accepted) unless the
-owner deliberately sets `Storage__AllowDirectDownloadOnHostFilesystem=true`
-for an explicitly configured local/VM workspace. This is **not** a quota
-override: disk reservations, capacity checks and UI confirmation are still
-required before release in #1209. If a NAS mount disappears, Jularr must not
-fall back to VM-local storage; check the actual mounts and free space before
-enabling acquisition.
+Storage connections expose local Compose paths or mounted SMB/NFS filesystems.
+Native downloading and external repair/unpack programs require filesystem
+paths inside the Jularr container. A direct SMB connection remains usable for
+libraries and external-client imports, but needs a container mount for native
+downloads. Confirmation resolves both existing, writable, separate folders,
+checks capacity and records filesystem identity. Missing targets, pseudo
+filesystems, symlink aliases and changed mount identity stop work without a
+fallback to local storage. Each area owns a unique workspace namespace; files
+from other instances or unknown folders are never adopted or cleaned up.
 
+The optional download limit applies to the downloaded payload: native NNTP
+checks announced sizes and actual article extents; direct sources check the
+response length and streamed bytes. Expanded files have no second download
+ceiling. The optional workspace ceiling counts all managed working files across
+Incomplete and Complete, including archives, expanded files, pending copies,
+hidden files and concurrent jobs. The selected reserve is checked against the
+actual filesystem. Concurrent stream writes reserve growth before writing;
+one job cannot be executed twice and each area enforces its configured parallel
+limit. Every parallel job has its own service invocation and SQL context.
 
-## Native NNTP job size ceiling
+Before extraction, 7-Zip lists the expanded size so capacity can be checked.
+PAR2 and 7-Zip are monitored during execution and stopped on a storage violation.
+These external programs may briefly exceed the limit before the monitor stops
+them; this is deliberately **not** an operating-system or NAS quota. Other
+applications sharing the filesystem are outside Jularr's write reservations.
 
-`Storage__UsenetMaxJobBytes` controls the maximum allocated article-file bytes
-for any single NNTP job (default: **20 GiB**, independently configurable per
-installation). The worker validates the parsed NZB's total declared size
-before opening article files; the downloader additionally reserves actual
-file-growth extents across concurrent NNTP sessions before each write. An
-invalid, unknown or over-budget NZB waits with `usenet_disk_budget`, preserving
-its staging data instead of exceeding the configured job limit. Lowering the
-limit below an existing partial job pauses it on the next pass.
+Completed payloads enter the selected Complete workspace before the common
+importer runs. A move avoids duplicating payloads on one filesystem; a verified
+copy publishes them atomically when copying is required. Import failure keeps
+the source for another attempt. Only a fully successful import removes Jularr's
+own job files. SABnzbd retains its own cleanup configuration. Paths cannot be
+changed while jobs are active; limits remain editable.
 
-**This is a job-size limit, not the total workspace size**, and it does not
-reserve disk across downloads, cap PAR2/7-Zip extraction, protect other
-processes sharing the filesystem, or cover direct-source books. Those remain
-separate prerequisites of release issue #1209; do not expose this as a
-complete hard workspace quota.
-NZB segment sizes are checked before summing to reject numeric overflow. Existing
-article files count against the job limit even when every article is finished,
-so a restart or lower configured limit cannot bypass the extraction preflight.
-
-**Pseudo mounts:** Native download staging rejects Linux `tmpfs`, `overlay`,
-`proc` and other operating-system pseudo filesystems even if Docker reports
-a mount point. A separate bind mount can still target VM-local storage:
-verify its physical source explicitly before enabling downloads.
-The nearest mount is authoritative: an unsafe nested mount cannot inherit its
-parent's approval, and host-filesystem opt-in does not permit RAM/overlay storage.
-
-## Space checks for native Usenet unpacking
-
-Before extracting archives, the native worker checks free space on the **actual
-filesystem containing the staging files** and reserves a rough 10% overhead
-above the compressed input size for the next extraction. Linux mount identity
-is read from `/proc/self/mountinfo`; if the filesystem cannot be resolved
-to a ready mount, extraction enters the existing `usenet_disk_full` wait state
-rather than using a misleading VM-root free-space number. This is a preflight
-safeguard, **not a hard quota**; capacity reservation across jobs and checks
-during extraction are still part of #1209.
+The previous environment-only download paths and size ceiling are replaced by
+this confirmed policy. This changes the fresh clean-start baseline only; it does
+not migrate or reset an active database. Real mounted-NAS/SABnzbd acceptance
+remains part of the release gate.

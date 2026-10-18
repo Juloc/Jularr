@@ -23,7 +23,9 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         {
             await Context.RequireSetupVersionAsync(new SetupVersionData(Data.Version), CancellationToken);
             await Context.DisableUnconfiguredMediaAsync(CancellationToken);
-            await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Providers), CancellationToken);
+            var modules = await Context.ReadModuleStatesAsync(new InstanceModuleParameters(["Acquisition"]), CancellationToken);
+            var next = modules.Any(module => module.IsEnabled) ? SetupStepType.DownloadStorage : SetupStepType.Providers;
+            await Context.UpdateSetupStepAsync(new SetupStepData(next), CancellationToken);
             return new UpdateResult(true);
         }
     }
