@@ -22,7 +22,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     internal sealed class WorkMetadata
     {
         private readonly TmdbClient _tmdb;
-        private static readonly TimeSpan FeedLifetime = TimeSpan.FromMinutes(3);
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _cache;
         private readonly DiscoveryFeedSnapshots _snapshots;
@@ -98,11 +97,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // A stable key is shared by every profile viewing this provider, language and ranking.
             // No calendar-day suffix: the stored snapshot survives midnight and restarts.
             var key = $"metadata.feed.tmdb.{mediaType}.{feed}.{page}.{connection.Language}.{region ?? "global"}";
-            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
-            {
-                return cached!;
-            }
-
+            // Read through the retention-aware shared snapshot owner. A separate RAM
+            // feed entry could outlive the provider's legal retention boundary.
             var results = await _snapshots.ReadAsync(key, "tmdb", TimeSpan.FromHours(6), TimeSpan.FromDays(90),
                 async token =>
                 {
@@ -115,12 +111,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         throw Translate(exception);
                     }
                 }, ct);
-            // RAM remains only a short-lived read accelerator and compatibility fallback
-            // for installations that have not yet applied the versioned cache migration.
-            if (results.Count > 0)
-            {
-                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FeedLifetime, Size = Math.Max(1, results.Count) });
-            }
             return results;
         }
 

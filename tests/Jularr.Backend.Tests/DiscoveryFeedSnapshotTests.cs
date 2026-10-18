@@ -1,6 +1,7 @@
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Caching.Memory;
 using Fixture = Jularr.Backend.Tests.ProfileReferenceVerticalTests.ProfileFixture;
 
 namespace Jularr.Backend.Tests
@@ -90,7 +91,8 @@ namespace Jularr.Backend.Tests
         {
             await using var fixture = await Fixture.CreateAsync();
             var calls = 0;
-            var response = await NewCache(fixture).ReadAsync<int>(Key, "tmdb", FreshFor, RetainFor,
+            var coordinator = NewCache(fixture);
+            var response = await coordinator.ReadAsync<int>(Key, "tmdb", FreshFor, RetainFor,
                 _ =>
                 {
                     Interlocked.Increment(ref calls);
@@ -98,6 +100,10 @@ namespace Jularr.Backend.Tests
                 }, CancellationToken.None);
             CollectionAssert.AreEqual(new[] { 603 }, response.ToArray());
             Assert.AreEqual(1, calls);
+            var reused = await coordinator.ReadAsync<int>(Key, "tmdb", FreshFor, RetainFor,
+                _ => throw new AssertFailedException("Short compatibility cache should prevent duplicate source calls."),
+                CancellationToken.None);
+            CollectionAssert.AreEqual(new[] { 603 }, reused.ToArray());
         }
 
         [TestMethod]
@@ -131,7 +137,8 @@ namespace Jularr.Backend.Tests
         }
 
         private static DiscoveryFeedSnapshots NewCache(Fixture fixture) =>
-            new(new SqlDatabase(fixture.Database), TimeProvider.System, NullLogger<DiscoveryFeedSnapshots>.Instance);
+            new(new SqlDatabase(fixture.Database), TimeProvider.System,
+                new MemoryCache(new MemoryCacheOptions { SizeLimit = 20_000 }), NullLogger<DiscoveryFeedSnapshots>.Instance);
 
         private static async Task InstallAsync(Fixture fixture)
         {

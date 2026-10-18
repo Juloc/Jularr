@@ -5,13 +5,14 @@ using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 
 namespace Jularr.Backend.Service.Core
 {
     // Shared infrastructure for public ranked feeds. Never persist user/profile overlays.
     // Source-specific owners must choose retention within their provider's license.
-    internal sealed class DiscoveryFeedSnapshots(SqlDatabase database, TimeProvider clock, ILogger<DiscoveryFeedSnapshots> logger)
+    internal sealed class DiscoveryFeedSnapshots(SqlDatabase database, TimeProvider clock, IMemoryCache memory, ILogger<DiscoveryFeedSnapshots> logger)
     {
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
         private static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(1);
@@ -32,6 +33,13 @@ namespace Jularr.Backend.Service.Core
                 throw new ArgumentOutOfRangeException(nameof(retainFor));
             }
 
+            // Only pre-migration installations use this short in-memory compatibility cache.
+            // Persisted provider data is always checked against its legal retention deadline.
+            if (memory.TryGetValue("discovery.compat." + key, out IReadOnlyList<T>? legacy))
+            {
+                return legacy!;
+            }
+
             var snapshot = await LoadAsync<T>(key, providerKey, ct);
             if (snapshot is { } cached)
             {
@@ -49,6 +57,10 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 // A concurrent request may have completed the first fill while we waited.
+                if (memory.TryGetValue("discovery.compat." + key, out IReadOnlyList<T>? legacy))
+                {
+                    return legacy!;
+                }
                 snapshot = await LoadAsync<T>(key, providerKey, ct);
                 if (snapshot is not null)
                 {
@@ -136,7 +148,10 @@ namespace Jularr.Backend.Service.Core
             }
             catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UndefinedTable)
             {
-                // Existing installations remain functional until their manual migration.
+                // Existing installations remain functional until their manual migration,
+                // without triggering a remote call for each overlapping request.
+                memory.Set("discovery.compat." + key, items,
+                    new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(3), Size = Math.Max(1, items.Count) });
                 logger.LogDebug("Discovery snapshots schema is not installed yet.");
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
