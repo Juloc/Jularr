@@ -322,7 +322,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 var hero = new MediaHero(item.Title, item.PosterUrl, texts["discover.type." + mediaScope.Slug], null,
                     "media.continue", action, details);
                 candidates.Add(new HeroCandidate<MediaHero>("work:" + workId,
-                    item.MediaTypeId.ToString(), null, true, hero));
+                    mediaScope.Slug, null, true, hero));
             }
 
             var scope = Listed.FirstOrDefault(type => (selected is null || type.Slug == selected.Slug)
