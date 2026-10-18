@@ -37,8 +37,8 @@ namespace Jularr.Frontend.Framework
                         .Attribute("type", "button")
                         .Attribute("data-hero-direction", "previous")
                         .Attribute("aria-label", texts["media.shelfPrevious"]),
-                    new Button(new Icon("chevron-right", assets))
-                        .Class("media-hero-carousel__arrow button")
+                    new Button(new Icon("chevron-left", assets))
+                        .Class("media-hero-carousel__arrow media-hero-carousel__arrow--next button")
                         .Attribute("type", "button")
                         .Attribute("data-hero-direction", "next")
                         .Attribute("aria-label", texts["media.shelfNext"])
