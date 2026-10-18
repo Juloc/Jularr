@@ -9,7 +9,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
     public sealed class DownloadStorageDetailsV1 : BaseResponse
     {
-        public DownloadStorageDetailsV1(string? usenetDownloadPath, string? directSourceDownloadPath, long usenetMaxJobBytes, bool allowDirectDownloadOnHostFilesystem)
+        public DownloadStorageDetailsV1(string? usenetDownloadPath, string? directSourceDownloadPath, long? usenetMaxJobBytes, bool allowDirectDownloadOnHostFilesystem)
         {
             UsenetDownloadPath = usenetDownloadPath;
             DirectSourceDownloadPath = directSourceDownloadPath;
@@ -24,7 +24,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
         public string? DirectSourceDownloadPath { get; }
 
         [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.ConfiguredJobLimitBytes))]
-        public long UsenetMaxJobBytes { get; }
+        public long? UsenetMaxJobBytes { get; }
 
         [DataField(typeof(DownloadStorageFields), nameof(DownloadStorageFields.AllowsHostFilesystem))]
         public bool AllowDirectDownloadOnHostFilesystem { get; }

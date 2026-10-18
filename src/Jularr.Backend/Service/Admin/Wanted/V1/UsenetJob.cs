@@ -82,12 +82,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Check the NZB itself; indexer sizes are hints, not a trusted disk bound.
             // Unknown or overflowing sizes are not allowed to consume unbounded storage.
+            var maximumJobBytes = _storage.UsenetMaxJobBytes ?? long.MaxValue;
             var announced = 0L;
             foreach (var file in files)
             {
                 foreach (var segment in file.Segments)
                 {
-                    if (_storage.UsenetMaxJobBytes <= 0 || segment.Bytes <= 0 || segment.Bytes > _storage.UsenetMaxJobBytes - announced)
+                    if (maximumJobBytes <= 0 || segment.Bytes <= 0 || segment.Bytes > maximumJobBytes - announced)
                     {
                         return new UsenetPassResult(UsenetPassState.Waiting, 0, 0, 0, "usenet_disk_budget", progressed: false);
                     }
@@ -104,7 +105,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             UsenetProgress progress;
             try
             {
-                progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, _storage.UsenetMaxJobBytes, ct);
+                progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, maximumJobBytes, ct);
             }
             catch (UsenetStorageBudgetException)
             {

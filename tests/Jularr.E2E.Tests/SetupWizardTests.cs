@@ -52,6 +52,7 @@ namespace Jularr.E2E.Tests
                 await SaveConnectionAsync(page, "Setup indexer", "https://indexer.example.test");
                 await CheckViewportAsync(page, "indexers", width);
                 await OpenSourceTabAsync(page, "/Setup/Downloads");
+                await Assertions.Expect(page.GetByText("No size limit")).ToBeVisibleAsync();
                 await SaveConnectionAsync(page, "Setup downloader", "https://downloader.example.test");
                 await CheckViewportAsync(page, "downloads", width);
                 await OpenSourceTabAsync(page, "/Setup/Profiles");

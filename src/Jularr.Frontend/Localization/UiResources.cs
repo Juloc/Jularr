@@ -1052,6 +1052,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.workspace.usenet", "Usenet temporary files"),
             new("acquisition.workspace.direct", "Direct book downloads"),
             new("acquisition.workspace.limit", "Per-Usenet-job limit"),
+            new("acquisition.workspace.unlimited", "No size limit"),
             new("acquisition.workspace.unset", "Not configured"),
             new("acquisition.workspace.hostAllow", "Host filesystem: explicitly allowed"),
             new("acquisition.workspace.hostDeny", "Host filesystem: blocked unless a mounted workspace is selected"),

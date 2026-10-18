@@ -19,7 +19,7 @@ namespace Jularr.Backend.Service.Core
 
         // Limit for one native NNTP job, including its existing incomplete articles.
         // This is a per-job ceiling; aggregate workspace quotas require coordinated reservations.
-        public long UsenetMaxJobBytes { get; set; } = 20L * 1024 * 1024 * 1024;
+        public long? UsenetMaxJobBytes { get; set; }
 
         // Deliberate opt-in for workspaces on the host filesystem rather than a Docker/NAS mount.
         public bool AllowDirectDownloadOnHostFilesystem { get; set; }
