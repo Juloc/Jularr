@@ -64,7 +64,26 @@ namespace Jularr.Backend.Logic.Media
                 throw new DataValidationException(nameof(data.TvdbId), "in_use");
             }
 
-            if (inserted == 1)
+            // An explicitly verified existing auto mapping becomes manual, so later refreshes
+            // cannot silently supersede the administrator's choice.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WorkExternalIdentities"
+                SET
+                    "IsManual" = TRUE,
+                    "UpdatedAt" = now()
+                WHERE
+                    "WorkId" = @Id
+                    AND "Namespace" = 'tvdb'
+                    AND "Value" = @TvdbId::text
+                    AND NOT "IsManual";
+                """;
+            sql.Parameters.Add(data);
+            var confirmed = await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            if (inserted == 1 || confirmed == 1)
             {
                 sql = new SqlStatement();
                 sql.Statement =
