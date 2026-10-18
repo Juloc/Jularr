@@ -43,7 +43,7 @@ namespace Jularr.Backend.Logic.Media
             if (data.FetchedAt.Kind != DateTimeKind.Utc || data.FreshUntil.Kind != DateTimeKind.Utc || data.RetainUntil.Kind != DateTimeKind.Utc
                 || data.FreshUntil < data.FetchedAt || data.RetainUntil <= data.FreshUntil)
             {
-                throw new DataValidationException(nameof(data.RetainUntil), "invalid_range");
+                throw new DataValidationException(nameof(data.RetainUntil), "invalid_value");
             }
 
             if (Encoding.UTF8.GetByteCount(data.Payload) > MaximumPayloadBytes)
