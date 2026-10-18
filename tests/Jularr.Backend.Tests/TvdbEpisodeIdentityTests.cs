@@ -131,8 +131,8 @@ namespace Jularr.Backend.Tests
                     json = """{"data":{"episodes":[{"id":43,"seasonNumber":1,"number":1,"name":"Remote A"},{"id":44,"seasonNumber":1,"number":2,"name":"Remote B"}]},"links":{"next":null}}""";
                 }
 
-                return Task.FromResult(json is null ? new HttpResponseMessage(HttpStatusCode.NotFound)
-                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+                return json is null ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
             }
         }
     }
