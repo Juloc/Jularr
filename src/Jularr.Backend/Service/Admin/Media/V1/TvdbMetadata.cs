@@ -3,6 +3,7 @@ using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Integrations.Data.Tvdb;
 using Jularr.Integrations.Logic.Tvdb;
