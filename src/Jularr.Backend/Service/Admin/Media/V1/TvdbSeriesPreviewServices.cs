@@ -48,7 +48,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var imdbId = identities.FirstOrDefault(identity => identity.Namespace == "imdb")?.Value;
             var tvdb = identities.FirstOrDefault(identity => identity.Namespace == "tvdb")?.Value;
 
-            var session = await _tvdb.ConnectAsync(Context, CancellationToken);
+            var session = await _tvdb.ConnectAsync(Context, CancellationToken, existingReadTransaction: true);
             int? tvdbId = tvdb is null
                 ? imdbId is null ? null : await _tvdb.FindSeriesByImdbAsync(session, imdbId, CancellationToken)
                 : int.TryParse(tvdb, NumberStyles.None, CultureInfo.InvariantCulture, out var knownId) && knownId > 0
