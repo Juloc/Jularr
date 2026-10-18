@@ -165,6 +165,8 @@ namespace Jularr.Backend.Tests
                 """{"config":{"categories":[{"name":"tv","dir":"tv*"}]}}""", "tv"));
             Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder(status,
                 """{"config":{"categories":[]}}""", "missing"));
+            Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[{"name":"tv"}]}}""", "tv"));
         }
 
         [TestMethod]

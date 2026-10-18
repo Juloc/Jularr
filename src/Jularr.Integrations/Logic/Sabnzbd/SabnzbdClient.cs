@@ -72,7 +72,9 @@ namespace Jularr.Integrations.Logic.Sabnzbd
                 && string.Equals(ReadString(item, "name"), category, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (matches.Length != 1) throw new SabnzbdException("SABnzbd category folder is missing or ambiguous.");
 
-            var folder = ReadString(matches[0], "dir") ?? "";
+            if (!matches[0].TryGetProperty("dir", out var categoryDir) || categoryDir.ValueKind != JsonValueKind.String)
+                throw new SabnzbdException("SABnzbd category directory could not be read.");
+            var folder = categoryDir.GetString() ?? "";
             // The trailing '*' disables per-job folders; never assume which media belongs to Jularr.
             if (folder.EndsWith('*')) throw new SabnzbdException("SABnzbd category must create individual job folders.");
             folder = folder.Replace('\\', '/').Trim('/');
