@@ -40,6 +40,8 @@ async function start(player: HTMLElement): Promise<void> {
     let switching = false;
     let idle = 0;
     let seeking = false;
+    let sourceReady = false;
+    let sourcePosition = 0;
     let lastSubtitle: HTMLButtonElement | undefined;
     const settings = player.querySelector<HTMLElement>('#player-settings')!;
     const sidebar = player.querySelector<HTMLElement>('#player-sidebar');
@@ -80,9 +82,9 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
-        if (!plan) return;
+        if (!plan || !sourceReady && !ended) return;
         save({
-            positionMs: Math.floor(video.currentTime * 1000),
+            positionMs: Math.floor((sourceReady ? video.currentTime : sourcePosition) * 1000),
             durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
             isEnded: ended,
             isCompleted: completed
@@ -164,6 +166,8 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Conversions use HLS: native where available, otherwise hls.js on demand.
     async function attach(next: PlaybackPlan, position: number, autoplay = true): Promise<void> {
+        sourceReady = false;
+        sourcePosition = position;
         const rate = video.playbackRate;
         hls?.destroy();
         hls = null;
@@ -204,6 +208,7 @@ async function start(player: HTMLElement): Promise<void> {
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
+            sourceReady = true;
             player.querySelector('[data-role=resolution]')!.textContent = video.videoWidth > 0 ? `${video.videoWidth} × ${video.videoHeight}` : '';
             if (autoplay) void video.play().catch(() => undefined);
             else video.pause();

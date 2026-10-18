@@ -4,11 +4,19 @@ using System.Net.Http.Json;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.User.Playback.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
+using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Tests
 {
@@ -232,6 +240,126 @@ namespace Jularr.Backend.Tests
             await LibraryTests.ScanAsync(host, rootId);
             Assert.AreEqual("Film (2020)/Film (2020).mkv", await host.ScalarAsync("SELECT \"RelativePath\" FROM \"StoredFiles\""));
             Assert.AreEqual(5000L, await host.ScalarAsync("SELECT \"SizeBytes\" FROM \"StoredFiles\""));
+        }
+
+        [TestMethod]
+        public async Task Playback_DirectSmbShare_StreamsRangesAndPreservesResume()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                new SaveStorageMountDataV1("NAS", StorageProtocolType.Smb, "nas.test", "/media/library", "3.1.1", "jularr", null, true, "secret"));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var mountId = (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
+
+            // The same direct SMB path is used for scanning, planning and browser range requests.
+            var share = Path.Combine(storage.Path, "share");
+            var movie = Path.Combine(share, "library", "Movies", "Film (2020)");
+            Directory.CreateDirectory(movie);
+            File.WriteAllBytes(Path.Combine(movie, "Film.mp4"), Film);
+            host.Services.GetRequiredService<SmbShares>().Get(mountId, 1, () => new SmbSession(new FakeSmbStore(share), () => { }));
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
+
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment",
+                new AssignLibraryFileDataV1(null, "Film", null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            var assetId = (await assigned.Content.ReadFromJsonAsync<AssignLibraryFileResultV1>())!.MediaAssetId;
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
+            Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, await player.Content.ReadAsStringAsync());
+
+            var capabilities = new StartPlaybackDataV1(["mp4"], ["h264"], ["aac"]);
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", capabilities);
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            var plan = (await started.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            Assert.AreEqual(PlaybackModeType.DirectPlay, plan.PlaybackModeTypeId);
+
+            using var client = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl);
+            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            request.Headers.Range = new RangeHeaderValue(1000, 1999);
+            using var partial = await client.SendAsync(request);
+            Assert.AreEqual(HttpStatusCode.PartialContent, partial.StatusCode, await partial.Content.ReadAsStringAsync());
+            Assert.AreEqual("bytes 1000-1999/5000", partial.Content.Headers.ContentRange?.ToString());
+            Assert.AreEqual("video/mp4", partial.Content.Headers.ContentType?.MediaType);
+            CollectionAssert.AreEqual(Film[1000..2000], await partial.Content.ReadAsByteArrayAsync());
+
+            using var progress = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId,
+                new UpdatePlaybackDataV1(2_500, 13_500, false, false));
+            Assert.AreEqual(HttpStatusCode.OK, progress.StatusCode, await progress.Content.ReadAsStringAsync());
+            using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", capabilities);
+            Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            Assert.AreEqual(2_500L, (await resumed.Content.ReadFromJsonAsync<PlaybackPlanV1>())!.ResumePositionMs);
+        }
+
+        [TestMethod]
+        public async Task Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls()
+        {
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG") is not { Length: > 0 } ffmpeg)
+            {
+                Assert.Inconclusive("Set JULARR_TEST_FFMPEG to run real SMB-to-FFmpeg conversion.");
+                return;
+            }
+
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            var source = Path.Combine(storage.Path, "Film.mkv");
+            using (var generate = System.Diagnostics.Process.Start(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "testsrc=size=160x90:rate=12", "-f", "lavfi", "-i", "sine=frequency=440",
+                "-t", "14", "-c:v", "mpeg4", "-c:a", "ac3", "-shortest", source]))
+            {
+                Assert.IsNotNull(generate);
+                await generate.WaitForExitAsync();
+                Assert.AreEqual(0, generate.ExitCode);
+            }
+
+            using var share = new SmbShare(() => new SmbSession(new FakeSmbStore(storage.Path), () => { }), TimeProvider.System);
+            using var stream = new StorageStreamServer();
+            using var transcodes = new PlaybackTranscodes(new MediaTranscoder { ExecutablePath = ffmpeg },
+                Options.Create(new MediaOptions { TranscodeCachePath = cache.Path, MaxTranscodes = 1 }));
+            var session = Guid.NewGuid();
+            transcodes.Register(new PlaybackTranscodeSource(session, 7, stream.Open(new SmbStorageFiles(share, ""), "Film.mkv"),
+                0, 1, false, false, 14_000));
+
+            // FFmpeg reads via Jularr's loopback Range server backed by a real SMB file stream.
+            // The later segment restarts input seeking rather than merely replaying the first bytes.
+            var first = await transcodes.GetSegmentAsync(session, 7, 0, CancellationToken.None);
+            var sought = await transcodes.GetSegmentAsync(session, 7, 1, CancellationToken.None);
+            Assert.IsTrue(new FileInfo(first).Length > 188);
+            Assert.IsTrue(new FileInfo(sought).Length > 188);
+            Assert.AreEqual((byte)0x47, File.ReadAllBytes(sought)[0]);
+            transcodes.Stop(session);
+            Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
+
+            // Direct SMB subtitle conversion previously failed because FFmpeg allowed file: only.
+            File.WriteAllText(Path.Combine(storage.Path, "Film.en.ass"),
+                """
+                [Script Info]
+                ScriptType: v4.00+
+                [V4+ Styles]
+                Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+                Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+                [Events]
+                Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+                Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello from SMB
+                """);
+            var transcoder = new MediaTranscoder { ExecutablePath = ffmpeg };
+            using (var subtitle = stream.Open(new SmbStorageFiles(share, ""), "Film.en.ass"))
+            {
+                var vtt = Path.Combine(cache.Path, "Film.en.vtt");
+                Assert.IsTrue(await transcoder.ConvertSubtitleAsync(subtitle.Location, "ass", null, vtt, CancellationToken.None));
+                StringAssert.Contains(await File.ReadAllTextAsync(vtt), "Hello from SMB");
+            }
+
+            // Trickplay uses the same protected loopback transport as subtitle conversion.
+            using (var video = stream.Open(new SmbStorageFiles(share, ""), "Film.mkv"))
+            {
+                var sheets = Path.Combine(cache.Path, "trickplay");
+                Directory.CreateDirectory(sheets);
+                Assert.IsTrue(await transcoder.CreateTrickplayAsync(video.Location, sheets, 10, 64, 36, 3, 2, CancellationToken.None));
+                Assert.IsTrue(Directory.EnumerateFiles(sheets, "*.jpg").Any());
+            }
         }
 
         private sealed class Clock : TimeProvider
