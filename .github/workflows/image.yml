@@ -31,16 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      # Local builds are faster here than exporting gigabytes of remote layer cache.
+      # Docker Compose still validates the exact image this job just built.
       - name: Build the image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: ghcr.io/juloc/jularr:ci
-          cache-from: type=gha,scope=jularr-image
-          cache-to: type=gha,scope=jularr-image,mode=max,ignore-error=true
+        run: docker build --tag ghcr.io/juloc/jularr:ci .
       - name: Start the shipped compose.yaml with nothing but its variables
         env:
           JULARR_VERSION: ci
