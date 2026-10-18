@@ -18,6 +18,7 @@ function mount(count = 3, reduced = false) {
     const motion = { matches: reduced, addEventListener() {} };
     const document = {
         hidden: false, addEventListener: (name, action) => { documentEvents[name] = action; },
+        removeEventListener: name => { delete documentEvents[name]; },
         querySelectorAll: () => [carousel]
     };
 
