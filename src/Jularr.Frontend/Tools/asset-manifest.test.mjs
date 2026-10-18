@@ -69,6 +69,15 @@ test("CSS image URLs use the host build root and resolve to published assets", (
     assert.ok(images >= 5, "Original decorations must be emitted and referenced");
 });
 
+test("Hero carousel references only icons present in the compiled sprite", () => {
+    const component = readFileSync(join(root, "Framework", "Components", "MediaHeroCarousel.cs"), "utf8");
+    const used = [...component.matchAll(/new Icon\("([^"]+)"/g)].map(match => match[1]);
+    assert.equal(used.length, 2, "Hero carousel must expose previous and next controls");
+    for (const icon of used) {
+        assert.equal(icons.symbols[icon], "icon-" + icon, "Missing compiled Hero icon: " + icon);
+    }
+});
+
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
     for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original",
         "books", "reading", "folder", "subtitles", "providers", "theme-system", "player-previous", "player-next", "close"]) {

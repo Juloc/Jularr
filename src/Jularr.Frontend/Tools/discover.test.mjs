@@ -54,6 +54,7 @@ function discover(landing = false) {
         exports: {},
         require: name => {
             if (name === '../../../Framework/Components/MediaCard') return { initializeCards() {} };
+            if (name === '../../../Framework/Components/MediaHeroCarousel') return { initializeHeroCarousels() {} };
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },
