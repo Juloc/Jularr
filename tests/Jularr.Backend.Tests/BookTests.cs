@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(book));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
-            Assert.AreEqual(0, Directory.GetFileSystemEntries(downloads.Path).Length);
+            Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count());
         }
 
         [TestMethod]
@@ -177,8 +177,7 @@ namespace Jularr.Backend.Tests
         {
             var host = await LibraryTests.CreateHostAsync(storage, razor, settings: new Dictionary<string, string>
             {
-                ["Storage:DirectDownloadPath"] = downloads,
-                ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+                ["Storage:LocalPaths:2"] = downloads
             }, services: services =>
             {
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
@@ -206,6 +205,7 @@ namespace Jularr.Backend.Tests
 
             using var tested = await host.SendAsync(HttpMethod.Post, Connections + "/3/test");
             Assert.IsTrue((await tested.Content.ReadFromJsonAsync<AcquisitionConnectionTestV1>())!.IsAvailable);
+            await DownloadStorageTests.ConfigureAsync(host, downloads, Jularr.Backend.Data.Enums.Storage.DownloadStorageArea.Direct);
             return host;
         }
 

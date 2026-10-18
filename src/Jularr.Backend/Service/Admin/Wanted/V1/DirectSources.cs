@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.AnnasArchive;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Gutenberg;
@@ -83,8 +84,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
         }
 
-        public async Task DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, CancellationToken ct)
+        public async Task DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, DownloadStoragePaths paths, CancellationToken ct)
         {
+            var directory = Path.GetDirectoryName(destination)!;
+            IDisposable Reserve(long bytes) => paths.ReserveWrite(download.OperationId, directory, bytes);
             if (!Uri.TryCreate(download.SourceUrl, UriKind.Absolute, out var address))
             {
                 throw new DirectSourceException("acquisition_grab_failed");
@@ -98,17 +101,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         var id = download.ExternalId?.Split(':') is [_, var key, ..] && int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var bookId)
                             ? bookId
                             : throw new DirectSourceException("acquisition_grab_failed");
-                        await _gutenberg.DownloadAsync(id, destination, ct);
+                        await _gutenberg.DownloadAsync(id, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                         break;
                     case AcquisitionConnectionType.Opds:
-                        await _opds.DownloadAsync(Opds(source), address, destination, ct);
+                        await _opds.DownloadAsync(Opds(source), address, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                         break;
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
                         var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
                         if (source.ProtectedApiKey is { } memberKey)
                         {
-                            await _annas.DownloadAsync(site, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct);
+                            await _annas.DownloadAsync(site, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                             break;
                         }
 
@@ -117,11 +120,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         {
                             if (download.SourceLinkUrl is { } link)
                             {
-                                await _annas.DownloadFileAsync(new Uri(link), destination, ct);
+                                await _annas.DownloadFileAsync(new Uri(link), destination, ct, paths.Settings.MaxJobBytes, Reserve);
                             }
                             else
                             {
-                                await _annas.SlowDownloadAsync(site, md5, destination, SlowWait, ct);
+                                await _annas.SlowDownloadAsync(site, md5, destination, SlowWait, ct, paths.Settings.MaxJobBytes, Reserve);
                             }
                         }
                         catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate or AnnasArchiveFailure.WaitTooLong)
@@ -136,6 +139,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
             catch (DirectDownloadException exception)
             {
+                if (exception.Failure == DirectDownloadFailure.TooLarge) throw new ServiceUnavailableException("download_size_limit");
                 throw new DirectSourceException(exception.Failure switch
                 {
                     DirectDownloadFailure.Gate => "source_gate",

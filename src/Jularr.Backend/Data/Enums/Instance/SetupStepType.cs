@@ -1,6 +1,6 @@
 namespace Jularr.Backend.Data.Enums.Instance
 {
-    // Wizard pages after the first Owner, in order.
+    // Persisted wizard identifiers; navigation defines their display order.
     public enum SetupStepType : byte
     {
         Instance = 1,
@@ -10,6 +10,7 @@ namespace Jularr.Backend.Data.Enums.Instance
         Providers = 5,
         Profiles = 6,
         Media = 7,
-        Finish = 8
+        Finish = 8,
+        DownloadStorage = 9
     }
 }

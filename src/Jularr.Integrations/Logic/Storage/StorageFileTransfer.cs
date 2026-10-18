@@ -9,10 +9,11 @@ namespace Jularr.Integrations.Logic.Storage
     internal static class StorageFileTransfer
     {
         // The placed file as the library shows it; a taken name fails.
-        public static async Task<StorageEntry> PlaceAsync(StorageFiles sourceFiles, string sourcePath, StorageFiles target, string targetPath, CancellationToken ct)
+        public static async Task<StorageEntry> PlaceAsync(StorageFiles sourceFiles, string sourcePath, StorageFiles target, string targetPath, CancellationToken ct,
+            Func<long, IDisposable>? reserveWrite = null)
         {
             await target.CreateDirectoryAsync(StoragePath.Parent(targetPath), ct);
-            if (sourceFiles is LocalStorageFiles localSource && target is LocalStorageFiles local)
+            if (reserveWrite is null && sourceFiles is LocalStorageFiles localSource && target is LocalStorageFiles local)
             {
                 var destination = Path.Combine(local.ResolveDirectory(StoragePath.Parent(targetPath)), StoragePath.Name(targetPath));
                 await Task.Run(() => HardlinkOrCopy(localSource.ResolveFile(sourcePath), destination), ct);
@@ -27,7 +28,14 @@ namespace Jularr.Integrations.Logic.Storage
                     await using (var source = await sourceFiles.OpenReadAsync(sourcePath, ct))
                     await using (var copy = await target.CreateAsync(partial, ct) ?? throw new IOException("The library already contains a file at the destination."))
                     {
-                        await source.CopyToAsync(copy, 1024 * 1024, ct);
+                        var buffer = new byte[1024 * 1024];
+                        int read;
+                        while ((read = await source.ReadAsync(buffer, ct)) > 0)
+                        {
+                            using var reservation = reserveWrite?.Invoke(read);
+                            await copy.WriteAsync(buffer.AsMemory(0, read), ct);
+                            if (reserveWrite is not null) await copy.FlushAsync(ct);
+                        }
                     }
 
                     var current = await sourceFiles.GetAsync(sourcePath, ct);
@@ -61,6 +69,11 @@ namespace Jularr.Integrations.Logic.Storage
             if (TryHardLink(sourcePath, destinationPath))
             {
                 return;
+            }
+
+            if (StorageFileSystem.AvailableFreeSpace(Path.GetDirectoryName(destinationPath)!) is not { } available || new FileInfo(sourcePath).Length > available)
+            {
+                throw new IOException("The destination does not have verified space for the copy.");
             }
 
             // Copy beside the target and publish it only when complete.

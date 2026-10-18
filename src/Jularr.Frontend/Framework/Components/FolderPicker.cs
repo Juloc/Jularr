@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace Jularr.Frontend.Framework
 {
     public sealed class FolderPicker(string browseUrl, string selectedPath, string fieldName, string fallbackUrl, IReadOnlyList<IUiComponent>? fallback = null,
-        string? storageMountFieldName = null, bool isVisible = true) : IUiComponent
+        string? storageMountFieldName = null, bool isVisible = true, bool choosesStorage = false, string? selectedLabel = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
             var picker = new Div(
                 new P(new Strong(new Text("storage.paths.selected")), new ValueText(": "),
-                    new Span(new ValueText("/" + selectedPath)).Attribute("data-folder-selection", "")),
+                    new Span(new ValueText(selectedLabel ?? "/" + selectedPath)).Attribute("data-folder-selection", "")),
                 new A(new Text("storage.paths.browse")).Class("button").Attribute("href", fallbackUrl)
                     .Attribute("data-folder-open", "").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath)),
                 new NoScript(new Div([.. fallback ?? []])),
@@ -22,17 +22,20 @@ namespace Jularr.Frontend.Framework
                 ).Class("folder-picker__dialog").Attribute("aria-label", texts["storage.paths.browse"])
             ).Class("folder-picker").Attribute("data-folder-picker", "").Attribute("data-folder-field", fieldName)
                 .Attribute("data-folder-mount-field", storageMountFieldName ?? "")
+                .Attribute("data-folder-chooses-storage", choosesStorage ? "true" : "false")
                 .Attribute("data-folder-error", texts["folderPicker.failed"]).Attribute("data-folder-loading", texts["folderPicker.loading"]);
             if (!isVisible) picker.Attribute("hidden", "hidden");
             picker.WriteTo(writer, encoder, texts);
         }
 
-        public static IUiComponent Directories(string browseUrl, string path, IReadOnlyList<string> names, UiText texts, string? afterName = null, bool hasMore = false)
+        public static IUiComponent Directories(string browseUrl, string path, IReadOnlyList<string> names, UiText texts, string? afterName = null, bool hasMore = false,
+            string? mountsUrl = null, long? storageMountId = null, string? selectedLabel = null, string? warningKey = null)
         {
             var trail = new List<IUiComponent>
             {
                 new A(new Text("storage.paths.connectionRoot")).Attribute("href", QueryHelpers.AddQueryString(browseUrl, "path", "")).Attribute("data-folder-navigate", "")
             };
+            if (mountsUrl is not null) trail.Insert(0, new A(new Text("folderPicker.storageConnections")).Attribute("href", mountsUrl).Attribute("data-folder-navigate", ""));
             var segments = path.Length == 0 ? [] : path.Split('/');
             for (var index = 0; index < segments.Length; index++)
             {
@@ -53,7 +56,10 @@ namespace Jularr.Frontend.Framework
                         .Attribute("href", QueryHelpers.AddQueryString(browseUrl, new Dictionary<string, string?> { ["path"] = path, ["afterName"] = names[^1] }))
                         .Attribute("data-folder-navigate", "")
                 ).Class("page-actions"),
-                new Button(new Text("folderPicker.choose")).Primary().Attribute("data-folder-choose", path)
+                warningKey is not null ? new P(new Text(warningKey)).Attribute("role", "status")
+                    : new Button(new Text("folderPicker.choose")).Primary().Attribute("data-folder-choose", path)
+                        .Attribute("data-folder-mount-id", storageMountId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")
+                        .Attribute("data-folder-label", selectedLabel ?? "/" + path)
             ).Attribute("data-folder-fragment", "");
         }
 

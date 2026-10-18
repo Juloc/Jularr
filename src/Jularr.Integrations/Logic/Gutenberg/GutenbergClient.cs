@@ -10,7 +10,6 @@ namespace Jularr.Integrations.Logic.Gutenberg
     // Project Gutenberg through a Gutendex catalog; downloads stay on gutenberg.org.
     internal sealed class GutenbergClient(HttpClient http)
     {
-        public const long MaximumBytes = 200L * 1024 * 1024;
         private const int MaximumRedirects = 5;
 
         // Public-domain EPUB with images; the catalog id is all a download needs.
@@ -66,15 +65,15 @@ namespace Jularr.Integrations.Logic.Gutenberg
             }
         }
 
-        public async Task DownloadAsync(int bookId, string destination, CancellationToken ct)
+        public async Task DownloadAsync(int bookId, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
             // Redirects stay on gutenberg.org over HTTPS; the size is bounded.
             using var response = await SendAsync(EpubUri(bookId), ct);
             try
             {
-                await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
+                await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
             }
-            catch (DirectDownloadException exception)
+            catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
                 throw new GutenbergException("The book is too large.", exception);
             }

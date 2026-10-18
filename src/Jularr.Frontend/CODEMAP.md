@@ -49,9 +49,11 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, home shelf order, appearance and granted administration links.
 - [Login](Pages/Account/Login/Login.cshtml.cs) (links to [Register](Pages/Account/Register/Register.cshtml.cs) while the Registration module is on; the new account waits until an administrator enables it), [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [PIN](Pages/Account/ProfilePin/ProfilePin.cshtml.cs) (numeric input that confirms itself at the PIN's length), [New profile](Pages/Account/ProfileNew/ProfileNew.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs), [Logout](Pages/Account/Logout/Logout.cshtml.cs): canonical service-driven authentication flows.
 - [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): catalog-backed 403.
-- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Modules](Pages/Setup/Instance/Instance.cshtml.cs), [Libraries](Pages/Setup/Storage/Storage.cshtml.cs), [Sources](Pages/Setup/Sources/Sources.cshtml.cs): four-step flow; [SetupWizard.cs](Framework/SetupWizard.cs) owns navigation, source tabs and resume mapping. Source tabs reuse the canonical Admin connection/profile/takeover editors at setup addresses. [Setup contract](../../docs/INSTANCE_SETUP.md).
+- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Modules](Pages/Setup/Instance/Instance.cshtml.cs), [Libraries](Pages/Setup/Storage/Storage.cshtml.cs), [Sources](Pages/Setup/Sources/Sources.cshtml.cs): conditional flow with download storage after libraries; [SetupWizard.cs](Framework/SetupWizard.cs) owns navigation, source tabs and resume mapping. Source tabs reuse the canonical Admin connection/profile/takeover editors at setup addresses. [Setup contract](../../docs/INSTANCE_SETUP.md).
 
 ## Admin pages
+
+- [Download storage](Pages/Admin/DownloadStorage/DownloadStorage.cshtml.cs), also `/Setup/DownloadStorage` after library storage with Acquisition: per-area Incomplete/Complete folder dialogs, reserve, optional limits and parallel jobs. Uses the canonical Storage services; browser tests: `DownloadStorageTests`.
 
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
 - [Backup](Pages/Admin/Backup/Backup.cshtml.cs): backups with their schema version, back up now, delete; under `/Setup/Backup` also restore.

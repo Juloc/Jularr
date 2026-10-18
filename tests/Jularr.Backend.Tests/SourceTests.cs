@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -354,8 +355,7 @@ namespace Jularr.Backend.Tests
         {
             var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string>
             {
-                ["Storage:DirectDownloadPath"] = downloads,
-                ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true"
+                ["Storage:LocalPaths:2"] = downloads
             }, services: services =>
             {
                 services.AddHttpClient<OpdsClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
@@ -368,22 +368,93 @@ namespace Jularr.Backend.Tests
             using var client = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test", "client-key",
                 true, 10, [], "books", "/downloads", downloads));
             Assert.AreEqual(HttpStatusCode.OK, client.StatusCode, await client.Content.ReadAsStringAsync());
+            await DownloadStorageTests.ConfigureAsync(host, downloads, Jularr.Backend.Data.Enums.Storage.DownloadStorageArea.Direct);
             return host;
         }
 
-        private static async Task<long> CreateWantedBookAsync(Host host)
+        [TestMethod]
+        public async Task DirectSizeLimit_WaitsAndImportsTheSameJobAfterTheLimitIsRemoved()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeSources());
+            using var connection = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Calibre", AcquisitionConnectionType.Opds,
+                "https://opds.example.test/opds", FakeSources.Password, true, 40, [], null, null, null, FakeSources.User));
+            Assert.AreEqual(HttpStatusCode.OK, connection.StatusCode);
+            await LimitAsync(1);
+            var wantedId = await CreateWantedBookAsync(host);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidate = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(item => item.ConnectionName == "Calibre");
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("download_size_limit", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2 AND \"OperationStatusTypeId\" IN (3, 4)"));
+            await LimitAsync(null);
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2 AND \"OperationStatusTypeId\" = 3"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            async Task LimitAsync(long? bytes)
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/2");
+                var policy = (await read.Content.ReadFromJsonAsync<DownloadStorageSettingsV1>())!;
+                using var saved = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/downloads/2", new SaveDownloadStorageDataV1(policy.IncompleteStorageMountId,
+                    policy.IncompletePath, policy.CompleteStorageMountId, policy.CompletePath, policy.FreeSpaceReserveBytes, bytes, policy.MaxWorkspaceBytes,
+                    policy.MaxParallelJobs, policy.Version, true));
+                Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            }
+        }
+
+        [TestMethod]
+        public async Task DirectJobs_RunInParallelWithIndependentTransactionsAndImportBoth()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var bothStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var started = 0;
+            var sources = new FakeSources
+            {
+                BeforeDownloadAsync = async ct =>
+                {
+                    if (Interlocked.Increment(ref started) >= 2) bothStarted.TrySetResult();
+                    await bothStarted.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+                }
+            };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var connection = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Calibre", AcquisitionConnectionType.Opds,
+                "https://opds.example.test/opds", FakeSources.Password, true, 40, [], null, null, null, FakeSources.User));
+            Assert.AreEqual(HttpStatusCode.OK, connection.StatusCode);
+            foreach (var offset in new[] { 0L, 1L })
+            {
+                var wantedId = await CreateWantedBookAsync(host, offset);
+                using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+                var candidate = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(item => item.ConnectionName == "Calibre");
+                using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+                Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            }
+
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.IsTrue(bothStarted.Task.IsCompletedSuccessfully, "Both jobs must reach the HTTP downloader before either is released.");
+            // Equal book names may collide; the waiting import must recover without another download.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2 AND \"OperationStatusTypeId\" = 3"));
+            Assert.AreEqual(2, Directory.EnumerateFiles(storage.Path, "*.epub", SearchOption.AllDirectories).Count());
+        }
+
+        private static async Task<long> CreateWantedBookAsync(Host host, long offset = 0)
         {
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Pride and Prejudice", 1813));
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "People" ("Id", "Name") VALUES (9001, 'Jane Austen');
+                INSERT INTO "People" ("Id", "Name") VALUES (9001, 'Jane Austen') ON CONFLICT DO NOTHING;
                 INSERT INTO "WorkPeople" ("WorkId", "PersonId", "PersonRoleId", "Position") VALUES ({work.Id}, 9001, 7, 1);
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES (710, {work.Id}, 202, 42, 1, 2, 41, now());
-                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (810, {work.Id});
-                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (710, 810);
+                VALUES ({710 + offset}, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES ({810 + offset}, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES ({710 + offset}, {810 + offset});
                 """);
-            return 810;
+            return 810 + offset;
         }
 
         private static async Task RunAsync<TService>(Host host) where TService : Service.Core.SystemService<AcquisitionCycleParametersV1, NoData>
@@ -411,11 +482,13 @@ namespace Jularr.Backend.Tests
             public bool Challenge { get; set; }
             public bool SlowGate { get; set; }
             public int SlowWaitSeconds { get; set; } = 1;
-            public int SignedHits { get; private set; }
+            private int _signedHits;
+            public int SignedHits => Volatile.Read(ref _signedHits);
             public ConcurrentBag<string> AuthorizationSeenBy { get; } = [];
             public ConcurrentBag<string> Requests { get; } = [];
+            public Func<CancellationToken, Task>? BeforeDownloadAsync { get; set; }
 
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var uri = request.RequestUri!;
                 Requests.Add(uri.Host + uri.PathAndQuery);
@@ -424,7 +497,8 @@ namespace Jularr.Backend.Tests
                     AuthorizationSeenBy.Add(uri.Host);
                 }
 
-                return Task.FromResult(uri.Host switch
+                if (uri.Host == "cdn.example.test" && BeforeDownloadAsync is { } before) await before(cancellationToken);
+                return uri.Host switch
                 {
                     "opds.example.test" => Opds(request),
                     "cdn.example.test" => Signed(uri),
@@ -432,7 +506,7 @@ namespace Jularr.Backend.Tests
                     "files.example.test" when uri.AbsolutePath == "/expired.epub" => new HttpResponseMessage(HttpStatusCode.Gone),
                     "files.example.test" => Bytes(ReadingTests.BuildEpub("Pride and Prejudice")),
                     _ => Text("""{"queue":{"paused":false,"slots":[]},"history":{"slots":[]},"version":"4.5.0"}""", "application/json")
-                });
+                };
             }
 
             private static HttpResponseMessage Opds(HttpRequestMessage request)
@@ -462,8 +536,7 @@ namespace Jularr.Backend.Tests
             // The first signed link has expired by the time it is used.
             private HttpResponseMessage Signed(Uri uri)
             {
-                SignedHits++;
-                return SignedHits == 1 ? new HttpResponseMessage(HttpStatusCode.Gone) : Bytes(ReadingTests.BuildEpub("Pride and Prejudice"));
+                return Interlocked.Increment(ref _signedHits) == 1 ? new HttpResponseMessage(HttpStatusCode.Gone) : Bytes(ReadingTests.BuildEpub("Pride and Prejudice"));
             }
 
             private HttpResponseMessage Annas(HttpRequestMessage request)

@@ -606,7 +606,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<UnitStateData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<DownloadData>> ReadActiveDownloadsAsync(this LogicContext ctx, CancellationToken ct)
+        public static Task<IReadOnlyList<DownloadData>> ReadActiveDownloadsAsync(this LogicContext ctx, CancellationToken ct, long? operationId = null)
         {
             // Grouped by client for one queue and history read each; a source that waits for a person is not asked again.
             var sql = new SqlStatement();
@@ -657,10 +657,12 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND operation."OperationStatusTypeId" IN (1, 2)
                     AND operation."AcquisitionConnectionId" IS NOT NULL
                     AND operation."AttentionUrl" IS NULL
+                    AND (@OperationId::bigint IS NULL OR operation."Id" = @OperationId)
                 ORDER BY
                     operation."AcquisitionConnectionId",
                     operation."Id";
                 """;
+            sql.Parameters.Add(new DownloadLookupData(operationId));
             return ctx.ReadSql.ReadListAsync<DownloadData>(sql, ct);
         }
 
@@ -860,20 +862,20 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        public static async Task<bool> IsDownloadFinishedAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
+        public static async Task<bool> IsDownloadImportedAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    operation."OperationStatusTypeId" IN (3, 4) AS "IsFinished"
+                    operation."OperationStatusTypeId" = 3 AS "IsFinished"
                 FROM
                     "Operations" AS operation
                 WHERE
                     operation."Id" = @OperationId;
                 """;
             sql.Parameters.Add(data);
-            return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? true;
+            return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? false;
         }
 
         public static async Task CompleteDownloadAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)

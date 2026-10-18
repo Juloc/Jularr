@@ -9,7 +9,7 @@ namespace Jularr.E2E.Tests
         [DataRow(1440, 900)]
         [DataRow(390, 844)]
         [Timeout(300_000)]
-        public async Task FourSteps_SourceTabsSaveInPlaceAndResumeAtEveryStep(int width, int height)
+        public async Task SetupSteps_SourceTabsSaveInPlaceAndResumeAtEveryStep(int width, int height)
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -25,7 +25,7 @@ namespace Jularr.E2E.Tests
                 await page.FillAsync("[name=PasswordConfirmation]", Owner.Password);
                 await page.GetByRole(AriaRole.Button, new() { Name = "Create Owner", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Instance");
-                Assert.AreEqual(4, await page.Locator(".setup-wizard .navigation-tabs a").CountAsync());
+                Assert.AreEqual(5, await page.Locator(".setup-wizard .navigation-tabs a").CountAsync());
                 Assert.AreEqual(1, await page.Locator("form[action='/Setup/Instance']").CountAsync());
                 Assert.AreEqual(0, await page.Locator("[name=UsersConfirmSources]").CountAsync());
                 await page.GetByRole(AriaRole.Button, new() { Name = "Requests", Exact = true }).ClickAsync();
@@ -40,6 +40,11 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Setup/Progress");
                 await page.WaitForURLAsync("**/Setup/Storage");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync("**/Setup/DownloadStorage");
+                await CheckViewportAsync(page, "download-storage", width);
+                await page.GotoAsync("/Setup/Progress");
+                await page.WaitForURLAsync("**/Setup/DownloadStorage");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Sources");
                 await CheckViewportAsync(page, "sources", width);
                 Assert.AreEqual(6, await page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a").CountAsync());
@@ -52,7 +57,7 @@ namespace Jularr.E2E.Tests
                 await SaveConnectionAsync(page, "Setup indexer", "https://indexer.example.test");
                 await CheckViewportAsync(page, "indexers", width);
                 await OpenSourceTabAsync(page, "/Setup/Downloads");
-                await Assertions.Expect(page.GetByText("No size limit")).ToBeVisibleAsync();
+                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Configure download storage", Exact = true })).ToBeVisibleAsync();
                 await SaveConnectionAsync(page, "Setup downloader", "https://downloader.example.test");
                 await CheckViewportAsync(page, "downloads", width);
                 await OpenSourceTabAsync(page, "/Setup/Profiles");

@@ -110,6 +110,31 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             try
             {
+                var canLink = false;
+                long? freeBytes;
+                if (library is LocalStorageFiles local)
+                {
+                    var targetDirectory = local.ResolveDirectory(directory);
+                    freeBytes = StorageFileSystem.AvailableFreeSpace(targetDirectory);
+                    if (source is LocalStorageFiles localSource)
+                    {
+                        var volume = StorageFileSystem.DownloadFilesystemIdentity(localSource.ResolveDirectory(sourceDirectory), includeDirectory: false, includeMountPoint: true);
+                        canLink = volume is not null && volume == StorageFileSystem.DownloadFilesystemIdentity(targetDirectory, includeDirectory: false, includeMountPoint: true);
+                    }
+                }
+                else
+                {
+                    freeBytes = (await library.ProbeAsync(ct)).FreeBytes;
+                }
+
+                var lengths = files.ToDictionary(file => file.RelativePath, file => file.SizeBytes, StringComparer.Ordinal);
+                var copyBytes = canLink ? 0 : placements.Sum(placement => lengths[placement.SourcePath]);
+                if (freeBytes is null || copyBytes > freeBytes.Value)
+                {
+                    await AttentionAsync(context, download.OperationId, "import_storage_full", null, ct);
+                    return;
+                }
+
                 foreach (var group in placements.GroupBy(placement => placement.Group))
                 {
                     var stem = await FreeStemAsync(library, directory, group.First().TargetStem, group.Select(placement => placement.Extension).ToArray(), ct);

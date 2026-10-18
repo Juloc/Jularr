@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
     // Indexers, download clients and subtitle providers, each kind on its own page.
     public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
         UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
-        UiText texts, ReadDownloadStorageV1 storage, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
+        UiText texts, ReadStorageMountsV1 mounts, ReadStorageDirectoriesV1 directories) : JularrPage
     {
         // The kinds each tab adds.
         private static readonly IReadOnlyDictionary<AcquisitionConnectionRole, (AcquisitionConnectionType Type, string LabelKey)[]> Additions =
@@ -35,7 +35,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private SaveAcquisitionConnectionDataV1? _input;
         private SearchAcquisitionConnectionDataV1? _searchInput;
         private IReadOnlyList<IndexerReleaseV1>? _releases;
-        private DownloadStorageDetailsV1? _downloadStorage;
         private readonly List<StorageMountDetailsV1> _storageMounts = [];
 
         [BindProperty(SupportsGet = true)]
@@ -82,25 +81,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     if (list.Items.Count == list.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
                 }
 
-                // Download workspaces are configured by the server owner, not by SABnzbd.
-                // Surface the effective values without implying that a configured mount is online.
-                if (_downloadStorage is { } configured)
+                if (Role == AcquisitionConnectionRole.Download)
                 {
-                    split.Primary.Add(new UiSection("acquisition.workspace.title",
-                    [
-                        new P(new Text("acquisition.workspace.hint")),
-                        WorkspaceLine("acquisition.workspace.usenet", configured.UsenetDownloadPath),
-                        WorkspaceLine("acquisition.workspace.direct", configured.DirectSourceDownloadPath),
-                        new P(new Strong(new Text("acquisition.workspace.limit")),
-                            new ValueText(": "), configured.UsenetMaxJobBytes is { } limit
-                                ? new ValueText(ByteSize.Format(limit) + " (" + (limit / (1024d * 1024 * 1024)).ToString("0.##", CultureInfo.CurrentCulture) + " GiB)")
-                                : new Text("acquisition.workspace.unlimited")),
-                        new P(new Text(configured.AllowDirectDownloadOnHostFilesystem
-                            ? "acquisition.workspace.hostAllow" : "acquisition.workspace.hostDeny")),
-                        new P(new Text("acquisition.workspace.manageHint"))
-                    ]));
+                    split.Primary.Add(new UiSection("downloadStorage.title", [new A(new Text("downloadStorage.configure")).Class("button")
+                        .Attribute("href", isSetup ? "/Setup/DownloadStorage" : "/Admin/DownloadStorage")]));
                 }
-
                 // Indexers also come from a Prowlarr in one step; subtitle providers from the source catalog with their addresses.
                 var additions = Additions[Role].Select(addition => (IUiComponent)new A(new Text(addition.LabelKey)).Class("button").Attribute("href", Address(type: addition.Type))).ToList();
                 if (Role == AcquisitionConnectionRole.Search)
@@ -132,10 +117,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
             if (FormError is not null && _searchInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
-
-        private IUiComponent WorkspaceLine(string titleKey, string? configuredPath) =>
-            new P(new Strong(new Text(titleKey)),
-                new ValueText(": " + (string.IsNullOrWhiteSpace(configuredPath) ? texts["acquisition.workspace.unset"] : configuredPath)));
 
         private Table<AcquisitionConnectionDetailsV1> ConnectionTable(IReadOnlyList<AcquisitionConnectionDetailsV1> items)
         {
@@ -281,7 +262,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 HttpContext.RequestAborted);
             if (Role == AcquisitionConnectionRole.Download)
             {
-                _downloadStorage = await storage.ExecuteAsync<DownloadStorageDetailsV1>(new ReadDownloadStorageParametersV1(), HttpContext.RequestAborted);
                 _storageMounts.Clear();
                 for (var mountPage = 1; texts.Can("storage.read"); mountPage++)
                 {

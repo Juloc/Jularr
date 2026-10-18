@@ -6,7 +6,6 @@ using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Usenet;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
@@ -59,21 +58,21 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly UsenetDownloader _downloader;
         private readonly ArchiveTools _tools;
         private readonly IDataProtector _protector;
-        private readonly StorageOptions _storage;
 
-        public UsenetJob(UsenetDownloader downloader, ArchiveTools tools, IDataProtectionProvider protection, IOptions<StorageOptions> storage)
+        public UsenetJob(UsenetDownloader downloader, ArchiveTools tools, IDataProtectionProvider protection)
         {
             _downloader = downloader;
             _tools = tools;
-            _storage = storage.Value;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
         [GeneratedRegex(@"\.part0*(\d+)\.rar$", RegexOptions.IgnoreCase)]
         private static partial Regex RarPart();
 
-        public async Task<UsenetPassResult> RunAsync(AcquisitionConnectionData server, string staging, DateTimeOffset until, CancellationToken ct)
+        public async Task<UsenetPassResult> RunAsync(AcquisitionConnectionData server, string staging, DateTimeOffset until, CancellationToken ct,
+            DownloadStoragePaths paths, long operationId)
         {
+            var settings = paths.Settings;
             IReadOnlyList<NzbFile> files;
             await using (var nzb = File.OpenRead(Path.Combine(staging, NzbName)))
             {
@@ -82,7 +81,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Check the NZB itself; indexer sizes are hints, not a trusted disk bound.
             // Unknown or overflowing sizes are not allowed to consume unbounded storage.
-            var maximumJobBytes = _storage.UsenetMaxJobBytes ?? long.MaxValue;
+            var maximumJobBytes = settings.MaxJobBytes ?? long.MaxValue;
             var announced = 0L;
             foreach (var file in files)
             {
@@ -102,10 +101,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var state = File.Exists(statePath) ? await File.ReadAllLinesAsync(statePath, ct) : [];
             var finished = state.Select(line => line.TrimStart('!')).ToHashSet(StringComparer.Ordinal);
             var directory = Directory.CreateDirectory(Path.Combine(staging, FilesFolder)).FullName;
+            maximumJobBytes = Math.Min(maximumJobBytes, paths.MaximumArticleBytes(directory));
             UsenetProgress progress;
             try
             {
-                progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, maximumJobBytes, ct);
+                progress = await _downloader.DownloadAsync(Server(server), files, directory, finished, until, maximumJobBytes, ct, settings.FreeSpaceReserveBytes!.Value,
+                    bytes => paths.ReserveWrite(operationId, directory, bytes));
             }
             catch (UsenetStorageBudgetException)
             {
@@ -141,7 +142,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_repair_missing", progressed: false);
                 }
 
-                if (!await _tools.RepairAsync(par2, ct))
+                if (!await _tools.RepairAsync(par2, ct, () => paths.CheckCapacity()))
                 {
                     return new UsenetPassResult(UsenetPassState.Failed, 100, size, 0, "usenet_repair_failed");
                 }
@@ -169,8 +170,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Require space on the actual mounted download filesystem, not the VM root.
             // Keep extraction unopened when free space cannot be verified.
-            var unpackBytes = Directory.EnumerateFiles(directory).Sum(path => new FileInfo(path).Length);
-            if (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || available < unpackBytes + unpackBytes / 10)
+            long unpackBytes = 0;
+            foreach (var archive in archives)
+            {
+                if (await _tools.ReadExtractionSizeAsync(archive, ct) is not { } expanded || expanded > long.MaxValue - unpackBytes)
+                {
+                    return new UsenetPassResult(UsenetPassState.Failed, 100, size, 0, "usenet_extract_failed");
+                }
+
+                unpackBytes += expanded;
+            }
+
+            paths.CheckCapacity(unpackBytes);
+            if (StorageFileSystem.AvailableFreeSpace(directory) is not { } available || unpackBytes > available - settings.FreeSpaceReserveBytes!.Value)
             {
                 return new UsenetPassResult(UsenetPassState.Waiting, 100, size, 0, "usenet_disk_full", progressed: false);
             }
@@ -179,7 +191,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             foreach (var archive in archives)
             {
-                if (!await _tools.ExtractAsync(archive, output, ct))
+                if (!await _tools.ExtractAsync(archive, output, ct, () => paths.CheckCapacity()))
                 {
                     return new UsenetPassResult(UsenetPassState.Failed, 100, size, 0, "usenet_extract_failed");
                 }

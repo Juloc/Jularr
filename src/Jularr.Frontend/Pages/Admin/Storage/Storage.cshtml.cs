@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             page.Asset("Pages/Admin/Storage/Storage.entry.scss");
             page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage));
+            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
 
             var split = new Split(content =>
             {

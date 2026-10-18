@@ -181,6 +181,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<SmbShares>();
             services.TryAddSingleton<StorageStreamServer>();
             services.TryAddSingleton<StorageAccess>();
+            services.TryAddSingleton<DownloadStorage>();
             services.TryAddSingleton<MediaTranscoder>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
