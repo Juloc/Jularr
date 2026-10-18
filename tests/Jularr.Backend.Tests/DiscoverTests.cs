@@ -191,7 +191,8 @@ namespace Jularr.Backend.Tests
             var html = await home.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode, html);
             StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
-            Assert.IsFalse(html.Contains("The Matrix", StringComparison.Ordinal));
+            StringAssert.Contains(html, "The Matrix");
+            StringAssert.Contains(html, "media-hero");
 
             // Native recommendation route stays usable.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
