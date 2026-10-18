@@ -1,8 +1,8 @@
-# Jularr Alpha-90 recovery — execution plan (12 October 2026)
+# Jularr Alpha-90 feature recovery reference (12 October 2026)
 
 > Later owner decisions in [BACKEND_NEXT](BACKEND_NEXT.md) take precedence: the first Owner is created in Setup without installation proof, Prowlarr/Sonarr/Radarr are one-time takeover sources only, Wake-on-LAN is an Owner setting, Games use the unified Arr+ and conversions use HLS with hls.js.
 
-Status: **proposed implementation plan; no code migration, production database reset, provider credentials or feature completion is implied.** Target branch is `clean-start`, not `dev`. This is a short-path recovery plan, **not** an authorization to abandon the new architecture.
+Status: **historical feature and technical-dependency reference only, not an active implementation schedule.** This document does not authorize coding, parallel work, migration or database resets. Current decisions, GitHub issues and owner-approved specifications govern each implementation.
 
 ## 0. Evidence and source hierarchy
 
@@ -10,7 +10,7 @@ Status: **proposed implementation plan; no code migration, production database r
 2. **Approved UX, subject to more recent decisions:** historical `dev` specs in `docs/mockups/**/SPEC.md`, especially setup, storage, admin acquisition settings/manual search/wanted, discover/home, login/profile, library, player and user settings.
 3. **Inventory/triage:** `docs/documentation-audit-20261011` (`docs/audit/2026-10-11/README.md`, `MD_INVENTORY.md`, `CONFLICTS.md`) inventories 146 MDs/74 screen specs/94 mockup images. **This is incomplete content triage, not approval of an older runtime design.** `backup/docs-specs-pre-audit-20261011` preserves pre-audit source.
 4. **Old behavior references only:** `dev/src/Jularr.Web` (1,806 old Web files). Inspect the narrow exact feature only; translate observable behavior, algorithms and tests to new contracts. **Do not copy old Pages, Stores, SQLite/JSON persistence, dependency injection or incompatible DTOs into the new host.**
-5. Functional contract issues: [#813](https://github.com/Juloc/Jularr/issues/813) core request-to-play parity, [#396](https://github.com/Juloc/Jularr/issues/396) unified acquisition, [#403](https://github.com/Juloc/Jularr/issues/403) playback, [#888](https://github.com/Juloc/Jularr/issues/888) demand-paced transcoding, [#857](https://github.com/Juloc/Jularr/issues/857) resource budgets, [#880](https://github.com/Juloc/Jularr/issues/880) *historical full database cutover tracker*, [#930](https://github.com/Juloc/Jularr/issues/930) UI, [#864](https://github.com/Juloc/Jularr/issues/864) Search Planner. The newer clean-start baseline overrides draft Phase B table inventories and stale issue comments.
+5. Functional contract issues: [#813](https://github.com/Juloc/Jularr/issues/813) core request-to-play parity, [#396](https://github.com/Juloc/Jularr/issues/396) unified acquisition, [#403](https://github.com/Juloc/Jularr/issues/403) playback, [#888](https://github.com/Juloc/Jularr/issues/888) demand-paced transcoding, [#857](https://github.com/Juloc/Jularr/issues/857) resource budgets, [#880](https://github.com/Juloc/Jularr/issues/880) *historical full database cutover tracker*, [#930](https://github.com/Juloc/Jularr/issues/930) UI, [#864](https://github.com/Juloc/Jularr/issues/864) Search Planner. The current clean-start baseline overrides historical draft table inventories and stale issue comments.
 
 **Current hard gap:** `clean-start` has 22 Backend Service source files, six Logic source files, 19 Razor PageModels, one Account SQL baseline, and no real Work/Library/Player/Arr+ Backend verticals. Do not call prepared empty pages complete. The older `dev` implementation was much larger but not directly compatible.
 
@@ -42,9 +42,9 @@ Create a single small reviewed contract PR, **not** a weeks-long inventory. Defi
 - Consumer `Request`/approval and canonical `Wanted` acquisition target; AcquisitionProfile/ReleaseRule, Indexer/provider capability, normalized ReleaseCandidate (external evidence), DownloadJob / ImportOperation / history/retry/blocklist and final library link. Temporary candidate score is **not** a permanent fact about a release.
 - Storage availability vs genuinely missing file, configured root read permissions; explicit handling of missing storage and safe paths.
 
-**Gate 0:** one schema owner checks the approved clean-cut decision rules and compiles an **isolated, clean-installable** Postgres baseline; all agents read these contracts instead of inventing duplicate tables/DTOs. The larger Phase-B draft (different historical 157/168 table counts) is **not** wholesale imported or treated as schema authority.
+**Schema dependency:** use one reviewed, isolated and clean-installable PostgreSQL baseline rather than inventing duplicate tables or contracts. Historical draft inventories (including incompatible table counts) are references only, never schema authority.
 
-## 4. Parallel agent lanes (independent branches/worktrees)
+## 4. Historical capability areas (reference only; no parallel implementation approval)
 
 | Lane | Owner and gate | First deliverable | Legacy behavior reference |
 | --- | --- | --- | --- |
@@ -58,7 +58,7 @@ Create a single small reviewed contract PR, **not** a weeks-long inventory. Defi
 
 No lane may modify another lane's DTO/SQL contract without an explicit small contract-change PR; no parallel edits to shared Schema/Program/Service gate. Use one responsible integrator and merge small validated PRs into `clean-start` in dependency order, never seven long-lived divergent branches. Never merge from `dev` as a bulk import.
 
-## 5. Narrow implementation sequence and gates
+## 5. Historical capability and verification checklist
 
 ### Gate 1 — bootstrap and minimal setup (first dependency)
 Provision an **isolated PostgreSQL DB**, install approved fresh SQL, ensure `JULARR_DB`, local HTTPS and Vite production assets. Use current host/Backend auth; add exactly-once Owner installation proof, authorized Owner+Profile login, secure cookie, actual logout/profile switch. Read readiness (DB, schema, app-data permission, media mounts, disk). Minimal Setup must save real instance/module/locale/timezone state, one library root, one metadata provider, one indexer, one SABnzbd connection; run bounded connectivity tests. Surface partial errors; optional AI/migration/branding/backup sections remain legitimately skippable when unsupported, not fake completed.
@@ -101,7 +101,7 @@ Bound live transcoding to real segment demand/high-water rather than encode the 
 ### Gate 6 — integration, deployment and handoff
 The existing local preview `docs/LOCAL_PREVIEW.md` points to `D:\jularr-clean-start-server\checkout`; it is **not evidence of a working DB**. Do not reuse active database. Assemble one disposable compose/dev environment with PostgreSQL, Jularr host, bind-mounted fixture media, optional SABnzbd, synthetic indexer fixtures, ffprobe/FFmpeg availability and exact health checks. Commit lockfile and generated asset rules, secrets externally, no destructive cleanup. Test clean install, restarted jobs, invalid passwords, profile authorization, path traversal, offline NAS, failed indexer/FFmpeg, double grab, real browser mobile/desktop responsive and performance under resource limits. Merge only independently passing focused PRs. Publish a functional gap checklist, not a percentage invented from compiling skeletons.
 
-## 6. Sequence for aggressive parallel execution
+## 6. Superseded delivery estimates (not an active schedule)
 
 **0–2 h (planning/contract gate, can block):** One integrator verifies exact SQL/Service contracts from clean-start and chooses *single* Work/File/Wanted/Session owners. Identify available mounted media, ffprobe/FFmpeg, isolated DB, provider/SAB credentials; record Owner bootstrap proof and NAS WOL preference. Other agents read only targeted dev files/specs and prepare tests/interfaces, **no unreviewed schema changes**.
 
