@@ -278,6 +278,10 @@ namespace Jularr.E2E.Tests
                     var queued = _held.Values.Select(waiting =>
                         "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
                     return Json("{\"queue\":{\"paused\":false,\"slots\":[" + string.Join(',', queued) + "]}}");
+                case "status":
+                    return Json("""{"status":{"completedir":"/downloads"}}""");
+                case "get_config":
+                    return Json("""{"config":{"categories":[{"name":"*","dir":""},{"name":"movies","dir":""},{"name":"tv","dir":""}]}}""");
                 case "history":
                     var slots = _completed.Values.Select(done => FailDownloads
                         ? "{\"nzo_id\":\"SABnzbd_nzo_" + done.Guid + "\",\"name\":\"" + done.Title + "\",\"status\":\"Failed\",\"fail_message\":\"Not enough articles\"}"

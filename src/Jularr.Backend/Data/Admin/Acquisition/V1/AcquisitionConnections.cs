@@ -266,9 +266,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
                 throw new DataValidationException(nameof(DownloadCategory), "invalid_transition");
             }
 
-            if ((RemotePath is null) != (LocalPath is null && DownloadStorageMountId is null))
+            // RemotePath is optional when the SAB folder will be discovered from the client API.
+            if (RemotePath is not null && LocalPath is null && DownloadStorageMountId is null)
             {
-                throw new DataValidationException(RemotePath is null ? nameof(RemotePath) : nameof(LocalPath), "required");
+                throw new DataValidationException(nameof(LocalPath), "required");
             }
 
             // Only news servers open several sessions.

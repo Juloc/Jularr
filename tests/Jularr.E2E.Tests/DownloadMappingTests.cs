@@ -12,6 +12,7 @@ namespace Jularr.E2E.Tests
         public async Task CompletedDownloadStorage_BrowsesAndPersistsWithoutLosingTheDraft(int width, int height)
         {
             using var folders = new Folders("Complete & Bücher");
+            await using var fakeSab = await FakeServices.StartAsync(folders.Library);
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
@@ -27,9 +28,8 @@ namespace Jularr.E2E.Tests
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 Assert.AreEqual(0d, await page.EvaluateAsync<double>("() => window.jularrLayoutShift"));
                 await form.Locator("[name=Name]").FillAsync("My download client");
-                await form.Locator("[name=BaseUrl]").FillAsync("https://sab.example.test");
-                await form.Locator("[name=ApiKey]").FillAsync("test-only-key");
-                await form.Locator("[name=RemotePath]").FillAsync("/data/downloads/complete");
+                await form.Locator("[name=BaseUrl]").FillAsync(new Uri(fakeSab.Address, "sabnzbd/").ToString());
+                await form.Locator("[name=ApiKey]").FillAsync(FakeServices.ClientKey);
                 await form.Locator("[name=LocalPath]").FillAsync("/old-container-path");
                 await form.Locator("[name=DownloadStorageMountId]").SelectOptionAsync("1");
                 var originalAddress = page.Url;
@@ -41,7 +41,7 @@ namespace Jularr.E2E.Tests
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
                 await Assertions.Expect(form.Locator("[name=LocalPath]")).ToHaveValueAsync("Complete & Bücher");
                 await Assertions.Expect(form.Locator("[name=Name]")).ToHaveValueAsync("My download client");
-                await Assertions.Expect(form.Locator("[name=ApiKey]")).ToHaveValueAsync("test-only-key");
+                await Assertions.Expect(form.Locator("[name=ApiKey]")).ToHaveValueAsync(FakeServices.ClientKey);
                 Assert.AreEqual(originalAddress, page.Url);
                 Assert.AreEqual(0, navigations);
                 await Steps.SubmitAsync(page, form);
@@ -49,6 +49,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(form.Locator("[name=DownloadStorageMountId]")).ToHaveValueAsync("1");
                 await Assertions.Expect(form.Locator("[name=LocalPath]")).ToHaveValueAsync("Complete & Bücher");
                 await Assertions.Expect(form.Locator("[name=ApiKey]")).ToHaveValueAsync("");
+                await Assertions.Expect(form).ToContainTextAsync("/downloads");
                 await form.GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Link, new() { Name = "Connection root", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
