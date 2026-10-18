@@ -83,6 +83,40 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3, aniList.Searches);
         }
 
+        [TestMethod]
+        public async Task AniListRefresh_IgnoresManualTvdbEpisodeMappings()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var aniList = new FakeAniList();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path,
+                services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
+
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear")
+                VALUES (10, 2, 1, 'Example Quest', 2019);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number")
+                VALUES (100, 10, 1, 1), (101, 10, 2, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                SELECT 10, 100, 2, n FROM generate_series(2, 12) AS n;
+                UPDATE "WorkUnits" SET "ParentWorkUnitId" = 100 WHERE "Id" = 101;
+                INSERT INTO "WorkIdentityMatches" ("WorkId", "Namespace", "IdentityMatchStatusTypeId", "Candidates", "CheckedAt")
+                VALUES (10, 'anilist', 1, '[]', now() - interval '8 days');
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "IsManual")
+                VALUES (101, 'tvdb', '92001', TRUE);
+                """);
+
+            await RunAsync(host);
+
+            Assert.AreEqual(true, await host.ScalarAsync("""
+                SELECT "CheckedAt" > now() - interval '1 day'
+                FROM "WorkIdentityMatches" WHERE "WorkId" = 10 AND "Namespace" = 'anilist';
+                """));
+            Assert.AreEqual("92001", await host.ScalarAsync("""
+                SELECT "Value" FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 101 AND "Namespace" = 'tvdb';
+                """));
+            Assert.IsTrue(aniList.Searches > 0);
+        }
+
         private static async Task RunAsync(Host host)
         {
             await using var scope = host.Services.CreateAsyncScope();
