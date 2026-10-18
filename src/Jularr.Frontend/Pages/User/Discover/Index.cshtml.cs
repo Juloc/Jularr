@@ -315,7 +315,15 @@ namespace Jularr.Frontend.Pages.User.Discover
                 {
                     var items = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
                         new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), HttpContext.RequestAborted);
-                    var item = items.FirstOrDefault(value => value.PosterUrl is not null) ?? items.FirstOrDefault();
+                    // A random, unique choice per visit from the genuine authorized feed.
+                    // The full eight-slide collection will be fed by the shared warm-snapshot reader.
+                    var catalogPicks = HeroSelection.Choose(items
+                        .Where(value => !string.IsNullOrWhiteSpace(value.Namespace) && !string.IsNullOrWhiteSpace(value.ExternalId))
+                        .Select(value => new HeroCandidate<DiscoverCatalogItemV1>(
+                            value.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
+                                : value.Namespace + ":" + value.ExternalId,
+                            scope.Slug, DiscoverFeedType.Trending, false, value)));
+                    var item = catalogPicks.FirstOrDefault()?.Content;
                     if (item is null)
                     {
                         return;
@@ -332,7 +340,12 @@ namespace Jularr.Frontend.Pages.User.Discover
 
                 var results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(
                     new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), HttpContext.RequestAborted);
-                var featured = results.FirstOrDefault(item => item.BackdropUrl is not null || item.PosterUrl is not null) ?? results.FirstOrDefault();
+                var picks = HeroSelection.Choose(results.Where(item => item.WorkId is not null || item.TmdbId is not null)
+                    .Select(item => new HeroCandidate<DiscoverItemV1>(
+                        item.WorkId is { } id ? "work:" + id.ToString(CultureInfo.InvariantCulture)
+                            : "tmdb:" + item.MediaTypeId + ":" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
+                        scope.Slug, DiscoverFeedType.Trending, false, item)));
+                var featured = picks.FirstOrDefault()?.Content;
                 if (featured is null)
                 {
                     return;
