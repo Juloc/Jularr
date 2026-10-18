@@ -304,6 +304,7 @@ CREATE TABLE "WorkUnitExternalIdentities" (
     "Namespace" varchar(16) NOT NULL CHECK ("Namespace" IN ('anilist', 'tvdb')),
     "Value" varchar(64) NOT NULL CHECK (length(btrim("Value")) > 0),
     "EpisodeOffset" integer NOT NULL DEFAULT 0 CHECK ("EpisodeOffset" >= 0),
+    CONSTRAINT "CK_WorkUnitExternalIdentities_TvdbOffset" CHECK ("Namespace" <> 'tvdb' OR "EpisodeOffset" = 0),
     "IsManual" boolean NOT NULL DEFAULT FALSE,
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("Namespace", "Value")
@@ -311,7 +312,6 @@ CREATE TABLE "WorkUnitExternalIdentities" (
 CREATE INDEX "IX_WorkUnitExternalIdentities_Unit" ON "WorkUnitExternalIdentities" ("WorkUnitId");
 -- TVDB provides one identity per local episode, never a many-to-one range as AniList may do.
 CREATE UNIQUE INDEX "UX_WorkUnitExternalIdentities_Tvdb_Unit" ON "WorkUnitExternalIdentities" ("WorkUnitId") WHERE "Namespace" = 'tvdb';
-ALTER TABLE "WorkUnitExternalIdentities" ADD CONSTRAINT "CK_WorkUnitExternalIdentities_TvdbOffset" CHECK ("Namespace" <> 'tvdb' OR "EpisodeOffset" = 0);
 
 -- Automatic matching to a secondary provider: matched, waiting for a person, nothing found or dismissed.
 CREATE TABLE "WorkIdentityMatches" (
