@@ -185,17 +185,14 @@ namespace Jularr.Backend.Tests
             var sourceFile = Path.Combine(completed, Feature + ".mkv");
             File.WriteAllBytes(sourceFile, new byte[4096]);
             await host.Fixture.RunSqlAsync("""
-                CREATE FUNCTION test_skip_imported_media() RETURNS trigger AS $
-                BEGIN
-                    RETURN NULL;
-                END;
-                $ LANGUAGE plpgsql;
+                CREATE FUNCTION test_skip_imported_media() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END;';
                 CREATE TRIGGER test_skip_imported_media BEFORE INSERT ON "StoredFiles"
                     FOR EACH ROW EXECUTE FUNCTION test_skip_imported_media();
                 """);
 
             usenet.Queue = FakeUsenet.EmptyQueue;
-            usenet.History = $$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/{{{Feature}}}"}]}}""";
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}"""
+                .Replace("FEATURE", Feature, StringComparison.Ordinal);
             await RunAsync<MonitorDownloadsV1>(host);
 
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
