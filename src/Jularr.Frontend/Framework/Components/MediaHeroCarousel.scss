@@ -53,6 +53,14 @@
         background: color-mix(in srgb, var(--surface) 75%, transparent);
     }
 
+    // Reuse the icon already shipped in Jularr's compiled SVG sprite.
+    &__arrow--next .ui-icon { transform: rotate(180deg); }
+
+    [dir="rtl"] &__arrow {
+        .ui-icon { transform: rotate(180deg); }
+        &--next .ui-icon { transform: none; }
+    }
+
     &__segments {
         position: absolute;
         z-index: 3;
