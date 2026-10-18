@@ -62,18 +62,19 @@ namespace Jularr.Backend.Tests
             // Native actions, encoded text.
             writer.GetStringBuilder().Clear();
             var card = new MediaCard(assets, "<Title>", "/Details/1", null, "2026", "media.state.InProgress", "media.continue", "/Player/2")
-                .Availability(availability).Continue(30000, 90000).Trailer("k4xGqY5IDBE");
+                .Availability(availability).Continue(30000, 90000);
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
             StringAssert.Contains(html, "media-availability-badge--partialotheraudio");
             StringAssert.Contains(html, "href=\"/Player/2\"");
-            StringAssert.Contains(html, texts["media.details"]);
+            StringAssert.Contains(html, "class=\"media-card__title\"");
+            StringAssert.Contains(html, "class=\"media-card__details\"");
             StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\"");
-            StringAssert.Contains(html, "data-trailer-label=\"" + texts["media.preview.playTrailer"] + "\"");
+            Assert.IsFalse(html.Contains("data-trailer-id", StringComparison.Ordinal));
+            Assert.AreEqual(1, Regex.Matches(html, "media-card__actions").Count);
             foreach (var omitted in new[] { "media-card__series", "media-card__genres", "media-card__languages", "media-card__remaining", "<iframe", "disabled=\"disabled\"" })
                 Assert.IsFalse(html.Contains(omitted, StringComparison.Ordinal), omitted);
-            Assert.ThrowsExactly<ArgumentException>(() => card.Trailer("../../bad"));
 
             // Progression has no invented duration.
             writer.GetStringBuilder().Clear();
@@ -87,7 +88,7 @@ namespace Jularr.Backend.Tests
             // Preview keeps real fallback links.
             writer.GetStringBuilder().Clear();
             card.Preview("preview-test").WriteTo(writer, HtmlEncoder.Default, texts);
-            Assert.AreEqual(2, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
+            Assert.AreEqual(1, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
             writer.GetStringBuilder().Clear();
             availability.WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.AreEqual(symbol, writer.ToString());
