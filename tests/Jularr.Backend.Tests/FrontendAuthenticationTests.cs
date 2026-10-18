@@ -237,7 +237,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
             Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
             StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
-            Assert.IsFalse(html.Contains("data-trailer-id=", StringComparison.Ordinal));
+            // MediaPreview still supports trailers independently of the simplified MediaCard.
+            StringAssert.Contains(html, "data-trailer-id=\"k4xGqY5IDBE\"");
             StringAssert.Contains(html, "#icon-close");
             Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
             StringAssert.Contains(html, "Request status");
