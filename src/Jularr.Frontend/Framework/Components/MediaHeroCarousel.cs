@@ -14,6 +14,8 @@ namespace Jularr.Frontend.Framework
 
             var items = slides.Select((slide, index) =>
             {
+                // Only the first image is above the fold; avoid eight eager downloads.
+                slide.Priority = index == 0;
                 var wrapper = new Div(slide).Class(index == 0
                     ? "media-hero-carousel__slide is-active" : "media-hero-carousel__slide")
                     .Attribute("data-hero-slide-item", index.ToString(CultureInfo.InvariantCulture))
