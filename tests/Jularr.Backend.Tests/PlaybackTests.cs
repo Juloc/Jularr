@@ -328,14 +328,13 @@ namespace Jularr.Backend.Tests
             // A deferred commit failure must leave the stream and its cache available.
             await host.Fixture.RunSqlAsync(
                 """
-                CREATE FUNCTION "FailSessionEnd"() RETURNS trigger AS $
+                CREATE FUNCTION "FailSessionEnd"() RETURNS trigger LANGUAGE plpgsql AS '
                 BEGIN
                     IF NEW."EndedAt" IS NOT NULL THEN
-                        RAISE EXCEPTION 'forced playback commit failure';
+                        RAISE EXCEPTION ''forced playback commit failure'';
                     END IF;
                     RETURN NEW;
-                END;
-                $ LANGUAGE plpgsql;
+                END;';
                 CREATE CONSTRAINT TRIGGER "FailSessionEndTrigger" AFTER UPDATE ON "PlaybackSessions"
                     DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "FailSessionEnd"();
                 """);
