@@ -49,7 +49,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(form.Locator("[name=DownloadStorageMountId]")).ToHaveValueAsync("1");
                 await Assertions.Expect(form.Locator("[name=LocalPath]")).ToHaveValueAsync("Complete & Bücher");
                 await Assertions.Expect(form.Locator("[name=ApiKey]")).ToHaveValueAsync("");
-                await Assertions.Expect(form.Locator("body")).ToContainTextAsync("/downloads");
+                await Assertions.Expect(form).ToContainTextAsync("/downloads");
                 await form.GetByRole(AriaRole.Link, new() { Name = "Browse folders", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Link, new() { Name = "Connection root", Exact = true }).ClickAsync();
                 await dialog.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
