@@ -171,8 +171,7 @@ The owner requires the following coverage beyond the first connected pages:
 
 [ALPHA90_RECOVERY_PLAN.md](ALPHA90_RECOVERY_PLAN.md) is the owner's recovery/parity reference, not a complete
 specification of extensions. These targets are not implemented capability claims.
-Latest decisions, fresh schema contracts and dependency approvals still apply. Historical
-phase labels are not development gates; legacy parity alone does not authorize active-database migrations.
+Latest decisions, fresh schema contracts and dependency approvals still apply. Previous implementation schedules are not development requirements; legacy parity alone does not authorize active-database migrations.
 
 ## Remaining decisions and prerequisites
 
