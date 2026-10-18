@@ -40,10 +40,10 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Link_ConflictingImdbOrTvdbIdentity_IsRejected()
+        public async Task Link_TvdbIdAlreadyMappedToAnotherWork_IsRejected()
         {
             using var directory = new LibraryTests.TemporaryDirectory();
-            await using var host = await HostAsync(directory.Path, "tt9999999");
+            await using var host = await HostAsync(directory.Path, "tt1234567");
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'Show'), (200, 2, 'Other');
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
@@ -53,6 +53,36 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, denied.StatusCode);
             Assert.AreEqual(200L, await host.ScalarAsync("""SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT "Version" FROM "Works" WHERE "Id" = 100"""));
+        }
+
+        [TestMethod]
+        public async Task Link_MismatchedRemoteImdb_IsRejected()
+        {
+            using var directory = new LibraryTests.TemporaryDirectory();
+            await using var host = await HostAsync(directory.Path, "tt9999999");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'Show');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (100, 'imdb', 'tt1234567');
+                """);
+            using var response = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
+        }
+
+        [TestMethod]
+        public async Task Link_ExistingAutomaticMapping_BecomesManual()
+        {
+            using var directory = new LibraryTests.TemporaryDirectory();
+            await using var host = await HostAsync(directory.Path, "tt1234567");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'Show');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                VALUES (100, 'imdb', 'tt1234567'), (100, 'tvdb', '123');
+                """);
+            using var response = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("""SELECT "IsManual" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
+            Assert.AreEqual(2L, await host.ScalarAsync("""SELECT "Version" FROM "Works" WHERE "Id" = 100"""));
         }
 
         [TestMethod]
