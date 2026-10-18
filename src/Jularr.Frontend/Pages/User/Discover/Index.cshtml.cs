@@ -25,6 +25,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IReadOnlyList<DiscoverItemV1>? _results;
         private IReadOnlyList<DiscoverCatalogItemV1>? _catalog;
         private IReadOnlyList<ContinueItemV1> _continue = [];
+        private IUiComponent? _featured;
         private IReadOnlyList<LibraryItemV1> _recent = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
@@ -118,10 +119,11 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Local content arrives first.
-            var featured = new Page();
-            DefineFeatured(featured);
-            page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
+            // Featured is part of the initial response, never a late insertion above the shelves.
+            if (_featured is not null)
+            {
+                page.Content.Add(_featured);
+            }
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
             var continuing = _continue.Where(item => selected is null || item.MediaTypeId == selected.MediaTypeId).ToList();
@@ -165,17 +167,6 @@ namespace Jularr.Frontend.Pages.User.Discover
                 .Bookmark(new MediaBookmark(assets, item.WorkId));
             return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
         })]);
-
-        private void DefineFeatured(Page page)
-        {
-            // Provider chooses the featured title.
-            if (_shelves.SelectMany(shelf => shelf.Items).FirstOrDefault(item => item.BackdropUrl is not null) is { } featured)
-            {
-                var (actionKey, actionHref) = Action(featured);
-                page.Content.Add(new MediaHero(featured.Title, featured.BackdropUrl, featured.ReleaseYear?.ToString(CultureInfo.InvariantCulture), featured.Overview,
-                    actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured)));
-            }
-        }
 
         private void DefineRecommendations(Page page)
         {
@@ -229,13 +220,9 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return Page();
             }
 
-            var featured = new Page();
             var recommendations = new Page();
-            DefineFeatured(featured);
             DefineRecommendations(recommendations);
-            return Partial("_UiComponent", new Div(
-                new Div([.. featured.Content]).Attribute("id", "discover-featured"),
-                new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations")));
+            return Partial("_UiComponent", new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations"));
         }
 
         protected override async Task LoadDataAsync()
@@ -301,10 +288,65 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected?.MediaTypeId, pageSize: 20), HttpContext.RequestAborted)).Items;
             }
+
+            if (View is null && string.IsNullOrWhiteSpace(Query))
+            {
+                await LoadFeaturedAsync(selected);
+            }
         }
 
         private async Task LoadListedAsync() =>
             _scopes ??= await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
+
+        // Read a real permitted feed before first paint. The shared persisted feed read will
+        // replace this single-source selection when the discovery snapshot contract is ready.
+        private async Task LoadFeaturedAsync(DiscoverScopeV1? selected)
+        {
+            var scope = Listed.FirstOrDefault(type => (selected is null || type.Slug == selected.Slug)
+                && type.Feeds.Contains(DiscoverFeedType.Trending));
+            if (scope is null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (scope.IsCatalog)
+                {
+                    var items = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
+                        new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), HttpContext.RequestAborted);
+                    var item = items.FirstOrDefault(value => value.PosterUrl is not null) ?? items.FirstOrDefault();
+                    if (item is null)
+                    {
+                        return;
+                    }
+
+                    var href = item.WorkId is { } workId
+                        ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
+                        : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
+                    var requestable = item.WorkId is null && texts.CanRequest();
+                    _featured = new MediaHero(item.Title, item.PosterUrl, null, null, requestable ? "request.create" : "media.details", href,
+                        requestable ? href : null);
+                    return;
+                }
+
+                var results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(
+                    new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), HttpContext.RequestAborted);
+                var featured = results.FirstOrDefault(item => item.BackdropUrl is not null || item.PosterUrl is not null) ?? results.FirstOrDefault();
+                if (featured is null)
+                {
+                    return;
+                }
+
+                var (actionKey, actionHref) = Action(featured);
+                _featured = new MediaHero(featured.Title, featured.BackdropUrl ?? featured.PosterUrl, null, featured.Overview,
+                    actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured));
+            }
+            catch (ServiceUnavailableException)
+            {
+                // An optional Hero must never prevent local shelves from rendering.
+            }
+        }
 
         private async Task LoadRecommendationsAsync()
         {

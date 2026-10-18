@@ -35,7 +35,6 @@ function discover(landing = false) {
             querySelector: selector => selector === '.media-grid' ? grid : selector === '.discover-paging' ? paging
                 : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? paging.next
                 : selector === '[data-discover-recommendations]' ? recommendations ? { href: 'https://jularr.test/?handler=Recommendations' } : null
-                : selector === '#discover-featured' ? { replaceWith: value => slots.featured = value }
                 : selector === '#discover-recommendations' ? { replaceWith: value => slots.shelves = value } : null,
             querySelectorAll: () => cards,
             setAttribute(name, value) { this.attributes[name] = value; },
@@ -64,7 +63,7 @@ function discover(landing = false) {
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
         DOMParser: class { parseFromString(key) { return { querySelector: selector => {
             const value = pages.get(key);
-            return value?.featured ? selector === '#discover-featured' ? value.featured : value.shelves : value;
+            return value?.shelves ? selector === '#discover-recommendations' ? value.shelves : null : value;
         } }; } },
         history: { replaceState: (_, __, url) => { address = url.href; } },
         fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
@@ -155,15 +154,23 @@ test('recommendation fragments preserve local content and obsolete responses are
     const local = ui.active;
     assert.equal(ui.requests.length, 1);
     assert.equal(ui.requests[0].options.headers['X-Jularr-Fragment'], 'recommendations');
-    const providers = { featured: {}, shelves: {} };
+    const providers = { shelves: {} };
     await ui.answer(0, providers);
     assert.equal(ui.active, local);
     assert.equal(local.cards.length, 2);
-    assert.equal(local.slots.featured, providers.featured);
+    assert.equal(local.slots.shelves, providers.shelves);
 
     const obsolete = discover(true);
     obsolete.type('Matrix');
     assert.equal(obsolete.requests[0].options.signal.aborted, true);
     await obsolete.answer(0, providers);
-    assert.equal(obsolete.active.slots.featured, undefined);
+    assert.equal(obsolete.active.slots.shelves, undefined);
+});
+
+
+test('Hero never arrives in an asynchronous recommendations fragment', () => {
+    const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');
+    assert.match(source, /await LoadFeaturedAsync\(selected\)/);
+    assert.doesNotMatch(source, /discover-featured/);
+    assert.match(source, /if \(_featured is not null\)/);
 });

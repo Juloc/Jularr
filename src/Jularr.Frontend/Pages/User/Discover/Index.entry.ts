@@ -28,11 +28,9 @@ if (searchForm && searchInput && results) {
             const response = await fetch(link.href, { signal, headers: { Accept: 'text/html', 'X-Jularr-Fragment': 'recommendations' } });
             if (!response.ok || response.redirected) throw new Error('Unavailable recommendations');
             const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-            const featured = page.querySelector('#discover-featured');
             const shelves = page.querySelector('#discover-recommendations');
-            if (!featured || !shelves) throw new Error('Missing recommendations');
+            if (!shelves) throw new Error('Missing recommendations');
             if (current !== generation || signal.aborted) return;
-            results!.querySelector('#discover-featured')?.replaceWith(featured);
             results!.querySelector('#discover-recommendations')?.replaceWith(shelves);
             initializeShelves(results!);
         } catch {
