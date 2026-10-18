@@ -25,7 +25,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, (await first.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Version);
             Assert.AreEqual("43", await host.ScalarAsync("""SELECT "Value" FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 501 AND "Namespace" = 'tvdb'"""));
             Assert.AreEqual(true, await host.ScalarAsync("""SELECT "IsManual" FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 501 AND "Namespace" = 'tvdb'"""));
-            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT "EpisodeOffset" FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 501 AND "Namespace" = 'tvdb'"""));
+            Assert.AreEqual(0, await host.ScalarAsync("""SELECT "EpisodeOffset" FROM "WorkUnitExternalIdentities" WHERE "WorkUnitId" = 501 AND "Namespace" = 'tvdb'"""));
             Assert.AreEqual(52000L, await host.ScalarAsync("""SELECT "PositionMs" FROM "MediaProgress" WHERE "WorkUnitId" = 501"""));
             Assert.AreEqual(7m, await host.ScalarAsync("""SELECT "Number" FROM "WorkUnits" WHERE "Id" = 501"""));
 
