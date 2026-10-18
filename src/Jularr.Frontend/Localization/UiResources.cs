@@ -1097,6 +1097,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.import_source_unavailable", "Download folder is unreachable"),
             new("acquisition.outcome.import_storage_unavailable", "Storage became unavailable while importing"),
             new("acquisition.outcome.import_assignment_failed", "The copied files could not be fully assigned to the library. Download files were kept for recovery."),
+            new("acquisition.outcome.import_target_conflict", "All available import filenames are occupied. The existing library files were not overwritten."),
             new("acquisition.outcome.import_storage_full", "Library space is insufficient or could not be checked"),
             new("acquisition.connection.downloadStorage", "Completed download storage"),
             new("acquisition.connection.containerStorage", "Path inside the Jularr container"),

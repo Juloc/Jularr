@@ -138,6 +138,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 foreach (var group in placements.GroupBy(placement => placement.Group))
                 {
                     var stem = await FreeStemAsync(library, directory, group.First().TargetStem, group.Select(placement => placement.Extension).ToArray(), ct);
+                    if (stem is null)
+                    {
+                        await AttentionAsync(context, download.OperationId, "import_target_conflict", null, ct);
+                        return;
+                    }
+
                     foreach (var placement in group)
                     {
                         var relativePath = stem + placement.Extension;
@@ -204,9 +210,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         }
 
         // The first numbered alternative whose files are all free.
-        private static async Task<string> FreeStemAsync(StorageFiles library, string directory, string stem, IReadOnlyList<string> extensions, CancellationToken ct)
+        internal static async Task<string?> FreeStemAsync(StorageFiles library, string directory, string stem, IReadOnlyList<string> extensions, CancellationToken ct)
         {
-            for (var attempt = 1; ; attempt++)
+            for (var attempt = 1; attempt <= 99; attempt++)
             {
                 var candidate = LibraryNaming.Alternative(stem, attempt);
                 var free = true;
@@ -215,11 +221,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     free &= !await library.ExistsAsync(StoragePath.Combine(directory, candidate + extension), ct);
                 }
 
-                if (free || attempt == 99)
+                if (free)
                 {
                     return candidate;
                 }
             }
+
+            return null;
         }
 
         private static async Task<bool> IsDocumentAsync(StorageFiles source, string path, string extension, CancellationToken ct)
