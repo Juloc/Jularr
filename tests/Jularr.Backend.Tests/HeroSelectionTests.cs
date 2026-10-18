@@ -61,6 +61,22 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ContinueSlidesCountTowardTheMediaGroupBalance()
+        {
+            var items = new[]
+            {
+                Item("continue:1", "movies", isContinue: true),
+                Item("continue:2", "movies", isContinue: true)
+            }.Concat(Enumerable.Range(1, 10).Select(n => Item("movie:" + n, "movies")))
+                .Concat(Enumerable.Range(1, 10).Select(n => Item("book:" + n, "books")));
+
+            var chosen = HeroSelection.Choose(items, new Random(8));
+            Assert.AreEqual(8, chosen.Count);
+            Assert.AreEqual(2, chosen.Count(item => item.IsContinue));
+            Assert.IsTrue(chosen.Count(item => item.MediaGroup == "books") >= 3);
+        }
+
+        [TestMethod]
         public void IgnoresUnavailableSourcesAndUnidentifiedEntries()
         {
             var result = HeroSelection.Choose([
