@@ -7,10 +7,14 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.User.Playback.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
+using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
 
@@ -238,7 +242,6 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(5000L, await host.ScalarAsync("SELECT \"SizeBytes\" FROM \"StoredFiles\""));
         }
 
-
         [TestMethod]
         public async Task Playback_DirectSmbShare_StreamsRangesAndPreservesResume()
         {
@@ -288,6 +291,46 @@ namespace Jularr.Backend.Tests
             using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", capabilities);
             Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
             Assert.AreEqual(2_500L, (await resumed.Content.ReadFromJsonAsync<PlaybackPlanV1>())!.ResumePositionMs);
+        }
+
+        [TestMethod]
+        public async Task Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls()
+        {
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG") is not { Length: > 0 } ffmpeg)
+            {
+                Assert.Inconclusive("Set JULARR_TEST_FFMPEG to run real SMB-to-FFmpeg conversion.");
+                return;
+            }
+
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            var source = Path.Combine(storage.Path, "Film.mkv");
+            using (var generate = System.Diagnostics.Process.Start(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "testsrc=size=160x90:rate=12", "-f", "lavfi", "-i", "sine=frequency=440",
+                "-t", "14", "-c:v", "mpeg4", "-c:a", "ac3", "-shortest", source]))
+            {
+                Assert.IsNotNull(generate);
+                await generate.WaitForExitAsync();
+                Assert.AreEqual(0, generate.ExitCode);
+            }
+
+            using var share = new SmbShare(() => new SmbSession(new FakeSmbStore(storage.Path), () => { }), TimeProvider.System);
+            using var stream = new StorageStreamServer();
+            using var transcodes = new PlaybackTranscodes(new MediaTranscoder { ExecutablePath = ffmpeg },
+                Options.Create(new MediaOptions { TranscodeCachePath = cache.Path, MaxTranscodes = 1 }));
+            var session = Guid.NewGuid();
+            transcodes.Register(new PlaybackTranscodeSource(session, 7, stream.Open(new SmbStorageFiles(share, ""), "Film.mkv"),
+                0, 1, false, false, 14_000));
+
+            // FFmpeg reads via Jularr's loopback Range server backed by a real SMB file stream.
+            // The later segment restarts input seeking rather than merely replaying the first bytes.
+            var first = await transcodes.GetSegmentAsync(session, 7, 0, CancellationToken.None);
+            var sought = await transcodes.GetSegmentAsync(session, 7, 1, CancellationToken.None);
+            Assert.IsTrue(new FileInfo(first).Length > 188);
+            Assert.IsTrue(new FileInfo(sought).Length > 188);
+            Assert.AreEqual(0x47, File.ReadAllBytes(sought)[0]);
+            transcodes.Stop(session);
+            Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
         }
 
         private sealed class Clock : TimeProvider
