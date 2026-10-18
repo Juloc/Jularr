@@ -193,6 +193,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
             StringAssert.Contains(html, "The Matrix");
             StringAssert.Contains(html, "media-hero");
+            StringAssert.Contains(html, "data-hero-carousel=\"true\"");
+            StringAssert.Contains(html, "data-hero-slide-item=\"0\"");
+            // A single real feed candidate has no inert navigation buttons.
+            Assert.IsFalse(html.Contains("data-hero-direction=", StringComparison.Ordinal));
 
             // Native recommendation route stays usable, but no longer inserts Hero content.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
