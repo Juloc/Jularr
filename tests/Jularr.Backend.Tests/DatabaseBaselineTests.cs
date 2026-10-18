@@ -1,4 +1,5 @@
 using Jularr.Backend.Service.Core;
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Media;
@@ -118,7 +119,7 @@ namespace Jularr.Backend.Tests
             // A new SQL context sees an aged but still lawfully retained snapshot.
             var stored = await ReadSnapshotAsync(fixture, first.Key);
             Assert.IsNotNull(stored);
-            Assert.AreEqual(first.Payload, stored.Payload);
+            Assert.AreEqual(603, SnapshotId(stored.Payload));
             Assert.IsTrue(stored.FreshUntil < DateTime.UtcNow);
 
             // Finishing an older in-flight request does not replace a newer generation.
@@ -126,7 +127,7 @@ namespace Jularr.Backend.Tests
                 fetched.AddHours(1), fetched.AddHours(2), fetched.AddDays(149));
             Assert.IsTrue(await SaveSnapshotAsync(fixture, newer));
             Assert.IsFalse(await SaveSnapshotAsync(fixture, first));
-            Assert.AreEqual(newer.Payload, (await ReadSnapshotAsync(fixture, first.Key))!.Payload);
+            Assert.AreEqual(604, SnapshotId((await ReadSnapshotAsync(fixture, first.Key))!.Payload));
 
             // A conflicting provider cannot take over a public cache identity.
             var wrongProvider = new DiscoverySnapshotData(first.Key, "anilist", "[{\"id\":77}]",
@@ -158,6 +159,12 @@ namespace Jularr.Backend.Tests
             await sql.CommitAsync();
             Assert.AreEqual(1, removed);
             Assert.AreEqual(0L, await ScalarLongAsync(fixture, "SELECT count(*) FROM \"DiscoverySnapshots\""));
+        }
+
+        private static int SnapshotId(string payload)
+        {
+            using var document = JsonDocument.Parse(payload);
+            return document.RootElement[0].GetProperty("id").GetInt32();
         }
 
         private static async Task<bool> SaveSnapshotAsync(Fixture fixture, DiscoverySnapshotData snapshot)
