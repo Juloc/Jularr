@@ -2,8 +2,12 @@
 
 `Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql`. The host applies all baselines in installation order
-in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs));
-it never changes or migrates a database that has one.
+in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs)).
+`Schema.sql` records the installation's ordered schema history. Existing unversioned
+pre-release databases keep their current startup behavior and are not adopted or migrated.
+Explicitly versioned release schemas use the same startup owner for backup-first upgrades;
+see [release upgrades](../docs/DATABASE_UPGRADES.md).
+The public provider-owned DiscoverySnapshots cache is registered as version 2 in the canonical `DatabaseBaseline.Migrations` history using [one embedded SQL script](migrations/20261018_01_DiscoverySnapshots.sql). No parallel ledger, manual up/down script or automatic provider fetching is introduced.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
@@ -175,19 +179,3 @@ groups and transfers are outside this base-table slice.
 AccountSchemaTests verifies field/column coverage, nullability and PostgreSQL
 types, enum seeds, typed binding and representative auth constraints. Profile
 regression tests use this same baseline, never a second reduced schema.
-
-## Versioned Discovery snapshot schema
-
-[20261018_01_DiscoverySnapshots.up.sql](migrations/20261018_01_DiscoverySnapshots.up.sql)
-adds the shared, **public provider-feed-only** snapshot table, keyed by the entire provider/feed/locale/region/page scope. It records the fetch time, refresh boundary and an explicit **provider-specific legal retention deadline**. It does not store profile progress or turn transient provider titles into canonical Works. A snapshot must be validated and replaced atomically by its future cache owner; this migration does **not** enable fetching or modify existing provider behavior.
-
-Fresh installations receive the same upgrade SQL during the existing **empty-database-only** bootstrap transaction. Jularr does **not** apply migrations to databases with existing tables, including when a newer image is started. Do not confuse schema presence on new installations with an upgrade of existing instances.
-
-For an **existing installation**, the following steps are manual and require downtime, a verified backup and a separate operator choice:
-
-1. Stop Jularr and all workers using this database. Take a full PostgreSQL custom-format backup with `pg_dump --format=custom --file=jularr-before-discovery.dump --dbname="$JULARR_DATABASE_URL"` (using the database connection string for your installation). Verify that the dump is readable with `pg_restore --list jularr-before-discovery.dump`; preferably test restoring it into an isolated database.
-2. Review [the up script](migrations/20261018_01_DiscoverySnapshots.up.sql) and its table-name collision check. Run `psql -X -v ON_ERROR_STOP=1 --dbname="$JULARR_DATABASE_URL" --file=database/migrations/20261018_01_DiscoverySnapshots.up.sql`. The script is a single transaction: an error rolls back the schema change and must be investigated rather than worked around.
-3. Verify that `"SchemaMigrations"` records `20261018_01_DiscoverySnapshots`, and the table has its expected columns/indexes. Only then restart Jularr. This schema addition alone does not activate a new provider cache.
-4. If reversal is necessary, stop Jularr and run [the down script](migrations/20261018_01_DiscoverySnapshots.down.sql) the same way. **The rollback deletes only regenerable DiscoverySnapshots cache entries** and its migration-ledger row; it preserves Works, Profiles and other application tables. For a failed wider upgrade, restore the tested full backup to a **separate** database and choose a controlled cutover, not an automatic overwrite of the live instance.
-
-The upgrade is designed to fail on unexpected existing tables or a repeated application, not silently alter an unknown schema. The matching isolated PostgreSQL tests exercise fresh install, upgrade of existing account data, rollback/reapply, double-apply safety and an incompatible-table failure. The runtime cache read/write, provider refresh policy and pruning belong to #595/#879 in subsequent slices; migration approval does not imply provider licensing approval.

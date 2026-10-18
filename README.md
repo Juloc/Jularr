@@ -371,6 +371,11 @@ nur einer ausdrücklich gewählten einmaligen Übernahme (`/Admin/Acquisition/Ta
 Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
 
+Der Update-Pfad ab dem ersten offiziellen Clean-Start-Release verwendet eine versionierte
+Schemahistorie und erstellt vor unterstützten Migrationen ein Backup. Scheitert es,
+startet keine Schemaänderung. Bestehende unversionierte Testdatenbanken werden nicht
+automatisch übernommen. Ablauf und verbleibende Release-Abnahme: [Datenbank-Updates](docs/DATABASE_UPGRADES.md).
+
 Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
 Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch alle
 `Backup:IntervalHours` (Standard 24, 0 aus), die neuesten `Backup:Keep` (Standard 7, mindestens 1) bleiben.

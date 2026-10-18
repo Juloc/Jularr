@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
@@ -33,6 +34,7 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Tvdb;
 using Jularr.Integrations.Logic.Usenet;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -97,7 +99,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
-            services.AddHostedService(_ => new DatabaseBaseline(connectionString));
+            services.AddHostedService(provider => new DatabaseBaseline(connectionString, provider.GetRequiredService<IOptions<BackupOptions>>().Value, provider.GetRequiredService<PostgresBackupTools>()));
 
             // Persistent state lives under one folder, /data in the image; every feature works without further settings.
             var data = configuration["DataPath"] is { Length: > 0 } dataPath ? dataPath
@@ -300,6 +302,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<MediaServerClient>(services, 30, 32);
             AddClient<NewznabClient>(services, 30, 16);
             AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb);
+            AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb);
             AddClient<SabnzbdClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);

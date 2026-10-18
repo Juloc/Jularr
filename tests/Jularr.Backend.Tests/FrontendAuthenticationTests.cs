@@ -62,18 +62,19 @@ namespace Jularr.Backend.Tests
             // Native actions, encoded text.
             writer.GetStringBuilder().Clear();
             var card = new MediaCard(assets, "<Title>", "/Details/1", null, "2026", "media.state.InProgress", "media.continue", "/Player/2")
-                .Availability(availability).Continue(30000, 90000).Trailer("k4xGqY5IDBE");
+                .Availability(availability).Continue(30000, 90000);
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
             StringAssert.Contains(html, "media-availability-badge--partialotheraudio");
             StringAssert.Contains(html, "href=\"/Player/2\"");
-            StringAssert.Contains(html, texts["media.details"]);
+            StringAssert.Contains(html, "class=\"media-card__title\"");
+            StringAssert.Contains(html, "class=\"media-card__details\"");
             StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\"");
-            StringAssert.Contains(html, "data-trailer-label=\"" + texts["media.preview.playTrailer"] + "\"");
+            Assert.IsFalse(html.Contains("data-trailer-id", StringComparison.Ordinal));
+            Assert.AreEqual(1, Regex.Matches(html, "media-card__actions").Count);
             foreach (var omitted in new[] { "media-card__series", "media-card__genres", "media-card__languages", "media-card__remaining", "<iframe", "disabled=\"disabled\"" })
                 Assert.IsFalse(html.Contains(omitted, StringComparison.Ordinal), omitted);
-            Assert.ThrowsExactly<ArgumentException>(() => card.Trailer("../../bad"));
 
             // Progression has no invented duration.
             writer.GetStringBuilder().Clear();
@@ -87,7 +88,7 @@ namespace Jularr.Backend.Tests
             // Preview keeps real fallback links.
             writer.GetStringBuilder().Clear();
             card.Preview("preview-test").WriteTo(writer, HtmlEncoder.Default, texts);
-            Assert.AreEqual(2, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
+            Assert.AreEqual(1, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
             writer.GetStringBuilder().Clear();
             availability.WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.AreEqual(symbol, writer.ToString());
@@ -227,7 +228,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
             StringAssert.Contains(html, "data-media-card=\"true\"");
-            StringAssert.Contains(html, "media-card__actions");
+            StringAssert.Contains(html, "media-card__title");
+            StringAssert.Contains(html, "media-card__details");
             StringAssert.Contains(html, "data-shelf-direction=\"next\"");
             StringAssert.Contains(html, "class=\"media-shelf__items\" tabindex=\"0\" role=\"region\"");
             foreach (var state in new[] { MediaAvailabilityState.Available, MediaAvailabilityState.Partial, MediaAvailabilityState.Missing, MediaAvailabilityState.Downloading, MediaAvailabilityState.Searching })
@@ -235,6 +237,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
             Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
             StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
+            // MediaPreview still supports trailers independently of the simplified MediaCard.
             StringAssert.Contains(html, "data-trailer-id=\"k4xGqY5IDBE\"");
             StringAssert.Contains(html, "#icon-close");
             Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));

@@ -156,26 +156,47 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            var assets = await context.ExecuteBatchAsync(async (ctx, token) =>
+            if (media.Count == 0)
             {
-                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, StoredFileLogic.StoredTime(DateTime.UtcNow), JsonSerializer.Serialize(imported)), token);
-                var assigned = new List<long>();
-                foreach (var (relativePath, placement) in media)
+                await AttentionAsync(context, download.OperationId, "import_assignment_failed", null, ct);
+                return;
+            }
+
+            IReadOnlyList<long> assets;
+            try
+            {
+                assets = await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
-                    if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token) is { } file)
+                    await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, StoredFileLogic.StoredTime(DateTime.UtcNow), JsonSerializer.Serialize(imported)), token);
+                    var assigned = new List<long>();
+                    foreach (var (relativePath, placement) in media)
                     {
+                        var file = await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token);
+                        if (file is null)
+                        {
+                            // Never complete an import if the library inventory did not accept a media file.
+                            throw new ImportAssignmentException();
+                        }
+
                         assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
                             placement.ParentUnitNumber, download.GamePlatformId, false), token)).Id);
                         await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.Imported, operationId: download.OperationId, storedFileId: file.Id), token);
                     }
-                }
 
-                await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), token);
+                    await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), token);
 
-                // The scan analyses the new streams.
-                await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), token);
-                return assigned;
-            }, ct);
+                    // The scan analyses the new streams.
+                    await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), token);
+                    return assigned;
+                }, ct);
+            }
+            catch (ImportAssignmentException)
+            {
+                // The database transaction rolls back; keep the download for manual-safe recovery.
+                await AttentionAsync(context, download.OperationId, "import_assignment_failed", null, ct);
+                return;
+            }
+
             await replacements.ReplaceAsync(context, assets, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target), ct);
 
             // A connected Plex shows the title right away.
@@ -222,6 +243,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 await ctx.FailDownloadAsync(new DownloadFailureData(operationId, reasonKey, nextSearchAt), token);
                 return true;
             }, ct);
+
+        private sealed class ImportAssignmentException : Exception
+        {
+        }
 
         private sealed class ImportedFile
         {

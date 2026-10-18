@@ -136,7 +136,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     HomeShelfType.ContinueReading => ContinueShelf("media.continueReading",
                         texts.CanRead() ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
                     HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(assets, item.Title,
-                        "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
+                        "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, null, "media.state." + item.MediaStateTypeId)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]),
                     _ => Recommendations(selected?.Slug)
                 });
@@ -338,7 +338,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Card(DiscoverItemV1 item)
         {
             var (actionKey, actionHref) = Action(item);
-            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, null, "media.state." + item.MediaStateTypeId, actionKey, actionHref);
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
         }
@@ -346,7 +346,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         // A known title opens its Work; any other opens its request.
         private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
-            var meta = string.Join(" · ", new[] { item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), item.Author }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            var meta = item.Author;
             if (item.WorkId is { } workId)
             {
                 return new MediaCard(assets, item.Title, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), item.PosterUrl, meta, "discover.known")

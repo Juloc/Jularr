@@ -170,6 +170,38 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task CompletedSabImport_DoesNotFinishWhenDatabaseSkipsTheMediaAssignment()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            var sourceFile = Path.Combine(completed, Feature + ".mkv");
+            File.WriteAllBytes(sourceFile, new byte[4096]);
+            await host.Fixture.RunSqlAsync("""
+                CREATE FUNCTION test_skip_imported_media() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END;';
+                CREATE TRIGGER test_skip_imported_media BEFORE INSERT ON "StoredFiles"
+                    FOR EACH ROW EXECUTE FUNCTION test_skip_imported_media();
+                """);
+
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}"""
+                .Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual("import_assignment_failed", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.IsTrue(File.Exists(sourceFile), "A DB assignment failure must never delete a completed SAB download.");
+        }
+
+        [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
             using var storage = new TemporaryDirectory();
