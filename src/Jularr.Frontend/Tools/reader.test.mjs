@@ -30,15 +30,22 @@ test('player planning network failure displays the localized status', async () =
     const source = readFileSync(new URL('../Modules/Player/player.entry.ts', import.meta.url), 'utf8').replace('import "./player.scss";', '');
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
     const status = { hidden: true, textContent: '' };
+    let requests = 0;
     const player = {
         dataset: { startUrl: '/start', antiforgery: 'test' },
-        querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' } : {}
+        classList: { toggle() {}, contains: () => false },
+        querySelectorAll: () => [],
+        querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' }
+            : selector === '#player-sidebar' ? null : { addEventListener() {}, setAttribute() {} }
     };
     runInNewContext(code, {
-        exports: {}, require: () => ({}), document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }) },
-        fetch: () => Promise.reject(new Error('Offline'))
+        exports: {}, require: () => ({}),
+        document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }), addEventListener() {} },
+        matchMedia: () => ({ matches: false, addEventListener() {} }),
+        fetch: () => { requests++; return Promise.reject(new Error('Offline')); }
     });
     await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests, 1, 'the actual planning request must fail, not an incomplete UI fixture');
     assert.equal(status.hidden, false);
     assert.equal(status.textContent, 'Localized failure');
 });
