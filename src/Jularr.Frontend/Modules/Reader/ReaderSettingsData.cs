@@ -1,0 +1,36 @@
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields;
+
+namespace Jularr.Frontend.Modules.Reader
+{
+    // Presentation-only device preferences; never a second reading-progress store.
+    public sealed class ReaderSettingsData : BaseData
+    {
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Preset { get; } = "book";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Mode { get; } = "paged";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Layout { get; } = "auto";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Direction { get; } = "ltr";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Surface { get; } = "paper";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Colour))]
+        public string Colour { get; } = "#f7f3ec";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Animation { get; } = "system";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Size))]
+        public int Size { get; } = 20;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Spacing))]
+        public int Spacing { get; } = 165;
+    }
+
+    public static class ReaderSettingsFields
+    {
+        public static readonly StringField Choice = new() { MaximumLength = 16 };
+        public static readonly StringField Colour = new() { MinimumLength = 7, MaximumLength = 7 };
+        public static readonly IntField Size = new() { Minimum = 14, Maximum = 40 };
+        public static readonly IntField Spacing = new() { Minimum = 120, Maximum = 220 };
+    }
+}

@@ -109,6 +109,7 @@ namespace Jularr.Frontend.Framework
 
     // Small HTML primitives are kept together; feature components own their renderers.
     public sealed class Div(params IUiComponent[] children) : HtmlElement("div", children);
+    public sealed class Aside(params IUiComponent[] children) : HtmlElement("aside", children);
     public sealed class Svg(params IUiComponent[] children) : HtmlElement("svg", children);
     public sealed class Use() : HtmlElement("use");
     public sealed class Polyline() : HtmlElement("polyline");

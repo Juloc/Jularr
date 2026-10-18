@@ -23,14 +23,20 @@ namespace Jularr.Frontend.Framework
         private bool _hasWideField;
         private readonly string _prefix;
         private readonly string? _antiforgeryToken;
+        private readonly bool _local;
 
-        public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null)
-            : this(define, action, antiforgeryToken, data, error, "", true)
+        public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null, bool local = false)
+            : this(define, action, antiforgeryToken, data, error, "", true, local)
         {
         }
 
-        private Form(Action<Form<TData>> define, string? action, string? antiforgeryToken, TData? data, ServiceError? error, string prefix, bool ownsToken)
+        private Form(Action<Form<TData>> define, string? action, string? antiforgeryToken, TData? data, ServiceError? error, string prefix, bool ownsToken, bool local)
         {
+            if (local && (action is not null || antiforgeryToken is not null))
+            {
+                throw new ArgumentException("Local fields cannot declare a server action or antiforgery token.", nameof(local));
+            }
+
             // Bind only local POST actions.
             if (action is not null && (!action.StartsWith('/') || action.StartsWith("//") || action.Any(character => char.IsControl(character) || character == '\\')
                 || string.IsNullOrWhiteSpace(antiforgeryToken)))
@@ -44,6 +50,7 @@ namespace Jularr.Frontend.Framework
             _error = error;
             _prefix = prefix;
             _antiforgeryToken = antiforgeryToken;
+            _local = local;
             if (action is not null && ownsToken)
             {
                 _content.Add(new Input().Attribute("type", "hidden").Attribute("name", "__RequestVerificationToken").Attribute("value", antiforgeryToken!));
@@ -62,7 +69,7 @@ namespace Jularr.Frontend.Framework
                 var item = rows![index];
                 if (include is not null && !include(item)) continue;
                 var child = new Form<TItem>(form => define(form, item), _action, _antiforgeryToken, item, _error,
-                    _prefix + property.Name + "[" + index.ToString(CultureInfo.InvariantCulture) + "].", false);
+                    _prefix + property.Name + "[" + index.ToString(CultureInfo.InvariantCulture) + "].", false, _local);
                 if (child._actions.Count > 0) throw new InvalidOperationException("Row fields share the parent's submit action.");
                 if (child._visibleFields > 0) _target.Add(new Div([.. child._content]).Class("ui-form__row"));
                 else _target.AddRange(child._content);
@@ -80,6 +87,16 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null) =>
             Add(field, FieldControl.Password, labelKey, autocomplete, help);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
+
+        public Form<TData> Color(Expression<Func<TData, string>> selector, string labelKey)
+        {
+            var field = Declare(selector, FieldControl.Text, labelKey);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "color");
+            if (Value(field) is { } value) input.Attribute("value", value);
+            Configure(field, input);
+            AddField(field, input);
+            return this;
+        }
 
         // A file field makes the form a multipart upload.
         public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
@@ -166,6 +183,7 @@ namespace Jularr.Frontend.Framework
         private void RefreshButton(string? action, string? labelKey)
         {
             if (action is null) return;
+            if (_local) throw new InvalidOperationException("Local fields cannot refresh from a server action.");
             if (labelKey is null || !action.StartsWith('/') || action.StartsWith("//")) throw new ArgumentException("Refresh requires a local action and a label.");
             _target.Add(new Button(new Text(labelKey)).Attribute("type", "submit").Attribute("formaction", action)
                 .Attribute("formnovalidate", "formnovalidate").Attribute("data-form-refresh-submit", action));
@@ -181,7 +199,7 @@ namespace Jularr.Frontend.Framework
             {
                 var input = new Input().Attribute("type", "checkbox").Attribute("name", field.Name).Attribute("value", option.Value);
                 if (selected.Contains(option.Value)) input.Attribute("checked", "checked");
-                if (_action is null) input.Attribute("disabled", "disabled");
+                if (_action is null && !_local) input.Attribute("disabled", "disabled");
                 return new HtmlLabel(input, new Span(new ValueText(option.Label))).Class("ui-checkbox");
             }).ToArray<IUiComponent>();
             var content = new List<IUiComponent> { new HtmlLegend(new Text(field.LabelKey), new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info")), new Div(choices).Class("ui-choices") };
@@ -237,7 +255,7 @@ namespace Jularr.Frontend.Framework
                 var input = new Input().Attribute("type", column.Single ? "radio" : "checkbox").Attribute("name", column.Name).Attribute("value", value);
                 if (column.Selected.Contains(value) || none && column.Selected.Count == 0) input.Attribute("checked", "checked");
                 input.Attribute("aria-labelledby", RowId(row) + " " + ColumnId(column));
-                if (_action is null) input.Attribute("disabled", "disabled");
+                if (_action is null && !_local) input.Attribute("disabled", "disabled");
                 return new HtmlCell(input);
             }
 
@@ -310,6 +328,7 @@ namespace Jularr.Frontend.Framework
 
         public Form<TData> Submit(Button button)
         {
+            if (_local) throw new InvalidOperationException("Local fields cannot declare a submit action.");
             if (_action is null) button.Disabled();
             else button.Submit();
 
@@ -327,8 +346,11 @@ namespace Jularr.Frontend.Framework
 
             // Buttons close the form; a single short field, or none, sits beside its buttons.
             if (_actions.Count > 0) content.Add(new Div([.. _actions]).Class("ui-form__actions"));
-            var form = new HtmlForm([.. content]).Class(_visibleFields <= 1 && !_hasWideField ? "ui-form ui-form--inline" : "ui-form")
+            // Local preferences are an editable field group, never a submitting form.
+            HtmlElement container = _local ? new Div([.. content]) : new HtmlForm([.. content]);
+            var form = container.Class(_visibleFields <= 1 && !_hasWideField ? "ui-form ui-form--inline" : "ui-form")
                 .Attribute("data-form-kind", typeof(TData).FullName!);
+            if (_local) form.Attribute("data-form-local", "");
             if (_action is not null)
             {
                 form.Attribute("action", _action).Attribute("method", "post");
@@ -393,7 +415,7 @@ namespace Jularr.Frontend.Framework
         private void Configure(BaseField field, HtmlElement input)
         {
             // Use canonical field metadata.
-            if (_action is null) input.Attribute("disabled", "disabled");
+            if (_action is null && !_local) input.Attribute("disabled", "disabled");
             // A list may stay empty; it is required only to be sent.
             if (field.Required && field.Control != FieldControl.Checkbox && !field.ValueType.IsArray) input.Attribute("required", "required");
             if (field.MinimumLength is { } minimumLength) input.Attribute("minlength", minimumLength.ToString(CultureInfo.InvariantCulture));

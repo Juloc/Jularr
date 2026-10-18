@@ -117,7 +117,7 @@ function toHex(color: Color): string {
     }).join("");
 }
 
-function contrast(first: string, second: string): number {
+export function contrast(first: string, second: string): number {
     const luminance = (hex: string) => { const [r, g, b] = rgb(hex).map(linear); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
     const values = [luminance(first), luminance(second)].sort((a, b) => b - a);
     return (values[0] + 0.05) / (values[1] + 0.05);

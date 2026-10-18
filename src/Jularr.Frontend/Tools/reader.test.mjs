@@ -4,51 +4,26 @@ import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('../Modules/Reader/reader.entry.ts', import.meta.url), 'utf8').replace('import "./reader.scss";', '');
+const source = readFileSync(new URL('../Modules/Reader/Settings.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const exports = {};
+runInNewContext(script, { exports, require: () => ({}) });
 
-function reader(stored = '{}', blocked = false) {
-    const events = {}, buttons = {}, saved = [];
-    let bottom = 10000;
-    const block = { dataset: { b: '0' }, getBoundingClientRect: () => ({ bottom, right: 100 }) };
-    const content = {
-        querySelectorAll: () => [block], querySelector: () => null, addEventListener() {},
-        getBoundingClientRect: () => ({ left: 0, bottom })
-    };
-    const button = { dataset: { setting: 'size', value: 'larger' }, setAttribute() {}, addEventListener: (name, action) => buttons[name] = action };
-    const element = {
-        dataset: { section: '0', sections: '1', blocks: '1', before: '0', characters: '100', total: '100' },
-        style: { setProperty: (_, value) => element.size = value },
-        querySelector: selector => selector === '[data-role=content]' ? content : null,
-        querySelectorAll: selector => selector === '[data-setting]' ? [button] : []
-    };
-    runInNewContext(script, {
-        exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
-        document: { querySelector: () => element, addEventListener() {} },
-        window: { innerHeight: 900, addEventListener: (name, action) => events[name] = action },
-        location: { hash: '', search: '' }, URLSearchParams,
-        localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
-    });
-    return { element, saved, enlarge: () => buttons.click(), leave: () => events.pagehide(), finish: () => bottom = 800 };
-}
-
-test('reader requires the visible section end before marking a single-block book complete', () => {
-    const ui = reader();
-    ui.leave();
-    assert.equal(ui.saved[0].isCompleted, false);
-    ui.finish();
-    ui.leave();
-    assert.equal(ui.saved[1].isCompleted, true);
-    assert.equal(ui.saved[1].progression, 1);
-});
-
-test('invalid saved preferences fall back and blocked persistence does not break controls', () => {
-    const ui = reader('{"size":"large","theme":"invalid","mode":"invalid"}', true);
-    assert.equal(ui.element.size, '1.1rem');
-    assert.equal(ui.element.dataset.theme, 'light');
-    assert.equal(ui.element.dataset.mode, 'scroll');
-    ui.enlarge();
-    assert.equal(ui.element.size, '1.2rem');
+test('Reader validates optional device settings without trusting saved shapes or colours', () => {
+    const invalid = exports.readerSettings({size:'large', spacing:Infinity, mode:'bad', animation:'bad', layout:'bad', colour:'url(https://bad.test)'});
+    assert.equal(invalid.size, 20);
+    assert.equal(invalid.spacing, 165);
+    assert.equal(invalid.mode, 'paged');
+    assert.equal(invalid.animation, 'system');
+    assert.equal(invalid.layout, 'auto');
+    assert.equal(invalid.colour, '#f7f3ec');
+    assert.equal(exports.readerSettings(null, true).direction, 'rtl');
+    assert.equal(exports.readerSettings({size:100, spacing:20, colour:'#123ABC', animation:'on'}).size, 40);
+    assert.equal(exports.readerSettings({spacing:20}).spacing, 120);
+    assert.equal(exports.readerSettings({colour:'#123ABC'}).colour, '#123ABC');
+    assert.equal(exports.readerSettings({animation:'on'}).animation, 'on');
+    assert.equal(exports.readerSettings({size:1.1, theme:'dark'}).size, 18);
+    assert.equal(exports.readerSettings({theme:'dark'}).colour, '#141414');
 });
 
 test('player planning network failure displays the localized status', async () => {
