@@ -90,7 +90,8 @@ namespace Jularr.Backend.Tests
             await using var fixture = await Fixture.CreateAsync();
             await fixture.RunSqlAsync("CREATE TABLE \"DiscoverySnapshots\" (\"Key\" integer PRIMARY KEY);");
 
-            await Assert.ThrowsExactlyAsync<PostgresException>(() => fixture.RunSqlAsync(await MigrationSqlAsync("up")));
+            var up = await MigrationSqlAsync("up");
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => fixture.RunSqlAsync(up));
             Assert.AreEqual(0L, await ScalarLongAsync(fixture,
                 "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = current_schema() AND tablename = 'SchemaMigrations'"));
             Assert.AreEqual(1L, await ScalarLongAsync(fixture,
