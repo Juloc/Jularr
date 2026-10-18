@@ -8,6 +8,15 @@ namespace Jularr.Frontend.Framework
     {
         private long? _positionMs;
         private long? _durationMs;
+        private bool _compact;
+        private bool _current;
+
+        public EpisodeCard Compact(bool current = false)
+        {
+            _compact = true;
+            _current = current;
+            return this;
+        }
 
         public EpisodeCard Progress(long? positionMs, long? durationMs)
         {
@@ -27,10 +36,10 @@ namespace Jularr.Frontend.Framework
                 art.Add(new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes))).Class("episode-card__runtime"));
             }
 
-            if (_positionMs is > 0 and { } position && _durationMs is > 0 and { } duration)
+            if ((_positionMs is > 0 || _current) && _durationMs is > 0 and { } duration)
             {
                 art.Add(new Progress().Attribute("max", duration.ToString(CultureInfo.InvariantCulture))
-                    .Attribute("value", Math.Clamp(position, 0, duration).ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", texts["media.progress"]).Class("episode-card__progress"));
+                    .Attribute("value", Math.Clamp(_positionMs ?? 0, 0, duration).ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", texts["media.progress"]).Class("episode-card__progress"));
             }
 
             // The link names its action alone: play, or continue at the stored position.
@@ -41,15 +50,17 @@ namespace Jularr.Frontend.Framework
             }
 
             var still = new Div([.. art]).Class("episode-card__art");
-            new Article(
+            var card = new Article(
                 still,
                 new Div(
                     new Span(new ValueText(label)).Class("episode-card__label"),
                     title is null ? new Span() : new H3(new ValueText(title)).Class("episode-card__title"),
-                    overview is null ? new Span() : new P(new ValueText(overview)).Class("episode-card__overview"),
+                    overview is null || _compact ? new Span() : new P(new ValueText(overview)).Class("episode-card__overview"),
                     new Span(new Text(stateKey)).Class("state-chip state-chip--" + stateKey[(stateKey.LastIndexOf('.') + 1)..].ToLowerInvariant())
                 ).Class("episode-card__body")
-            ).Class("episode-card").WriteTo(writer, encoder, texts);
+            ).Class(_compact ? "episode-card episode-card--compact" : "episode-card");
+            if (_current) card.Attribute("aria-current", "true");
+            card.WriteTo(writer, encoder, texts);
         }
 
         private sealed class Article(params IUiComponent[] children) : HtmlElement("article", children);
