@@ -19,12 +19,18 @@
 - Optimize effort: targeted file reads and tests, reuse existing context and owners, avoid repeated repository-wide scans, stop unproductive loops, keep PRs small. Never claim a feature is finished without evidence.
 - For audit, interview or planning requests, perform no code changes unless explicitly authorized. For issue/PR/branch cleanup, classify and recommend first; never close, delete, retarget, merge or discard existing work without explicit item-specific authorization.
 
+## Legacy feature preservation
+
+- Old Phase A/Phase B/clean-cut milestones are historical planning labels, not authorization gates or automatic implementation requirements. Plan and prioritize by owner-approved features, issues and acceptance criteria, not the former phases.
+- Before retiring any old plan or deleting/closing its associated issue, PR, branch or document, inventory the relevant functionality and approved decisions from the previous Jularr code (including `dev`/`main`) and historic specifications; compare each capability with `clean-start`. Record a verifiable mapping: implemented and tested in `clean-start`, or missing/partial with an open, linked GitHub issue. Preserve prior decisions and dependencies, and get owner confirmation where intent is ambiguous.
+- Do not declare legacy feature preservation complete until the audit identifies no untracked functionality or agreed feature. Record missing items as issues without automatically implementing them; owner separately prioritizes and approves implementation.
+
 ## Scope and safety
 
 - Extend the canonical owner; do not add parallel business rules or unnecessary abstractions.
 - Preserve unrelated and uncommitted changes. Do not reset, delete or overwrite user work without explicit authorization.
 - Never expose or commit secrets. Do not change an active database; use isolated databases for tests.
-- Discuss framework limitations and new dependencies before adding workarounds. Frontend owns the single web host and invokes Services only. Phase B remains stopped; no clean-cut migrations or active-database changes.
+- Discuss framework limitations and new dependencies before adding workarounds. Frontend owns the single web host and invokes Services only. Do not modify active databases or run destructive migrations without an individually approved migration plan, verified backups, rollback and isolated tests.
 
 ## Validation and Git
 
