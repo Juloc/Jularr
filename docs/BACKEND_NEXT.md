@@ -81,7 +81,7 @@ and commit together. No migration, active-database installation or extra server.
   `DataPath/translation`), with translated sections shared on the server. Retro games play
   through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
-  a Jularr backup restore; migration stays with the stopped Phase B; the AI step waits
+  a Jularr backup restore; existing-instance migration remains a separately approved and issue-tracked future capability; the AI step waits
   for its own package.
 - Owner decisions of 14 October 2026: order is the running Arr+ packages, then Playwright
   browser and end-to-end tests (agents check important changes with them), then K24 and
@@ -171,8 +171,8 @@ The owner requires the following coverage beyond the first connected pages:
 
 [ALPHA90_RECOVERY_PLAN.md](ALPHA90_RECOVERY_PLAN.md) is the owner's recovery/parity reference, not a complete
 specification of extensions. These targets are not implemented capability claims.
-Latest decisions, fresh schema contracts, dependency approvals and the stopped
-Phase B still apply; legacy parity does not authorize active-database migrations.
+Latest decisions, fresh schema contracts and dependency approvals still apply. Historical
+phase labels are not development gates; legacy parity alone does not authorize active-database migrations.
 
 ## Remaining decisions and prerequisites
 
