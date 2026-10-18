@@ -15,7 +15,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Import_KnownImdbWork_ReusesItsUnitsAndProgress()
         {
-            await using var host = await CreateHostAsync();
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'Example Show');
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (100, 'imdb', 'tt39551287');
@@ -38,7 +39,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Import_TwoConflictingProviderWorks_BlocksBeforeAnyWrite()
         {
-            await using var host = await CreateHostAsync();
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'First'), (101, 2, 'Second');
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
@@ -53,7 +55,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Import_DifferentMediaTypeWithSameImdbId_DoesNotMerge()
         {
-            await using var host = await CreateHostAsync();
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 1, 'Movie');
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (100, 'imdb', 'tt39551287');
@@ -66,7 +69,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Import_ConflictingExistingTmdbId_LeavesManualIdentityIntact()
         {
-            await using var host = await CreateHostAsync();
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'Show');
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value", "IsManual")
@@ -77,9 +81,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("987", await host.ScalarAsync("""SELECT "Value" FROM "WorkExternalIdentities" WHERE "WorkId" = 100 AND "Namespace" = 'tmdb_tv'"""));
         }
 
-        private static async Task<Host> CreateHostAsync()
+        private static async Task<Host> CreateHostAsync(string storagePath)
         {
-            var host = await LibraryTests.CreateHostAsync(new LibraryTests.TemporaryDirectory().Path,
+            var host = await LibraryTests.CreateHostAsync(storagePath,
                 services: services => services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTmdb()));
             var provider = (long)(await host.ScalarAsync("""SELECT "Id" FROM "Providers" WHERE "Key" = 'tmdb'"""))!;
             using var secret = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1("eyJ-test-identity-token"));
