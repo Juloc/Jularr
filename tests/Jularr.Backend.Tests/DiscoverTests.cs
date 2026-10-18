@@ -194,12 +194,12 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "The Matrix");
             StringAssert.Contains(html, "media-hero");
 
-            // Native recommendation route stays usable.
+            // Native recommendation route stays usable, but no longer inserts Hero content.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
             html = await recommendations.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
-            StringAssert.Contains(html, "media-hero");
+            Assert.IsFalse(html.Contains("media-hero", StringComparison.Ordinal));
             StringAssert.Contains(html, "/Discover/movies/603");
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
