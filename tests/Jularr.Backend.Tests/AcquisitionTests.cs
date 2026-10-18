@@ -151,6 +151,8 @@ namespace Jularr.Backend.Tests
         {
             const string status = """{"status":{"completedir":"/downloads/complete"}}""";
             Assert.AreEqual("/downloads/complete", SabnzbdClient.ParseCompletedFolder(status));
+            Assert.AreEqual("/downloads/complete/default", SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[{"name":"*","dir":"default"}]}}""", "*"));
             Assert.AreEqual("/downloads/complete/tv", SabnzbdClient.ParseCompletedFolder(status,
                 """{"config":{"categories":[{"name":"tv","dir":"tv"}]}}""", "tv"));
             Assert.AreEqual("/other/completed", SabnzbdClient.ParseCompletedFolder(status,
@@ -1621,7 +1623,7 @@ namespace Jularr.Backend.Tests
             public string Queue { get; set; } = EmptyQueue;
             public string History { get; set; } = """{"history":{"slots":[]}}""";
             public string Status { get; set; } = """{"status":{"completedir":"/downloads/complete"}}""";
-            public string CategoryConfig { get; set; } = """{"config":{"categories":[{"name":"movies","dir":"movies"},{"name":"tv","dir":"tv"}]}}""";
+            public string CategoryConfig { get; set; } = """{"config":{"categories":[{"name":"*","dir":""},{"name":"movies","dir":"movies"},{"name":"tv","dir":"tv"}]}}""";
 
             public const string PlexToken = "plex-server-token";
             public List<string> PlexRequests { get; } = [];

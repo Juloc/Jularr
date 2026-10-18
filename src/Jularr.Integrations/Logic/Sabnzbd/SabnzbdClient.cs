@@ -44,10 +44,9 @@ namespace Jularr.Integrations.Logic.Sabnzbd
         {
             using var status = await SendAsync(connection, [new("mode", "status"), new("skip_dashboard", "1")], ct);
             var statusJson = await RequireBodyAsync(status, ct);
-            if (string.IsNullOrWhiteSpace(category) || category == "*") return ParseCompletedFolder(statusJson);
-
+            // Even the default '*' category can have its own configured target folder.
             using var config = await SendAsync(connection, [new("mode", "get_config"), new("section", "categories")], ct);
-            return ParseCompletedFolder(statusJson, await RequireBodyAsync(config, ct), category);
+            return ParseCompletedFolder(statusJson, await RequireBodyAsync(config, ct), string.IsNullOrWhiteSpace(category) ? "*" : category);
         }
 
         internal static string ParseCompletedFolder(string statusJson, string? configJson = null, string? category = null)
@@ -56,9 +55,12 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             if (!status.RootElement.TryGetProperty("status", out var details))
                 throw new SabnzbdException("SABnzbd did not provide a completed download folder.");
             var root = AbsoluteFolder(ReadString(details, "completedir"));
-            if (string.IsNullOrWhiteSpace(category) || category == "*") return root;
-
-            if (configJson is null) throw new SabnzbdException("SABnzbd category configuration is missing.");
+            if (configJson is null)
+            {
+                if (category is null) return root;
+                throw new SabnzbdException("SABnzbd category configuration is missing.");
+            }
+            category = string.IsNullOrWhiteSpace(category) ? "*" : category;
             using var config = JsonDocument.Parse(configJson);
             if (!config.RootElement.TryGetProperty("config", out var settings)
                 || !settings.TryGetProperty("categories", out var categories) || categories.ValueKind != JsonValueKind.Array)
