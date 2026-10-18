@@ -41,6 +41,13 @@ export function initializeHeroCarousels(root: ParentNode = document): void {
 
         function schedule(): void {
             stop();
+            if (!carousel.isConnected) {
+                observer?.disconnect();
+                document.removeEventListener('visibilitychange', schedule);
+                reducedMotion.removeEventListener?.('change', schedule);
+                initialized.delete(carousel);
+                return;
+            }
             if (canRotate()) timer = setInterval(() => {
                 if (!canRotate()) { stop(); return; }
                 show(active + 1);
