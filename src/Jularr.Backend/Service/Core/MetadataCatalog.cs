@@ -22,7 +22,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.Core
 {
     // Provider search and import of every media type, for the Works page and for Discover.
-    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache)
+    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, DiscoveryFeedSnapshots snapshots)
     {
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
         {
@@ -213,13 +213,25 @@ namespace Jularr.Backend.Service.Core
                 _ => throw new DataValidationException("DiscoverFeedTypeId", "unknown_catalog_value")
             };
 
-            // Ranked lists change slowly; a shared cache of a day spares the provider.
+            if (ranking is null)
+            {
+                // Worldwide Open Library ranking: do not claim a German/locale chart.
+                // Public provider facts are persisted; profile Work IDs are overlaid afterward.
+                var globalBooks = await snapshots.ReadAsync("metadata.catalog.openlibrary.book.trending.global",
+                    "openlibrary", TimeSpan.FromHours(6), TimeSpan.FromDays(90),
+                    async token => (IReadOnlyList<MetadataSearchResultV1>)[.. (await books.ReadTrendingAsync(token)).Select(Book)],
+                    ct);
+                return await MarkKnownAsync(context, globalBooks, ct);
+            }
+
+            // AniList license limits require separate review before persistent storage.
+            // Retain the previous bounded RAM behavior for those rankings.
             var key = $"metadata.catalog.{mediaType}.{subtype}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}";
             if (!cache.TryGetValue(key, out List<MetadataSearchResultV1>? results))
             {
-                results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
-                    : mediaType == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
-                    : [.. (await aniList.ReadBookRankingAsync(subtype!.Value, order, ct)).Select(AniListBook)];
+                results = mediaType == MediaType.Series
+                    ? [.. (await aniList.ReadAnimeRankingAsync(ranking.Value, ct)).Select(AniListAnime)]
+                    : [.. (await aniList.ReadBookRankingAsync(subtype!.Value, ranking.Value, ct)).Select(AniListBook)];
                 cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = Math.Max(1, results.Count) });
             }
 
