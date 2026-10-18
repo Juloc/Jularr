@@ -4,9 +4,25 @@ on:
   push:
     branches: [codex/backend-clean-start]
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'database/**'
+      - 'scripts/**'
+      - '*.sln'
+      - '**/*.props'
+      - '**/*.targets'
+      - 'NuGet.Config'
+      - '.github/workflows/backend.yml'
 
 permissions:
   contents: read
+
+# Only the newest revision of each pull request needs a full test run.
+# Keep branch runs independent and never cancel a target-branch push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -35,9 +51,17 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
       - name: Compile assets for Razor integration tests
         working-directory: src/Jularr.Frontend
         run: |
@@ -72,9 +96,17 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
       - name: Compile assets
         working-directory: src/Jularr.Frontend
         run: |
