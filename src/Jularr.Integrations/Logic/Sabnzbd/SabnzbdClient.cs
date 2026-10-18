@@ -52,7 +52,8 @@ namespace Jularr.Integrations.Logic.Sabnzbd
         internal static string ParseCompletedFolder(string statusJson, string? configJson = null, string? category = null)
         {
             using var status = JsonDocument.Parse(statusJson);
-            if (!status.RootElement.TryGetProperty("status", out var details))
+            if (status.RootElement.ValueKind != JsonValueKind.Object || !status.RootElement.TryGetProperty("status", out var details)
+                || details.ValueKind != JsonValueKind.Object)
                 throw new SabnzbdException("SABnzbd did not provide a completed download folder.");
             var root = AbsoluteFolder(ReadString(details, "completedir"));
             if (configJson is null)
@@ -62,8 +63,9 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
             category = string.IsNullOrWhiteSpace(category) ? "*" : category;
             using var config = JsonDocument.Parse(configJson);
-            if (!config.RootElement.TryGetProperty("config", out var settings)
-                || !settings.TryGetProperty("categories", out var categories) || categories.ValueKind != JsonValueKind.Array)
+            if (config.RootElement.ValueKind != JsonValueKind.Object || !config.RootElement.TryGetProperty("config", out var settings)
+                || settings.ValueKind != JsonValueKind.Object || !settings.TryGetProperty("categories", out var categories)
+                || categories.ValueKind != JsonValueKind.Array)
                 throw new SabnzbdException("SABnzbd category folders could not be read.");
 
             var matches = categories.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object

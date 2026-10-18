@@ -151,6 +151,8 @@ namespace Jularr.Backend.Tests
         {
             const string status = """{"status":{"completedir":"/downloads/complete"}}""";
             Assert.AreEqual("/downloads/complete", SabnzbdClient.ParseCompletedFolder(status));
+            Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder("""[]"""));
+            Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder(status, """{"config":null}""", "tv"));
             Assert.AreEqual("/downloads/complete/default", SabnzbdClient.ParseCompletedFolder(status,
                 """{"config":{"categories":[{"name":"*","dir":"default"}]}}""", "*"));
             Assert.AreEqual("/downloads/complete/tv", SabnzbdClient.ParseCompletedFolder(status,
