@@ -92,8 +92,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         WorkspaceLine("acquisition.workspace.usenet", configured.UsenetDownloadPath),
                         WorkspaceLine("acquisition.workspace.direct", configured.DirectSourceDownloadPath),
                         new P(new Strong(new Text("acquisition.workspace.limit")),
-                            new ValueText(": " + ByteSize.Format(configured.UsenetMaxJobBytes) + " (" +
-                                (configured.UsenetMaxJobBytes / (1024d * 1024 * 1024)).ToString("0.##", CultureInfo.CurrentCulture) + " GiB)")),
+                            new ValueText(": "), configured.UsenetMaxJobBytes is { } limit
+                                ? new ValueText(ByteSize.Format(limit) + " (" + (limit / (1024d * 1024 * 1024)).ToString("0.##", CultureInfo.CurrentCulture) + " GiB)")
+                                : new Text("acquisition.workspace.unlimited")),
                         new P(new Text(configured.AllowDirectDownloadOnHostFilesystem
                             ? "acquisition.workspace.hostAllow" : "acquisition.workspace.hostDeny")),
                         new P(new Text("acquisition.workspace.manageHint"))

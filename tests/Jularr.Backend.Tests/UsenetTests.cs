@@ -76,6 +76,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Usenet_UnsetJobLimitAllowsReleasesAnnouncingMoreThanTwentyGiB()
+        {
+            using var storage = new TemporaryDirectory();
+            using var staging = new TemporaryDirectory();
+            await using var news = new FakeNewsServer("reader", "news-secret");
+            var bytes = new byte[300_000];
+            news.Publish(Feature + ".mkv", bytes, 3);
+            var nzb = System.Text.RegularExpressions.Regex.Replace(news.Nzb(Feature + ".mkv"), "bytes=\"[0-9]+\"", "bytes=\"32212254720\"");
+            await using var host = await CreateHostAsync(storage.Path, staging.Path, new FakeIndexer(nzb), news.Port);
+
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            await RunAsync<DownloadUsenetV1>(host);
+
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var imported = Directory.EnumerateFiles(storage.Path, "*.mkv", SearchOption.AllDirectories).Single();
+            CollectionAssert.AreEqual(bytes, File.ReadAllBytes(imported));
+        }
+
+        [TestMethod]
         public async Task Usenet_JobLimitStopsDownloadBeforeCreatingArticleFiles()
         {
             using var storage = new TemporaryDirectory();
@@ -270,7 +290,7 @@ namespace Jularr.Backend.Tests
                 {
                     ["Storage:DirectDownloadPath"] = staging,
                     ["Storage:AllowDirectDownloadOnHostFilesystem"] = "true",
-                    ["Storage:UsenetMaxJobBytes"] = (maxJobBytes ?? 20L * 1024 * 1024 * 1024).ToString(CultureInfo.InvariantCulture)
+                    ["Storage:UsenetMaxJobBytes"] = maxJobBytes?.ToString(CultureInfo.InvariantCulture) ?? ""
                 },
                 services: services => services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => indexer));
             var mountId = await LibraryTests.CreateMountAsync(host);

@@ -1496,7 +1496,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "Download storage");
             StringAssert.Contains(html, "Usenet temporary files");
             StringAssert.Contains(html, "Direct book downloads");
-            StringAssert.Contains(html, "20 GiB");
+            StringAssert.Contains(html, "No size limit");
             StringAssert.Contains(html, "Not configured");
             StringAssert.Contains(html, "In-app editing is not available yet.");
             using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads");
@@ -1504,7 +1504,7 @@ namespace Jularr.Backend.Tests
             var downloadStorage = await storagePolicy.Content.ReadFromJsonAsync<Jularr.Backend.Data.Admin.Storage.V1.DownloadStorageDetailsV1>();
             Assert.IsNull(downloadStorage!.UsenetDownloadPath);
             Assert.IsNull(downloadStorage.DirectSourceDownloadPath);
-            Assert.AreEqual(20L * 1024 * 1024 * 1024, downloadStorage.UsenetMaxJobBytes);
+            Assert.IsNull(downloadStorage.UsenetMaxJobBytes);
             Assert.IsFalse(downloadStorage.AllowDirectDownloadOnHostFilesystem);
             Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
 
