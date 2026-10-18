@@ -24,6 +24,7 @@ function mounted(desktop = false) {
         document,
         exports,
         Element,
+        HTMLElement: Element,
         matchMedia: () => ({ matches: desktop })
     });
     exports.initializeCards();
