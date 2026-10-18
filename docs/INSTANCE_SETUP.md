@@ -59,7 +59,7 @@ connected server. Both kinds of registration remain configurable.
   rechecks configuration in its transaction. Secrets remain write-only; a blank
   setup TMDB key keeps the saved credential.
 - Restore remains available at /Setup/Backup for a compatible Jularr backup.
-  Legacy migration remains in stopped Phase B. AI setup is a separate package.
+  Existing-instance migration is tracked separately in [#433](https://github.com/Juloc/Jularr/issues/433). AI setup is a separate package.
 - Only an Owner configures the instance. Permissions, validation, transactions,
   safe paths and provider access remain Backend-owned. NAS outages leave catalog
   and administration browsing usable. No active database is installed or changed.

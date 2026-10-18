@@ -148,7 +148,7 @@ Behavior and integration tests are in [Jularr.Backend.Tests](../tests/Jularr.Bac
 
 Anime absolute numbering, artwork for Games, offline play, email verification, 2FA/WebAuthn completion,
 old Android/TV consumers, further module capabilities and full custom branding.
-This reference backend does not complete Phase B or replace an active installation.
+This reference backend is not full feature parity with the previous release and does not replace or migrate an active installation.
 
 ## Next slices (not implemented)
 
