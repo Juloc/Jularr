@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.Core
             try
             {
                 // A concurrent request may have completed the first fill while we waited.
-                if (memory.TryGetValue("discovery.compat." + key, out IReadOnlyList<T>? legacy))
+                if (memory.TryGetValue("discovery.compat." + key, out IReadOnlyList<T>? legacyAfterGate))
                 {
                     return legacyAfterGate!;
                 }
