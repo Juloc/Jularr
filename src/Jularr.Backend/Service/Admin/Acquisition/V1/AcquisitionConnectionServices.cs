@@ -187,7 +187,16 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var stored = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
+            // This read is authorized by the service, but must not open a short write batch.
+            // Only a SAB connection with a stored secret needs its previous protected key.
+            AcquisitionConnectionData? stored = null;
+            if (Data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && Data.ApiKey is null && Data.RemotePath is null
+                && (Data.DownloadStorageMountId is not null || Data.LocalPath is not null))
+            {
+                stored = await Context.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(
+                    AcquisitionConnectionLogic.ReadAcquisitionConnectionStatement(Parameters.AcquisitionConnectionId), CancellationToken);
+            }
+
             var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, CancellationToken);
             await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector, detected), CancellationToken);
             return new UpdateResult(true);
@@ -381,10 +390,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 return await sabnzbd.GetCompletedFolderAsync(new SabnzbdConnection(data.BaseUrl, key), data.DownloadCategory, ct);
             }
-            catch (Exception exception) when (exception is SabnzbdException or HttpRequestException or JsonException
-                || exception is TaskCanceledException && !ct.IsCancellationRequested)
+            catch (Exception exception) when (exception is SabnzbdException or JsonException)
             {
-                throw new ServiceUnavailableException("import_path_unmapped");
+                throw new ServiceUnavailableException("acquisition_invalid_response");
+            }
+            catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                throw new ServiceUnavailableException("acquisition_unavailable");
             }
         }
 

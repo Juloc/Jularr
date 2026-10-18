@@ -11,7 +11,10 @@ namespace Jularr.Backend.Logic.Acquisition
 {
     internal static class AcquisitionConnectionLogic
     {
-        public static Task<AcquisitionConnectionData> ReadAcquisitionConnectionAsync(this LogicContext ctx, long acquisitionConnectionId, CancellationToken ct)
+        public static Task<AcquisitionConnectionData> ReadAcquisitionConnectionAsync(this LogicContext ctx, long acquisitionConnectionId, CancellationToken ct) =>
+            ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(ReadAcquisitionConnectionStatement(acquisitionConnectionId), ct);
+
+        internal static SqlStatement ReadAcquisitionConnectionStatement(long acquisitionConnectionId)
         {
             // Connection facts for external work.
             var sql = new SqlStatement();
@@ -51,7 +54,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Id" = @AcquisitionConnectionId;
                 """;
             sql.Parameters.Add(new AcquisitionConnectionParameters(acquisitionConnectionId));
-            return ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(sql, ct);
+            return sql;
         }
 
         // The enabled connections of one role, best priority first.

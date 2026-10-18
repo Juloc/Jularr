@@ -118,7 +118,6 @@ namespace Jularr.E2E.Tests
             await page.FillAsync("form [name=Name]", "SABnzbd");
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("form [name=ApiKey]", FakeServices.ClientKey);
-            await page.FillAsync("form [name=RemotePath]", "/downloads");
             await page.FillAsync("form [name=LocalPath]", fakes.Downloads);
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
         }
