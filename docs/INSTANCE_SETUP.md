@@ -32,6 +32,11 @@ connected server. Both kinds of registration remain configurable.
 
 - New connections, library paths, tests and scans use their ordinary canonical
   operations. Continue saves each main step; it is placed below the content.
+- Library folders are selected in the shared native dialog. Folder navigation fetches
+  authorized server-rendered lists without navigating the surrounding page or losing
+  its draft. Escape/Close preserves the prior selection; Use this folder updates the
+  existing form. Large lists have cursor navigation. Without JavaScript the ordinary
+  browse links remain available. The same directory service handles SMB, NFS and local paths.
 - Sources has a shared tab row on every editor, including an individual profile.
   Indexer and downloader tabs open a creation form immediately and keep their
   connection list visible on mobile. Saving returns to that setup editor.

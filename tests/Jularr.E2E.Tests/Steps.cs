@@ -87,7 +87,9 @@ namespace Jularr.E2E.Tests
             {
                 await page.GotoAsync(connection);
                 await page.GetByRole(AriaRole.Link, new() { Name = "Browse folders" }).ClickAsync();
-                await page.GetByRole(AriaRole.Link, new() { Name = folder, Exact = true }).ClickAsync();
+                var picker = page.GetByRole(AriaRole.Dialog, new() { Name = "Browse folders", Exact = true });
+                await picker.GetByRole(AriaRole.Link, new() { Name = folder, Exact = true }).ClickAsync();
+                await picker.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
                 var root = FormWith(page, "Add library path");
                 await root.Locator("[name=Name]").FillAsync(folder);
                 await root.Locator("[name=MediaTypeId]").SelectOptionAsync(new SelectOptionValue { Label = type });

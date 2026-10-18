@@ -315,17 +315,23 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
     public sealed class ReadStorageDirectoriesDataV1 : BaseData
     {
-        public ReadStorageDirectoriesDataV1(string relativePath)
+        public ReadStorageDirectoriesDataV1(string relativePath, string? afterName = null)
         {
             RelativePath = relativePath;
+            AfterName = afterName;
         }
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
         public string RelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.DirectoryName), false)]
+        public string? AfterName { get; }
     }
 
     public sealed class StorageDirectoryV1 : BaseResponse
     {
+        public const int PageSize = 500;
+
         public StorageDirectoryV1(string name)
         {
             Name = name;

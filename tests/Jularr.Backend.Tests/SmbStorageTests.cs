@@ -193,7 +193,7 @@ namespace Jularr.Backend.Tests
         public async Task Connections_DirectSmb_CheckBrowseAndScanThroughJularrsOwnSession()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
-            await using var host = await LibraryTests.CreateHostAsync(storage.Path);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
                 new SaveStorageMountDataV1("NAS", StorageProtocolType.Smb, "nas.test", "/media/library", "3.1.1", "jularr", null, true, "secret"));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
@@ -211,6 +211,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(StorageAvailabilityType.Available, (await check.Content.ReadFromJsonAsync<StorageMountStatusV1>())!.StorageAvailabilityTypeId);
             using var browse = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + mountId + "/directories", new ReadStorageDirectoriesDataV1(""));
             StringAssert.Contains(await browse.Content.ReadAsStringAsync(), "Movies");
+
+            Directory.CreateDirectory(Path.Combine(share, "library", "Books & more"));
+            using var nextFolders = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + mountId + "/directories", new ReadStorageDirectoriesDataV1("", "Books & more"));
+            CollectionAssert.AreEqual(new[] { "Movies" }, (await nextFolders.Content.ReadFromJsonAsync<StorageDirectoryV1[]>())!.Select(directory => directory.Name).ToArray());
+            using var fragment = await host.SendAsync(HttpMethod.Get, "/Setup/Storage?handler=Folders&storageMountId=" + mountId);
+            var html = await fragment.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, fragment.StatusCode, html);
+            StringAssert.Contains(html, "data-folder-fragment");
+            StringAssert.Contains(html, "Books &amp; more");
+            Assert.IsFalse(html.Contains("<html", StringComparison.OrdinalIgnoreCase));
+            using var traversal = await host.SendAsync(HttpMethod.Get, "/Setup/Storage?handler=Folders&storageMountId=" + mountId + "&path=..%2F..%2Foutside");
+            Assert.AreEqual(HttpStatusCode.BadRequest, traversal.StatusCode);
 
             // No compose lines: nothing is mounted by Docker.
             using var volume = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/mounts/" + mountId + "/volume");
