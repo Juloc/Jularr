@@ -331,6 +331,35 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((byte)0x47, File.ReadAllBytes(sought)[0]);
             transcodes.Stop(session);
             Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
+
+            // Direct SMB subtitle conversion previously failed because FFmpeg allowed file: only.
+            File.WriteAllText(Path.Combine(storage.Path, "Film.en.ass"),
+                """
+                [Script Info]
+                ScriptType: v4.00+
+                [V4+ Styles]
+                Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+                Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+                [Events]
+                Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+                Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello from SMB
+                """);
+            var transcoder = new MediaTranscoder { ExecutablePath = ffmpeg };
+            using (var subtitle = stream.Open(new SmbStorageFiles(share, ""), "Film.en.ass"))
+            {
+                var vtt = Path.Combine(cache.Path, "Film.en.vtt");
+                Assert.IsTrue(await transcoder.ConvertSubtitleAsync(subtitle.Location, "ass", null, vtt, CancellationToken.None));
+                StringAssert.Contains(await File.ReadAllTextAsync(vtt), "Hello from SMB");
+            }
+
+            // Trickplay uses the same protected loopback transport as subtitle conversion.
+            using (var video = stream.Open(new SmbStorageFiles(share, ""), "Film.mkv"))
+            {
+                var sheets = Path.Combine(cache.Path, "trickplay");
+                Directory.CreateDirectory(sheets);
+                Assert.IsTrue(await transcoder.CreateTrickplayAsync(video.Location, sheets, 10, 64, 36, 3, 2, CancellationToken.None));
+                Assert.IsTrue(Directory.EnumerateFiles(sheets, "*.jpg").Any());
+            }
         }
 
         private sealed class Clock : TimeProvider
