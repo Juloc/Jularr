@@ -348,7 +348,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 if (type == AcquisitionConnectionType.Sabnzbd)
                 {
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
-                    form.Text(item => item.RemotePath, "acquisition.connection.remotePath");
+                    // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
+                    if (_selected?.RemotePath is { } detected)
+                        form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));
                     if (texts.Can("storage.read"))
                     {
                         form.Select(item => item.DownloadStorageMountId, "acquisition.connection.downloadStorage", [

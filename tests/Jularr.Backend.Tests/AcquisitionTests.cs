@@ -132,6 +132,38 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task SabConnection_DiscoversItsCategoryFolderWithoutAManualRemotePath()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+
+            using var saved = await host.SendAsync(HttpMethod.Put, Connections + "/2",
+                new SaveAcquisitionConnectionDataV1("SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test",
+                    null, true, 10, [], "movies", null, downloads.Path));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var result = await host.SendAsync(HttpMethod.Get, Connections + "/2");
+            Assert.AreEqual("/downloads/complete/movies", (await result.Content.ReadFromJsonAsync<AcquisitionConnectionDetailsV1>())!.RemotePath);
+        }
+
+        [TestMethod]
+        public void SabConnection_RejectsAmbiguousAndUnsafeCategoryPaths()
+        {
+            const string status = """{"status":{"completedir":"/downloads/complete"}}""";
+            Assert.AreEqual("/downloads/complete", SabnzbdClient.ParseCompletedFolder(status));
+            Assert.AreEqual("/downloads/complete/tv", SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[{"name":"tv","dir":"tv"}]}}""", "tv"));
+            Assert.AreEqual("/other/completed", SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[{"name":"movies","dir":"/other/completed"}]}}""", "movies"));
+            Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[{"name":"tv","dir":"../outside"}]}}""", "tv"));
+            Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[{"name":"tv","dir":"tv*"}]}}""", "tv"));
+            Assert.ThrowsExactly<SabnzbdException>(() => SabnzbdClient.ParseCompletedFolder(status,
+                """{"config":{"categories":[]}}""", "missing"));
+        }
+
+        [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
             using var storage = new TemporaryDirectory();
@@ -1588,6 +1620,8 @@ namespace Jularr.Backend.Tests
             public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
             public string History { get; set; } = """{"history":{"slots":[]}}""";
+            public string Status { get; set; } = """{"status":{"completedir":"/downloads/complete"}}""";
+            public string CategoryConfig { get; set; } = """{"config":{"categories":[{"name":"movies","dir":"movies"},{"name":"tv","dir":"tv"}]}}""";
 
             public const string PlexToken = "plex-server-token";
             public List<string> PlexRequests { get; } = [];
@@ -1638,6 +1672,10 @@ namespace Jularr.Backend.Tests
                         return Json(Queue);
                     case "history":
                         return Json(History);
+                    case "status":
+                        return Json(Status);
+                    case "get_config":
+                        return Json(CategoryConfig);
                     default:
                         return Json("""{"version":"4.5.0"}""");
                 }

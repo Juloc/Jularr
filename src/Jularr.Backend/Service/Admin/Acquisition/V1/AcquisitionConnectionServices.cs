@@ -141,10 +141,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class CreateAcquisitionConnectionV1 : AdminService<CreateAcquisitionConnectionParametersV1, SaveAcquisitionConnectionDataV1>
     {
         private readonly IDataProtector _protector;
+        private readonly SabnzbdClient _sabnzbd;
 
-        internal CreateAcquisitionConnectionV1(IDataProtectionProvider protection)
+        internal CreateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd)
         {
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+            _sabnzbd = sabnzbd;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -160,7 +162,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(Data.Username is null ? nameof(SaveAcquisitionConnectionDataV1.Username) : nameof(SaveAcquisitionConnectionDataV1.Password), "required");
             }
 
-            var data = AcquisitionConnectionInput.Create(null, Data, _protector);
+            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, null, _protector, _sabnzbd, CancellationToken);
+            var data = AcquisitionConnectionInput.Create(null, Data, _protector, detected);
             return new CreateAcquisitionConnectionResultV1(await Context.CreateAcquisitionConnectionAsync(data, CancellationToken));
         }
     }
@@ -169,10 +172,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class UpdateAcquisitionConnectionV1 : AdminService<AcquisitionConnectionParametersV1, SaveAcquisitionConnectionDataV1>
     {
         private readonly IDataProtector _protector;
+        private readonly SabnzbdClient _sabnzbd;
 
-        internal UpdateAcquisitionConnectionV1(IDataProtectionProvider protection)
+        internal UpdateAcquisitionConnectionV1(IDataProtectionProvider protection, SabnzbdClient sabnzbd)
         {
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+            _sabnzbd = sabnzbd;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -182,7 +187,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector), CancellationToken);
+            var stored = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
+            var detected = await AcquisitionConnectionInput.DiscoverCompleteFolderAsync(Data, stored, _protector, _sabnzbd, CancellationToken);
+            await Context.UpdateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(Parameters.AcquisitionConnectionId, Data, _protector, detected), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -360,13 +367,34 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         public const string ProtectorPurpose = "Jularr.Acquisition.ApiKey.V1";
 
-        public static AcquisitionConnectionSaveData Create(long? id, SaveAcquisitionConnectionDataV1 data, IDataProtector protector)
+        public static async Task<string?> DiscoverCompleteFolderAsync(SaveAcquisitionConnectionDataV1 data, AcquisitionConnectionData? stored,
+            IDataProtector protector, SabnzbdClient sabnzbd, CancellationToken ct)
+        {
+            // Existing explicit API mappings remain valid; the regular UI no longer asks for a remote path.
+            if (data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemotePath is not null
+                || data.DownloadStorageMountId is null && data.LocalPath is null) return null;
+
+            var key = data.ApiKey ?? (stored is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Sabnzbd }
+                ? Unprotect(protector, stored.ProtectedApiKey) : null);
+            if (data.BaseUrl is null || key is null) throw new ServiceUnavailableException("acquisition_unavailable");
+            try
+            {
+                return await sabnzbd.GetCompletedFolderAsync(new SabnzbdConnection(data.BaseUrl, key), data.DownloadCategory, ct);
+            }
+            catch (Exception exception) when (exception is SabnzbdException or HttpRequestException or JsonException
+                || exception is TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                throw new ServiceUnavailableException("import_path_unmapped");
+            }
+        }
+
+        public static AcquisitionConnectionSaveData Create(long? id, SaveAcquisitionConnectionDataV1 data, IDataProtector protector, string? detectedRemotePath = null)
         {
             // Protect before persistence.
             var apiKey = data.ApiKey is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.ApiKey));
             var password = data.AcquisitionConnectionTypeId == AcquisitionConnectionType.OpenSubtitles && data.Password is { } clear ? protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl, apiKey, data.IsEnabled, data.Priority,
-                data.Categories, data.DownloadCategory, data.RemotePath, data.LocalPath,
+                data.Categories, data.DownloadCategory, detectedRemotePath ?? data.RemotePath, data.LocalPath,
                 data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
                 data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl, data.DownloadStorageMountId);

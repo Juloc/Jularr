@@ -39,6 +39,60 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
         }
 
+        // Discover the actual SAB folder; categories can override the global Complete folder.
+        public async Task<string> GetCompletedFolderAsync(SabnzbdConnection connection, string? category, CancellationToken ct)
+        {
+            using var status = await SendAsync(connection, [new("mode", "status"), new("skip_dashboard", "1")], ct);
+            var statusJson = await RequireBodyAsync(status, ct);
+            if (string.IsNullOrWhiteSpace(category) || category == "*") return ParseCompletedFolder(statusJson);
+
+            using var config = await SendAsync(connection, [new("mode", "get_config"), new("section", "categories")], ct);
+            return ParseCompletedFolder(statusJson, await RequireBodyAsync(config, ct), category);
+        }
+
+        internal static string ParseCompletedFolder(string statusJson, string? configJson = null, string? category = null)
+        {
+            using var status = JsonDocument.Parse(statusJson);
+            if (!status.RootElement.TryGetProperty("status", out var details))
+                throw new SabnzbdException("SABnzbd did not provide a completed download folder.");
+            var root = AbsoluteFolder(ReadString(details, "completedir"));
+            if (string.IsNullOrWhiteSpace(category) || category == "*") return root;
+
+            if (configJson is null) throw new SabnzbdException("SABnzbd category configuration is missing.");
+            using var config = JsonDocument.Parse(configJson);
+            if (!config.RootElement.TryGetProperty("config", out var settings)
+                || !settings.TryGetProperty("categories", out var categories) || categories.ValueKind != JsonValueKind.Array)
+                throw new SabnzbdException("SABnzbd category folders could not be read.");
+
+            var matches = categories.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object
+                && string.Equals(ReadString(item, "name"), category, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length != 1) throw new SabnzbdException("SABnzbd category folder is missing or ambiguous.");
+
+            var folder = ReadString(matches[0], "dir") ?? "";
+            // The trailing '*' disables per-job folders; never assume which media belongs to Jularr.
+            if (folder.EndsWith('*')) throw new SabnzbdException("SABnzbd category must create individual job folders.");
+            folder = folder.Replace('\\', '/').Trim('/');
+            if (folder.Length == 0) return root;
+            if (folder.Split('/').Any(part => part is "." or "..") || folder.Any(char.IsControl))
+                throw new SabnzbdException("SABnzbd category folder is unsafe.");
+
+            var raw = ReadString(matches[0], "dir")!.Replace('\\', '/');
+            return IsAbsoluteFolder(raw) ? AbsoluteFolder(raw) : AbsoluteFolder(root.TrimEnd('/') + "/" + folder);
+        }
+
+        private static bool IsAbsoluteFolder(string value) => value.StartsWith('/') || value.Length >= 3
+            && char.IsAsciiLetter(value[0]) && value[1] == ':' && value[2] is '/' or '\\';
+
+        private static string AbsoluteFolder(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) throw new SabnzbdException("SABnzbd completed folder is empty.");
+            var path = value.Replace('\\', '/').TrimEnd('/');
+            if (path.Length == 0 && value.StartsWith('/')) path = "/";
+            if (!IsAbsoluteFolder(path) || path.Any(char.IsControl) || path.Split('/').Any(part => part is "." or ".."))
+                throw new SabnzbdException("SABnzbd completed folder is not a safe absolute path.");
+            return path;
+        }
+
         public async Task<SabnzbdGrabResult> GrabAsync(SabnzbdConnection connection, SabnzbdGrabRequest grab, CancellationToken ct)
         {
             if (!grab.NzbUrl.IsAbsoluteUri || grab.NzbUrl.Scheme is not ("http" or "https"))
