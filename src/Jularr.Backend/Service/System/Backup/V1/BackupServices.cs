@@ -40,36 +40,13 @@ namespace Jularr.Backend.Service.System.Backup.V1
                 throw new ServiceUnavailableException("backup_unavailable");
             }
 
-            // A half-written backup never shows up in the list.
-            var now = _time.GetUtcNow().UtcDateTime;
-            var name = BackupFiles.NewName(now);
-            var partial = Path.Combine(root, name + ".partial");
-            BackupFiles.CreatePrivate(partial);
             try
             {
-                try
-                {
-                    await _tools.DumpAsync(Path.Combine(partial, BackupFiles.DumpName), CancellationToken);
-                }
-                catch (PostgresToolException exception)
-                {
-                    throw new ServiceUnavailableException(exception.Code, exception);
-                }
-
-                if (_options.Passphrase is { Length: > 0 } passphrase)
-                {
-                    BackupFiles.SealKeys(_options.KeyDirectory, Path.Combine(partial, BackupFiles.SealedKeysName), passphrase);
-                }
-                else
-                {
-                    BackupFiles.CopyKeys(_options.KeyDirectory, Path.Combine(partial, "keys"));
-                }
-                await BackupFiles.WriteManifestAsync(partial, now, CancellationToken);
-                Directory.Move(partial, Path.Combine(root, name));
+                await BackupFiles.CreateAsync(_options, _tools, _time.GetUtcNow().UtcDateTime, DatabaseBaseline.CurrentVersion, BackupFiles.SchemaFingerprint, CancellationToken);
             }
-            finally
+            catch (PostgresToolException exception)
             {
-                if (Directory.Exists(partial)) Directory.Delete(partial, true);
+                throw new ServiceUnavailableException(exception.Code, exception);
             }
 
             // The backup counts even when pruning fails.

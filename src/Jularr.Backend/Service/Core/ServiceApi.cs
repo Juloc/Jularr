@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
@@ -98,7 +99,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
-            services.AddHostedService(_ => new DatabaseBaseline(connectionString));
+            services.AddHostedService(provider => new DatabaseBaseline(connectionString, provider.GetRequiredService<IOptions<BackupOptions>>().Value, provider.GetRequiredService<PostgresBackupTools>()));
 
             // Persistent state lives under one folder, /data in the image; every feature works without further settings.
             var data = configuration["DataPath"] is { Length: > 0 } dataPath ? dataPath
