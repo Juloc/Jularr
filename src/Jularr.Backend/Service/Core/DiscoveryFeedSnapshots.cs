@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.Core
                 // A concurrent request may have completed the first fill while we waited.
                 if (memory.TryGetValue("discovery.compat." + key, out IReadOnlyList<T>? legacy))
                 {
-                    return legacy!;
+                    return legacyAfterGate!;
                 }
                 snapshot = await LoadAsync<T>(key, providerKey, ct);
                 if (snapshot is not null)
