@@ -236,7 +236,10 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "data-action=\"audio\"");
+            StringAssert.Contains(html, "data-action=\"settings\"");
+            StringAssert.Contains(html, "data-panel=\"audio\"");
+            StringAssert.Contains(html, "data-audio=\"1\"");
+            StringAssert.Contains(html, "data-audio=\"2\"");
             StringAssert.Contains(html, "data-action=\"minimize\" aria-label=\"Minimize\" hidden=\"hidden\"");
             StringAssert.Contains(html, "Deutsch &#xB7; Kommentar &#xB7; Stereo");
             StringAssert.Contains(html, "data-subtitle=\"" + sidecar.Key + "\"");
