@@ -133,7 +133,7 @@ namespace Jularr.Backend.Tests
                     }
                     else if (path == "/v4/series/123/extended")
                     {
-                        json = """{"data":{"id":123,"name":"Remote Show","remoteIds":[{"sourceName":"IMDb","id":""" + "\"" + SeriesImdbId + "\"" + "}]}}";
+                        json = System.Text.Json.JsonSerializer.Serialize(new { data = new { id = 123, name = "Remote Show", remoteIds = new[] { new { sourceName = "IMDb", id = SeriesImdbId } } } });
                     }
                     else if (path == "/v4/series/123/episodes/default")
                     {
