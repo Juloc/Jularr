@@ -67,6 +67,67 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("The Movie/9876", NamingPattern.Apply("{Movie CleanTitle}/{TmdbId}", movie));
         }
 
+        // The formats the *arr community publishes (TRaSH) run unchanged: prefixes and suffixes around a token, any case, literal groups and filters.
+        [TestMethod]
+        public void NamingPattern_CommunityFormatsOfSonarrAndRadarr_RenderAsTheArrsDo()
+        {
+            var episode = new NamingValues("The Series Name's Title!", 2010, 1, 7, "Midnight", "HDTV-1080p", "RLSGRP", null, 2)
+            {
+                MediaTypeId = MediaType.Series,
+                CustomFormats = new Dictionary<string, string> { ["iNTERNAL"] = "iNTERNAL" },
+                MediaInfo = new Dictionary<string, string>
+                {
+                    ["MediaInfo VideoDynamicRangeType"] = "DV HDR10", ["MediaInfo AudioCodec"] = "DTS", ["MediaInfo AudioChannels"] = "5.1",
+                    ["MediaInfo AudioLanguages"] = "[EN+DE]", ["MediaInfo VideoCodec"] = "x265"
+                }
+            };
+            const string series = "{Series TitleYear} - S{season:00}E{episode:00} - {Episode CleanTitle} [{Custom Formats }{Quality Full}]{[MediaInfo VideoDynamicRangeType]}"
+                + "{[Mediainfo AudioCodec}{ Mediainfo AudioChannels]}{MediaInfo AudioLanguages}{[MediaInfo VideoCodec]}{-Release Group}";
+            NamingPattern.Validate(MediaType.Series, series, "Pattern");
+            Assert.AreEqual("The Series Name's Title! (2010) - S01E07 - Midnight [iNTERNAL HDTV-1080p Proper][DV HDR10][DTS 5.1][EN+DE][x265]-RLSGRP", NamingPattern.Apply(series, episode));
+            Assert.AreEqual("The Series Name's Title! (2010) - S01E07 - Midnight [HDTV-1080p Proper]-RLSGRP", NamingPattern.Apply(series, new NamingValues("The Series Name's Title!", 2010, 1, 7, "Midnight", "HDTV-1080p", "RLSGRP", null, 2) { MediaTypeId = MediaType.Series }));
+
+            var movie = new NamingValues("The Matrix", 1999, null, null, null, "Bluray-1080p", "BHDStudio", "IMAX", 1)
+            {
+                ProviderIds = new Dictionary<string, string> { ["imdb"] = "tt0133093" },
+                CustomFormats = new Dictionary<string, string> { ["Remux"] = "Remux" },
+                MediaInfo = new Dictionary<string, string>
+                {
+                    ["MediaInfo VideoDynamicRangeType"] = "HDR10", ["MediaInfo AudioCodec"] = "DTS", ["MediaInfo AudioChannels"] = "7.1", ["MediaInfo VideoCodec"] = "x265"
+                }
+            };
+            const string film = "{Movie CleanTitle} {(Release Year)} {imdb-{ImdbId}} {edition-{Edition Tags}} {[Custom Formats]}{[Quality Full]}{[MediaInfo 3D]}"
+                + "{[MediaInfo VideoDynamicRangeType]}{[Mediainfo AudioCodec}{ Mediainfo AudioChannels]}{[Mediainfo VideoCodec]}{-Release Group}";
+            NamingPattern.Validate(MediaType.Movie, film, "Pattern");
+            Assert.AreEqual("The Matrix (1999) {imdb-tt0133093} {edition-IMAX} [Remux][Bluray-1080p][HDR10][DTS 7.1][x265]-BHDStudio", NamingPattern.Apply(film, movie));
+
+            // The literal groups leave with their empty token.
+            Assert.AreEqual("The Matrix (1999) [Bluray-1080p]-BHDStudio", NamingPattern.Apply(film, new NamingValues("The Matrix", 1999, null, null, null, "Bluray-1080p", "BHDStudio", null, 1)));
+            Assert.AreEqual("The Matrix (1999)", NamingPattern.Apply("{Movie CleanTitle} ({Release Year})", movie));
+        }
+
+        [TestMethod]
+        public void NamingPattern_TokenCaseSeparatorEscapesAndFilters_FollowTheArrs()
+        {
+            var episode = new NamingValues("The Series", 2010, 1, 7, "Mid Night", "HDTV-1080p", "Rls Grp", null, 1)
+            {
+                MediaTypeId = MediaType.Series,
+                AirDate = new DateOnly(2020, 9, 3),
+                Absolute = 12,
+                CustomFormats = new Dictionary<string, string> { ["AMZN"] = "AMZN", ["x265"] = "x265" },
+                MediaInfo = new Dictionary<string, string> { ["MediaInfo AudioCodec"] = "DTS", ["MediaInfo VideoCodec"] = "x264", ["MediaInfo Simple"] = "x264 DTS" }
+            };
+            Assert.AreEqual("the series/THE SERIES/The.Series/The_Series/The-Series", NamingPattern.Apply("{series title}/{SERIES TITLE}/{Series.Title}/{Series_Title}/{Series-Title}", episode));
+            Assert.AreEqual("2020-09-03 2020.09.03 2020 09 03", NamingPattern.Apply("{Air-Date} {Air.Date} {Air Date}", episode));
+            Assert.AreEqual("S1E7 - 012 - Mid.Night", NamingPattern.Apply("S{season:0}E{episode:0} - {absolute:000} - {Episode.Title}", episode));
+            Assert.AreEqual("The S... {x} The Series", NamingPattern.Apply("{Series Title:8} {{x}} {Series Title}", episode));
+            Assert.AreEqual("AMZN x265;x265;AMZN;AMZN x265", NamingPattern.Apply("{Custom Formats};{Custom Formats:x265};{Custom Formats:-x265};{Custom Formats:AMZN,x265}", episode));
+            Assert.AreEqual("x264 DTS;DTS;x264", NamingPattern.Apply("{MediaInfo Simple};{MediaInfo Audio};{MediaInfo Video}", episode));
+            Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Series, "{Title} {Studio}/S{Season:00}E{Episode:00}", "Pattern")).Code);
+            Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {imdb-{Nothing}}", "Pattern")).Code);
+            NamingPattern.Validate(MediaType.Movie, "{movie title} {{x}} {Release Year}", "Pattern");
+        }
+
         [TestMethod]
         public void NamingPattern_OriginalFilename_ExcludesTheExtension()
         {

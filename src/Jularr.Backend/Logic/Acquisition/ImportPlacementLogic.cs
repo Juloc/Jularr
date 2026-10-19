@@ -68,8 +68,15 @@ namespace Jularr.Backend.Logic.Acquisition
                     continue;
                 }
 
+                // The placed episode brings its absolute number and air date to the name.
+                var unit = episodes?.FirstOrDefault(candidate => candidate.ParentNumber == season && candidate.Number == episode);
                 AddGroup(placements, files, video, NamingPattern.Apply(patterns[MediaType.Series],
-                    new NamingValues(title, year, season, episode, null, qualityKey, facts?.ReleaseGroup ?? parsed.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), WorkUnitType.Episode, episode, season);
+                    new NamingValues(title, year, season, episode, null, qualityKey, facts?.ReleaseGroup ?? parsed.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)
+                    {
+                        MediaTypeId = MediaType.Series,
+                        Absolute = unit?.Absolute,
+                        AirDate = unit?.ReleasedOn ?? parsed.AirDate
+                    }), WorkUnitType.Episode, episode, season);
             }
 
             return placements;

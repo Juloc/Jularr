@@ -46,6 +46,11 @@ namespace Jularr.Backend.Logic.Library
             }
         }
 
+        // A value inside a name: characters no file system takes become spaces; its ends keep dots, as in "Title...".
+        public static string CleanPart(string value) =>
+            string.Join(' ', new string(value.Select(character => InvalidNameCharacters.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray())
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
         public static string SafeName(string value)
         {
             var cleaned = new string(value.Select(character => InvalidNameCharacters.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray());

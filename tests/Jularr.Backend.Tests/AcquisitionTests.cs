@@ -1423,6 +1423,14 @@ namespace Jularr.Backend.Tests
             var placed = ImportPlacementLogic.Plan(MediaType.Series, MediaSubtype.Anime, "Example Show", 2020, "WEBDL-1080p", [new StorageFile("[Grp] Example Show - 04 [1080p].mkv", 1000, DateTime.UtcNow)],
                 NamingPatternTests.Defaults, null, episodes: episodes).Single();
             Assert.AreEqual(((decimal?)2, (decimal?)1), (placed.ParentUnitNumber, placed.UnitNumber));
+
+            // The name may carry the absolute number and the air date of the episode it took.
+            var named = new Dictionary<MediaType, string>(NamingPatternTests.Defaults)
+            {
+                [MediaType.Series] = "{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00} - {absolute:000} - {Air-Date}"
+            };
+            Assert.AreEqual("Example Show/Season 02/Example Show - S02E01 - 004 - 2021-04-01", ImportPlacementLogic.Plan(MediaType.Series, MediaSubtype.Anime, "Example Show", 2020, "WEBDL-1080p",
+                [new StorageFile("[Grp] Example Show - 04 [1080p].mkv", 1000, DateTime.UtcNow)], named, null, episodes: episodes).Single().TargetStem);
         }
 
         [TestMethod]
