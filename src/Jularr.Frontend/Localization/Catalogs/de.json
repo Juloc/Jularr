@@ -5272,6 +5272,58 @@
    "Example:",
    "Beispiel:"
   ],
+  "library.naming.Series.Anime": [
+   "Anime episode files",
+   "Anime-Folgendateien"
+  ],
+  "library.naming.settings.Movie": [
+   "Film names",
+   "Filmnamen"
+  ],
+  "library.naming.settings.Series": [
+   "Episode names",
+   "Folgennamen"
+  ],
+  "library.naming.replacesIllegal": [
+   "Replace illegal characters",
+   "Unzulässige Zeichen ersetzen"
+  ],
+  "library.naming.colon": [
+   "Colon replacement",
+   "Doppelpunkt ersetzen durch"
+  ],
+  "library.naming.colonCustom": [
+   "Own replacement for the colon",
+   "Eigener Ersatz für den Doppelpunkt"
+  ],
+  "library.naming.specials": [
+   "Folder of season 0",
+   "Ordner für Staffel 0"
+  ],
+  "library.naming.colon.Delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "library.naming.colon.Dash": [
+   "Dash",
+   "Bindestrich"
+  ],
+  "library.naming.colon.SpaceDash": [
+   "Space dash",
+   "Leerzeichen und Bindestrich"
+  ],
+  "library.naming.colon.SpaceDashSpace": [
+   "Space dash space",
+   "Leerzeichen, Bindestrich, Leerzeichen"
+  ],
+  "library.naming.colon.Smart": [
+   "Smart",
+   "Intelligent"
+  ],
+  "library.naming.colon.Custom": [
+   "Own",
+   "Eigener"
+  ],
   "library.naming.placeholders": [
    "Placeholders",
    "Platzhalter"

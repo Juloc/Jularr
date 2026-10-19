@@ -336,17 +336,19 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 """
                 SELECT
                     pattern."MediaTypeId",
+                    pattern."MediaSubtypeId",
                     pattern."Pattern",
                     pattern."Version"
                 FROM
                     "NamingPatterns" AS pattern
                 ORDER BY
-                    pattern."MediaTypeId";
+                    pattern."MediaTypeId",
+                    pattern."MediaSubtypeId" NULLS FIRST;
                 """;
             return new BaseDataList<NamingPatternV1>([.. (await Context.ReadSql.ReadListAsync<NamingPatternSaveData>(sql, CancellationToken)).Select(row =>
             {
                 var (folder, file) = NamingPattern.Split(row.Pattern);
-                return new NamingPatternV1(row.MediaTypeId, folder, file, NamingPattern.Example(row.MediaTypeId, row.Pattern), row.Version);
+                return new NamingPatternV1(row.MediaTypeId, row.MediaSubtypeId, folder, file, NamingPattern.Example(row.MediaTypeId, row.Pattern), row.Version);
             })]);
         }
     }
@@ -361,7 +363,49 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, NamingPattern.Join(Data.Folder, Data.File), Data.Version), CancellationToken);
+            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, null, NamingPattern.Join(Data.Folder, Data.File), Data.Version), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/library/naming/{mediaTypeId}/{mediaSubtypeId}")]
+    public sealed class UpdateNamingSubtypePatternV1 : AdminService<NamingSubtypePatternParametersV1, UpdateNamingPatternDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(NamingSubtypePatternParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(NamingSubtypePatternParametersV1 parameters, Type resultType) => new("storage.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, NamingPattern.Join(Data.Folder, Data.File), Data.Version), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/library/naming/settings")]
+    public sealed class ReadNamingSettingsV1 : AdminService<ReadNamingSettingsParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<NamingSettingsV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadNamingSettingsParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadNamingSettingsParametersV1 parameters, Type resultType) => new("storage.read");
+
+        protected override async Task<IServiceOutput> OnRead() => new BaseDataList<NamingSettingsV1>([.. (await Context.ReadNamingSettingsAsync(CancellationToken)).Select(settings =>
+            new NamingSettingsV1(settings.MediaTypeId, settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder, settings.Version))]);
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/library/naming/{mediaTypeId}/settings")]
+    public sealed class UpdateNamingSettingsV1 : AdminService<NamingSettingsParametersV1, UpdateNamingSettingsDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(NamingSettingsParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(NamingSettingsParametersV1 parameters, Type resultType) => new("storage.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SaveNamingSettingsAsync(new NamingSettingsData(Parameters.MediaTypeId, Data.ReplacesIllegalCharacters, Data.ColonReplacementId, Data.CustomColonReplacement,
+                Data.SpecialsFolder, Data.Version), CancellationToken);
             return new UpdateResult(true);
         }
     }

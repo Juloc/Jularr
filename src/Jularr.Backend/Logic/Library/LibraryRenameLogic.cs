@@ -107,7 +107,7 @@ namespace Jularr.Backend.Logic.Library
             return ctx.ReadSql.ReadListAsync<LibraryRenameFileData>(sql, ct);
         }
 
-        public static IReadOnlyList<LibraryRenameData> Plan(IReadOnlyList<LibraryRenameFileData> files, IReadOnlyDictionary<MediaType, string> patterns)
+        public static IReadOnlyList<LibraryRenameData> Plan(IReadOnlyList<LibraryRenameFileData> files, NamingSet patterns)
         {
             var renames = new List<LibraryRenameData>();
             foreach (var root in files.GroupBy(file => file.LibraryRootId))
@@ -164,7 +164,7 @@ namespace Jularr.Backend.Logic.Library
         }
 
         // Only identities with a fixed layout are renamed; games keep their release folders.
-        private static string? Target(LibraryRenameFileData file, IReadOnlyDictionary<MediaType, string> patterns)
+        private static string? Target(LibraryRenameFileData file, NamingSet patterns)
         {
             if (file.CanonicalTitle is not { } title)
             {
@@ -173,8 +173,8 @@ namespace Jularr.Backend.Logic.Library
 
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
-                (MediaType.Movie, null) => NamingPattern.Apply(patterns[MediaType.Movie], Values(file, title, null, null)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns[MediaType.Series], Values(file, title, season, file.UnitNumber)),
+                (MediaType.Movie, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Movie, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns.Pattern(MediaType.Series, file.MediaSubtypeId), Values(file, title, season, file.UnitNumber, patterns)),
                 (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => LibraryNaming.Volume(title, file.UnitNumber),
                 (MediaType.Book, null) => LibraryNaming.Book(title, file.ReleaseYear, file.Author),
                 (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is { } name => LibraryNaming.Track(file.Author, title, file.ReleaseYear, file.UnitNumber!.Value, name),
@@ -182,10 +182,11 @@ namespace Jularr.Backend.Logic.Library
             };
         }
 
-        private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
+        private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode, NamingSet patterns) =>
             new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
             {
                 MediaTypeId = file.MediaTypeId,
+                Rules = patterns.Rules(file.MediaTypeId),
                 AirDate = file.UnitReleasedOn,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
                 OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath),
