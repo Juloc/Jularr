@@ -28,6 +28,41 @@ namespace Jularr.Integrations.Data.AniList
         Newest
     }
 
+    // A title as the provider catalog keeps it: one entry of a page that walks AniList by id.
+    internal sealed class AniListCatalogEntry
+    {
+        public AniListCatalogEntry(int id, string type, string? format, string title, string? originalTitle, DateOnly? releasedOn, int? year, string? description, string? coverUrl,
+            int? popularity, int? averageScore)
+        {
+            Id = id;
+            Type = type;
+            Format = format;
+            Title = title;
+            OriginalTitle = originalTitle;
+            ReleasedOn = releasedOn;
+            Year = year;
+            Description = description;
+            CoverUrl = coverUrl;
+            Popularity = popularity;
+            AverageScore = averageScore;
+        }
+
+        public int Id { get; }
+        // ANIME or MANGA.
+        public string Type { get; }
+        public string? Format { get; }
+        public string Title { get; }
+        public string? OriginalTitle { get; }
+        public DateOnly? ReleasedOn { get; }
+        public int? Year { get; }
+        public string? Description { get; }
+        public string? CoverUrl { get; }
+        // How many AniList users list it.
+        public int? Popularity { get; }
+        // On a scale of a hundred.
+        public int? AverageScore { get; }
+    }
+
     internal enum AniListMediaType : byte
     {
         Anime,

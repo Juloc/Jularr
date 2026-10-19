@@ -11,6 +11,8 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.System.Media.V1;
+using System.Text.Json;
+using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -70,6 +72,42 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AniList_WalksItsTitlesByPage_KeepsTheFormatsDiscoverShows_AndWaitsWhileUsed()
+        {
+            var aniList = new FakeAniListCatalog();
+            var time = new FixedTime(new DateTimeOffset(2026, 10, 19, 3, 0, 0, TimeSpan.Zero));
+            await using var host = await Host.CreateAsync(library: true, services: services =>
+            {
+                services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                services.AddSingleton<TimeProvider>(time);
+            });
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
+
+            // While someone uses Jularr the walk waits.
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var used = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            await RunAsync(host);
+            Assert.AreEqual(0, aniList.Pages.Count);
+
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"PausesWhileUsed\" = FALSE WHERE \"Namespace\" = 'anilist'");
+            await RunAsync(host);
+            CollectionAssert.AreEqual(new[] { 0, 3 }, aniList.Pages.ToArray());
+            Assert.AreEqual("2:1", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '1'"));
+            Assert.AreEqual(8.4m, await host.ScalarAsync("SELECT \"Rating\" FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
+            Assert.AreEqual("Frieren", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
+            Assert.AreEqual("2023-09-29", await host.ScalarAsync("SELECT \"ReleasedOn\"::text FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
+            Assert.AreEqual("3:3", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Value\" = '3'"));
+            Assert.AreEqual("3:2", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Value\" = '5'"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\" WHERE \"Value\" = '2'"), "A music video is no Discover title.");
+            Assert.AreEqual("2026-10-19", await host.ScalarAsync("SELECT \"ListedOn\"::text FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist' AND \"Cursor\" IS NULL"));
+
+            // A finished walk rests for a week.
+            await RunAsync(host);
+            Assert.AreEqual(2, aniList.Pages.Count);
+        }
+
+        [TestMethod]
         public void Windows_AndUse_DecideWhetherACatalogSyncs()
         {
             var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null);
@@ -120,6 +158,23 @@ namespace Jularr.Backend.Tests
         {
             public DateTimeOffset Now { get; set; } = now;
             public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        private sealed class FakeAniListCatalog : HttpMessageHandler
+        {
+            public List<int> Pages { get; } = [];
+            private const string Frieren = """{"id":1,"type":"ANIME","format":"TV","title":{"romaji":"Sousou no Frieren","english":"Frieren","native":"葬送のフリーレン"},"startDate":{"year":2023,"month":9,"day":29},"coverImage":{"large":"https://img.anili.st/1.jpg"},"popularity":500000,"averageScore":84}""";
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                var after = body.RootElement.GetProperty("variables").GetProperty("after").GetInt32();
+                Pages.Add(after);
+                var json = after == 0
+                    ? """{"data":{"Page":{"pageInfo":{"hasNextPage":true},"media":[""" + Frieren + "," + """{"id":2,"type":"ANIME","format":"MUSIC","title":{"romaji":"Song"},"startDate":{"year":2020}},{"id":3,"type":"MANGA","format":"NOVEL","title":{"romaji":"Novel"},"startDate":{"year":2019}}]}}}"""
+                    : """{"data":{"Page":{"pageInfo":{"hasNextPage":false},"media":[{"id":5,"type":"MANGA","format":"MANGA","title":{"romaji":"Manga"},"averageScore":0}]}}}""";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            }
         }
 
         private sealed class FakeTmdbCatalog : HttpMessageHandler

@@ -120,6 +120,12 @@ namespace Jularr.Backend.Logic.Media
 
         public static bool IsListDue(ExternalWorkSyncData sync, DateTimeOffset now) => sync.ListedOn != DateOnly.FromDateTime(now.UtcDateTime) && now.UtcDateTime.Hour >= 9;
 
+        // A catalog without a daily id list walks all its titles; an unfinished walk goes on, a finished one starts again after a week.
+        public static readonly TimeSpan FullPassInterval = TimeSpan.FromDays(7);
+
+        public static bool IsFullPassDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
+            sync.Cursor is not null || sync.ListedOn is not { } listed || DateOnly.FromDateTime(now.UtcDateTime).DayNumber - listed.DayNumber >= FullPassInterval.Days;
+
         public static bool AreChangesDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
             sync.ChangesReadAt is not { } read || now - new DateTimeOffset(read, TimeSpan.Zero) >= ChangesInterval;
 

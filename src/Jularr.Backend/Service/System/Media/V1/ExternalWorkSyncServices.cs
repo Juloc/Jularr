@@ -8,6 +8,7 @@ using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
 
@@ -18,12 +19,14 @@ namespace Jularr.Backend.Service.System.Media.V1
     public sealed class SyncExternalWorksV1 : SystemService<SyncExternalWorksParametersV1, NoData>
     {
         private readonly WorkMetadata _metadata;
+        private readonly AniListMetadata _aniList;
         private readonly TimeProvider _time;
         private readonly UserActivity _activity;
 
-        internal SyncExternalWorksV1(WorkMetadata metadata, TimeProvider time, UserActivity activity)
+        internal SyncExternalWorksV1(WorkMetadata metadata, AniListMetadata aniList, TimeProvider time, UserActivity activity)
         {
             _metadata = metadata;
+            _aniList = aniList;
             _time = time;
             _activity = activity;
         }
@@ -35,7 +38,11 @@ namespace Jularr.Backend.Service.System.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Without a TMDB key there is nothing to keep.
+            var windows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncWindowsAsync(ct), CancellationToken);
+            var isUsed = _activity.IsUsedWithin(ExternalWorkLogic.UseLasts);
+            var changed = await SyncAniListAsync(windows, isUsed);
+
+            // Without a TMDB key there is nothing to keep from TMDB.
             TmdbConnection connection;
             try
             {
@@ -43,12 +50,9 @@ namespace Jularr.Backend.Service.System.Media.V1
             }
             catch (ServiceUnavailableException)
             {
-                return new UpdateResult(false);
+                return new UpdateResult(changed > 0);
             }
 
-            var windows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncWindowsAsync(ct), CancellationToken);
-            var isUsed = _activity.IsUsedWithin(ExternalWorkLogic.UseLasts);
-            var changed = 0;
             foreach (var mediaType in new[] { MediaType.Movie, MediaType.Series })
             {
                 var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
@@ -78,6 +82,81 @@ namespace Jularr.Backend.Service.System.Media.V1
             }
 
             return new UpdateResult(changed > 0);
+        }
+
+        // AniList has no id list: a pass walks its titles by id, a page per request within the budget, and goes on where the last one stopped.
+        private async Task<int> SyncAniListAsync(IReadOnlyList<ExternalWorkSyncWindowData> windows, bool isUsed)
+        {
+            var now = _time.GetUtcNow();
+            var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(AniListMetadata.Namespace, ct), CancellationToken);
+            if (sync is null || !ExternalWorkLogic.MaySync(sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)
+                || !ExternalWorkLogic.IsFullPassDue(sync, now))
+            {
+                return 0;
+            }
+
+            var cursor = sync.Cursor ?? 0;
+            var complete = false;
+            var changed = 0;
+            for (var request = 0; request < sync.RequestsPerMinute; request++)
+            {
+                IReadOnlyList<AniListCatalogEntry> entries;
+                bool more;
+                try
+                {
+                    (entries, more) = await _aniList.ReadCatalogPageAsync(cursor, CancellationToken);
+                }
+                catch (ServiceUnavailableException)
+                {
+                    break;
+                }
+
+                changed += await KeepAniListAsync(entries);
+                if (entries.Count > 0) cursor = entries.Max(entry => entry.Id);
+                if (!more || entries.Count == 0)
+                {
+                    complete = true;
+                    break;
+                }
+            }
+
+            var progress = complete ? new ExternalWorkSyncProgressData(sync.Namespace, DateOnly.FromDateTime(now.UtcDateTime), null, sync.ChangesReadAt)
+                : new ExternalWorkSyncProgressData(sync.Namespace, sync.ListedOn, cursor > 0 ? cursor : null, sync.ChangesReadAt);
+            await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(progress, ct), CancellationToken);
+            return changed;
+        }
+
+        private async Task<int> KeepAniListAsync(IReadOnlyList<AniListCatalogEntry> entries)
+        {
+            var changed = 0;
+            foreach (var group in entries.Select(entry => (entry, place: AniListMatching.CatalogType(entry.Type, entry.Format))).Where(item => item.place is not null).GroupBy(item => item.place!.Value))
+            {
+                var list = new ExternalWorkListData(AniListMetadata.Namespace, group.Key.Type, group.Key.Subtype);
+                var works = group.Select(item => new ExternalWorkData(AniListMetadata.Namespace, item.entry.Id.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(item.entry.Title, 500)!,
+                    TextLimit.Cut(item.entry.OriginalTitle, 500), item.entry.Year is >= 1800 and <= 2200 ? item.entry.Year : null, TextLimit.Cut(item.entry.Description, 4000), null,
+                    item.entry.CoverUrl, null, DateTime.MinValue)).ToArray();
+                var details = JsonSerializer.Serialize(group.Select(item => new
+                {
+                    Value = item.entry.Id.ToString(CultureInfo.InvariantCulture),
+                    item.entry.Title,
+                    item.entry.OriginalTitle,
+                    ReleasedOn = item.entry.ReleasedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Overview = item.entry.Description,
+                    ImageUrl = item.entry.CoverUrl,
+                    BackdropUrl = (string?)null,
+                    Popularity = item.entry.Popularity,
+                    Rating = item.entry.AverageScore is > 0 ? item.entry.AverageScore / 10.0 : null,
+                    ImdbId = (string?)null,
+                    IsAdult = false
+                }));
+                changed += await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, false), ct);
+                    return await ctx.DetailExternalWorksAsync(new ExternalWorkEntriesData(list, details), ct);
+                }, CancellationToken);
+            }
+
+            return changed;
         }
 
         // Adult titles and video extras stay out of the catalog.
