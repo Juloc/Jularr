@@ -2,17 +2,13 @@
 """Print per-test TRX durations without modifying test execution or outcomes."""
 from pathlib import Path
 import os
-import re
 import sys
 import xml.etree.ElementTree as ET
 
 
 def seconds(value: str) -> float:
-    match = re.fullmatch(r"(\\d+):(\\d+):(\\d+)(?:\\.(\\d+))?", value)
-    if not match:
-        raise ValueError(f"Unrecognized TRX duration: {value}")
-    hours, minutes, whole, fraction = match.groups()
-    return int(hours) * 3600 + int(minutes) * 60 + int(whole) + float(f"0.{fraction or '0'}")
+    hours, minutes, rest = value.split(":")
+    return int(hours) * 3600 + int(minutes) * 60 + float(rest)
 
 
 def main() -> int:
@@ -48,10 +44,10 @@ def main() -> int:
         "| ---: | --- | --- | --- |",
     ]
     for duration, name, outcome, file in tests[:20]:
-        safe_name = name.replace("|", "\\|").replace("\\n", " ")
+        safe_name = name.replace("|", "\\|").replace("\n", " ")
         rows.append(f"| {duration:.2f} s | {outcome} | {safe_name} | {file} |")
 
-    report = "\\n".join(rows) + "\\n"
+    report = "\n".join(rows) + "\n"
     print(report)
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary, "a", encoding="utf8") as output:
