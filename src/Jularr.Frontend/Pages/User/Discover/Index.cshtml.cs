@@ -110,7 +110,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected?.Slug, View, PageNumber - 1)));
                 if (!_providerUnavailable && PageNumber < 500 && results.Count >= 20)
                 {
-                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("href", Address(selected?.Slug, View, PageNumber + 1)));
+                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("data-navigation", "full").Attribute("href", Address(selected?.Slug, View, PageNumber + 1)));
                 }
 
                 page.Content.Add(new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]));

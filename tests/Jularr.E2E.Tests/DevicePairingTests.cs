@@ -31,7 +31,7 @@ namespace Jularr.E2E.Tests
             await phone.GotoAsync("/Devices/Pair?code=" + code);
             StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "Browser (Web) asks to be paired");
             StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), code);
-            await phone.Locator("main form button[type=submit]").Last.ClickAsync();
+            await Steps.FollowAsync(phone, phone.Locator("main form button[type=submit]").Last);
             StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "The device is paired");
 
             // The TV looks again by itself and is signed in.
@@ -62,7 +62,7 @@ namespace Jularr.E2E.Tests
             // The phone sees the device and confirms it.
             await phone.GotoAsync("/Devices/Pair?code=" + code);
             StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "Living room TV (AndroidTV) asks to be paired");
-            await phone.Locator("main form button[type=submit]").Last.ClickAsync();
+            await Steps.FollowAsync(phone, phone.Locator("main form button[type=submit]").Last);
             StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "The device is paired");
 
             // The app fetches its token once and signs in with it alone.

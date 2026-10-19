@@ -45,6 +45,9 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
     background: var(--surface);
 }
 .skip-link:focus { top: 12px; }
+// The exchangeable page area adds no box of its own; it stays invisible until a new page's styles apply.
+.app-content { display: contents; }
+.app-content--loading { visibility: hidden; }
 
 .page-title { margin: 0 0 26px; font-size: clamp(24px, 3vw, 32px); letter-spacing: -.04em; }
 .ui-panel {

@@ -15,9 +15,18 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   live search and server-rendered fragments; no client hydration, client-side
   business templates or translation-bundle fetching. Preserve native navigation
   and forms wherever the feature does not inherently require JavaScript.
-- Server-rendered fragment navigation is approved to keep the application shell
-  and active Player alive. Keep normal full-page routes usable without JavaScript;
-  authorization, form validation and rendering stay server-owned.
+- Owner's decision 19 Oct: in-place navigation uses **htmx 4** (boost), not a SPA.
+  Links and forms of app pages replace `#app-content` with the same element of the
+  server's full page; the head, theme and an active Player stay. Player, Reader, Game,
+  Account, Setup, API addresses, downloads, new windows and `data-navigation="full"`
+  (also links a page script handles itself) load normally ([rules](../src/Jularr.Frontend/Modules/Navigation/Navigation.ts)).
+  Back reloads the page from the server; no page HTML is kept in browser storage.
+  Every route stays usable without JavaScript; authorization, form validation and
+  rendering stay server-owned. A POST that shows its page again adds no history entry.
+- App-page styles and scripts render inside `#app-content`. A page script registers
+  its DOM setup with `onPage(import.meta.url, setup)`: it runs once per document load
+  and again for each new page the script belongs to; document-level listeners are
+  installed once at module level. HTML a script inserts goes through `inserted(element)`.
 - Frontend owns UI appearance, accessible interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.

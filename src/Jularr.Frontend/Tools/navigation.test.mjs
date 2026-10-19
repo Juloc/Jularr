@@ -8,24 +8,27 @@ const source = readFileSync(new URL('../Modules/Navigation/Navigation.ts', impor
 const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const module = { exports: {} };
 runInNewContext(script, { exports: module.exports, module, URL });
-const { isNavigable } = module.exports;
+const { staysInApp } = module.exports;
 
 const current = { href: 'https://jularr.test/Details/1', origin: 'https://jularr.test', pathname: '/Details/1', search: '' };
-const click = (extra = {}) => ({ defaultPrevented: false, button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...extra });
-const anchor = (href, extra = {}) => ({ href: new URL(href, current.href).href, target: '', dataset: {}, hasAttribute: () => false, ...extra });
-
-test('app pages stay in the document while playing', () => {
-    assert.equal(isNavigable(anchor('/Library'), current, click()), true);
-    assert.equal(isNavigable(anchor('/Details/2?p=3'), current, click()), true);
+const element = (attributes = {}, dataset = {}) => ({
+    target: attributes.target ?? '', dataset,
+    hasAttribute: name => name in attributes
 });
 
-test('other pages, origins and modified clicks load normally', () => {
-    for (const href of ['/Read/4', '/Player/5', '/Account/Logout', '/Setup/Progress', '/api/v1/auth', 'https://elsewhere.test/']) {
-        assert.equal(isNavigable(anchor(href), current, click()), false, href);
+test('app pages and their forms swap in place', () => {
+    assert.equal(staysInApp(element(), '/Library', current), true);
+    assert.equal(staysInApp(element(), '/Details/2?p=3', current), true);
+    assert.equal(staysInApp(element(), '/Admin/Instance?handler=Save', current), true);
+    assert.equal(staysInApp(element(), '', current), true, 'a form without action posts to the current page');
+});
+
+test('other shells, files, origins and new windows load normally', () => {
+    for (const href of ['/Read/4', '/Player/5', '/Game/6', '/Account/Logout', '/Setup/Progress', '/api/v1/auth', 'https://elsewhere.test/']) {
+        assert.equal(staysInApp(element(), href, current), false, href);
     }
 
-    assert.equal(isNavigable(anchor('/Library'), current, click({ ctrlKey: true })), false);
-    assert.equal(isNavigable(anchor('/Library', { target: '_blank' }), current, click()), false);
-    assert.equal(isNavigable(anchor('/Library', { dataset: { navigation: 'full' } }), current, click()), false);
-    assert.equal(isNavigable(anchor('#section'), current, click()), false);
+    assert.equal(staysInApp(element({ target: '_blank' }), '/Library', current), false);
+    assert.equal(staysInApp(element({ download: '' }), '/Library', current), false);
+    assert.equal(staysInApp(element({}, { navigation: 'full' }), '/Library', current), false);
 });

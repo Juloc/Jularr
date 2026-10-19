@@ -14,6 +14,9 @@ namespace Jularr.Frontend.Framework
         // Shared service failure feedback.
         public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
         {
+            // A POST that shows its page again adds no history entry; after a redirect the target address is recorded.
+            if (HttpMethods.IsPost(Request.Method)) Response.Headers["HX-Push-Url"] = "false";
+
             // Reject failed HTTP binding.
             if (!context.ModelState.IsValid)
             {

@@ -102,7 +102,7 @@ namespace Jularr.Frontend.Framework
                         .Attribute("popovertarget", "player-sidebar").Attribute("popovertargetaction", "hide"),
                     _sidebar).Class("player__sidebar").Attribute("id", "player-sidebar").Attribute("aria-label", texts["details.episodes"]));
             }
-            new Div([.. content]).Class("player")
+            new Div([.. content]).Class("player").Attribute("hx-ignore", "")
                 .Attribute("data-start-url", source.StartUrl)
                 .Attribute("data-session-url", source.SessionUrl)
                 .Attribute("data-antiforgery", source.AntiforgeryToken)
