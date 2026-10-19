@@ -33,6 +33,11 @@ namespace Jularr.Frontend.Framework
 
             var stage = new Div(
                 video,
+                // Playback feedback stays above the picture, never over the controls.
+                new Div(new Span().Class("player__loading-ring")).Class("player__loading")
+                    .Attribute("data-role", "loading").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
+                new Div(Icon("play"), Icon("pause")).Class("player__feedback")
+                    .Attribute("data-role", "transport-feedback").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                 new Div(
                     new Div(
                         new A(Icon("close")).Class("button button--icon player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
