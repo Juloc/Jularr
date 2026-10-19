@@ -26,9 +26,9 @@ const symbols = {};
 const shapes = [];
 
 for (const file of icons.sort()) {
-    const relativeName = relative(root, file).replaceAll("\\", "/")
-        .replace(/^Assets\/Icons\//, "").replace(/\.svg$/i, "");
-    const name = relativeName.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
+    const relativeName = relative(root, file).replaceAll("\\", "/");
+    const name = relativeName.split("/").at(-1).replace(/\.svg$/i, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
     if (symbols[name]) throw new Error("Duplicate icon symbol: " + name);
 
     const svg = (await readFile(file, "utf8")).trim();
