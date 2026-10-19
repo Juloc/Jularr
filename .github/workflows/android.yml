@@ -1,0 +1,48 @@
+name: Android
+
+on:
+  pull_request:
+    paths:
+      - "clients/android/**"
+      - ".github/workflows/android.yml"
+  push:
+    branches:
+      - "clean-start"
+    paths:
+      - "clients/android/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.8.0"
+
+      - name: Test and lint the client modules
+        working-directory: clients/android
+        run: gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-model:lintDebug
