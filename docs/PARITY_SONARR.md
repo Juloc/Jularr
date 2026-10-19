@@ -59,6 +59,14 @@ Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it
 | Indexers, download | Torrent indexers and clients | Usenet only |
 | Import lists | MyAnimeList, Simkl, other Sonarr, custom lists | Not needed |
 
+## Editions and languages (all media types)
+
+By default every Work comes in one edition chosen by the profile (theatrical cut, standard album, the profile's
+language), once for every language that is needed: each profile that requests or watchlists the Work brings its
+language, within the languages the Owner allows; a profile for all languages takes every allowed language.
+Further editions (director's cut, extended, deluxe, remaster, vinyl, another language) can be requested on their own
+and then lie side by side; the player and reader choose among them.
+
 ## Same
 
 Quality profiles, custom formats and quality sizes (with takeover; the Owner's six profiles and seven formats

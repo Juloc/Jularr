@@ -19,7 +19,7 @@ Only what Radarr adds or does otherwise is listed here. Build state is tracked i
 
 | Area | Radarr | Jularr |
 | --- | --- | --- |
-| Editions | One file per film; editions preferred through custom formats | Several editions and versions per film, chosen when playing; the wanted edition selectable in the profile and the request; edition as a naming token and custom format condition |
+| Editions | One file per film; editions preferred through custom formats | The [general rule](PARITY_SONARR.md#editions-and-languages-all-media-types): one edition per needed language by default, further editions requestable side by side and chosen when playing; edition as a naming token and custom format condition |
 
 ## Later
 
