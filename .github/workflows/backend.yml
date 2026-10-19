@@ -131,6 +131,7 @@ jobs:
 
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
+    name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Three runners share the browser tests by measured class durations; every class not named belongs to "rest".
