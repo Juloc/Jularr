@@ -844,6 +844,7 @@ namespace Jularr.Frontend.Localization
             new("continueReading.dismiss", "Hide this bar; your reading position stays"),
             new("discover.title", "Discover"),
             new("discover.all", "All"),
+            new("discover.suggestions", "Suggestions"),
             new("discover.type.movies", "Movies"),
             new("discover.type.series", "Series"),
             new("discover.type.anime", "Anime"),

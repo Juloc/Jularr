@@ -35,7 +35,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 ## User and account pages
 
-- [Discover](Pages/User/Discover/Index.cshtml.cs), [client](Pages/User/Discover/Index.entry.ts): local-first landing with Continue Watching, Listening and Reading shelves, recommendation HTML fragments, debounced search and progressive result paging.
+- [Discover](Pages/User/Discover/Index.cshtml.cs), [client](Pages/User/Discover/Index.entry.ts): local-first landing with Continue Watching, Listening and Reading shelves, recommendation HTML fragments (whole catalogs in one read), debounced search with kept-title suggestions under the field and progressive result paging.
 - [Provider title](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs): TMDB title and authorized request before canonical Work creation; [catalog title](Pages/User/DiscoverCatalog/DiscoverCatalog.cshtml.cs) the same for a book, light novel, manga, album or game found in its catalog, and an anime season shown as AniList shows it (a known one opens its series). The scopes of the media-type bar come from `ReadDiscoverScopesV1`; the catalog page reads its title from the catalog.
 - [Library](Pages/User/Library/Library.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): real bounded catalogs; both narrow by [LibraryScopes](Framework/LibraryScopes.cs) type tabs and sort.
 - [Details](Pages/User/Details/Details.cshtml.cs): Work, paged versions, personal actions and capability-based Play/Read links; a series shows its seasons beside [episode cards](Framework/Components/EpisodeCard.cs) (still, length, progress, state chip).
