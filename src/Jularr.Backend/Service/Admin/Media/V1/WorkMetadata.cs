@@ -239,6 +239,60 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }, ct);
         }
 
+        // TMDB's daily id list in batches; false while TMDB has not published the day's list.
+        public async Task<bool> ReadIdListAsync(MediaType mediaType, DateOnly day, Func<IReadOnlyList<TmdbExportEntry>, Task> batch, CancellationToken ct)
+        {
+            var entries = new List<TmdbExportEntry>(IdListBatch);
+            try
+            {
+                await foreach (var entry in _tmdb.ReadIdExportAsync(Kind(mediaType), day, ct))
+                {
+                    entries.Add(entry);
+                    if (entries.Count < IdListBatch) continue;
+                    await batch(entries);
+                    entries = new List<TmdbExportEntry>(IdListBatch);
+                }
+            }
+            catch (TmdbException exception) when (exception.Failure == TmdbFailure.NotFound)
+            {
+                return false;
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+
+            if (entries.Count > 0) await batch(entries);
+            return true;
+        }
+
+        private const int IdListBatch = 5000;
+
+        public async Task<(IReadOnlyList<int> Ids, int Pages)> ReadChangesAsync(TmdbConnection connection, MediaType mediaType, DateOnly from, DateOnly to, int page, CancellationToken ct)
+        {
+            try
+            {
+                return await _tmdb.ReadChangesAsync(connection, Kind(mediaType), from, to, page, ct);
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
+        // One title for the provider catalog; null when TMDB no longer has it.
+        public async Task<TmdbCatalogEntry?> ReadCatalogEntryAsync(TmdbConnection connection, MediaType mediaType, int id, CancellationToken ct)
+        {
+            try
+            {
+                return await _tmdb.ReadCatalogEntryAsync(connection, Kind(mediaType), id, ct);
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         private static TmdbMediaKind Kind(MediaType mediaType) => mediaType switch
         {
             MediaType.Movie => TmdbMediaKind.Movie,

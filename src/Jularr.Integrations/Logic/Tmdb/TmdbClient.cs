@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Tmdb;
@@ -178,6 +180,98 @@ namespace Jularr.Integrations.Logic.Tmdb
                 : [];
         }
 
+        // TMDB's daily list of every id with its popularity: public, gzip, one JSON object per line; published around 08:00 UTC.
+        private static readonly Uri ExportHost = new("https://files.tmdb.org/p/exports/");
+
+        public async IAsyncEnumerable<TmdbExportEntry> ReadIdExportAsync(TmdbMediaKind kind, DateOnly day, [EnumeratorCancellation] CancellationToken ct)
+        {
+            var file = (kind == TmdbMediaKind.Movie ? "movie" : "tv_series") + "_ids_" + day.ToString("MM_dd_yyyy", CultureInfo.InvariantCulture) + ".json.gz";
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(ExportHost, file));
+            HttpResponseMessage response;
+            try
+            {
+                response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            }
+            catch (Exception exception) when (exception is HttpRequestException || exception is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                throw new TmdbException(TmdbFailure.Unavailable, "TMDB's id list could not be reached.", exception);
+            }
+
+            using (response)
+            {
+                if (response.StatusCode == HttpStatusCode.NotFound) throw new TmdbException(TmdbFailure.NotFound, "TMDB has not published this id list.");
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new TmdbException(TmdbFailure.Unavailable, "TMDB's id list answered HTTP " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture) + ".");
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                await using var unpacked = new GZipStream(stream, CompressionMode.Decompress);
+                using var reader = new StreamReader(unpacked);
+                while (await reader.ReadLineAsync(ct) is { } line)
+                {
+                    if (ParseExport(kind, line) is { } entry) yield return entry;
+                }
+            }
+        }
+
+        // The ids changed between two days (at most fourteen apart), one page of a hundred at a time.
+        public async Task<(IReadOnlyList<int> Ids, int Pages)> ReadChangesAsync(TmdbConnection connection, TmdbMediaKind kind, DateOnly from, DateOnly to, int page, CancellationToken ct)
+        {
+            using var document = await ReadAsync(connection, (kind == TmdbMediaKind.Movie ? "movie" : "tv") + "/changes", [
+                new("start_date", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                new("end_date", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                new("page", page.ToString(CultureInfo.InvariantCulture))], ct);
+            var ids = document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array
+                ? results.EnumerateArray().Select(item => Int(item, "id")).OfType<int>().Where(id => id > 0).ToArray()
+                : [];
+            return (ids, Int(document.RootElement, "total_pages") ?? 1);
+        }
+
+        // One title for the provider catalog, without the heavy details of an import; null when TMDB no longer has it.
+        public async Task<TmdbCatalogEntry?> ReadCatalogEntryAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
+        {
+            var movie = kind == TmdbMediaKind.Movie;
+            JsonDocument document;
+            try
+            {
+                document = await ReadAsync(connection, (movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture), [new("append_to_response", "external_ids")], ct);
+            }
+            catch (TmdbException exception) when (exception.Failure == TmdbFailure.NotFound)
+            {
+                return null;
+            }
+
+            using (document)
+            {
+                var item = document.RootElement;
+                if (Text(item, movie ? "title" : "name") is not { } title) return null;
+                var imdb = Text(item, "imdb_id") ?? (item.TryGetProperty("external_ids", out var external) ? Text(external, "imdb_id") : null);
+                return new TmdbCatalogEntry(id, title, Text(item, movie ? "original_title" : "original_name"), Date(item, movie ? "release_date" : "first_air_date"), Text(item, "overview"),
+                    ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "popularity"), Number(item, "vote_average"), imdb,
+                    item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True);
+            }
+        }
+
+        private static TmdbExportEntry? ParseExport(TmdbMediaKind kind, string line)
+        {
+            if (line.Length == 0) return null;
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                var item = document.RootElement;
+                return Int(item, "id") is { } id and > 0 && Text(item, kind == TmdbMediaKind.Movie ? "original_title" : "original_name") is { } title
+                    ? new TmdbExportEntry(id, title, Number(item, "popularity") ?? 0, item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True,
+                        item.TryGetProperty("video", out var video) && video.ValueKind == JsonValueKind.True)
+                    : null;
+            }
+            catch (JsonException)
+            {
+                // A damaged line is skipped; the next day's list has it again.
+                return null;
+            }
+        }
+
         private async Task<JsonDocument> ReadAsync(TmdbConnection connection, string path, IReadOnlyList<KeyValuePair<string, string>> parameters, CancellationToken ct)
         {
             // Read tokens are JWTs; anything else is a v3 key.
@@ -273,6 +367,10 @@ namespace Jularr.Integrations.Logic.Tmdb
         private static int? Int(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
                 ? number : null;
+
+        private static double? Number(JsonElement element, string name) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number)
+                && double.IsFinite(number) ? number : null;
 
         private static DateOnly? Date(JsonElement element, string name) =>
             DateOnly.TryParseExact(Text(element, name), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
