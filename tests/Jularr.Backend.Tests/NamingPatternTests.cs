@@ -26,8 +26,8 @@ namespace Jularr.Backend.Tests
         public void NamingPattern_EmptyPlaceholders_DropWithTheirBrackets()
         {
             var episode = new NamingValues("Show: Part", 2020, 1, 2.5m, "Pilot", "WEBDL-1080p", "GRP", null, 2);
-            Assert.AreEqual("Show Part/Season 01/Show Part - S01E02.5 [WEBDL-1080p]", NamingPattern.Apply(Defaults[MediaType.Series], episode));
-            Assert.AreEqual("Show Part (2020)/S01E02.5 - Pilot [WEBDL-1080p Proper] - GRP",
+            Assert.AreEqual("Show - Part/Season 01/Show - Part - S01E02.5 [WEBDL-1080p]", NamingPattern.Apply(Defaults[MediaType.Series], episode));
+            Assert.AreEqual("Show - Part (2020)/S01E02.5 - Pilot [WEBDL-1080p Proper] - GRP",
                 NamingPattern.Apply("{Title} ({Year})/S{Season:00}E{Episode:00} - {Episode Title} [{Quality} {Proper}] - {Release Group}", episode));
 
             // Nothing known leaves no empty brackets or separators.
@@ -129,6 +129,32 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void NamingPattern_ColonsIllegalCharactersAndSeason0_FollowTheRules()
+        {
+            NamingValues Show(NamingRules rules, decimal season = 1) => new("Show: The Part: 2", 2020, season, 3, "Who: Me", "WEBDL-1080p", "GRP", null, 1) { MediaTypeId = MediaType.Series, Rules = rules };
+            const string pattern = "{Title}/Season {Season:00}/{Title} - S{Season:00}E{Episode:00} - {Episode Title}";
+            string Name(ColonReplacement colon, string? custom = null, bool replaces = true) =>
+                NamingPattern.Apply("{Title} - {Episode Title}", Show(new NamingRules(replaces, colon, custom, "Specials")));
+            Assert.AreEqual("Show - The Part - 2 - Who - Me", Name(ColonReplacement.Smart));
+            Assert.AreEqual("Show The Part 2 - Who Me", Name(ColonReplacement.Delete));
+            Assert.AreEqual("Show- The Part- 2 - Who- Me", Name(ColonReplacement.Dash));
+            Assert.AreEqual("Show - The Part - 2 - Who - Me", Name(ColonReplacement.SpaceDash));
+            Assert.AreEqual("Show - The Part - 2 - Who - Me", Name(ColonReplacement.SpaceDashSpace));
+            Assert.AreEqual("Show~ The Part~ 2 - Who~ Me", Name(ColonReplacement.Custom, "~"));
+
+            // Not replacing illegal characters removes them without a space.
+            Assert.AreEqual("Show The Part 2 - Who Me", Name(ColonReplacement.Smart, replaces: false));
+            Assert.AreEqual("AB", NamingPattern.Apply("{Title}", new NamingValues("A*B", null, null, null, null, null, null, null, 1) { Rules = new NamingRules(false, ColonReplacement.Smart, null, null) }));
+            Assert.AreEqual("A B", NamingPattern.Apply("{Title}", new NamingValues("A*B", null, null, null, null, null, null, null, 1)));
+
+            // Season 0 goes to its own folder, any other season keeps the season folder.
+            var rules = new NamingRules(true, ColonReplacement.Smart, null, "Specials");
+            Assert.AreEqual("Show - The Part - 2/Specials/Show - The Part - 2 - S00E03 - Who - Me", NamingPattern.Apply(pattern, Show(rules, 0)));
+            Assert.AreEqual("Show - The Part - 2/Season 01/Show - The Part - 2 - S01E03 - Who - Me", NamingPattern.Apply(pattern, Show(rules)));
+            Assert.AreEqual("Show - The Part - 2/Season 00/Show - The Part - 2 - S00E03 - Who - Me", NamingPattern.Apply(pattern, Show(rules with { SpecialsFolder = null }, 0)));
+        }
+
+        [TestMethod]
         public void NamingPattern_OriginalFilename_ExcludesTheExtension()
         {
             var values = new NamingValues("Movie", 2020, null, null, null, null, null, null, 1)
@@ -193,7 +219,9 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "Episode files");
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/naming");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
-            var series = (await read.Content.ReadFromJsonAsync<BaseDataList<NamingPatternV1>>())!.Single(pattern => pattern.MediaTypeId == MediaType.Series);
+            var all = (await read.Content.ReadFromJsonAsync<BaseDataList<NamingPatternV1>>())!;
+            var series = all.Single(pattern => pattern.MediaTypeId == MediaType.Series && pattern.MediaSubtypeId is null);
+            Assert.AreEqual(Defaults[MediaType.Series], all.Single(pattern => pattern.MediaSubtypeId == MediaSubtype.Anime).Folder + "/" + all.Single(pattern => pattern.MediaSubtypeId == MediaSubtype.Anime).File);
             Assert.AreEqual(Defaults[MediaType.Series], series.Folder + "/" + series.File);
             Assert.AreEqual("Example Show/Season 01/Example Show - S01E02 [WEBDL-1080p].mkv", series.Example);
             StringAssert.Contains(html, "Example Show/Season 01/Example Show - S01E02 [WEBDL-1080p].mkv");
@@ -204,7 +232,67 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1(null, "{Title}", series.Version + 1));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
-            Assert.AreEqual("{Title}/S{Season:00}/{Title} S{Season:00}E{Episode:00}", await host.ScalarAsync("SELECT \"Pattern\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2"));
+            Assert.AreEqual("{Title}/S{Season:00}/{Title} S{Season:00}E{Episode:00}", await host.ScalarAsync("SELECT \"Pattern\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2 AND \"MediaSubtypeId\" IS NULL"));
+        }
+
+        [TestMethod]
+        public void NamingSet_SubtypePattern_NamesItsFilesAndTheTypeKeepsTheRest()
+        {
+            var set = new NamingSet(new Dictionary<(MediaType, MediaSubtype?), string>
+            {
+                [(MediaType.Movie, null)] = Defaults[MediaType.Movie],
+                [(MediaType.Series, null)] = Defaults[MediaType.Series],
+                [(MediaType.Series, MediaSubtype.Anime)] = "{Title}/S{Season:00}E{Episode:00} - {Absolute:000}"
+            });
+            Assert.AreEqual("{Title}/S{Season:00}E{Episode:00} - {Absolute:000}", set.Pattern(MediaType.Series, MediaSubtype.Anime));
+            Assert.AreEqual(Defaults[MediaType.Series], set.Pattern(MediaType.Series, null));
+            Assert.AreEqual(Defaults[MediaType.Movie], set.Pattern(MediaType.Movie, MediaSubtype.Anime));
+            Assert.AreEqual(NamingRules.Default, set.Rules(MediaType.Series));
+        }
+
+        [TestMethod]
+        public async Task NamingSettings_AdminEdit_IsVersionCheckedAndHeldPerType()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Naming");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Anime episode files");
+            StringAssert.Contains(html, "Replace illegal characters");
+            StringAssert.Contains(html, "Folder of season 0");
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/naming/settings");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var settings = (await read.Content.ReadFromJsonAsync<BaseDataList<NamingSettingsV1>>())!.ToArray();
+            var series = settings.Single(item => item.MediaTypeId == MediaType.Series);
+            Assert.AreEqual((true, ColonReplacement.Smart, "Specials"), (series.ReplacesIllegalCharacters, series.ColonReplacementId, series.SpecialsFolder));
+            Assert.IsNull(settings.Single(item => item.MediaTypeId == MediaType.Movie).SpecialsFolder);
+
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/settings", new UpdateNamingSettingsDataV1(true, ColonReplacement.Custom, "~", "Extras", series.Version));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"ColonReplacementId\" FROM \"NamingSettings\" WHERE \"MediaTypeId\" = 2"));
+            Assert.AreEqual("Extras", await host.ScalarAsync("SELECT \"SpecialsFolder\" FROM \"NamingSettings\" WHERE \"MediaTypeId\" = 2"));
+
+            // A stale edit, a custom choice without its text, a colon or slash as the replacement and a folder for films are refused; a choice other than custom forgets its text.
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/settings", new UpdateNamingSettingsDataV1(true, ColonReplacement.Smart, null, null, series.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
+            using var none = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/settings", new UpdateNamingSettingsDataV1(true, ColonReplacement.Custom, null, null, series.Version + 1));
+            StringAssert.Contains(await none.Content.ReadAsStringAsync(), "required");
+            using var slash = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/settings", new UpdateNamingSettingsDataV1(true, ColonReplacement.Custom, "/", null, series.Version + 1));
+            StringAssert.Contains(await slash.Content.ReadAsStringAsync(), "invalid_value");
+            using var film = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Movie/settings", new UpdateNamingSettingsDataV1(true, ColonReplacement.Smart, null, "Extras", 1));
+            StringAssert.Contains(await film.Content.ReadAsStringAsync(), "invalid_value");
+            using var plain = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/settings", new UpdateNamingSettingsDataV1(false, ColonReplacement.Dash, "~", null, series.Version + 1));
+            Assert.AreEqual(HttpStatusCode.OK, plain.StatusCode, await plain.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"CustomColonReplacement\" FROM \"NamingSettings\" WHERE \"MediaTypeId\" = 2"));
+
+            // The anime pattern is its own: saved apart, the type's stays.
+            using var all = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/naming");
+            var anime = (await all.Content.ReadFromJsonAsync<BaseDataList<NamingPatternV1>>())!.Single(pattern => pattern.MediaSubtypeId == MediaSubtype.Anime);
+            using var edited = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series/Anime", new UpdateNamingPatternDataV1("{Title}/S{Season:00}", "{Title} S{Season:00}E{Episode:00} {absolute:000}", anime.Version));
+            Assert.AreEqual(HttpStatusCode.OK, edited.StatusCode, await edited.Content.ReadAsStringAsync());
+            Assert.AreEqual(Defaults[MediaType.Series], await host.ScalarAsync("SELECT \"Pattern\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2 AND \"MediaSubtypeId\" IS NULL"));
+            Assert.AreEqual("{Title}/S{Season:00}/{Title} S{Season:00}E{Episode:00} {absolute:000}", await host.ScalarAsync("SELECT \"Pattern\" FROM \"NamingPatterns\" WHERE \"MediaSubtypeId\" = 1"));
         }
 
         [TestMethod]
@@ -232,7 +320,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync($"UPDATE \"NamingPatterns\" SET \"Pattern\" = '{Defaults[MediaType.Series]}' WHERE \"MediaTypeId\" = 2");
             using var kept = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(true, RecycleMode.Delete, null, null, 7, settings.Version));
             Assert.AreEqual(HttpStatusCode.OK, kept.StatusCode, await kept.Content.ReadAsStringAsync());
-            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2"))!;
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2 AND \"MediaSubtypeId\" IS NULL"))!;
             using var plain = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}", "{Title} S{Season:00}E{Episode:00}", version));
             StringAssert.Contains(await plain.Content.ReadAsStringAsync(), "naming_needs_release_token");
 

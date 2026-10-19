@@ -70,7 +70,7 @@ namespace Jularr.Backend.Logic.Library
             }
 
             // Several releases of one film or episode need names that tell them apart.
-            if (data.KeepsReleases && (await ctx.ReadNamingPatternsAsync(ct)).Values.Any(pattern => !NamingPattern.Distinguishes(pattern)))
+            if (data.KeepsReleases && (await ctx.ReadNamingPatternsAsync(ct)).Patterns.Any(pattern => !NamingPattern.Distinguishes(pattern)))
             {
                 throw new DataValidationException(nameof(data.KeepsReleases), "naming_needs_release_token");
             }

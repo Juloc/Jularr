@@ -61,6 +61,14 @@ namespace Jularr.Backend.Logic.Library
             var parts = pattern.Split('/');
             for (var index = 0; index < parts.Length; index++)
             {
+                // Season 0 goes to its own folder instead of the season folder.
+                if (values.Season == 0 && values.Rules.SpecialsFolder is { Length: > 0 } specials && index < parts.Length - 1
+                    && Parse(parts[index]).Any(piece => piece.Name == "Season"))
+                {
+                    segments.Add(LibraryNaming.SafeName(specials));
+                    continue;
+                }
+
                 // Empty tokens drop out with the brackets and separators around them; what stays is rendered afterwards,
                 // so values keep whatever characters they have.
                 var rendered = new List<string>();
@@ -241,12 +249,23 @@ namespace Jularr.Backend.Logic.Library
             }
 
             // A value never opens a folder or ends in a dot; a cut adds its dots afterwards.
-            value = LibraryNaming.CleanPart(value).Trim('.', ' ');
+            value = LibraryNaming.CleanPart(ReplaceColons(value, values.Rules), values.Rules.ReplacesIllegalCharacters).Trim('.', ' ');
 
             return format.Length > 0 && int.TryParse(format, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var limit) && !NamingTokens.Numbered.Contains(name)
                 ? TruncateUtf8(value, limit)
                 : value;
         }
+
+        // Smart turns ": " into " - " and a colon without a space into a dash; the others replace every colon alike.
+        private static string ReplaceColons(string value, NamingRules rules) => !rules.ReplacesIllegalCharacters || !value.Contains(':') ? value : rules.ColonReplacement switch
+        {
+            ColonReplacement.Delete => value.Replace(":", "", StringComparison.Ordinal),
+            ColonReplacement.Dash => value.Replace(":", "-", StringComparison.Ordinal),
+            ColonReplacement.SpaceDash => value.Replace(":", " -", StringComparison.Ordinal),
+            ColonReplacement.SpaceDashSpace => value.Replace(":", " - ", StringComparison.Ordinal),
+            ColonReplacement.Custom => value.Replace(":", rules.CustomColonReplacement ?? "", StringComparison.Ordinal),
+            _ => value.Replace(": ", " - ", StringComparison.Ordinal).Replace(":", "-", StringComparison.Ordinal)
+        };
 
         // {Custom Formats:A,B} names only these, {Custom Formats:-A,B} all but these.
         private static string CustomFormats(IReadOnlyDictionary<string, string>? formats, string format)
@@ -369,10 +388,17 @@ namespace Jularr.Backend.Logic.Library
         private static partial Regex Spaces();
     }
 
+    // How values become file names; the defaults are the *arrs'.
+    internal sealed record NamingRules(bool ReplacesIllegalCharacters, ColonReplacement ColonReplacement, string? CustomColonReplacement, string? SpecialsFolder)
+    {
+        public static NamingRules Default { get; } = new(true, ColonReplacement.Smart, null, "Specials");
+    }
+
     internal sealed record NamingValues(string Title, int? Year, decimal? Season, decimal? Episode, string? EpisodeTitle, string? Quality, string? ReleaseGroup, string? Edition, int Revision)
     {
         public MediaType MediaTypeId { get; init; } = MediaType.Movie;
         public IReadOnlyDictionary<string, string>? ProviderIds { get; init; }
+        public NamingRules Rules { get; init; } = NamingRules.Default;
         public decimal? Absolute { get; init; }
         public DateOnly? AirDate { get; init; }
         public bool IsReal { get; init; }

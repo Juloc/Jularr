@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Library;
 
@@ -100,10 +101,27 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         public MediaType MediaTypeId { get; }
     }
 
+    // A subtype's own pattern is addressed by both.
+    public sealed class NamingSubtypePatternParametersV1 : BaseParameters
+    {
+        public NamingSubtypePatternParametersV1(MediaType mediaTypeId, MediaSubtype mediaSubtypeId)
+        {
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaSubtypeId))]
+        public MediaSubtype MediaSubtypeId { get; }
+    }
+
     public sealed class NamingPatternV1 : BaseResponse
     {
-        public NamingPatternV1(MediaType mediaTypeId, string? folder, string file, string example, long version)
+        public NamingPatternV1(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? folder, string file, string example, long version)
         {
+            MediaSubtypeId = mediaSubtypeId;
             MediaTypeId = mediaTypeId;
             Folder = folder;
             File = file;
@@ -113,6 +131,9 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Folder))]
         public string? Folder { get; }
@@ -142,6 +163,80 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
         public string File { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
+        public long Version { get; }
+    }
+
+    public sealed class ReadNamingSettingsParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class NamingSettingsParametersV1 : BaseParameters
+    {
+        public NamingSettingsParametersV1(MediaType mediaTypeId)
+        {
+            MediaTypeId = mediaTypeId;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+    }
+
+    // How names are made of values for one media type.
+    public sealed class NamingSettingsV1 : BaseResponse
+    {
+        public NamingSettingsV1(MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version)
+        {
+            MediaTypeId = mediaTypeId;
+            ReplacesIllegalCharacters = replacesIllegalCharacters;
+            ColonReplacementId = colonReplacementId;
+            CustomColonReplacement = customColonReplacement;
+            SpecialsFolder = specialsFolder;
+            Version = version;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.ReplacesIllegalCharacters))]
+        public bool ReplacesIllegalCharacters { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.ColonReplacementId))]
+        public ColonReplacement ColonReplacementId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.CustomColonReplacement))]
+        public string? CustomColonReplacement { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.SpecialsFolder))]
+        public string? SpecialsFolder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
+        public long Version { get; }
+    }
+
+    public sealed class UpdateNamingSettingsDataV1 : BaseData
+    {
+        public UpdateNamingSettingsDataV1(bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement, string? specialsFolder, long version)
+        {
+            ReplacesIllegalCharacters = replacesIllegalCharacters;
+            ColonReplacementId = colonReplacementId;
+            CustomColonReplacement = customColonReplacement;
+            SpecialsFolder = specialsFolder;
+            Version = version;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.ReplacesIllegalCharacters))]
+        public bool ReplacesIllegalCharacters { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.ColonReplacementId))]
+        public ColonReplacement ColonReplacementId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.CustomColonReplacement))]
+        public string? CustomColonReplacement { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.SpecialsFolder))]
+        public string? SpecialsFolder { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }

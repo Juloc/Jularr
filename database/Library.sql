@@ -202,14 +202,33 @@ CREATE TABLE "DownloadStorageSettings" (
 INSERT INTO "DownloadStorageSettings" ("DownloadStorageAreaId") VALUES (1), (2);
 
 -- The Admin's names for movie and episode files below a library; '/' separates folders, the last part names the file.
+-- A subtype may have a pattern of its own (anime episodes); without one its type's pattern names its files.
 CREATE TABLE "NamingPatterns" (
-    "MediaTypeId" smallint PRIMARY KEY REFERENCES "MediaTypes" ("Id") CHECK ("MediaTypeId" IN (1, 2)),
+    "Id" smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "MediaTypeId" smallint NOT NULL REFERENCES "MediaTypes" ("Id") CHECK ("MediaTypeId" IN (1, 2)),
+    "MediaSubtypeId" smallint NULL,
     "Pattern" varchar(500) NOT NULL CHECK (length(btrim("Pattern")) > 0),
-    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
+    FOREIGN KEY ("MediaSubtypeId", "MediaTypeId") REFERENCES "MediaSubtypeParents" ("MediaSubtypeId", "MediaTypeId"),
+    UNIQUE NULLS NOT DISTINCT ("MediaTypeId", "MediaSubtypeId")
 );
-INSERT INTO "NamingPatterns" ("MediaTypeId", "Pattern") VALUES
-    (1, '{Title} ({Year})/{Title} ({Year}) [{Quality}]'),
-    (2, '{Title}/Season {Season:00}/{Title} - S{Season:00}E{Episode:00} [{Quality}]');
+INSERT INTO "NamingPatterns" ("MediaTypeId", "MediaSubtypeId", "Pattern") VALUES
+    (1, NULL, '{Title} ({Year})/{Title} ({Year}) [{Quality}]'),
+    (2, NULL, '{Title}/Season {Season:00}/{Title} - S{Season:00}E{Episode:00} [{Quality}]'),
+    (2, 1, '{Title}/Season {Season:00}/{Title} - S{Season:00}E{Episode:00} [{Quality}]');
+
+-- How names are made of values, like the *arrs' media management: whether illegal characters are replaced and a colon
+-- (1 delete, 2 dash, 3 space dash, 4 space dash space, 5 smart, 6 custom), and the folder of season 0.
+CREATE TABLE "NamingSettings" (
+    "MediaTypeId" smallint PRIMARY KEY REFERENCES "MediaTypes" ("Id") CHECK ("MediaTypeId" IN (1, 2)),
+    "ReplacesIllegalCharacters" boolean NOT NULL DEFAULT TRUE,
+    "ColonReplacementId" smallint NOT NULL DEFAULT 5 CHECK ("ColonReplacementId" BETWEEN 1 AND 6),
+    "CustomColonReplacement" varchar(16) NULL,
+    "SpecialsFolder" varchar(60) NULL CHECK (length(btrim("SpecialsFolder")) > 0),
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
+    CHECK ("ColonReplacementId" <> 6 OR "CustomColonReplacement" IS NOT NULL)
+);
+INSERT INTO "NamingSettings" ("MediaTypeId", "SpecialsFolder") VALUES (1, NULL), (2, 'Specials');
 
 -- Other versions of the same film, episode, track or volume: same Work, unit, kind and edition, books and comics only
 -- in the same format; a game keeps one asset per platform.
