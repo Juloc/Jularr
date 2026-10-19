@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Acquisition
 {
     internal static class AcquisitionRequestLogic
     {
-        public static async Task<AcquisitionRequestData> CreateAcquisitionRequestAsync(this LogicContext ctx, AcquisitionRequestCreationData data, CancellationToken ct)
+        public static async Task<(AcquisitionRequestData Request, bool NewlyApproved)> CreateAcquisitionRequestAsync(this LogicContext ctx, AcquisitionRequestCreationData data, CancellationToken ct)
         {
             // Lock an enabled language.
             var sql = new SqlStatement();
@@ -121,12 +121,13 @@ namespace Jularr.Backend.Logic.Acquisition
             var request = await ctx.ReadRequiredAsync<AcquisitionRequestData>(sql, ct);
 
             // The Owner and automatic rules approve the new request at once, through the same transition as moderation.
-            if (policy.ActiveRequestId is null && (data.IsOwner || policy.IsAutomaticApproval))
+            var newlyApproved = policy.ActiveRequestId is null && (data.IsOwner || policy.IsAutomaticApproval);
+            if (newlyApproved)
             {
                 await ctx.UpdateAcquisitionRequestAsync(new AcquisitionRequestUpdateData(request.Id, AcquisitionRequestStatusType.Approved, 1, data.RequestedByAccountId), ct);
             }
 
-            return request;
+            return (request, newlyApproved);
         }
 
         public static async Task UpdateAcquisitionRequestAsync(this LogicContext ctx, AcquisitionRequestUpdateData data, CancellationToken ct)

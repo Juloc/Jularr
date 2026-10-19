@@ -19,7 +19,7 @@ namespace Jularr.Workers
             {
                 await RunOnceAsync(stoppingToken);
             }
-            while (await WaitAsync(timer, stoppingToken));
+            while (await WaitForNextRunAsync(timer, stoppingToken));
         }
 
         // One System service call in its own scope.
@@ -40,7 +40,7 @@ namespace Jularr.Workers
             }
         }
 
-        private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken ct)
+        protected virtual async Task<bool> WaitForNextRunAsync(PeriodicTimer timer, CancellationToken ct)
         {
             try
             {
