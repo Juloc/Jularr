@@ -131,6 +131,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                     JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."WorkUnitId" = season."Id"
                                 WHERE
                                     season."WorkId" = work."Id"
+                                    AND mapped."Namespace" = 'anilist'
                                     AND mapped."IsManual"
                             )
                             OR match."IdentityMatchStatusTypeId" = 3 AND match."CheckedAt" < now() - interval '30 days'))
