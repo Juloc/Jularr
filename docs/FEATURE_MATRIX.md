@@ -55,7 +55,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 ## Radarr, Sonarr, Lidarr, Readarr, Bazarr
 
-What each *arr has and what Jularr keeps, does differently, adds later or leaves out: [Sonarr](PARITY_SONARR.md), [Radarr](PARITY_RADARR.md), [Lidarr](PARITY_LIDARR.md), [Readarr](PARITY_READARR.md), [Prowlarr](PARITY_PROWLARR.md), [Bazarr](PARITY_BAZARR.md).
+What each *arr has and what Jularr keeps, does differently, adds later or leaves out: [Sonarr](PARITY_SONARR.md), [Radarr](PARITY_RADARR.md), [Lidarr](PARITY_LIDARR.md), [Readarr](PARITY_READARR.md), [Prowlarr](PARITY_PROWLARR.md), [Bazarr](PARITY_BAZARR.md), [Seerr](PARITY_SEERR.md).
 
 | Function | Status | Owner | Tests | Missing |
 | --- | --- | --- | --- | --- |
