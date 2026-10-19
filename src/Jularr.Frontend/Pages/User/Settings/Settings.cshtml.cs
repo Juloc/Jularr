@@ -57,7 +57,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                     {
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
-                        form.Submit("profile.settings.save");
+                        form.Save();
                     }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin ? null : FormError));
 
                     // Hidden types leave the profile's lists; they stay reachable.
@@ -66,7 +66,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                         content.Add(new Form<UpdateProfileMediaDataV1>(form =>
                         {
                             form.Choices(x => x.HiddenKeys, "profile.media.hidden", _media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
-                            form.Submit("profile.settings.save");
+                            form.Save();
                         }, Url.Page("/User/Settings/Settings", "Media"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                             new UpdateProfileMediaDataV1([.. _media.Where(item => item.IsHidden).Select(item => item.Key)]), _savingMedia ? FormError : null));
                     }
@@ -205,7 +205,6 @@ namespace Jularr.Frontend.Pages.User.Settings
 
             // Save through the canonical writer.
             await updateProfile.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), _input, HttpContext.RequestAborted);
-            TempData["ProfileSaved"] = true;
             return RedirectToPage("/User/Settings/Settings");
         }
 
@@ -215,7 +214,6 @@ namespace Jularr.Frontend.Pages.User.Settings
             _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
             var profileId = _authentication!.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
             await updateMedia.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), new UpdateProfileMediaDataV1(hiddenKeys ?? []), HttpContext.RequestAborted);
-            TempData["ProfileSaved"] = true;
             return RedirectToPage("/User/Settings/Settings");
         }
 

@@ -42,7 +42,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual("Browser format", await format.Locator("[name=Name]").InputValueAsync());
                 await format.Locator("[name='Conditions[1].Name']").FillAsync("Title");
                 await format.Locator("[name='Conditions[1].Value']").FillAsync("HDR");
-                await Steps.FollowAsync(page, format.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
+                await Steps.SaveAsync(page);
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator("tr", new() { HasText = "Browser format" })).ToBeVisibleAsync();
 
@@ -53,7 +53,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual("Browser quality", await profile.Locator("[name=Name]").InputValueAsync());
                 await profile.Locator("[name='FormatScores[0].Score']").FillAsync("100");
                 await profile.Locator("[name=MinimumFormatScore]").FillAsync("100");
-                await Steps.FollowAsync(page, profile.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
+                await Steps.SaveAsync(page);
                 await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
                 Assert.AreEqual("100", await profile.Locator("[name='FormatScores[0].Score']").InputValueAsync());
 
@@ -62,14 +62,14 @@ namespace Jularr.E2E.Tests
                 await release.Locator("[name=Name]").FillAsync("Browser release");
                 await release.Locator("[name=Required]").FillAsync("/^TEAM{1,3},HDR$/i");
                 await release.Locator("[name=Ignored]").FillAsync("x265\nCAM");
-                await Steps.FollowAsync(page, release.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
+                await Steps.SaveAsync(page);
                 Assert.AreEqual("/^TEAM{1,3},HDR$/i", await release.Locator("[name=Required]").InputValueAsync());
                 Assert.AreEqual("x265\nCAM", await release.Locator("[name=Ignored]").InputValueAsync());
 
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=tags");
                 var tag = page.Locator("main form", new() { Has = page.Locator("[name=Label]") });
                 await tag.Locator("[name=Label]").FillAsync("browser-tag");
-                await Steps.FollowAsync(page, tag.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
+                await Steps.SaveAsync(page);
                 await Assertions.Expect(page.Locator("tr", new() { HasText = "browser-tag" })).ToBeVisibleAsync();
                 await page.SetViewportSizeAsync(1440, 1000);
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");

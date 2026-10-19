@@ -1004,10 +1004,6 @@
    "Users may confirm source checks",
    "Les utilisateurs peuvent confirmer les vérifications de source"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "Les réglages de l'instance ont été enregistrés."
-  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "Activez ou désactivez les intégrations enregistrées. Les capacités de connexion et d'authentification nécessitent toujours leur configuration d'hôte existante."
@@ -1035,10 +1031,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Réglages du profil"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Enregistrer les modifications"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1575,6 @@
   "admin.instance.media": [
    "Media types",
    "Types de média"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Disponibilité"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2711,6 @@
   "admin.instance.modules": [
    "Modules",
    "Modules"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Statut du module"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",

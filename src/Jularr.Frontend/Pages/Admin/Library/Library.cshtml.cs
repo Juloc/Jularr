@@ -143,7 +143,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                             form.Hidden(item => item.Version);
                             form.Text(item => item.Folder, "library.naming.folder");
                             form.Text(item => item.File, "library.naming.file");
-                            form.Submit("common.save");
+                            form.Save();
                         }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId, csrf,
                             failed && _patternInput is { } input ? input : new UpdateNamingPatternDataV1(pattern.Folder, pattern.File, pattern.Version), failed ? FormError : null),
                         new P(new Text("library.naming.example"), new ValueText(" "), new Span(new ValueText(pattern.Example)).Class("library-example"))]));
@@ -170,7 +170,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     form.Select(item => item.RecycleStorageMountId, "library.replacement.mount", mounts);
                     form.Text(item => item.RecyclePath, "library.replacement.path");
                     form.Number(item => item.RecycleDays, "library.replacement.days");
-                    form.Submit("common.save");
+                    form.Save();
                 }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecycleModeId,
                     replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version), _replacementInput is null ? null : FormError));
             }

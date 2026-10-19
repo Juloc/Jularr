@@ -55,6 +55,13 @@ namespace Jularr.E2E.Tests
         // Submits, waits for the answering page and fails on the error it shows.
         public static async Task SubmitAsync(IPage page, ILocator form)
         {
+            // A form saved through the page's pill has no visible button of its own.
+            if (await form.GetAttributeAsync("data-save") is not null && await page.Locator("[data-save-pill]").CountAsync() > 0)
+            {
+                await SaveAsync(page);
+                return;
+            }
+
             await FollowAsync(page, form.Locator("button[type=submit]").Last);
             var alert = page.Locator("main [role=alert]");
             if (await alert.CountAsync() > 0)
@@ -73,13 +80,24 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, tmdb);
         }
 
-        // Switches a module on the Instance page; the form follows the module's description.
+        // Switches a module on the Instance page; its form is labelled with the module.s description.
         public static async Task SetModuleAsync(IPage page, string description, bool enabled)
         {
             await page.GotoAsync("/Admin/Instance");
-            var form = page.Locator("main p:has-text(\"" + description + "\") + form");
+            var form = page.Locator("main form[data-save]").Filter(new() { Has = page.Locator("legend", new() { HasText = description }) });
             await form.Locator("[name=IsEnabled][value=" + (enabled ? "True" : "False") + "]").CheckAsync();
-            await SubmitAsync(page, form);
+            await SaveAsync(page);
+        }
+
+        // Saves every changed form of the page through its save pill and fails on an error the page shows.
+        public static async Task SaveAsync(IPage page)
+        {
+            await FollowAsync(page, page.Locator("[data-save-pill] [data-save-submit]"));
+            var alert = page.Locator("main [role=alert]");
+            if (await alert.CountAsync() > 0)
+            {
+                Assert.Fail("The page answered: " + await alert.First.InnerTextAsync());
+            }
         }
 
         // The local folder as a writable connection with one library path per media type folder.

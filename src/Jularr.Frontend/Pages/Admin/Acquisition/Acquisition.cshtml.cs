@@ -370,7 +370,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                 }
 
-                form.Submit("common.save");
+                form.Save();
             }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : FormError);
         }
 

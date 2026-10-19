@@ -56,7 +56,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     form.Content(new Button(new Text("arr.removeCondition")).Attribute("type", "submit").Attribute("formaction", Address("Condition", Edit))
                         .Attribute("formnovalidate", "formnovalidate"));
                 }
-                form.Submit("common.save");
+                form.Save();
             }, Address("Format", Edit), Token, input, _import is null ? FormError : null));
             if (input.Id is { } id) DeleteForm(page, id, input.Version!.Value);
             page.Content.Add(new Form<ImportCustomFormatsDataV1>(form =>
@@ -83,7 +83,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     row.Number(value => value.PreferredMbPerMinute, "arr.preferredMb");
                     row.Number(value => value.MaximumMbPerMinute, "arr.maximumMb");
                 });
-                form.Submit("common.save");
+                form.Save();
             }, Address("Sizes"), Token, _sizes, FormError));
         }
 
@@ -108,7 +108,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 PickerPaging(form, "Release", "IndexerPage", _indexerPage?.Page ?? 1, _indexerPage?.Items.Count == _indexerPage?.PageSize);
                 form.Choices(item => item.TagIds, "arr.tags", _tagChoices);
                 PickerPaging(form, "Release", "TagPage", _tagPage?.Page ?? 1, _tagPage?.Items.Count == _tagPage?.PageSize);
-                form.Submit("common.save");
+                form.Save();
             }, Address("Release", Edit), Token, input, FormError));
             if (input.Id is { } id) DeleteForm(page, id, input.Version!.Value);
         }
@@ -127,7 +127,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Hidden(item => item.Id);
                 form.Hidden(item => item.Version);
                 form.Text(item => item.Label, "profile.name");
-                form.Submit("common.save");
+                form.Save();
             }, Address("Tag", Edit), Token, input, FormError));
             if (input.Id is { } id) DeleteForm(page, id, input.Version!.Value);
         }

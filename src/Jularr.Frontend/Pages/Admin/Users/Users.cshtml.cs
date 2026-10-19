@@ -76,7 +76,7 @@ namespace Jularr.Frontend.Pages.Admin.Users
                 form.Choices(item => item.AllowedMediaKeys, "request.rule.media", _media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
                 form.Choices(item => item.AcquisitionProfileIds, "request.rule.profiles",
                     _profiles.Select(profile => new SelectOption(profile.Id.ToString(CultureInfo.InvariantCulture), profile.Name)));
-                form.Submit("common.save");
+                form.Save();
             }, Address(account.AccountId, PageNumber), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, input, _input is null ? null : FormError);
         }
 
