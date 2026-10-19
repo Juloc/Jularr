@@ -42,6 +42,10 @@ test('player planning network failure displays the localized status', async () =
         exports: {}, require: () => ({}),
         document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }), addEventListener() {} },
         matchMedia: () => ({ matches: false, addEventListener() {} }),
+        // The player starts a deferred loading indicator before requesting its plan.
+        // Provide the browser timer APIs so this fixture reaches the actual fetch.
+        window: { setTimeout: () => 1 },
+        clearTimeout() {},
         fetch: () => { requests++; return Promise.reject(new Error('Offline')); }
     });
     await new Promise(resolve => setImmediate(resolve));
