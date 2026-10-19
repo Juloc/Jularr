@@ -16,7 +16,7 @@ namespace Jularr.Backend.Service.Core
         private readonly PostgresBackupTools _tools;
         private readonly IReadOnlyList<DatabaseMigration> _migrations;
 
-        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = [new(2, LoadMigration("20261018_01_DiscoverySnapshots"))];
+        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = [new(2, LoadMigration("20261019_01_ExternalWorks"))];
         private static string LoadMigration(string name)
         {
             using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database.Migrations." + name + ".sql")

@@ -27,10 +27,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
     public sealed class ReadDiscoverFeedV1 : UserService<DiscoverParametersV1, ReadDiscoverFeedDataV1>
     {
         private readonly WorkMetadata _metadata;
+        private readonly TimeProvider _time;
 
-        internal ReadDiscoverFeedV1(WorkMetadata metadata)
+        internal ReadDiscoverFeedV1(WorkMetadata metadata, TimeProvider time)
         {
             _metadata = metadata;
+            _time = time;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -52,10 +54,32 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return new BaseDataList<DiscoverItemV1>([]);
             }
 
-            var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-            var results = await _metadata.ReadFeedAsync(connection, Data.MediaTypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
-            var overlay = await DiscoverQueries.ReadOverlayAsync(Context, Data.MediaTypeId, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
-            return new BaseDataList<DiscoverItemV1>(results.Select(result => DiscoverQueries.ToItem(Data.MediaTypeId, result, overlay)).ToArray());
+            // The first trending page comes from the catalog while it is fresh, and from there too while TMDB cannot answer.
+            var list = new ExternalWorkListData(WorkMetadata.Namespace(Data.MediaTypeId), Data.MediaTypeId, null);
+            var isTrending = Data.DiscoverFeedTypeId == DiscoverFeedType.Trending && Data.Page <= 1;
+            var known = isTrending ? await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadTrendingExternalWorksAsync(list, ct), CancellationToken) : [];
+            IReadOnlyList<ExternalWorkData> works;
+            if (ExternalWorkLogic.IsFresh(known, _time.GetUtcNow()))
+            {
+                works = known;
+            }
+            else
+            {
+                try
+                {
+                    var connection = await _metadata.ConnectAsync(Context, CancellationToken);
+                    var results = await _metadata.ReadFeedAsync(connection, Data.MediaTypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
+                    works = [.. results.Select(result => DiscoverQueries.ExternalWork(list.Namespace, result))];
+                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, isTrending), ct), CancellationToken);
+                }
+                catch (ServiceUnavailableException) when (known.Count > 0)
+                {
+                    works = known;
+                }
+            }
+
+            var overlay = await DiscoverQueries.ReadOverlayAsync(Context, Data.MediaTypeId, works.Select(work => int.Parse(work.Value, CultureInfo.InvariantCulture)), Auth.ProfileId!.Value, CancellationToken);
+            return new BaseDataList<DiscoverItemV1>(works.Select(work => DiscoverQueries.ToItem(Data.MediaTypeId, work, overlay)).ToArray());
         }
     }
 
@@ -171,6 +195,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     }
 
                     var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
+                    var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
+                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(result => DiscoverQueries.ExternalWork(list.Namespace, result))], false), ct),
+                        CancellationToken);
                     var overlay = await DiscoverQueries.ReadOverlayAsync(Context, mediaType, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
                     var localIds = items.Where(item => item.MediaTypeId == mediaType && item.TmdbId is not null).Select(item => item.TmdbId!.Value).ToHashSet();
                     items.AddRange(results.Where(result => !localIds.Contains(result.Id)).Select(result => DiscoverQueries.ToItem(mediaType, result, overlay)));
@@ -382,6 +409,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var results = Data.MediaSubtypeId == MediaSubtype.Anime ? await _catalog.SearchAnimeAsync(Context, Data.Query, CancellationToken)
                 : await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
+            await _catalog.KeepAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, results, CancellationToken);
             return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
         }
     }
@@ -549,6 +577,19 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return ctx.ReadSql.ReadListAsync<DiscoverOverlayData>(sql, token);
             }, ct);
             return rows.ToDictionary(row => int.Parse(row.Value, CultureInfo.InvariantCulture));
+        }
+
+        // A TMDB title as the catalog keeps it.
+        public static ExternalWorkData ExternalWork(string @namespace, TmdbSearchResult result) => new(@namespace, result.Id.ToString(CultureInfo.InvariantCulture),
+            TextLimit.Cut(result.Title, 500)!, TextLimit.Cut(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000), null,
+            TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), DateTime.MinValue);
+
+        public static DiscoverItemV1 ToItem(MediaType mediaType, ExternalWorkData work, IReadOnlyDictionary<int, DiscoverOverlayData> overlay)
+        {
+            var id = int.Parse(work.Value, CultureInfo.InvariantCulture);
+            var known = overlay.GetValueOrDefault(id);
+            return new DiscoverItemV1(mediaType, id, known?.WorkId, work.Title, work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl,
+                known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
         }
 
         public static DiscoverItemV1 ToItem(MediaType mediaType, TmdbSearchResult result, IReadOnlyDictionary<int, DiscoverOverlayData> overlay)
