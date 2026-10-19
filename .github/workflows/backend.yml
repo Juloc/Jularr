@@ -77,7 +77,19 @@ jobs:
           sudo apt-get install --yes --no-install-recommends postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
-      - run: dotnet test tests/Jularr.Backend.Tests --configuration Release
+      - name: Run backend tests and record per-test durations
+        run: dotnet test tests/Jularr.Backend.Tests --configuration Release --logger "trx;LogFileName=backend.trx" --results-directory TestResults/ci/backend
+      - name: Summarize slowest backend tests
+        if: always()
+        run: python3 scripts/ci-test-timings.py TestResults/ci/backend
+      - name: Keep backend timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-timings
+          path: TestResults/ci/backend/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
 
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
@@ -129,7 +141,7 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
       - name: Direct SMB HLS regression (real FFmpeg)
-        run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls
+        run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls --logger "trx;LogFileName=ffmpeg.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
       # The test DB is PostgreSQL 18; the runner's default pg_dump may be older.
@@ -143,9 +155,21 @@ jobs:
           sudo apt-get install --yes --no-install-recommends postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
-      - run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build
+      - name: Run browser E2E tests and record per-test durations
+        run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build --logger "trx;LogFileName=e2e.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
+      - name: Summarize slowest E2E tests
+        if: always()
+        run: python3 scripts/ci-test-timings.py TestResults/ci/e2e
+      - name: Keep E2E timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-timings
+          path: TestResults/ci/e2e/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Keep the evidence of a failed run
         if: failure()
         uses: actions/upload-artifact@v7
