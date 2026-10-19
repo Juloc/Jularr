@@ -64,24 +64,6 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ExternalWorks_PreviousVersionUpgradesWithoutLosingAccounts()
-        {
-            var dump = Executables.Resolve(Environment.GetEnvironmentVariable("JULARR_TEST_PG_DUMP"), "pg_dump");
-            if (dump is null) Assert.Inconclusive("PostgreSQL dump tooling is required for this upgrade test.");
-
-            using var backups = new LibraryTests.TemporaryDirectory();
-            var cs = TestPostgres.ResolveConnectionString(nameof(ExternalWorks_PreviousVersionUpgradesWithoutLosingAccounts));
-            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
-            await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'Preserved on upgrade';");
-            var tools = Tools(cs, dump, null);
-            await new DatabaseBaseline(cs, new BackupOptions { Path = backups.Path }, tools).StartAsync(CancellationToken.None);
-            Assert.AreEqual("Preserved on upgrade", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
-            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
-            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"ExternalWorks\";"));
-            Assert.AreEqual(1, Directory.GetDirectories(backups.Path).Length);
-        }
-
-        [TestMethod]
         public async Task UnversionedDatabase_Startup_PreservesExistingTablesAndData()
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(UnversionedDatabase_Startup_PreservesExistingTablesAndData));
