@@ -21,13 +21,14 @@ namespace Jularr.Integrations.Data.AnnasArchive
     // One public slow download page: the file it names and the wait it asks for first.
     internal sealed class AnnasArchivePage
     {
-        public AnnasArchivePage(Uri file, TimeSpan wait)
+        public AnnasArchivePage(Uri? file, TimeSpan wait)
         {
             File = file;
             Wait = wait;
         }
 
-        public Uri File { get; }
+        // Null while the page only counts down; the file names itself once the wait is over.
+        public Uri? File { get; }
         public TimeSpan Wait { get; }
     }
 

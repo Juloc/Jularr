@@ -129,6 +129,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                     throw new DirectSourceWaitException(page.Wait);
                                 }
 
+                                // The page counted down but names no file yet; the next attempt reads it again.
+                                if (page.File is null)
+                                {
+                                    throw new DirectSourceException("acquisition_grab_failed");
+                                }
+
                                 await _annas.DownloadFileAsync(page.File, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                             }
                         }
