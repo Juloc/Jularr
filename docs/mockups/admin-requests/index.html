@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fd">
+  <title>Jularr · Requests Design Reference</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="icon-defs">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.3 4.7-4.7 2.3 2.3-4.7z"/></symbol>
+    <symbol id="i-library" viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="15" rx="1"/><rect x="10" y="3" width="6" height="17" rx="1"/><path d="m17 6 4-1 2 14-4 1z"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/></symbol>
+    <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="8" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h5l2 3h4l2-3h5"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M3 6h2M3 12h2M3 18h2"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="var(--panel)"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="var(--panel)"/><circle cx="7" cy="18" r="2" fill="currentColor" stroke="var(--panel)"/></symbol>
+    <symbol id="i-hard-drive" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 12h18M7 16h.01M11 16h.01"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24"><path d="M12 6a4 4 0 0 0-8 1v3a4 4 0 0 0 0 7 4 4 0 0 0 8 1V6Zm0 0a4 4 0 0 1 8 1v3a4 4 0 0 1 0 7 4 4 0 0 1-8 1"/></symbol>
+    <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 5 4l1 6a3 3 0 0 1-5 2l-3-3H9l-3 3a3 3 0 0 1-5-2l1-6a5 5 0 0 1 5-4zM7 11v5m-2.5-2.5h5M16 13h.01M19 15h.01"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2m2-17a4 4 0 0 1 0 8m1 4a5 5 0 0 1 3 5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m10 2-.6 2.5-2.3 1.2-2.4-.8-2 3.6 1.9 1.8v2.5l-1.9 1.8 2 3.6 2.4-.8 2.3 1.2L10 22h4l.6-2.4 2.3-1.2 2.4.8 2-3.6-1.9-1.8v-2.5l1.9-1.8-2-3.6-2.4.8-2.3-1.2L14 2z"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 7h.01M7 18h.01"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 8-3 8-3 10h18c0-2-3-2-3-10M10 22h4"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 0 0 6 6L4 8V3m0 5h5M4 13a8 8 0 0 0 14 5l2-2v5m0-5h-5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6m4-6v6"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+    <symbol id="i-arrow-down-up" viewBox="0 0 24 24"><path d="M7 20V4m-4 4 4-4 4 4m6-4v16m-4-4 4 4 4-4"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2zM12 9v5m0 3h.01"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></symbol>
+    <symbol id="i-log-out" viewBox="0 0 24 24"><path d="M10 3H4v18h6m4-4 5-5-5-5m-8 5h13"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M13 4h7v7m-1-6-9 9M20 13v7H4V4h7"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 2 2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 15a8 8 0 0 1-12-12A9 9 0 1 0 21 15z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1m0-14.2L17 7M7 17l-2.1 2.1"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/></symbol>
+  </svg>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand" aria-label="Jularr"><svg class="brand-mark" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 4 34 19.5c1.8 1 1.8 3 0 4L7 39c-2.5 1.5-5-.3-5-3.1V7C2 4.2 4.5 2.5 7 4Z" stroke="url(#brand-g)" stroke-width="5" stroke-linejoin="round"/><path d="m16 12 15 9-15 9z" fill="url(#brand-g)"/><defs><linearGradient id="brand-g" x1="2" x2="40" y1="42" y2="2"><stop stop-color="#5d41f5"/><stop offset="1" stop-color="#ba60ff"/></linearGradient></defs></svg><div><strong>Jularr</strong><span class="brand-sub">DESIGN PROTOTYPE</span></div></div>
+      <nav class="side-navigation" aria-label="Main navigation"><div id="nav-user"></div><div class="side-separator"></div><div class="nav-caption">ADMIN · MANAGEMENT</div><div id="nav-management"></div><div class="nav-caption gap-top">ADMIN · CONFIGURATION</div><div id="nav-config"></div><div class="nav-caption gap-top">ADMIN · SYSTEM</div><div id="nav-system"></div></nav>
+      <div class="side-bottom"><div class="version-chip" id="version-chip"><svg class="icon"><use href="#i-info"/></svg><div><strong>Jularr</strong><small>v0.1.0</small></div></div></div>
+    </aside>
+    <div class="shell-main">
+      <header class="topbar">
+        <div class="breadcrumbs"><button class="mobile-menu icon-button" id="mobile-menu" aria-label="Toggle sidebar"><svg class="icon"><use href="#i-list"/></svg></button><button id="crumb-admin" class="crumb-link">Admin</button><svg class="icon slim muted"><use href="#i-chevron-right"/></svg><span class="current-crumb" id="crumb-current">Requests</span></div>
+        <div class="global-search-wrap"><svg class="icon"><use href="#i-search"/></svg><input id="global-search" aria-label="Search media globally (prototype)" placeholder="Search anime, series, movies, books..."/><kbd>Ctrl K</kbd></div>
+        <div class="top-actions"><div class="popover-root"><button class="icon-button notification-button" id="notifications-toggle" aria-label="Notifications"><svg class="icon"><use href="#i-bell"/></svg><span class="unread-dot"></span></button><div class="popover notification-popover hidden" id="notifications-popover"><strong>Notifications</strong><p>2 new updates</p><div class="popover-message"><span class="tiny-dot purple"></span> Request approved: Frieren</div><div class="popover-message"><span class="tiny-dot green"></span> Import completed: Suzume</div></div></div><div class="popover-root"><button id="profile-toggle" class="profile-control" aria-expanded="false"><span class="avatar">D</span><span class="profile-name">demo</span><svg class="icon slim"><use href="#i-chevron-down"/></svg></button><div id="profile-popover" class="popover profile-popover hidden"><div class="pop-profile"><span class="avatar">D</span><div><strong>demo</strong><small>Administrator</small></div></div><button class="pop-action" data-open-settings="personal"><svg class="icon"><use href="#i-settings"/></svg> Personal settings</button><button class="pop-action" data-open-settings="modules"><svg class="icon"><use href="#i-sliders"/></svg> Instance modules</button><button class="pop-action" id="profile-switch"><svg class="icon"><use href="#i-users"/></svg> Switch profile</button><div class="pop-divider"></div><button class="pop-action" id="sign-out-demo"><svg class="icon"><use href="#i-log-out"/></svg> Sign out (demo)</button></div></div></div>
+      </header>
+      <main class="main-content" id="main-content">
+        <section id="requests-view" class="requests-view">
+          <div class="controls-shell">
+            <div class="controls-top"><div class="status-tabs" id="status-tabs" aria-label="Request states"></div><div class="filter-row"><div class="select-control"><svg class="icon"><use href="#i-filter"/></svg><select id="filter-type" aria-label="Filter media type"></select></div><div class="select-control"><select id="filter-language" aria-label="Filter language"></select></div><div class="select-control"><select id="filter-media-status" aria-label="Filter availability"></select></div><div class="select-control"><select id="filter-requester" aria-label="Filter requester"></select></div><div class="select-control sort-control"><svg class="icon"><use href="#i-arrow-down-up"/></svg><select id="sort-order" aria-label="Sort requests"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="modified">Last modified</option><option value="title">Title A–Z</option><option value="requester">Requester</option></select></div></div></div>
+            <div class="controls-bottom"><label class="request-search"><svg class="icon"><use href="#i-search"/></svg><input id="request-search" aria-label="Search requests" placeholder="Search requests by title or requester..."/></label><span id="results-summary" class="result-counter"></span><button class="text-action" id="clear-filters">Clear filters</button><div class="layout-toggle" aria-label="Layout is available on desktop"><button class="icon-button active" title="Table layout" aria-label="Table layout"><svg class="icon"><use href="#i-list"/></svg></button></div></div>
+          </div>
+          <div class="table-shell"><div class="table-header table-grid" id="table-header"><div class="cell cell-select"><input id="select-all" class="checkbox" type="checkbox" aria-label="Select visible requests"/></div><div class="cell title-cell">TITLE</div><div class="cell col-type">TYPE</div><div class="cell col-requester">REQUESTER</div><div class="cell col-requested">REQUESTED</div><div class="cell col-modified">MODIFIED</div><div class="cell col-profile">PROFILE</div><div class="cell col-status">STATUS</div><div class="cell col-availability">MEDIA STATUS</div><div class="cell col-seasons">SEASONS / DETAILS</div><div class="cell col-actions">ACTIONS</div></div><div id="requests-table" role="table" aria-label="Requests"></div><div id="empty-results" class="empty-results hidden"><svg class="icon"><use href="#i-search"/></svg><strong>No requests found</strong><p>Change your filters or search query.</p><button id="empty-clear" class="pill secondary">Reset filters</button></div></div>
+          <footer class="table-footer"><div class="page-size-area"><span>Page size</span><div class="select-control compact-select"><select id="page-size" aria-label="Rows per page"><option value="20">20</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="custom">Custom…</option></select></div><label id="custom-size-label" class="custom-size hidden"><span class="sr-only">Custom page size</span><input type="number" id="custom-page-size" min="1" max="500" placeholder="1–500"/></label><span id="range-text" class="range-text"></span><label class="goto-label">Go to <input type="number" min="1" id="go-to-page" aria-label="Go to page"/></label></div><div class="pagination" id="pagination"></div></footer>
+        </section>
+        <section class="placeholder-view hidden" id="placeholder-view"><div class="placeholder-hero"><div class="placeholder-tag">NAVIGATION PREVIEW</div><h1 id="placeholder-title"></h1><p id="placeholder-description"></p><div class="placeholder-lines"><span></span><span></span><span></span></div><button class="pill primary" id="back-to-requests"><svg class="icon"><use href="#i-chevron-left"/></svg><span class="button-content">Back to Requests</span></button></div></section>
+      </main>
+    </div>
+  </div>
+  <div class="bulk-toolbar hidden" id="bulk-toolbar" role="toolbar" aria-label="Bulk request actions"><div class="selected-count"><strong id="selected-count">0 selected</strong><button id="clear-selection" class="tiny-clear" aria-label="Clear selection"><svg class="icon"><use href="#i-close"/></svg></button></div><button class="pill primary bulk-action" data-bulk="approve"><svg class="icon"><use href="#i-check"/></svg><span class="button-content">Approve</span></button><button class="pill danger-soft bulk-action" data-bulk="reject"><svg class="icon"><use href="#i-close"/></svg><span class="button-content">Reject</span></button><button class="pill secondary bulk-action" data-bulk="mark"><svg class="icon"><use href="#i-check"/></svg><span class="button-content">Mark as added</span></button><button class="pill secondary bulk-action" data-bulk="profile"><svg class="icon"><use href="#i-sliders"/></svg><span class="button-content">Change profile</span></button><button class="pill secondary bulk-action" data-bulk="remove"><svg class="icon"><use href="#i-trash"/></svg><span class="button-content">Remove media</span></button><button class="pill danger-outline bulk-action" data-bulk="delete"><svg class="icon"><use href="#i-trash"/></svg><span class="button-content">Delete request</span></button><button class="icon-button overflow-action" id="bulk-more" title="More bulk actions" aria-label="More bulk actions"><svg class="icon"><use href="#i-more"/></svg></button></div>
+  <div id="dialog-backdrop" class="dialog-backdrop hidden"><div role="dialog" aria-modal="true" aria-labelledby="dialog-title" class="dialog" id="dialog"><div class="dialog-top"><div><span id="dialog-eyebrow" class="dialog-eyebrow">REQUEST</span><h2 id="dialog-title">Details</h2></div><button class="icon-button" id="dialog-close" aria-label="Close dialog"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="dialog-body" id="dialog-body"></div><div class="dialog-footer" id="dialog-footer"></div></div></div>
+  <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
+</body>
+</html>
