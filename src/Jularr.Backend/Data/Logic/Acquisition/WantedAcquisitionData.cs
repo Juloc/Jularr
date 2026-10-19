@@ -301,8 +301,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
-            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName)
+            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, int? expectedParentUnitNumber = null, int? expectedUnitStart = null, int? expectedUnitEnd = null)
         {
+            ExpectedParentUnitNumber = expectedParentUnitNumber;
+            ExpectedUnitStart = expectedUnitStart;
+            ExpectedUnitEnd = expectedUnitEnd;
             GamePlatformId = gamePlatformId;
             PlatformName = platformName;
             SourceUrl = sourceUrl;
@@ -378,6 +381,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
         public string? PlatformName { get; }
+
+        // The season and episodes the grab was made for; none for a whole season or a film.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber))]
+        public int? ExpectedParentUnitNumber { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? ExpectedUnitStart { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitEnd))]
+        public int? ExpectedUnitEnd { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData
@@ -469,11 +482,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class DownloadAttentionData : BaseData
     {
-        public DownloadAttentionData(long operationId, string? attentionKey, string? attentionUrl)
+        public DownloadAttentionData(long operationId, string? attentionKey, string? attentionUrl, string? attentionProposal = null)
         {
             OperationId = operationId;
             AttentionKey = attentionKey;
             AttentionUrl = attentionUrl;
+            AttentionProposal = attentionProposal;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
@@ -484,6 +498,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl))]
         public string? AttentionUrl { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
+        public string? AttentionProposal { get; }
     }
 
     internal sealed class DownloadFinishedData : BaseData

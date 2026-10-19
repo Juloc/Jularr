@@ -41,6 +41,10 @@ namespace Jularr.Backend.Logic.Acquisition
             return new ReleaseJudgement<VideoIdentityMatch>(judged.Match, judged.Parsed, judged.Evidence, judged.Coverage, judged.SafetyRejection) { Languages = languages };
         }
 
+        // Whether a name found in a download's own file is the film or series asked for.
+        public static VideoIdentityMatch JudgeTitle(AcquisitionKind kind, string title, int? year, ReleaseInfo parsed) =>
+            (kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, false) : JudgeSeriesTitle(title, parsed, false)).Match;
+
         // Scene names state non-English audio as words; untagged releases are English.
         private static IReadOnlyList<string> Languages(ReleaseInfo parsed)
         {

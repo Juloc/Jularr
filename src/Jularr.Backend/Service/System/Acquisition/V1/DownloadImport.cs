@@ -47,6 +47,21 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var facts = new ReleaseFact(TextLimit.Cut(download.Title, 500)!, parsedFacts?.ReleaseGroup, download.QualityKey ?? parsedFacts?.QualityKey,
                 parsedFacts?.Edition, parsedFacts?.Revision ?? 1);
 
+            // A clear film or episode imports by itself, one of no use is excluded and searched again at once, a doubt waits for a person with its reason.
+            var verdict = ImportJudgement.Judge(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.Title, download.ExpectedParentUnitNumber,
+                download.ExpectedUnitStart, download.ExpectedUnitEnd, files, EpisodeNumbering.Episodes(units), target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target));
+            if (verdict.Kind == ImportVerdictKind.Discard)
+            {
+                await FailAsync(context, download.OperationId, verdict.ReasonKey!, time.GetUtcNow().UtcDateTime, ct);
+                return;
+            }
+
+            if (verdict.Kind == ImportVerdictKind.Doubt)
+            {
+                await AttentionAsync(context, download.OperationId, verdict.ReasonKey!, null, ct, verdict.ProposalJson);
+                return;
+            }
+
             // Music follows its tags; ebooks and comics must be what their names say.
             Dictionary<string, AudioTags>? tags = download.MediaTypeId == MediaType.Music ? new(StringComparer.Ordinal) : null;
             var placements = new List<ImportPlacementData>();
@@ -230,10 +245,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             return LibraryFileTypes.IsDocumentContent(extension, header.AsSpan(0, read));
         }
 
-        public Task AttentionAsync(LogicContext context, long operationId, string attentionKey, string? attentionUrl, CancellationToken ct) =>
+        public Task AttentionAsync(LogicContext context, long operationId, string attentionKey, string? attentionUrl, CancellationToken ct, string? attentionProposal = null) =>
             context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.SetDownloadAttentionAsync(new DownloadAttentionData(operationId, attentionKey, attentionUrl), token);
+                await ctx.SetDownloadAttentionAsync(new DownloadAttentionData(operationId, attentionKey, attentionUrl, attentionProposal), token);
                 return true;
             }, ct);
 

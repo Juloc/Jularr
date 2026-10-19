@@ -3980,6 +3980,38 @@
    "Download exceeds the configured size limit",
    "Download überschreitet das konfigurierte Größenlimit"
   ],
+  "acquisition.outcome.import_no_media": [
+   "The download holds no video file",
+   "Der Download enthält keine Videodatei"
+  ],
+  "acquisition.outcome.import_only_extras": [
+   "The download holds only samples or extras",
+   "Der Download enthält nur Samples oder Extras"
+  ],
+  "acquisition.outcome.import_wrong_series": [
+   "The files name another series",
+   "Die Dateien nennen eine andere Serie"
+  ],
+  "acquisition.outcome.import_wrong_title": [
+   "The file names another film",
+   "Die Datei nennt einen anderen Film"
+  ],
+  "acquisition.outcome.import_wrong_episode": [
+   "The files name other episodes than the ones wanted",
+   "Die Dateien nennen andere Folgen als die gesuchten"
+  ],
+  "acquisition.outcome.import_ambiguous_title": [
+   "The file's title does not clearly match the film",
+   "Der Titel der Datei passt nicht eindeutig zum Film"
+  ],
+  "acquisition.outcome.import_unreadable_names": [
+   "The file names do not say which episode they are",
+   "Die Dateinamen sagen nicht, welche Folge sie sind"
+  ],
+  "acquisition.outcome.import_quality_not_allowed": [
+   "The quality of the files is not one the profile allows",
+   "Die Qualität der Dateien erlaubt das Profil nicht"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "Download-Ordner ist keinem Speicher zugeordnet"
