@@ -16,7 +16,14 @@ namespace Jularr.Backend.Service.Core
         private readonly PostgresBackupTools _tools;
         private readonly IReadOnlyList<DatabaseMigration> _migrations;
 
-        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = [];
+        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = [new(2, LoadMigration("20261018_01_DiscoverySnapshots"))];
+        private static string LoadMigration(string name)
+        {
+            using var reader = new StreamReader(typeof(DatabaseBaseline).Assembly.GetManifestResourceStream("Jularr.Database.Migrations." + name + ".sql")
+                ?? throw new InvalidDataException("The required release schema migration was not embedded: " + name));
+            return reader.ReadToEnd();
+        }
+
         public static int CurrentVersion => 1 + Migrations.Count;
         public static string CurrentFingerprint => Fingerprint(CurrentVersion, Migrations);
 
