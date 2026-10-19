@@ -55,6 +55,8 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 ## Radarr, Sonarr, Lidarr, Readarr, Bazarr
 
+What each *arr has and what Jularr keeps, does differently, adds later or leaves out: [Sonarr](PARITY_SONARR.md), [Radarr](PARITY_RADARR.md), [Lidarr](PARITY_LIDARR.md).
+
 | Function | Status | Owner | Tests | Missing |
 | --- | --- | --- | --- | --- |
 | Movies: TMDB metadata, search, rename, history, editions, franchises | tested | `TmdbClient`, `WorkMetadata` | AcquisitionTests, DiscoverTests, ReleaseFactsTests | Edition choice in the UI |
