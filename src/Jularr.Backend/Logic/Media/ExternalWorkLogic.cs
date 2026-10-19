@@ -1,5 +1,7 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Logic.Instance;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
@@ -7,6 +9,10 @@ namespace Jularr.Backend.Logic.Media
     // The provider catalog Discover keeps: every title it loaded once, the current trending lists in their order.
     internal static class ExternalWorkLogic
     {
+        // With the DiscoverCache module Discover keeps what it loaded and answers from it; without it Discover only asks the providers.
+        public static async Task<bool> KeepsDiscoverTitlesAsync(this LogicContext ctx, CancellationToken ct) =>
+            (await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct)).Any(module => module.IsEnabled);
+
         // Trending lists change slowly; within this time the catalog answers instead of the provider.
         private static readonly TimeSpan TrendingLifetime = TimeSpan.FromHours(6);
 

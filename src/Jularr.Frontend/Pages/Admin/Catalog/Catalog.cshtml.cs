@@ -16,6 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
         private const int MaxWindows = 8;
         private IReadOnlyList<ExternalWorkSyncV1> _syncs = [];
         private bool _isOn;
+        private bool _keeps;
         private string? _draftNamespace;
         private UpdateExternalWorkSyncDataV1? _draft;
 
@@ -26,7 +27,8 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             page.Asset("Framework/Components/TimePicker.entry.ts");
             if (!_isOn)
             {
-                page.Content.Add(new P(new Text("admin.catalog.off"), new ValueText(" "), new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance")).Attribute("role", "status"));
+                page.Content.Add(new P(new Text(_keeps ? "admin.catalog.off" : "admin.catalog.nothingKept"), new ValueText(" "), new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"))
+                    .Attribute("role", "status"));
             }
 
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
@@ -98,7 +100,8 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             var ct = HttpContext.RequestAborted;
             _syncs = await read.ExecuteAsync<BaseDataList<ExternalWorkSyncV1>>(new ReadExternalWorkSyncsParametersV1(), ct);
             var modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), ct);
-            _isOn = modules.Any(module => module.Key == "LocalDiscovery" && module.IsEnabled);
+            _keeps = modules.Any(module => module.Key == "DiscoverCache" && module.IsEnabled);
+            _isOn = _keeps && modules.Any(module => module.Key == "LocalDiscovery" && module.IsEnabled);
         }
 
         private static UpdateExternalWorkSyncDataV1 Input(bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows) =>

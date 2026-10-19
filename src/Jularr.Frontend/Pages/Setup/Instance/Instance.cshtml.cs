@@ -82,7 +82,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
 
         private static string Group(string key) => key switch
         {
-            "Library" or "Playback" or "Reading" or "Emulation" or "Subtitles" or "Trickplay" or "Translation" or "Ocr" or "LocalDiscovery" => "media",
+            "Library" or "Playback" or "Reading" or "Emulation" or "Subtitles" or "Trickplay" or "Translation" or "Ocr" or "DiscoverCache" or "LocalDiscovery" => "media",
             "Requests" or "Acquisition" or "Uploads" => "requests",
             "Profiles" or "Devices" or "ProgressSync" or "HomeLayout" or "Collections" or "Calendar" or "Notifications" or "Statistics" or "UnitGroups" or "Franchises" or "Registration" => "personal",
             _ => "operations"

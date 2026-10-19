@@ -56,8 +56,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
             // The first trending page comes from the catalog while it is fresh, and from there too while TMDB cannot answer.
             var list = new ExternalWorkListData(WorkMetadata.Namespace(Data.MediaTypeId), Data.MediaTypeId, null);
+            var keeps = await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken);
             var isTrending = Data.DiscoverFeedTypeId == DiscoverFeedType.Trending && Data.Page <= 1;
-            var known = isTrending ? await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadTrendingExternalWorksAsync(list, ct), CancellationToken) : [];
+            var known = keeps && isTrending ? await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadTrendingExternalWorksAsync(list, ct), CancellationToken) : [];
             IReadOnlyList<ExternalWorkData> works;
             if (ExternalWorkLogic.IsFresh(known, _time.GetUtcNow()))
             {
@@ -70,7 +71,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     var connection = await _metadata.ConnectAsync(Context, CancellationToken);
                     var results = await _metadata.ReadFeedAsync(connection, Data.MediaTypeId, Data.DiscoverFeedTypeId, Data.Page, CancellationToken);
                     works = [.. results.Select(result => DiscoverQueries.ExternalWork(list.Namespace, result))];
-                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, isTrending), ct), CancellationToken);
+                    if (keeps) await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, works, isTrending), ct), CancellationToken);
                 }
                 catch (ServiceUnavailableException) when (known.Count > 0)
                 {
@@ -196,8 +197,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
                     var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
                     var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
-                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(result => DiscoverQueries.ExternalWork(list.Namespace, result))], false), ct),
-                        CancellationToken);
+                    if (await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken))
+                    {
+                        await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(result => DiscoverQueries.ExternalWork(list.Namespace, result))], false), ct),
+                            CancellationToken);
+                    }
                     var overlay = await DiscoverQueries.ReadOverlayAsync(Context, mediaType, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
                     var localIds = items.Where(item => item.MediaTypeId == mediaType && item.TmdbId is not null).Select(item => item.TmdbId!.Value).ToHashSet();
                     items.AddRange(results.Where(result => !localIds.Contains(result.Id)).Select(result => DiscoverQueries.ToItem(mediaType, result, overlay)));

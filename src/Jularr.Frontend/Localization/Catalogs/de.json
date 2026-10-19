@@ -1008,6 +1008,10 @@
    "Discover catalog",
    "Discover-Katalog"
   ],
+  "admin.catalog.nothingKept": [
+   "Discover keeps nothing locally and always asks the providers.",
+   "Discover speichert nichts lokal und fragt immer die Anbieter."
+  ],
   "admin.catalog.off": [
    "Full local discovery is off; Discover keeps only what it loaded.",
    "Full local discovery ist aus; Discover behält nur, was es geladen hat."
@@ -4731,6 +4735,10 @@
   "instance.module.Ocr": [
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
+  ],
+  "instance.module.DiscoverCache": [
+   "Keep Discover's titles locally",
+   "Discover-Titel lokal speichern"
   ],
   "instance.module.LocalDiscovery": [
    "Keep whole provider catalogs for Discover",
