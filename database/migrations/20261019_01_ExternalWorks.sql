@@ -24,6 +24,8 @@ CREATE TABLE "ExternalWorks" (
     "TrendingRank" integer NULL CHECK ("TrendingRank" > 0),
     "IsAdult" boolean NOT NULL DEFAULT FALSE,
     "FetchedAt" timestamptz NOT NULL DEFAULT now(),
+    -- When the provider's own entry of the title was last read; NULL while a full sync still has to read it.
+    "DetailedAt" timestamptz NULL,
     "SearchText" tsvector GENERATED ALWAYS AS (to_tsvector('simple', "Title" || ' ' || coalesce("OriginalTitle", ''))) STORED,
     UNIQUE ("Namespace", "Value"),
     FOREIGN KEY ("MediaSubtypeId", "MediaTypeId") REFERENCES "MediaSubtypeParents" ("MediaSubtypeId", "MediaTypeId")
@@ -33,3 +35,20 @@ CREATE INDEX "IX_ExternalWorks_Popularity" ON "ExternalWorks" ("MediaTypeId", "M
 CREATE INDEX "IX_ExternalWorks_Released" ON "ExternalWorks" ("MediaTypeId", "MediaSubtypeId", "ReleasedOn" DESC NULLS LAST);
 CREATE INDEX "IX_ExternalWorks_Imdb" ON "ExternalWorks" ("ImdbId") WHERE "ImdbId" IS NOT NULL;
 CREATE INDEX "IX_ExternalWorks_Search" ON "ExternalWorks" USING gin ("SearchText");
+-- A full sync reads entries in the order users are most likely to look for them.
+CREATE INDEX "IX_ExternalWorks_Undetailed" ON "ExternalWorks" ("Namespace", "Popularity" DESC NULLS LAST) WHERE "DetailedAt" IS NULL;
+
+-- How far the full sync of a catalog has come: the provider's id list and its list of changed entries.
+CREATE TABLE "ExternalWorkSyncs" (
+    "Namespace" varchar(16) PRIMARY KEY CHECK ("Namespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'openlibrary', 'anilist', 'musicbrainz', 'igdb')),
+    "ListedOn" date NULL,
+    "ChangesReadAt" timestamptz NULL,
+    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
+);
+
+-- LocalDiscovery keeps whole provider catalogs locally (full local discovery); off, Discover keeps only what it loaded.
+ALTER TABLE "InstanceModules" DROP CONSTRAINT "InstanceModules_Key_check";
+ALTER TABLE "InstanceModules" ADD CONSTRAINT "InstanceModules_Key_check" CHECK ("Key" IN ('Library', 'Requests', 'Acquisition', 'Playback', 'Reading', 'Profiles', 'Emulation',
+    'Notifications', 'Collections', 'Calendar', 'Statistics', 'UnitGroups', 'HomeLayout', 'Trickplay', 'Franchises', 'Diagnostics', 'Subtitles', 'Uploads', 'ProgressSync', 'Devices',
+    'Registration', 'Translation', 'Ocr', 'LocalDiscovery'));
+INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('LocalDiscovery', FALSE);

@@ -4660,6 +4660,10 @@
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
   ],
+  "instance.module.LocalDiscovery": [
+   "Keep whole provider catalogs for Discover",
+   "Ganze Anbieter-Kataloge für Discover lokal halten"
+  ],
   "instance.module.Diagnostics": [
    "Diagnostics in memory",
    "Diagnose im Arbeitsspeicher"
