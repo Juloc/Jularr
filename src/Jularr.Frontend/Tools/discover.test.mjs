@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('../Pages/User/Discover/Index.entry.ts', import.meta.url), 'utf8');
+// The page script registers its setup with the in-place navigation; outside a module it names itself.
+const source = readFileSync(new URL('../Pages/User/Discover/Index.entry.ts', import.meta.url), 'utf8').replace('import.meta.url', "'discover'");
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
@@ -55,6 +56,7 @@ function discover(landing = false) {
         exports: {},
         require: name => {
             if (name === '../../../Framework/Components/MediaCard') return { initializeCards() {} };
+            if (name === '../../../Modules/Navigation/PageSwap') return { onPage: (_, setup) => setup(), inserted() {} };
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },

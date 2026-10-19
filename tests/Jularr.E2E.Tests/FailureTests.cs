@@ -89,8 +89,8 @@ namespace Jularr.E2E.Tests
                 // The retried search may take it in the background first; then the page says it is already downloading.
                 if (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))
                 {
-                    await page.Locator("tr", new() { HasText = LowerFilm.Title }).Locator("form")
-                        .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }).Locator("button[type=submit]").ClickAsync();
+                    await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = LowerFilm.Title }).Locator("form")
+                        .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }).Locator("button[type=submit]"));
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
@@ -201,7 +201,7 @@ namespace Jularr.E2E.Tests
         private static async Task<string> CheckLibraryAsync(IPage page)
         {
             await page.GotoAsync("/Admin/Storage");
-            await page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
+            await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }));
             await Steps.SubmitAsync(page, Steps.FormWith(page, "Check now"));
             return await page.Locator(".storage__health").InnerTextAsync();
         }

@@ -66,7 +66,7 @@ namespace Jularr.E2E.Tests
 
                 // The second episode is switched off on the Monitoring tab: nothing monitored is missing, the request completes and the Missing list drops the series.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = "Episode 1" }).InnerTextAsync(), "Present");
                 await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "Episode 2" }).Locator("form")
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Stop monitoring" }) }));
@@ -193,6 +193,10 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".app-layout")).ToBeVisibleAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
             Assert.AreEqual(1, await page.Locator("video").CountAsync());
+            // Saving a form of the page beside the mini player keeps the same playback.
+            await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Add to watchlist", Exact = true }) }));
+            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Remove from watchlist", Exact = true })).ToBeVisibleAsync();
+            Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
             await page.Locator("[data-action=expand]").ClickAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
             // Keep the resume contract of the surrounding end-to-end path unchanged.

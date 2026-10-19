@@ -40,13 +40,22 @@ namespace Jularr.E2E.Tests
         public static ILocator FormWith(IPage page, string button) =>
             page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = button, Exact = true }) });
 
+        // Clicks a link or button and waits for the page it leads to, swapped in place or loaded as a new document.
+        public static async Task FollowAsync(IPage page, ILocator element)
+        {
+            // A search asks every indexer rung in turn and may take its time.
+            await page.EvaluateAsync("() => { window.jularrFollowing = true; document.getElementById('app-content')?.setAttribute('data-followed', ''); }");
+            await element.ClickAsync();
+            await page.WaitForFunctionAsync("""
+                () => (!window.jularrFollowing || !!document.getElementById('app-content') && !document.querySelector('#app-content[data-followed]'))
+                    && document.readyState !== 'loading' && !document.querySelector('.htmx-request, .htmx-swapping')
+                """, null, new() { Timeout = 120_000 });
+        }
+
         // Submits, waits for the answering page and fails on the error it shows.
         public static async Task SubmitAsync(IPage page, ILocator form)
         {
-            // A new document has replaced the marked one; a search asks every indexer rung in turn and may take its time.
-            await page.EvaluateAsync("() => window.jularrSubmitting = true");
-            await form.Locator("button[type=submit]").Last.ClickAsync();
-            await page.WaitForFunctionAsync("() => !window.jularrSubmitting && document.readyState !== 'loading'", null, new() { Timeout = 120_000 });
+            await FollowAsync(page, form.Locator("button[type=submit]").Last);
             var alert = page.Locator("main [role=alert]");
             if (await alert.CountAsync() > 0)
             {
@@ -77,7 +86,7 @@ namespace Jularr.E2E.Tests
         public static async Task AddLibraryAsync(IPage page, string localPath, params LibraryPath[] roots)
         {
             await page.GotoAsync("/Admin/Storage");
-            await page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }));
             await page.FillAsync("form [name=Name]", "Library");
             await page.SelectOptionAsync("form [name=SharePath]", localPath);
             await page.Locator("form [name=IsReadOnly][value=False]").CheckAsync();
@@ -108,7 +117,7 @@ namespace Jularr.E2E.Tests
         public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories, bool searchesAutomatically = false)
         {
             await page.GotoAsync("/Admin/Acquisition");
-            await page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }));
             await page.FillAsync("form [name=Name]", "Indexer");
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("form [name=ApiKey]", FakeServices.IndexerKey);
@@ -116,7 +125,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("form [name=SearchesAutomatically]").SelectOptionAsync(searchesAutomatically ? "True" : "False");
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
-            await page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }));
             await page.FillAsync("form [name=Name]", "SABnzbd");
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("form [name=ApiKey]", FakeServices.ClientKey);
@@ -130,7 +139,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
             await card.HoverAsync();
-            await card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }).ClickAsync();
+            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }));
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
@@ -140,21 +149,21 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?type=" + type + "&q=" + Uri.EscapeDataString(title));
             var card = page.Locator(".media-card", new() { HasText = title }).Filter(new() { Has = page.Locator("a[href*='/" + type + "/" + source + "/']") }).First;
             await card.HoverAsync();
-            await card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }).ClickAsync();
+            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }));
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
         public static async Task OpenWantedAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Wanted");
-            await page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
+            await FollowAsync(page, page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Open" }));
         }
 
         // The manual search page of a target.
         public static async Task OpenSearchAsync(IPage page, string title)
         {
             await OpenWantedAsync(page, title);
-            await page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true }));
         }
 
         public static async Task GrabAsync(IPage page, FakeRelease release)
@@ -173,7 +182,7 @@ namespace Jularr.E2E.Tests
                 var card = page.GetByRole(AriaRole.Link, new() { Name = title });
                 if (await card.CountAsync() > 0)
                 {
-                    await card.First.ClickAsync();
+                    await FollowAsync(page, card.First);
                     if (await page.GetByRole(AriaRole.Link, new() { Name = action, Exact = true }).CountAsync() > 0)
                     {
                         return new Uri(page.Url).PathAndQuery;

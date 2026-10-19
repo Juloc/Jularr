@@ -58,6 +58,8 @@ function refreshControls(): void {
 
 applyPalette();
 refreshControls();
+// Pages swapped in place show the current choice too.
+document.addEventListener("htmx:after:swap", refreshControls);
 
 // Update shared controls.
 document.addEventListener("click", event => {

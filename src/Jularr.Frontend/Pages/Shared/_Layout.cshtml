@@ -10,6 +10,7 @@
         : ViewData["Title"] as string ?? T["app.name"]);
     ViewData["Title"] = title;
     var pageAssets = currentPage?.Definition.AssetEntries.ToArray() ?? [];
+    var inPlace = showShell || isPlayer;
 }
 <!DOCTYPE html>
 <html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system">
@@ -20,27 +21,48 @@
     <meta name="theme-color" content="#17161e" />
     <title>@title · @T.InstanceName</title>
     @Assets.Styles("Assets/Shared/shell.entry.scss")
-    @Assets.Styles(pageAssets)
+    @if (!showShell)
+    {
+        @Assets.Styles(pageAssets)
+    }
     @Assets.Scripts("Modules/Appearance/theme.entry.ts")
+    @if (inPlace)
+    {
+        @Assets.Scripts("Modules/Navigation/navigation.entry.ts")
+    }
     @if (showShell && !isPreview)
     {
         @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
     }
-    @Assets.Scripts(pageAssets)
+    @if (!showShell)
+    {
+        @Assets.Scripts(pageAssets)
+    }
     @await RenderSectionAsync("Head", required: false)
 </head>
-<body class="@(isPlayer ? "player-page" : showShell ? "app-page" : "auth-page")">
+@* App pages swap #app-content in place (with their own assets); the player page keeps its player beside it. *@
+<body class="@(isPlayer ? "player-page" : showShell ? "app-page" : "auth-page")" hx-boost:inherited="@(inPlace ? "true" : null)"
+    hx-target:inherited="@(inPlace ? "#app-content" : null)" hx-select:inherited="@(inPlace ? "#app-content" : null)" hx-swap:inherited="@(inPlace ? "outerHTML" : null)">
     <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
     @if (showShell)
     {
-        <div class="app-layout">
-            <partial name="_AppShell" />
-            <main class="app-main" id="main-content" tabindex="-1">@RenderBody()</main>
+        <div id="app-content" class="app-content" data-shell="app" hx-history-elt>
+            @Assets.Styles(pageAssets)
+            <div class="app-layout">
+                <partial name="_AppShell" />
+                <main class="app-main" id="main-content" tabindex="-1">@RenderBody()</main>
+            </div>
+            @Assets.Scripts(pageAssets)
         </div>
+    }
+    else if (isPlayer)
+    {
+        <div id="app-content" class="app-content" data-shell="player" hx-history-elt></div>
+        <main class="player-main" id="main-content" tabindex="-1">@RenderBody()</main>
     }
     else
     {
-        <main class="@(isPlayer ? "player-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
+        <main class="auth-main" id="main-content" tabindex="-1">@RenderBody()</main>
     }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
