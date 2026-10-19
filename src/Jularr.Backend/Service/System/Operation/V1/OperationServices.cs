@@ -297,7 +297,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         bitRate = probe.BitRate is >= 0 ? probe.BitRate : null;
                         tracks = JsonSerializer.Serialize(probe.Streams.Select(stream => new ProbedTrack(stream.Index,
                             stream.CodecType switch { "video" => MediaTrackType.Video, "audio" => MediaTrackType.Audio, _ => MediaTrackType.Subtitle },
-                            TextLimit.Cut(stream.Codec, 64), TextLimit.Cut(stream.Language, 16), TextLimit.Cut(stream.Title, 256), stream.Width, stream.Height, stream.Channels, stream.IsDefault, stream.IsForced)));
+                            TextLimit.Cut(stream.Codec, 64), TextLimit.Cut(stream.Language, 16), TextLimit.Cut(stream.Title, 256), stream.Width, stream.Height, stream.Channels, stream.IsDefault, stream.IsForced, stream.BitDepth, TextLimit.Cut(stream.DynamicRange, 16), stream.Is3D)));
                     }
                     catch (Exception exception) when (exception is InvalidDataException or Integrations.Data.Nas.NasMountException)
                     {
@@ -766,6 +766,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private sealed record ScannedFile(string RelativePath, long SizeBytes, DateTime ModifiedAt, string? ReleaseName, string? ReleaseGroup, string? QualityKey, string? Edition, int Revision);
 
         private sealed record ProbedTrack(int StreamIndex, MediaTrackType MediaTrackTypeId, string? Codec, string? Language, string? Title, int? Width, int? Height, int? Channels,
-            bool IsDefault, bool IsForced);
+            bool IsDefault, bool IsForced, int? BitDepth = null, string? DynamicRange = null, bool Is3D = false);
     }
 }

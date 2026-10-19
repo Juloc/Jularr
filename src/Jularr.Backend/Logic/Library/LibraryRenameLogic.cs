@@ -48,7 +48,7 @@ namespace Jularr.Backend.Logic.Library
                     coalesce((SELECT jsonb_object_agg(identity."Namespace", identity."Value")::text FROM "WorkExternalIdentities" AS identity
                         WHERE identity."WorkId" = work."Id"), '{}') AS "ProviderIds",
                     coalesce((SELECT jsonb_agg(jsonb_build_object('MediaTrackTypeId', track."MediaTrackTypeId", 'Codec', track."Codec",
-                        'Language', track."Language", 'Channels', track."Channels") ORDER BY track."StreamIndex")::text
+                        'Language', track."Language", 'Channels', track."Channels", 'BitDepth', track."BitDepth", 'DynamicRange', track."DynamicRange", 'Is3D', track."Is3D") ORDER BY track."StreamIndex")::text
                         FROM "MediaTracks" AS track WHERE track."StoredFileId" = file."Id"), '[]') AS "MediaTracks",
                     coalesce((SELECT jsonb_object_agg(format."Name", format."Name")::text
                         FROM "StoredFileCustomFormats" AS evaluated
@@ -196,7 +196,7 @@ namespace Jularr.Backend.Logic.Library
                 LocalizedTitles = JsonSerializer.Deserialize<Dictionary<string, string>>(file.LocalizedTitles)
             };
 
-        private static IReadOnlyDictionary<string, string> MediaDetails(string json)
+        internal static IReadOnlyDictionary<string, string> MediaDetails(string json)
         {
             var tracks = JsonSerializer.Deserialize<NamingTrack[]>(json) ?? [];
             var video = tracks.FirstOrDefault(track => track.MediaTrackTypeId == 1);
@@ -230,12 +230,16 @@ namespace Jularr.Backend.Logic.Library
                 ["MediaInfo AudioLanguagesAll"] = allAudio,
                 ["MediaInfo SubtitleLanguages"] = subtitleText,
                 ["MediaInfo SubtitleLanguagesAll"] = subtitleText,
+                ["MediaInfo VideoBitDepth"] = video?.BitDepth?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                ["MediaInfo VideoDynamicRange"] = video?.DynamicRange is { Length: > 0 } and not "DV SDR" ? "HDR" : "",
+                ["MediaInfo VideoDynamicRangeType"] = video?.DynamicRange ?? "",
+                ["MediaInfo 3D"] = video?.Is3D == true ? "3D" : "",
                 ["MediaInfo Simple"] = string.Join(' ', new[] { videoCodec, audioCodec }.Where(value => value.Length > 0)),
                 ["MediaInfo Full"] = string.Join(' ', new[] { videoCodec, audioCodec, allAudio, subtitleText }.Where(value => value.Length > 0))
             };
         }
 
-        private sealed record NamingTrack(int MediaTrackTypeId, string? Codec, string? Language, int? Channels);
+        private sealed record NamingTrack(int MediaTrackTypeId, string? Codec, string? Language, int? Channels, int? BitDepth = null, string? DynamicRange = null, bool Is3D = false);
 
         // The stored release quality, else a tag only an older name carries, else the analysed width, wide formats included.
         private static string? QualityOf(LibraryRenameFileData file) => file.QualityKey

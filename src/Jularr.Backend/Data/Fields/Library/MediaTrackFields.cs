@@ -13,6 +13,9 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly IntField Width = new() { Minimum = 1, Required = false };
         public static readonly IntField Height = new() { Minimum = 1, Required = false };
         public static readonly IntField Channels = new() { Minimum = 1, Required = false };
+        public static readonly IntField BitDepth = new() { Minimum = 1, Maximum = 32, Required = false };
+        public static readonly StringField DynamicRange = new(NpgsqlDbType.Varchar) { MaximumLength = 16, Required = false };
+        public static readonly BoolField Is3D = new();
         public static readonly BoolField IsDefault = new();
         public static readonly BoolField IsForced = new();
         public static readonly StringArrayField Languages = new() { ItemMaximumLength = 16 };

@@ -912,6 +912,43 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Probe_FfprobeJson_ReadsBitDepthDynamicRangeAndStereo()
+        {
+            static Jularr.Integrations.Data.Media.MediaProbeStream Video(string stream) => MediaProbeClient.Parse("{\"streams\":[" + stream + "]}").Streams.Single();
+            var hdr10 = Video("""{"index":0,"codec_type":"video","codec_name":"hevc","pix_fmt":"yuv420p10le","color_transfer":"smpte2084","color_primaries":"bt2020","side_data_list":[{"side_data_type":"Mastering display metadata"}]}""");
+            Assert.AreEqual((10, "HDR10", false), (hdr10.BitDepth, hdr10.DynamicRange, hdr10.Is3D));
+            Assert.AreEqual("HDR10Plus", Video("""{"index":0,"codec_type":"video","color_transfer":"smpte2084","side_data_list":[{"side_data_type":"Mastering display metadata"},{"side_data_type":"HDR Dynamic Metadata SMPTE2094-40 (HDR10+)"}]}""").DynamicRange);
+            Assert.AreEqual("HLG", Video("""{"index":0,"codec_type":"video","color_transfer":"arib-std-b67"}""").DynamicRange);
+            Assert.AreEqual("PQ", Video("""{"index":0,"codec_type":"video","color_transfer":"smpte2084"}""").DynamicRange);
+            Assert.AreEqual("DV HDR10", Video("""{"index":0,"codec_type":"video","color_transfer":"smpte2084","side_data_list":[{"side_data_type":"DOVI configuration record","dv_bl_signal_compatibility_id":1}]}""").DynamicRange);
+            Assert.AreEqual("DV", Video("""{"index":0,"codec_type":"video","side_data_list":[{"side_data_type":"DOVI configuration record","dv_bl_signal_compatibility_id":0}]}""").DynamicRange);
+
+            // Standard dynamic range at eight bits, a raw sample size wins, and the stereo mode marks 3D.
+            var sdr = Video("""{"index":0,"codec_type":"video","pix_fmt":"yuv420p","color_transfer":"bt709"}""");
+            Assert.AreEqual((8, (string?)null), (sdr.BitDepth, sdr.DynamicRange));
+            Assert.AreEqual(12, Video("""{"index":0,"codec_type":"video","pix_fmt":"yuv420p10le","bits_per_raw_sample":"12"}""").BitDepth);
+            Assert.IsTrue(Video("""{"index":0,"codec_type":"video","tags":{"stereo_mode":"1"}}""").Is3D);
+            Assert.IsNull(Video("""{"index":1,"codec_type":"audio","codec_name":"dts","channels":6}""").BitDepth);
+        }
+
+        // The tracks of a file give the MediaInfo tokens of its name.
+        [TestMethod]
+        public void Rename_MediaTracks_FillTheMediaInfoTokens()
+        {
+            var info = LibraryRenameLogic.MediaDetails("""
+                [{"MediaTrackTypeId":1,"Codec":"hevc","Language":null,"Channels":null,"BitDepth":10,"DynamicRange":"DV HDR10","Is3D":false},
+                {"MediaTrackTypeId":2,"Codec":"dts","Language":"ger","Channels":6},{"MediaTrackTypeId":3,"Codec":"subrip","Language":"eng"}]
+                """);
+            Assert.AreEqual("10", info["MediaInfo VideoBitDepth"]);
+            Assert.AreEqual("HDR", info["MediaInfo VideoDynamicRange"]);
+            Assert.AreEqual("DV HDR10", info["MediaInfo VideoDynamicRangeType"]);
+            Assert.AreEqual("", info["MediaInfo 3D"]);
+            Assert.AreEqual("[EN]", info["MediaInfo SubtitleLanguagesAll"]);
+            Assert.AreEqual("", LibraryRenameLogic.MediaDetails("""[{"MediaTrackTypeId":1,"Codec":"h264","DynamicRange":"DV SDR","Is3D":true}]""")["MediaInfo VideoDynamicRange"]);
+            Assert.AreEqual("3D", LibraryRenameLogic.MediaDetails("""[{"MediaTrackTypeId":1,"Codec":"h264","Is3D":true}]""")["MediaInfo 3D"]);
+        }
+
+        [TestMethod]
         public async Task Rename_MovesOnlyTheConfirmedPreviewAndKeepsIdentity()
         {
             using var storage = new TemporaryDirectory();

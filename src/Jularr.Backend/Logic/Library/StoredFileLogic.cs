@@ -240,7 +240,7 @@ namespace Jularr.Backend.Logic.Library
             sql.Statement =
                 """
                 INSERT INTO
-                    "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Codec", "Language", "Title", "Width", "Height", "Channels", "IsDefault", "IsForced")
+                    "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Codec", "Language", "Title", "Width", "Height", "Channels", "BitDepth", "DynamicRange", "Is3D", "IsDefault", "IsForced")
                 SELECT
                     @Id,
                     track."StreamIndex",
@@ -251,11 +251,14 @@ namespace Jularr.Backend.Logic.Library
                     track."Width",
                     track."Height",
                     track."Channels",
+                    track."BitDepth",
+                    track."DynamicRange",
+                    coalesce(track."Is3D", FALSE),
                     track."IsDefault",
                     track."IsForced"
                 FROM
                     jsonb_to_recordset(@Tracks::jsonb) AS track("StreamIndex" integer, "MediaTrackTypeId" smallint, "Codec" text, "Language" text, "Title" text,
-                        "Width" integer, "Height" integer, "Channels" integer, "IsDefault" boolean, "IsForced" boolean);
+                        "Width" integer, "Height" integer, "Channels" integer, "BitDepth" integer, "DynamicRange" text, "Is3D" boolean, "IsDefault" boolean, "IsForced" boolean);
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
