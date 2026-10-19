@@ -106,13 +106,49 @@ namespace Jularr.Backend.Data.Logic.Media
         public string?[] BackdropUrls { get; }
     }
 
-    // How far the full sync of one catalog has come.
+    // A catalog's full-sync settings and progress.
     internal sealed class ExternalWorkSyncData : BaseData
     {
-        public ExternalWorkSyncData(string @namespace, DateOnly? listedOn, DateTime? changesReadAt)
+        public ExternalWorkSyncData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
+        {
+            Namespace = @namespace;
+            IsEnabled = isEnabled;
+            RequestsPerMinute = requestsPerMinute;
+            PausesWhileUsed = pausesWhileUsed;
+            ListedOn = listedOn;
+            Cursor = cursor;
+            ChangesReadAt = changesReadAt;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
+        public bool IsEnabled { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
+        public int RequestsPerMinute { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.PausesWhileUsed))]
+        public bool PausesWhileUsed { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ListedOn))]
+        public DateOnly? ListedOn { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Cursor))]
+        public int? Cursor { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ChangesReadAt))]
+        public DateTime? ChangesReadAt { get; }
+    }
+
+    internal sealed class ExternalWorkSyncProgressData : BaseData
+    {
+        public ExternalWorkSyncProgressData(string @namespace, DateOnly? listedOn, int? cursor, DateTime? changesReadAt)
         {
             Namespace = @namespace;
             ListedOn = listedOn;
+            Cursor = cursor;
             ChangesReadAt = changesReadAt;
         }
 
@@ -122,8 +158,100 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ListedOn))]
         public DateOnly? ListedOn { get; }
 
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Cursor))]
+        public int? Cursor { get; }
+
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ChangesReadAt))]
         public DateTime? ChangesReadAt { get; }
+    }
+
+    internal sealed class ExternalWorkSyncWindowData : BaseData
+    {
+        public ExternalWorkSyncWindowData(string @namespace, TimeOnly startsAt, TimeOnly endsAt)
+        {
+            Namespace = @namespace;
+            StartsAt = startsAt;
+            EndsAt = endsAt;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.StartsAt))]
+        public TimeOnly StartsAt { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.EndsAt))]
+        public TimeOnly EndsAt { get; }
+    }
+
+    internal sealed class ExternalWorkSyncSummaryData : BaseData
+    {
+        public ExternalWorkSyncSummaryData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, DateOnly? listedOn, long entries, long pending, long version)
+        {
+            Namespace = @namespace;
+            IsEnabled = isEnabled;
+            RequestsPerMinute = requestsPerMinute;
+            PausesWhileUsed = pausesWhileUsed;
+            ListedOn = listedOn;
+            Entries = entries;
+            Pending = pending;
+            Version = version;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
+        public bool IsEnabled { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
+        public int RequestsPerMinute { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.PausesWhileUsed))]
+        public bool PausesWhileUsed { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ListedOn))]
+        public DateOnly? ListedOn { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Entries))]
+        public long Entries { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Pending))]
+        public long Pending { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Version))]
+        public long Version { get; }
+    }
+
+    // The Owner's choices for one catalog, with its windows as JSON rows.
+    internal sealed class ExternalWorkSyncSettingsData : BaseData
+    {
+        public ExternalWorkSyncSettingsData(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, string windows)
+        {
+            Namespace = @namespace;
+            IsEnabled = isEnabled;
+            RequestsPerMinute = requestsPerMinute;
+            PausesWhileUsed = pausesWhileUsed;
+            Version = version;
+            Windows = windows;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.IsEnabled))]
+        public bool IsEnabled { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.RequestsPerMinute))]
+        public int RequestsPerMinute { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.PausesWhileUsed))]
+        public bool PausesWhileUsed { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Version))]
+        public long Version { get; }
+
+        public string Windows { get; }
     }
 
     // The next entries a full sync reads, most popular first.

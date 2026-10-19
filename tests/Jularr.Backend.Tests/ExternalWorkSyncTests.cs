@@ -2,11 +2,17 @@ using System.IO.Compression;
 using System.Net;
 using System.Security;
 using System.Text;
+using System.Net.Http.Json;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.System.Media.V1;
+using System.Text.Json;
+using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -65,6 +71,83 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Stale", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '604'"));
         }
 
+        [TestMethod]
+        public async Task AniList_WalksItsTitlesByPage_KeepsTheFormatsDiscoverShows_AndWaitsWhileUsed()
+        {
+            var aniList = new FakeAniListCatalog();
+            var time = new FixedTime(new DateTimeOffset(2026, 10, 19, 3, 0, 0, TimeSpan.Zero));
+            await using var host = await Host.CreateAsync(library: true, services: services =>
+            {
+                services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+                services.AddSingleton<TimeProvider>(time);
+            });
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'LocalDiscovery'");
+
+            // While someone uses Jularr the walk waits.
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var used = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            await RunAsync(host);
+            Assert.AreEqual(0, aniList.Pages.Count);
+
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorkSyncs\" SET \"PausesWhileUsed\" = FALSE WHERE \"Namespace\" = 'anilist'");
+            await RunAsync(host);
+            CollectionAssert.AreEqual(new[] { 0, 3 }, aniList.Pages.ToArray());
+            Assert.AreEqual("2:1", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '1'"));
+            Assert.AreEqual(8.4m, await host.ScalarAsync("SELECT \"Rating\" FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
+            Assert.AreEqual("Frieren", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
+            Assert.AreEqual("2023-09-29", await host.ScalarAsync("SELECT \"ReleasedOn\"::text FROM \"ExternalWorks\" WHERE \"Value\" = '1'"));
+            Assert.AreEqual("3:3", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Value\" = '3'"));
+            Assert.AreEqual("3:2", await host.ScalarAsync("SELECT \"MediaTypeId\" || ':' || \"MediaSubtypeId\" FROM \"ExternalWorks\" WHERE \"Value\" = '5'"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\" WHERE \"Value\" = '2'"), "A music video is no Discover title.");
+            Assert.AreEqual("2026-10-19", await host.ScalarAsync("SELECT \"ListedOn\"::text FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist' AND \"Cursor\" IS NULL"));
+
+            // A finished walk rests for a week.
+            await RunAsync(host);
+            Assert.AreEqual(2, aniList.Pages.Count);
+        }
+
+        [TestMethod]
+        public void Windows_AndUse_DecideWhetherACatalogSyncs()
+        {
+            var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null);
+            IReadOnlyList<ExternalWorkSyncWindowData> night = [new("anilist", new TimeOnly(22, 0), new TimeOnly(6, 0)), new("tmdb_movie", new TimeOnly(12, 0), new TimeOnly(13, 0))];
+            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, [], new TimeOnly(15, 0), false), "Without windows a catalog syncs any time.");
+            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), false));
+            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(5, 59), false), "A window past midnight ends the next day.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(12, 30), false), "Another catalog's window does not count.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), true), "It waits while Jularr is used.");
+            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null), night, new TimeOnly(23, 30), true));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", false, 20, false, null, null, null), [], new TimeOnly(23, 30), false));
+        }
+
+        [TestMethod]
+        public async Task Settings_SaveChoicesAndWindows_WithTheirVersion()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var aniList = (await read.Content.ReadFromJsonAsync<BaseDataList<ExternalWorkSyncV1>>())!.Single(sync => sync.Namespace == "anilist");
+            Assert.AreEqual(20, aniList.RequestsPerMinute);
+            Assert.IsTrue(aniList.PausesWhileUsed);
+
+            var windows = new BaseDataList<ExternalWorkSyncWindowV1>([new(new TimeOnly(2, 0), new TimeOnly(6, 0)), new(new TimeOnly(22, 30), new TimeOnly(1, 0))]);
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 15, true, aniList.Version, windows));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual("02:00:00-06:00:00,22:30:00-01:00:00", await host.ScalarAsync("SELECT string_agg(\"StartsAt\"::text || '-' || \"EndsAt\"::text, ',' ORDER BY \"StartsAt\") FROM \"ExternalWorkSyncWindows\""));
+
+            // An old version and a window without length are refused; the saved windows stay.
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
+            using var empty = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist",
+                new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version + 1, new([new(new TimeOnly(3, 0), new TimeOnly(3, 0))])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncWindows\""));
+            Assert.AreEqual(15, await host.ScalarAsync("SELECT \"RequestsPerMinute\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
+        }
+
         private static async Task RunAsync(Host host)
         {
             await using var scope = host.Services.CreateAsyncScope();
@@ -75,6 +158,23 @@ namespace Jularr.Backend.Tests
         {
             public DateTimeOffset Now { get; set; } = now;
             public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        private sealed class FakeAniListCatalog : HttpMessageHandler
+        {
+            public List<int> Pages { get; } = [];
+            private const string Frieren = """{"id":1,"type":"ANIME","format":"TV","title":{"romaji":"Sousou no Frieren","english":"Frieren","native":"葬送のフリーレン"},"startDate":{"year":2023,"month":9,"day":29},"coverImage":{"large":"https://img.anili.st/1.jpg"},"popularity":500000,"averageScore":84}""";
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                var after = body.RootElement.GetProperty("variables").GetProperty("after").GetInt32();
+                Pages.Add(after);
+                var json = after == 0
+                    ? """{"data":{"Page":{"pageInfo":{"hasNextPage":true},"media":[""" + Frieren + "," + """{"id":2,"type":"ANIME","format":"MUSIC","title":{"romaji":"Song"},"startDate":{"year":2020}},{"id":3,"type":"MANGA","format":"NOVEL","title":{"romaji":"Novel"},"startDate":{"year":2019}}]}}}"""
+                    : """{"data":{"Page":{"pageInfo":{"hasNextPage":false},"media":[{"id":5,"type":"MANGA","format":"MANGA","title":{"romaji":"Manga"},"averageScore":0}]}}}""";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            }
         }
 
         private sealed class FakeTmdbCatalog : HttpMessageHandler

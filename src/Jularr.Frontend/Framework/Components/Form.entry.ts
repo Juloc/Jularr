@@ -26,6 +26,7 @@ function enhance(form: HTMLFormElement): void {
             if (controller.signal.aborted) return;
             form.replaceWith(replacement);
             inserted(replacement);
+            replacement.dispatchEvent(new CustomEvent("jularr:draft", { bubbles: true }));
             enhance(replacement);
             replacement.querySelector<HTMLElement>(`[name="${CSS.escape(field.name)}"]`)?.focus({ preventScroll: true });
         } catch {

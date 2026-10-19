@@ -12,6 +12,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Form.cs](Framework/Components/Form.cs), [BaseField.cs](Framework/BaseField.cs): canonical Backend metadata, invariant form binding, antiforgery and field/form errors; placeholders and the label's (i) ([FieldInfo.cs](Framework/Components/FieldInfo.cs)) come from `hint.<Fields>.<Field>` texts in [UiResources.cs](Localization/UiResources.cs).
 - [FolderPicker.cs](Framework/Components/FolderPicker.cs), [client](Framework/Components/FolderPicker.entry.ts): native folder dialog using authorized SSR directory fragments, preserving form drafts and supporting cursor navigation. Storage and Setup share the same picker; `FolderPickerTests` and `SmbStorageTests` cover it.
 - [SavePill](Framework/Components/SavePill.cs), [client](Framework/Components/SavePill.ts): one save action for the page's `Form.Save` forms; `SavePillTests` cover save, discard and a failing form.
+- [TimePicker](Framework/Components/TimePicker.ts) behind `Form.Time`: desktop fields, Android wheel, iOS system picker; [tests](Tools/time-picker.test.mjs).
 - [Table.cs](Framework/Components/Table.cs): typed rows and composed cells.
 - [Button.cs](Framework/Components/Button.cs), [Tag.cs](Framework/Components/Tag.cs), [Toggle.cs](Framework/Components/Toggle.cs): shared controls.
 - [Split.cs](Framework/Components/Split.cs), [Tabs.cs](Framework/Components/Tabs.cs), [NavigationTabs.cs](Framework/Components/NavigationTabs.cs): layout and route-backed navigation.
@@ -60,6 +61,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
 - [Backup](Pages/Admin/Backup/Backup.cshtml.cs): backups with their schema version, back up now, delete; under `/Setup/Backup` also restore.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
+- [Discover catalog](Pages/Admin/Catalog/Catalog.cshtml.cs) (`/Admin/Catalog`, linked from Settings): each kept catalog's titles, pending entries and last complete pass; keep whole, requests per minute, pause while Jularr is used and sync windows (`CatalogSettingsTests`).
 - [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts with their last observed state, WOL, safe browsing and independently paged library paths.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): registry, protected TMDB/IGDB credentials, Plex server, and with ProgressSync the Jellyfin/Emby connections and which profile each server user shares progress with.
 - [DeviceLink](Pages/Account/DeviceLink/DeviceLink.cshtml.cs) (`/Devices/Link`, anonymous): a browser on a TV shows a pairing code and [QrCode](Framework/Components/QrCode.cs), kept in a strict cookie, and signs in once confirmed.

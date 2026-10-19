@@ -215,7 +215,8 @@ namespace Jularr.Backend.Service.Core
 
             // Trending comes from the catalog while it is fresh, and from there too while the provider cannot answer.
             var list = new ExternalWorkListData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype);
-            var isTrending = feed == DiscoverFeedType.Trending;
+            var keeps = await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct);
+            var isTrending = keeps && feed == DiscoverFeedType.Trending;
             var known = isTrending ? await context.ExecuteBatchAsync((ctx, token) => ctx.ReadTrendingExternalWorksAsync(list, token), ct) : [];
             if (ExternalWorkLogic.IsFresh(known, time.GetUtcNow()))
             {
@@ -237,7 +238,7 @@ namespace Jularr.Backend.Service.Core
                     return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
                 }
 
-                await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(ExternalWork)], isTrending), token), ct);
+                if (keeps) await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(ExternalWork)], isTrending), token), ct);
                 if (!isTrending) cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = Math.Max(1, results.Count) });
             }
 
@@ -247,6 +248,7 @@ namespace Jularr.Backend.Service.Core
         // Every catalog title a search or list showed stays in the catalog, each catalog under its own name.
         public async Task KeepAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
         {
+            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.KeepsDiscoverTitlesAsync(token), ct)) return;
             foreach (var group in results.GroupBy(result => result.Namespace))
             {
                 var list = new ExternalWorkListData(group.Key, mediaType, subtype);

@@ -186,6 +186,11 @@ namespace Jularr.Frontend.Pages.User.Settings
             {
                 administration.Add(new A(new Text("admin.providers.title")).Class("button").Attribute("href", "/Admin/Providers"));
             }
+
+            if (_authentication?.Permissions.Contains("instance.settings.read", StringComparer.Ordinal) is true)
+            {
+                administration.Add(new A(new Text("admin.catalog.title")).Class("button").Attribute("href", "/Admin/Catalog"));
+            }
             if (administration.Count > 0) page.Content.Add(new UiSection("nav.admin", administration));
         }
 

@@ -109,6 +109,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Catalog_WithoutTheDiscoverCacheModule_KeepsNothingAndAsksTheProviders()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
+            using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual("The Matrix", (await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
+            using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorks\""));
+        }
+
+        [TestMethod]
         public async Task Franchise_TmdbCollection_ListsTheVisibleTitles()
         {
             await using var host = await CreateHostAsync(razor: true);

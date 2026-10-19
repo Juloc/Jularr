@@ -1,4 +1,7 @@
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Logic.Instance;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
@@ -6,6 +9,10 @@ namespace Jularr.Backend.Logic.Media
     // The provider catalog Discover keeps: every title it loaded once, the current trending lists in their order.
     internal static class ExternalWorkLogic
     {
+        // With the DiscoverCache module Discover keeps what it loaded and answers from it; without it Discover only asks the providers.
+        public static async Task<bool> KeepsDiscoverTitlesAsync(this LogicContext ctx, CancellationToken ct) =>
+            (await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache"]), ct)).Any(module => module.IsEnabled);
+
         // Trending lists change slowly; within this time the catalog answers instead of the provider.
         private static readonly TimeSpan TrendingLifetime = TimeSpan.FromHours(6);
 
@@ -111,50 +118,160 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(list);
             return await ctx.ReadSql.ReadListAsync<ExternalWorkData>(sql, ct);
         }
-        // A full sync: the provider's id list once a day, its changes every six hours, then this many entries per pass.
+        // A full sync reads the provider's id list once a day and its changes every six hours.
         public static readonly TimeSpan ChangesInterval = TimeSpan.FromHours(6);
-        public const int EntriesPerPass = 240;
+
+        // Jularr counts as used while someone made a request within these minutes.
+        public static readonly TimeSpan UseLasts = TimeSpan.FromMinutes(5);
 
         public static bool IsListDue(ExternalWorkSyncData sync, DateTimeOffset now) => sync.ListedOn != DateOnly.FromDateTime(now.UtcDateTime) && now.UtcDateTime.Hour >= 9;
+
+        // A catalog without a daily id list walks all its titles; an unfinished walk goes on, a finished one starts again after a week.
+        public static readonly TimeSpan FullPassInterval = TimeSpan.FromDays(7);
+
+        public static bool IsFullPassDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
+            sync.Cursor is not null || sync.ListedOn is not { } listed || DateOnly.FromDateTime(now.UtcDateTime).DayNumber - listed.DayNumber >= FullPassInterval.Days;
 
         public static bool AreChangesDue(ExternalWorkSyncData sync, DateTimeOffset now) =>
             sync.ChangesReadAt is not { } read || now - new DateTimeOffset(read, TimeSpan.Zero) >= ChangesInterval;
 
-        public static async Task<ExternalWorkSyncData> ReadExternalWorkSyncAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
+        // A catalog syncs when the Owner kept it on, inside one of its windows (none: any time) and, if it waits, while nobody uses Jularr.
+        public static bool MaySync(ExternalWorkSyncData sync, IReadOnlyList<ExternalWorkSyncWindowData> windows, TimeOnly localTime, bool isUsed)
+        {
+            if (!sync.IsEnabled || sync.PausesWhileUsed && isUsed) return false;
+            var own = windows.Where(window => window.Namespace == sync.Namespace).ToArray();
+            return own.Length == 0 || own.Any(window => window.StartsAt < window.EndsAt
+                ? localTime >= window.StartsAt && localTime < window.EndsAt
+                : localTime >= window.StartsAt || localTime < window.EndsAt);
+        }
+
+        public static async Task<ExternalWorkSyncData?> ReadExternalWorkSyncAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     sync."Namespace",
+                    sync."IsEnabled",
+                    sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
+                    sync."PausesWhileUsed",
                     sync."ListedOn",
+                    sync."Cursor",
                     sync."ChangesReadAt"
                 FROM
                     "ExternalWorkSyncs" AS sync
                 WHERE
                     sync."Namespace" = @Namespace;
                 """;
-            sql.Parameters.Add(new ExternalWorkSyncData(@namespace, null, null));
-            return await ctx.ReadSql.ReadOptionalAsync<ExternalWorkSyncData>(sql, ct) ?? new ExternalWorkSyncData(@namespace, null, null);
+            sql.Parameters.Add(new ExternalWorkSyncProgressData(@namespace, null, null, null));
+            return await ctx.ReadSql.ReadOptionalAsync<ExternalWorkSyncData>(sql, ct);
         }
 
-        public static async Task<int> SaveExternalWorkSyncAsync(this LogicContext ctx, ExternalWorkSyncData data, CancellationToken ct)
+        public static async Task<IReadOnlyList<ExternalWorkSyncWindowData>> ReadExternalWorkSyncWindowsAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                INSERT INTO
-                    "ExternalWorkSyncs" AS sync ("Namespace", "ListedOn", "ChangesReadAt")
-                VALUES
-                    (@Namespace, @ListedOn, @ChangesReadAt)
-                ON CONFLICT ("Namespace") DO UPDATE
+                SELECT
+                    slot."Namespace",
+                    slot."StartsAt",
+                    slot."EndsAt"
+                FROM
+                    "ExternalWorkSyncWindows" AS slot
+                ORDER BY
+                    slot."Namespace",
+                    slot."StartsAt";
+                """;
+            return await ctx.ReadSql.ReadListAsync<ExternalWorkSyncWindowData>(sql, ct);
+        }
+
+        // The kept catalogs with how many titles they hold and how many still wait to be read.
+        public static async Task<IReadOnlyList<ExternalWorkSyncSummaryData>> ReadExternalWorkSyncSummariesAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    sync."Namespace",
+                    sync."IsEnabled",
+                    sync."RequestsPerMinute"::integer AS "RequestsPerMinute",
+                    sync."PausesWhileUsed",
+                    sync."ListedOn",
+                    (SELECT count(*) FROM "ExternalWorks" AS work WHERE work."Namespace" = sync."Namespace") AS "Entries",
+                    (SELECT count(*) FROM "ExternalWorks" AS work WHERE work."Namespace" = sync."Namespace" AND work."DetailedAt" IS NULL) AS "Pending",
+                    sync."Version"
+                FROM
+                    "ExternalWorkSyncs" AS sync
+                ORDER BY
+                    sync."Namespace";
+                """;
+            return await ctx.ReadSql.ReadListAsync<ExternalWorkSyncSummaryData>(sql, ct);
+        }
+
+        // Progress of a pass; it leaves the Owner's choices and their version alone.
+        public static async Task<int> SaveExternalWorkSyncAsync(this LogicContext ctx, ExternalWorkSyncProgressData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "ExternalWorkSyncs" AS sync
                 SET
-                    "ListedOn" = EXCLUDED."ListedOn",
-                    "ChangesReadAt" = EXCLUDED."ChangesReadAt",
-                    "UpdatedAt" = now();
+                    "ListedOn" = @ListedOn,
+                    "Cursor" = @Cursor,
+                    "ChangesReadAt" = @ChangesReadAt,
+                    "UpdatedAt" = now()
+                WHERE
+                    sync."Namespace" = @Namespace;
                 """;
             sql.Parameters.Add(data);
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The Owner's choices replace the old ones and their windows, if nobody changed them in between.
+        public static async Task UpdateExternalWorkSyncSettingsAsync(this LogicContext ctx, ExternalWorkSyncSettingsData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "ExternalWorkSyncs" AS sync
+                SET
+                    "IsEnabled" = @IsEnabled,
+                    "RequestsPerMinute" = @RequestsPerMinute,
+                    "PausesWhileUsed" = @PausesWhileUsed,
+                    "Version" = sync."Version" + 1,
+                    "UpdatedAt" = now()
+                WHERE
+                    sync."Namespace" = @Namespace
+                    AND sync."Version" = @Version;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.Version), "invalid_transition");
+            }
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH removed AS (
+                    DELETE FROM
+                        "ExternalWorkSyncWindows" AS slot
+                    WHERE
+                        slot."Namespace" = @Namespace
+                )
+                INSERT INTO
+                    "ExternalWorkSyncWindows" ("Namespace", "StartsAt", "EndsAt")
+                SELECT
+                    @Namespace,
+                    slot."StartsAt",
+                    slot."EndsAt"
+                FROM
+                    jsonb_to_recordset(@Windows::jsonb) AS slot ("StartsAt" time(0), "EndsAt" time(0));
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         // A provider's id list adds the titles not yet known; known ones only take its popularity, their titles stay.
