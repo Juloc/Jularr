@@ -28,14 +28,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             var session = await _tvdb.ConnectAsync(Context, CancellationToken);
             var remote = await _tvdb.ReadSeriesAsync(session, Data.TvdbId, CancellationToken);
-            if (remote.ImdbId is not { Length: > 0 })
+            if (remote.ImdbId is not { Length: > 0 } && !Data.ConfirmUnverified)
             {
                 throw new DataValidationException(nameof(Data.TvdbId), "unknown_reference");
             }
 
             return await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.LinkTvdbSeriesIdentityAsync(new TvdbIdentityLinkData(Parameters.WorkId, Data.TvdbId, Data.Version, remote.ImdbId), ct);
+                await ctx.LinkTvdbSeriesIdentityAsync(new TvdbIdentityLinkData(Parameters.WorkId, Data.TvdbId, Data.Version, remote.ImdbId, Data.ConfirmUnverified), ct);
                 return await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct);
             }, CancellationToken);
         }

@@ -5,12 +5,13 @@ namespace Jularr.Backend.Data.Logic.Media
 {
     internal sealed class TvdbIdentityLinkData : BaseData
     {
-        public TvdbIdentityLinkData(long id, int tvdbId, long version, string imdbId)
+        public TvdbIdentityLinkData(long id, int tvdbId, long version, string? imdbId, bool confirmUnverified)
         {
             Id = id;
             TvdbId = tvdbId;
             Version = version;
             ImdbId = imdbId;
+            ConfirmUnverified = confirmUnverified;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -22,7 +23,9 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(WorkFields), nameof(WorkFields.Version))]
         public long Version { get; }
 
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
-        public string ImdbId { get; }
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId), false)]
+        public string? ImdbId { get; }
+
+        public bool ConfirmUnverified { get; }
     }
 }

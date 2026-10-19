@@ -9,8 +9,8 @@ namespace Jularr.Backend.Logic.Media
         // Only the Work-level TVDB identity is written. Episode identity must be reviewed separately.
         public static async Task LinkTvdbSeriesIdentityAsync(this LogicContext ctx, TvdbIdentityLinkData data, CancellationToken ct)
         {
-            // Recheck both the current work version and local IMDb identity in the write transaction.
-            // The caller independently verified that TVDB reports precisely this IMDb title identifier.
+            // Recheck both Work version and external identity in the write transaction.
+            // Without a local IMDb ID an administrator must explicitly confirm the TVDB choice.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -18,12 +18,21 @@ namespace Jularr.Backend.Logic.Media
                     work."Id"
                 FROM
                     "Works" AS work
-                    JOIN "WorkExternalIdentities" AS imdb ON imdb."WorkId" = work."Id" AND imdb."Namespace" = 'imdb'
+                    LEFT JOIN "WorkExternalIdentities" AS imdb ON imdb."WorkId" = work."Id" AND imdb."Namespace" = 'imdb'
                 WHERE
                     work."Id" = @Id
                     AND work."MediaTypeId" = 2
                     AND work."Version" = @Version
-                    AND imdb."Value" = @ImdbId
+                    AND (
+                        (@ImdbId::text IS NOT NULL AND imdb."Value" = @ImdbId)
+                        OR (imdb."Id" IS NULL AND @ConfirmUnverified::boolean)
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM "WorkExternalIdentities" AS other
+                        WHERE other."Namespace" = 'imdb'
+                            AND other."Value" = @ImdbId
+                            AND other."WorkId" <> @Id
+                    )
                 FOR UPDATE OF work;
                 """;
             sql.Parameters.Add(data);

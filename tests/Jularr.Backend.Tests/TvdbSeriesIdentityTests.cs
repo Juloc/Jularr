@@ -86,6 +86,65 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Link_WithoutLocalImdb_RequiresExplicitConfirmation()
+        {
+            using var directory = new LibraryTests.TemporaryDirectory();
+            await using var host = await HostAsync(directory.Path, "tt7654321");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'No IMDb');
+                """);
+            using var defaultAttempt = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, defaultAttempt.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" """));
+            using var manuallyConfirmed = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1, true));
+            Assert.AreEqual(HttpStatusCode.OK, manuallyConfirmed.StatusCode, await manuallyConfirmed.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("""SELECT "IsManual" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
+            Assert.AreEqual(100L, await host.ScalarAsync("""SELECT "WorkId" FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
+        }
+
+        [TestMethod]
+        public async Task Link_NoRemoteImdb_RequiresManualConfirmation()
+        {
+            using var directory = new LibraryTests.TemporaryDirectory();
+            await using var host = await HostAsync(directory.Path, null);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'No IMDb Anywhere');
+                """);
+            using var standard = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, standard.StatusCode);
+            using var manual = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1, true));
+            Assert.AreEqual(HttpStatusCode.OK, manual.StatusCode, await manual.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task Link_ManualConfirmationCannotOverrideConflictingImdb()
+        {
+            using var directory = new LibraryTests.TemporaryDirectory();
+            await using var host = await HostAsync(directory.Path, "tt7654321");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'Incorrect');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (100, 'imdb', 'tt1234567');
+                """);
+            using var attempt = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1, true));
+            Assert.AreEqual(HttpStatusCode.BadRequest, attempt.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
+        }
+
+        [TestMethod]
+        public async Task Link_ManualConfirmationCannotClaimAnotherWorksImdb()
+        {
+            using var directory = new LibraryTests.TemporaryDirectory();
+            await using var host = await HostAsync(directory.Path, "tt7654321");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (100, 2, 'One'), (200, 2, 'Existing');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (200, 'imdb', 'tt7654321');
+                """);
+            using var attempt = await host.SendAsync(HttpMethod.Post, Route, new LinkTvdbSeriesIdentityDataV1(123, 1, true));
+            Assert.AreEqual(HttpStatusCode.BadRequest, attempt.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
+        }
+
+        [TestMethod]
         public async Task Link_StaleVersionOrMovie_IsRejected()
         {
             using var directory = new LibraryTests.TemporaryDirectory();
@@ -102,7 +161,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("""SELECT count(*) FROM "WorkExternalIdentities" WHERE "Namespace" = 'tvdb'"""));
         }
 
-        private static async Task<Host> HostAsync(string folder, string remoteImdb)
+        private static async Task<Host> HostAsync(string folder, string? remoteImdb)
         {
             var host = await LibraryTests.CreateHostAsync(folder, services: services =>
                 services.AddHttpClient<TvdbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeTvdb(remoteImdb)));
@@ -113,7 +172,7 @@ namespace Jularr.Backend.Tests
             return host;
         }
 
-        private sealed class FakeTvdb(string imdb) : HttpMessageHandler
+        private sealed class FakeTvdb(string? imdb) : HttpMessageHandler
         {
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
             {
@@ -128,7 +187,7 @@ namespace Jularr.Backend.Tests
                 {
                     Assert.AreEqual("tvdb-token", request.Headers.Authorization?.Parameter);
                     response = JsonSerializer.Serialize(new { data = new { id = 123, name = "Series",
-                        remoteIds = new[] { new { sourceName = "IMDb", id = imdb } } } });
+                        remoteIds = imdb is null ? Array.Empty<object>() : new object[] { new { sourceName = "IMDb", id = imdb } } } });
                 }
                 else
                 {
