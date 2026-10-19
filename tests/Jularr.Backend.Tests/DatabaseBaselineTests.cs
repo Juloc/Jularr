@@ -39,41 +39,45 @@ namespace Jularr.Backend.Tests
 
 
         [TestMethod]
-        public async Task DiscoverySnapshots_FreshInstallCreatesProviderScopedSchema()
+        public async Task ExternalWorks_FreshInstallCreatesTheProviderCatalog()
         {
-            var cs = TestPostgres.ResolveConnectionString(nameof(DiscoverySnapshots_FreshInstallCreatesProviderScopedSchema));
+            var cs = TestPostgres.ResolveConnectionString(nameof(ExternalWorks_FreshInstallCreatesTheProviderCatalog));
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             await ExecuteAsync(cs,
                 """
-                INSERT INTO "DiscoverySnapshots" ("Key", "ProviderKey", "Payload", "FetchedAt", "FreshUntil", "RetainUntil")
-                VALUES ('tmdb:trending:de:1', 'tmdb', '[{"id":1}]'::jsonb, now(), now() + interval '1 hour', now() + interval '1 day');
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "OriginalTitle", "ImdbId", "Rating", "TrendingRank")
+                VALUES ('tmdb_movie', '603', 1, 'Matrix', 'The Matrix', 'tt0133093', 8.2, 1);
                 """);
-            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"DiscoverySnapshots\";"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"ExternalWorks\" WHERE \"SearchText\" @@ to_tsquery('simple', 'matrix');"));
+            // One row per provider title, and only catalogs Jularr reads.
             await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs,
                 """
-                INSERT INTO "DiscoverySnapshots" ("Key", "ProviderKey", "Payload", "FetchedAt", "FreshUntil", "RetainUntil")
-                VALUES ('invalid', 'tmdb', '{"id":1}'::jsonb, now(), now() + interval '1 hour', now() + interval '1 day');
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title") VALUES ('tmdb_movie', '603', 1, 'Again');
+                """));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs,
+                """
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title") VALUES ('plex', '1', 1, 'Unknown catalog');
                 """));
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
-            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"DiscoverySnapshots\";"));
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"ExternalWorks\";"));
         }
 
         [TestMethod]
-        public async Task DiscoverySnapshots_PreviousVersionUpgradesWithoutLosingAccounts()
+        public async Task ExternalWorks_PreviousVersionUpgradesWithoutLosingAccounts()
         {
             var dump = Executables.Resolve(Environment.GetEnvironmentVariable("JULARR_TEST_PG_DUMP"), "pg_dump");
             if (dump is null) Assert.Inconclusive("PostgreSQL dump tooling is required for this upgrade test.");
 
             using var backups = new LibraryTests.TemporaryDirectory();
-            var cs = TestPostgres.ResolveConnectionString(nameof(DiscoverySnapshots_PreviousVersionUpgradesWithoutLosingAccounts));
+            var cs = TestPostgres.ResolveConnectionString(nameof(ExternalWorks_PreviousVersionUpgradesWithoutLosingAccounts));
             await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'Preserved on upgrade';");
             var tools = Tools(cs, dump, null);
             await new DatabaseBaseline(cs, new BackupOptions { Path = backups.Path }, tools).StartAsync(CancellationToken.None);
             Assert.AreEqual("Preserved on upgrade", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
-            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"DiscoverySnapshots\";"));
+            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"ExternalWorks\";"));
             Assert.AreEqual(1, Directory.GetDirectories(backups.Path).Length);
         }
 

@@ -446,6 +446,15 @@ namespace Jularr.Backend.Tests
                     }
                 }
 
+                // Release migrations follow the baselines, as in a fresh installation.
+                if (library)
+                {
+                    foreach (var migration in DatabaseBaseline.Migrations)
+                    {
+                        await fixture.RunSqlAsync(migration.Statement);
+                    }
+                }
+
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
                 var hash = hasher.HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password);
                 await fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 1 WHERE \"Id\" = 41");

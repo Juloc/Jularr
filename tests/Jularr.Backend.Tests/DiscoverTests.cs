@@ -73,6 +73,42 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Catalog_KeepsWhatDiscoverLoaded_AndAnswersTrendingWhileFreshOrTheProviderIsDown()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb);
+
+            // A trending list is kept in its order; searches keep their titles too.
+            using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, feed.StatusCode, await feed.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"TrendingRank\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '603'"));
+            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/backdrop.jpg", await host.ScalarAsync("SELECT \"BackdropUrl\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("Matrix"));
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode);
+            Assert.AreEqual("The Matrix Show", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"TrendingRank\" FROM \"ExternalWorks\" WHERE \"Value\" = '1399'"));
+
+            // While the list is fresh the catalog answers, also for a catalog of its own (AniList).
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"Title\" = 'The Matrix (kept)' WHERE \"Value\" = '603'");
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.AreEqual("The Matrix (kept)", (await again.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            using var anime = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, anime.StatusCode, await anime.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"TrendingRank\" FROM \"ExternalWorks\" WHERE \"Namespace\" = 'anilist' AND \"Value\" = '21' AND \"MediaSubtypeId\" IS NOT NULL"));
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"Title\" = 'Season 2 (kept)' WHERE \"Namespace\" = 'anilist'");
+            using var animeAgain = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Series, DiscoverFeedType.Trending, MediaSubtype.Anime));
+            Assert.AreEqual("Season 2 (kept)", (await animeAgain.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single().Title);
+
+            // An old list is loaded again, and while TMDB cannot answer the last one is shown.
+            await host.Fixture.RunSqlAsync("UPDATE \"ExternalWorks\" SET \"FetchedAt\" = now() - interval '7 hours', \"TrendingRank\" = 1 WHERE \"Namespace\" = 'tmdb_tv'");
+            tmdb.IsUnavailable = true;
+            using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Series, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, stale.StatusCode, await stale.Content.ReadAsStringAsync());
+            Assert.AreEqual("The Matrix Show", (await stale.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().Title);
+            Assert.IsTrue(tmdb.Requests.Any(request => request.AbsolutePath == "/3/trending/tv/week"));
+        }
+
+        [TestMethod]
         public async Task Franchise_TmdbCollection_ListsTheVisibleTitles()
         {
             await using var host = await CreateHostAsync(razor: true);
@@ -361,9 +397,9 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(list, "Use this match");
         }
 
-        private static async Task<Host> CreateHostAsync(bool razor = false)
+        private static async Task<Host> CreateHostAsync(bool razor = false, FakeTmdb? fake = null)
         {
-            var tmdb = new FakeTmdb();
+            var tmdb = fake ?? new FakeTmdb();
             var aniList = new FakeAniList();
             var host = await Host.CreateAsync(razor: razor, library: true, services: services =>
             {
@@ -397,6 +433,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeTmdb : HttpMessageHandler
         {
             public List<Uri> Requests { get; } = [];
+            public bool IsUnavailable { get; set; }
             private const string MovieDetails = """ "genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}],"runtime":136,"production_companies":[{"name":"Village Roadshow"}],"videos":{"results":[{"site":"YouTube","type":"Teaser","key":"aaaaaaaaaaa"},{"site":"YouTube","type":"Trailer","key":"vKQi3bBA1y8","official":true}]},"credits":{"cast":[{"id":6384,"name":"Keanu Reeves","character":"Neo","profile_path":"/neo.jpg"}],"crew":[{"id":9339,"name":"Lana Wachowski","job":"Director"},{"id":1,"name":"Someone","job":"Gaffer"}]} """;
             private const string Movie = """{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}""";
             private const string Show = """{"id":1399,"name":"The Matrix Show","original_name":"The Matrix Show","first_air_date":"2020-01-01","overview":"A show.","poster_path":"/show.jpg"}""";
@@ -404,6 +441,7 @@ namespace Jularr.Backend.Tests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 Requests.Add(request.RequestUri!);
+                if (IsUnavailable) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
                 if (request.Headers.Authorization?.Parameter != Token) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
                 if (QueryHelpers.ParseQuery(request.RequestUri!.Query).GetValueOrDefault("query") == "PagedOnly")
                 {

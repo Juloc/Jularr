@@ -22,7 +22,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.Core
 {
     // Provider search and import of every media type, for the Works page and for Discover.
-    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache)
+    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, TimeProvider time)
     {
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
         {
@@ -213,18 +213,52 @@ namespace Jularr.Backend.Service.Core
                 _ => throw new DataValidationException("DiscoverFeedTypeId", "unknown_catalog_value")
             };
 
-            // Ranked lists change slowly; a shared cache of a day spares the provider.
-            var key = $"metadata.catalog.{mediaType}.{subtype}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}";
-            if (!cache.TryGetValue(key, out List<MetadataSearchResultV1>? results))
+            // Trending comes from the catalog while it is fresh, and from there too while the provider cannot answer.
+            var list = new ExternalWorkListData(ranking is null ? BookMetadata.Namespace : AniListMetadata.Namespace, mediaType, subtype);
+            var isTrending = feed == DiscoverFeedType.Trending;
+            var known = isTrending ? await context.ExecuteBatchAsync((ctx, token) => ctx.ReadTrendingExternalWorksAsync(list, token), ct) : [];
+            if (ExternalWorkLogic.IsFresh(known, time.GetUtcNow()))
             {
-                results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
-                    : mediaType == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
-                    : [.. (await aniList.ReadBookRankingAsync(subtype!.Value, order, ct)).Select(AniListBook)];
-                cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = Math.Max(1, results.Count) });
+                return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
+            }
+
+            // The other ranked lists change slowly too; a shared cache of six hours spares the provider.
+            var key = $"metadata.catalog.{mediaType}.{subtype}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}";
+            if (isTrending || !cache.TryGetValue(key, out List<MetadataSearchResultV1>? results))
+            {
+                try
+                {
+                    results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
+                        : mediaType == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
+                        : [.. (await aniList.ReadBookRankingAsync(subtype!.Value, order, ct)).Select(AniListBook)];
+                }
+                catch (ServiceUnavailableException) when (known.Count > 0)
+                {
+                    return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
+                }
+
+                await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(ExternalWork)], isTrending), token), ct);
+                if (!isTrending) cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = Math.Max(1, results.Count) });
             }
 
             return await MarkKnownAsync(context, results!, ct);
         }
+
+        // Every catalog title a search or list showed stays in the catalog, each catalog under its own name.
+        public async Task KeepAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, IReadOnlyList<MetadataSearchResultV1> results, CancellationToken ct)
+        {
+            foreach (var group in results.GroupBy(result => result.Namespace))
+            {
+                var list = new ExternalWorkListData(group.Key, mediaType, subtype);
+                await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. group.Select(ExternalWork)], false), token), ct);
+            }
+        }
+
+        private static ExternalWorkData ExternalWork(MetadataSearchResultV1 result) => new(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle, result.ReleaseYear,
+            result.Overview, result.Author, result.PosterUrl, null, DateTime.MinValue);
+
+        private static MetadataSearchResultV1 Catalog(ExternalWorkData work) => new(work.Namespace, work.Value, work.Title, work.OriginalTitle, work.ReleaseYear, work.Overview, null,
+            work.Creator, work.ImageUrl);
 
         private static MetadataSearchResultV1 Game(IgdbGame game) => new(GameMetadata.Namespace, game.Id.ToString(CultureInfo.InvariantCulture), game.Name, null,
             game.Year is >= 1950 and <= 2200 ? game.Year : null, TextLimit.Cut(game.Summary, 4000), null, TextLimit.Cut(string.Join(", ", game.Developers), 4000),
