@@ -39,6 +39,7 @@ namespace Jularr.Backend.Logic.Library
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     unit."Title" AS "UnitTitle",
+                    unit."ReleasedOn" AS "UnitReleasedOn",
                     parent."Number" AS "ParentUnitNumber",
                     file."QualityKey",
                     file."ReleaseGroup",
@@ -185,6 +186,7 @@ namespace Jularr.Backend.Logic.Library
             new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
             {
                 MediaTypeId = file.MediaTypeId,
+                AirDate = file.UnitReleasedOn,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
                 OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath),
                 OriginalReleaseTitle = file.ReleaseName,
@@ -227,6 +229,7 @@ namespace Jularr.Backend.Logic.Library
                 ["MediaInfo AudioLanguages"] = languages is ["EN"] ? "" : allAudio,
                 ["MediaInfo AudioLanguagesAll"] = allAudio,
                 ["MediaInfo SubtitleLanguages"] = subtitleText,
+                ["MediaInfo SubtitleLanguagesAll"] = subtitleText,
                 ["MediaInfo Simple"] = string.Join(' ', new[] { videoCodec, audioCodec }.Where(value => value.Length > 0)),
                 ["MediaInfo Full"] = string.Join(' ', new[] { videoCodec, audioCodec, allAudio, subtitleText }.Where(value => value.Length > 0))
             };

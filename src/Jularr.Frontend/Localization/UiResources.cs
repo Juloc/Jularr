@@ -1479,7 +1479,7 @@ namespace Jularr.Frontend.Localization
             new("library.naming.file", "File name"),
             new("library.naming.example", "Example:"),
             new("library.naming.placeholders", "Placeholders"),
-            new("library.naming.rules", "Empty placeholders leave with their brackets; the file name always names the film or the episode."),
+            new("library.naming.rules", "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode."),
             new("library.naming.token.Title", "The title"),
             new("library.naming.token.Year", "The year of release"),
             new("library.naming.token.Season", "The season number, with :00 two digits"),
