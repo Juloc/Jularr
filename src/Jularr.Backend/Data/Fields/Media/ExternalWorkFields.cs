@@ -15,5 +15,8 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField BackdropUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
         public static readonly IntField TrendingRank = new() { Minimum = 1, Required = false };
         public static readonly DateTimeField FetchedAt = new();
+        public static readonly DateField ListedOn = new() { Required = false };
+        public static readonly DateTimeField ChangesReadAt = new() { Required = false };
+        public static readonly IntField Limit = new() { Minimum = 1, Maximum = 1000 };
     }
 }

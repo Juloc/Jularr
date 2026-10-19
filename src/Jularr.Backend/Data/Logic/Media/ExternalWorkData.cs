@@ -105,4 +105,83 @@ namespace Jularr.Backend.Data.Logic.Media
         public string?[] ImageUrls { get; }
         public string?[] BackdropUrls { get; }
     }
+
+    // How far the full sync of one catalog has come.
+    internal sealed class ExternalWorkSyncData : BaseData
+    {
+        public ExternalWorkSyncData(string @namespace, DateOnly? listedOn, DateTime? changesReadAt)
+        {
+            Namespace = @namespace;
+            ListedOn = listedOn;
+            ChangesReadAt = changesReadAt;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ListedOn))]
+        public DateOnly? ListedOn { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ChangesReadAt))]
+        public DateTime? ChangesReadAt { get; }
+    }
+
+    // The next entries a full sync reads, most popular first.
+    internal sealed class ExternalWorkQueueData : BaseData
+    {
+        public ExternalWorkQueueData(string @namespace, int limit)
+        {
+            Namespace = @namespace;
+            Limit = limit;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Limit))]
+        public int Limit { get; }
+    }
+
+    // Many titles of one catalog list as JSON rows (a provider's id list, or its entries just read) and the ones it no longer has.
+    internal sealed class ExternalWorkEntriesData : BaseData
+    {
+        public ExternalWorkEntriesData(ExternalWorkListData list, string entries, string[]? gone = null)
+        {
+            Namespace = list.Namespace;
+            MediaTypeId = (short)list.MediaTypeId;
+            MediaSubtypeId = list.MediaSubtypeId is { } subtype ? (short)subtype : null;
+            Entries = entries;
+            Gone = gone ?? [];
+        }
+
+        public string Namespace { get; }
+        public short MediaTypeId { get; }
+        public short? MediaSubtypeId { get; }
+        public string Entries { get; }
+        public string[] Gone { get; }
+    }
+
+    internal sealed class ExternalWorkValueData : BaseData
+    {
+        public ExternalWorkValueData(string value)
+        {
+            Value = value;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Value))]
+        public string Value { get; }
+    }
+
+    // Values of one catalog, such as the entries a provider changed.
+    internal sealed class ExternalWorkValuesData : BaseData
+    {
+        public ExternalWorkValuesData(string @namespace, string[] values)
+        {
+            Namespace = @namespace;
+            Values = values;
+        }
+
+        public string Namespace { get; }
+        public string[] Values { get; }
+    }
 }

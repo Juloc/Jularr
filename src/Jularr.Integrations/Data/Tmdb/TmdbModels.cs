@@ -189,6 +189,59 @@ namespace Jularr.Integrations.Data.Tmdb
         public TmdbFailure Failure { get; } = failure;
     }
 
+    // One line of TMDB's daily id list: the id, the original title and how popular the title is.
+    internal sealed class TmdbExportEntry
+    {
+        public TmdbExportEntry(int id, string originalTitle, double popularity, bool isAdult, bool isVideo)
+        {
+            Id = id;
+            OriginalTitle = originalTitle;
+            Popularity = popularity;
+            IsAdult = isAdult;
+            IsVideo = isVideo;
+        }
+
+        public int Id { get; }
+        public string OriginalTitle { get; }
+        public double Popularity { get; }
+        public bool IsAdult { get; }
+        // A video extra rather than a film.
+        public bool IsVideo { get; }
+    }
+
+    // A title as the provider catalog keeps it, in the connection's language.
+    internal sealed class TmdbCatalogEntry
+    {
+        public TmdbCatalogEntry(int id, string title, string? originalTitle, DateOnly? releasedOn, string? overview, string? posterPath, string? backdropPath, double? popularity,
+            double? voteAverage, string? imdbId, bool isAdult)
+        {
+            Id = id;
+            Title = title;
+            OriginalTitle = originalTitle;
+            ReleasedOn = releasedOn;
+            Overview = overview;
+            PosterPath = posterPath;
+            BackdropPath = backdropPath;
+            Popularity = popularity;
+            VoteAverage = voteAverage;
+            ImdbId = imdbId;
+            IsAdult = isAdult;
+        }
+
+        public int Id { get; }
+        public string Title { get; }
+        public string? OriginalTitle { get; }
+        public DateOnly? ReleasedOn { get; }
+        public string? Overview { get; }
+        public string? PosterPath { get; }
+        public string? BackdropPath { get; }
+        public double? Popularity { get; }
+        // TMDB's average vote on a scale of ten.
+        public double? VoteAverage { get; }
+        public string? ImdbId { get; }
+        public bool IsAdult { get; }
+    }
+
     // A language (ISO 639-1), its region (ISO 3166-1) and the texts TMDB has in it.
     internal sealed record TmdbTranslation(string Language, string? Region, string? Title, string? Overview);
 }
