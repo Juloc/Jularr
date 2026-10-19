@@ -19,6 +19,5 @@
     <EmbeddedResource Include="../../database/Library.sql" LogicalName="Jularr.Database.Library.sql" />
     <EmbeddedResource Include="../../database/Playback.sql" LogicalName="Jularr.Database.Playback.sql" />
     <EmbeddedResource Include="../../database/Schema.sql" LogicalName="Jularr.Database.Schema.sql" />
-    <EmbeddedResource Include="../../database/migrations/20261019_01_ExternalWorks.sql" LogicalName="Jularr.Database.Migrations.20261019_01_ExternalWorks.sql" />
   </ItemGroup>
 </Project>

@@ -7,7 +7,7 @@ in one transaction when its database has no table yet ([DatabaseBaseline.cs](../
 pre-release databases keep their current startup behavior and are not adopted or migrated.
 Explicitly versioned release schemas use the same startup owner for backup-first upgrades;
 see [release upgrades](../docs/DATABASE_UPGRADES.md).
-The provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) is registered as version 2 in the canonical `DatabaseBaseline.Migrations` history using [one embedded SQL script](migrations/20261019_01_ExternalWorks.sql). No parallel ledger or manual up/down script is introduced.
+`Media.sql` also holds the provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) and its full-sync state `ExternalWorkSyncs`. Until the first release schema changes go into these baselines; `DatabaseBaseline.Migrations` stays empty.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
