@@ -16,9 +16,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly IDataProtector _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
 
-        public async Task<TvdbSession> ConnectAsync(LogicContext context, CancellationToken ct)
+        public async Task<TvdbSession> ConnectAsync(LogicContext context, CancellationToken ct, bool existingReadTransaction = false)
         {
-            var credential = await context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), ct);
+            var credential = existingReadTransaction
+                ? await context.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), ct)
+                : await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProviderCredentialAsync(new ProviderParameters("tvdb"), token), ct);
             if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
             {
                 throw new ServiceUnavailableException("metadata_unavailable");
