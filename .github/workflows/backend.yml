@@ -131,8 +131,20 @@ jobs:
 
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
+    name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Three runners share the browser tests by measured class durations; every class not named belongs to "rest".
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: automatic
+            filter: FullyQualifiedName~Jularr.E2E.Tests.AutomaticPathTests.
+          - shard: paths
+            filter: FullyQualifiedName~Jularr.E2E.Tests.ReadingPathTests.|FullyQualifiedName~Jularr.E2E.Tests.FailureTests.|FullyQualifiedName~Jularr.E2E.Tests.LibraryChangesTests.|FullyQualifiedName~Jularr.E2E.Tests.MusicPathTests.
+          - shard: rest
+            filter: FullyQualifiedName!~Jularr.E2E.Tests.AutomaticPathTests.&FullyQualifiedName!~Jularr.E2E.Tests.ReadingPathTests.&FullyQualifiedName!~Jularr.E2E.Tests.FailureTests.&FullyQualifiedName!~Jularr.E2E.Tests.LibraryChangesTests.&FullyQualifiedName!~Jularr.E2E.Tests.MusicPathTests.
     services:
       postgres:
         image: postgres:18
@@ -179,6 +191,7 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
       - name: Direct SMB HLS regression (real FFmpeg)
+        if: matrix.shard == 'rest'
         run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls --logger "trx;LogFileName=ffmpeg.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
@@ -194,7 +207,7 @@ jobs:
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
       - name: Run browser E2E tests and record per-test durations
-        run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build --logger "trx;LogFileName=e2e.trx" --results-directory TestResults/ci/e2e
+        run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build --filter "${{ matrix.filter }}" --logger "trx;LogFileName=e2e-${{ matrix.shard }}.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
       - name: Summarize slowest E2E tests
@@ -204,7 +217,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-test-timings
+          name: e2e-test-timings-${{ matrix.shard }}
           path: TestResults/ci/e2e/*.trx
           if-no-files-found: ignore
           retention-days: 7
@@ -212,5 +225,5 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-evidence
+          name: e2e-evidence-${{ matrix.shard }}
           path: TestResults/e2e
