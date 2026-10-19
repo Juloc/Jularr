@@ -144,23 +144,26 @@ test("availability dots share one palette with their compact expanded symbols", 
     assert.ok(css.includes(".media-availability--partialotheraudio .media-availability__track{color:var(--status-alternate)}"));
 });
 
-test("shared covers clip rounded progress, equal actions and a same-height trailer", () => {
+test("shared cards reserve titles below posters and center one action without trailer expansion", () => {
     const css = readFileSync(join(build, manifest["Pages/User/Library/Library.entry.scss"].file), "utf8");
     assert.ok(css.includes(".media-image{display:block;width:100%;max-width:100%;height:auto;object-fit:cover}"));
     assert.match(css, /\.media-card__surface\{[^}]*overflow:hidden;border-radius:24px/);
     assert.match(css, /\.media-card__progress\{[^}]*height:12px;border:0;background:#ffffffa6/);
     assert.match(css, /\.media-card__progress::-webkit-progress-value\{[^}]*border-radius:999px/);
     assert.match(css, /\.media-card__progress::-moz-progress-bar\{[^}]*border-radius:999px/);
-    assert.ok(css.includes(".media-card__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}"));
-    assert.match(css, /\.media-card__surface\[data-expanded\]\{[^}]*height:var\(--preview-height\)/);
+    assert.match(css, /\.media-card__actions\{[^}]*position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center/);
+    assert.match(css, /\.media-card__details\{[^}]*min-height:76px/);
+    assert.doesNotMatch(css, /\.media-card__surface\[data-expanded\]/);
     assert.doesNotMatch(css, /media-card__genres|media-card__series|media-card__languages|media-card--minimal/);
 });
 
-test("card entry delegates initialization to one cached shared chunk", () => {
+test("card entry delegates one touch status handler without trailer autoplay", () => {
     const entry = manifest["Framework/Components/MediaCard.entry.ts"];
     const script = readFileSync(join(build, entry.file), "utf8");
     assert.ok(!script.includes("pointerover"), "Reimporting the entry must not recreate global listeners.");
-    assert.ok(entry.imports?.some(key => readFileSync(join(build, manifest[key].file), "utf8").includes("pointerover")));
+    const chunks = entry.imports?.map(key => readFileSync(join(build, manifest[key].file), "utf8")) ?? [];
+    assert.ok(chunks.some(chunk => chunk.includes("data-open") && chunk.includes("keydown")));
+    assert.ok(chunks.every(chunk => !chunk.includes("youtube.com/embed") && !chunk.includes("pointerover")));
 });
 
 test("manifest URLs are relative and cannot escape the asset root", () => {

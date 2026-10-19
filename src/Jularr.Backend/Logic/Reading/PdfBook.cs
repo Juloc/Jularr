@@ -74,7 +74,7 @@ namespace Jularr.Backend.Logic.Reading
         {
             foreach (var image in page.GetImages())
             {
-                if (images.Count >= MaximumImages || image.Bounds.Width < MinimumImagePoints || image.Bounds.Height < MinimumImagePoints)
+                if (images.Count >= MaximumImages || image.BoundingBox.Width < MinimumImagePoints || image.BoundingBox.Height < MinimumImagePoints)
                 {
                     continue;
                 }
@@ -89,7 +89,7 @@ namespace Jularr.Backend.Logic.Reading
 
                 var path = "pdf/images/" + images.Count.ToString("D5", System.Globalization.CultureInfo.InvariantCulture) + extension;
                 images.Add(new PdfImage(path, mediaType, bytes));
-                yield return new PdfLine(image.Bounds.Top, 0, page.Height) { Image = path };
+                yield return new PdfLine(image.BoundingBox.Top, 0, page.Height) { Image = path };
             }
         }
 

@@ -11,9 +11,20 @@ on:
       - '.github/workflows/image.yml'
   push:
     branches: [clean-start]
+    paths:
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - '.dockerignore'
+      - 'database/**'
+      - 'src/**'
+      - '.github/workflows/image.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   minimal-compose:
@@ -21,8 +32,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
       - name: Build the image
-        run: docker build --tag ghcr.io/juloc/jularr:ci .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ghcr.io/juloc/jularr:ci
+          cache-from: type=gha,scope=jularr-image
+          cache-to: type=gha,scope=jularr-image,mode=max,ignore-error=true
       - name: Start the shipped compose.yaml with nothing but its variables
         env:
           JULARR_VERSION: ci

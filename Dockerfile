@@ -10,11 +10,23 @@ RUN npm run build
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 WORKDIR /src
+# Project manifests change less often than source. Restore stays cached between code-only builds.
+COPY src/Jularr.Integrations/Jularr.Integrations.csproj src/Jularr.Integrations/
+COPY src/Jularr.Backend/Jularr.Backend.csproj src/Jularr.Backend/
+COPY src/Jularr.Workers/Jularr.Workers.csproj src/Jularr.Workers/
+COPY src/Jularr.Frontend/Jularr.Frontend.csproj src/Jularr.Frontend/
+# Native libraries only for the image's own platform, not for every system ONNX Runtime and SkiaSharp support.
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet restore src/Jularr.Frontend/Jularr.Frontend.csproj \
+      --runtime linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64)
+
 COPY . .
 COPY --from=frontend /src/src/Jularr.Frontend/wwwroot/ src/Jularr.Frontend/wwwroot/
 COPY --from=frontend /src/src/Jularr.Frontend/Assets/Generated/ src/Jularr.Frontend/Assets/Generated/
-# Native libraries only for the image's own platform, not for every system ONNX Runtime and SkiaSharp support.
-RUN dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release --output /app     --runtime linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) --self-contained false
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj \
+      --configuration Release --no-restore --output /app \
+      --runtime linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) --self-contained false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 ARG TARGETARCH

@@ -2,8 +2,12 @@
 
 `Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql`. The host applies all baselines in installation order
-in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs));
-it never changes or migrates a database that has one.
+in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs)).
+`Schema.sql` records the installation's ordered schema history. Existing unversioned
+pre-release databases keep their current startup behavior and are not adopted or migrated.
+Explicitly versioned release schemas use the same startup owner for backup-first upgrades;
+see [release upgrades](../docs/DATABASE_UPGRADES.md).
+The public provider-owned DiscoverySnapshots cache is registered as version 2 in the canonical `DatabaseBaseline.Migrations` history using [one embedded SQL script](migrations/20261018_01_DiscoverySnapshots.sql). No parallel ledger, manual up/down script or automatic provider fetching is introduced.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
