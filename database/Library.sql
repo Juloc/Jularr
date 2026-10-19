@@ -117,6 +117,10 @@ CREATE TABLE "MediaTracks" (
     "Width" integer NULL CHECK ("Width" > 0),
     "Height" integer NULL CHECK ("Height" > 0),
     "Channels" integer NULL CHECK ("Channels" > 0),
+    -- Of a video: bits per colour, the dynamic range as the arrs name it (HDR10, DV HDR10, HLG …) and whether it is stereoscopic.
+    "BitDepth" smallint NULL CHECK ("BitDepth" BETWEEN 1 AND 32),
+    "DynamicRange" varchar(16) NULL CHECK (length(btrim("DynamicRange")) > 0),
+    "Is3D" boolean NOT NULL DEFAULT FALSE,
     "IsDefault" boolean NOT NULL,
     "IsForced" boolean NOT NULL,
     UNIQUE ("StoredFileId", "StreamIndex")
