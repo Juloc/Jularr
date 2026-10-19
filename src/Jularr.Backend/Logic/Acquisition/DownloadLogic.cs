@@ -489,6 +489,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "AttentionKey" = NULL,
                     "AttentionUrl" = NULL,
                     "SourceLinkUrl" = NULL,
+                    "DownloadWaitUntil" = NULL,
                     "DismissedAt" = NULL,
                     "StartedAt" = now(),
                     "FinishedAt" = NULL
@@ -608,7 +609,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static Task<IReadOnlyList<DownloadData>> ReadActiveDownloadsAsync(this LogicContext ctx, CancellationToken ct, long? operationId = null)
         {
-            // Grouped by client for one queue and history read each; a source that waits for a person is not asked again.
+            // Grouped by client for one queue and history read each; a source that waits for a person or for its own countdown is not asked again.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -627,6 +628,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     release."QualityKey",
                     release."SourceUrl",
                     operation."SourceLinkUrl",
+                    operation."DownloadWaitUntil",
                     (
                         SELECT
                             count(*)::integer
@@ -658,6 +660,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND operation."AcquisitionConnectionId" IS NOT NULL
                     AND operation."AttentionUrl" IS NULL
                     AND (@OperationId::bigint IS NULL OR operation."Id" = @OperationId)
+                    AND (operation."DownloadWaitUntil" IS NULL OR operation."DownloadWaitUntil" <= now())
                 ORDER BY
                     operation."AcquisitionConnectionId",
                     operation."Id";
@@ -718,7 +721,9 @@ namespace Jularr.Backend.Logic.Acquisition
                         "FinishedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
-                        "SourceLinkUrl" = NULL
+                        "SourceLinkUrl" = NULL,
+                        "DownloadWaitUntil" = NULL,
+                        "EtaSeconds" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2
@@ -771,7 +776,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "AttentionKey" = @AttentionKey,
                     "AttentionUrl" = @AttentionUrl,
-                    "SourceLinkUrl" = NULL
+                    "SourceLinkUrl" = NULL,
+                    "DownloadWaitUntil" = NULL,
+                    "EtaSeconds" = NULL
                 WHERE
                     operation."Id" = @OperationId
                     AND operation."OperationTypeId" = 2
@@ -781,6 +788,30 @@ namespace Jularr.Backend.Logic.Acquisition
                         OR operation."AttentionUrl" IS DISTINCT FROM @AttentionUrl
                         OR operation."SourceLinkUrl" IS NOT NULL
                     );
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static async Task SetDownloadWaitAsync(this LogicContext ctx, DownloadWaitData data, CancellationToken ct)
+        {
+            // A source countdown keeps the download active but not due; the monitor resumes it at the announced time.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "DownloadWaitUntil" = @DownloadWaitUntil,
+                    "EtaSeconds" = @EtaSeconds,
+                    "DownloadStateTypeId" = 1,
+                    "SizeBytes" = NULL,
+                    "RemainingBytes" = NULL,
+                    "ProgressPercent" = NULL
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2);
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -830,7 +861,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "AttentionKey" = NULL,
                     "AttentionUrl" = NULL,
-                    "SourceLinkUrl" = @SourceLinkUrl
+                    "SourceLinkUrl" = @SourceLinkUrl,
+                    "DownloadWaitUntil" = NULL
                 WHERE
                     operation."Id" = @OperationId
                     AND operation."OperationTypeId" = 2
@@ -892,7 +924,9 @@ namespace Jularr.Backend.Logic.Acquisition
                         "FinishedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
-                        "SourceLinkUrl" = NULL
+                        "SourceLinkUrl" = NULL,
+                        "DownloadWaitUntil" = NULL,
+                        "EtaSeconds" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2

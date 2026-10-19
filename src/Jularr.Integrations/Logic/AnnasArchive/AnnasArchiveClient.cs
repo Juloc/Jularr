@@ -13,6 +13,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
     {
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
+        private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
 
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
 
@@ -101,8 +102,8 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             await DownloadFileAsync(target, destination, ct, maximumBytes, reserveWrite);
         }
 
-        // The public slow download: the page's waiting time is kept, its check is never passed.
-        public async Task SlowDownloadAsync(Uri site, string md5, string destination, TimeSpan maximumWait, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
+        // The public slow download: the page's own countdown is handed to the caller, its check is never passed.
+        public async Task<AnnasArchivePage> ReadSlowPageAsync(Uri site, string md5, CancellationToken ct)
         {
             AnnasArchiveException? last = null;
             for (var server = 0; server < SlowServers; server++)
@@ -128,9 +129,15 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                     continue;
                 }
 
-                // The page names a waiting time and, after it, the file.
+                // The page names how long to wait and where the file is.
                 var document = new HtmlParser().ParseDocument(page);
-                var wait = Countdown().Match(document.Body?.TextContent ?? "") is { Success: true } countdown ? TimeSpan.FromSeconds(int.Parse(countdown.Groups[1].Value, CultureInfo.InvariantCulture)) : TimeSpan.Zero;
+                var wait = ReadWait(document.Body?.TextContent ?? "");
+                if (wait > MaximumWait)
+                {
+                    last = new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The download page asks for more than a day.");
+                    continue;
+                }
+
                 var link = document.QuerySelectorAll("a[href]")
                     .Select(anchor => Uri.TryCreate(site, anchor.GetAttribute("href"), out var uri) ? (Uri: uri, Text: anchor.TextContent) : (Uri: (Uri?)null, Text: ""))
                     .Where(candidate => candidate.Uri is { Scheme: "https" } uri && !IsSitePage(site, uri))
@@ -141,14 +148,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                     continue;
                 }
 
-                if (wait > maximumWait)
-                {
-                    throw new AnnasArchiveException(AnnasArchiveFailure.WaitTooLong, "The slow download waits longer than allowed.");
-                }
-
-                await Task.Delay(wait, ct);
-                await DownloadFileAsync(link, destination, ct, maximumBytes, reserveWrite);
-                return;
+                return new AnnasArchivePage(link, wait);
             }
 
             throw last ?? new AnnasArchiveException(AnnasArchiveFailure.Unavailable, "No slow download server answered.");
@@ -187,6 +187,44 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             return (long)(value * factor);
         }
 
+        // The page states its wait in seconds, minutes or a clock; the longest statement wins.
+        private static TimeSpan ReadWait(string text)
+        {
+            var wait = TimeSpan.Zero;
+            void Longest(TimeSpan candidate)
+            {
+                if (candidate > wait) wait = candidate;
+            }
+
+            foreach (Match match in CountdownSeconds().Matches(text))
+            {
+                if (int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)) Longest(TimeSpan.FromSeconds(seconds));
+            }
+
+            foreach (Match match in CountdownMinutes().Matches(text))
+            {
+                if (int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)) Longest(TimeSpan.FromMinutes(minutes));
+            }
+
+            foreach (Match match in CountdownClock().Matches(text))
+            {
+                // Two parts count minutes and seconds; three parts add hours.
+                var first = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                var second = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                if (match.Groups[3].Success)
+                {
+                    var third = int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+                    if (second < 60 && third < 60) Longest(new TimeSpan(first, second, third));
+                }
+                else if (second < 60)
+                {
+                    Longest(TimeSpan.FromMinutes(first) + TimeSpan.FromSeconds(second));
+                }
+            }
+
+            return wait;
+        }
+
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
 
         [GeneratedRegex("^/md5/([0-9a-f]{32})$")]
@@ -195,8 +233,14 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         [GeneratedRegex(@"\.(epub|pdf|mobi|azw3)\b", RegexOptions.IgnoreCase)]
         private static partial Regex Extension();
 
-        [GeneratedRegex(@"wait\D{0,40}?([0-9]{1,4})\s*(?:s\b|sec|second)", RegexOptions.IgnoreCase)]
-        private static partial Regex Countdown();
+        [GeneratedRegex(@"wait\D{0,40}?([0-9]{1,5})\s*(?:s\b|sec|second)", RegexOptions.IgnoreCase)]
+        private static partial Regex CountdownSeconds();
+
+        [GeneratedRegex(@"wait\D{0,40}?([0-9]{1,4})\s*(?:m\b|min|minute)", RegexOptions.IgnoreCase)]
+        private static partial Regex CountdownMinutes();
+
+        [GeneratedRegex(@"(?:wait|ready|in)\b\D{0,20}?([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?", RegexOptions.IgnoreCase)]
+        private static partial Regex CountdownClock();
 
         [GeneratedRegex(@"\[([a-z]{2,3})\]")]
         private static partial Regex Language();

@@ -301,8 +301,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
-            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName)
+            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, DateTime? downloadWaitUntil)
         {
+            DownloadWaitUntil = downloadWaitUntil;
             GamePlatformId = gamePlatformId;
             PlatformName = platformName;
             SourceUrl = sourceUrl;
@@ -367,6 +368,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl))]
         public string? SourceLinkUrl { get; }
+
+        // Set while a direct source asks Jularr to wait before its file host is contacted.
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadWaitUntil), false)]
+        public DateTime? DownloadWaitUntil { get; }
 
         // Tracks the album's edition names; files are tied to them only when the counts agree.
         [DataField(typeof(WorkFields), nameof(WorkFields.TrackCount))]
@@ -484,6 +489,26 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl))]
         public string? AttentionUrl { get; }
+    }
+
+    internal sealed class DownloadWaitData : BaseData
+    {
+        public DownloadWaitData(long operationId, DateTime downloadWaitUntil, int etaSeconds)
+        {
+            OperationId = operationId;
+            DownloadWaitUntil = downloadWaitUntil;
+            EtaSeconds = etaSeconds;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        // When the source's own countdown ends; the monitor resumes the job then.
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadWaitUntil), true)]
+        public DateTime DownloadWaitUntil { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.EtaSeconds))]
+        public int EtaSeconds { get; }
     }
 
     internal sealed class DownloadFinishedData : BaseData

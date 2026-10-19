@@ -139,7 +139,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task AnnasArchive_WithoutKeyKeepsTheSlowCountdownAndImports()
+        public async Task AnnasArchive_WithoutKeyWaitsBetweenJobsAndImports()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -154,11 +154,23 @@ namespace Jularr.Backend.Tests
             var wantedId = await CreateWantedBookAsync(host);
             await GrabAnnaAsync(host, wantedId);
 
-            // The page's own countdown is waited out before the file is fetched.
-            var started = DateTime.UtcNow;
+            // The page's own countdown is kept between jobs: nobody is asked and no slot stays blocked.
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromSeconds(1));
-            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
+            var book = Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub");
+            Assert.IsFalse(File.Exists(book));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(1, Convert.ToInt32(await host.ScalarAsync("SELECT \"EtaSeconds\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2")));
+            Assert.AreEqual(1, Convert.ToInt32(await host.ScalarAsync("SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2")));
+            var asked = sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal));
+            Assert.AreEqual(1, asked);
+
+            // While the countdown runs, the source is not asked again.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
+
+            // Once the countdown ended, the page's link is fetched and imported without a key.
+            await WaitForSlowPageAsync(host);
+            Assert.IsTrue(File.Exists(book));
             Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
             Assert.IsFalse(sources.Requests.Any(request => request.Contains("fast_download", StringComparison.Ordinal)));
         }
@@ -183,6 +195,7 @@ namespace Jularr.Backend.Tests
             var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\" WHERE \"WorkId\" = " + workId))!;
             await GrabAnnaAsync(host, wantedId);
             await RunAsync<MonitorDownloadsV1>(host);
+            await WaitForSlowPageAsync(host);
 
             // The imported book opens in the reader, reads and continues where it was left.
             var assetId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"MediaAssets\" WHERE \"WorkId\" = " + workId))!;
@@ -278,15 +291,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task AnnasArchive_LongCountdownWaitsForAPerson()
+        public async Task AnnasArchive_LongCountdownIsHandedBackInsteadOfGuessed()
         {
             var sources = new FakeSources { SlowWaitSeconds = 600 };
             var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver());
-            using var target = new TemporaryDirectory();
-            var failure = await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
-                client.SlowDownloadAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", Path.Combine(target.Path, "book.epub"), TimeSpan.FromSeconds(90), CancellationToken.None));
-            Assert.AreEqual(Integrations.Data.AnnasArchive.AnnasArchiveFailure.WaitTooLong, failure.Failure);
+            var page = await client.ReadSlowPageAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", CancellationToken.None);
+
+            // The page names its wait and its file; the file host is not touched before the wait ended.
+            Assert.AreEqual(TimeSpan.FromMinutes(10), page.Wait);
+            Assert.AreEqual("https://files.example.test/0123.epub", page.File.ToString());
             Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("files.example.test", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
+        [DataRow("Please wait 2 minutes before downloading.", 120)]
+        [DataRow("Please wait 01:30 before downloading.", 90)]
+        [DataRow("Please wait 1:05:00 before downloading.", 3900)]
+        public async Task AnnasArchive_CountdownSpeaksSecondsMinutesAndClocks(string text, int seconds)
+        {
+            var sources = new FakeSources { SlowWaitText = text };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver());
+            var page = await client.ReadSlowPageAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", CancellationToken.None);
+            Assert.AreEqual(TimeSpan.FromSeconds(seconds), page.Wait);
         }
 
         [TestMethod]
@@ -327,6 +353,13 @@ namespace Jularr.Backend.Tests
         [DataRow("2606:4700::1", true)]
         public void PublicNetwork_ReachesPublicAddressesOnly(string address, bool expected) =>
             Assert.AreEqual(expected, PublicNetwork.IsPublic(System.Net.IPAddress.Parse(address)));
+
+        // The source's countdown is moved to the past instead of sleeping in the test.
+        private static async Task WaitForSlowPageAsync(Host host)
+        {
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"DownloadWaitUntil\" = now() - interval '1 second' WHERE \"DownloadWaitUntil\" IS NOT NULL");
+            await RunAsync<MonitorDownloadsV1>(host);
+        }
 
         private static async Task GrabAnnaAsync(Host host, long wantedId)
         {
@@ -482,6 +515,7 @@ namespace Jularr.Backend.Tests
             public bool Challenge { get; set; }
             public bool SlowGate { get; set; }
             public int SlowWaitSeconds { get; set; } = 1;
+            public string? SlowWaitText { get; set; }
             private int _signedHits;
             public int SignedHits => Volatile.Read(ref _signedHits);
             public ConcurrentBag<string> AuthorizationSeenBy { get; } = [];
@@ -555,7 +589,8 @@ namespace Jularr.Backend.Tests
                 {
                     if (!SlowGate)
                     {
-                        return Text($"""<html><body><p>Please wait {SlowWaitSeconds} seconds before downloading.</p><a href="/md5/0123456789abcdef0123456789abcdef">Back</a><a href="https://files.example.test/0123.epub">Download now</a></body></html>""", "text/html");
+                        var wait = SlowWaitText ?? $"Please wait {SlowWaitSeconds} seconds before downloading.";
+                        return Text($"""<html><body><p>{wait}</p><a href="/md5/0123456789abcdef0123456789abcdef">Back</a><a href="https://files.example.test/0123.epub">Download now</a></body></html>""", "text/html");
                     }
 
                     var check = Text("<html><body>Checking your browser</body></html>", "text/html", HttpStatusCode.ServiceUnavailable);
