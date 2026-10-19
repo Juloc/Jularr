@@ -36,8 +36,8 @@ versions to serve requests against one database at the same time.
 
 At the first official release, freeze the baseline SQL and its version-1 fingerprint.
 Later changes add reviewed, embedded SQL to `DatabaseBaseline.Migrations` in
-contiguous order from version 2. The first version (2) creates the provider catalog
-`ExternalWorks` using the same backup-first upgrade mechanism. Scripts contain no transaction-control commands;
+contiguous order from version 2, using the same backup-first upgrade mechanism. Until
+then there is no migration; schema changes go into the baselines. Scripts contain no transaction-control commands;
 startup owns the transaction. Do not edit previously released scripts or run a
 second migration mechanism. Each version's fingerprint includes all previous SQL,
 with normalized line endings. Fresh installations replay the same history.
