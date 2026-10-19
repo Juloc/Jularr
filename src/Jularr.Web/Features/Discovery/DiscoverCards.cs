@@ -44,6 +44,42 @@ public sealed record DiscoverStateView(DiscoverStateKind Kind, string Css, strin
 /// <param name="Icon">The icon of the fact in the Quick View ("star" for a rating, "dot" for the release status), or none.</param>
 public sealed record DiscoverFact(string Label, string Value, string? Icon = null);
 
+/// <summary>Server-localized facts that progressively enrich an open TMDB Quick View.</summary>
+public sealed record DiscoverPreviewView(
+    string? PosterUrl,
+    string? BackdropUrl,
+    IReadOnlyList<string> Genres,
+    string? Status,
+    IReadOnlyList<DiscoverFact> Facts,
+    string? TrailerKey)
+{
+    public static DiscoverPreviewView From(TmdbDiscoverPreview preview, UiTextBundle ui)
+    {
+        var facts = new List<DiscoverFact>();
+        if (preview.RuntimeMinutes is { } runtime)
+        {
+            facts.Add(new DiscoverFact(ui["discover.fact.runtime"], ui.Format("discover.fact.runtimeValue", ("minutes", runtime))));
+        }
+
+        if (!string.IsNullOrWhiteSpace(preview.Certification))
+        {
+            facts.Add(new DiscoverFact(ui["discover.fact.ageRating"], preview.Certification));
+        }
+
+        if (preview.Popularity is { } popularity)
+        {
+            facts.Add(new DiscoverFact(ui["discover.fact.popularity"], popularity.ToString("0.#", CultureInfo.InvariantCulture)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(preview.Status))
+        {
+            facts.Add(new DiscoverFact(ui["library.browse.filter.status"], preview.Status, "dot"));
+        }
+
+        return new DiscoverPreviewView(preview.PosterUrl, preview.BackdropUrl, preview.Genres, preview.Status, facts, preview.TrailerKey);
+    }
+}
+
 /// <summary>The languages and the play link of a title that is already in the library.</summary>
 public sealed record DiscoverLocalFacts(
     IReadOnlyList<string> Audio,

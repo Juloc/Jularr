@@ -615,6 +615,75 @@
     }
     let keyCounter = 0;
 
+    function previewAddress(card) {
+        const params = new URLSearchParams();
+        params.set("handler", "Preview");
+        params.set("category", card.dataset.dcCategory || "");
+        params.set("provider", card.dataset.dcProvider || "");
+        params.set("externalId", card.dataset.dcExternalId || "");
+        return `${window.location.pathname}?${params}`;
+    }
+
+    function appendPreviewFact(list, fact) {
+        const row = document.createElement("div");
+        const label = document.createElement("dt");
+        const value = document.createElement("dd");
+        label.textContent = fact.label;
+        value.textContent = fact.value;
+        row.append(label, value);
+        list.append(row);
+    }
+
+    function applyTmdbPreview(preview) {
+        const genres = sheetContent.querySelector("[data-dc-preview-genres]");
+        if (genres && Array.isArray(preview.genres)) {
+            genres.replaceChildren();
+            preview.genres.forEach(genre => {
+                const item = document.createElement("li");
+                item.textContent = genre;
+                genres.append(item);
+            });
+            genres.hidden = preview.genres.length === 0;
+        }
+
+        const facts = sheetContent.querySelector("[data-dc-preview-facts]");
+        if (facts && Array.isArray(preview.facts) && preview.facts.length > 0) {
+            preview.facts.forEach(fact => appendPreviewFact(facts, fact));
+            facts.hidden = false;
+        }
+
+        const poster = sheetContent.querySelector("[data-dc-preview-poster]");
+        if (poster && preview.posterUrl) {
+            const image = document.createElement("img");
+            image.src = preview.posterUrl;
+            image.alt = "";
+            image.loading = "lazy";
+            image.decoding = "async";
+            image.referrerPolicy = "no-referrer";
+            poster.replaceChildren(image);
+        }
+
+        const media = sheetContent.querySelector("[data-dc-preview-media]");
+        if (media && preview.backdropUrl) {
+            const image = media.querySelector(".dc-pv-backdrop");
+            if (image instanceof HTMLImageElement) {
+                image.src = preview.backdropUrl;
+                image.classList.remove("is-derived");
+            }
+        }
+    }
+
+    async function hydrateTmdbPreview(card) {
+        if (card.dataset.dcProvider !== "tmdb") return;
+        try {
+            const response = await fetch(previewAddress(card), { cache: "no-store", headers: { "X-Requested-With": "fetch" } });
+            if (!response.ok || sheetCard !== card || !sheet.open) return;
+            applyTmdbPreview(await response.json());
+        } catch {
+            // The preview remains useful with the shelf data if a supplemental provider request cannot answer.
+        }
+    }
+
     function hideHover() {
         if (!hover.hidden) {
             hover.hidden = true;
@@ -622,8 +691,9 @@
         }
     }
 
-    // The arrows of the preview open the title before or after the current one in its row or grid: the next card with a preview of its own.
+    // The arrows open the neighbouring title. A landing shelf pulls its matching Browse pages only when the viewer reaches its end.
     let sheetCard = null;
+    const sheetPagers = new WeakMap();
 
     function neighbourOf(card, step) {
         let item = card.closest("li");
@@ -636,17 +706,72 @@
         return null;
     }
 
+    function pagerFor(card) {
+        const section = card.closest("[data-dc-section][data-dc-layout='track']");
+        const address = section?.querySelector(".dc-shelf-more")?.href;
+        if (!section || !address) return null;
+        let pager = sheetPagers.get(section);
+        if (!pager) {
+            pager = { address, page: 0, loading: false, done: false };
+            sheetPagers.set(section, pager);
+        }
+        return pager;
+    }
+
+    async function appendSheetPage(card) {
+        const section = card.closest("[data-dc-section][data-dc-layout='track']");
+        const list = section?.querySelector(".dc-track:not(.dc-ghosts)");
+        const pager = pagerFor(card);
+        if (!section || !list || !pager || pager.loading || pager.done) return null;
+        pager.loading = true;
+        try {
+            const url = new URL(pager.address, window.location.origin);
+            url.searchParams.set("handler", "Body");
+            if (pager.page > 0) url.searchParams.set("pg", String(pager.page + 1));
+            const response = await fetch(url, { cache: "no-store", headers: { "X-Requested-With": "fetch" } });
+            if (!response.ok) throw new Error(String(response.status));
+            const documentPage = new DOMParser().parseFromString(await response.text(), "text/html");
+            const source = pager.page === 0
+                ? documentPage.querySelector("[data-dc-section][data-dc-layout='grid'] ul:not(.dc-ghosts)")
+                : documentPage.querySelector("[data-dc-more-items]");
+            const known = new Set([...list.querySelectorAll("[data-dc-card]")].map(cardKey));
+            let first = null;
+            source?.querySelectorAll(":scope > li").forEach(item => {
+                const candidate = item.querySelector("[data-dc-card]");
+                const key = candidate ? cardKey(candidate) : "";
+                if (!candidate || !key || known.has(key)) return;
+                known.add(key);
+                const appended = document.importNode(item, true);
+                first ??= appended.querySelector("[data-dc-card]");
+                list.append(appended);
+            });
+            pager.page += 1;
+            pager.done = pager.page === 1
+                ? documentPage.querySelector("[data-dc-state]")?.dataset.dcHasMore !== "true"
+                : source?.dataset.dcHasMore !== "true";
+            return first;
+        } catch {
+            pager.done = true;
+            return null;
+        } finally {
+            pager.loading = false;
+            syncSheetNav();
+        }
+    }
+
     function syncSheetNav() {
         sheetContent.querySelectorAll("[data-dc-sheet-nav]").forEach(button => {
-            button.hidden = !sheetCard || !neighbourOf(sheetCard, Number(button.dataset.dcSheetNav));
+            const step = Number(button.dataset.dcSheetNav);
+            button.hidden = !sheetCard || (!neighbourOf(sheetCard, step) && (step < 0 || !pagerFor(sheetCard) || pagerFor(sheetCard).done));
         });
     }
 
-    function stepSheet(step) {
+    async function stepSheet(step) {
         const next = sheetCard ? neighbourOf(sheetCard, step) : null;
-        if (!next) return;
-        openSheet(next);
-        next.scrollIntoView({ block: "nearest", inline: "center" });
+        const loaded = next || (step > 0 && sheetCard ? await appendSheetPage(sheetCard) : null);
+        if (!loaded) return;
+        openSheet(loaded);
+        loaded.scrollIntoView({ block: "nearest", inline: "center" });
     }
 
     function openSheet(card) {
@@ -670,6 +795,7 @@
         // Reduced motion keeps the facade, so the viewer starts it on purpose.
         const facade = sheetContent.querySelector("[data-vd-trailer]");
         if (facade && !reducedMotion.matches) window.JularrWorkMetadata?.startTrailer(facade, document, { muted: true });
+        void hydrateTmdbPreview(card);
         return true;
     }
 
@@ -684,7 +810,7 @@
     });
     sheet.addEventListener("click", event => {
         const nav = event.target instanceof Element ? event.target.closest("[data-dc-sheet-nav]") : null;
-        if (nav) stepSheet(Number(nav.dataset.dcSheetNav));
+        if (nav) void stepSheet(Number(nav.dataset.dcSheetNav));
     });
     sheet.addEventListener("keydown", event => {
         if ((event.key !== "ArrowLeft" && event.key !== "ArrowRight") || event.altKey || event.ctrlKey || event.metaKey || /input|textarea|select/i.test(document.activeElement?.tagName || "")) return;

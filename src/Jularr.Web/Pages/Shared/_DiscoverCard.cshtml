@@ -118,7 +118,7 @@
              data-subtitle="@card.Meta">
             @* The hero is the backdrop of the title, else its cover blurred into a backdrop (docs/mockups/media-preview, section 7). The trailer
                is a facade: nothing of YouTube is requested until the sheet is open, and then discover.js starts it muted. *@
-            <div class="dc-pv-media">
+            <div class="dc-pv-media" data-dc-preview-media>
                 @if (card.BackdropUrl is { } backdrop)
                 {
                     <img class="dc-pv-backdrop" src="@backdrop" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
@@ -135,11 +135,6 @@
                            aria-label="@ui.Format("library.video.playTrailer", ("title", card.Title))">
                             <span class="dc-pv-trailer-button" aria-hidden="true"><partial name="_DiscoverIcon" model='"play"' /></span>
                         </a>
-                        @* The badge is a second link of the facade: the same click starts the trailer in place. *@
-                        <a class="dc-pv-badge" href="https://www.youtube.com/watch?v=@trailerKey" target="_blank" rel="noopener noreferrer">
-                            <partial name="_DiscoverIcon" model='"play"' />
-                            <span>@ui["discover.preview.trailer"]</span>
-                        </a>
                     </div>
                 }
 
@@ -152,7 +147,7 @@
                 </button>
             </div>
 
-            <div class="dc-pv-poster">
+            <div class="dc-pv-poster" data-dc-preview-poster>
                 @if (card.PosterUrl is { } poster)
                 {
                     <img src="@poster" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
@@ -171,24 +166,21 @@
                 }
                 <p class="dc-pv-meta">@card.Meta.Replace(" · ", " • ")</p>
 
-                @if (card.Genres.Count > 0)
-                {
-                    <ul class="dc-pv-genres">
-                        @foreach (var genre in card.Genres)
-                        {
-                            <li>@genre</li>
-                        }
-                    </ul>
-                }
+                <ul class="dc-pv-genres" data-dc-preview-genres @(card.Genres.Count == 0 ? "hidden" : null)>
+                    @foreach (var genre in card.Genres)
+                    {
+                        <li>@genre</li>
+                    }
+                </ul>
 
                 @if (card.Description is { } description)
                 {
                     <p class="dc-pv-desc">@description</p>
                 }
 
-                @if (card.Facts.Count > 0 || card.Audio.Count > 0 || card.Subtitles.Count > 0)
+                @if (card.Facts.Count > 0 || card.Audio.Count > 0 || card.Subtitles.Count > 0 || card.Provider == TmdbDiscoveryProvider.ProviderKey)
                 {
-                    <dl class="dc-pv-facts">
+                    <dl class="dc-pv-facts" data-dc-preview-facts>
                         @foreach (var fact in card.Facts)
                         {
                             <div>

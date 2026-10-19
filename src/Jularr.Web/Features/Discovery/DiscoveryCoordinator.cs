@@ -522,8 +522,6 @@ public sealed class DiscoveryCoordinator(
                         LocalMediaId = inLibrary ? canonicalWorkId : null,
                         WorkUrl = detailUrl,
                         Title = metadata?.Title ?? item.Title,
-                        CoverImageUrl = metadata?.PosterUrl ?? item.CoverImageUrl,
-                        BackdropUrl = metadata?.BackdropUrl ?? item.BackdropUrl,
                         TrailerKey = metadata?.TrailerKey
                     };
                 }

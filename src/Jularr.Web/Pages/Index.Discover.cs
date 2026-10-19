@@ -180,6 +180,35 @@ public sealed partial class IndexModel
         }
     }
 
+    /// <summary>
+    /// Reads the provider facts only after a TMDB Quick View opens. This preserves the bounded shelf
+    /// fetch while making the preview use the same current TMDB artwork as the detail response.
+    /// </summary>
+    public async Task<IActionResult> OnGetPreviewAsync(string? category, string? provider, string? externalId, CancellationToken cancellationToken)
+    {
+        if (!string.Equals(provider, TmdbDiscoveryProvider.ProviderKey, StringComparison.Ordinal)
+            || !TmdbDiscoveryProvider.TryNormalizeExternalId(externalId, out var tmdbId))
+        {
+            return BadRequest();
+        }
+
+        var mediaType = category switch
+        {
+            "movie" => TmdbDiscoveryMediaType.Movie,
+            "tv" => TmdbDiscoveryMediaType.Series,
+            _ => (TmdbDiscoveryMediaType?)null
+        };
+        if (mediaType is null)
+        {
+            return BadRequest();
+        }
+
+        Response.Headers.CacheControl = "no-store";
+        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var preview = await tmdb.GetDiscoverPreviewAsync(mediaType.Value, tmdbId, cancellationToken);
+        return new JsonResult(DiscoverPreviewView.From(preview, ui));
+    }
+
     /// <summary>No view needs more than this many provider pages: a bound against a loop, not a limit a viewer reaches.</summary>
     private const int MaxPage = 200;
 

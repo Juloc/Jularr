@@ -36,6 +36,17 @@ public sealed record TmdbDiscoveryCandidate(
         : $"https://www.themoviedb.org/tv/{ExternalId}";
 }
 
+/// <summary>Transient TMDB facts for one Discover Quick View. They are never persisted merely by opening a preview.</summary>
+public sealed record TmdbDiscoverPreview(
+    string? PosterUrl,
+    string? BackdropUrl,
+    IReadOnlyList<string> Genres,
+    string? Status,
+    int? RuntimeMinutes,
+    string? Certification,
+    double? Popularity,
+    string? TrailerKey);
+
 /// <summary>
 /// TMDB metadata/discovery adapter for Movie/Series (#809). Every remote call goes through the shared
 /// provider executor and response cache. Browse/search candidates remain bounded runtime cache entries;
@@ -135,6 +146,53 @@ public sealed partial class TmdbDiscoveryProvider(
         // The search endpoint cannot filter by genre; the browse endpoints did it already, and repeating it is harmless.
         var items = HasGenres(page.Results, mediaType, request.EffectiveGenres).Take(Math.Clamp(limit, 1, 40)).ToArray();
         return new DiscoveryProviderPage<TmdbDiscoveryCandidate>(items, request.Page < page.TotalPages && request.Page < 500);
+    }
+
+    /// <summary>Loads the current provider artwork and facts for an opened Discover preview without materializing a Work.</summary>
+    public async Task<TmdbDiscoverPreview> GetDiscoverPreviewAsync(
+        TmdbDiscoveryMediaType mediaType,
+        string externalId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryNormalizeExternalId(externalId, out var canonicalExternalId)
+            || !int.TryParse(canonicalExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId))
+        {
+            throw new ArgumentException("A positive TMDB id is required.", nameof(externalId));
+        }
+
+        var locale = CurrentLocale();
+        var movie = mediaType == TmdbDiscoveryMediaType.Movie;
+        var language = WorkMetadataLocales.BaseLanguage(locale);
+        var details = await cache.GetOrFetchAsync(
+            $"tmdb:discover-preview:{mediaType}:{tmdbId}:{locale}",
+            TimeSpan.FromHours(6),
+            ct => GetJsonAsync<TmdbMetadataDetails>(
+                $"{(movie ? "movie" : "tv")}/{tmdbId}",
+                [
+                    ("language", locale),
+                    ("append_to_response", movie ? "videos,release_dates" : "videos,content_ratings"),
+                    ("include_video_language", language)
+                ],
+                ct),
+            cancellationToken);
+
+        var country = WorkMetadataLocales.CertificationCountry(locale);
+        var certification = movie
+            ? details.ReleaseDates?.Results?.FirstOrDefault(x => x.Country == country)?.ReleaseDates?.Select(x => x.Certification?.Trim()).FirstOrDefault(x => !string.IsNullOrEmpty(x))
+            : details.ContentRatings?.Results?.FirstOrDefault(x => x.Country == country)?.Rating?.Trim();
+        var runtime = movie
+            ? details.Runtime
+            : details.EpisodeRunTime?.FirstOrDefault(x => x > 0) is int typical and > 0 ? typical : details.LastEpisodeToAir?.Runtime;
+
+        return new TmdbDiscoverPreview(
+            CoverUrl(details.PosterPath),
+            BackdropUrl(details.BackdropPath),
+            DistinctTexts((details.Genres ?? []).Select(x => x.Name), 10),
+            Trimmed(details.Status, 80),
+            runtime is > 0 ? runtime : null,
+            string.IsNullOrEmpty(certification) || country is null ? null : Trimmed(certification, 32),
+            details.Popularity is > 0 ? Math.Round(details.Popularity.Value, 1) : null,
+            TrailerKeys(details.Videos?.Results).FirstOrDefault());
     }
 
     private static (string Path, IReadOnlyList<(string Key, string Value)> Query) SearchRequest(TmdbDiscoveryMediaType mediaType, DiscoveryRequest request, string locale)
@@ -836,10 +894,10 @@ public sealed partial class TmdbDiscoveryProvider(
     }
 
     private static string? CoverUrl(string? path) =>
-        string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w500{path}";
+        TryBuildImageUri(path, "w500", out var uri) ? uri.AbsoluteUri : null;
 
     private static string? BackdropUrl(string? path) =>
-        string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w780{path}";
+        TryBuildImageUri(path, "w780", out var uri) ? uri.AbsoluteUri : null;
 
     private static int? Year(string? value) =>
         DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
@@ -976,6 +1034,18 @@ public sealed partial class TmdbDiscoveryProvider(
 
         [JsonPropertyName("tagline")]
         public string? Tagline { get; set; }
+
+        [JsonPropertyName("poster_path")]
+        public string? PosterPath { get; set; }
+
+        [JsonPropertyName("backdrop_path")]
+        public string? BackdropPath { get; set; }
+
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
+        [JsonPropertyName("popularity")]
+        public double? Popularity { get; set; }
 
         [JsonPropertyName("release_date")]
         public string? ReleaseDate { get; set; }

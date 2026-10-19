@@ -281,8 +281,8 @@
 .dc-card:hover .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested .dc-icon,
 .dc-card:focus-within .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested .dc-icon { color: var(--accent-text); animation: dc-spin 1.6s linear infinite; }
 
-/* Preview (Quick View), as in the approved mockup (docs/mockups/media-preview): a wide 2:1 hero of backdrop or trailer with the close button, the
-   arrows to the neighbouring titles and the trailer badge; the cover overlapping its lower left edge; beside it title, meta line, genres, description, the
+/* Preview (Quick View), as in the approved mockup (docs/mockups/media-preview): a wide 2:1 hero of backdrop or trailer with the close button and
+   arrows to the neighbouring titles; the cover overlapping its lower left edge; beside it title, meta line, genres, description, the
    facts in a row and the actions as pills. Without a backdrop the hero is the cover blurred into one. ---------------------------------------------- */
 .dc-pv { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .dc-pv-media { position: relative; grid-column: 1 / -1; aspect-ratio: 2 / 1; overflow: hidden; background: var(--surface-2); }
@@ -291,33 +291,24 @@
 .dc-pv-trailer { position: absolute; inset: 0; z-index: 1; }
 .dc-pv-trailer-play { position: absolute; inset: 0; display: grid; place-items: center; color: #15121c; }
 .dc-pv-trailer-button {
-    display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
-    background: rgb(255 255 255 / .94); box-shadow: 0 8px 22px rgb(0 0 0 / .32); transition: transform .15s ease-out, background-color .15s ease-out;
+    display: grid; place-items: center; width: 76px; height: 68px; border-radius: 24px;
+    background: rgb(255 255 255 / .94); box-shadow: 0 8px 22px rgb(0 0 0 / .32); transition: transform .2s cubic-bezier(.22, 1, .36, 1), background-color .2s ease-out;
 }
-.dc-pv-trailer-button .dc-icon { width: 28px; height: 28px; margin-inline-start: 3px; }
+.dc-pv-trailer-button .dc-icon { width: 32px; height: 32px; margin-inline-start: 4px; }
 .dc-pv-trailer-play:hover .dc-pv-trailer-button { background: #fff; transform: scale(1.06); }
 .dc-pv-trailer-play:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 .dc-pv-trailer-play:focus-visible .dc-pv-trailer-button { box-shadow: 0 0 0 4px var(--accent), 0 8px 22px rgb(0 0 0 / .32); }
 .dc-pv-trailer .vd-trailer-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
 
-/* The trailer badge at the lower right of the hero, a second link of the trailer facade. */
-.dc-pv-badge {
-    position: absolute; z-index: 2; inset-block-end: 20px; inset-inline-end: 24px; display: inline-flex; align-items: center; gap: 8px;
-    min-height: 32px; padding: 0 14px; border-radius: 10px; background: rgb(38 38 44 / .78); backdrop-filter: blur(6px);
-    color: #fff; font-size: 14px; font-weight: 600; text-decoration: none;
-}
-.dc-pv-badge .dc-icon { width: 14px; height: 14px; }
-.dc-pv-badge:hover { background: rgb(38 38 44 / .92); color: #fff; }
-
 /* The arrows to the previous and the next title of the row, centred on the sides of the hero. */
 .dc-pv-nav {
-    position: absolute; z-index: 3; inset-block-start: 50%; display: grid; place-items: center; width: 48px; height: 48px; padding: 0;
+    position: absolute; z-index: 3; inset-block-start: 50%; display: grid; place-items: center; width: 56px; height: 56px; padding: 0;
     border: 0; border-radius: 50%; background: rgb(12 10 18 / .55); backdrop-filter: blur(6px); color: #fff; cursor: pointer;
-    transform: translateY(-50%); transition: background-color .15s ease-out;
+    transform: translateY(-50%); transition: background-color .2s ease-out, transform .2s cubic-bezier(.22, 1, .36, 1);
 }
 .dc-pv-nav[hidden] { display: none; }
-.dc-pv-nav:hover { background: rgb(12 10 18 / .78); }
-.dc-pv-nav .dc-icon { width: 22px; height: 22px; }
+.dc-pv-nav:hover { background: rgb(12 10 18 / .82); transform: translateY(-50%) scale(1.08); }
+.dc-pv-nav .dc-icon { width: 26px; height: 26px; }
 .dc-pv-nav-prev { inset-inline-start: 24px; }
 .dc-pv-nav-next { inset-inline-end: 24px; }
 .dc-pv-nav-prev .dc-icon { transform: rotate(90deg); }
@@ -380,7 +371,7 @@
 @keyframes dc-pop-in { from { opacity: 0; transform: scale(.97); } }
 
 .dc-sheet {
-    width: min(764px, 94vw); max-height: 92vh; padding: 0; overflow: auto; overscroll-behavior: contain;
+    width: min(764px, 94vw); height: min(790px, 92vh); padding: 0; overflow: auto; overscroll-behavior: contain;
     border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text);
     box-shadow: 0 30px 80px rgb(0 0 0 / .4);
 }
@@ -422,7 +413,7 @@
     body:has(.dc-pop[open]) { overflow: hidden; }
 
     .dc-sheet {
-        width: 100%; max-width: none; max-height: 90vh; margin: auto 0 0; border-radius: 18px 18px 0 0; border-bottom: 0;
+        width: 100%; max-width: none; height: min(760px, 90vh); margin: auto 0 0; border-radius: 18px 18px 0 0; border-bottom: 0;
         padding-bottom: env(safe-area-inset-bottom);
     }
 }

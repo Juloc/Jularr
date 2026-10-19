@@ -209,6 +209,24 @@ public sealed class DiscoverCompletionTests
     }
 
     [TestMethod]
+    public void TmdbQuickViewFactsUseTheCurrentPreviewDetailsAndTheDialogCanContinueALandingShelf()
+    {
+        var view = DiscoverPreviewView.From(
+            new TmdbDiscoverPreview("https://image.tmdb.org/t/p/w500/poster.jpg", "https://image.tmdb.org/t/p/w780/backdrop.jpg", ["Drama"], "Released", 125, "PG-13", 342.1, null),
+            UiTextBundle.English);
+        var script = ReadSource("wwwroot", "js", "discover.js");
+        var style = ReadSource("wwwroot", "css", "discover-browse.css");
+
+        CollectionAssert.AreEqual(new[] { "Runtime", "Age rating", "Popularity", "Status" }, view.Facts.Select(fact => fact.Label).ToArray());
+        CollectionAssert.AreEqual(new[] { "125 min", "PG-13", "342.1", "Released" }, view.Facts.Select(fact => fact.Value).ToArray());
+        StringAssert.Contains(script, "handler\", \"Preview\"");
+        StringAssert.Contains(script, "appendSheetPage");
+        StringAssert.Contains(script, "data-dc-preview-facts");
+        StringAssert.Contains(style, "height: min(790px, 92vh)");
+        StringAssert.Contains(style, "width: 56px; height: 56px");
+    }
+
+    [TestMethod]
     public void TheFilterIsAMultiSelectWithAYearRangeAndNoBrowseViewsAndTheBrowseNavigationStartsWithAll()
     {
         var filter = ReadSource("Pages", "Shared", "_DiscoverFilter.cshtml");
