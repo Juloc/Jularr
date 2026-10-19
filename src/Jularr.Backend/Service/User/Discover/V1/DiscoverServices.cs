@@ -215,10 +215,13 @@ namespace Jularr.Backend.Service.User.Discover.V1
     public sealed class RequestDiscoverItemV1 : UserService<DiscoverItemParametersV1, CreateRequestDataV1>
     {
         private readonly WorkMetadata _metadata;
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _newlyApproved;
 
-        internal RequestDiscoverItemV1(WorkMetadata metadata)
+        internal RequestDiscoverItemV1(WorkMetadata metadata, AcquisitionSearchSignal searchSignal)
         {
             _metadata = metadata;
+            _searchSignal = searchSignal;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -232,9 +235,15 @@ namespace Jularr.Backend.Service.User.Discover.V1
             await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
-            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
+            var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
                 CancellationToken);
+            _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_newlyApproved) _searchSignal.RequestSearch();
         }
     }
 
@@ -404,10 +413,13 @@ namespace Jularr.Backend.Service.User.Discover.V1
     public sealed class RequestDiscoverCatalogItemV1 : UserService<DiscoverParametersV1, RequestDiscoverCatalogDataV1>
     {
         private readonly MetadataCatalog _catalog;
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _newlyApproved;
 
-        internal RequestDiscoverCatalogItemV1(MetadataCatalog catalog)
+        internal RequestDiscoverCatalogItemV1(MetadataCatalog catalog, AcquisitionSearchSignal searchSignal)
         {
             _catalog = catalog;
+            _searchSignal = searchSignal;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -420,9 +432,15 @@ namespace Jularr.Backend.Service.User.Discover.V1
             // The catalog identity resolves to one canonical Work before the request exists.
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
-            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
+            var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
                 Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
+            _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_newlyApproved) _searchSignal.RequestSearch();
         }
     }
 

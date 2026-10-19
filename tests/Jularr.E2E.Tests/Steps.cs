@@ -103,8 +103,9 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // Manual-flow tests use a manual-only indexer; automatic-flow tests explicitly opt in to automatic searching.
         // The fake indexer and SABnzbd; finished jobs appear under the downloads folder.
-        public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories)
+        public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories, bool searchesAutomatically = false)
         {
             await page.GotoAsync("/Admin/Acquisition");
             await page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }).ClickAsync();
@@ -112,6 +113,7 @@ namespace Jularr.E2E.Tests
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("form [name=ApiKey]", FakeServices.IndexerKey);
             await page.FillAsync("form [name=Categories]", categories);
+            await page.Locator("form [name=SearchesAutomatically]").SelectOptionAsync(searchesAutomatically ? "True" : "False");
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
             await page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }).ClickAsync();

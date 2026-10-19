@@ -39,7 +39,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Series", "Series"));
-                await Steps.AddUsenetAsync(page, fakes, "5000,5040");
+                await Steps.AddUsenetAsync(page, fakes, "5000,5040", searchesAutomatically: true);
 
                 // The preview assigns Sonarr's root folder to the only series library; taking over brings the profile and the missing series.
                 fakes.Offer(television, x265, first, second);
@@ -114,7 +114,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"), new LibraryPath("Anime", "Series", "Anime"));
-                await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5070");
+                await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5070", searchesAutomatically: true);
                 await CreateProfileAsync(page, "Movie", "German", mustContain: "German");
                 await RegisterAsync(page, user);
 
@@ -181,7 +181,7 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
-                await Steps.AddUsenetAsync(page, fakes, "7000,7020");
+                await Steps.AddUsenetAsync(page, fakes, "7000,7020", searchesAutomatically: true);
                 await RegisterAsync(page, user);
 
                 // The user asks for the novel; once approved, nobody searches by hand.

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger)
+    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger, AcquisitionSearchSignal signal)
         : PeriodicWorker(scopes, time, logger, TimeSpan.FromSeconds(15))
     {
         private static readonly TimeSpan SearchInterval = TimeSpan.FromMinutes(2);
@@ -21,11 +21,12 @@ namespace Jularr.Workers
             // Downloads are tracked often; metadata and due targets are refreshed in small passes.
             await RunAsync<MonitorDownloadsV1>(ct);
             await RunAsync<RefreshStoredFileFormatsV1>(ct);
-            if (Time.GetUtcNow() >= _nextSearch)
+            var periodicSearchDue = Time.GetUtcNow() >= _nextSearch;
+            if (signal.TakeRequest() || periodicSearchDue)
             {
                 await RunAsync<RefreshWantedMetadataV1>(ct);
                 await RunAsync<SearchDueWantedV1>(ct);
-                _nextSearch = Time.GetUtcNow() + SearchInterval;
+                if (periodicSearchDue) _nextSearch = Time.GetUtcNow() + SearchInterval;
             }
 
             // Plex availability follows the server every half hour.
@@ -33,6 +34,33 @@ namespace Jularr.Workers
             {
                 await RunAsync<SyncPlexLibraryV1>(ct);
                 _nextPlexSync = Time.GetUtcNow() + PlexInterval;
+            }
+        }
+
+        protected override async Task<bool> WaitForNextRunAsync(PeriodicTimer timer, CancellationToken ct)
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var tick = timer.WaitForNextTickAsync(linked.Token).AsTask();
+            var request = signal.WaitForRequestAsync(linked.Token).AsTask();
+            var completed = await Task.WhenAny(tick, request);
+            await linked.CancelAsync();
+            try
+            {
+                return await completed;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return false;
+            }
+            finally
+            {
+                try
+                {
+                    await Task.WhenAll(tick, request);
+                }
+                catch (OperationCanceledException)
+                {
+                }
             }
         }
 

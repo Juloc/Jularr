@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Request.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
@@ -67,6 +68,12 @@ namespace Jularr.Backend.Service.Admin.Request.V1
     [ServiceEndpoint("PUT", "/api/v1/admin/requests/{acquisitionRequestId:long}")]
     public sealed class UpdateRequestV1 : AdminService<UpdateRequestParametersV1, UpdateRequestDataV1>
     {
+        private readonly AcquisitionSearchSignal _searchSignal;
+
+        internal UpdateRequestV1(AcquisitionSearchSignal searchSignal)
+        {
+            _searchSignal = searchSignal;
+        }
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(UpdateRequestParametersV1 parameters) => ModuleRequirement.All("Requests");
@@ -76,6 +83,11 @@ namespace Jularr.Backend.Service.Admin.Request.V1
         {
             await Context.UpdateAcquisitionRequestAsync(new AcquisitionRequestUpdateData(Parameters.AcquisitionRequestId, Data.AcquisitionRequestStatusTypeId, Data.Version, Auth.AccountId!.Value), CancellationToken);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (Data.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Approved) _searchSignal.RequestSearch();
         }
     }
 }

@@ -165,6 +165,7 @@ namespace Jularr.Backend.Service.Core
         private static IServiceCollection RegisterServices(IServiceCollection services, Assembly[] assemblies, ProviderOptions providers)
         {
             // Recent warnings and errors for the Owner's system page.
+            services.TryAddSingleton<AcquisitionSearchSignal>();
             services.TryAddSingleton<RecentLogs>();
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ResourceHistory>();
