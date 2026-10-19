@@ -233,7 +233,7 @@ namespace Jularr.E2E.Tests
             await format.Locator("[name=Name]").FillAsync(name);
             await format.Locator("[name='Conditions[0].Name']").FillAsync(name);
             await format.Locator("[name='Conditions[0].Value']").FillAsync(mustContain);
-            await Steps.FollowAsync(page, format.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
+            await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
             await page.GotoAsync("/Admin/Acquisition/Profiles/New?type=" + type);
             var form = page.Locator("main form", new() { Has = page.Locator("[name=MinimumFormatScore]") });
@@ -243,7 +243,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("tr", new() { HasText = name }).GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).ClickAsync();
             await form.Locator("[name='FormatScores[0].Score']").FillAsync("100");
             await form.Locator("[name=MinimumFormatScore]").FillAsync("100");
-            await Steps.FollowAsync(page, form.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
+            await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
         }
 

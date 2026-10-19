@@ -52,7 +52,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 {
                     form.Hidden(item => item.ExpectedIsEnabled);
                     form.Toggle(item => item.IsEnabled, "admin.providers.state");
-                    form.Submit("common.save");
+                    form.Save();
                 }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? FormError : null));
 
@@ -68,7 +68,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                         }
 
                         form.Password(item => item.Secret, provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
-                        form.Submit("common.save");
+                        form.Save();
                     }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         new SaveProviderSecretDataV1(null)));
                 }
@@ -145,7 +145,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                                 signIn.SectionKeys.Zip(signIn.SectionTitles, (key, title) => new SelectOption(key, title)));
                         }
 
-                        form.Submit("common.save");
+                        form.Save();
                     }, Home + "?handler=PlexSignIn", csrf, _signInInput ?? new SavePlexSignInDataV1(signIn.SignIn, signIn.Registration, signIn.RegistrationApproval, signIn.RegistrationSections),
                         _signInInput is null ? null : FormError));
                 }

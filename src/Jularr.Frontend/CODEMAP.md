@@ -11,6 +11,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Elements.cs](Framework/Elements.cs), [UiComponent.cs](Framework/UiComponent.cs): encoded HTML primitives and Razor boundary.
 - [Form.cs](Framework/Components/Form.cs), [BaseField.cs](Framework/BaseField.cs): canonical Backend metadata, invariant form binding, antiforgery and field/form errors; placeholders and the label's (i) ([FieldInfo.cs](Framework/Components/FieldInfo.cs)) come from `hint.<Fields>.<Field>` texts in [UiResources.cs](Localization/UiResources.cs).
 - [FolderPicker.cs](Framework/Components/FolderPicker.cs), [client](Framework/Components/FolderPicker.entry.ts): native folder dialog using authorized SSR directory fragments, preserving form drafts and supporting cursor navigation. Storage and Setup share the same picker; `FolderPickerTests` and `SmbStorageTests` cover it.
+- [SavePill](Framework/Components/SavePill.cs), [client](Framework/Components/SavePill.ts): one save action for the page's `Form.Save` forms; `SavePillTests` cover save, discard and a failing form.
 - [Table.cs](Framework/Components/Table.cs): typed rows and composed cells.
 - [Button.cs](Framework/Components/Button.cs), [Tag.cs](Framework/Components/Tag.cs), [Toggle.cs](Framework/Components/Toggle.cs): shared controls.
 - [Split.cs](Framework/Components/Split.cs), [Tabs.cs](Framework/Components/Tabs.cs), [NavigationTabs.cs](Framework/Components/NavigationTabs.cs): layout and route-backed navigation.

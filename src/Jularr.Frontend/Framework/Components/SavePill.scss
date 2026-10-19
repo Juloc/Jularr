@@ -1,0 +1,74 @@
+// A small pill centred in the app content, well above the bottom edge and always in view while something is unsaved.
+.save-pill {
+    position: sticky;
+    bottom: calc(40px + env(safe-area-inset-bottom));
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    margin: 24px auto 0;
+    padding: 6px 6px 6px 16px;
+    border: 1px solid var(--accent-line);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow);
+    transition: opacity .2s, translate .35s cubic-bezier(.34, 1.56, .64, 1), scale .35s cubic-bezier(.34, 1.56, .64, 1), display .35s allow-discrete;
+
+    @starting-style {
+        opacity: 0;
+        translate: 0 24px;
+        scale: .92;
+    }
+
+    &[hidden] {
+        display: none;
+        opacity: 0;
+        translate: 0 24px;
+        scale: .92;
+    }
+
+    &--bump { animation: save-pill-bump .35s cubic-bezier(.34, 1.56, .64, 1); }
+
+    &__count {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-right: 4px;
+        color: var(--muted);
+        font-size: 14px;
+        white-space: nowrap;
+
+        &::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+    }
+
+    &--failed &__count { color: var(--danger); }
+    &--failed &__count::before { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent); }
+
+    &--saved &__count, &--saved [data-save-discard] { display: none; }
+    &--saved [data-save-submit] { border-color: var(--success); background: var(--success); }
+
+    @media (prefers-reduced-motion: reduce) {
+        transition: none;
+        &--bump { animation: none; }
+    }
+
+    @media (max-width: 780px) {
+        bottom: calc(96px + env(safe-area-inset-bottom));
+    }
+}
+
+@keyframes save-pill-bump {
+    40% { scale: 1.06; }
+}
+
+// Fields that differ from the loaded page; their own save buttons give way to the pill.
+.ui-field--changed .ui-field__control { border-color: var(--accent); }
+[data-save-ready] [data-form-save] { display: none; }

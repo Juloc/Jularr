@@ -50,7 +50,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
             {
                 form.Hidden(item => item.NotificationTypeId);
                 form.Select(item => item.IsMuted, "notifications.type." + setting.NotificationTypeId, states);
-                form.Submit("common.save");
+                form.Save();
             }, "/Notifications?handler=Setting", csrf, new UpdateNotificationSettingDataV1(setting.NotificationTypeId, setting.IsMuted)))]));
         }
 

@@ -1004,10 +1004,6 @@
    "Users may confirm source checks",
    "Gebruikers mogen bronnencontroles bevestigen"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "De instantie-instellingen zijn opgeslagen."
-  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "Schakel geregistreerde integraties in of uit. Voor verbindings- en inlogmogelijkheden is nog steeds de bestaande hostconfiguratie nodig."
@@ -1035,10 +1031,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Profielinstellingen"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Wijzigingen opslaan"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1575,6 @@
   "admin.instance.media": [
    "Media types",
    "Mediatypen"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Beschikbaarheid"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2711,6 @@
   "admin.instance.modules": [
    "Modules",
    "Modules"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Modulestatus"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",

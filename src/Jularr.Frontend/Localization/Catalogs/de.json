@@ -1004,9 +1004,33 @@
    "Users may confirm source checks",
    "Benutzer dürfen Quellenprüfungen bestätigen"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "Die Instanzeinstellungen wurden gespeichert."
+  "savePill.region": [
+   "Unsaved changes",
+   "Ungespeicherte Änderungen"
+  ],
+  "savePill.one": [
+   "1 change",
+   "1 Änderung"
+  ],
+  "savePill.other": [
+   "{0} changes",
+   "{0} Änderungen"
+  ],
+  "savePill.failed": [
+   "{0} not saved",
+   "{0} nicht gespeichert"
+  ],
+  "savePill.saved": [
+   "Saved",
+   "Gespeichert"
+  ],
+  "savePill.discard": [
+   "Discard",
+   "Verwerfen"
+  ],
+  "savePill.leave": [
+   "Leave this page without saving your changes?",
+   "Seite verlassen, ohne die Änderungen zu speichern?"
   ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
@@ -1035,10 +1059,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Profileinstellungen"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Änderungen speichern"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1603,6 @@
   "admin.instance.media": [
    "Media types",
    "Medientypen"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Verfügbarkeit"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2739,6 @@
   "admin.instance.modules": [
    "Modules",
    "Module"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Modulstatus"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",

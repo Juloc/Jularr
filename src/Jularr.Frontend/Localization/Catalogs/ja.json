@@ -1004,10 +1004,6 @@
    "Users may confirm source checks",
    "ユーザーがソース確認を承認できる"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "インスタンス設定を保存しました。"
-  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "登録済みの連携を有効または無効にします。接続とログインの機能には、引き続きホスト側の既存の設定が必要です。"
@@ -1035,10 +1031,6 @@
   "profile.settings.title": [
    "Profile settings",
    "プロフィール設定"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "変更を保存"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1575,6 @@
   "admin.instance.media": [
    "Media types",
    "メディアタイプ"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "利用可否"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2711,6 @@
   "admin.instance.modules": [
    "Modules",
    "モジュール"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "モジュールの状態"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",

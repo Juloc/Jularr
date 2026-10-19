@@ -36,8 +36,10 @@ document.addEventListener("htmx:after:swap", event => {
     if (!isPageSwap(contextOf(event)) || !content) return;
     document.body.classList.add("app-page");
     hideUntilStyled(content);
-    window.scrollTo(0, 0);
-    content.querySelector<HTMLElement>("#main-content")?.focus({ preventScroll: true });
+    if (!refreshing) {
+        window.scrollTo(0, 0);
+        content.querySelector<HTMLElement>("#main-content")?.focus({ preventScroll: true });
+    }
     pageChanged();
 });
 
@@ -86,6 +88,20 @@ export function inserted(element: Element): void {
 export async function visit(address: string): Promise<void> {
     await htmx.ajax("GET", address, { target: "#" + Content, select: "#" + Content, swap: "outerHTML", push: "true" });
 }
+
+// The current page again from the server, in place and at the same position (after saving or discarding).
+let refreshing = false;
+
+export async function refresh(): Promise<void> {
+    refreshing = true;
+    try {
+        await htmx.ajax("GET", location.pathname + location.search, { target: "#" + Content, select: "#" + Content, swap: "outerHTML" });
+    } finally {
+        refreshing = false;
+    }
+}
+
+export const isRefreshing = () => refreshing;
 
 export function pushAddress(address: string): void {
     history.pushState({ htmx: true }, "", address);

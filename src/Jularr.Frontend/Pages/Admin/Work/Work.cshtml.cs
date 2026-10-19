@@ -48,7 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     form.Text(item => item.CanonicalTitle, "media.title");
                     form.Number(item => item.ReleaseYear, "media.year");
                     if (subtypes.Length > 1) form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
-                    form.Submit("common.save");
+                    form.Save();
                 }, "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version, work.ReleaseYear, work.MediaSubtypeId), _input is null ? null : FormError));
                 // The series and place an administrator chooses; an empty name returns them to the providers.
@@ -61,7 +61,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                             section.Text(item => item.FranchiseName, "admin.work.seriesName");
                             section.Number(item => item.FranchisePosition, "admin.work.seriesPosition");
                         });
-                        form.Submit("common.save");
+                        form.Save();
                     }, Home + "?handler=Franchise", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         _franchiseInput ?? new UpdateWorkFranchiseDataV1(work.FranchiseName, work.FranchisePosition), _franchiseInput is null ? null : FormError));
                 }

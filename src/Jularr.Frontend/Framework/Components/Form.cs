@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Framework
         private readonly string _prefix;
         private readonly string? _antiforgeryToken;
         private readonly bool _local;
+        private bool _saves;
 
         public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null, bool local = false)
             : this(define, action, antiforgeryToken, data, error, "", true, local)
@@ -339,6 +340,15 @@ namespace Jularr.Frontend.Framework
             return Submit(button);
         }
 
+        // The page's save pill saves this form together with every other changed one; without script the button saves it alone.
+        public Form<TData> Save()
+        {
+            _saves = true;
+            var button = new Button(new Text("common.save")).Primary();
+            button.Attribute("data-form-save", "");
+            return Submit(button);
+        }
+
         public Form<TData> Submit(Button button)
         {
             if (_local) throw new InvalidOperationException("Local fields cannot declare a submit action.");
@@ -368,6 +378,7 @@ namespace Jularr.Frontend.Framework
             {
                 form.Attribute("action", _action).Attribute("method", "post");
                 if (_isUpload) form.Attribute("enctype", "multipart/form-data");
+                if (_saves) form.Attribute("data-save", "");
             }
 
             form.WriteTo(writer, encoder, texts);

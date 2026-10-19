@@ -34,6 +34,10 @@
     {
         @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
     }
+    @if (showShell)
+    {
+        @Assets.Scripts("Framework/Components/SavePill.entry.ts")
+    }
     @if (!showShell)
     {
         @Assets.Scripts(pageAssets)
@@ -50,7 +54,7 @@
             @Assets.Styles(pageAssets)
             <div class="app-layout">
                 <partial name="_AppShell" />
-                <main class="app-main" id="main-content" tabindex="-1">@RenderBody()</main>
+                <main class="app-main" id="main-content" tabindex="-1">@RenderBody()@(new UiHtml(new SavePill(), T))</main>
             </div>
             @Assets.Scripts(pageAssets)
         </div>
