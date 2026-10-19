@@ -1004,6 +1004,78 @@
    "Users may confirm source checks",
    "Benutzer dürfen Quellenprüfungen bestätigen"
   ],
+  "admin.catalog.title": [
+   "Discover catalog",
+   "Discover-Katalog"
+  ],
+  "admin.catalog.off": [
+   "Full local discovery is off; Discover keeps only what it loaded.",
+   "Full local discovery ist aus; Discover behält nur, was es geladen hat."
+  ],
+  "admin.catalog.tmdb_movie": [
+   "TMDB films",
+   "TMDB-Filme"
+  ],
+  "admin.catalog.tmdb_tv": [
+   "TMDB series",
+   "TMDB-Serien"
+  ],
+  "admin.catalog.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "admin.catalog.entries": [
+   "Titles",
+   "Titel"
+  ],
+  "admin.catalog.pending": [
+   "Still to read",
+   "Noch zu lesen"
+  ],
+  "admin.catalog.listedOn": [
+   "Last complete",
+   "Zuletzt vollständig"
+  ],
+  "admin.catalog.enabled": [
+   "Keep whole",
+   "Ganz lokal halten"
+  ],
+  "admin.catalog.requestsPerMinute": [
+   "Requests per minute",
+   "Anfragen pro Minute"
+  ],
+  "admin.catalog.pausesWhileUsed": [
+   "Pause while Jularr is used",
+   "Pausieren, solange Jularr benutzt wird"
+  ],
+  "admin.catalog.startsAt": [
+   "From",
+   "Von"
+  ],
+  "admin.catalog.endsAt": [
+   "To",
+   "Bis"
+  ],
+  "admin.catalog.addWindow": [
+   "Add window",
+   "Fenster hinzufügen"
+  ],
+  "admin.catalog.removeWindow": [
+   "Remove last window",
+   "Letztes Fenster entfernen"
+  ],
+  "form.time.hour": [
+   "Hour",
+   "Stunde"
+  ],
+  "form.time.minute": [
+   "Minute",
+   "Minute"
+  ],
+  "form.time.done": [
+   "Done",
+   "Fertig"
+  ],
   "savePill.region": [
    "Unsaved changes",
    "Ungespeicherte Änderungen"

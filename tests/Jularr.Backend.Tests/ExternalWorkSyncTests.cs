@@ -2,7 +2,11 @@ using System.IO.Compression;
 using System.Net;
 using System.Security;
 using System.Text;
+using System.Net.Http.Json;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
@@ -63,6 +67,47 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(tmdb.Requests.Any(request => request.AbsolutePath == "/3/movie/changes" && request.Query.Contains("start_date=2026-10-19", StringComparison.Ordinal)));
             Assert.AreEqual("Matrix", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '603'"));
             Assert.AreEqual("Stale", await host.ScalarAsync("SELECT \"Title\" FROM \"ExternalWorks\" WHERE \"Value\" = '604'"));
+        }
+
+        [TestMethod]
+        public void Windows_AndUse_DecideWhetherACatalogSyncs()
+        {
+            var sync = new ExternalWorkSyncData("anilist", true, 20, true, null, null, null);
+            IReadOnlyList<ExternalWorkSyncWindowData> night = [new("anilist", new TimeOnly(22, 0), new TimeOnly(6, 0)), new("tmdb_movie", new TimeOnly(12, 0), new TimeOnly(13, 0))];
+            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, [], new TimeOnly(15, 0), false), "Without windows a catalog syncs any time.");
+            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), false));
+            Assert.IsTrue(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(5, 59), false), "A window past midnight ends the next day.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(12, 30), false), "Another catalog's window does not count.");
+            Assert.IsFalse(ExternalWorkLogic.MaySync(sync, night, new TimeOnly(23, 30), true), "It waits while Jularr is used.");
+            Assert.IsTrue(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", true, 20, false, null, null, null), night, new TimeOnly(23, 30), true));
+            Assert.IsFalse(ExternalWorkLogic.MaySync(new ExternalWorkSyncData("anilist", false, 20, false, null, null, null), [], new TimeOnly(23, 30), false));
+        }
+
+        [TestMethod]
+        public async Task Settings_SaveChoicesAndWindows_WithTheirVersion()
+        {
+            await using var host = await Host.CreateAsync(library: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/syncs");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var aniList = (await read.Content.ReadFromJsonAsync<BaseDataList<ExternalWorkSyncV1>>())!.Single(sync => sync.Namespace == "anilist");
+            Assert.AreEqual(20, aniList.RequestsPerMinute);
+            Assert.IsTrue(aniList.PausesWhileUsed);
+
+            var windows = new BaseDataList<ExternalWorkSyncWindowV1>([new(new TimeOnly(2, 0), new TimeOnly(6, 0)), new(new TimeOnly(22, 30), new TimeOnly(1, 0))]);
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 15, true, aniList.Version, windows));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual("02:00:00-06:00:00,22:30:00-01:00:00", await host.ScalarAsync("SELECT string_agg(\"StartsAt\"::text || '-' || \"EndsAt\"::text, ',' ORDER BY \"StartsAt\") FROM \"ExternalWorkSyncWindows\""));
+
+            // An old version and a window without length are refused; the saved windows stay.
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist", new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
+            using var empty = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/syncs/anilist",
+                new UpdateExternalWorkSyncDataV1(true, 10, true, aniList.Version + 1, new([new(new TimeOnly(3, 0), new TimeOnly(3, 0))])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ExternalWorkSyncWindows\""));
+            Assert.AreEqual(15, await host.ScalarAsync("SELECT \"RequestsPerMinute\"::integer FROM \"ExternalWorkSyncs\" WHERE \"Namespace\" = 'anilist'"));
         }
 
         private static async Task RunAsync(Host host)

@@ -89,6 +89,18 @@ namespace Jularr.Frontend.Framework
             Add(field, FieldControl.Password, labelKey, autocomplete, help);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
 
+        // A wall-clock time: hour and minute fields on a desktop, a wheel on Android, the system's own picker on iOS (TimePicker.entry.ts).
+        public Form<TData> Time<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
+        {
+            var field = Declare(selector, FieldControl.Text, labelKey, help);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "time").Attribute("data-time-picker", "")
+                .TextAttribute("data-time-hour", "form.time.hour").TextAttribute("data-time-minute", "form.time.minute").TextAttribute("data-time-done", "form.time.done");
+            if (Value(field) is { } value) input.Attribute("value", value);
+            Configure(field, input);
+            AddField(field, input);
+            return this;
+        }
+
         public Form<TData> Color(Expression<Func<TData, string>> selector, string labelKey)
         {
             var field = Declare(selector, FieldControl.Text, labelKey);
@@ -429,6 +441,7 @@ namespace Jularr.Frontend.Framework
             {
                 DateTime timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
                 DateTimeOffset timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+                TimeOnly time => time.ToString("HH:mm", CultureInfo.InvariantCulture),
                 string[] list => string.Join(", ", list),
                 int[] list => string.Join(", ", list.Select(item => item.ToString(CultureInfo.InvariantCulture))),
                 Enum catalogValue => Convert.ToByte(catalogValue).ToString(CultureInfo.InvariantCulture),

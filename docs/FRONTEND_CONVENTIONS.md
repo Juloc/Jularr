@@ -102,6 +102,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   error while the others save. Discard shows the saved page again in place without asking; leaving with changes asks.
   Actions (test, search, delete) stay their own buttons. Without script each form keeps its visible save button.
   Pages with many small forms of one kind label each form with its item instead of repeating a field label.
+  A form shown again as a draft (a row added, a choice applied) counts as unsaved in the pill until saved or discarded.
+- Times use `Form.Time` ([TimePicker](../src/Jularr.Frontend/Framework/Components/TimePicker.ts), from the UiDesigner study): hour and
+  minute fields on a desktop, a wheel sheet on Android, the system's own picker on iOS (owner's decision 19 Oct); the native
+  time field stays the submitted value and the picker without script.
 - `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
 - `Form.Select` may declare a local draft refresh action and a fallback button label. `Form.entry.ts` replaces only the server-rendered form on a field change; the action preserves the draft and performs no mutation. The native button remains usable without JavaScript. Pages opt into the component asset.
 - Form transport values are invariant, independently of the display language.

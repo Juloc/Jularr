@@ -5,6 +5,9 @@ import { inserted, isRefreshing, refresh, visit } from "../../Modules/Navigation
 
 type Values = Map<string, string[]>;
 const loaded = new WeakMap<HTMLFormElement, Values>();
+// A form shown again as a draft (a row added, a choice applied) is unsaved even where it equals what it shows.
+const drafts = new WeakSet<HTMLFormElement>();
+let draftIndex: number | undefined;
 let changes = 0;
 let saving = false;
 
@@ -23,11 +26,15 @@ function changedNames(form: HTMLFormElement): string[] {
     const before = loaded.get(form);
     if (!before) return [];
     const now = valuesOf(form);
-    return [...new Set([...before.keys(), ...now.keys()])].filter(name => (before.get(name) ?? []).join("\u0000") !== (now.get(name) ?? []).join("\u0000"));
+    const names = [...new Set([...before.keys(), ...now.keys()])].filter(name => (before.get(name) ?? []).join("\u0000") !== (now.get(name) ?? []).join("\u0000"));
+    return names.length === 0 && drafts.has(form) ? [""] : names;
 }
 
 export function initializeSavePill(): void {
     for (const form of forms()) loaded.set(form, valuesOf(form));
+    const draft = draftIndex === undefined ? undefined : forms()[draftIndex];
+    if (draft) drafts.add(draft);
+    draftIndex = undefined;
     document.documentElement.toggleAttribute("data-save-ready", true);
     changes = 0;
     update();
@@ -150,12 +157,25 @@ export function installSavePill(): void {
     document.addEventListener("change", event => { if ((event.target as Element).closest?.("form[data-save]")) update(); });
     // Enter in a field and the form's own save button save through the pill; other submit buttons keep their action.
     document.addEventListener("submit", event => {
+        const form = event.target as HTMLFormElement;
         const submitter = (event as SubmitEvent).submitter;
-        if (!(event.target as Element).matches("form[data-save]") || !pill() || submitter && !submitter.matches("[data-form-save]")) return;
+        if (!form.matches("form[data-save]") || !pill()) return;
+        if (submitter && !submitter.matches("[data-form-save]")) {
+            draftIndex = forms().indexOf(form);
+            return;
+        }
         event.preventDefault();
         event.stopPropagation();
         void save();
     }, true);
+    // A form a script showed again as a draft.
+    document.addEventListener("jularr:draft", event => {
+        const form = event.target as HTMLFormElement;
+        if (!form.matches?.("form[data-save]")) return;
+        if (!loaded.has(form)) loaded.set(form, valuesOf(form));
+        drafts.add(form);
+        update();
+    });
     document.addEventListener("click", event => {
         const target = event.target as Element;
         if (target.closest("[data-save-submit]")) void save();

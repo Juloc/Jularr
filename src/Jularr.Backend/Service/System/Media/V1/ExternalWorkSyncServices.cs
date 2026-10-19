@@ -19,11 +19,13 @@ namespace Jularr.Backend.Service.System.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly TimeProvider _time;
+        private readonly UserActivity _activity;
 
-        internal SyncExternalWorksV1(WorkMetadata metadata, TimeProvider time)
+        internal SyncExternalWorksV1(WorkMetadata metadata, TimeProvider time, UserActivity activity)
         {
             _metadata = metadata;
             _time = time;
+            _activity = activity;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -44,28 +46,35 @@ namespace Jularr.Backend.Service.System.Media.V1
                 return new UpdateResult(false);
             }
 
+            var windows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncWindowsAsync(ct), CancellationToken);
+            var isUsed = _activity.IsUsedWithin(ExternalWorkLogic.UseLasts);
             var changed = 0;
             foreach (var mediaType in new[] { MediaType.Movie, MediaType.Series })
             {
                 var list = new ExternalWorkListData(WorkMetadata.Namespace(mediaType), mediaType, null);
-                var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
                 var now = _time.GetUtcNow();
+                var sync = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
+                if (sync is null || !ExternalWorkLogic.MaySync(sync, windows, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, _time.LocalTimeZone).DateTime), isUsed)) continue;
+
                 var today = DateOnly.FromDateTime(now.UtcDateTime);
+                var listedOn = sync.ListedOn;
                 if (ExternalWorkLogic.IsListDue(sync, now) && await ListAsync(mediaType, list, today))
                 {
-                    sync = new ExternalWorkSyncData(list.Namespace, today, sync.ChangesReadAt);
-                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(sync, ct), CancellationToken);
+                    listedOn = today;
+                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(new ExternalWorkSyncProgressData(list.Namespace, listedOn, sync.Cursor, sync.ChangesReadAt), ct),
+                        CancellationToken);
                 }
 
                 if (ExternalWorkLogic.AreChangesDue(sync, now))
                 {
                     // The first pass has every entry still to read; later ones read what changed since.
                     if (sync.ChangesReadAt is { } read) changed += await MarkChangesAsync(connection, mediaType, list, DateOnly.FromDateTime(read), today);
-                    sync = new ExternalWorkSyncData(list.Namespace, sync.ListedOn, now.UtcDateTime);
-                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(sync, ct), CancellationToken);
+                    await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(new ExternalWorkSyncProgressData(list.Namespace, listedOn, sync.Cursor, now.UtcDateTime), ct),
+                        CancellationToken);
                 }
 
-                changed += await DetailAsync(connection, mediaType, list, ExternalWorkLogic.EntriesPerPass / 2);
+                // A pass runs every minute: the catalog's requests a minute are its budget.
+                changed += await DetailAsync(connection, mediaType, list, sync.RequestsPerMinute);
             }
 
             return new UpdateResult(changed > 0);

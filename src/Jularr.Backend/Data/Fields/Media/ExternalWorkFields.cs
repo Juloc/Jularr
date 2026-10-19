@@ -18,5 +18,14 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DateField ListedOn = new() { Required = false };
         public static readonly DateTimeField ChangesReadAt = new() { Required = false };
         public static readonly IntField Limit = new() { Minimum = 1, Maximum = 1000 };
+        public static readonly BoolField IsEnabled = new();
+        public static readonly IntField RequestsPerMinute = new() { Minimum = 1, Maximum = 600 };
+        public static readonly BoolField PausesWhileUsed = new();
+        public static readonly IntField Cursor = new() { Minimum = 1, Required = false };
+        public static readonly LongField Version = new() { Minimum = 1 };
+        public static readonly TimeField StartsAt = new();
+        public static readonly TimeField EndsAt = new();
+        public static readonly LongField Entries = new() { Minimum = 0 };
+        public static readonly LongField Pending = new() { Minimum = 0 };
     }
 }

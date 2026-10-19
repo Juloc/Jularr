@@ -151,7 +151,7 @@ namespace Jularr.Backend.Tests
         public async Task PublicGate_ProfilePermissionAndResource_AreDenied()
         {
             await using var database = new NpgsqlDataSourceBuilder("Host=127.0.0.1;Port=1;Username=unused;Database=unused").Build();
-            var gate = new ServiceGate(new SessionAuthentication(database), new HttpContextAccessor());
+            var gate = new ServiceGate(new SessionAuthentication(database), new HttpContextAccessor(), new UserActivity(TimeProvider.System));
             var caller = await gate.RequireCallerAsync(ServiceArea.Public, default);
             await gate.RequireAccessAsync(caller, ServicePermission.Public, default);
             await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new("profile.self.read"), default));
