@@ -37,6 +37,46 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Kept", await name.ExecuteScalarAsync());
         }
 
+
+        [TestMethod]
+        public async Task DiscoverySnapshots_FreshInstallCreatesProviderScopedSchema()
+        {
+            var cs = TestPostgres.ResolveConnectionString(nameof(DiscoverySnapshots_FreshInstallCreatesProviderScopedSchema));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            await ExecuteAsync(cs,
+                """
+                INSERT INTO "DiscoverySnapshots" ("Key", "ProviderKey", "Payload", "FetchedAt", "FreshUntil", "RetainUntil")
+                VALUES ('tmdb:trending:de:1', 'tmdb', '[{"id":1}]'::jsonb, now(), now() + interval '1 hour', now() + interval '1 day');
+                """);
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"DiscoverySnapshots\";"));
+            await Assert.ThrowsExactlyAsync<PostgresException>(() => ExecuteAsync(cs,
+                """
+                INSERT INTO "DiscoverySnapshots" ("Key", "ProviderKey", "Payload", "FetchedAt", "FreshUntil", "RetainUntil")
+                VALUES ('invalid', 'tmdb', '{"id":1}'::jsonb, now(), now() + interval '1 hour', now() + interval '1 day');
+                """));
+            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"DiscoverySnapshots\";"));
+        }
+
+        [TestMethod]
+        public async Task DiscoverySnapshots_PreviousVersionUpgradesWithoutLosingAccounts()
+        {
+            var dump = Executables.Resolve(Environment.GetEnvironmentVariable("JULARR_TEST_PG_DUMP"), "pg_dump");
+            if (dump is null) Assert.Inconclusive("PostgreSQL dump tooling is required for this upgrade test.");
+
+            using var backups = new LibraryTests.TemporaryDirectory();
+            var cs = TestPostgres.ResolveConnectionString(nameof(DiscoverySnapshots_PreviousVersionUpgradesWithoutLosingAccounts));
+            await new DatabaseBaseline(cs, migrations: []).StartAsync(CancellationToken.None);
+            await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'Preserved on upgrade';");
+            var tools = Tools(cs, dump, null);
+            await new DatabaseBaseline(cs, new BackupOptions { Path = backups.Path }, tools).StartAsync(CancellationToken.None);
+            Assert.AreEqual("Preserved on upgrade", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM \"DiscoverySnapshots\";"));
+            Assert.AreEqual(1, Directory.GetDirectories(backups.Path).Length);
+        }
+
         [TestMethod]
         public async Task UnversionedDatabase_Startup_PreservesExistingTablesAndData()
         {
@@ -52,12 +92,12 @@ namespace Jularr.Backend.Tests
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(ConcurrentFreshStarts_InstallOneCompleteHistory));
             await Task.WhenAll(new DatabaseBaseline(cs).StartAsync(CancellationToken.None), new DatabaseBaseline(cs).StartAsync(CancellationToken.None));
-            Assert.AreEqual(1L, await ScalarAsync(cs, "SELECT count(*) FROM \"DatabaseSchemaVersions\";"));
-            Assert.AreEqual(DatabaseBaseline.CurrentFingerprint, await ScalarAsync(cs, "SELECT \"Fingerprint\" FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual((long)DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT count(*) FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentFingerprint, await ScalarAsync(cs, "SELECT \"Fingerprint\" FROM \"DatabaseSchemaVersions\" ORDER BY \"Version\" DESC LIMIT 1;"));
         }
 
         [TestMethod]
-        [DataRow("INSERT INTO \"DatabaseSchemaVersions\" (\"Version\", \"Fingerprint\") VALUES (2, repeat('a', 64));")]
+        [DataRow("INSERT INTO \"DatabaseSchemaVersions\" (\"Version\", \"Fingerprint\") VALUES (99, repeat('a', 64));")]
         [DataRow("UPDATE \"DatabaseSchemaVersions\" SET \"Fingerprint\" = repeat('0', 64);")]
         [DataRow("DELETE FROM \"DatabaseSchemaVersions\";")]
         public async Task UnsupportedVersionHistory_StopsWithoutChangingData(string change)
@@ -79,10 +119,10 @@ namespace Jularr.Backend.Tests
             await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'preserved';");
             var tools = Tools(cs, Path.Combine(folder.Path, "missing-pg-dump"), null);
             var next = new DatabaseBaseline(cs, new BackupOptions { Path = folder.Path }, tools,
-                [new DatabaseMigration(2, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
+                [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
             var error = await Assert.ThrowsExactlyAsync<PostgresToolException>(() => next.StartAsync(CancellationToken.None));
             Assert.AreEqual("backup_tool_missing", error.Code);
-            Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'Accounts' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual("preserved", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
             Assert.AreEqual(0, Directory.GetFileSystemEntries(folder.Path).Length);
@@ -96,10 +136,10 @@ namespace Jularr.Backend.Tests
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "INSERT INTO \"Accounts\" (\"Id\", \"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES (41, 'keys@example.test', 'Keys Owner', 1);");
             var options = new BackupOptions { Path = folder.Path, KeyDirectory = Path.Combine(folder.Path, "missing-keys") };
-            var next = new DatabaseBaseline(cs, options, migrations: [new DatabaseMigration(2, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
+            var next = new DatabaseBaseline(cs, options, migrations: [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
             var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => next.StartAsync(CancellationToken.None));
             StringAssert.Contains(error.Message, "key ring");
-            Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'Accounts' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual(0, Directory.GetFileSystemEntries(folder.Path).Length);
         }
@@ -109,11 +149,11 @@ namespace Jularr.Backend.Tests
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(FreshInstall_FailedMigration_RollsBackTheEntireInstallation));
             var broken = new DatabaseBaseline(cs, migrations:
-                [new DatabaseMigration(2, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), new DatabaseMigration(3, "SELECT 1 / 0;")]);
+                [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), new DatabaseMigration(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             await Assert.ThrowsExactlyAsync<PostgresException>(() => broken.StartAsync(CancellationToken.None));
             Assert.AreEqual(0, (await TablesAsync(cs)).Length);
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
-            Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
         }
 
         [TestMethod]
@@ -168,10 +208,10 @@ namespace Jularr.Backend.Tests
             var before = await ReleaseDataAsync(cs);
             var options = new BackupOptions { Path = backups.Path, KeyDirectory = keys.Path, Passphrase = "isolated-upgrade-test" };
             var tools = Tools(cs, dump, restore);
-            DatabaseMigration[] migrations = [new(2, "ALTER TABLE \"InstanceSettings\" ADD COLUMN \"UpgradeProbe\" text NOT NULL DEFAULT 'N+1';")];
-            var broken = new DatabaseBaseline(cs, options, tools, [migrations[0], new DatabaseMigration(3, "SELECT 1 / 0;")]);
+            DatabaseMigration[] migrations = [.. DatabaseBaseline.Migrations, new(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"InstanceSettings\" ADD COLUMN \"UpgradeProbe\" text NOT NULL DEFAULT 'N+1';")];
+            var broken = new DatabaseBaseline(cs, options, tools, [.. migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
             await Assert.ThrowsExactlyAsync<PostgresException>(() => broken.StartAsync(CancellationToken.None));
-            Assert.AreEqual(1, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'InstanceSettings' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual(before, await ReleaseDataAsync(cs));
             var next = new DatabaseBaseline(cs, options, tools, migrations);
@@ -180,17 +220,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Release N", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
             Assert.AreEqual("N+1", await ScalarAsync(cs, "SELECT \"UpgradeProbe\" FROM \"InstanceSettings\";"));
             Assert.AreEqual(before, await ReleaseDataAsync(cs));
-            Assert.AreEqual(2L, await ScalarAsync(cs, "SELECT count(*) FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual((long)DatabaseBaseline.CurrentVersion + 1, await ScalarAsync(cs, "SELECT count(*) FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(2, Directory.GetDirectories(backups.Path).Length);
             var backup = Directory.GetDirectories(backups.Path).Order(StringComparer.Ordinal).First();
-            StringAssert.Contains(await File.ReadAllTextAsync(Path.Combine(backup, "backup.json")), "\"SchemaVersion\":1");
+            StringAssert.Contains(await File.ReadAllTextAsync(Path.Combine(backup, "backup.json")), "\"SchemaVersion\":" + DatabaseBaseline.CurrentVersion);
             Assert.IsTrue(File.Exists(Path.Combine(backup, BackupFiles.SealedKeysName)));
 
             // Restore while the application is stopped, then use the same upgrade owner.
             var restored = TestPostgres.ResolveConnectionString(nameof(ReleaseUpgrade_BackupRestoreRetryAndConcurrentStarts_PreserveDataAndKeys) + "-restored");
             var restoreTools = Tools(restored, dump, restore);
             await restoreTools.RestoreAsync(Path.Combine(backup, BackupFiles.DumpName), CancellationToken.None);
-            Assert.AreEqual(1, await ScalarAsync(restored, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
+            Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(restored, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             using var recoveredKeys = new LibraryTests.TemporaryDirectory();
             BackupFiles.UnsealKeys(Path.Combine(backup, BackupFiles.SealedKeysName), recoveredKeys.Path, options.Passphrase);
             foreach (var key in Directory.EnumerateFiles(keys.Path, "*.xml"))
