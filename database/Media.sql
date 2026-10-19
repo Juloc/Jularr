@@ -580,6 +580,8 @@ CREATE TABLE "ExternalWorks" (
     "Popularity" real NULL CHECK ("Popularity" >= 0),
     -- On a scale of ten, whatever scale the catalog uses.
     "Rating" numeric(4, 2) NULL CHECK ("Rating" BETWEEN 0 AND 10),
+    -- How many people rated or listed it; a top list trusts only ratings with enough of them.
+    "Votes" integer NULL CHECK ("Votes" >= 0),
     -- The place in the catalog's current trending list of its type; NULL when it is not trending.
     "TrendingRank" integer NULL CHECK ("TrendingRank" > 0),
     "IsAdult" boolean NOT NULL DEFAULT FALSE,
@@ -590,9 +592,11 @@ CREATE TABLE "ExternalWorks" (
     UNIQUE ("Namespace", "Value"),
     FOREIGN KEY ("MediaSubtypeId", "MediaTypeId") REFERENCES "MediaSubtypeParents" ("MediaSubtypeId", "MediaTypeId")
 );
-CREATE INDEX "IX_ExternalWorks_Trending" ON "ExternalWorks" ("MediaTypeId", "MediaSubtypeId", "TrendingRank") WHERE "TrendingRank" IS NOT NULL;
-CREATE INDEX "IX_ExternalWorks_Popularity" ON "ExternalWorks" ("MediaTypeId", "MediaSubtypeId", "Popularity" DESC NULLS LAST);
-CREATE INDEX "IX_ExternalWorks_Released" ON "ExternalWorks" ("MediaTypeId", "MediaSubtypeId", "ReleasedOn" DESC NULLS LAST);
+-- Discover reads each list of a catalog's type in its own order; no subtype counts as 0.
+CREATE INDEX "IX_ExternalWorks_Trending" ON "ExternalWorks" ("Namespace", "MediaTypeId", coalesce("MediaSubtypeId", 0), "TrendingRank") WHERE "TrendingRank" IS NOT NULL;
+CREATE INDEX "IX_ExternalWorks_Popularity" ON "ExternalWorks" ("Namespace", "MediaTypeId", coalesce("MediaSubtypeId", 0), "Popularity" DESC NULLS LAST);
+CREATE INDEX "IX_ExternalWorks_Rating" ON "ExternalWorks" ("Namespace", "MediaTypeId", coalesce("MediaSubtypeId", 0), "Rating" DESC NULLS LAST);
+CREATE INDEX "IX_ExternalWorks_Released" ON "ExternalWorks" ("Namespace", "MediaTypeId", coalesce("MediaSubtypeId", 0), "ReleasedOn" DESC NULLS LAST);
 CREATE INDEX "IX_ExternalWorks_Imdb" ON "ExternalWorks" ("ImdbId") WHERE "ImdbId" IS NOT NULL;
 CREATE INDEX "IX_ExternalWorks_Search" ON "ExternalWorks" USING gin ("SearchText");
 -- A full sync reads entries in the order users are most likely to look for them.
@@ -610,6 +614,8 @@ CREATE TABLE "ExternalWorkSyncs" (
     -- Where an unfinished pass over a catalog without a daily id list goes on.
     "Cursor" integer NULL CHECK ("Cursor" > 0),
     "ChangesReadAt" timestamptz NULL,
+    -- When every title of the catalog was first read; from then on Discover answers from it.
+    "CompletedAt" timestamptz NULL,
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now()
 );

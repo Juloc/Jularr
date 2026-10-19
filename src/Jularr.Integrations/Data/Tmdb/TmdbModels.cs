@@ -213,7 +213,7 @@ namespace Jularr.Integrations.Data.Tmdb
     internal sealed class TmdbCatalogEntry
     {
         public TmdbCatalogEntry(int id, string title, string? originalTitle, DateOnly? releasedOn, string? overview, string? posterPath, string? backdropPath, double? popularity,
-            double? voteAverage, string? imdbId, bool isAdult)
+            double? voteAverage, int? voteCount, string? imdbId, bool isAdult)
         {
             Id = id;
             Title = title;
@@ -224,6 +224,7 @@ namespace Jularr.Integrations.Data.Tmdb
             BackdropPath = backdropPath;
             Popularity = popularity;
             VoteAverage = voteAverage;
+            VoteCount = voteCount;
             ImdbId = imdbId;
             IsAdult = isAdult;
         }
@@ -238,6 +239,7 @@ namespace Jularr.Integrations.Data.Tmdb
         public double? Popularity { get; }
         // TMDB's average vote on a scale of ten.
         public double? VoteAverage { get; }
+        public int? VoteCount { get; }
         public string? ImdbId { get; }
         public bool IsAdult { get; }
     }
