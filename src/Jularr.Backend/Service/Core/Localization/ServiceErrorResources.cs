@@ -137,7 +137,14 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.invalid_placeholders", "The translation must preserve its placeholders."),
             new("errors.validation.unknown_id", "The referenced item is unavailable."),
             new("errors.validation.duplicate_id", "The item was supplied more than once."),
-            new("errors.validation.unknown_or_duplicate_id", "The item is unavailable or was supplied more than once.")
+            new("errors.validation.unknown_or_duplicate_id", "The item is unavailable or was supplied more than once."),
+            new("errors.validation.import_too_large", "The list is larger than 1 MiB."),
+            new("errors.validation.import_invalid_json", "The list is not valid JSON."),
+            new("errors.validation.import_invalid_structure", "The list needs an object with the keys version and items."),
+            new("errors.validation.import_unknown_key", "The list may only have the keys version and items, each once."),
+            new("errors.validation.import_unsupported_version", "The list needs \"version\": 1."),
+            new("errors.validation.import_empty", "The list has no items."),
+            new("errors.validation.import_too_many_items", "The list has more than 2000 items.")
         ];
 
         public static bool IsDefined(string key) => Keys.Contains(key);

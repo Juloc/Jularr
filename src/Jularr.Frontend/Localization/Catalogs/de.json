@@ -7963,6 +7963,302 @@
   "admin.browser.sourceFailed": [
    "The source does not answer:",
    "Die Quelle antwortet nicht:"
+  ],
+  "admin.import.title": [
+   "Import",
+   "Import"
+  ],
+  "import.file": [
+   "JSON file",
+   "JSON-Datei"
+  ],
+  "import.json": [
+   "Or paste the list",
+   "Oder Liste einfügen"
+  ],
+  "import.action": [
+   "Add as",
+   "Hinzufügen als"
+  ],
+  "import.action.AddOnly": [
+   "Add only",
+   "Nur hinzufügen"
+  ],
+  "import.action.Monitor": [
+   "Monitor",
+   "Überwachen"
+  ],
+  "import.action.MonitorAndSearch": [
+   "Monitor + search",
+   "Überwachen + suchen"
+  ],
+  "import.preview": [
+   "Preview",
+   "Vorschau"
+  ],
+  "import.refresh": [
+   "Update preview",
+   "Vorschau aktualisieren"
+  ],
+  "import.searchMore": [
+   "Search more",
+   "Weitersuchen"
+  ],
+  "import.apply": [
+   "Import selected",
+   "Auswahl importieren"
+  ],
+  "import.example": [
+   "Example file",
+   "Beispieldatei"
+  ],
+  "import.restart": [
+   "Start over",
+   "Neu beginnen"
+  ],
+  "import.again": [
+   "New import",
+   "Neuer Import"
+  ],
+  "import.continue": [
+   "Continue with the rest",
+   "Mit dem Rest fortfahren"
+  ],
+  "import.defaults": [
+   "Defaults by type",
+   "Standard je Art"
+  ],
+  "import.profile": [
+   "Quality profile",
+   "Qualitätsprofil"
+  ],
+  "import.library": [
+   "Library",
+   "Bibliothek"
+  ],
+  "import.defaultProfile": [
+   "Default profile",
+   "Standardprofil"
+  ],
+  "import.defaultLibrary": [
+   "Default library",
+   "Standardbibliothek"
+  ],
+  "import.defaultAction": [
+   "Default: {0}",
+   "Standard: {0}"
+  ],
+  "import.col.include": [
+   "Import",
+   "Import"
+  ],
+  "import.col.match": [
+   "Match",
+   "Treffer"
+  ],
+  "import.col.options": [
+   "Action",
+   "Aktion"
+  ],
+  "import.row.include": [
+   "Import this title",
+   "Diesen Titel importieren"
+  ],
+  "import.search": [
+   "Search by title",
+   "Nach Titel suchen"
+  ],
+  "import.search.go": [
+   "Search",
+   "Suchen"
+  ],
+  "import.choose": [
+   "Choose a match",
+   "Treffer wählen"
+  ],
+  "import.unsearched": [
+   "not searched yet",
+   "noch nicht gesucht"
+  ],
+  "import.searches": [
+   "Searching",
+   "Suche läuft"
+  ],
+  "import.duplicateOf": [
+   "Same as row {0}",
+   "Wie Zeile {0}"
+  ],
+  "import.intent.Tracked": [
+   "Already monitored",
+   "Bereits überwacht"
+  ],
+  "import.status.New": [
+   "New",
+   "Neu"
+  ],
+  "import.status.InLibrary": [
+   "In library",
+   "In Bibliothek"
+  ],
+  "import.status.Duplicate": [
+   "Duplicate",
+   "Doppelt"
+  ],
+  "import.status.Open": [
+   "Open",
+   "Offen"
+  ],
+  "import.status.Invalid": [
+   "Invalid",
+   "Ungültig"
+  ],
+  "import.problem.not_object": [
+   "Not an object",
+   "Kein Objekt"
+  ],
+  "import.problem.unknown_key": [
+   "Unknown key",
+   "Unbekannter Schlüssel"
+  ],
+  "import.problem.unknown_id_key": [
+   "Unknown id name",
+   "Unbekannter ID-Name"
+  ],
+  "import.problem.duplicate_key": [
+   "Key given twice",
+   "Schlüssel doppelt"
+  ],
+  "import.problem.unknown_type": [
+   "Unknown type",
+   "Unbekannte Art"
+  ],
+  "import.problem.missing_type": [
+   "Type missing",
+   "Art fehlt"
+  ],
+  "import.problem.invalid_ids": [
+   "ids is not an object",
+   "ids ist kein Objekt"
+  ],
+  "import.problem.invalid_id": [
+   "Invalid id",
+   "Ungültige ID"
+  ],
+  "import.problem.id_not_for_type": [
+   "Id does not fit the type",
+   "ID passt nicht zur Art"
+  ],
+  "import.problem.invalid_year": [
+   "Year not in 1800 to 2200",
+   "Jahr nicht zwischen 1800 und 2200"
+  ],
+  "import.problem.invalid_text": [
+   "Invalid text",
+   "Ungültiger Text"
+  ],
+  "import.problem.too_long": [
+   "Text too long",
+   "Text zu lang"
+  ],
+  "import.problem.no_identity": [
+   "Neither id nor title",
+   "Weder ID noch Titel"
+  ],
+  "import.problem.ids_conflict": [
+   "Ids name different titles",
+   "IDs nennen verschiedene Titel"
+  ],
+  "import.problem.type_mismatch": [
+   "The library has another type",
+   "Die Bibliothek führt eine andere Art"
+  ],
+  "import.problem.excluded": [
+   "Deleted with an exclusion",
+   "Mit Ausschluss gelöscht"
+  ],
+  "import.problem.no_match": [
+   "No entry for these ids",
+   "Kein Eintrag für diese IDs"
+  ],
+  "import.outcome.Added": [
+   "Added",
+   "Hinzugefügt"
+  ],
+  "import.outcome.AddedAndMonitored": [
+   "Added, monitored",
+   "Hinzugefügt, überwacht"
+  ],
+  "import.outcome.Monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "import.outcome.Unchanged": [
+   "Unchanged",
+   "Unverändert"
+  ],
+  "import.outcome.Skipped": [
+   "Skipped",
+   "Übersprungen"
+  ],
+  "import.outcome.NotFound": [
+   "Not found",
+   "Nicht gefunden"
+  ],
+  "import.outcome.Unavailable": [
+   "Provider unavailable",
+   "Anbieter nicht erreichbar"
+  ],
+  "import.outcome.Excluded": [
+   "Excluded",
+   "Ausgeschlossen"
+  ],
+  "import.outcome.Deferred": [
+   "Waiting for the next run",
+   "Wartet auf den nächsten Lauf"
+  ],
+  "import.outcome.Failed": [
+   "Failed",
+   "Fehlgeschlagen"
+  ],
+  "admin.works.source.isbn": [
+   "ISBN",
+   "ISBN"
+  ],
+  "admin.works.source.imdb": [
+   "IMDb",
+   "IMDb"
+  ],
+  "admin.works.source.tvdb": [
+   "TVDB",
+   "TVDB"
+  ],
+  "errors.validation.import_too_large": [
+   "The list is larger than 1 MiB.",
+   "Die Liste ist größer als 1 MiB."
+  ],
+  "errors.validation.import_invalid_json": [
+   "The list is not valid JSON.",
+   "Die Liste ist kein gültiges JSON."
+  ],
+  "errors.validation.import_invalid_structure": [
+   "The list needs an object with the keys version and items.",
+   "Die Liste braucht ein Objekt mit den Schlüsseln version und items."
+  ],
+  "errors.validation.import_unknown_key": [
+   "The list may only have the keys version and items, each once.",
+   "Die Liste darf nur die Schlüssel version und items haben, je einmal."
+  ],
+  "errors.validation.import_unsupported_version": [
+   "The list needs \"version\": 1.",
+   "Die Liste braucht \"version\": 1."
+  ],
+  "errors.validation.import_empty": [
+   "The list has no items.",
+   "Die Liste hat keine Einträge."
+  ],
+  "errors.validation.import_too_many_items": [
+   "The list has more than 2000 items.",
+   "Die Liste hat mehr als 2000 Einträge."
   ]
  }
 }

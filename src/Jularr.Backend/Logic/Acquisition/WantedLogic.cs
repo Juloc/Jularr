@@ -50,9 +50,9 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        public static async Task EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
+        // A target for a title that has none; one that exists stays as it is. Without the data asking for monitoring, a new target starts paused and the Owner unpauses it later.
+        public static async Task<bool> EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
         {
-            // Inventory and monitoring do not transfer automatic acquisition. The Owner explicitly unpauses a new takeover target later.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -66,7 +66,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     work."Id",
                     profile."Id",
                     root."Id",
-                    TRUE
+                    @IsPaused
                 FROM
                     "Works" AS work
                     LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = @AcquisitionProfileId
@@ -79,7 +79,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 ON CONFLICT ("WorkId", "GamePlatformId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
 
         public static async Task<bool> UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
