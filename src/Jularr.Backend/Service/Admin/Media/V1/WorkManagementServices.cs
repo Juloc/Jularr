@@ -125,7 +125,32 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                             OR (unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" > current_date) THEN 4
                         WHEN unit."IsMonitored" THEN 2
                         ELSE 5
-                    END AS "WorkUnitStatusId"
+                    END AS "WorkUnitStatusId",
+                    CASE WHEN unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 THEN (
+                        SELECT
+                            count(*)::integer
+                        FROM
+                            "WorkUnits" AS earlier
+                            JOIN "WorkUnits" AS season ON season."Id" = earlier."ParentWorkUnitId"
+                        WHERE
+                            earlier."WorkId" = unit."WorkId"
+                            AND earlier."WorkUnitTypeId" = 2
+                            AND season."Number" > 0
+                            AND (season."Number", earlier."Number") <= (parent."Number", unit."Number")
+                    ) END AS "AbsoluteNumber",
+                    CASE WHEN unit."WorkUnitTypeId" = 2 THEN (
+                        SELECT
+                            unit."Number" - entry."EpisodeOffset"
+                        FROM
+                            "WorkUnitExternalIdentities" AS entry
+                        WHERE
+                            entry."WorkUnitId" = unit."ParentWorkUnitId"
+                            AND entry."Namespace" = 'anilist'
+                            AND entry."EpisodeOffset" < unit."Number"
+                        ORDER BY
+                            entry."EpisodeOffset" DESC
+                        LIMIT 1
+                    ) END AS "AniListNumber"
                 FROM
                     "WorkUnits" AS unit
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
@@ -244,12 +269,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             // Figures: an episode, or a film as a whole, wants an upgrade while none of its files meets the cutoff and one is below it
             var episodes = units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).ToArray();
+            var leaves = units.Where(unit => unit.WorkUnitTypeId is WorkUnitType.Episode or WorkUnitType.Volume).ToArray();
             var present = files.Where(file => !file.IsMissing).ToArray();
             bool WantsUpgrade(IEnumerable<WorkManagementFileV1> own) => own.Any(file => file.FileQualityGradeId == FileQualityGrade.Upgrade) && !own.Any(file => file.FileQualityGradeId == FileQualityGrade.Met);
-            var upgrades = episodes.Length > 0 ? episodes.Count(unit => WantsUpgrade(present.Where(file => file.WorkUnitIds.Contains(unit.Id)))) : WantsUpgrade(present) ? 1 : 0;
+            var upgrades = leaves.Length > 0 ? leaves.Count(unit => WantsUpgrade(present.Where(file => file.WorkUnitIds.Contains(unit.Id)))) : WantsUpgrade(present) ? 1 : 0;
             return new WorkManagementV1(hero.Id, hero.WantedItemId, hero.MediaTypeId, hero.MediaSubtypeId, hero.CanonicalTitle, hero.ReleaseYear, hero.RuntimeMinutes, hero.ReleasedOn, hero.Overview, hero.Genres,
-                hero.Studio, hero.PosterUrl, hero.BackdropUrl, present.Sum(file => file.SizeBytes), episodes.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Missing), upgrades,
-                episodes.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Unaired), units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number > 0), episodes.Length,
+                hero.Studio, hero.PosterUrl, hero.BackdropUrl, present.Sum(file => file.SizeBytes), leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Missing), upgrades,
+                leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Unaired), units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number > 0), episodes.Length,
                 new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files));
         }
     }

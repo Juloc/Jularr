@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public int HistoryPage { get; set; } = 1;
 
         // Films and series have the management page; every other type keeps its metadata page until its own layout is built.
-        private bool Managed => _work is { MediaTypeId: MediaType.Movie or MediaType.Series };
+        private bool Managed => _work is { MediaTypeId: MediaType.Movie or MediaType.Series } or { MediaTypeId: MediaType.Book, MediaSubtypeId: MediaSubtype.Manga or MediaSubtype.LightNovel };
 
         // Searching needs Arr+; Requests alone stay manual.
         private bool CanAcquire => texts.CanAcquire();

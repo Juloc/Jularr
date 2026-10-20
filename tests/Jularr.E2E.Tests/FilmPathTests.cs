@@ -62,9 +62,9 @@ namespace Jularr.E2E.Tests
 
                 // The second episode is switched off on the title's page: nothing monitored is missing, the request completes and the Missing list drops the series.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
-                StringAssert.Contains(await EpisodeRow(page, "1").InnerTextAsync(), "On disk");
+                await Assertions.Expect(EpisodeRow(page, "1")).ToContainTextAsync("On disk");
                 await Steps.SubmitAsync(page, EpisodeRow(page, "2").Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }) }));
-                StringAssert.Contains(await EpisodeRow(page, "2").InnerTextAsync(), "Not monitored");
+                await Assertions.Expect(EpisodeRow(page, "2")).ToContainTextAsync("Not monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
                 Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
                 await page.GotoAsync("/Admin/Requests");
@@ -139,7 +139,7 @@ namespace Jularr.E2E.Tests
                 await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
                 await Steps.SubmitAsync(page, editor.Locator("form"));
                 await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 updated" })).ToBeVisibleAsync();
-                StringAssert.Contains(await page.Locator("tr.work-file").InnerTextAsync(), "HDTV-720p");
+                await Assertions.Expect(page.Locator("tr.work-file")).ToContainTextAsync("HDTV-720p");
                 await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete file" }) }));
                 await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
                 await Assertions.Expect(page.GetByText("This film has no file yet.")).ToBeVisibleAsync();
@@ -149,14 +149,14 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "work-series-with-file");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Manage files", Exact = true }));
                 var managed = page.Locator("tr.work-row").Filter(new() { HasText = ".webm" });
-                StringAssert.Contains(await managed.InnerTextAsync(), "Matches the naming");
+                await Assertions.Expect(managed).ToContainTextAsync("Matches the naming");
                 await Evidence.SaveAsync(page, "work-manage-files");
                 await managed.GetByRole(AriaRole.Checkbox).CheckAsync();
                 await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete selected files" }) }));
                 await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
                 Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode's file is still there.");
                 await page.GotoAsync(page.Url.Split('?')[0]);
-                StringAssert.Contains(await EpisodeRow(page, "1").InnerTextAsync(), "Missing");
+                await Assertions.Expect(EpisodeRow(page, "1")).ToContainTextAsync("Missing");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

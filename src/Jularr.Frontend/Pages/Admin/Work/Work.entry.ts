@@ -218,6 +218,28 @@ function initializeTable(table: HTMLTableElement): void {
 }
 
 // A mouse drags the strips sideways as a finger does; touch scrolls them natively, and they all slide together because a season is one scroller.
+// Anime numbers its episodes in two ways; the choice stays in this browser and only changes what the numbers show.
+function initializeNumbering(): void {
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-numbering-set]'));
+    if (buttons.length === 0) return;
+    const apply = (mode: string): void => {
+        document.querySelectorAll<HTMLElement>('[data-numbering]').forEach(item => { item.hidden = item.dataset.numbering !== mode; });
+        buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.numberingSet === mode)));
+    };
+    let stored = 'standard';
+    try { stored = localStorage.getItem('jularr.work.numbering') === 'anilist' ? 'anilist' : 'standard'; } catch { /* the choice then only lasts for this page */ }
+    apply(stored);
+    for (const button of buttons) {
+        if (button.dataset.workReady) continue;
+        button.dataset.workReady = 'true';
+        button.addEventListener('click', () => {
+            const mode = button.dataset.numberingSet ?? 'standard';
+            try { localStorage.setItem('jularr.work.numbering', mode); } catch { /* ignored */ }
+            apply(mode);
+        });
+    }
+}
+
 function initializeStrips(): void {
     document.querySelectorAll<HTMLElement>('.work-strips').forEach(scroller => {
         if (scroller.dataset.workReady) return;
@@ -298,6 +320,7 @@ onPage(import.meta.url, () => {
     initializeSelection();
     initializeFileEdit();
     initializeStrips();
+    initializeNumbering();
     document.querySelectorAll<HTMLTableElement>('[data-work-table]').forEach(initializeTable);
     if (!pickerReady) { pickerReady = true; initializePicker(); }
 });

@@ -117,7 +117,7 @@ namespace Jularr.E2E.Tests
 
                 await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import by hand", Exact = true }));
                 var file = page.Locator(".ui-form__row").First;
-                StringAssert.Contains(await file.InnerTextAsync(), "Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm");
+                await Assertions.Expect(file).ToContainTextAsync("Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm");
                 await Assertions.Expect(file.Locator("input[type=checkbox]")).ToBeCheckedAsync();
                 await Evidence.SaveAsync(page, "manual-import-queue");
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import"));

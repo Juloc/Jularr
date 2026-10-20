@@ -753,6 +753,47 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, page.Files.Count);
         }
 
+        // An anime counts its episodes across seasons and, where its seasons are mapped to AniList entries, within the entry; a manga's volumes are units like episodes.
+        [TestMethod]
+        public async Task WorkManagement_NumbersAnimeEpisodesTwoWays_AndCountsVolumes()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Anime", null, MediaSubtype.Anime));
+            var anime = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            using var manga = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Manga", null, MediaSubtype.Manga));
+            var mangaId = (await manga.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({anime}, 1, 0), ({anime}, 1, 1), ({anime}, 1, 2);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                SELECT {anime}, season."Id", 2, episode."Number" FROM "WorkUnits" AS season CROSS JOIN generate_series(1, 3) AS episode ("Number")
+                WHERE season."WorkId" = {anime} AND season."WorkUnitTypeId" = 1;
+                INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value", "EpisodeOffset")
+                SELECT season."Id", 'anilist', 'entry' || offsets."Offset", offsets."Offset"
+                FROM "WorkUnits" AS season CROSS JOIN (VALUES (0), (2)) AS offsets ("Offset") WHERE season."WorkId" = {anime} AND season."WorkUnitTypeId" = 1 AND season."Number" = 2;
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number", "ReleasedOn") VALUES ({mangaId}, 3, 1, current_date - 30), ({mangaId}, 3, 2, current_date + 30);
+                """);
+
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + anime + "/management");
+            var page = (await read.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            var numbers = page.Units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).Select(unit => (unit.ParentWorkUnitId, unit.Number, unit.AbsoluteNumber, unit.AniListNumber)).ToArray();
+            var secondSeason = page.Units.Single(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number == 2).Id;
+            var firstSeason = page.Units.Single(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number == 1).Id;
+
+            // The special has none; the second season goes on from the first, and its entries restart the count.
+            Assert.IsNull(page.Units.Single(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number == 0).AbsoluteNumber);
+            CollectionAssert.AreEqual(new int?[] { 4, 5, 6 }, numbers.Where(item => item.ParentWorkUnitId == secondSeason).OrderBy(item => item.Number).Select(item => item.AbsoluteNumber).ToArray());
+            CollectionAssert.AreEqual(new decimal?[] { 1, 2, 1 }, numbers.Where(item => item.ParentWorkUnitId == secondSeason).OrderBy(item => item.Number).Select(item => item.AniListNumber).ToArray());
+            Assert.IsTrue(numbers.Where(item => item.ParentWorkUnitId == firstSeason).All(item => item.AniListNumber is null), "An unmapped season has no AniList numbers.");
+
+            using var volumes = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + mangaId + "/management");
+            var volumePage = (await volumes.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            Assert.AreEqual(2, volumePage.Units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Volume));
+            Assert.AreEqual(1L, volumePage.MissingCount);
+            Assert.AreEqual(1L, volumePage.UnairedCount);
+        }
+
         [TestMethod]
         public async Task ManualImport_RefusesWhatItCannotDo_AndTouchesNothing()
         {

@@ -6456,6 +6456,10 @@
    "Seasons",
    "Staffeln"
   ],
+  "work.tab.volumes": [
+   "Volumes",
+   "Bände"
+  ],
   "work.tab.files": [
    "Files",
    "Dateien"
@@ -6632,6 +6636,14 @@
    "{0} seasons",
    "{0} Staffeln"
   ],
+  "work.figure.volumes": [
+   "{0} volumes",
+   "{0} Bände"
+  ],
+  "work.figure.volumeOne": [
+   "{0} volume",
+   "{0} Band"
+  ],
   "work.figure.episodes": [
    "{0} episodes",
    "{0} Folgen"
@@ -6655,6 +6667,10 @@
   "work.empty": [
    "This title has no seasons yet.",
    "Dieser Titel hat noch keine Staffeln."
+  ],
+  "work.empty.volumes": [
+   "This title has no volume yet.",
+   "Dieser Titel hat noch keinen Band."
   ],
   "work.empty.files": [
    "This film has no file yet.",
@@ -6699,6 +6715,30 @@
   "work.col.number": [
    "#",
    "#"
+  ],
+  "work.col.absolute": [
+   "Absolute #",
+   "Absolut-Nr."
+  ],
+  "work.col.released": [
+   "Released",
+   "Erschienen"
+  ],
+  "work.col.format": [
+   "Format",
+   "Format"
+  ],
+  "work.numbering.label": [
+   "Episode numbering",
+   "Folgennummerierung"
+  ],
+  "work.numbering.standard": [
+   "Standard",
+   "Standard"
+  ],
+  "work.numbering.anilist": [
+   "AniList",
+   "AniList"
   ],
   "work.col.title": [
    "Title",

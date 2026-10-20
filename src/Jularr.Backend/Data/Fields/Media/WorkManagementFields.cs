@@ -21,5 +21,6 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly LongField UnitCount = new() { Minimum = 0 };
         public static readonly LongArrayField UnitIds = new() { Minimum = 1, MaximumLength = 1000 };
         public static readonly BoolField IsMissing = new();
+        public static readonly IntField AbsoluteNumber = new() { Minimum = 1, Required = false };
     }
 }
