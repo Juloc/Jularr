@@ -1,9 +1,12 @@
 package de.juloc.jularr.core.api
 
 import de.juloc.jularr.core.model.DevicePlatform
+import de.juloc.jularr.core.model.WorkCardV1
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class AppApiJsonTest {
@@ -76,6 +79,74 @@ class AppApiJsonTest {
         assertEquals(false, body.has("deviceName"))
         assertEquals("Android", body.getString("devicePlatform"))
         assertEquals(false, body.has("replacesPairingId"))
+    }
+
+    @Test
+    fun aWorkCardIsReadFromTheServerShape() {
+        val card = JSONObject(
+            """{"id":10,"mediaTypeId":2,"mediaSubtypeId":1,"title":"One Show","releaseYear":2006,"posterUrl":"https://example.test/poster.jpg",
+               "mediaStateTypeId":3,"isWatchlisted":true,"availabilityStateId":2,"availableUnits":2,"monitoredUnits":4,
+               "audioLanguages":["ja"],"subtitleLanguages":["de","en"]}""",
+        ).toWorkCard()
+
+        assertEquals(10L, card.id)
+        assertEquals(1, card.mediaSubtypeId)
+        assertEquals("One Show", card.title)
+        assertEquals(2006, card.releaseYear)
+        assertEquals(WorkCardV1.AvailabilityPartial, card.availabilityStateId)
+        assertEquals(2, card.availableUnits)
+        assertEquals(4, card.monitoredUnits)
+        assertEquals(listOf("ja"), card.audioLanguages)
+        assertEquals(listOf("de", "en"), card.subtitleLanguages)
+    }
+
+    @Test
+    fun aWorkCardWithoutAYearOrAPosterKeepsBothEmpty() {
+        val card = JSONObject(
+            """{"id":30,"mediaTypeId":3,"mediaSubtypeId":null,"title":"One Book","releaseYear":null,"posterUrl":null,"mediaStateTypeId":1,
+               "isWatchlisted":true,"availabilityStateId":1,"availableUnits":0,"monitoredUnits":0,
+               "audioLanguages":[],"subtitleLanguages":[]}""",
+        ).toWorkCard()
+
+        assertNull(card.releaseYear)
+        assertNull(card.posterUrl)
+        assertNull(card.mediaSubtypeId)
+        assertEquals(WorkCardV1.AvailabilityAvailable, card.availabilityStateId)
+    }
+
+    @Test
+    fun theWatchlistPageIsReadFromTheServerShape() {
+        val page = JSONObject(
+            """{"items":[{"id":10,"mediaTypeId":2,"mediaSubtypeId":1,"title":"One Show","releaseYear":2006,"posterUrl":null,
+               "mediaStateTypeId":3,"isWatchlisted":true,"availabilityStateId":7,"availableUnits":4,"monitoredUnits":4,
+               "audioLanguages":["ja"],"subtitleLanguages":["de"]}],"page":1,"pageSize":25,"totalCount":1,"hasMore":false}""",
+        )
+
+        val cards = page.toWorkCards()
+
+        assertEquals(1, cards.size)
+        assertEquals(WorkCardV1.AvailabilityProfileAudio, cards[0].availabilityStateId)
+    }
+
+    @Test
+    fun theInstancePresentationIsReadFromTheServerShape() {
+        val presentation = JSONObject(
+            """{"name":"Jularr","uiLocaleId":2,"publicUrl":null,"devicesEnabled":true,"registrationEnabled":false}""",
+        ).toInstancePresentation()
+
+        assertEquals("Jularr", presentation.name)
+        assertEquals(2L, presentation.uiLocaleId)
+        assertNull(presentation.publicUrl)
+        assertTrue(presentation.devicesEnabled)
+        assertFalse(presentation.registrationEnabled)
+    }
+
+    @Test
+    fun theServerTextsAreReadFromTheServerShape() {
+        val texts = JSONObject("""{"uiLocaleId":2,"locale":"en-GB","isRightToLeft":false,"texts":{"watchlist.title":"Watchlist"}}""")
+            .toUiTexts()
+
+        assertEquals(mapOf("watchlist.title" to "Watchlist"), texts)
     }
 
     @Test

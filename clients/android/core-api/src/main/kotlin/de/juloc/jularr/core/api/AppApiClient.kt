@@ -4,10 +4,12 @@ import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
 import de.juloc.jularr.core.model.InstanceCapabilities
+import de.juloc.jularr.core.model.InstancePresentationV1
+import de.juloc.jularr.core.model.WorkCardV1
 
 /**
- * The app services a client needs before it shows anything: pair the device, read what the
- * instance allows and keep the session alive.
+ * The app services a client needs: pair the device, read what the instance allows and keep the
+ * session alive. Every answer comes from the versioned app services of the Backend.
  */
 interface AppApiClient {
     /** Starts a pairing; the device shows the returned code. */
@@ -18,4 +20,13 @@ interface AppApiClient {
 
     /** Reads the permissions and the modules of the paired device. */
     suspend fun capabilities(): InstanceCapabilities
+
+    /** Reads the public display values of the instance. */
+    suspend fun instancePresentation(): InstancePresentationV1
+
+    /** Reads the server's texts of a locale; the client shows them instead of its own words. */
+    suspend fun uiTexts(uiLocaleId: Long): Map<String, String>
+
+    /** Reads one page of the profile's watchlist. */
+    suspend fun watchlist(page: Int = 1, pageSize: Int = 25): List<WorkCardV1>
 }

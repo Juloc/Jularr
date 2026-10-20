@@ -8,9 +8,16 @@ object AppApiRoutes {
     const val Base = "/api/v1"
     const val Pairings = "$Base/devices/pairings"
     const val Capabilities = "$Base/instance/capabilities"
+    const val InstancePresentation = "$Base/instance/presentation"
+    const val Watchlist = "$Base/watchlist"
 
     /** The server hands the device token in this header instead of a cookie. */
     const val DeviceTokenHeader = "Jularr-Device-Token"
 
     fun pairingClaim(pairingId: String): String = "$Pairings/$pairingId/claim"
+
+    /** The server's texts of a locale; the client shows them instead of its own words. */
+    fun uiTexts(uiLocaleId: Long): String = "$Base/localization/texts/$uiLocaleId"
+
+    fun watchlistPage(page: Int, pageSize: Int): String = "$Watchlist?page=$page&pageSize=$pageSize"
 }

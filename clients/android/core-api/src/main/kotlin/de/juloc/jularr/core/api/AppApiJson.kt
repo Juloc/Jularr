@@ -4,6 +4,8 @@ import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
 import de.juloc.jularr.core.model.InstanceCapabilities
+import de.juloc.jularr.core.model.InstancePresentationV1
+import de.juloc.jularr.core.model.WorkCardV1
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -27,6 +29,44 @@ internal fun JSONObject.toInstanceCapabilities(): InstanceCapabilities =
     InstanceCapabilities(
         permissions = getJSONArray("permissions").toStringList(),
         modules = getJSONArray("modules").toStringList(),
+    )
+
+internal fun JSONObject.toInstancePresentation(): InstancePresentationV1 =
+    InstancePresentationV1(
+        name = getString("name"),
+        uiLocaleId = getLong("uiLocaleId"),
+        publicUrl = if (isNull("publicUrl")) null else getString("publicUrl"),
+        devicesEnabled = getBoolean("devicesEnabled"),
+        registrationEnabled = getBoolean("registrationEnabled"),
+    )
+
+internal fun JSONObject.toUiTexts(): Map<String, String> {
+    val texts = getJSONObject("texts")
+    val result = mutableMapOf<String, String>()
+    for (key in texts.keys()) {
+        result[key] = texts.getString(key)
+    }
+    return result
+}
+
+internal fun JSONObject.toWorkCards(): List<WorkCardV1> =
+    getJSONArray("items").mapObjects { it.toWorkCard() }
+
+internal fun JSONObject.toWorkCard(): WorkCardV1 =
+    WorkCardV1(
+        id = getLong("id"),
+        mediaTypeId = getInt("mediaTypeId"),
+        mediaSubtypeId = if (isNull("mediaSubtypeId")) null else getInt("mediaSubtypeId"),
+        title = getString("title"),
+        releaseYear = if (isNull("releaseYear")) null else getInt("releaseYear"),
+        posterUrl = if (isNull("posterUrl")) null else getString("posterUrl"),
+        mediaStateTypeId = getInt("mediaStateTypeId"),
+        isWatchlisted = getBoolean("isWatchlisted"),
+        availabilityStateId = getInt("availabilityStateId"),
+        availableUnits = getInt("availableUnits"),
+        monitoredUnits = getInt("monitoredUnits"),
+        audioLanguages = getJSONArray("audioLanguages").toStringList(),
+        subtitleLanguages = getJSONArray("subtitleLanguages").toStringList(),
     )
 
 internal fun DevicePairingRequest.toRequestBody(): JSONObject =
@@ -55,3 +95,6 @@ internal fun appApiException(statusCode: Int, payload: String): AppApiException 
 }
 
 private fun JSONArray.toStringList(): List<String> = (0 until length()).map { getString(it) }
+
+private fun <T> JSONArray.mapObjects(read: (JSONObject) -> T): List<T> =
+    (0 until length()).map { read(getJSONObject(it)) }

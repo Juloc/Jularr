@@ -4,6 +4,8 @@ import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
 import de.juloc.jularr.core.model.InstanceCapabilities
+import de.juloc.jularr.core.model.InstancePresentationV1
+import de.juloc.jularr.core.model.WorkCardV1
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -32,6 +34,15 @@ class HttpAppApiClient(
 
     override suspend fun capabilities(): InstanceCapabilities =
         request("GET", AppApiRoutes.Capabilities, null).payload.toInstanceCapabilities()
+
+    override suspend fun instancePresentation(): InstancePresentationV1 =
+        request("GET", AppApiRoutes.InstancePresentation, null).payload.toInstancePresentation()
+
+    override suspend fun uiTexts(uiLocaleId: Long): Map<String, String> =
+        request("GET", AppApiRoutes.uiTexts(uiLocaleId), null).payload.toUiTexts()
+
+    override suspend fun watchlist(page: Int, pageSize: Int): List<WorkCardV1> =
+        request("GET", AppApiRoutes.watchlistPage(page, pageSize), null).payload.toWorkCards()
 
     private suspend fun request(method: String, route: String, body: JSONObject?): AppResponse =
         withContext(Dispatchers.IO) {
