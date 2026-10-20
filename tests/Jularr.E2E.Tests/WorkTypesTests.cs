@@ -100,6 +100,11 @@ namespace Jularr.E2E.Tests
                 var platforms = page.Locator(".work-season");
                 Assert.AreEqual(2, await platforms.CountAsync());
                 await Assertions.Expect(platforms.Filter(new() { HasText = "PC" })).ToContainTextAsync("Not requested");
+
+                // Each platform has its own target with its own settings.
+                await platforms.Filter(new() { HasText = "Switch" }).GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator("dialog[open].work-dialog")).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
                 await Evidence.SaveAsync(page, "work-game-platforms");
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }

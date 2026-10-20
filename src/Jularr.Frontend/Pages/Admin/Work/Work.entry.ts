@@ -290,13 +290,18 @@ function initializeSelection(): void {
     document.querySelectorAll<HTMLInputElement>('[data-select-all]').forEach(all => {
         if (all.dataset.workReady) return;
         all.dataset.workReady = 'true';
-        const boxes = (): HTMLInputElement[] => Array.from(all.closest('table')?.querySelectorAll<HTMLInputElement>('input[name="storedFileIds"]') ?? []);
+        // The table and the strips of a narrow screen share one set of files, so the choice is made in whichever is shown.
+        const scope = all.closest('.work-manage') ?? all.closest('table');
+        const boxes = (): HTMLInputElement[] => Array.from(scope?.querySelectorAll<HTMLInputElement>('input[name="storedFileIds"]') ?? []);
         all.addEventListener('change', () => boxes().forEach(box => { box.checked = all.checked; }));
-        all.closest('table')?.addEventListener('change', event => {
-            if (event.target === all) return;
-            const items = boxes();
-            all.checked = items.length > 0 && items.every(box => box.checked);
-            all.indeterminate = !all.checked && items.some(box => box.checked);
+        scope?.addEventListener('change', event => {
+            if (event.target === all || !(event.target as HTMLElement).matches('input[name="storedFileIds"]')) return;
+            const target = event.target as HTMLInputElement;
+            boxes().filter(box => box.value === target.value).forEach(box => { box.checked = target.checked; });
+            const items = Array.from(new Set(boxes().map(box => box.value)));
+            const checked = items.filter(value => boxes().some(box => box.value === value && box.checked));
+            all.checked = items.length > 0 && checked.length === items.length;
+            all.indeterminate = !all.checked && checked.length > 0;
         });
     });
 }

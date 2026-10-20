@@ -18,11 +18,11 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private static readonly string[] UnitColumns = ["monitored", "number", "title", "aired", "languages", "group", "size", "status", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly string[] VolumeColumns = ["monitored", "number", "title", "released", "format", "group", "size", "status", "quality", "path"];
         private static readonly string[] EditionColumns = ["title", "format", "group", "size", "quality", "path"];
-        private static readonly string[] GameColumns = ["title", "format", "group", "size", "quality", "rom", "path"];
+        private static readonly string[] GameColumns = ["title", "format", "region", "version", "group", "size", "quality", "rom", "path"];
         private static readonly string[] TrackColumns = ["number", "title", "length", "format", "group", "size", "status", "quality", "path"];
         private static readonly string[] FileColumns = ["title", "languages", "group", "size", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly HashSet<string> HiddenByDefault = ["languagesIso", "languagesNames", "path", "codec", "range"];
-        private static readonly string[] SortableColumns = ["number", "absolute", "title", "aired", "released", "format", "length", "size", "status", "quality", "group", "rom"];
+        private static readonly string[] SortableColumns = ["region", "version", "number", "absolute", "title", "aired", "released", "format", "length", "size", "status", "quality", "group", "rom"];
 
         // Anime counts episodes across seasons as well.
         private static string[] ColumnsOf(WorkManagementV1 work) => work.MediaTypeId == MediaType.Music ? TrackColumns : work.MediaTypeId == MediaType.Book ? VolumeColumns
@@ -65,7 +65,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     break;
             }
 
-            if (_wanted is not null && CanAcquire && _profiles.Count > 0 && work.MediaTypeId != MediaType.Game) page.Content.Add(EditDialog(work, csrf));
+            if (_wanted is not null && CanAcquire && _profiles.Count > 0 && work.MediaTypeId != MediaType.Game) page.Content.Add(EditDialog(work, csrf, _wanted, "work-edit"));
+            if (work.MediaTypeId == MediaType.Game && _profiles.Count > 0) page.Content.AddRange(_platformTargets.Values.Select(target => EditDialog(work, csrf, target, "work-edit-" + target.Id.ToString(CultureInfo.InvariantCulture), true)));
             if (texts.CanManageMedia()) page.Content.Add(DeleteDialog(csrf));
             if (texts.CanManageMedia() && (hasUnits ? Tab == WorkTab.Files : Tab == WorkTab.Units) && work.Files.Any(file => !file.IsMissing)) page.Content.Add(EditFilesDialog(work, csrf));
         }
@@ -313,12 +314,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
         }
 
         // A version of a unit below its strip, shown with the unit's versions button.
-        private IUiComponent FileStrip(WorkManagementFileV1 file, string? csrf, string[] columns)
+        private IUiComponent FileStrip(WorkManagementFileV1 file, string? csrf, string[] columns, bool hidden = true, bool canEdit = false)
         {
-            var icons = DeleteIcon(file, csrf).ToArray();
-            return new Div(
+            var icons = DeleteIcon(file, csrf, canEdit).ToArray();
+            var strip = new Div(
                 new Div(new Span().Class("work-strip__number"), new Div(new Span(new ValueText(Path.GetFileName(file.RelativePath))).Class("work-title-text")).Class("work-strip__title"), new Div(icons).Class("work-icons")).Class("work-strip__main"),
-                StripFacts(FileFacts(file, null, file), columns)).Class("work-strip work-strip--file").Attribute("hidden", "hidden");
+                StripFacts(FileFacts(file, null, file), columns)).Class("work-strip work-strip--file");
+            if (hidden) strip.Attribute("hidden", "hidden");
+            return strip;
         }
 
         // The facts of the second line in the order of the columns; one that has nothing to say is left out.
@@ -330,9 +333,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         private IUiComponent FileTable(IEnumerable<WorkManagementFileV1> files, string[] columns, string? csrf, string kind = "files")
         {
-            var rows = files.OrderBy(file => (int)Rank(file.FileQualityGradeId)).ThenByDescending(file => file.SizeBytes)
-                .Select(file => (IUiComponent)new Tbody(FileRow(file, null, columns, csrf)).Class("work-unit")).ToList();
-            return Table(kind, columns, rows);
+            var ordered = files.OrderBy(file => (int)Rank(file.FileQualityGradeId)).ThenByDescending(file => file.SizeBytes).ToArray();
+            var rows = ordered.Select(file => (IUiComponent)new Tbody(FileRow(file, null, columns, csrf)).Class("work-unit")).ToList();
+            var strips = ordered.Select(file => FileStrip(file, csrf, columns, hidden: false, canEdit: true));
+            return new Div(Table(kind, columns, rows), new Div([.. strips]).Class("work-strips").Attribute("data-work-strips", kind));
         }
 
         // A book's editions or a game's platforms as accordions, each with the files that belong to it; a platform is monitored and searched on its own.
@@ -376,6 +380,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                             new SwitchButton(group.IsPaused != true, group.IsPaused == true ? "work.monitor.start" : "work.monitor.stop"));
                         icons.Add(new PostForm(Address(Tab, "Automatic"), csrf, [("wantedItemId", id)], IconSubmit("search", "work.search")));
                         icons.Add(new A(Icon("user", 22)).Class("work-icon").Attribute("href", WantedStatus.Home(wantedId) + "/Search").TextAttribute("aria-label", "work.interactive").TextAttribute("title", "work.interactive"));
+                        if (_platformTargets.ContainsKey(wantedId)) icons.Add(IconSubmit("pencil", "work.edit").Attribute("type", "button").Attribute("data-dialog-open", "work-edit-" + id));
                     }
 
                     Add(group.Id.ToString(CultureInfo.InvariantCulture), group.Name ?? "", string.Join(" · ", new[] { group.Title, group.WantedItemId is null ? texts["work.platform.notWanted"] : null, size }.Where(text => !string.IsNullOrEmpty(text))), lead, icons, files);
@@ -435,6 +440,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             facts["languagesNames"] = new(LanguageGroup(shown, WorkLanguages.Mode.Names), null, noLanguages);
             facts["length"] = new(new ValueText(shown.DurationMs is { } milliseconds ? Duration(milliseconds) : ""), (shown.DurationMs ?? 0).ToString("D12", CultureInfo.InvariantCulture), shown.DurationMs is null);
             facts["format"] = new(new ValueText(Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant()), Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant(), Path.GetExtension(shown.RelativePath).Length < 2);
+            facts["region"] = new(new ValueText(shown.GameRegion ?? ""), shown.GameRegion ?? "", string.IsNullOrEmpty(shown.GameRegion));
+            facts["version"] = new(new ValueText(shown.GameVersion ?? ""), shown.GameVersion ?? "", string.IsNullOrEmpty(shown.GameVersion));
             facts["rom"] = new(shown.IsRomVerified is null ? new Span() : new Span(new Text(shown.IsRomVerified == true ? "work.rom.verified" : "work.rom.unverified")).Class("work-rom work-rom--" + (shown.IsRomVerified == true ? "ok" : "off")),
                 shown.IsRomVerified == true ? "1" : "0", shown.IsRomVerified is null);
             facts["path"] = new(new ValueText(shown.RelativePath));
@@ -529,13 +536,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
         }
 
         // Where every episode's actions are: the whole unit table has them in its last column, and the gear of the column picker above.
-        private IUiComponent Table(string kind, string[] columns, List<IUiComponent> bodies)
+        private IUiComponent Table(string kind, string[] columns, List<IUiComponent> bodies, bool striped = true)
         {
             var head = new Tr([.. columns.Select(column => (IUiComponent)new Th(SortableColumns.Contains(column) ? (IUiComponent)new Button(new Text("work.col." + column)).Attribute("data-sort", column).Attribute("type", "button").Class("work-sort")
                     : new Text("work.col." + column)).Attribute("data-col", column).Attribute("data-label", texts["work.col." + column]).Attribute("scope", "col")
                 .Attribute("data-hidden", HiddenByDefault.Contains(column) ? "true" : "false")),
                 new Th(new Button(Icon("settings"), new Span(new Text("work.columns")).Class("visually-hidden")).Attribute("data-columns-open", "").Attribute("type", "button").Class("work-gear")).Attribute("data-col", "actions")]);
-            return new Div(new TableElement([new Thead(head), .. bodies]).Class("work-table").Attribute("data-work-table", kind)).Class("work-table-wrap work-table-wrap--" + kind);
+            return new Div(new TableElement([new Thead(head), .. bodies]).Class("work-table").Attribute("data-work-table", kind)).Class("work-table-wrap work-table-wrap--" + kind + (striped ? " work-table-wrap--striped" : ""));
         }
 
         private Tr RowOf(string[] columns, Dictionary<string, Td> cells)
@@ -604,7 +611,20 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 new Th(new Input().Attribute("type", "checkbox").Attribute("data-select-all", "").TextAttribute("aria-label", "work.manage.selectAll")).Attribute("scope", "col"),
                 new Th(new Text("work.manage.col.unit")).Attribute("scope", "col"), new Th(new Text("work.manage.col.file")).Attribute("scope", "col"), new Th(new Text("work.col.quality")).Attribute("scope", "col"),
                 new Th(new Text(video ? "work.col.languages" : "work.col.format")).Attribute("scope", "col"), new Th(new Text("work.col.size")).Attribute("scope", "col"));
-            var table = new Div(new TableElement([new Thead(head), new Tbody([.. rows])]).Class("work-table work-table--manage")).Class("work-table-wrap");
+            var table = new Div(new TableElement([new Thead(head), new Tbody([.. rows])]).Class("work-table work-table--manage")).Class("work-table-wrap work-table-wrap--striped");
+            string[] stripColumns = video ? ["quality", "size", "languages"] : ["quality", "size", "format"];
+            var strips = new Div([new Label(new Input().Attribute("type", "checkbox").Attribute("data-select-all", ""), new Span(new Text("work.manage.selectAll"))).Class("work-strips__all"),
+                .. files.OrderBy(Position).ThenBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase).Select(file =>
+                {
+                    var plan = targets.TryGetValue(file.Id, out var renamed) ? renamed : null;
+                    return (IUiComponent)new Div(
+                        new Div(new Input().Attribute("type", "checkbox").Attribute("name", "storedFileIds").Attribute("value", file.Id.ToString(CultureInfo.InvariantCulture)).TextAttribute("aria-label", "work.manage.select"),
+                            new Span(new ValueText(Label(file))).Class("work-strip__number"),
+                            new Div(new Span(new ValueText(Path.GetFileName(file.RelativePath))).Class("work-title-text"),
+                                plan is null ? new Span() : new Span(new Text("work.manage.renamesTo"), new ValueText(" " + Path.GetFileName(plan))).Class("work-manage__target")).Class("work-strip__title work-strip__title--stacked"),
+                            new Span()).Class("work-strip__main"),
+                        StripFacts(FileFacts(file, null, file), stripColumns)).Class("work-strip");
+                })]).Class("work-strips").Attribute("data-work-strips", "manage");
 
             var content = new List<IUiComponent>();
             if (_renames is { Total: > 0 } plan)
@@ -614,7 +634,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             }
 
             content.Add(new PostForm(Address(WorkTab.Files, "DeleteFiles"), csrf, [], new Div(new Button(Icon("pencil"), new Text("work.manage.edit")).Attribute("type", "button").Attribute("data-edit-selected", ""),
-                new Button(Icon("trash"), new Text("work.manage.delete")).Attribute("type", "submit")).Class("work-manage__bar"), table));
+                new Button(Icon("trash"), new Text("work.manage.delete")).Attribute("type", "submit")).Class("work-manage__bar"), table, strips));
             return new Div([.. content]).Class("work-manage");
         }
 
@@ -664,10 +684,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
         }
 
         // The profile, library and tags of the title and whether new episodes are monitored.
-        private IUiComponent EditDialog(WorkManagementV1 work, string? csrf)
+        private IUiComponent EditDialog(WorkManagementV1 work, string? csrf, WantedDetailsV1 wanted, string dialogId, bool ownTarget = false)
         {
-            var wanted = _wanted!;
-            var isOpen = _choice is not null && FormError is not null;
+            var isOpen = _choice is not null && FormError is not null && (_choiceWantedId ?? _wanted?.Id) == wanted.Id;
+            var mine = isOpen ? _choice : null;
             var form = new Form<UpdateWantedDataV1>(form =>
             {
                 form.Hidden(data => data.IsPaused);
@@ -683,9 +703,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
                 form.Choices(data => data.TagIds, "arr.tags", _tagChoices);
                 form.Save();
-            }, Address(Tab, "Choice"), csrf, _choice ?? new UpdateWantedDataV1(wanted.IsPaused, wanted.Version, wanted.AcquisitionProfileId, wanted.LibraryRootId, wanted.MonitorsNewUnits, tagIds: wanted.TagIds), _choice is null ? null : FormError);
+            }, Address(Tab, "Choice") + (ownTarget ? "&wantedItemId=" + wanted.Id.ToString(CultureInfo.InvariantCulture) : ""), csrf,
+                mine ?? new UpdateWantedDataV1(wanted.IsPaused, wanted.Version, wanted.AcquisitionProfileId, wanted.LibraryRootId, wanted.MonitorsNewUnits, tagIds: wanted.TagIds), mine is null ? null : FormError);
             return new Dialog(new Div(new H2(new Text("work.edit")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)
-                .Class("work-dialog").Attribute("id", "work-edit").Attribute("data-open", isOpen ? "true" : "false");
+                .Class("work-dialog").Attribute("id", dialogId).Attribute("data-open", isOpen ? "true" : "false");
         }
 
         // Sonarr's dialog: the title leaves the library, with its files when ticked, and with an exclusion when ticked.
@@ -723,6 +744,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IUiComponent Icon(string name, int size = 20) => new Framework.Icon(name, assets, size, "2.4");
 
         private HtmlElement IconSubmit(string icon, string labelKey) => new IconButton(Icon(icon, 22)).Attribute("type", "submit").Class("work-icon").TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
+
+        private sealed class Label(params IUiComponent[] children) : HtmlElement("label", children);
 
         private sealed class Td(params IUiComponent[] children) : HtmlElement("td", children);
 

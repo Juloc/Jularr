@@ -6788,6 +6788,14 @@
    "ROM check",
    "ROM-Prüfung"
   ],
+  "work.col.region": [
+   "Region",
+   "Region"
+  ],
+  "work.col.version": [
+   "Version",
+   "Version"
+  ],
   "work.rom.verified": [
    "In the ROM catalog",
    "Im ROM-Katalog"

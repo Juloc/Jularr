@@ -166,7 +166,7 @@
 
 // Seasons
 
-.work-seasons { container: work / inline-size; }
+.work-seasons, .work-files, .work-manage { container: work / inline-size; }
 
 .work-rom {
     display: inline-flex;
@@ -303,6 +303,8 @@
 .work-manage__bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .work-table--manage td:first-child, .work-table--manage th:first-child { width: 1%; }
 .work-manage__file { display: grid; gap: 2px; }
+.work-strips__all { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; color: var(--muted); }
+.work-strip__title--stacked { flex-direction: column; align-items: flex-start; gap: 2px; }
 .work-manage__target { color: var(--accent-text); }
 .work-manage__matches { color: var(--muted); font-size: 12px; }
 
@@ -447,7 +449,7 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 .work-strips { display: none; }
 
 @container work (max-width: 720px) {
-    .work-table-wrap--units { display: none; }
+    .work-table-wrap--striped { display: none; }
     .work-tools__columns { display: inline-flex; }
 
     .work-strips {
