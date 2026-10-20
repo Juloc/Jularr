@@ -1,0 +1,22 @@
+.choice-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    &__control {
+        min-height: 36px;
+        max-width: 170px;
+        padding: 0 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 650;
+
+        &:focus-visible { outline: none; border-color: var(--accent); }
+    }
+
+}
+
+html.choice-select-ready .choice-select__apply { display: none; }

@@ -1,0 +1,115 @@
+// The bar answers to its own width, not the window's: the sidebar changes how much room it has.
+.capsule-bar {
+    container: capsule-bar / inline-size;
+    margin-bottom: 16px;
+
+    &__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
+
+    &__areas {
+        display: flex;
+        flex: 1;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+    }
+
+    &__tools { display: flex; flex: none; align-items: center; gap: 5px; }
+
+    &__all {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        text-decoration: none;
+
+        &:hover { background: var(--surface-hover); color: var(--text); }
+        &--on, &--on:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+    }
+}
+
+.capsule-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    min-height: 42px;
+    padding: 3px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    white-space: nowrap;
+
+    &__master {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        position: relative;
+        min-height: 34px;
+        padding: 0 11px;
+        border-radius: var(--radius-control);
+        color: var(--accent-text);
+        font-size: 11px;
+        font-weight: 820;
+        text-decoration: none;
+
+        &:hover, &--solo { background: var(--accent-soft); }
+    }
+
+    &__divider { flex: none; width: 1px; height: 19px; margin: 0 5px 0 2px; background: var(--border); }
+
+    &__item {
+        display: inline-flex;
+        align-items: center;
+        min-height: 33px;
+        padding: 0 11px;
+        border-radius: var(--radius-control);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: none;
+
+        &:hover { background: var(--surface-hover); }
+        &--checked, &--checked:hover { background: var(--accent); color: var(--accent-contrast); }
+        // Left out while others are chosen: still reachable, but quieter.
+        &--dimmed { opacity: .55; }
+    }
+}
+
+// Icons only once the labels no longer fit.
+@container capsule-bar (max-width: 1180px) {
+    .capsule-group__master { padding: 0 9px; span { display: none; } }
+    .capsule-bar__row { border-radius: 24px; align-items: flex-start; }
+}
+
+// Phones: all and the four areas in one row; single types are chosen in the filter.
+@container capsule-bar (max-width: 560px) {
+    .capsule-bar__row { align-items: center; gap: 4px; padding: 6px 5px; border-radius: var(--radius-control); }
+    .capsule-bar__areas { flex-wrap: nowrap; justify-content: space-between; gap: 3px; }
+    .capsule-bar__all { flex: 0 0 44px; min-width: 44px; min-height: 38px; padding: 0; svg { display: none; } }
+    .capsule-group { flex: 0 0 38px; justify-content: center; width: 38px; min-height: 38px; padding: 2px; }
+    .capsule-group__divider, .capsule-group__item { display: none; }
+    .capsule-group__master { width: 32px; min-height: 32px; padding: 0; border-radius: 50%; svg { width: 19px; height: 19px; }
+        &--included { background: var(--accent-soft); }
+        &--partial::after { content: ""; position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+    }
+    .capsule-bar__tools { gap: 3px; }
+}

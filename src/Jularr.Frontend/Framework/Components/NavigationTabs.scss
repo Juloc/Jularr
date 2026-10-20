@@ -16,6 +16,25 @@
     // Keep native horizontal navigation.
     &::-webkit-scrollbar { display: none; }
 
+    // Separate small pills for filters of one list, without the shared capsule.
+    &--chips {
+        padding: 0;
+        border: 0;
+        background: transparent;
+
+        .navigation-tabs__link {
+            min-height: 36px;
+            padding: 0 14px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            font-size: 12px;
+            font-weight: 710;
+
+            &:hover { border-color: var(--accent-line); background: var(--surface-hover); }
+            &--active, &--active:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+        }
+    }
+
     &__link {
         display: inline-flex;
         flex: none;

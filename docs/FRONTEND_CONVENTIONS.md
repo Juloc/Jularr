@@ -185,10 +185,14 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Discover separates media-type scope, browse view and filters. Its All
   landing has a shared Hero/Continue followed by per-enabled-type shelves
   in the approved order; only provider-supported rankings may appear. A ranking
-  opens from its shelf's See all and names itself with a way back (one tab row).
-  Cards use the shared cover presentation and Backend-supplied state below. The
-  header owns the **one** global Search and Filter entry; do not add another
-  search/filter field inside Discover. User/profile ordering is respected.
+  opens from its shelf's See all and names itself with a way back. Owner's mockup of 19 Oct
+  ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
+  types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
+  as one carousel (continued titles first, then each type's best by rank; the device keeps how many
+  and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
+  global Search; do not add another search field inside Discover. The Filter drawer narrows by
+  type, availability and release year only: no genre, language, rating or provider facets exist yet.
+  Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.
 - Apply the same module/profile visibility gate to Watchlist, Library and

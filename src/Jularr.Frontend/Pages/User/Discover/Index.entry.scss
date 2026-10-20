@@ -1,9 +1,11 @@
 @use "../../../Framework/Components/MediaShelf";
 @use "../../../Framework/Components/MediaCard";
-@use "../../../Framework/Components/MediaHero";
+@use "../../../Framework/Components/CapsuleBar";
+@use "../../../Framework/Components/HeroCarousel";
+@use "../../../Framework/Components/ChoiceGroup";
 
 .discover-media-heading {
-    margin: 20px 0 0;
+    margin: 4px 0 0;
     color: var(--accent-text);
     font-size: 22px;
     font-weight: 750;
@@ -23,6 +25,65 @@
     gap: 12px;
     padding: 24px 0;
 }
+
+.capsule-bar__tool.button {
+    position: relative;
+    width: 39px;
+    min-height: 39px;
+    color: var(--muted);
+
+    &:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
+}
+
+.capsule-bar__badge {
+    position: absolute;
+    top: -4px;
+    right: -2px;
+    display: grid;
+    place-items: center;
+    min-width: 17px;
+    height: 17px;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 10px;
+    line-height: 1;
+}
+
+// Lists of one feed, their order and the layout of the shelves.
+.discover-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 0 4px;
+
+    &__settings { display: flex; align-items: center; gap: 7px; }
+
+    // Rows scroll sideways; the grid wraps every shelf. The icon shows the layout a click leads to.
+    &__layout.button { width: 36px; min-height: 36px; .ui-icon:last-child { display: none; } }
+}
+
+html:not(.discover-scripted) [data-discover-layout] { display: none; }
+
+html[data-discover-layout="grid"] {
+    .discover-toolbar__layout .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
+
+    .discover-results .media-shelf__items {
+        flex-wrap: wrap;
+        overflow: visible;
+        scroll-snap-type: none;
+    }
+
+    .discover-results .media-shelf__controls { display: none; }
+}
+
+html:not(.discover-scripted) .discover-pick { display: none; }
+
+.discover-switches { display: grid; padding: 8px 0; }
 
 // Suggestions under the header search, as wide as the field like the combobox popup.
 .app-header .search-box { position: relative; }
@@ -64,11 +125,14 @@
 
     &__text {
         display: grid;
+        flex: 1;
         min-width: 0;
 
         strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
         span { color: var(--muted); font-size: 12px; }
     }
+
+    &__arrow { display: grid; flex: none; color: var(--muted); .ui-icon { transform: rotate(180deg); } }
 }
 
 .discover-feedback {
