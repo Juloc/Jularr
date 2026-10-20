@@ -98,6 +98,66 @@
     }
 }
 
+// A list row: the phase with its percent above five thin segments, names as tooltips, the time left below; the segments are the bar.
+.live-progress--compact {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 5px;
+
+    .live-progress__phase {
+        order: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        &::before {
+            content: "";
+            flex: none;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+    }
+
+    &[data-phase="completed"] .live-progress__phase::before,
+    &[data-phase="failed"] .live-progress__phase::before,
+    &[data-phase="rejected"] .live-progress__phase::before,
+    &[data-phase="cancelled"] .live-progress__phase::before { background: currentColor; }
+
+    .live-progress__phase--steps {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: hidden;
+        clip-path: none;
+        white-space: nowrap;
+    }
+
+    .live-steps {
+        order: 1;
+        flex: none;
+        margin: 0;
+    }
+
+    .live-steps__item {
+        height: 5px;
+        padding: 0;
+        border-top-width: 5px;
+        border-radius: 999px;
+        font-size: 0;
+    }
+
+    .live-progress__bar { display: none; }
+    .live-progress__facts { order: 2; color: var(--muted); }
+}
+
 @for $step from 1 through 5 {
     .live-progress[data-step="#{$step}"] .live-steps__item:nth-child(-n + #{$step}) {
         border-top-color: var(--accent);
