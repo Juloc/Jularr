@@ -63,7 +63,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
                         return [.. (await _annas.SearchAsync(site, target.Isbns.FirstOrDefault() ?? query, ct)).Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
-                            record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes))];
+                            record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes, record.IsPart))];
                     default:
                         return [];
                 }
@@ -175,10 +175,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
         }
 
-        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes)
+        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false)
         {
             var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title + (language is { Length: > 0 } ? " (" + language.ToUpperInvariant() + ")" : "") + " (" + format + ")";
-            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]);
+            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]) { IsPart = isPart };
         }
 
         private OpdsConnection Opds(AcquisitionConnectionData source) =>

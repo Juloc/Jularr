@@ -34,7 +34,7 @@ namespace Jularr.Integrations.Data.AnnasArchive
 
     internal sealed class AnnasArchiveRecord
     {
-        public AnnasArchiveRecord(string md5, string title, string? author, string extension, string? language, long? sizeBytes)
+        public AnnasArchiveRecord(string md5, string title, string? author, string extension, string? language, long? sizeBytes, bool isPart = false)
         {
             Md5 = md5;
             Title = title;
@@ -42,6 +42,7 @@ namespace Jularr.Integrations.Data.AnnasArchive
             Extension = extension;
             Language = language;
             SizeBytes = sizeBytes;
+            IsPart = isPart;
         }
 
         public string Md5 { get; }
@@ -50,5 +51,8 @@ namespace Jularr.Integrations.Data.AnnasArchive
         public string Extension { get; }
         public string? Language { get; }
         public long? SizeBytes { get; }
+
+        // The file is one part of a work; the whole work is elsewhere.
+        public bool IsPart { get; }
     }
 }

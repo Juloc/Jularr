@@ -334,6 +334,20 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_FileThatIsOnlyAPartIsMarked()
+        {
+            // A file that names a part of a work is only that part.
+            var sources = new FakeSources { RealRows = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var record = (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None)).Single();
+            Assert.IsFalse(record.IsPart);
+
+            var parts = new FakeSources { RealRows = true, RowFileName = "lgli/Jane Austen - Pride and Prejudice (1813) Part 1 of 3.epub" };
+            var other = new AnnasArchiveClient(new HttpClient(parts), new NoSourceGateResolver(), NoBrowser());
+            Assert.IsTrue((await other.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None)).Single().IsPart);
+        }
+
+        [TestMethod]
         [DataRow("Please wait 2 minutes before downloading.", 120)]
         [DataRow("Please wait 01:30 before downloading.", 90)]
         [DataRow("Please wait 1:05:00 before downloading.", 3900)]
@@ -549,6 +563,7 @@ namespace Jularr.Backend.Tests
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
+            public string RowFileName { get; set; } = "lgli/Jane Austen - Pride and Prejudice (1813).epub";
             public int SlowWaitSeconds { get; set; } = 1;
             public string? SlowWaitText { get; set; }
             private int _signedHits;
@@ -636,12 +651,12 @@ namespace Jularr.Backend.Tests
 
                 if (RealRows && uri.AbsolutePath == "/search")
                 {
-                    return Text("""
+                    return Text($"""
                         <html><body>
                           <div class="flex pt-3 pb-3 border-b">
                             <a href="/md5/0123456789abcdef0123456789abcdef" class="custom-a block"><img src="/cover.jpg"></a>
                             <div>
-                              <div class="line-clamp-[2] text-[9px] font-mono">lgli/Jane Austen - Pride and Prejudice (1813).epub</div>
+                              <div class="line-clamp-[2] text-[9px] font-mono">{RowFileName}</div>
                               <a href="/md5/0123456789abcdef0123456789abcdef" class="js-vim-focus">Pride and Prejudice</a>
                               <a href="/search?q=Jane Austen" class="custom-a text-sm"><span class="icon-[mdi--user-edit]"></span> Jane Austen</a>
                               <a href="/search?q=" class="custom-a text-sm"><span class="icon-[mdi--company]"></span> 1813</a>

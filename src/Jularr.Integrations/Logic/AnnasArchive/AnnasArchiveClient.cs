@@ -282,7 +282,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
 
-        // A search result is a row: the file's facts, the title link and the author.
+        // Each record is a row: the file's facts, the title link and the author.
         private static AnnasArchiveRecord? ReadRecord(IElement link, string md5)
         {
             var title = (link.QuerySelector("h3")?.TextContent ?? link.TextContent ?? "").Trim();
@@ -291,7 +291,8 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 return null;
             }
 
-            var lines = Lines(Row(link));
+            var row = Row(link);
+            var lines = Lines(row);
             var facts = lines.FirstOrDefault(line => Size().IsMatch(line)) ?? "";
             var format = Format().Match(facts) is { Success: true } found ? found.Groups[1].Value.ToLowerInvariant()
                 : lines.Select(line => Format().Match(line)).FirstOrDefault(match => match.Success)?.Groups[1].Value.ToLowerInvariant();
@@ -300,9 +301,23 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 return null;
             }
 
-            var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? Author(Row(link));
+            var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? Author(row);
             var language = Language().Match(facts) is { Success: true } code ? code.Groups[1].Value : null;
-            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts));
+            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), IsPart(lines));
+        }
+
+        // A file that names a part of a work is only that part.
+        private static bool IsPart(IReadOnlyList<string> lines)
+        {
+            foreach (var line in lines)
+            {
+                if (Part().IsMatch(line))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // The facts sit around the title link.
@@ -339,6 +354,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         [GeneratedRegex(@"\b(epub|pdf|mobi|azw3)\b", RegexOptions.IgnoreCase)]
         private static partial Regex Format();
+
+        // A file that names a part of a work: "(1 of 3)", "Part 2", "Band 1", "Vol. 2", "Teil 2", "Tomo 2".
+        [GeneratedRegex(@"\(\s*\d+\s+of\s+\d+\s*\)|\b(part|band|vol|volume|teil|tomo|partie)\.?\s*\d+", RegexOptions.IgnoreCase)]
+        private static partial Regex Part();
 
         [GeneratedRegex(@"wait\D{0,40}?([0-9]{1,5})\s*(?:s\b|sec|second)", RegexOptions.IgnoreCase)]
         private static partial Regex CountdownSeconds();

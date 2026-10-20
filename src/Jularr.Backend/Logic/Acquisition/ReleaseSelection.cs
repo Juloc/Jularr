@@ -11,9 +11,18 @@ namespace Jularr.Backend.Logic.Acquisition
             ArgumentNullException.ThrowIfNull(profile);
             ArgumentNullException.ThrowIfNull(candidates);
 
-            var ranked = candidates
-                .Select(candidate => Evaluate(profile, candidate))
-                .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
+            var evaluations = candidates.Select(candidate => Evaluate(profile, candidate)).ToArray();
+
+            // A complete file comes before a file that is only a part of a work. Among the complete ones the
+            // languages a request asks for come first; when no candidate carries one of them, the original
+            // language of the work does, before the quality does.
+            var asked = evaluations.Where(evaluation => UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)).ToArray();
+            var original = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsOriginal(profile, evaluation.Candidate.Languages)).ToArray();
+
+            var ranked = evaluations
+                .OrderBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
+                .ThenBy(evaluation => asked.Contains(evaluation) ? 0 : original.Contains(evaluation) ? 1 : 2)
+                .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
                 .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)
                 .ThenBy(evaluation => UpgradePolicy.LanguageRank(profile, evaluation.Candidate.Languages))
