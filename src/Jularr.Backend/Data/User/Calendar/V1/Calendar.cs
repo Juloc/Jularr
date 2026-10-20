@@ -21,12 +21,13 @@ namespace Jularr.Backend.Data.User.Calendar.V1
 
     public sealed class CalendarEntryV1 : BaseResponse
     {
-        public CalendarEntryV1(DateOnly day, long workId, MediaType mediaTypeId, string title, string? posterUrl, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
-            string? unitTitle, bool isAvailable, bool isWatchlisted)
+        public CalendarEntryV1(DateOnly day, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string title, string? posterUrl, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
+            string? unitTitle, bool isAvailable, bool isWatchlisted, bool isRequested)
         {
             Day = day;
             WorkId = workId;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Title = title;
             PosterUrl = posterUrl;
             WorkUnitTypeId = workUnitTypeId;
@@ -35,6 +36,7 @@ namespace Jularr.Backend.Data.User.Calendar.V1
             UnitTitle = unitTitle;
             IsAvailable = isAvailable;
             IsWatchlisted = isWatchlisted;
+            IsRequested = isRequested;
         }
 
         [DataField(typeof(CalendarFields), nameof(CalendarFields.Day))]
@@ -45,6 +47,10 @@ namespace Jularr.Backend.Data.User.Calendar.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        // Anime, Manga or Light novel of a Movie, Series or Book.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string Title { get; }
@@ -71,5 +77,9 @@ namespace Jularr.Backend.Data.User.Calendar.V1
 
         [DataField(typeof(CalendarFields), nameof(CalendarFields.IsWatchlisted))]
         public bool IsWatchlisted { get; }
+
+        // Requested by the profile.
+        [DataField(typeof(CalendarFields), nameof(CalendarFields.IsRequested))]
+        public bool IsRequested { get; }
     }
 }

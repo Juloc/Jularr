@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Data.Common;
 
 namespace Jularr.Integrations.Logic.Common
@@ -9,6 +10,41 @@ namespace Jularr.Integrations.Logic.Common
     {
         private const int MaximumRedirects = 5;
         private static readonly string[] GateMarkers = ["cf-challenge", "challenge-platform", "ddos-guard", "g-recaptcha", "h-captcha", "captcha"];
+
+        // A page behind a browser check is read by a real browser; without one the check stands and a person takes over.
+        public static async Task<string> ReadPageAsync(HttpClient http, Uri uri, ISourceGateResolver gates, ISourceBrowser browser, CancellationToken ct)
+        {
+            try
+            {
+                using var response = await SendAsync(http, uri, null, gates, ct);
+                return await response.Content.ReadAsStringAsync(ct);
+            }
+            catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
+            {
+                var page = await browser.ReadPageAsync(uri, ct);
+                if (page is not null)
+                {
+                    return page;
+                }
+
+                throw;
+            }
+        }
+
+        // A file behind a browser check is fetched by a real browser; the storage rules stay the caller's.
+        public static async Task SaveFileAsync(HttpClient http, Uri uri, string destination, ISourceGateResolver gates, ISourceBrowser browser, long? maximumBytes,
+            Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+        {
+            try
+            {
+                using var response = await SendAsync(http, uri, null, gates, ct);
+                await SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
+            }
+            catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
+            {
+                await browser.SaveFileAsync(uri, destination, maximumBytes, reserveWrite, ct);
+            }
+        }
 
         public static async Task<HttpResponseMessage> SendAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct)
         {
@@ -57,7 +93,13 @@ namespace Jularr.Integrations.Logic.Common
             }
 
             await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, useAsync: true);
+            await CopyAsync(source, destination, maximumBytes, reserveWrite, ct);
+        }
+
+        // The file is written in pieces; the limit and the reservation are the storage's rules.
+        public static async Task CopyAsync(Stream source, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+        {
+            await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
             var buffer = new byte[81920];
             long total = 0;
             int read;

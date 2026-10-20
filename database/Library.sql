@@ -155,6 +155,7 @@ CREATE TABLE "Operations" (
     "RemainingBytes" bigint NULL CHECK ("RemainingBytes" >= 0),
     "EtaSeconds" integer NULL CHECK ("EtaSeconds" >= 0),
     "DownloadStateTypeId" smallint NULL CHECK ("DownloadStateTypeId" BETWEEN 1 AND 4),
+    "DownloadWaitUntil" timestamptz NULL,
     "RequestedByAccountId" bigint NULL REFERENCES "Accounts" ("Id") ON DELETE SET NULL,
     "ProcessedCount" bigint NOT NULL DEFAULT 0 CHECK ("ProcessedCount" >= 0),
     "ErrorKey" varchar(64) NULL,
@@ -176,7 +177,8 @@ CREATE TABLE "Operations" (
     CHECK ("AttentionProposal" IS NULL OR "AttentionKey" IS NOT NULL),
     CHECK ("OperationStatusTypeId" IN (1, 2) OR "SourceLinkUrl" IS NULL),
     CHECK ("DismissedAt" IS NULL OR "OperationStatusTypeId" = 4),
-    CHECK ("OperationTypeId" = 2 OR ("SizeBytes" IS NULL AND "DownloadStateTypeId" IS NULL))
+    CHECK ("OperationTypeId" = 2 OR ("SizeBytes" IS NULL AND "DownloadStateTypeId" IS NULL)),
+    CHECK ("OperationTypeId" = 2 OR "DownloadWaitUntil" IS NULL)
 );
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_ActiveBackup" ON "Operations" ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2);

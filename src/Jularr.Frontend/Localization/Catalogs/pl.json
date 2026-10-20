@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "pl",
  "name": "Polski",
  "reviewed": false,
@@ -5561,7 +5561,7 @@
    "Otwórz źródło i potwierdź"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Link do pliku ze źródła"
   ],
   "activity.continueDownload": [

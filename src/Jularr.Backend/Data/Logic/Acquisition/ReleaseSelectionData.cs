@@ -95,6 +95,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? SafetyRejection { get; init; }
         public ReleaseReliability? Reliability { get; init; }
 
+        // The file is one part of a work; the rest of it is elsewhere.
+        public bool IsPart { get; init; }
+
         // Preference points the media type resolves from the request rather than from the profile (a preferred language, an exact volume), added to the profile's preference score.
         public int ContextScore { get; init; }
 

@@ -74,7 +74,7 @@ namespace Jularr.Frontend.Pages.Shared
             {
                 acquisition.AddRange([new("acquisition.role.Search", "/Admin/Acquisition", ""), new("acquisition.role.Download", "/Admin/Acquisition/Downloads", ""),
                     new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", ""), new("admin.profiles.title", "/Admin/Acquisition/Profiles", ""),
-                    new("admin.sources.title", "/Admin/Acquisition/Sources", ""), new("admin.takeover.title", "/Admin/Acquisition/Takeover", "")]);
+                    new("admin.sources.title", "/Admin/Acquisition/Sources", ""), new("admin.takeover.title", "/Admin/Acquisition/Takeover", ""), new("admin.browser.title", "/Admin/Browser", "")]);
             }
 
             if (acquisition.Count > 0) secondary.Add(Group("nav.group.acquisition", "settings", [.. acquisition]));

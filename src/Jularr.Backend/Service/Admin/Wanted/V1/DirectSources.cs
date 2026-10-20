@@ -21,6 +21,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     // Sources that search and serve files themselves: Gutenberg, OPDS catalogs and Anna's Archive.
     internal sealed class DirectSources
     {
+        // The ways one work is looked for; more would only load the source for nothing.
+        private const int MaximumTitles = 3;
+        private const int MaximumIsbns = 2;
+
         private readonly GutenbergClient _gutenberg;
         private readonly OpdsClient _opds;
         private readonly AnnasArchiveClient _annas;
@@ -36,9 +40,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // The download waits for a person to pass the source's own check and paste the file link.
         public const string ManualLinkKey = "source_manual_link";
-
-        // The longest waiting page Jularr sits through itself.
-        private static readonly TimeSpan SlowWait = TimeSpan.FromSeconds(90);
 
         public static bool IsDirect(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive;
 
@@ -65,8 +66,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
-                        return [.. (await _annas.SearchAsync(site, target.Isbns.FirstOrDefault() ?? query, ct)).Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
-                            record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes))];
+                        return [.. (await _annas.SearchAsync(site, AnnaQueries(target), ct)).Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
+                            record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes, record.IsPart))];
                     default:
                         return [];
                 }
@@ -115,7 +116,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             break;
                         }
 
-                        // Without a key: the person's file link, else the slow download; checks, long waits and dead links go to a person.
+                        // Without a key: the person's file link, else the slow download; a check or a dead link goes to a person.
                         try
                         {
                             if (download.SourceLinkUrl is { } link)
@@ -124,10 +125,26 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             }
                             else
                             {
-                                await _annas.SlowDownloadAsync(site, md5, destination, SlowWait, ct, paths.Settings.MaxJobBytes, Reserve);
+                                // The mirror that offered the file is the one that serves it.
+                                var mirror = new Uri($"{address.Scheme}://{address.Host}/");
+                                var page = await _annas.ReadSlowPageAsync(mirror, md5, ct);
+
+                                // The page's own countdown is served once per attempt; a repeated rendering does not restart it.
+                                if (page.Wait > TimeSpan.Zero && download.DownloadWaitUntil is null)
+                                {
+                                    throw new DirectSourceWaitException(page.Wait);
+                                }
+
+                                // The page counted down but names no file yet; the next attempt reads it again.
+                                if (page.File is null)
+                                {
+                                    throw new DirectSourceException("acquisition_grab_failed");
+                                }
+
+                                await _annas.DownloadFileAsync(page.File, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                             }
                         }
-                        catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate or AnnasArchiveFailure.WaitTooLong)
+                        catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate)
                         {
                             throw new DirectSourceException(ManualLinkKey, AnnasArchiveClient.SlowPageUri(site, md5));
                         }
@@ -162,10 +179,40 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
         }
 
-        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes)
+        // Every way to find the work at Anna's Archive: its title with the author, its titles in the other
+        // languages and its ISBNs. The source knows only the query; the work knows the ways.
+        internal static IReadOnlyList<string> AnnaQueries(WantedTargetData target)
+        {
+            var queries = new List<string>();
+            void Add(string? value)
+            {
+                var query = value?.Trim();
+                if (!string.IsNullOrWhiteSpace(query) && !queries.Contains(query, StringComparer.OrdinalIgnoreCase))
+                {
+                    queries.Add(query);
+                }
+            }
+
+            Add(string.Join(' ', new[] { target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
+                .Where(part => !string.IsNullOrWhiteSpace(part))));
+            Add(target.CanonicalTitle);
+            foreach (var title in target.EditionTitles.Take(MaximumTitles))
+            {
+                Add(title);
+            }
+
+            foreach (var isbn in target.Isbns.Take(MaximumIsbns))
+            {
+                Add(isbn);
+            }
+
+            return queries;
+        }
+
+        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false)
         {
             var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title + (language is { Length: > 0 } ? " (" + language.ToUpperInvariant() + ")" : "") + " (" + format + ")";
-            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]);
+            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]) { IsPart = isPart };
         }
 
         private OpdsConnection Opds(AcquisitionConnectionData source) =>
@@ -184,5 +231,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // The page a person opens to pass the source's check.
         public Uri? ManualUrl { get; } = manualUrl;
+    }
+
+    // A source states its own countdown; the job returns and the monitor resumes it when the wait ends.
+    internal sealed class DirectSourceWaitException(TimeSpan wait) : Exception("The direct source asks to wait.")
+    {
+        public TimeSpan Wait { get; } = wait;
     }
 }

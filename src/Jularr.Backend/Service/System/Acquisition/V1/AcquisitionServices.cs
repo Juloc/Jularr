@@ -763,7 +763,20 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await paths.PrepareIncompleteAsync(download.OperationId, CancellationToken);
                     File.Delete(path + ".part");
                     await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
+                    // A file of an earlier attempt is replaced; it never stays beside the new one.
+                    File.Delete(path);
                     File.Move(path + ".part", path);
+                }
+                catch (DirectSourceWaitException wait)
+                {
+                    // The source's own countdown runs between jobs, so waiting never holds a download slot.
+                    var eta = Math.Max(1, (int)Math.Ceiling(wait.Wait.TotalSeconds));
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SetDownloadWaitAsync(new DownloadWaitData(download.OperationId, _time.GetUtcNow().UtcDateTime + wait.Wait, eta), ct);
+                        return true;
+                    }, CancellationToken);
+                    return;
                 }
                 catch (DirectSourceException exception) when (exception.ErrorKey is "source_gate" or DirectSources.ManualLinkKey)
                 {
@@ -784,6 +797,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 catch (DirectSourceException)
                 {
                     File.Delete(path + ".part");
+                    // What the failed attempt left behind goes; the next one starts clean.
+                    paths.RemoveCompleted(download.OperationId);
                     await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
                     return;
                 }
