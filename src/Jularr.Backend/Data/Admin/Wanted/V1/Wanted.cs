@@ -320,8 +320,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class SearchWantedDataV1 : BaseData
     {
-        public SearchWantedDataV1(int? parentUnitNumber = null, int? unitNumber = null)
+        public SearchWantedDataV1(int? parentUnitNumber = null, int? unitNumber = null, string? language = null)
         {
+            Language = language;
             ParentUnitNumber = parentUnitNumber;
             UnitNumber = unitNumber;
         }
@@ -332,6 +333,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
         public int? UnitNumber { get; }
+
+        // A book is searched for one edition: only releases in its language count.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.LanguageCode), false)]
+        public string? Language { get; }
     }
 
     public sealed class GrabWantedReleaseDataV1 : BaseData

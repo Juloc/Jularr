@@ -23,6 +23,9 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DateTimeField UpdatedAt = new();
         public static readonly BoolField IsWatchlisted = new();
         public static readonly BoolField IsRequestable = new();
+        public static readonly EnumField AvailabilityStateId = new(typeof(MediaAvailabilityState));
+        public static readonly IntField AvailableUnits = new() { Minimum = 0 };
+        public static readonly IntField MonitoredUnits = new() { Minimum = 0 };
         public static readonly StringArrayField Titles = new() { ItemMaximumLength = 500 };
     }
 }

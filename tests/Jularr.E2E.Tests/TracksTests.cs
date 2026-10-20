@@ -48,11 +48,7 @@ namespace Jularr.E2E.Tests
                 foreach (var (release, number) in new[] { (first, "1"), (second, "2") })
                 {
                     fakes.Offer(release);
-                    await Steps.OpenSearchAsync(page, FakeServices.SeriesTitle);
-                    var search = Steps.FormWith(page, "Start search");
-                    await search.Locator("[name=ParentUnitNumber]").FillAsync("1");
-                    await search.Locator("[name=UnitNumber]").FillAsync(number);
-                    await Steps.SubmitAsync(page, search);
+                    await Steps.SearchEpisodeAsync(page, FakeServices.SeriesTitle, number);
                     await Steps.GrabAsync(page, release);
                 }
 

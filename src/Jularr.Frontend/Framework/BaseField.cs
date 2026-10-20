@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Framework
         Password,
         TextArea,
         Number,
+        Range,
         Checkbox,
         Select,
         MultiSelect,
@@ -25,8 +26,8 @@ namespace Jularr.Frontend.Framework
         FieldControl Control,
         bool Required,
         int? MaximumLength,
-        long? Minimum,
-        long? Maximum,
+        decimal? Minimum,
+        decimal? Maximum,
         string LabelKey)
     {
         private static readonly ConcurrentDictionary<PropertyInfo, (DataFieldAttribute Field, Func<BaseData, object?> Read)> Properties = new();
@@ -75,8 +76,8 @@ namespace Jularr.Frontend.Framework
             {
                 LongField number => (number.Minimum, number.Maximum),
                 IntField number => (number.Minimum, number.Maximum),
-                DecimalField number => ((long)decimal.Ceiling(number.Minimum), (long)decimal.Floor(number.Maximum)),
-                _ => ((long?)null, (long?)null)
+                DecimalField number => (number.Minimum, number.Maximum),
+                _ => ((decimal?)null, (decimal?)null)
             };
 
             return new BaseField(

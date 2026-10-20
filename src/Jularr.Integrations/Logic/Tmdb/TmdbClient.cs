@@ -248,7 +248,7 @@ namespace Jularr.Integrations.Logic.Tmdb
                 if (Text(item, movie ? "title" : "name") is not { } title) return null;
                 var imdb = Text(item, "imdb_id") ?? (item.TryGetProperty("external_ids", out var external) ? Text(external, "imdb_id") : null);
                 return new TmdbCatalogEntry(id, title, Text(item, movie ? "original_title" : "original_name"), Date(item, movie ? "release_date" : "first_air_date"), Text(item, "overview"),
-                    ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "popularity"), Number(item, "vote_average"), imdb,
+                    ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "popularity"), Number(item, "vote_average"), Int(item, "vote_count"), imdb,
                     item.TryGetProperty("adult", out var adult) && adult.ValueKind == JsonValueKind.True);
             }
         }

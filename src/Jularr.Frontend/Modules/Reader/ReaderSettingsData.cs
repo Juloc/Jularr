@@ -24,6 +24,16 @@ namespace Jularr.Frontend.Modules.Reader
         public int Size { get; } = 20;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Spacing))]
         public int Spacing { get; } = 165;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string FontFamily { get; } = "serif";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.TextWidth))]
+        public int TextWidth { get; } = 68;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
+        public bool Indent { get; } = false;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
+        public bool Hyphenation { get; } = true;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
+        public bool Illustrations { get; } = true;
     }
 
     public static class ReaderSettingsFields
@@ -32,5 +42,7 @@ namespace Jularr.Frontend.Modules.Reader
         public static readonly StringField Colour = new() { MinimumLength = 7, MaximumLength = 7 };
         public static readonly IntField Size = new() { Minimum = 14, Maximum = 40 };
         public static readonly IntField Spacing = new() { Minimum = 120, Maximum = 220 };
+        public static readonly IntField TextWidth = new() { Minimum = 40, Maximum = 90 };
+        public static readonly BoolField Enabled = new();
     }
 }

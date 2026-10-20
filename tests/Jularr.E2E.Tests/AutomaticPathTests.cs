@@ -46,7 +46,7 @@ namespace Jularr.E2E.Tests
                 await TakeOverAsync(page, fakes, apply: false);
                 Assert.AreEqual(1, await page.Locator("[name=RootFolders]:checked").CountAsync(), "The root folder was not suggested for the series library.");
                 await TakeOverAsync(page, fakes, apply: true);
-                StringAssert.Contains(await page.Locator("main table").Last.InnerTextAsync(), "Wanted");
+                await Assertions.Expect(page.Locator("main table").Last).ToContainTextAsync("Wanted");
 
                 // Inventory takeover stays paused across restart until the Owner explicitly takes over automatic acquisition.
                 await page.GotoAsync("about:blank");
@@ -132,7 +132,7 @@ namespace Jularr.E2E.Tests
                 var anime = await Steps.WaitForAvailableAsync(user, FakeServices.AnimeTitle);
                 Assert.AreEqual(2, Directory.EnumerateFiles(Path.Combine(folders.Library, "Anime"), "*.webm", SearchOption.AllDirectories).Count(), "The anime episodes were not imported.");
                 await user.GotoAsync("/Requests");
-                StringAssert.Contains(await user.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Available");
+                await Assertions.Expect(user.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
 
                 if (ffmpeg is null)
                 {
@@ -194,7 +194,7 @@ namespace Jularr.E2E.Tests
                 var details = await Steps.WaitForAvailableAsync(user, FakeServices.BookTitle, "Read");
                 await Steps.OpenReaderAsync(user, details);
                 var content = user.Locator("[data-role=content]");
-                StringAssert.Contains(await content.InnerTextAsync(), "must be in want of a wife.");
+                await Assertions.Expect(content).ToContainTextAsync("must be in want of a wife.");
                 var picture = content.Locator("img").First;
                 await Assertions.Expect(picture).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
                 Assert.IsTrue(await picture.EvaluateAsync<bool>("image => image.complete && image.naturalWidth > 0"), "The PDF's picture did not load.");

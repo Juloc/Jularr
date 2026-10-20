@@ -23,25 +23,9 @@ namespace Jularr.Backend.Service.User.Library.V1
             // Works the profile lists that have media, a Plex item or an acquisition target; search stays local.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
-                    work."Id",
-                    work."MediaTypeId",
-                    visible."Title" AS "Title",
-                    work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl",
-                    state."MediaStateTypeId",
+                    {{WorkCardProjection.Columns}},
                     EXISTS (
                         SELECT
                             1
@@ -54,7 +38,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
-                    JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = work."Id"
+                    {{WorkCardProjection.Joins}}
                     LEFT JOIN LATERAL (
                         SELECT
                             max(file."CreatedAt") AS "AddedAt"

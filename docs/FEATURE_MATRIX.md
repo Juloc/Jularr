@@ -55,13 +55,15 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 ## Radarr, Sonarr, Lidarr, Readarr, Bazarr
 
+What each *arr has and what Jularr keeps, does differently, adds later or leaves out: [Sonarr](PARITY_SONARR.md), [Radarr](PARITY_RADARR.md), [Lidarr](PARITY_LIDARR.md), [Readarr](PARITY_READARR.md), [Prowlarr](PARITY_PROWLARR.md), [Bazarr](PARITY_BAZARR.md), [Seerr](PARITY_SEERR.md).
+
 | Function | Status | Owner | Tests | Missing |
 | --- | --- | --- | --- | --- |
 | Movies: TMDB metadata, search, rename, history, editions, franchises | tested | `TmdbClient`, `WorkMetadata` | AcquisitionTests, DiscoverTests, ReleaseFactsTests | Edition choice in the UI |
 | Series: seasons, episodes, specials, season packs, absolute (Anime) and dated (daily) releases | tested | `WorkMetadata`, `VideoReleaseJudge`, `EpisodeNumbering` | AcquisitionTests | Specials search; an AniList mapping where TMDB seasons differ from the Anime count |
 | Music: MusicBrainz, Cover Art Archive, albums, tracks, FLAC/ALAC/MP3/AAC, album playback | tested | `MusicBrainzClient`, `MusicReleaseJudge` | MusicTests | Artists, discographies and their monitoring, editions/media, secondary types, multi-format, tag read/write, retag preview, duplicates (#1022) |
 | Books, manga, light novels: sources, Newznab, import, reader | tested | Book/Manga judges, sources | BookTests, MangaTests, SourceTests, ReadingTests | Author and series entities and monitoring, editions, format upgrades, chapter releases |
-| Audiobooks as Book subtype | planned | Media subtypes | – | Subtype, library/discover view, audio playback with chapters |
+| Audiobooks as their own media type ([Readarr parity](PARITY_READARR.md)) | planned | Media types | – | Type, library/discover view, audio playback with chapters, tags, narrator |
 | Subtitles: detection, wanted languages, automatic fetch, manual search and choice, OpenSubtitles, SubDL | tested | `SubtitleServices` | SubtitleTests, PlaybackTests | Status and history page, forced flags, quotas, further providers; a browser test needs an HTTPS subtitle fake |
 
 ## Prowlarr and Seerr

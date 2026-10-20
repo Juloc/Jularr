@@ -28,7 +28,7 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
-            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null, IReadOnlyList<TargetUnit>? episodes = null,
+            NamingSet patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null, IReadOnlyList<TargetUnit>? episodes = null,
             IReadOnlyDictionary<string, AudioTags>? tags = null)
         {
             if (mediaType == MediaType.Book)
@@ -53,8 +53,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 // The largest video is the feature.
                 if (videos.MaxBy(video => video.SizeBytes) is { } feature)
                 {
-                    AddGroup(placements, files, feature, NamingPattern.Apply(patterns[MediaType.Movie],
-                        new NamingValues(title, year, null, null, null, qualityKey, facts?.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), null, null, null);
+                    AddGroup(placements, files, feature, NamingPattern.Apply(patterns.Pattern(MediaType.Movie, subtype),
+                        new NamingValues(title, year, null, null, null, qualityKey, facts?.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1) { Rules = patterns.Rules(MediaType.Movie) }), null, null, null);
                 }
 
                 return placements;
@@ -68,8 +68,52 @@ namespace Jularr.Backend.Logic.Acquisition
                     continue;
                 }
 
-                AddGroup(placements, files, video, NamingPattern.Apply(patterns[MediaType.Series],
-                    new NamingValues(title, year, season, episode, null, qualityKey, facts?.ReleaseGroup ?? parsed.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), WorkUnitType.Episode, episode, season);
+                // The placed episode brings its absolute number and air date to the name.
+                var unit = episodes?.FirstOrDefault(candidate => candidate.ParentNumber == season && candidate.Number == episode);
+                AddGroup(placements, files, video, NamingPattern.Apply(patterns.Pattern(MediaType.Series, subtype),
+                    new NamingValues(title, year, season, episode, null, qualityKey, facts?.ReleaseGroup ?? parsed.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)
+                    {
+                        MediaTypeId = MediaType.Series,
+                        Rules = patterns.Rules(MediaType.Series),
+                        Absolute = unit?.Absolute,
+                        AirDate = unit?.ReleasedOn ?? parsed.AirDate
+                    }), WorkUnitType.Episode, episode, season);
+            }
+
+            return placements;
+        }
+
+        // The videos a person chose, each as the film or as the episode they say; every file is named by its own release facts, and subtitles named like it follow.
+        public static IReadOnlyList<ImportPlacementData> PlanChosen(MediaType mediaType, MediaSubtype? subtype, string title, int? year, IReadOnlyList<StorageFile> files,
+            IReadOnlyList<(string Path, int? Season, int? Episode)> choices, NamingSet patterns, IReadOnlyList<TargetUnit> episodes)
+        {
+            var placements = new List<ImportPlacementData>();
+            var isMovie = mediaType == MediaType.Movie;
+            foreach (var (path, season, episode) in choices)
+            {
+                if (files.FirstOrDefault(file => file.RelativePath == path && LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video) is not { } video)
+                {
+                    continue;
+                }
+
+                var facts = ReleaseFacts.OfPath(path, isMovie);
+                if (isMovie)
+                {
+                    AddGroup(placements, files, video, NamingPattern.Apply(patterns.Pattern(MediaType.Movie, subtype),
+                        new NamingValues(title, year, null, null, null, facts?.QualityKey, facts?.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1) { Rules = patterns.Rules(MediaType.Movie) }), null, null, null);
+                }
+                else if (season is { } seasonNumber && episode is { } episodeNumber)
+                {
+                    var unit = episodes.FirstOrDefault(candidate => candidate.ParentNumber == seasonNumber && candidate.Number == episodeNumber);
+                    AddGroup(placements, files, video, NamingPattern.Apply(patterns.Pattern(MediaType.Series, subtype),
+                        new NamingValues(title, year, seasonNumber, episodeNumber, null, facts?.QualityKey, facts?.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)
+                        {
+                            MediaTypeId = MediaType.Series,
+                            Rules = patterns.Rules(MediaType.Series),
+                            Absolute = unit?.Absolute,
+                            AirDate = unit?.ReleasedOn
+                        }), WorkUnitType.Episode, episodeNumber, seasonNumber);
+                }
             }
 
             return placements;

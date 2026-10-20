@@ -3,13 +3,15 @@ import { progressReporter } from '../Tracking/Progress';
 import { findings, highlights } from './highlights';
 import { translator } from './Translation/translation';
 import { createTranslationWorker } from './Translation/worker';
-import { initializeReaderSettings } from './Settings';
+import { initializeReaderChrome, initializeReaderSettings } from './Settings';
 import { initializePaperPages } from './PaperPages';
 import { initializeComicPages } from './ComicPages';
+import { initializeReadAloud } from './Speech';
 
 const reader = document.querySelector<HTMLElement>('.reader');
-if (reader && reader.dataset.format !== 'pdf') {
-    if (reader.dataset.format === 'comic') initializeComicPages(reader);
+if (reader) {
+    if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
+    else if (reader.dataset.format === 'comic') initializeComicPages(reader);
     else if (reader.querySelector('[data-role=content]')) initializeText(reader);
 }
 
@@ -33,6 +35,7 @@ function initializeText(reader: HTMLElement): void {
     if (reader.dataset.query) findings(content, reader.dataset.query);
     paging = initializePaperPages(reader, content, settings, () => report(false));
     paging.layout();
+    initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
     const requested = new URLSearchParams(location.search).get('b');
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
@@ -49,6 +52,7 @@ function initializeText(reader: HTMLElement): void {
     if (translate) void translate(reading === 'original' ? '' : reading);
     reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(button => button.addEventListener('click', async () => {
         reading = button.dataset.languageChoice!;
+        reader.dataset.readingLanguage = reading;
         reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
         try {
             const response = await fetch(reader.dataset.languageUrl!, {

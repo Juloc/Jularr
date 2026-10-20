@@ -82,9 +82,25 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static async Task UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
+        public static async Task<bool> UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
         {
             if (data.TagIds is not null) await ctx.RequireAcquisitionTagsAsync(new AcquisitionTagSetData(data.TagIds), ct);
+
+            // Optimistic version validation below guards the paused state used for this transition.
+            var resumed = false;
+            if (!data.IsPaused)
+            {
+                var current = new SqlStatement();
+                current.Statement =
+                    """
+                    SELECT "IsPaused"
+                    FROM "WantedItems"
+                    WHERE "Id" = @Id AND "Version" = @Version;
+                    """;
+                current.Parameters.Add(data);
+                resumed = await ctx.ReadSql.ExecuteScalarAsync(current, ct) is true;
+            }
+
             // Do not alter request decisions; a chosen profile and library fit the type and subtype.
             var sql = new SqlStatement();
             sql.Statement =
@@ -93,6 +109,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "WantedItems" AS wanted
                 SET
                     "IsPaused" = @IsPaused,
+                    "NextSearchAt" = CASE WHEN wanted."IsPaused" AND NOT @IsPaused THEN NULL ELSE wanted."NextSearchAt" END,
                     "AcquisitionProfileId" = @AcquisitionProfileId,
                     "LibraryRootId" = @LibraryRootId,
                     "MonitorsNewUnits" = coalesce(@MonitorsNewUnits, wanted."MonitorsNewUnits"),
@@ -130,7 +147,7 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
-            if (data.TagIds is null) return;
+            if (data.TagIds is null) return resumed;
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -147,6 +164,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            return resumed;
         }
 
         // A season sets all its episodes; units of other Works and other unit types are not touched.

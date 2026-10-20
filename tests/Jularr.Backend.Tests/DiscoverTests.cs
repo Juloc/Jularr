@@ -122,6 +122,69 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Catalog_ReadWhole_AnswersEveryShelfAndSuggestsWhileTyping()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(fake: tmdb);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'LocalDiscovery';
+                UPDATE "ExternalWorkSyncs" SET "CompletedAt" = now() WHERE "Namespace" IN ('tmdb_movie', 'anilist');
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleasedOn", "ImageUrl", "ImdbId", "Popularity", "Rating", "Votes", "TrendingRank", "IsAdult") VALUES
+                    ('tmdb_movie', '603', 1, NULL, 'The Matrix', '1999-03-31', 'https://img.test/603.jpg', 'tt0133093', 80, 8.7, 25000, 1, FALSE),
+                    ('tmdb_movie', '604', 1, NULL, 'The Matrix Reloaded', '2003-05-15', 'https://img.test/604.jpg', 'tt0234215', 60, 7.0, 10000, NULL, FALSE),
+                    ('tmdb_movie', '700', 1, NULL, 'Rated By Five', '2020-01-01', 'https://img.test/700.jpg', NULL, 1, 9.9, 5, NULL, FALSE),
+                    ('tmdb_movie', '701', 1, NULL, 'Out Now', current_date - 10, 'https://img.test/701.jpg', NULL, 50, NULL, NULL, NULL, FALSE),
+                    ('tmdb_movie', '702', 1, NULL, 'Out Soon', current_date + 30, 'https://img.test/702.jpg', NULL, 40, NULL, NULL, NULL, FALSE),
+                    ('tmdb_movie', '703', 1, NULL, 'Matrix Adult', '2001-01-01', 'https://img.test/703.jpg', NULL, 90, 9.0, 9000, 2, TRUE),
+                    ('tmdb_movie', '704', 1, NULL, 'Matrix Unread', NULL, NULL, NULL, 99, NULL, NULL, 3, FALSE),
+                    ('anilist', '21', 2, 1, 'The Matrix Anime', '2021-04-01', 'https://img.test/21.jpg', NULL, 5000, 8.0, 5000, 1, FALSE);
+                """);
+
+            // The whole catalogs answer all their shelves at once; series still come from TMDB and are not among them.
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var shelves = (await read.Content.ReadFromJsonAsync<BaseDataList<DiscoverShelfV1>>())!.ToArray();
+            string Shelf(string scope, DiscoverFeedType feed) => string.Join(",", shelves.Single(shelf => shelf.ScopeSlug == scope && shelf.DiscoverFeedTypeId == feed) is var found
+                ? found.Items.Select(item => item.TmdbId!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Concat(found.CatalogItems.Select(item => item.ExternalId)) : []);
+            Assert.AreEqual("603", Shelf("movies", DiscoverFeedType.Trending));
+            Assert.AreEqual("603,604", Shelf("movies", DiscoverFeedType.Top));
+            Assert.AreEqual("701", Shelf("movies", DiscoverFeedType.New));
+            Assert.AreEqual("702", Shelf("movies", DiscoverFeedType.Upcoming));
+            Assert.AreEqual("21", Shelf("anime", DiscoverFeedType.Trending));
+            Assert.IsFalse(shelves.Any(shelf => shelf.ScopeSlug == "series"));
+            Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.StartsWith("/3/trending/movie", StringComparison.Ordinal)));
+
+            // A browse page goes on in the catalog; a requested title carries its state.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top));
+            var topItems = (await top.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.ToArray();
+            Assert.AreEqual(MediaStateType.Requested, topItems[0].MediaStateTypeId);
+            Assert.IsNotNull(topItems[0].WorkId);
+            using var nextPage = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 2));
+            Assert.AreEqual(0, (await nextPage.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Count);
+
+            // Typed words suggest the library's title first, then the others; adult and unread titles stay out.
+            using var suggested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
+            Assert.AreEqual(HttpStatusCode.OK, suggested.StatusCode, await suggested.Content.ReadAsStringAsync());
+            var suggestions = (await suggested.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.ToArray();
+            Assert.AreEqual("The Matrix|The Matrix Anime|The Matrix Reloaded", string.Join("|", suggestions.Select(item => item.Title)));
+            Assert.AreEqual("movies", suggestions[0].ScopeSlug);
+            Assert.IsNotNull(suggestions[0].WorkId);
+            Assert.AreEqual("anime", suggestions[1].ScopeSlug);
+            using var narrowed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matrix rel", "movies"));
+            Assert.AreEqual("The Matrix Reloaded", (await narrowed.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Single().Title);
+
+            // Without full local discovery the shelves come from the providers again; without DiscoverCache nothing is suggested.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'LocalDiscovery'");
+            using var off = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/shelves", new ReadDiscoverShelvesDataV1());
+            Assert.AreEqual(0, (await off.Content.ReadFromJsonAsync<BaseDataList<DiscoverShelfV1>>())!.Count);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'DiscoverCache'");
+            using var none = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/suggestions", new SuggestDiscoverDataV1("matr"));
+            Assert.AreEqual(0, (await none.Content.ReadFromJsonAsync<BaseDataList<DiscoverSuggestionV1>>())!.Count);
+        }
+
+        [TestMethod]
         public async Task Franchise_TmdbCollection_ListsTheVisibleTitles()
         {
             await using var host = await CreateHostAsync(razor: true);
@@ -240,14 +303,15 @@ namespace Jularr.Backend.Tests
             var html = await home.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode, html);
             StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
-            Assert.IsFalse(html.Contains("The Matrix", StringComparison.Ordinal));
+            StringAssert.Contains(html, "The Matrix");
+            StringAssert.Contains(html, "media-hero");
 
-            // Native recommendation route stays usable.
+            // Native recommendation route stays usable, but no longer inserts Hero content.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
             html = await recommendations.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
-            StringAssert.Contains(html, "media-hero");
+            StringAssert.Contains(html, "class=\"media-hero");
             StringAssert.Contains(html, "/Discover/movies/603");
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
@@ -397,11 +461,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await taken.Content.ReadAsStringAsync(), "in_use");
 
             // The Work page searches the provider and offers the choice.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + work.Id);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + work.Id + "?Tab=Metadata");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Wrong match");
-            using var results = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + work.Id + "?handler=MatchSearch", new Dictionary<string, string>
+            using var results = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + work.Id + "?Tab=Metadata&handler=MatchSearch", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = LibraryTests.Token(html), ["MediaTypeId"] = "1", ["Query"] = "Matrix"
             });

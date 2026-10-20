@@ -5504,14 +5504,6 @@
    "Queued at",
    "キュー追加日時"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "アクティビティ"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "やること"
-  ],
   "activity.tab.History": [
    "History",
    "履歴"
@@ -5575,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "ダウンロードを続行"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "実行中のものはありません。"
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "対応が必要なものはありません。"
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

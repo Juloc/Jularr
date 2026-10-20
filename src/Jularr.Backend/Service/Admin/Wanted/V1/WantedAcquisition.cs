@@ -47,7 +47,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // Automatic searches leave out manual-only, backed-off and exhausted indexers; every indexer asked records its use.
         public async Task<WantedSearchResult> SearchAsync(LogicContext context, WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, bool automatic,
-            CancellationToken ct, UnitScope? scope = null)
+            CancellationToken ct, UnitScope? scope = null, string? focusLanguage = null)
         {
             // Only targets with a profile can be ranked.
             if (target.Definition is null)
@@ -85,7 +85,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
             }
 
-            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
 
             // Expansion tiers only run while too few releases are usable.
             for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
@@ -106,7 +106,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     }
                 });
 
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values);
+                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable) >= budget.TargetUsable)
                 {
                     break;

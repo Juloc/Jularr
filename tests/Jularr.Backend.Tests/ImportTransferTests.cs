@@ -1,3 +1,5 @@
+using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Logic.Storage;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
 
@@ -6,6 +8,33 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class ImportTransferTests
     {
+        [TestMethod]
+        public async Task AllNinetyNineNamesAreTaken_DoesNotClaimAnOccupiedTarget()
+        {
+            using var directory = new TemporaryDirectory();
+            for (var attempt = 1; attempt <= 99; attempt++)
+            {
+                File.WriteAllText(Path.Combine(directory.Path, LibraryNaming.Alternative("film", attempt) + ".mkv"), "existing");
+            }
+
+            var result = await DownloadImport.FreeStemAsync(new LocalStorageFiles(directory.Path), "", "film", [".mkv"], CancellationToken.None);
+
+            Assert.IsNull(result);
+            Assert.AreEqual("existing", File.ReadAllText(Path.Combine(directory.Path, "film (99).mkv")));
+        }
+
+        [TestMethod]
+        public async Task ImportNameReservation_ChecksEveryExtensionInAGroup()
+        {
+            using var directory = new TemporaryDirectory();
+            File.WriteAllText(Path.Combine(directory.Path, "film.mkv"), "existing");
+            File.WriteAllText(Path.Combine(directory.Path, "film (2).en.srt"), "existing");
+
+            var result = await DownloadImport.FreeStemAsync(new LocalStorageFiles(directory.Path), "", "film", [".mkv", ".en.srt"], CancellationToken.None);
+
+            Assert.AreEqual("film (3)", result);
+        }
+
         [TestMethod]
         public async Task InterruptedCopy_RemovesTemporaryFileAndRetainsOriginal()
         {

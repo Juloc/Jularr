@@ -5504,14 +5504,6 @@
    "Queued at",
    "Diantrekan pada"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Aktivitas"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "Tugas"
-  ],
   "activity.tab.History": [
    "History",
    "Riwayat"
@@ -5575,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Lanjutkan unduhan"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Tidak ada yang berjalan."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Tidak ada yang perlu diperhatikan."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

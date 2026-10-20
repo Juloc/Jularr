@@ -1,6 +1,9 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Profile;
+using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
@@ -104,6 +107,159 @@ namespace Jularr.Backend.Data.Logic.Media
         public string?[] Creators { get; }
         public string?[] ImageUrls { get; }
         public string?[] BackdropUrls { get; }
+    }
+
+    // One Discover shelf of a whole catalog, or a scope to search without a list: Shelf numbers it within the request.
+    internal sealed class ExternalWorkShelfData
+    {
+        public ExternalWorkShelfData(int shelf, string @namespace, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, DiscoverFeedType? feed = null)
+        {
+            Shelf = shelf;
+            Namespace = @namespace;
+            MediaTypeId = (short)mediaTypeId;
+            // JSON rows carry no NULL numbers here; 0 stands for no subtype.
+            MediaSubtypeId = mediaSubtypeId is { } subtype ? (short)subtype : (short)0;
+            Feed = (short)(feed ?? 0);
+        }
+
+        public int Shelf { get; }
+        public string Namespace { get; }
+        public short MediaTypeId { get; }
+        public short MediaSubtypeId { get; }
+        public short Feed { get; }
+    }
+
+    // Shelves read in one statement; a browse page goes on at its offset.
+    internal sealed class ExternalWorkShelfQueryData : BaseData
+    {
+        public ExternalWorkShelfQueryData(IReadOnlyList<ExternalWorkShelfData> shelves, long profileId, DateOnly today, int offset = 0)
+        {
+            Shelves = JsonSerializer.Serialize(shelves);
+            ProfileId = profileId;
+            Today = today;
+            Offset = offset;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Shelves))]
+        public string Shelves { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Day))]
+        public DateOnly Today { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Offset))]
+        public int Offset { get; }
+    }
+
+    // How a whole catalog ranks its lists; set by ExternalWorkLogic.
+    internal sealed class ExternalWorkRankingData : BaseData
+    {
+        public ExternalWorkRankingData(int limit, int topVotes, DateOnly newSince, DateOnly upcomingUntil)
+        {
+            Limit = limit;
+            TopVotes = topVotes;
+            NewSince = newSince;
+            UpcomingUntil = upcomingUntil;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Limit))]
+        public int Limit { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.TopVotes))]
+        public int TopVotes { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Day))]
+        public DateOnly NewSince { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Day))]
+        public DateOnly UpcomingUntil { get; }
+    }
+
+    // A catalog title on a shelf or among the suggestions, with the profile's Work when it already is one.
+    internal sealed class ExternalWorkShelfItemData : BaseData
+    {
+        public ExternalWorkShelfItemData(int shelf, string @namespace, string value, string title, int? releaseYear, string? overview, string? creator, string? imageUrl,
+            string? backdropUrl, long? workId, MediaStateType? mediaStateTypeId, string? plexUrl)
+        {
+            Shelf = shelf;
+            Namespace = @namespace;
+            Value = value;
+            Title = title;
+            ReleaseYear = releaseYear;
+            Overview = overview;
+            Creator = creator;
+            ImageUrl = imageUrl;
+            BackdropUrl = backdropUrl;
+            WorkId = workId;
+            MediaStateTypeId = mediaStateTypeId;
+            PlexUrl = plexUrl;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Shelf))]
+        public int Shelf { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Value))]
+        public string Value { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Title))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Creator))]
+        public string? Creator { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.ImageUrl))]
+        public string? ImageUrl { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.BackdropUrl))]
+        public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId), false)]
+        public MediaStateType? MediaStateTypeId { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
+        public string? PlexUrl { get; }
+    }
+
+    // A typed search over the scopes of kept catalogs: Shelf numbers each scope.
+    internal sealed class ExternalWorkSuggestionQueryData : BaseData
+    {
+        public ExternalWorkSuggestionQueryData(IReadOnlyList<ExternalWorkShelfData> scopes, long profileId, string searchTerms, string titlePrefix, int limit)
+        {
+            Shelves = JsonSerializer.Serialize(scopes);
+            ProfileId = profileId;
+            SearchTerms = searchTerms;
+            TitlePrefix = titlePrefix;
+            Limit = limit;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Shelves))]
+        public string Shelves { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
+        public string SearchTerms { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.SearchTerms))]
+        public string TitlePrefix { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Limit))]
+        public int Limit { get; }
     }
 
     // A catalog's full-sync settings and progress.
@@ -287,6 +443,17 @@ namespace Jularr.Backend.Data.Logic.Media
         public short? MediaSubtypeId { get; }
         public string Entries { get; }
         public string[] Gone { get; }
+    }
+
+    internal sealed class ExternalWorkNamespaceData : BaseData
+    {
+        public ExternalWorkNamespaceData(string @namespace)
+        {
+            Namespace = @namespace;
+        }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace))]
+        public string Namespace { get; }
     }
 
     internal sealed class ExternalWorkValueData : BaseData

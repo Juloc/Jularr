@@ -334,6 +334,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     [ServiceEndpoint("PUT", "/api/v1/admin/wanted/{wantedItemId:long}")]
     public sealed class UpdateWantedV1 : AdminService<UpdateWantedParametersV1, UpdateWantedDataV1>
     {
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _resumed;
+
+        internal UpdateWantedV1(AcquisitionSearchSignal searchSignal)
+        {
+            _searchSignal = searchSignal;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(UpdateWantedParametersV1 parameters) => ModuleRequirement.All("Requests");
@@ -341,8 +349,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.MonitorsNewUnits, Data.Version, Data.TagIds), CancellationToken);
+            _resumed = await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.MonitorsNewUnits, Data.Version, Data.TagIds), CancellationToken);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_resumed) _searchSignal.RequestSearch();
         }
     }
 

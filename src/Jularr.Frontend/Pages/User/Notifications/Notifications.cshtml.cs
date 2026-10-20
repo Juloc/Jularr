@@ -56,7 +56,10 @@ namespace Jularr.Frontend.Pages.User.Notifications
 
         private IUiComponent Item(NotificationV1 item)
         {
-            var text = string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], item.Subject);
+            // A subject of two parts names the title and, as its reason, what the person is asked.
+            var (title, reason) = NotificationSubject.Split(item.Subject);
+            var text = reason is null ? string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], item.Subject)
+                : string.Format(CultureInfo.CurrentCulture, texts["notifications.message." + item.NotificationTypeId], title, texts["acquisition.outcome." + reason]);
             if (item.Occurrences > 1) text += " " + string.Format(CultureInfo.CurrentCulture, texts["notifications.times"], item.Occurrences);
             IUiComponent message = item.Link is { } link ? new A(new ValueText(text)).Attribute("href", link) : new Span(new ValueText(text));
             return new Li(message, new Span(new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("notifications__time"))

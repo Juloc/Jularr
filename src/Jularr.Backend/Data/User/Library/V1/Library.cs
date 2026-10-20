@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.User.Library.V1
@@ -36,7 +37,8 @@ namespace Jularr.Backend.Data.User.Library.V1
 
     public sealed class LibraryItemV1 : BaseResponse
     {
-        public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted)
+        public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted,
+            MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, string[] audioLanguages, string[] subtitleLanguages)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
@@ -45,6 +47,11 @@ namespace Jularr.Backend.Data.User.Library.V1
             PosterUrl = posterUrl;
             MediaStateTypeId = mediaStateTypeId;
             IsWatchlisted = isWatchlisted;
+            AvailabilityStateId = availabilityStateId;
+            AvailableUnits = availableUnits;
+            MonitoredUnits = monitoredUnits;
+            AudioLanguages = audioLanguages;
+            SubtitleLanguages = subtitleLanguages;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -67,5 +74,22 @@ namespace Jularr.Backend.Data.User.Library.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
         public bool IsWatchlisted { get; }
+
+        // What the title offers the profile: the library, its acquisition and the audio language.
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailabilityStateId))]
+        public MediaAvailabilityState AvailabilityStateId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailableUnits))]
+        public int AvailableUnits { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MonitoredUnits))]
+        public int MonitoredUnits { get; }
+
+        // The languages of the tracks that are really there.
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
+        public string[] SubtitleLanguages { get; }
     }
 }

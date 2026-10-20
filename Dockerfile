@@ -25,7 +25,7 @@ COPY --from=frontend /src/src/Jularr.Frontend/wwwroot/ src/Jularr.Frontend/wwwro
 COPY --from=frontend /src/src/Jularr.Frontend/Assets/Generated/ src/Jularr.Frontend/Assets/Generated/
 RUN --mount=type=cache,target=/root/.nuget/packages \
     dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj \
-      --configuration Release --no-restore --output /app \
+      --configuration Release --output /app \
       --runtime linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) --self-contained false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

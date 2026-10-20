@@ -27,6 +27,29 @@ namespace Jularr.Backend.Data.Logic.Library
         public string Files { get; }
     }
 
+    internal sealed class StoredFilePagesData : BaseData
+    {
+        public StoredFilePagesData(long id, long sizeBytes, DateTime modifiedAt, int? pageCount)
+        {
+            Id = id;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+            PageCount = pageCount;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.PageCount), false)]
+        public int? PageCount { get; }
+    }
+
     internal sealed class StoredFileProbeData : BaseData
     {
         public StoredFileProbeData(long id, long sizeBytes, DateTime modifiedAt, DateTime probedAt, string? container, long? durationMs, long? bitRate, string tracks)

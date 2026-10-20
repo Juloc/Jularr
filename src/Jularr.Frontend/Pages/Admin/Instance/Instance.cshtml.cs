@@ -69,6 +69,10 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             // Only implemented module controls.
             var stateOptions = new[] { new SelectOption("True", texts["admin.providers.enabled"]), new SelectOption("False", texts["admin.providers.disabled"]) };
             var moduleForms = new List<IUiComponent> { new P(new Text("admin.instance.module.retained")) };
+            if (!SetupWizard.IsActive(Request) && texts.Can("instance.settings.read"))
+            {
+                moduleForms.Add(new A(new Text("speech.models.title")).Class("button").Attribute("href", "/Admin/Instance/Speech"));
+            }
             foreach (var module in _modules)
             {
                 moduleForms.Add(new Form<UpdateInstanceModuleDataV1>(form =>

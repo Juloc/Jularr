@@ -33,7 +33,7 @@ namespace Jularr.Backend.Tests
             var html = await details.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, html);
             StringAssert.Contains(html, "<h3>Part 2</h3>");
-            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Works/10");
+            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Works/10?Tab=Metadata");
             StringAssert.Contains(await editor.Content.ReadAsStringAsync(), "Add section");
 
             // Removed sections and a switched-off module leave the plain list.

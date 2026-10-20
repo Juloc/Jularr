@@ -18,8 +18,12 @@ namespace Jularr.Integrations.Data.Media
 
     internal sealed class MediaProbeStream
     {
-        public MediaProbeStream(int index, string codecType, string? codec, string? language, string? title, int? width, int? height, int? channels, bool isDefault, bool isForced)
+        public MediaProbeStream(int index, string codecType, string? codec, string? language, string? title, int? width, int? height, int? channels, bool isDefault, bool isForced,
+            int? bitDepth = null, string? dynamicRange = null, bool is3D = false)
         {
+            BitDepth = bitDepth;
+            DynamicRange = dynamicRange;
+            Is3D = is3D;
             Index = index;
             CodecType = codecType;
             Codec = codec;
@@ -42,5 +46,9 @@ namespace Jularr.Integrations.Data.Media
         public int? Channels { get; }
         public bool IsDefault { get; }
         public bool IsForced { get; }
+        public int? BitDepth { get; }
+        // DV, DV HDR10, DV HLG, DV SDR, HDR10, HDR10Plus, HLG or PQ; none for standard dynamic range.
+        public string? DynamicRange { get; }
+        public bool Is3D { get; }
     }
 }

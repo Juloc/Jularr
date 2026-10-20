@@ -1,7 +1,9 @@
 import { inserted, onPage } from "../../Modules/Navigation/PageSwap";
+import { initializeRanges } from "./Range";
 
 // Refresh dependent fields from the server without saving the draft. The button remains usable without JavaScript.
 function enhance(form: HTMLFormElement): void {
+    initializeRanges(form);
     enhanceSizes(form);
     if (form.dataset.refreshReady || !form.querySelector('[data-form-refresh]')) return;
     form.dataset.refreshReady = "true";
@@ -41,7 +43,10 @@ function enhance(form: HTMLFormElement): void {
     });
 }
 
-onPage(import.meta.url, () => document.querySelectorAll<HTMLFormElement>('form').forEach(enhance));
+onPage(import.meta.url, () => {
+    document.querySelectorAll<HTMLFormElement>('form').forEach(enhance);
+    document.querySelectorAll<HTMLElement>('[data-form-local]').forEach(initializeRanges);
+});
 
 // Unit changes affect presentation only; the typed field is always submitted in bytes.
 function enhanceSizes(form: HTMLFormElement): void {

@@ -140,11 +140,14 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         current = target;
         restore();
         say(undefined);
+        reader.dataset.translationState = 'ready';
         if (target === "" || !source || source === target) return;
+        reader.dataset.translationState = 'loading';
         try {
             await translate(target);
+            if (current === target) reader.dataset.translationState = 'ready';
         } catch {
-            if (current === target) { restore(); say(reader.dataset.translationFailedLabel); }
+            if (current === target) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
         }
     };
 }

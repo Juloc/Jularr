@@ -54,6 +54,9 @@ namespace Jularr.Integrations.Data.MusicBrainz
         public int Number { get; }
         public string Title { get; }
 
+        // The disc (medium) it lies on.
+        public int Disc { get; init; } = 1;
+
         // The track's own artists where they differ from the album's.
         public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
