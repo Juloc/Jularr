@@ -82,7 +82,8 @@ namespace Jularr.Backend.Logic.Acquisition
             // The largest video is the feature, as the placement takes it.
             var feature = videos.MaxBy(video => video.SizeBytes)!;
             var stem = Path.GetFileNameWithoutExtension(feature.RelativePath);
-            if (Parse(stem) is { } parsed && HasEvidence(parsed))
+            var parsed = Parse(stem);
+            if (parsed is not null && HasEvidence(parsed))
             {
                 switch (VideoReleaseJudge.JudgeTitle(AcquisitionKind.Movie, title, year, parsed))
                 {
@@ -93,7 +94,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
 
-            return IsQualityNotAllowed(profile, AcquisitionKind.Movie, stem)
+            return IsQualityNotAllowed(profile, parsed)
                 ? new ImportVerdict(ImportVerdictKind.Doubt, QualityNotAllowed, [new ImportFileProposal(feature.RelativePath, null, null, null, null)])
                 : ImportVerdict.Clear;
         }
@@ -108,7 +109,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
                 // A name of another series is no episode of this one, but a name without evidence of its own (a bare number) is not against it.
                 var conflicts = parsed is not null && HasEvidence(parsed) && parsed.SeriesTitle.Length > 0 && !TitleMatcher.Matches(title, parsed.SeriesTitle);
-                return (Video: video, Stem: stem, Conflicts: conflicts, Mapped: parsed is null ? null : EpisodeNumbering.Resolve(parsed, units));
+                return (Video: video, Parsed: parsed, Conflicts: conflicts, Mapped: parsed is null ? null : EpisodeNumbering.Resolve(parsed, units));
             }).ToArray();
 
             var fitting = candidates.Where(candidate => !candidate.Conflicts).ToArray();
@@ -132,7 +133,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         candidate.Mapped!.Value.Season, candidate.Mapped.Value.Start, only?.ParentNumber, only?.Number))]);
                 }
 
-                return mapped.Any(candidate => IsQualityNotAllowed(profile, kind, candidate.Stem))
+                return mapped.Any(candidate => IsQualityNotAllowed(profile, candidate.Parsed))
                     ? new ImportVerdict(ImportVerdictKind.Doubt, QualityNotAllowed, [.. mapped.Select(candidate => new ImportFileProposal(candidate.Video.RelativePath,
                         candidate.Mapped!.Value.Season, candidate.Mapped.Value.Start, null, null))])
                     : ImportVerdict.Clear;
@@ -151,7 +152,9 @@ namespace Jularr.Backend.Logic.Acquisition
         private static bool HasEvidence(ReleaseInfo parsed) =>
             parsed.SeasonNumber is not null || parsed.AbsoluteEpisodeStart is not null || parsed.AirDate is not null || parsed.Resolution is not null || parsed.ReleaseGroup is not null;
 
-        private static bool IsQualityNotAllowed(QualityProfile? profile, AcquisitionKind kind, string stem) =>
-            profile is not null && AcquisitionSelectionLogic.QualityKey(kind, stem) is { } quality && !profile.AllowedQualities.Contains(quality, StringComparer.Ordinal);
+        // The profile's own reading of a quality: the same key, its group and the allowed groups as when the release was chosen.
+        private static bool IsQualityNotAllowed(QualityProfile? profile, ReleaseInfo? parsed) =>
+            profile is not null && parsed is not null && profile.AllowedQualities.Length > 0
+                && !profile.AllowedQualities.Contains(profile.Item(ReleaseQuality.GetKey(parsed, profile.IsMovie)), StringComparer.OrdinalIgnoreCase);
     }
 }
