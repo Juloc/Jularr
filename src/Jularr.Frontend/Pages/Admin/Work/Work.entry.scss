@@ -166,7 +166,9 @@
 
 // Seasons
 
-.work-seasons__tools { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.work-seasons { container: work / inline-size; }
+.work-seasons__tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+.work-tools__columns { display: none; }
 
 .work-season {
     margin-bottom: 12px;
@@ -417,6 +419,85 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 }
 
 .work-dialog__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; h2 { margin: 0; font-size: 18px; } }
+
+// Two lines for every unit on a narrow screen: the first stays in view, the second is a tinted strip that slides sideways. A season is one scroller, so its strips slide together.
+
+.work-strips { display: none; }
+
+@container work (max-width: 720px) {
+    .work-table-wrap--units { display: none; }
+    .work-tools__columns { display: inline-flex; }
+
+    .work-strips {
+        display: block;
+        container: strips / inline-size;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        cursor: grab;
+        &::-webkit-scrollbar { display: none; }
+        &.work-strips--dragging { cursor: grabbing; user-select: none; }
+    }
+
+    .work-strip { width: max-content; min-width: 100%; border-top: 1px solid var(--border); }
+
+    .work-strip__main {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        width: 100cqw;
+        padding: 8px 12px 4px;
+        background: var(--surface);
+    }
+
+    .work-strip__number { min-width: 2ch; color: var(--muted); font-weight: 600; font-size: 13px; text-align: right; }
+    .work-strip__title { display: flex; align-items: center; min-width: 0; font-weight: 600; font-size: 14px; }
+    .work-strip__title .work-title-text { min-width: 0; max-width: none; }
+
+    .work-strip__facts {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        box-sizing: border-box;
+        min-width: 100%;
+        padding: 6px 14px 8px 0;
+        background: light-dark(#f4f1fa, #2a2535);
+        white-space: nowrap;
+    }
+
+    // The handle shows that the line slides; it stays at the left edge.
+    .work-strip__handle {
+        position: sticky;
+        left: 0;
+        flex: none;
+        width: 22px;
+        align-self: stretch;
+        background: light-dark(#f4f1fa, #2a2535);
+        &::before { content: "⋮⋮"; display: grid; place-items: center; height: 100%; color: var(--muted); letter-spacing: -2px; font-size: 14px; }
+    }
+
+    .work-fact { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+    .work-fact__label { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+
+    .work-strip--file .work-strip__main { padding-top: 4px; }
+    .work-strip--file .work-title-text { color: var(--muted); font-weight: 500; }
+}
+
+.work-columns--sheet {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    max-height: 70vh;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: 20px;
+}
 
 @media (max-width: 720px) {
     .work-hero__content { flex-direction: column; padding: 18px; }
