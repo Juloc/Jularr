@@ -17,6 +17,14 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         private const long MaximumPageBytes = 4L * 1024 * 1024;
         private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
 
+        // The official mirrors of the source; all of them are tried, the one of the connection first.
+        private static readonly string[] OfficialMirrors =
+        [
+            "https://annas-archive.gl",
+            "https://annas-archive.pk",
+            "https://annas-archive.gd"
+        ];
+
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
 
         // The public waiting page of one download server.
@@ -26,18 +34,33 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct)
         {
-            string page;
-            try
+            // The source answers on one of its mirrors; all of them are tried, the fast way first.
+            var mirrors = Mirrors(site);
+            string? page = null;
+            foreach (var mirror in mirrors)
             {
-                page = await DirectDownload.ReadPageAsync(http, new Uri(site, "search?q=" + Uri.EscapeDataString(query)), gates, browser, ct);
-                if (page.Length > MaximumPageBytes)
+                page = await ReadAsync(mirror, query, ct);
+                if (page is not null)
                 {
-                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page is too large.");
+                    break;
                 }
             }
-            catch (DirectDownloadException exception)
+
+            if (page is null)
             {
-                throw new AnnasArchiveException(Failure(exception), "Anna's Archive could not be searched.", exception);
+                // A check in front of every mirror: the browser reads them at the same time.
+                var read = await browser.ReadPagesAsync([.. mirrors.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
+                if (read is null)
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
+                }
+
+                page = read.Html;
+            }
+
+            if (page.Length > MaximumPageBytes)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page is too large.");
             }
 
             // Each record is a row: the file's facts, the title link and the author.
@@ -62,6 +85,41 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
 
             return records;
+        }
+
+        // The mirrors of the source; the one of the connection comes first. Only a connection that points at
+        // the source itself gets the others.
+        private static IReadOnlyList<Uri> Mirrors(Uri site)
+        {
+            var mirrors = new List<Uri> { site };
+            if (!OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, site.Host, StringComparison.OrdinalIgnoreCase)))
+            {
+                return mirrors;
+            }
+
+            foreach (var mirror in OfficialMirrors)
+            {
+                var address = new Uri(mirror.TrimEnd('/') + "/");
+                if (!mirrors.Any(known => known.Host == address.Host))
+                {
+                    mirrors.Add(address);
+                }
+            }
+
+            return mirrors;
+        }
+
+        // The page of one mirror, or nothing when it puts a check in front.
+        private async Task<string?> ReadAsync(Uri mirror, string query, CancellationToken ct)
+        {
+            try
+            {
+                return await DirectDownload.ReadPageAsync(http, new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)), gates, browser, ct);
+            }
+            catch (DirectDownloadException)
+            {
+                return null;
+            }
         }
 
         public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)

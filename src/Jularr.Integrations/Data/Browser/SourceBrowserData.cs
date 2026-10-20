@@ -13,6 +13,9 @@ namespace Jularr.Integrations.Data.Browser
         // The rendered page, or null when the browser cannot answer it.
         Task<string?> ReadPageAsync(Uri uri, CancellationToken ct);
 
+        // Several addresses at the same time; the first that answers wins.
+        Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct);
+
         // The file is written to the destination; the limit and the write reservation are the caller's rules.
         Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct);
 
@@ -71,5 +74,18 @@ namespace Jularr.Integrations.Data.Browser
         public DateTime At { get; }
         public string Kind { get; }
         public string Message { get; }
+    }
+
+    // One address that the browser read.
+    internal sealed class BrowserPage
+    {
+        public BrowserPage(Uri address, string html)
+        {
+            Address = address;
+            Html = html;
+        }
+
+        public Uri Address { get; }
+        public string Html { get; }
     }
 }

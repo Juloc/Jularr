@@ -26,14 +26,16 @@ namespace Jularr.Integrations.Logic.Browser
         }
 
         // The raw answer of the command.
-        public async Task<string> SendAsync(string method, object? parameters, CancellationToken ct)
+        public async Task<string> SendAsync(string method, object? parameters, CancellationToken ct, string? sessionId = null)
         {
             var id = Interlocked.Increment(ref _nextId);
             var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pending[id] = completion;
             try
             {
-                var payload = JsonSerializer.Serialize(new { id, method, @params = parameters });
+                var payload = sessionId is null
+                    ? JsonSerializer.Serialize(new { id, method, @params = parameters })
+                    : JsonSerializer.Serialize(new { id, method, @params = parameters, sessionId });
                 await _socket.SendAsync(Encoding.UTF8.GetBytes(payload), WebSocketMessageType.Text, true, ct);
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, _stop.Token);
                 timeout.CancelAfter(CommandTimeout);
@@ -49,10 +51,34 @@ namespace Jularr.Integrations.Logic.Browser
             }
         }
 
-        // The value of a script run in the page.
-        public async Task<string> EvaluateAsync(string expression, CancellationToken ct)
+        // A page of its own, so several addresses can be read at the same time.
+        public async Task<(string Target, string Session)> OpenPageAsync(CancellationToken ct)
         {
-            var answer = await SendAsync("Runtime.evaluate", new { expression, returnByValue = true, awaitPromise = false }, ct);
+            var created = await SendAsync("Target.createTarget", new { url = "about:blank" }, ct);
+            using var document = JsonDocument.Parse(created);
+            var targetId = document.RootElement.GetProperty("result").GetProperty("targetId").GetString()!;
+            var attached = await SendAsync("Target.attachToTarget", new { targetId, flatten = true }, ct);
+            using var answer = JsonDocument.Parse(attached);
+            var sessionId = answer.RootElement.GetProperty("result").GetProperty("sessionId").GetString()!;
+            return (targetId, sessionId);
+        }
+
+        public async Task ClosePageAsync(string targetId, CancellationToken ct)
+        {
+            try
+            {
+                await SendAsync("Target.closeTarget", new { targetId }, ct);
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException)
+            {
+                // The page is gone anyway.
+            }
+        }
+
+        // The value of a script run in the page.
+        public async Task<string> EvaluateAsync(string expression, CancellationToken ct, string? sessionId = null)
+        {
+            var answer = await SendAsync("Runtime.evaluate", new { expression, returnByValue = true, awaitPromise = false }, ct, sessionId);
             using var document = JsonDocument.Parse(answer);
             if (!document.RootElement.TryGetProperty("result", out var result) || !result.TryGetProperty("result", out var value)
                 || !value.TryGetProperty("value", out var content))

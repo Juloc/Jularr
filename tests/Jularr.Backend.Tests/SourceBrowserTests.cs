@@ -69,6 +69,25 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Browser_ReadsSeveralAddressesAtTheSameTime()
+        {
+            var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(browser))
+            {
+                Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            }
+
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var source = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+
+            // The first address that answers wins; the mirrors are read at the same time.
+            var page = await source.ReadPagesAsync([server.Address, new Uri(server.Address, "/other")], CancellationToken.None);
+            Assert.IsNotNull(page);
+            StringAssert.Contains(page.Html, "The page behind the check");
+        }
+
+        [TestMethod]
         public async Task Browser_WithoutABinaryAnswersNothing()
         {
             using var folder = new TemporaryDirectory();

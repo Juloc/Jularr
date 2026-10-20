@@ -121,7 +121,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             }
                             else
                             {
-                                var page = await _annas.ReadSlowPageAsync(site, md5, ct);
+                                // The mirror that offered the file is the one that serves it.
+                                var mirror = new Uri($"{address.Scheme}://{address.Host}/");
+                                var page = await _annas.ReadSlowPageAsync(mirror, md5, ct);
 
                                 // The page's own countdown is served once per attempt; a repeated rendering does not restart it.
                                 if (page.Wait > TimeSpan.Zero && download.DownloadWaitUntil is null)
