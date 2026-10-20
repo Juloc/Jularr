@@ -92,10 +92,19 @@ namespace Jularr.Backend.Logic.Acquisition
         public static int LanguageRank(QualityProfile profile, IReadOnlyList<string> languages)
         {
             if (profile.LanguageOrder.Length == 0) return 0;
-            var best = languages.Select(language => Array.FindIndex(profile.LanguageOrder,
-                    wanted => language.StartsWith(wanted, StringComparison.OrdinalIgnoreCase) || wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase)))
+            var best = languages.Select(language => Array.FindIndex(profile.LanguageOrder, wanted => Same(wanted, language)))
                 .Where(index => index >= 0).DefaultIfEmpty(-1).Min();
             return best >= 0 ? best : languages.Count == 0 ? profile.LanguageOrder.Length : profile.LanguageOrder.Length + 1;
         }
+
+        // The file carries one of the languages a request asks for.
+        public static bool IsRequested(QualityProfile profile, IReadOnlyList<string> languages) => languages.Any(language => profile.LanguageOrder.Any(wanted => Same(wanted, language)));
+
+        // The file carries the original language of the work; it is the next choice after the asked ones.
+        public static bool IsOriginal(QualityProfile profile, IReadOnlyList<string> languages) =>
+            profile.OriginalLanguage is { } original && languages.Any(language => Same(original, language));
+
+        private static bool Same(string wanted, string language) =>
+            language.StartsWith(wanted, StringComparison.OrdinalIgnoreCase) || wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase);
     }
 }

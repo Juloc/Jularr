@@ -1,19 +1,33 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Jularr.Integrations.Data.AnnasArchive;
+using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.AnnasArchive
 {
     // Search results and member fast downloads; the member key only goes to Anna's Archive itself.
-    internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates)
+    internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates, ISourceBrowser browser)
     {
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
         private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
+
+        // Files enough to choose from; the other ways to find the work need not be asked.
+        private const int EnoughRecords = 20;
+        private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
+
+        // The official mirrors of the source; all of them are tried, the one of the connection first.
+        private static readonly string[] OfficialMirrors =
+        [
+            "https://annas-archive.gl",
+            "https://annas-archive.pk",
+            "https://annas-archive.gd"
+        ];
 
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
 
@@ -22,25 +36,82 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static string? ReadMd5(Uri record) => Md5Path().Match(record.AbsolutePath) is { Success: true } match ? match.Groups[1].Value : null;
 
-        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct)
+        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct) =>
+            await SearchAsync(site, [query], ct);
+
+        // Every way to find the work is tried; the files of all of them are gathered.
+        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, IReadOnlyList<string> queries, CancellationToken ct)
         {
-            string page;
-            try
+            // The source answers on one of its mirrors; all of them are tried, the fast way first.
+            var mirrors = Mirrors(site);
+            var records = new List<AnnasArchiveRecord>();
+            var checkedSite = false;
+            var answeredAny = false;
+            Uri? answered = null;
+            foreach (var query in queries)
             {
-                using var response = await DirectDownload.SendAsync(http, new Uri(site, "search?q=" + Uri.EscapeDataString(query)), null, gates, ct);
-                if (response.Content.Headers.ContentLength > MaximumPageBytes)
+                string? page = null;
+                if (!checkedSite)
                 {
-                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page is too large.");
+                    foreach (var mirror in mirrors)
+                    {
+                        if (await ReadAsync(mirror, query, ct) is { } direct)
+                        {
+                            page = direct;
+                            answered = mirror;
+                            break;
+                        }
+                    }
                 }
 
-                page = await response.Content.ReadAsStringAsync(ct);
-            }
-            catch (DirectDownloadException exception)
-            {
-                throw new AnnasArchiveException(Failure(exception), "Anna's Archive could not be searched.", exception);
+                if (page is null)
+                {
+                    // A check in front of the site: the browser reads the mirrors at the same time.
+                    var addresses = answered is null ? mirrors : [answered];
+                    var read = await browser.ReadPagesAsync([.. addresses.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
+                    if (read is null)
+                    {
+                        continue;
+                    }
+
+                    page = read.Html;
+                    answered = read.Address;
+                    checkedSite = true;
+                }
+
+                answeredAny = true;
+
+                foreach (var record in Records(page))
+                {
+                    if (records.All(known => known.Md5 != record.Md5))
+                    {
+                        records.Add(record);
+                    }
+                }
+
+                // Enough files to choose from; the other ways need not be asked.
+                if (records.Count >= EnoughRecords)
+                {
+                    break;
+                }
             }
 
-            // Each record links to /md5/<hash>; its text names title, author and file facts.
+            if (!answeredAny)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
+            }
+
+            return records;
+        }
+
+        // Each record is a row: the file's facts, the title link and the author.
+        private static IReadOnlyList<AnnasArchiveRecord> Records(string page)
+        {
+            if (page.Length > MaximumPageBytes)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page is too large.");
+            }
+
             var document = new HtmlParser().ParseDocument(page);
             var records = new List<AnnasArchiveRecord>();
             foreach (var link in document.QuerySelectorAll("a[href^='/md5/']"))
@@ -50,18 +121,11 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                     continue;
                 }
 
-                var lines = (link.TextContent ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                var title = link.QuerySelector("h3")?.TextContent.Trim() is { Length: > 0 } heading ? heading : lines.FirstOrDefault();
-                var facts = lines.FirstOrDefault(line => Extension().IsMatch(line)) ?? "";
-                if (string.IsNullOrWhiteSpace(title) || Extension().Match(facts) is not { Success: true } extension)
+                if (ReadRecord(link, match.Groups[1].Value) is { } record)
                 {
-                    continue;
+                    records.Add(record);
                 }
 
-                var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? lines.SkipWhile(line => line != title).Skip(1).FirstOrDefault(line => line != facts && !line.Contains('/') && line.Length <= 200);
-                var language = Language().Match(facts) is { Success: true } code ? code.Groups[1].Value : null;
-                records.Add(new AnnasArchiveRecord(match.Groups[1].Value, Limit(title, 500), author is null ? null : Limit(author, 200), extension.Groups[1].Value.ToLowerInvariant(), language,
-                    ReadSize(facts)));
                 if (records.Count >= 50)
                 {
                     break;
@@ -69,6 +133,41 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
 
             return records;
+        }
+
+        // The mirrors of the source; the one of the connection comes first. Only a connection that points at
+        // the source itself gets the others.
+        private static IReadOnlyList<Uri> Mirrors(Uri site)
+        {
+            var mirrors = new List<Uri> { site };
+            if (!OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, site.Host, StringComparison.OrdinalIgnoreCase)))
+            {
+                return mirrors;
+            }
+
+            foreach (var mirror in OfficialMirrors)
+            {
+                var address = new Uri(mirror.TrimEnd('/') + "/");
+                if (!mirrors.Any(known => known.Host == address.Host))
+                {
+                    mirrors.Add(address);
+                }
+            }
+
+            return mirrors;
+        }
+
+        // The page of one mirror, or nothing when it puts a check in front.
+        private async Task<string?> ReadAsync(Uri mirror, string query, CancellationToken ct)
+        {
+            try
+            {
+                return await DirectDownload.ReadPageAsync(http, new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)), gates, browser, ct);
+            }
+            catch (DirectDownloadException)
+            {
+                return null;
+            }
         }
 
         public async Task DownloadAsync(Uri site, string memberKey, string md5, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
@@ -111,13 +210,11 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 string page;
                 try
                 {
-                    using var response = await DirectDownload.SendAsync(http, SlowPageUri(site, md5, server), null, gates, ct);
-                    if (response.Content.Headers.ContentLength > MaximumPageBytes)
+                    page = await DirectDownload.ReadPageAsync(http, SlowPageUri(site, md5, server), gates, browser, ct);
+                    if (page.Length > MaximumPageBytes)
                     {
                         throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The download page is too large.");
                     }
-
-                    page = await response.Content.ReadAsStringAsync(ct);
                 }
                 catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
                 {
@@ -142,6 +239,13 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                     .Select(anchor => Uri.TryCreate(site, anchor.GetAttribute("href"), out var uri) ? (Uri: uri, Text: anchor.TextContent) : (Uri: (Uri?)null, Text: ""))
                     .Where(candidate => candidate.Uri is { Scheme: "https" } uri && !IsSitePage(site, uri))
                     .FirstOrDefault(candidate => Extension().IsMatch(candidate.Uri!.AbsolutePath) || candidate.Text.Contains("download", StringComparison.OrdinalIgnoreCase)).Uri;
+
+                // A page that only counts down names no file yet; the file comes with the next visit.
+                if (link is null && wait > TimeSpan.Zero)
+                {
+                    return new AnnasArchivePage(null, wait);
+                }
+
                 if (link is null)
                 {
                     last = new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The slow download page names no file.");
@@ -159,8 +263,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         {
             try
             {
-                using var response = await DirectDownload.SendAsync(http, file, null, gates, ct);
-                await DirectDownload.SaveAsync(response, destination, maximumBytes, ct, reserveWrite);
+                await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
             }
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
@@ -227,11 +330,82 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
 
+        // Each record is a row: the file's facts, the title link and the author.
+        private static AnnasArchiveRecord? ReadRecord(IElement link, string md5)
+        {
+            var title = (link.QuerySelector("h3")?.TextContent ?? link.TextContent ?? "").Trim();
+            if (title.Length == 0)
+            {
+                return null;
+            }
+
+            var row = Row(link);
+            var lines = Lines(row);
+            var facts = lines.FirstOrDefault(line => Size().IsMatch(line)) ?? "";
+            var format = Format().Match(facts) is { Success: true } found ? found.Groups[1].Value.ToLowerInvariant()
+                : lines.Select(line => Format().Match(line)).FirstOrDefault(match => match.Success)?.Groups[1].Value.ToLowerInvariant();
+            if (format is null)
+            {
+                return null;
+            }
+
+            var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? Author(row);
+            var language = Language().Match(facts) is { Success: true } code ? code.Groups[1].Value : null;
+            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), IsPart(lines));
+        }
+
+        // A file that names a part of a work is only that part.
+        private static bool IsPart(IReadOnlyList<string> lines)
+        {
+            foreach (var line in lines)
+            {
+                if (Part().IsMatch(line))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // The facts sit around the title link.
+        private static IElement Row(IElement link)
+        {
+            var element = link;
+            for (var level = 0; level < 6 && element is not null; level++)
+            {
+                if (Lines(element).Any(line => Size().IsMatch(line)))
+                {
+                    return element;
+                }
+
+                element = element.ParentElement;
+            }
+
+            return link;
+        }
+
+        private static List<string> Lines(IElement element) => (element.TextContent ?? "")
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        // The author is the first link that searches for a name.
+        private static string? Author(IElement row) => row.QuerySelectorAll("a[href^='/search?q=']")
+            .FirstOrDefault(anchor => (anchor.GetAttribute("href") ?? "").Length > "/search?q=".Length)?.TextContent.Trim();
+
         [GeneratedRegex("^/md5/([0-9a-f]{32})$")]
         private static partial Regex Md5Path();
 
         [GeneratedRegex(@"\.(epub|pdf|mobi|azw3)\b", RegexOptions.IgnoreCase)]
         private static partial Regex Extension();
+
+        [GeneratedRegex(@"\b(epub|pdf|mobi|azw3)\b", RegexOptions.IgnoreCase)]
+        private static partial Regex Format();
+
+        // A file that names a part of a work: "(1 of 3)", "Part 2", "Band 1", "Vol. 2", "Teil 2", "Tomo 2".
+        [GeneratedRegex(@"\(\s*\d+\s+of\s+\d+\s*\)|\b(part|band|vol|volume|teil|tomo|partie)\.?\s*\d+", RegexOptions.IgnoreCase)]
+        private static partial Regex Part();
 
         [GeneratedRegex(@"wait\D{0,40}?([0-9]{1,5})\s*(?:s\b|sec|second)", RegexOptions.IgnoreCase)]
         private static partial Regex CountdownSeconds();

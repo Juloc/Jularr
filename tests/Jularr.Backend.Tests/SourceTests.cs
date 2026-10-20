@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -13,11 +13,14 @@ using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.AnnasArchive;
+using Jularr.Integrations.Logic.Browser;
 using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Opds;
 using Microsoft.Extensions.DependencyInjection;
@@ -294,13 +297,94 @@ namespace Jularr.Backend.Tests
         public async Task AnnasArchive_LongCountdownIsHandedBackInsteadOfGuessed()
         {
             var sources = new FakeSources { SlowWaitSeconds = 600 };
-            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver());
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
             var page = await client.ReadSlowPageAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", CancellationToken.None);
 
             // The page names its wait and its file; the file host is not touched before the wait ended.
             Assert.AreEqual(TimeSpan.FromMinutes(10), page.Wait);
-            Assert.AreEqual("https://files.example.test/0123.epub", page.File.ToString());
+            Assert.AreEqual("https://files.example.test/0123.epub", page.File!.ToString());
             Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("files.example.test", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_CountdownPageWithoutAFileIsAWait()
+        {
+            // The site counts down first and names the file only afterwards.
+            var sources = new FakeSources { SlowWaitSeconds = 27, SlowWithoutFile = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var page = await client.ReadSlowPageAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", CancellationToken.None);
+
+            Assert.AreEqual(TimeSpan.FromSeconds(27), page.Wait);
+            Assert.IsNull(page.File);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_SearchReadsTheResultRowsOfTheSite()
+        {
+            // The site names a file, a title, an author and the file's facts in one row.
+            var sources = new FakeSources { RealRows = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var records = await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None);
+
+            var record = records.Single();
+            Assert.AreEqual("0123456789abcdef0123456789abcdef", record.Md5);
+            Assert.AreEqual("Pride and Prejudice", record.Title);
+            Assert.AreEqual("Jane Austen", record.Author);
+            Assert.AreEqual("epub", record.Extension);
+            Assert.AreEqual("en", record.Language);
+            Assert.AreEqual(1258291L, record.SizeBytes);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_FileThatIsOnlyAPartIsMarked()
+        {
+            // A file that names a part of a work is only that part.
+            var sources = new FakeSources { RealRows = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var record = (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None)).Single();
+            Assert.IsFalse(record.IsPart);
+
+            var parts = new FakeSources { RealRows = true, RowFileName = "lgli/Jane Austen - Pride and Prejudice (1813) Part 1 of 3.epub" };
+            var other = new AnnasArchiveClient(new HttpClient(parts), new NoSourceGateResolver(), NoBrowser());
+            Assert.IsTrue((await other.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None)).Single().IsPart);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_SearchGathersTheFilesOfEveryWay()
+        {
+            // The first way finds one file, the second another; the files of both are gathered.
+            var sources = new FakeSources { RealRows = true };
+            sources.SearchPages["zweiterWeg"] = """
+                <html><body>
+                  <a href="/md5/11111111111111111111111111111111"><h3>Pride and Prejudice</h3><div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, Pride and Prejudice.epub</div></a>
+                </body></html>
+                """;
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var records = await client.SearchAsync(new Uri("https://annas.example.test/"), ["Pride and Prejudice Austen", "zweiterWeg"], CancellationToken.None);
+
+            Assert.AreEqual(2, records.Count);
+            Assert.AreEqual("0123456789abcdef0123456789abcdef", records[0].Md5);
+            Assert.AreEqual("11111111111111111111111111111111", records[1].Md5);
+        }
+
+        [TestMethod]
+        public void AnnaQueries_NameTheWorkInEveryWay()
+        {
+            // The work knows the ways: the title with the author, the titles of its editions and its ISBNs.
+            var target = new WantedTargetData(1, 2, MediaType.Book, null, "Rich Dad, Poor Dad", null, ["Rich Dad, Poor Dad"], null, null, null, [], false, false, false, 0, [],
+                ["de"], "Robert Kiyosaki", null, null, editionTitles: ["Rich Dad Poor Dad", "Padre Rico, Padre Pobre"], isbns: ["3959720106", "9781612681139"]);
+
+            var queries = DirectSources.AnnaQueries(target);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "Rich Dad, Poor Dad Robert Kiyosaki",
+                "Rich Dad, Poor Dad",
+                "Rich Dad Poor Dad",
+                "Padre Rico, Padre Pobre",
+                "3959720106",
+                "9781612681139"
+            }, queries.ToArray());
         }
 
         [TestMethod]
@@ -310,7 +394,7 @@ namespace Jularr.Backend.Tests
         public async Task AnnasArchive_CountdownSpeaksSecondsMinutesAndClocks(string text, int seconds)
         {
             var sources = new FakeSources { SlowWaitText = text };
-            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver());
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
             var page = await client.ReadSlowPageAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", CancellationToken.None);
             Assert.AreEqual(TimeSpan.FromSeconds(seconds), page.Wait);
         }
@@ -321,18 +405,18 @@ namespace Jularr.Backend.Tests
             // The override lives in the tests; it knows only its own simulated challenge and allowed hosts.
             var sources = new FakeSources { Challenge = true };
             var resolver = new TestGateResolver(["annas.example.test"], FakeSources.ChallengeToken);
-            var client = new AnnasArchiveClient(new HttpClient(sources), resolver);
+            var client = new AnnasArchiveClient(new HttpClient(sources), resolver, NoBrowser());
             Assert.AreEqual(1, (await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None)).Count);
 
-            var foreign = new AnnasArchiveClient(new HttpClient(sources), resolver);
+            var foreign = new AnnasArchiveClient(new HttpClient(sources), resolver, NoBrowser());
             await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 foreign.SearchAsync(new Uri("https://other.example.test/"), "Pride and Prejudice Austen", CancellationToken.None));
-            var production = new AnnasArchiveClient(new HttpClient(sources), new Integrations.Logic.Common.NoSourceGateResolver());
+            var production = new AnnasArchiveClient(new HttpClient(sources), new Integrations.Logic.Common.NoSourceGateResolver(), NoBrowser());
             await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 production.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None));
 
             // A wrong token is not accepted even for an allowed host.
-            var wrong = new AnnasArchiveClient(new HttpClient(sources), new TestGateResolver(["annas.example.test"], "guess"));
+            var wrong = new AnnasArchiveClient(new HttpClient(sources), new TestGateResolver(["annas.example.test"], "guess"), NoBrowser());
             await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 wrong.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None));
             Assert.IsFalse(new DirectCredentials(new Uri("https://opds.example.test/opds"), "Basic x").Covers(new Uri("https://cdn.example.test/file")));
@@ -496,6 +580,9 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
         }
 
+        // Without a browser the source keeps its own way.
+        private static SourceBrowser NoBrowser() => new(new BrowserOptions { Path = "" });
+
         // Test-only override: passes the simulated challenge of explicitly allowed test hosts.
         private sealed class TestGateResolver(string[] allowedHosts, string expectedToken) : ISourceGateResolver
         {
@@ -514,6 +601,12 @@ namespace Jularr.Backend.Tests
 
             public bool Challenge { get; set; }
             public bool SlowGate { get; set; }
+            public bool SlowWithoutFile { get; set; }
+            public bool RealRows { get; set; }
+            public string RowFileName { get; set; } = "lgli/Jane Austen - Pride and Prejudice (1813).epub";
+
+            // The page of a search whose query contains the key.
+            public Dictionary<string, string> SearchPages { get; } = new(StringComparer.OrdinalIgnoreCase);
             public int SlowWaitSeconds { get; set; } = 1;
             public string? SlowWaitText { get; set; }
             private int _signedHits;
@@ -590,7 +683,8 @@ namespace Jularr.Backend.Tests
                     if (!SlowGate)
                     {
                         var wait = SlowWaitText ?? $"Please wait {SlowWaitSeconds} seconds before downloading.";
-                        return Text($"""<html><body><p>{wait}</p><a href="/md5/0123456789abcdef0123456789abcdef">Back</a><a href="https://files.example.test/0123.epub">Download now</a></body></html>""", "text/html");
+                        var link = SlowWithoutFile ? "" : """<a href="https://files.example.test/0123.epub">Download now</a>""";
+                        return Text($"""<html><body><p>{wait}</p><a href="/md5/0123456789abcdef0123456789abcdef">Back</a>{link}</body></html>""", "text/html");
                     }
 
                     var check = Text("<html><body>Checking your browser</body></html>", "text/html", HttpStatusCode.ServiceUnavailable);
@@ -598,9 +692,28 @@ namespace Jularr.Backend.Tests
                     return check;
                 }
 
+                if (RealRows && uri.AbsolutePath == "/search" && !SearchPages.Keys.Any(key => uri.Query.Contains(key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return Text($"""
+                        <html><body>
+                          <div class="flex pt-3 pb-3 border-b">
+                            <a href="/md5/0123456789abcdef0123456789abcdef" class="custom-a block"><img src="/cover.jpg"></a>
+                            <div>
+                              <div class="line-clamp-[2] text-[9px] font-mono">{RowFileName}</div>
+                              <a href="/md5/0123456789abcdef0123456789abcdef" class="js-vim-focus">Pride and Prejudice</a>
+                              <a href="/search?q=Jane Austen" class="custom-a text-sm"><span class="icon-[mdi--user-edit]"></span> Jane Austen</a>
+                              <a href="/search?q=" class="custom-a text-sm"><span class="icon-[mdi--company]"></span> 1813</a>
+                            </div>
+                            <div>English [en] Â· EPUB Â· 1.2MB Â· 1813 Â· ðŸ“• Book (fiction) Â· ðŸš€/lgli/zlib Â· Save Â· 24 Â· 1</div>
+                          </div>
+                        </body></html>
+                        """, "text/html");
+                }
+
                 return uri.AbsolutePath switch
                 {
-                    "/search" => Text("""
+                    "/search" => Text(SearchPages.Where(entry => uri.Query.Contains(entry.Key, StringComparison.OrdinalIgnoreCase))
+                        .Select(entry => entry.Value).FirstOrDefault() ?? """
                         <html><body>
                           <a href="/md5/0123456789abcdef0123456789abcdef"><h3>Pride and Prejudice</h3><div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, Pride and Prejudice.epub</div></a>
                           <a href="/md5/0123456789abcdef0123456789abcdef">duplicate</a>

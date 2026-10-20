@@ -7755,6 +7755,110 @@
   "arr.applyCondition": [
    "Apply condition type",
    "Bedingungsart anwenden"
+  ],
+  "admin.browser.title": [
+   "Browser",
+   "Browser"
+  ],
+  "admin.browser.state": [
+   "What the browser did",
+   "Was der Browser getan hat"
+  ],
+  "admin.browser.kind": [
+   "Event",
+   "Ereignis"
+  ],
+  "admin.browser.message": [
+   "Details",
+   "Details"
+  ],
+  "admin.browser.at": [
+   "When",
+   "Wann"
+  ],
+  "admin.browser.actions": [
+   "What the browser may do",
+   "Was der Browser tun darf"
+  ],
+  "admin.browser.action": [
+   "Action",
+   "Aktion"
+  ],
+  "admin.browser.start": [
+   "Start the browser",
+   "Browser starten"
+  ],
+  "admin.browser.stop": [
+   "Stop the browser",
+   "Browser stoppen"
+  ],
+  "admin.browser.reset": [
+   "Begin again as a new client",
+   "Als neuer Client wieder beginnen"
+  ],
+  "admin.browser.read": [
+   "Read a page",
+   "Eine Seite lesen"
+  ],
+  "admin.browser.url": [
+   "Address",
+   "Adresse"
+  ],
+  "admin.browser.run": [
+   "Do it",
+   "Ausführen"
+  ],
+  "admin.browser.sources": [
+   "The sources of the instance",
+   "Die Quellen der Instanz"
+  ],
+  "admin.browser.source": [
+   "Source",
+   "Quelle"
+  ],
+  "admin.browser.address": [
+   "Address",
+   "Adresse"
+  ],
+  "admin.browser.test": [
+   "Check",
+   "Prüfen"
+  ],
+  "admin.browser.off": [
+   "The source off",
+   "Die Quelle aus"
+  ],
+  "admin.browser.sourceOff": [
+   "The source searches no longer; the requests stay with the people.",
+   "Die Quelle sucht nicht mehr; die Anfragen bleiben bei den Menschen."
+  ],
+  "admin.browser.wanted": [
+   "The requests of the instance",
+   "Die Anfragen der Instanz"
+  ],
+  "admin.browser.request": [
+   "Request",
+   "Anfrage"
+  ],
+  "admin.browser.search": [
+   "A person searches",
+   "Ein Mensch sucht"
+  ],
+  "admin.browser.searched": [
+   "The request was searched by hand:",
+   "Die Anfrage wurde von Hand gesucht:"
+  ],
+"admin.browser.ran": [
+   "The browser did what was asked.",
+   "Der Browser hat getan, was verlangt war."
+  ],
+  "admin.browser.sourceOk": [
+   "The source answers.",
+   "Die Quelle antwortet."
+  ],
+  "admin.browser.sourceFailed": [
+   "The source does not answer:",
+   "Die Quelle antwortet nicht:"
   ]
  }
 }

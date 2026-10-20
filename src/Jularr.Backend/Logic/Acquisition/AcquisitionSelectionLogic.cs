@@ -151,6 +151,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 {
                     IndexerId = offer.ConnectionId,
                     IndexerFlags = offer.IndexerFlags,
+                    IsPart = offer.IsPart,
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection
                         ?? (EditionLanguageFilter.Rejects(judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [], target.MonitoredEditionLanguages, target.UnmonitoredEditionLanguages, focusLanguage) ? "EditionNotMonitored" : null),
                     ContextScore = judgement.ContextScore,

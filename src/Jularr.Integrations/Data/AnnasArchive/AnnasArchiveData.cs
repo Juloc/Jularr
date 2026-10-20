@@ -21,19 +21,20 @@ namespace Jularr.Integrations.Data.AnnasArchive
     // One public slow download page: the file it names and the wait it asks for first.
     internal sealed class AnnasArchivePage
     {
-        public AnnasArchivePage(Uri file, TimeSpan wait)
+        public AnnasArchivePage(Uri? file, TimeSpan wait)
         {
             File = file;
             Wait = wait;
         }
 
-        public Uri File { get; }
+        // Null while the page only counts down; the file names itself once the wait is over.
+        public Uri? File { get; }
         public TimeSpan Wait { get; }
     }
 
     internal sealed class AnnasArchiveRecord
     {
-        public AnnasArchiveRecord(string md5, string title, string? author, string extension, string? language, long? sizeBytes)
+        public AnnasArchiveRecord(string md5, string title, string? author, string extension, string? language, long? sizeBytes, bool isPart = false)
         {
             Md5 = md5;
             Title = title;
@@ -41,6 +42,7 @@ namespace Jularr.Integrations.Data.AnnasArchive
             Extension = extension;
             Language = language;
             SizeBytes = sizeBytes;
+            IsPart = isPart;
         }
 
         public string Md5 { get; }
@@ -49,5 +51,8 @@ namespace Jularr.Integrations.Data.AnnasArchive
         public string Extension { get; }
         public string? Language { get; }
         public long? SizeBytes { get; }
+
+        // The file is one part of a work; the whole work is elsewhere.
+        public bool IsPart { get; }
     }
 }
