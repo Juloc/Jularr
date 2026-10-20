@@ -2,18 +2,34 @@ namespace Jularr.Integrations.Data.Media
 {
     internal sealed class MediaProbe
     {
-        public MediaProbe(string? container, long? durationMs, long? bitRate, IReadOnlyList<MediaProbeStream> streams)
+        public MediaProbe(string? container, long? durationMs, long? bitRate, IReadOnlyList<MediaProbeStream> streams, IReadOnlyList<MediaProbeChapter>? chapters = null)
         {
             Container = container;
             DurationMs = durationMs;
             BitRate = bitRate;
             Streams = streams;
+            Chapters = chapters ?? [];
         }
 
         public string? Container { get; }
         public long? DurationMs { get; }
         public long? BitRate { get; }
         public IReadOnlyList<MediaProbeStream> Streams { get; }
+        public IReadOnlyList<MediaProbeChapter> Chapters { get; }
+    }
+
+    internal sealed class MediaProbeChapter
+    {
+        public MediaProbeChapter(long startMs, long endMs, string? title)
+        {
+            StartMs = startMs;
+            EndMs = endMs;
+            Title = title;
+        }
+
+        public long StartMs { get; }
+        public long EndMs { get; }
+        public string? Title { get; }
     }
 
     internal sealed class MediaProbeStream

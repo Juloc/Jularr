@@ -33,6 +33,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Sources/Sources", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
+            conventions.AuthorizePage("/Admin/WorkMarkers/WorkMarkers", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Matches/Matches", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
