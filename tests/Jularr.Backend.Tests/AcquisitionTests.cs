@@ -572,6 +572,117 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, (await again.Content.ReadFromJsonAsync<DeleteLibraryFilesResultV1>())!.DeletedCount);
         }
 
+        // The quality and the audio language of files are overridden by hand, only with what the title's type knows; what stays empty is not changed.
+        [TestMethod]
+        public async Task UpdateLibraryFileFacts_OverridesQualityAndAudioLanguage()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Language", "IsDefault", "IsForced")
+                VALUES ({fileId}, 0, 1, NULL, TRUE, FALSE), ({fileId}, 1, 2, 'jpn', TRUE, FALSE), ({fileId}, 2, 2, 'eng', FALSE, FALSE), ({fileId}, 3, 3, 'eng', FALSE, FALSE);
+                """);
+
+            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], "FLAC"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var nothing = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, nothing.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], null, "xxx"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+
+            using var changed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], "HDTV-720p", "ger"));
+            Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await changed.Content.ReadFromJsonAsync<UpdateLibraryFileFactsResultV1>())!.UpdatedCount);
+            Assert.AreEqual("HDTV-720p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"MediaTrackTypeId\" = 2 AND \"Language\" = 'ger'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"MediaTrackTypeId\" = 3 AND \"Language\" = 'eng'"));
+
+            // Only the quality: the languages stay.
+            using var quality = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], "Bluray-1080p"));
+            Assert.AreEqual(HttpStatusCode.OK, quality.StatusCode, await quality.Content.ReadAsStringAsync());
+            Assert.AreEqual("Bluray-1080p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"Language\" = 'ger'"));
+        }
+
+        // Deleting a title takes its requests, targets and files, the history keeps its texts, and an exclusion refuses a request until it is removed.
+        [TestMethod]
+        public async Task DeleteWork_RemovesTheTitle_WithItsFiles_AndAnExclusionRefusesRequests()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
+            var path = Directory.EnumerateFiles(Path.Combine(storage.Path, "1"), "*.mkv", SearchOption.AllDirectories).Single(file => !file.Contains("Incoming", StringComparison.Ordinal));
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES ({workId}, 'tmdb_movie', '4242');
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByAccountId", "UiLocaleId")
+                SELECT {workId}, (SELECT min("Id") FROM "Accounts"), (SELECT min("Id") FROM "UiLocales");
+                """);
+
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/" + workId + "/deletion", new DeleteWorkDataV1(true, true));
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.IsFalse(File.Exists(path), "The file is still on disk.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = " + (byte)ActivityEventType.WorkDeleted + " AND \"WorkTitle\" = 'Example Movie' AND \"WorkId\" IS NULL"));
+
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/exclusions");
+            var exclusions = (await listed.Content.ReadFromJsonAsync<PageResult<WorkExclusionV1>>())!;
+            Assert.AreEqual("Example Movie", exclusions.Items.Single().Title);
+
+            // A request through the same provider identity is refused before anything is imported.
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/" + (byte)MediaType.Movie + "/4242/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode, await refused.Content.ReadAsStringAsync());
+            StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "excluded");
+
+            using var removed = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/works/exclusions/" + exclusions.Items.Single().Id);
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExclusionIdentities\""));
+        }
+
+        [TestMethod]
+        public async Task DeleteWork_WithoutFiles_LeavesThemOnDisk_AndWithoutExclusion_AddsNone()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
+            var path = Directory.EnumerateFiles(Path.Combine(storage.Path, "1"), "*.mkv", SearchOption.AllDirectories).Single(file => !file.Contains("Incoming", StringComparison.Ordinal));
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WorkExternalIdentities\" (\"WorkId\", \"Namespace\", \"Value\") VALUES ({workId}, 'tmdb_movie', '4242');");
+
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/" + workId + "/deletion", new DeleteWorkDataV1(false, false));
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.IsTrue(File.Exists(path), "The file was deleted although it was not asked for.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NULL AND \"RelativePath\" LIKE '%.mkv'"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExclusions\""));
+        }
+
         [TestMethod]
         public async Task DeleteLibraryFiles_SwitchesTheEpisodeOff_OnlyWhenTheSettingSaysSo()
         {

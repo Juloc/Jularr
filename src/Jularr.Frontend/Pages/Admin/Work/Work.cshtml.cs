@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
-        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
+        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteWorkV1 deleteWork, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
@@ -52,6 +52,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private SelectOption[] _tagChoices = [];
         private UpdateWantedDataV1? _choice;
         private LibraryRenamePlanV1? _renames;
+        private DeleteWorkDataV1? _deleteInput;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -190,6 +191,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(WorkTab.History));
         }
 
+        // The title leaves the library; the page it was on is gone, so the list follows.
+        public async Task<IActionResult> OnPostDeleteTitleAsync(bool deletesFiles, bool addsExclusion)
+        {
+            _deleteInput = new DeleteWorkDataV1(deletesFiles, addsExclusion);
+            await deleteWork.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), _deleteInput, HttpContext.RequestAborted);
+            return LocalRedirect("/Admin/Works");
+        }
+
         // Files
 
         public async Task<IActionResult> OnPostDeleteFilesAsync(long[]? storedFileIds)
@@ -198,6 +207,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var result = await deleteFiles.ExecuteAsync<DeleteLibraryFilesResultV1>(new DeleteLibraryFilesParametersV1(), new DeleteLibraryFilesDataV1(storedFileIds), HttpContext.RequestAborted);
             TempData["WorkFilesDeleted"] = result.DeletedCount;
             TempData["WorkFilesKept"] = result.KeptCount;
+            return LocalRedirect(Address(Tab));
+        }
+
+        public async Task<IActionResult> OnPostEditFilesAsync(long[]? storedFileIds, string? qualityKey, string? audioLanguage)
+        {
+            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage)) return LocalRedirect(Address(Tab));
+            var result = await updateFacts.ExecuteAsync<UpdateLibraryFileFactsResultV1>(new UpdateLibraryFileFactsParametersV1(),
+                new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage), HttpContext.RequestAborted);
+            TempData["WorkFilesUpdated"] = result.UpdatedCount;
             return LocalRedirect(Address(Tab));
         }
 

@@ -11,6 +11,7 @@ namespace Jularr.Backend.Data.Enums.Library
         FileDeleted = 6,
         ManualImport = 7,
         Blocked = 8,
-        SubtitleDownloaded = 9
+        SubtitleDownloaded = 9,
+        WorkDeleted = 10
     }
 }

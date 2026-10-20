@@ -131,6 +131,17 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         }
     }
 
+    [ServiceEndpoint("PUT", "/api/v1/admin/library/files/facts")]
+    public sealed class UpdateLibraryFileFactsV1 : AdminService<UpdateLibraryFileFactsParametersV1, UpdateLibraryFileFactsDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateLibraryFileFactsResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateLibraryFileFactsParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(UpdateLibraryFileFactsParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnUpdate() => new UpdateLibraryFileFactsResultV1(await Context.UpdateStoredFileFactsAsync(Data, CancellationToken));
+    }
+
     [ServiceEndpoint("DELETE", "/api/v1/admin/library/files/{storedFileId:long}/assignment")]
     public sealed class UnassignLibraryFileV1 : AdminService<StoredFileParametersV1, NoData>
     {

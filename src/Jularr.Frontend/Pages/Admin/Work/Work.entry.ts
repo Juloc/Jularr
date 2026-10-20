@@ -195,6 +195,28 @@ function initializeTable(table: HTMLTableElement): void {
     });
 }
 
+// The files an edit applies to are written into the dialog when it opens: the one of a row, or the ticked boxes.
+function initializeFileEdit(): void {
+    const dialog = document.getElementById('work-files-edit') as HTMLDialogElement | null;
+    const holder = dialog?.querySelector<HTMLElement>('[data-edit-ids]');
+    if (!dialog || !holder) return;
+    const open = (ids: string[]): void => {
+        if (ids.length === 0) return;
+        holder.replaceChildren(...ids.map(id => Object.assign(document.createElement('input'), { type: 'hidden', name: 'storedFileIds', value: id })));
+        dialog.showModal();
+    };
+    document.querySelectorAll<HTMLElement>('[data-edit-file]').forEach(button => {
+        if (button.dataset.workReady) return;
+        button.dataset.workReady = 'true';
+        button.addEventListener('click', () => open([button.dataset.editFile ?? '']));
+    });
+    document.querySelectorAll<HTMLElement>('[data-edit-selected]').forEach(button => {
+        if (button.dataset.workReady) return;
+        button.dataset.workReady = 'true';
+        button.addEventListener('click', () => open(Array.from(document.querySelectorAll<HTMLInputElement>('input[name="storedFileIds"]:checked')).map(box => box.value)));
+    });
+}
+
 function initializeSelection(): void {
     document.querySelectorAll<HTMLInputElement>('[data-select-all]').forEach(all => {
         if (all.dataset.workReady) return;
@@ -227,6 +249,7 @@ onPage(import.meta.url, () => {
     initializeVersions();
     initializeDialogs();
     initializeSelection();
+    initializeFileEdit();
     document.querySelectorAll<HTMLTableElement>('[data-work-table]').forEach(initializeTable);
     if (!pickerReady) { pickerReady = true; initializePicker(); }
 });

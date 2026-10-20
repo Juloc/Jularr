@@ -420,6 +420,7 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 
 @media (max-width: 720px) {
     .work-hero__content { flex-direction: column; padding: 18px; }
+    .work-actions .work-delete { flex: 1 1 100%; justify-content: center; }
     .work-cover img, .work-cover .work-cover__placeholder { width: 120px; height: 180px; }
     .work-hero__body { min-height: 0; }
     .work-title h1 { font-size: 26px; }
