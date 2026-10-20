@@ -30,5 +30,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField Publisher = new(NpgsqlDbType.Varchar) { MaximumLength = 300, Required = false };
         public static readonly StringField Isbn = new() { MaximumLength = 400, Required = false };
         public static readonly BoolField IsRomVerified = new();
+        public static readonly StringField GameRegion = new(NpgsqlDbType.Varchar) { MaximumLength = 100, Required = false };
+        public static readonly StringField GameVersion = new(NpgsqlDbType.Varchar) { MaximumLength = 100, Required = false };
     }
 }

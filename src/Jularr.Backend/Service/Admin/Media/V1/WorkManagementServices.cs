@@ -369,8 +369,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 int? score = profile is not null && row.Evidence is { } json && JsonSerializer.Deserialize<StoredReleaseEvidence>(json) is { } facts && StoredFileFormatLogic.Candidate(facts) is { } candidate
                     ? ReleaseScorer.Score(profile, candidate).FormatScore : null;
                 long[] unitIds = [.. row.WorkUnitId is { } own ? new[] { own } : [], .. additional[row.MediaAssetId]];
+                var (region, version) = hero.MediaTypeId == MediaType.Game ? GameFileName.Facts(row.RelativePath) : (null, null);
                 return new WorkManagementFileV1(row.Id, unitIds, row.RelativePath, row.SizeBytes, row.QualityKey, WorkGradeLogic.Quality(profile, row.QualityKey), score, sizeGrade, perMinute, row.VideoCodec,
-                    row.Height, row.DynamicRange, row.AudioLanguages, row.SubtitleLanguages, row.ReleaseGroup, row.DurationMs, row.IsMissing, row.GroupId, row.IsRomVerified);
+                    row.Height, row.DynamicRange, row.AudioLanguages, row.SubtitleLanguages, row.ReleaseGroup, row.DurationMs, row.IsMissing, row.GroupId, row.IsRomVerified, region, version);
             }).ToArray();
 
             // Figures: an episode, or a film as a whole, wants an upgrade while none of its files meets the cutoff and one is below it

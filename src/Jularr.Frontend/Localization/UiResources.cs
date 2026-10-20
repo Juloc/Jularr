@@ -1602,6 +1602,8 @@ namespace Jularr.Frontend.Localization
             new("work.col.released", "Released"),
             new("work.col.format", "Format"),
             new("work.col.rom", "ROM check"),
+            new("work.col.region", "Region"),
+            new("work.col.version", "Version"),
             new("work.rom.verified", "In the ROM catalog"),
             new("work.rom.unverified", "Not in the catalog"),
             new("work.platform.notWanted", "Not requested"),

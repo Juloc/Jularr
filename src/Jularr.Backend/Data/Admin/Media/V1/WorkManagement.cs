@@ -63,8 +63,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public WorkManagementFileV1(long id, long[] workUnitIds, string relativePath, long sizeBytes, string? qualityKey, FileQualityGrade fileQualityGradeId, int? formatScore, FileSizeGrade fileSizeGradeId,
             decimal? megabytesPerMinute, string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? releaseGroup, long? durationMs, bool isMissing,
-            long? groupId = null, bool? isRomVerified = null)
+            long? groupId = null, bool? isRomVerified = null, string? gameRegion = null, string? gameVersion = null)
         {
+            GameRegion = gameRegion;
+            GameVersion = gameVersion;
             GroupId = groupId;
             IsRomVerified = isRomVerified;
             Id = id;
@@ -142,6 +144,13 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         // The edition or platform it belongs to.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
         public long? GroupId { get; }
+
+        // What a game file's name says: the region and the version of the dump.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GameRegion), false)]
+        public string? GameRegion { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GameVersion), false)]
+        public string? GameVersion { get; }
 
         // A game file whose hash a ROM catalog of its platform names; none when no hash is known.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.IsRomVerified), false)]

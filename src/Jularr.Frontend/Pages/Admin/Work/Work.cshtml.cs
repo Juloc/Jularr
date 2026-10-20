@@ -51,6 +51,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IReadOnlyList<WantedLibraryV1> _libraries = [];
         private SelectOption[] _tagChoices = [];
         private UpdateWantedDataV1? _choice;
+        private long? _choiceWantedId;
+        private readonly Dictionary<long, WantedDetailsV1> _platformTargets = [];
         private LibraryRenamePlanV1? _renames;
         private DeleteWorkDataV1? _deleteInput;
 
@@ -163,11 +165,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(Tab));
         }
 
-        public async Task<IActionResult> OnPostChoiceAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long[]? tagIds)
+        public async Task<IActionResult> OnPostChoiceAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long[]? tagIds, long? wantedItemId)
         {
-            var wantedItemId = await WantedItemIdAsync();
+            var targetId = await WantedItemIdAsync(wantedItemId);
+            _choiceWantedId = targetId;
             _choice = new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId, monitorsNewUnits, tagIds: tagIds ?? []);
-            await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(wantedItemId), _choice, HttpContext.RequestAborted);
+            await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(targetId), _choice, HttpContext.RequestAborted);
             return LocalRedirect(Address(Tab));
         }
 
@@ -270,6 +273,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     }
 
                     _tagChoices = choices.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+                }
+            }
+
+            // A game is wanted per platform; each target has its own settings to edit.
+            if (_management.MediaTypeId == MediaType.Game && CanAcquire && texts.CanManageWanted())
+            {
+                foreach (var group in _management.Groups.Where(group => group.WantedItemId is not null))
+                {
+                    _platformTargets[group.WantedItemId!.Value] = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(group.WantedItemId.Value), ct);
                 }
             }
 
