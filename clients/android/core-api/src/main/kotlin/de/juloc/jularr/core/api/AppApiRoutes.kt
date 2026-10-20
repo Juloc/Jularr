@@ -8,8 +8,14 @@ object AppApiRoutes {
     const val Base = "/api/v1"
     const val Pairings = "$Base/devices/pairings"
     const val Capabilities = "$Base/instance/capabilities"
+    const val Authentication = "$Base/auth"
     const val InstancePresentation = "$Base/instance/presentation"
     const val Watchlist = "$Base/watchlist"
+    const val Library = "$Base/library"
+    const val Continue = "$Base/continue"
+    const val HomeLayout = "$Base/home/layout"
+    const val DiscoverScopes = "$Base/discover/scopes"
+    const val Profiles = "$Base/profiles"
 
     /** The shared design tokens the instance serves; a client reads them from here. */
     const val DesignTokens = "/tokens.json"
@@ -23,4 +29,9 @@ object AppApiRoutes {
     fun uiTexts(uiLocaleId: Long): String = "$Base/localization/texts/$uiLocaleId"
 
     fun watchlistPage(page: Int, pageSize: Int): String = "$Watchlist?page=$page&pageSize=$pageSize"
+
+    fun libraryPage(page: Int, pageSize: Int): String = "$Library?page=$page&pageSize=$pageSize"
+
+    /** Switches the device to another profile of its account. */
+    fun selectProfile(profileId: Long): String = "$Base/auth/profile/$profileId"
 }

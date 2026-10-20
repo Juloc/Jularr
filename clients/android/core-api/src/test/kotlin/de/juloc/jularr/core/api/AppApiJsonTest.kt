@@ -1,6 +1,8 @@
 package de.juloc.jularr.core.api
 
+import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePlatform
+import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.WorkCardV1
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -112,6 +114,81 @@ class AppApiJsonTest {
         assertNull(card.posterUrl)
         assertNull(card.mediaSubtypeId)
         assertEquals(WorkCardV1.AvailabilityAvailable, card.availabilityStateId)
+    }
+
+    @Test
+    fun aContinueItemIsReadFromTheServerShape() {
+        val item = JSONObject(
+            """{"workId":10,"mediaAssetId":55,"mediaTypeId":2,"title":"One Show","posterUrl":"https://example.test/poster.jpg",
+               "workUnitTypeId":1,"unitNumber":3.0,"parentUnitNumber":1.0,"positionMs":120000,"durationMs":2400000,
+               "progression":0.25,"mediaAssetTypeId":1}""",
+        ).toContinueItem()
+
+        assertEquals(10L, item.workId)
+        assertEquals(55L, item.mediaAssetId)
+        assertEquals(2, item.mediaTypeId)
+        assertEquals("One Show", item.title)
+        assertEquals(1, item.workUnitTypeId)
+        assertEquals(3.0, item.unitNumber!!, 0.001)
+        assertEquals(1.0, item.parentUnitNumber!!, 0.001)
+        assertEquals(120000L, item.positionMs)
+        assertEquals(2400000L, item.durationMs)
+        assertEquals(0.25, item.progression!!, 0.001)
+        assertEquals(ContinueItemV1.AssetVideo, item.mediaAssetTypeId)
+    }
+
+    @Test
+    fun aContinueItemWithoutAUnitKeepsTheOptionalNumbersEmpty() {
+        val item = JSONObject(
+            """{"workId":11,"mediaAssetId":56,"mediaTypeId":3,"title":"One Book","posterUrl":null,
+               "workUnitTypeId":null,"unitNumber":null,"parentUnitNumber":null,"positionMs":0,"durationMs":null,
+               "progression":null,"mediaAssetTypeId":3}""",
+        ).toContinueItem()
+
+        assertNull(item.posterUrl)
+        assertNull(item.workUnitTypeId)
+        assertNull(item.unitNumber)
+        assertNull(item.parentUnitNumber)
+        assertNull(item.durationMs)
+        assertNull(item.progression)
+        assertEquals(ContinueItemV1.AssetEbook, item.mediaAssetTypeId)
+    }
+
+    @Test
+    fun theHomeLayoutIsReadFromTheServerShape() {
+        val shelves = listOf(
+            JSONObject("""{"homeShelfTypeId":1,"isHidden":false}""").toHomeShelf(),
+            JSONObject("""{"homeShelfTypeId":2,"isHidden":true}""").toHomeShelf(),
+        )
+
+        assertEquals(HomeShelfV1.ContinueWatching, shelves[0].homeShelfTypeId)
+        assertEquals(false, shelves[0].isHidden)
+        assertEquals(HomeShelfV1.ContinueListening, shelves[1].homeShelfTypeId)
+        assertEquals(true, shelves[1].isHidden)
+    }
+
+    @Test
+    fun aDiscoverScopeIsReadFromTheServerShape() {
+        val scope = JSONObject(
+            """{"slug":"anime","mediaTypeId":2,"mediaSubtypeId":1,"isCatalog":false,"feeds":[1,2]}""",
+        ).toDiscoverScope()
+
+        assertEquals("anime", scope.slug)
+        assertEquals(2, scope.mediaTypeId)
+        assertEquals(1, scope.mediaSubtypeId)
+        assertEquals(false, scope.isCatalog)
+        assertEquals(listOf(1, 2), scope.feeds)
+    }
+
+    @Test
+    fun aDiscoverScopeWithoutASubtypeKeepsItEmpty() {
+        val scope = JSONObject(
+            """{"slug":"film","mediaTypeId":1,"mediaSubtypeId":null,"isCatalog":true,"feeds":[]}""",
+        ).toDiscoverScope()
+
+        assertNull(scope.mediaSubtypeId)
+        assertEquals(true, scope.isCatalog)
+        assertEquals(emptyList<Int>(), scope.feeds)
     }
 
     @Test

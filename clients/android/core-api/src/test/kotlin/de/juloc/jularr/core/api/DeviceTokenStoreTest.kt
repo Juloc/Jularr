@@ -35,4 +35,41 @@ class DeviceTokenStoreTest {
 
         assertNull(store.current)
     }
+
+    @Test
+    fun aStoredTokenSurvivesTheNextStart() {
+        val storage = MemoryStorage()
+        val store = DeviceTokenStore(storage)
+        store.update("token-1")
+
+        val next = DeviceTokenStore(storage)
+
+        assertEquals("token-1", next.current)
+        assertEquals("token-1", storage.read())
+    }
+
+    @Test
+    fun aClearedStoreForgetsTheStoredToken() {
+        val storage = MemoryStorage()
+        val store = DeviceTokenStore(storage)
+        store.update("token-1")
+
+        store.clear()
+
+        assertNull(storage.read())
+    }
+
+    private class MemoryStorage : DeviceTokenStorage {
+        private var token: String? = null
+
+        override fun read(): String? = token
+
+        override fun write(token: String) {
+            this.token = token
+        }
+
+        override fun clear() {
+            token = null
+        }
+    }
 }

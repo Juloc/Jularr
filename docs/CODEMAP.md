@@ -7,6 +7,10 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md): Pages, C# components, split/tabs, Login/Shell ownership, localization, Vite assets and focused UI tests.
 - [Frontend host](../src/Jularr.Frontend/Program.cs): one Razor/API application host.
 
+## Native clients
+
+- [Android clients](../clients/android/README.md): the phone and the TV client of the product. They call the versioned app services (`/api/v1`) as paired devices and read the shared design tokens the instance serves; the television shows the desktop's layout at TV scale ([TV specification](mockups/tv/SPEC.md)).
+
 ## Host and Profile entry points
 
 - [Backend project](../src/Jularr.Backend/Jularr.Backend.csproj): class library; [Workers project](../src/Jularr.Workers/Jularr.Workers.csproj): hosted background work that only runs System services ([WorkerRegistration.cs](../src/Jularr.Workers/WorkerRegistration.cs); timer workers share [PeriodicWorker.cs](../src/Jularr.Workers/PeriodicWorker.cs)); [Frontend Program](../src/Jularr.Frontend/Program.cs): the only web host. Backend host registration: [README](../README.md#backend-im-gemeinsamen-host).

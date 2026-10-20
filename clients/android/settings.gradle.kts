@@ -22,6 +22,7 @@ rootProject.name = "JularrAndroid"
 // The client talks to the versioned app services of the backend (/api/v1). It signs in as a
 // paired device with a device token, never with a password, an API key or a browser cookie.
 include(
+    ":app-tv",
     ":core-api",
     ":core-design",
     ":core-model",

@@ -45,4 +45,4 @@ jobs:
 
       - name: Test and lint the client modules
         working-directory: clients/android
-        run: gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-model:lintDebug
+        run: gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-design:testDebugUnitTest :core-design:lintDebug :core-model:lintDebug :app-tv:testDebugUnitTest :app-tv:lintDebug :app-tv:assembleDebug

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window before the first frame: the background of the skin. -->
+    <style name="Theme.JularrTv" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/jularr_background</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

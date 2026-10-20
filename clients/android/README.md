@@ -3,8 +3,8 @@
 The first-party Android phone and Android TV clients of Jularr. They use the versioned app
 services of the backend (`/api/v1`) and never the web pages, a cookie or a password.
 
-The durable contract is [`docs/APP_API.md`](../../docs/APP_API.md); the app surfaces this
-directory needs are tracked in the native app contract issue.
+The durable contract is [`docs/APP_API.md`](../../docs/APP_API.md); the layout of the
+television is fixed in [`docs/mockups/tv/SPEC.md`](../../docs/mockups/tv/SPEC.md).
 
 ## Contract
 
@@ -27,9 +27,12 @@ directory needs are tracked in the native app contract issue.
 - `core-design`: the shared design tokens of the product. The instance serves them as
   `tokens.json`; a client reads them from there, so the desktop's colors, radii and type scale
   are the client's colors, radii and type scale.
+- `app-tv`: the Android TV client. It shows the desktop's layout at TV scale, with the focus
+  instead of the pointer: the rail with Home, Watchlist and Library, the profile and the
+  settings of the app, the top row and the home page with the type capsule and the shelves of
+  the profile.
 
-The phone shell, the TV shell, the player, the offline downloads and the speech runtime
-follow in later pull requests.
+The player, the offline downloads and the speech runtime follow in later pull requests.
 
 ## Baseline
 
@@ -43,7 +46,7 @@ follow in later pull requests.
 From this directory with Android SDK 36 available:
 
 ```bash
-gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-design:testDebugUnitTest :core-design:lintDebug :core-model:lintDebug
+gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-design:testDebugUnitTest :core-design:lintDebug :core-model:lintDebug :app-tv:testDebugUnitTest :app-tv:lintDebug :app-tv:assembleDebug
 ```
 
 CI runs the same commands (`.github/workflows/android.yml`).
