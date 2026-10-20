@@ -107,5 +107,8 @@ The keyboard is the TV's own: no system keyboard, no cursor, no text selection.
 3. **The shared tokens** (done, #1324): the one file with the colors of a skin, the radii and the type scale; the web builds its stylesheet from it and the instance serves it to the clients.
 4. **The TV shell** (done, #1328): the rail, the top row, the profile, the app settings, the type capsule and the shelves of the profile in the desktop's card.
 5. **The TV search and the details** (done, #1339): the magnifier of the top row opens the search; the field, the suggestions of the instance, the titles that match and the keyboard of the television on the left and on the right; OK opens the title and its details.
-6. **The TV player and the rest**: the previous client's player, the actions of a title and the offline engine, rebuilt on the new contract and in the desktop's look.
-7. **The phone shell**: the WebView shell and the native player from the previous client, on the new contract.
+6. **The TV player** (done, #1353): OK on a title the profile continues starts its playback; OK plays and pauses, left and right seek, the progress goes back to the instance.
+7. **The cards of the desktop** (done, #1354): the mark of the availability in the corner of the cover, the number of the titles in the heading of the shelf, the actions of the focused card and a clear order of the focus (the rail, the top row, then the rows of the content).
+8. **The discover and the profile** (done, #1359): the ranked lists of the instance below the shelves and the language of the profile in the settings of the television.
+9. **The TV offline engine and the rest**: the previous client's offline downloads, rebuilt on the new contract and in the desktop's look.
+10. **The phone shell**: the WebView shell and the native player from the previous client, on the new contract.
