@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
@@ -9,6 +10,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Activity.V1;
+using Jularr.Backend.Service.Admin.Library.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Frontend.Framework;
@@ -23,14 +25,16 @@ namespace Jularr.Frontend.Pages.Admin.Work
     {
         Units = 1,
         History = 2,
-        Metadata = 3
+        Metadata = 3,
+        Files = 4
     }
 
     // One page per title: films and series are managed here, with their seasons, files, searches and history; other types still show their metadata.
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
-        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
         private IReadOnlyList<MetadataSearchResultV1>? _matches;
@@ -47,6 +51,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IReadOnlyList<WantedLibraryV1> _libraries = [];
         private SelectOption[] _tagChoices = [];
         private UpdateWantedDataV1? _choice;
+        private LibraryRenamePlanV1? _renames;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -185,6 +190,26 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(WorkTab.History));
         }
 
+        // Files
+
+        public async Task<IActionResult> OnPostDeleteFilesAsync(long[]? storedFileIds)
+        {
+            if (storedFileIds is not { Length: > 0 }) return LocalRedirect(Address(Tab));
+            var result = await deleteFiles.ExecuteAsync<DeleteLibraryFilesResultV1>(new DeleteLibraryFilesParametersV1(), new DeleteLibraryFilesDataV1(storedFileIds), HttpContext.RequestAborted);
+            TempData["WorkFilesDeleted"] = result.DeletedCount;
+            TempData["WorkFilesKept"] = result.KeptCount;
+            return LocalRedirect(Address(Tab));
+        }
+
+        // The title's files move only for the plan that was shown.
+        public async Task<IActionResult> OnPostRenameFilesAsync([BindRequired] string fingerprint)
+        {
+            var result = await applyRenames.ExecuteAsync<ApplyLibraryRenamesResultV1>(new LibraryRenamesParametersV1(), new ApplyLibraryRenamesDataV1(fingerprint, Id), HttpContext.RequestAborted);
+            TempData["WorkRenamed"] = result.RenamedCount;
+            TempData["WorkRenameSkipped"] = result.SkippedCount;
+            return LocalRedirect(Address(Tab));
+        }
+
         // The title's target is found by the title, never taken from the request.
         private async Task<long> WantedItemIdAsync()
         {
@@ -223,6 +248,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 }
             }
 
+            if (Tab == WorkTab.Files && texts.CanManageStorage()) _renames = await readRenames.ExecuteAsync<LibraryRenamePlanV1>(new ReadLibraryRenamesParametersV1(1, 100, Id), ct);
             if (Tab == WorkTab.History) _events = await readEvents.ExecuteAsync<PageResult<ActivityEventV1>>(new ReadActivityEventsParametersV1(Id, Math.Max(1, HistoryPage)), ct);
         }
     }

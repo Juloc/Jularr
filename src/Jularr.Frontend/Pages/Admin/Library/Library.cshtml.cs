@@ -192,9 +192,10 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     form.Select(item => item.RecycleStorageMountId, "library.replacement.mount", mounts);
                     form.Text(item => item.RecyclePath, "library.replacement.path");
                     form.Number(item => item.RecycleDays, "library.replacement.days");
+                    form.Toggle(item => item.UnmonitorsDeletedUnits, "library.replacement.unmonitorsDeleted");
                     form.Save();
                 }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecycleModeId,
-                    replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version), _replacementInput is null ? null : FormError));
+                    replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version, replacement.UnmonitorsDeletedUnits), _replacementInput is null ? null : FormError));
             }
 
             if (FormError is not null && _failedFileId is null && _failedPattern is null && _failedSettings is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -325,9 +326,9 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
+        public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits)
         {
-            _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recycleModeId, recycleStorageMountId, recyclePath, recycleDays, version);
+            _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recycleModeId, recycleStorageMountId, recyclePath, recycleDays, version, unmonitorsDeletedUnits);
             await updateReplacement.ExecuteAsync<UpdateResult>(new ReplacementSettingsParametersV1(), _replacementInput, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }

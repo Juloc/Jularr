@@ -2152,6 +2152,10 @@
    "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
    "Tage, die eine entfernte Datei im Papierkorb-Ordner bleibt; 0 behält sie, bis du sie entfernst."
   ],
+  "hint.InstanceSettingsFields.UnmonitorsDeletedUnits.info": [
+   "When on, deleting a file by hand also stops monitoring its episode or volume; otherwise it stays monitored and is searched again.",
+   "Wenn aktiv, beendet das Löschen einer Datei von Hand auch die Überwachung ihrer Folge oder ihres Bands; sonst bleibt sie überwacht und wird erneut gesucht."
+  ],
   "hint.InstanceSettingsFields.RecyclePath.placeholder": [
    "Recycle",
    "Recycle"
@@ -5456,6 +5460,10 @@
    "Keep several releases",
    "Mehrere Releases behalten"
   ],
+  "library.replacement.unmonitorsDeleted": [
+   "Switch off an episode or volume whose file is deleted",
+   "Folge oder Band ausschalten, deren Datei gelöscht wird"
+  ],
   "library.replacement.mode": [
    "Replaced files",
    "Ersetzte Dateien"
@@ -6443,6 +6451,66 @@
   "work.tab.metadata": [
    "Metadata",
    "Metadaten"
+  ],
+  "work.tab.manage": [
+   "Manage files",
+   "Dateien verwalten"
+  ],
+  "work.file.delete": [
+   "Delete file",
+   "Datei löschen"
+  ],
+  "work.manage.selectAll": [
+   "Select all files",
+   "Alle Dateien auswählen"
+  ],
+  "work.manage.select": [
+   "Select file",
+   "Datei auswählen"
+  ],
+  "work.manage.delete": [
+   "Delete selected files",
+   "Ausgewählte Dateien löschen"
+  ],
+  "work.manage.rename": [
+   "Rename {0} files",
+   "{0} Dateien umbenennen"
+  ],
+  "work.manage.matches": [
+   "Matches the naming",
+   "Entspricht der Benennung"
+  ],
+  "work.manage.renamesTo": [
+   "renamed to",
+   "umbenannt in"
+  ],
+  "work.manage.empty": [
+   "This title has no file to manage.",
+   "Dieser Titel hat keine Datei zu verwalten."
+  ],
+  "work.manage.none": [
+   "Select files first.",
+   "Wähle zuerst Dateien aus."
+  ],
+  "work.manage.col.unit": [
+   "Episode",
+   "Folge"
+  ],
+  "work.manage.col.file": [
+   "File",
+   "Datei"
+  ],
+  "work.files.deleted": [
+   "{0} deleted",
+   "{0} gelöscht"
+  ],
+  "work.files.kept": [
+   "{0} could not be removed and stay",
+   "{0} konnten nicht entfernt werden und bleiben"
+  ],
+  "work.files.renamed": [
+   "{0} renamed, {1} skipped",
+   "{0} umbenannt, {1} übersprungen"
   ],
   "work.monitored": [
    "Monitored",

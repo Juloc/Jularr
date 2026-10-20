@@ -23,7 +23,8 @@ namespace Jularr.Backend.Logic.Library
                     settings."RecycleStorageMountId",
                     mount."IsReadOnly",
                     settings."RecyclePath",
-                    settings."RecycleDays"
+                    settings."RecycleDays",
+                    settings."UnmonitorsDeletedUnits"
                 FROM
                     "InstanceSettings" AS settings
                     LEFT JOIN "StorageMounts" AS mount ON mount."Id" = settings."RecycleStorageMountId"
@@ -44,7 +45,7 @@ namespace Jularr.Backend.Logic.Library
 
             // Only the own folder names a place; the other modes forget it.
             var data = input.RecycleModeId == RecycleMode.OwnFolder ? input
-                : new ReplacementSettingsSaveData(input.KeepsReleases, input.RecycleModeId, null, null, input.RecycleDays, input.Version);
+                : new ReplacementSettingsSaveData(input.KeepsReleases, input.RecycleModeId, null, null, input.RecycleDays, input.Version, input.UnmonitorsDeletedUnits);
 
             // The settings row stays locked, so a pattern edit waits and sees the new choice.
             var sql = new SqlStatement();
@@ -58,6 +59,7 @@ namespace Jularr.Backend.Logic.Library
                     "RecycleStorageMountId" = @RecycleStorageMountId,
                     "RecyclePath" = @RecyclePath,
                     "RecycleDays" = @RecycleDays,
+                    "UnmonitorsDeletedUnits" = @UnmonitorsDeletedUnits,
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1

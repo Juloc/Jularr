@@ -195,6 +195,21 @@ function initializeTable(table: HTMLTableElement): void {
     });
 }
 
+function initializeSelection(): void {
+    document.querySelectorAll<HTMLInputElement>('[data-select-all]').forEach(all => {
+        if (all.dataset.workReady) return;
+        all.dataset.workReady = 'true';
+        const boxes = (): HTMLInputElement[] => Array.from(all.closest('table')?.querySelectorAll<HTMLInputElement>('input[name="storedFileIds"]') ?? []);
+        all.addEventListener('change', () => boxes().forEach(box => { box.checked = all.checked; }));
+        all.closest('table')?.addEventListener('change', event => {
+            if (event.target === all) return;
+            const items = boxes();
+            all.checked = items.length > 0 && items.every(box => box.checked);
+            all.indeterminate = !all.checked && items.some(box => box.checked);
+        });
+    });
+}
+
 function initializePicker(): void {
     document.addEventListener('click', event => {
         const picker = document.querySelector<HTMLElement>('[data-column-picker]');
@@ -211,6 +226,7 @@ onPage(import.meta.url, () => {
     initializeSeasons();
     initializeVersions();
     initializeDialogs();
+    initializeSelection();
     document.querySelectorAll<HTMLTableElement>('[data-work-table]').forEach(initializeTable);
     if (!pickerReady) { pickerReady = true; initializePicker(); }
 });

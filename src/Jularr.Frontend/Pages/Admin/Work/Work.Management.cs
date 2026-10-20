@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
@@ -30,8 +31,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var isSeries = work.MediaTypeId == MediaType.Series;
 
             page.Content.Add(Hero(work, csrf));
-            page.Content.Add(new NavigationTabs([new(isSeries ? "work.tab.seasons" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History),
-                new("work.tab.metadata", Address(WorkTab.Metadata), Tab == WorkTab.Metadata)], "work.tabs"));
+            var tabs = new List<NavigationTab> { new(isSeries ? "work.tab.seasons" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History) };
+            if (isSeries && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
+            tabs.Add(new("work.tab.metadata", Address(WorkTab.Metadata), Tab == WorkTab.Metadata));
+            page.Content.Add(new NavigationTabs([.. tabs], "work.tabs"));
             if (FormError is not null && _choice is null && Tab == WorkTab.Units) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             switch (Tab)
             {
@@ -41,8 +44,11 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 case WorkTab.Metadata:
                     DefineMetadata(page, standalone: false);
                     break;
+                case WorkTab.Files when isSeries && texts.CanManageMedia():
+                    page.Content.Add(ManageFiles(work, csrf));
+                    break;
                 default:
-                    page.Content.Add(isSeries ? Seasons(work, csrf) : Files(work));
+                    page.Content.Add(isSeries ? Seasons(work, csrf) : Files(work, csrf));
                     break;
             }
 
@@ -97,6 +103,18 @@ namespace Jularr.Frontend.Pages.Admin.Work
             }
 
             var status = new List<IUiComponent>();
+            if (TempData["WorkFilesDeleted"] is int deleted)
+            {
+                var kept = TempData["WorkFilesKept"] as int? ?? 0;
+                status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.deleted"], deleted) + (kept > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["work.files.kept"], kept) : "")))
+                    .Attribute("role", "status").Class("work-hero__status"));
+            }
+
+            if (TempData["WorkRenamed"] is int renamed)
+            {
+                status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.renamed"], renamed, TempData["WorkRenameSkipped"] as int? ?? 0))).Attribute("role", "status").Class("work-hero__status"));
+            }
+
             if (TempData["WantedSearched"] is string outcome)
             {
                 status.Add(new P(new Text("acquisition.outcome." + outcome), new ValueText(TempData["WantedTaken"] is string taken ? ": " + taken : "")).Attribute("role", "status").Class("work-hero__status"));
@@ -155,10 +173,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
         }
 
         // A film's files, each as its own row.
-        private IUiComponent Files(WorkManagementV1 work)
+        private IUiComponent Files(WorkManagementV1 work, string? csrf)
         {
             if (work.Files.Count == 0) return new P(new Text("work.empty.files")).Attribute("role", "status");
-            return new Div(FileTable(work), ColumnPicker()).Class("work-files");
+            return new Div(FileTable(work, csrf), ColumnPicker()).Class("work-files");
         }
 
         private IUiComponent UnitTable(WorkManagementUnitV1[] episodes, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf)
@@ -178,31 +196,46 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     ["status"] = Cell("status", StatusPill(episode, today), ((int)episode.WorkUnitStatusId).ToString(CultureInfo.InvariantCulture))
                 };
                 foreach (var (key, cell) in FileCells(files.Length > 1 ? null : best, files.Length > 1 ? files.Sum(file => file.SizeBytes) : null, files.Length > 1 ? files[0] : null)) cells[key] = cell;
+                var icons = new List<IUiComponent>();
                 if (_wanted is not null && CanAcquire)
                 {
-                    var actionsCell = new Td(new Div(SearchIcon(episode, seasonNumbers, csrf, "work.search.episode", true), SearchIcon(episode, seasonNumbers, csrf, "work.interactive.episode", false)).Class("work-icons"));
+                    icons.Add(SearchIcon(episode, seasonNumbers, csrf, "work.search.episode", true));
+                    icons.Add(SearchIcon(episode, seasonNumbers, csrf, "work.interactive.episode", false));
+                }
+
+                if (files.Length == 1) icons.AddRange(DeleteIcon(files[0], csrf));
+                if (icons.Count > 0)
+                {
+                    var actionsCell = new Td(new Div([.. icons]).Class("work-icons"));
                     actionsCell.Attribute("data-col", "actions");
                     cells["actions"] = actionsCell;
                 }
 
-                rows.Add(new Tbody([RowOf(UnitColumns, cells), .. files.Length > 1 ? files.Select(file => FileRow(file, episode.Id, UnitColumns)) : []]).Class("work-unit"));
+                rows.Add(new Tbody([RowOf(UnitColumns, cells), .. files.Length > 1 ? files.Select(file => FileRow(file, episode.Id, UnitColumns, csrf)) : []]).Class("work-unit"));
             }
 
             return Table("units", UnitColumns, rows);
         }
 
-        private IUiComponent FileTable(WorkManagementV1 work)
+        private IUiComponent FileTable(WorkManagementV1 work, string? csrf)
         {
             var rows = work.Files.Where(file => !file.IsMissing).OrderBy(file => (int)Rank(file.FileQualityGradeId)).ThenByDescending(file => file.SizeBytes)
-                .Select(file => (IUiComponent)new Tbody(FileRow(file, null, FileColumns)).Class("work-unit")).ToList();
+                .Select(file => (IUiComponent)new Tbody(FileRow(file, null, FileColumns, csrf)).Class("work-unit")).ToList();
             return Table("files", FileColumns, rows);
         }
 
         // A file in the columns of its table, for a film or below the unit that has several.
-        private IUiComponent FileRow(WorkManagementFileV1 file, long? unitId, string[] columns)
+        private IUiComponent FileRow(WorkManagementFileV1 file, long? unitId, string[] columns, string? csrf)
         {
             var cells = new Dictionary<string, Td> { ["title"] = Cell("title", new Span(new ValueText(Path.GetFileName(file.RelativePath))).Class("work-title-text"), Path.GetFileName(file.RelativePath)) };
             foreach (var (key, cell) in FileCells(file, null, file)) cells[key] = cell;
+            var icons = DeleteIcon(file, csrf).ToArray();
+            if (icons.Length > 0)
+            {
+                var actionsCell = new Td(new Div(icons).Class("work-icons"));
+                actionsCell.Attribute("data-col", "actions");
+                cells["actions"] = actionsCell;
+            }
             var row = RowOf(columns, cells).Class("work-file");
             if (unitId is { } id) row.Attribute("data-unit", id.ToString(CultureInfo.InvariantCulture)).Attribute("hidden", "hidden");
             return row;
@@ -332,6 +365,62 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IUiComponent VersionsButton(long unitId, int count) => new Button(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.versions"], count))).Class("work-versions")
             .Attribute("data-versions-toggle", unitId.ToString(CultureInfo.InvariantCulture)).Attribute("type", "button").Attribute("aria-expanded", "false");
 
+        // A file goes at once, as in Sonarr; what happens to it follows the setting of replaced files.
+        private IEnumerable<IUiComponent> DeleteIcon(WorkManagementFileV1 file, string? csrf)
+        {
+            if (!texts.CanManageMedia()) yield break;
+            yield return new PostForm(Address(Tab, "DeleteFiles"), csrf, [("storedFileIds", file.Id.ToString(CultureInfo.InvariantCulture))], IconSubmit("trash", "work.file.delete"));
+        }
+
+        // All files of a series with a box each: delete the chosen ones, and rename every file whose name differs from the naming.
+        private IUiComponent ManageFiles(WorkManagementV1 work, string? csrf)
+        {
+            var files = work.Files.Where(file => !file.IsMissing).ToArray();
+            if (files.Length == 0) return new P(new Text("work.manage.empty")).Attribute("role", "status");
+            var targets = _renames is null ? new Dictionary<long, string>() : _renames.Items.ToDictionary(item => item.StoredFileId, item => item.TargetPath);
+            var seasons = work.Units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Season).ToDictionary(unit => unit.Id, unit => unit.Number);
+            var episodes = work.Units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).ToDictionary(unit => unit.Id);
+            decimal SeasonOf(WorkManagementUnitV1 unit) => unit.ParentWorkUnitId is { } parent && seasons.TryGetValue(parent, out var season) ? season : 0;
+            string Label(WorkManagementFileV1 file) => string.Join(", ", file.WorkUnitIds.Where(episodes.ContainsKey).Select(id => episodes[id]).OrderBy(SeasonOf).ThenBy(unit => unit.Number)
+                .Select(unit => MediaUnitLabel.Format(texts, WorkUnitType.Episode, unit.Number, SeasonOf(unit)) ?? ""));
+            decimal Position(WorkManagementFileV1 file) => file.WorkUnitIds.Where(episodes.ContainsKey).Select(id => SeasonOf(episodes[id]) * 100000 + episodes[id].Number).DefaultIfEmpty(decimal.MaxValue).Min();
+
+            var rows = files.OrderBy(Position).ThenBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase).Select(file =>
+            {
+                var name = new List<IUiComponent> { new Span(new ValueText(file.RelativePath)).Class("work-manage__path") };
+                if (_renames is not null)
+                {
+                    // Only a complete plan can say that a file needs no rename.
+                    if (targets.TryGetValue(file.Id, out var target)) name.Add(new Span(new Text("work.manage.renamesTo"), new ValueText(" " + target)).Class("work-manage__target"));
+                    else if (_renames.Total <= _renames.Items.Count) name.Add(new Span(new Text("work.manage.matches")).Class("work-manage__matches"));
+                }
+
+                return (IUiComponent)new Tr(
+                    new Td(new Input().Attribute("type", "checkbox").Attribute("name", "storedFileIds").Attribute("value", file.Id.ToString(CultureInfo.InvariantCulture)).TextAttribute("aria-label", "work.manage.select")),
+                    new Td(new ValueText(Label(file))),
+                    new Td(new Div([.. name]).Class("work-manage__file")),
+                    new Td(QualityBadge(file)),
+                    new Td(LanguageGroup(file, WorkLanguages.Mode.Flags)),
+                    new Td(SizeBlock(file, null))).Class("work-row");
+            }).ToArray();
+
+            var head = new Tr(
+                new Th(new Input().Attribute("type", "checkbox").Attribute("data-select-all", "").TextAttribute("aria-label", "work.manage.selectAll")).Attribute("scope", "col"),
+                new Th(new Text("work.manage.col.unit")).Attribute("scope", "col"), new Th(new Text("work.manage.col.file")).Attribute("scope", "col"), new Th(new Text("work.col.quality")).Attribute("scope", "col"),
+                new Th(new Text("work.col.languages")).Attribute("scope", "col"), new Th(new Text("work.col.size")).Attribute("scope", "col"));
+            var table = new Div(new TableElement([new Thead(head), new Tbody([.. rows])]).Class("work-table work-table--manage")).Class("work-table-wrap");
+
+            var content = new List<IUiComponent>();
+            if (_renames is { Total: > 0 } plan)
+            {
+                content.Add(new PostForm(Address(WorkTab.Files, "RenameFiles"), csrf, [("fingerprint", plan.Fingerprint)],
+                    new Button(Icon("tag"), new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.manage.rename"], plan.Total))).Attribute("type", "submit")).Class("work-manage__bar"));
+            }
+
+            content.Add(new PostForm(Address(WorkTab.Files, "DeleteFiles"), csrf, [], new Div(new Button(Icon("trash"), new Text("work.manage.delete")).Attribute("type", "submit")).Class("work-manage__bar"), table));
+            return new Div([.. content]).Class("work-manage");
+        }
+
         // The columns a person may show, in the order of the table; filled in from the table's headers by the client.
         private IUiComponent ColumnPicker() => new Div(new H3(new Text("work.columns")), new Ul().Class("work-columns__list")).Class("work-columns").Attribute("data-column-picker", "").Attribute("data-move-label", texts["work.columns.move"]).Attribute("hidden", "hidden");
 
@@ -409,6 +498,18 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private HtmlElement IconSubmit(string icon, string labelKey) => new IconButton(Icon(icon, 22)).Attribute("type", "submit").Class("work-icon").TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
 
         private sealed class Td(params IUiComponent[] children) : HtmlElement("td", children);
+
+        // A form that posts hidden values to a handler of this page; the page's own forms are built from their data contracts.
+        private sealed class PostForm : HtmlElement
+        {
+            public PostForm(string action, string? csrf, IEnumerable<(string Name, string Value)> hidden, params IUiComponent[] children)
+                : base("form", [new Input().Attribute("type", "hidden").Attribute("name", "__RequestVerificationToken").Attribute("value", csrf ?? ""),
+                    .. hidden.Select(item => (IUiComponent)new Input().Attribute("type", "hidden").Attribute("name", item.Name).Attribute("value", item.Value)), .. children])
+            {
+                Attribute("method", "post");
+                Attribute("action", action);
+            }
+        }
 
         private sealed class Dialog(params IUiComponent[] children) : HtmlElement("dialog", children);
 
