@@ -1834,7 +1834,7 @@ namespace Jularr.Frontend.Localization
             new("activity.retry", "Retry"),
             new("activity.dismiss", "Dismiss"),
             new("activity.openSource", "Open the source and confirm"),
-            new("activity.fileLink", "File link from the source"),
+            new("activity.fileLink", "The address of the file itself (the .epub link), not the page"),
             new("activity.continueDownload", "Continue download"),
             new("activity.empty.History", "Nothing has finished yet."),
             new("details.availability", "Available media"),
