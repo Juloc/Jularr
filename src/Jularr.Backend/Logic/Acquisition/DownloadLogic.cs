@@ -488,6 +488,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "ErrorKey" = NULL,
                     "AttentionKey" = NULL,
                     "AttentionUrl" = NULL,
+                    "AttentionProposal" = NULL,
                     "SourceLinkUrl" = NULL,
                     "DismissedAt" = NULL,
                     "StartedAt" = now(),
@@ -624,6 +625,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."ExternalId",
                     release."Title",
                     operation."StartedAt",
+                    release."ParentUnitNumber"::integer AS "ExpectedParentUnitNumber",
+                    release."UnitStart"::integer AS "ExpectedUnitStart",
+                    release."UnitEnd"::integer AS "ExpectedUnitEnd",
                     release."QualityKey",
                     release."SourceUrl",
                     operation."SourceLinkUrl",
@@ -657,6 +661,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND operation."OperationStatusTypeId" IN (1, 2)
                     AND operation."AcquisitionConnectionId" IS NOT NULL
                     AND operation."AttentionUrl" IS NULL
+                    AND operation."AttentionProposal" IS NULL
                     AND (@OperationId::bigint IS NULL OR operation."Id" = @OperationId)
                 ORDER BY
                     operation."AcquisitionConnectionId",
@@ -718,6 +723,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         "FinishedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
+                        "AttentionProposal" = NULL,
                         "SourceLinkUrl" = NULL
                     WHERE
                         operation."Id" = @OperationId
@@ -771,6 +777,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "AttentionKey" = @AttentionKey,
                     "AttentionUrl" = @AttentionUrl,
+                    "AttentionProposal" = @AttentionProposal::jsonb,
                     "SourceLinkUrl" = NULL
                 WHERE
                     operation."Id" = @OperationId
@@ -779,6 +786,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND (
                         operation."AttentionKey" IS DISTINCT FROM @AttentionKey
                         OR operation."AttentionUrl" IS DISTINCT FROM @AttentionUrl
+                        OR operation."AttentionProposal" IS DISTINCT FROM @AttentionProposal::jsonb
                         OR operation."SourceLinkUrl" IS NOT NULL
                     );
                 """;
@@ -830,6 +838,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "AttentionKey" = NULL,
                     "AttentionUrl" = NULL,
+                    "AttentionProposal" = NULL,
                     "SourceLinkUrl" = @SourceLinkUrl
                 WHERE
                     operation."Id" = @OperationId
@@ -892,6 +901,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         "FinishedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
+                        "AttentionProposal" = NULL,
                         "SourceLinkUrl" = NULL
                     WHERE
                         operation."Id" = @OperationId

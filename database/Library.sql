@@ -157,6 +157,8 @@ CREATE TABLE "Operations" (
     "ErrorKey" varchar(64) NULL,
     "AttentionKey" varchar(64) NULL,
     "AttentionUrl" varchar(2048) NULL CHECK ("AttentionUrl" ~ '^https://'),
+    -- A finished download that waits for a person: the files it holds and where Jularr would place them. It is not read again until the person decides.
+    "AttentionProposal" jsonb NULL,
     "SourceLinkUrl" varchar(2048) NULL CHECK ("SourceLinkUrl" ~ '^https://'),
     "DismissedAt" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
@@ -168,6 +170,7 @@ CREATE TABLE "Operations" (
     CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL),
     CHECK ("OperationStatusTypeId" IN (1, 2) OR "AttentionKey" IS NULL),
     CHECK ("AttentionUrl" IS NULL OR "AttentionKey" IS NOT NULL),
+    CHECK ("AttentionProposal" IS NULL OR "AttentionKey" IS NOT NULL),
     CHECK ("OperationStatusTypeId" IN (1, 2) OR "SourceLinkUrl" IS NULL),
     CHECK ("DismissedAt" IS NULL OR "OperationStatusTypeId" = 4),
     CHECK ("OperationTypeId" = 2 OR ("SizeBytes" IS NULL AND "DownloadStateTypeId" IS NULL))

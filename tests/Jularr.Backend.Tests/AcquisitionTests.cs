@@ -201,6 +201,63 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(sourceFile), "A DB assignment failure must never delete a completed SAB download.");
         }
 
+        // A finished download of another film is excluded and the target is searched again at once.
+        [TestMethod]
+        public async Task CompletedSabImport_AnotherFilm_IsExcludedAndSearchedAgainAtOnce()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            var other = Path.Combine(completed, "Another.Film.2020.1080p.WEB-DL.H264-GRP.mkv");
+            File.WriteAllBytes(other, new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual("import_wrong_title", await host.ScalarAsync("SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(((short)3, "import_wrong_title"), ((short)(await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""))!, (string)(await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""))!));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NOT NULL AND \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 600"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.IsTrue(File.Exists(other), "A download of no use stays for the client to remove.");
+        }
+
+        // A doubt waits for a person with what the files say and is not read again until the person decides.
+        [TestMethod]
+        public async Task CompletedSabImport_AnUnclearTitle_WaitsWithItsProposalAndIsNotReadAgain()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv"), new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual("import_ambiguous_title", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            StringAssert.Contains((string)(await host.ScalarAsync("SELECT \"AttentionProposal\"::text FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!, "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+
+            // Not read again: with the folder gone a download that was polled would turn into an unreachable source.
+            Directory.Delete(completed, true);
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("import_ambiguous_title", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+        }
+
         [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
