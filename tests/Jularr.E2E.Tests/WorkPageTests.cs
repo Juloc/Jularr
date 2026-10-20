@@ -54,7 +54,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(before.Min(int.Parse).ToString(), (await numbers())[0]);
 
                 // A column is hidden in the picker and stays hidden after a reload.
-                await page.Locator("[data-columns-open]").First.ClickAsync();
+                await page.Locator("th [data-columns-open]").First.ClickAsync();
                 var picker = page.Locator("[data-column-picker]");
                 await Assertions.Expect(picker).ToBeVisibleAsync();
                 await picker.GetByRole(AriaRole.Checkbox, new() { Name = "Status", Exact = true }).UncheckAsync();

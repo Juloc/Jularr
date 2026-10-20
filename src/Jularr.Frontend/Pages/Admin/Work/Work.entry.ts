@@ -36,7 +36,7 @@ function initializeVersions(): void {
         button.addEventListener('click', () => {
             const open = button.getAttribute('aria-expanded') !== 'true';
             button.setAttribute('aria-expanded', String(open));
-            button.closest('tbody')?.querySelectorAll<HTMLElement>('tr.work-file').forEach(row => { row.hidden = !open; });
+            button.closest('tbody, .work-strip-group')?.querySelectorAll<HTMLElement>('tr.work-file, .work-strip--file').forEach(row => { row.hidden = !open; });
         });
     });
 }
@@ -82,6 +82,18 @@ function applyState(kind: string, state: ColumnState): void {
             }
         }
     }
+
+    // The facts of a strip follow the same choice: its order, and the hidden columns leave.
+    document.querySelectorAll<HTMLElement>(`[data-work-strips="${CSS.escape(kind)}"] .work-strip__facts`).forEach(facts => {
+        const items = new Map<string, HTMLElement>();
+        for (const item of Array.from(facts.children) as HTMLElement[]) if (item.dataset.col) items.set(item.dataset.col, item);
+        for (const column of state.order) {
+            const item = items.get(column);
+            if (!item) continue;
+            facts.appendChild(item);
+            item.hidden = state.hidden.includes(column);
+        }
+    });
 }
 
 function saveState(kind: string, state: ColumnState): void {
@@ -181,17 +193,52 @@ function initializeTable(table: HTMLTableElement): void {
         sortTables(kind, column, direction);
     }));
 
-    const gear = table.querySelector<HTMLButtonElement>('[data-columns-open]');
     const picker = document.querySelector<HTMLElement>('[data-column-picker]');
-    if (!gear || !picker) return;
-    gear.addEventListener('click', event => {
-        event.stopPropagation();
-        if (!picker.hidden) { picker.hidden = true; return; }
-        renderPicker(picker, kind, table, state);
-        const box = gear.getBoundingClientRect();
-        picker.hidden = false;
-        picker.style.left = `${Math.max(8, box.right - 290)}px`;
-        picker.style.top = `${Math.max(8, Math.min(box.bottom + 6, window.innerHeight - picker.offsetHeight - 8))}px`;
+    if (!picker) return;
+    const gears = [table.querySelector<HTMLButtonElement>('[data-columns-open]'), ...Array.from(document.querySelectorAll<HTMLButtonElement>(`[data-columns-kind="${CSS.escape(kind)}"]`))];
+    for (const gear of gears) {
+        if (!gear || gear.dataset.workReady) continue;
+        gear.dataset.workReady = 'true';
+        gear.addEventListener('click', event => {
+            event.stopPropagation();
+            if (!picker.hidden) { picker.hidden = true; return; }
+            renderPicker(picker, kind, table, state);
+            picker.hidden = false;
+
+            // Beside narrow strips the list is a sheet from the bottom; otherwise it hangs below the gear.
+            const sheet = document.querySelector('.work-strips') !== null && getComputedStyle(document.querySelector('.work-strips')!).display !== 'none';
+            picker.classList.toggle('work-columns--sheet', sheet);
+            picker.style.left = picker.style.top = '';
+            if (sheet) return;
+            const box = gear.getBoundingClientRect();
+            picker.style.left = `${Math.max(8, box.right - 290)}px`;
+            picker.style.top = `${Math.max(8, Math.min(box.bottom + 6, window.innerHeight - picker.offsetHeight - 8))}px`;
+        });
+    }
+}
+
+// A mouse drags the strips sideways as a finger does; touch scrolls them natively, and they all slide together because a season is one scroller.
+function initializeStrips(): void {
+    document.querySelectorAll<HTMLElement>('.work-strips').forEach(scroller => {
+        if (scroller.dataset.workReady) return;
+        scroller.dataset.workReady = 'true';
+        scroller.addEventListener('pointerdown', event => {
+            if (event.pointerType !== 'mouse' || event.button !== 0 || (event.target as HTMLElement).closest('button, a, input, select, label')) return;
+            const startX = event.clientX;
+            const startScroll = scroller.scrollLeft;
+            scroller.setPointerCapture(event.pointerId);
+            scroller.classList.add('work-strips--dragging');
+            const move = (moveEvent: PointerEvent): void => { scroller.scrollLeft = startScroll - (moveEvent.clientX - startX); };
+            const end = (): void => {
+                scroller.classList.remove('work-strips--dragging');
+                scroller.removeEventListener('pointermove', move);
+                scroller.removeEventListener('pointerup', end);
+                scroller.removeEventListener('pointercancel', end);
+            };
+            scroller.addEventListener('pointermove', move);
+            scroller.addEventListener('pointerup', end);
+            scroller.addEventListener('pointercancel', end);
+        });
     });
 }
 
@@ -250,6 +297,7 @@ onPage(import.meta.url, () => {
     initializeDialogs();
     initializeSelection();
     initializeFileEdit();
+    initializeStrips();
     document.querySelectorAll<HTMLTableElement>('[data-work-table]').forEach(initializeTable);
     if (!pickerReady) { pickerReady = true; initializePicker(); }
 });

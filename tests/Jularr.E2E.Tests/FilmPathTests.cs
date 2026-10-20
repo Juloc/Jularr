@@ -103,6 +103,34 @@ namespace Jularr.E2E.Tests
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The episode started at " + resumed + " s instead of continuing.");
 
+                // On a narrow screen every unit is two lines: the facts of all units of the season slide together while the first line stays, and the columns are a sheet from the bottom.
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await page.SetViewportSizeAsync(390, 844);
+                var strips = page.Locator(".work-strips").First;
+                await Assertions.Expect(strips.Locator(".work-strip").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-work-table=units]")).ToBeHiddenAsync();
+                Assert.IsTrue(await strips.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth"), "The facts do not slide.");
+                var line = strips.Locator(".work-strip__main").Last;
+                var facts = strips.Locator(".work-strip__facts .work-fact").Last;
+                var lineBefore = (await line.BoundingBoxAsync())!;
+                var factBefore = (await facts.BoundingBoxAsync())!;
+                await strips.EvaluateAsync("element => { element.scrollLeft = 120; }");
+                Assert.AreEqual(lineBefore.X, (await line.BoundingBoxAsync())!.X, 1, "The first line moved.");
+                Assert.IsTrue((await facts.BoundingBoxAsync())!.X < factBefore.X - 50, "The facts did not move.");
+                Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
+                await strips.EvaluateAsync("element => { element.scrollLeft = 0; }");
+                await Evidence.SaveAsync(page, "work-strips-mobile");
+                await strips.EvaluateAsync("element => { element.scrollLeft = 120; }");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Columns", Exact = true }).ClickAsync();
+                var sheet = page.Locator("[data-column-picker]");
+                await Assertions.Expect(sheet).ToBeVisibleAsync();
+                await Assertions.Expect(sheet).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("work-columns--sheet"));
+                var sheetBox = (await sheet.BoundingBoxAsync())!;
+                Assert.IsTrue(Math.Abs(sheetBox.Y + sheetBox.Height - 844) <= 2, "The sheet does not end at the bottom.");
+                await Evidence.SaveAsync(page, "work-strips-sheet");
+                await page.Keyboard.PressAsync("Escape");
+                await page.SetViewportSizeAsync(1280, 900);
+
                 // An administrator deletes the film's file on its page and the episode's in Manage files; both are missing again and the files are gone.
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
                 await page.GetByRole(AriaRole.Button, new() { Name = "Edit file" }).ClickAsync();
