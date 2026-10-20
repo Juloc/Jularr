@@ -15,6 +15,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Range values](Framework/Components/Range.ts) behind `Form.Range`: native numeric sliders and their localized display; [tests](Tools/range.test.mjs), `FrontendAuthenticationTests.Form_Range`, `ReadingPathTests`.
 - [TimePicker](Framework/Components/TimePicker.ts) behind `Form.Time`: desktop fields, Android wheel, iOS system picker; [tests](Tools/time-picker.test.mjs).
 - [Table.cs](Framework/Components/Table.cs): typed rows and composed cells.
+- [ChipBar](Framework/Components/ChipBar.cs) (grouped filter chips as links), [LinkMenu](Framework/Components/LinkMenu.cs) (native details menu of links, [client](Framework/Components/LinkMenu.entry.ts)), [FilterDialog](Framework/Components/FilterDialog.cs) (side sheet around a GET form, [client](Framework/Components/FilterDialog.entry.ts)): used by the Calendar.
 - [Button.cs](Framework/Components/Button.cs), [Tag.cs](Framework/Components/Tag.cs), [Toggle.cs](Framework/Components/Toggle.cs): shared controls.
 - [Split.cs](Framework/Components/Split.cs), [Tabs.cs](Framework/Components/Tabs.cs), [NavigationTabs.cs](Framework/Components/NavigationTabs.cs): layout and route-backed navigation.
 - [Shell.cs](Pages/Shared/Shell.cs), [Brand.cs](Pages/Shared/Brand.cs): capability-driven application chrome and branding; administration areas are collapsible sidebar groups.
@@ -51,7 +52,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Progress transport](Modules/Tracking/Progress.ts): serialized acknowledged writes, finite transient retries and visible unsaved state for Reader/Player.
 - [Requests](Pages/User/Requests/Requests.cshtml.cs): profile queue and authorized source confirmation.
 - [Statistics](Pages/User/Statistics/Statistics.cshtml.cs): the profile's numbers for 7 days, 30 days, a year or all time. [System](Pages/Admin/System/System.cshtml.cs): the Owner's overview with links to the pages that act, performance of the process and its services, recent warnings and errors.
-- [Calendar](Pages/User/Calendar/Calendar.cshtml.cs): a month grid of upcoming releases with a media-type filter, or two weeks day by day as the agenda.
+- [Calendar](Pages/User/Calendar/Calendar.cshtml.cs), [boards](Pages/User/Calendar/Calendar.Boards.cs): month, week and day of the profile's releases, the whole view in the address (view, date, types, status, search, chosen day, entries per day); type tints, container-width density (text events, posters, phone strips); `CalendarTests` (services, week/day/month pages) and `FirstRunTests` (views and filter dialog).
 - [Collections](Pages/User/Collections/Collections.cshtml.cs), [one collection](Pages/User/Collection/Collection.cshtml.cs): list and creation, Works grid with name and filter editing; Details adds to and removes from hand-picked ones.
 - [Notifications](Pages/User/Notifications/Notifications.cshtml.cs): the profile's inbox, mark as read and one switch per kind; the bell with its unread count sits in the [Shell](Pages/Shared/Shell.cs) header (count read once per request by `UiText`).
 - [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, home shelf order, appearance and granted administration links.
