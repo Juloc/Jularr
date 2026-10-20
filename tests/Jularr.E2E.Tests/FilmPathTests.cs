@@ -105,6 +105,13 @@ namespace Jularr.E2E.Tests
 
                 // An administrator deletes the film's file on its page and the episode's in Manage files; both are missing again and the files are gone.
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await page.GetByRole(AriaRole.Button, new() { Name = "Edit file" }).ClickAsync();
+                var editor = page.Locator("#work-files-edit");
+                await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
+                await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
+                await Steps.SubmitAsync(page, editor.Locator("form"));
+                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 updated" })).ToBeVisibleAsync();
+                StringAssert.Contains(await page.Locator("tr.work-file").InnerTextAsync(), "HDTV-720p");
                 await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete file" }) }));
                 await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
                 await Assertions.Expect(page.GetByText("This film has no file yet.")).ToBeVisibleAsync();

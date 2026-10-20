@@ -36,6 +36,8 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly BoolField IsMedia = new();
         public static readonly IntField DeletedCount = new() { Minimum = 0 };
         public static readonly IntField KeptCount = new() { Minimum = 0 };
+        public static readonly IntField UpdatedCount = new() { Minimum = 0 };
+        public static readonly StringField AudioLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 3, MinimumLength = 3, Required = false, Trim = true };
 
         // Subtitles searched by hand.
         public static readonly StringField SubtitleLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 8, AllowBlank = false, Trim = true, Format = StringFormat.Locale };

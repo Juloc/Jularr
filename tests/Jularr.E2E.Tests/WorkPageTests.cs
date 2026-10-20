@@ -69,15 +69,29 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, page.Locator(".work-actions form").Filter(new() { Has = page.GetByRole(AriaRole.Switch) }));
                 await Assertions.Expect(page.Locator(".work-actions .work-switch").First).ToHaveAttributeAsync("aria-label", "Start monitoring");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
-                await Assertions.Expect(page.Locator("dialog.work-dialog")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("#work-edit")).ToBeVisibleAsync();
                 await page.Keyboard.PressAsync("Escape");
-                await Assertions.Expect(page.Locator("dialog.work-dialog")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("#work-edit")).ToBeHiddenAsync();
                 await Evidence.SaveAsync(page, "work-page-series");
 
                 // A narrow screen keeps the page itself in its width.
                 await page.SetViewportSizeAsync(390, 844);
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
                 await Evidence.SaveAsync(page, "work-page-series-mobile");
+                await page.SetViewportSizeAsync(1280, 900);
+
+                // Deleting the title with an exclusion: it leaves the list and the exclusion is listed until it is removed.
+                await page.GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).ClickAsync();
+                var deletion = page.Locator("#work-delete");
+                await Assertions.Expect(deletion).ToBeVisibleAsync();
+                await deletion.Locator("label.toggle", new() { HasText = "Add an exclusion" }).ClickAsync();
+                Assert.IsTrue(await deletion.Locator("[name=AddsExclusion][type=checkbox]").IsCheckedAsync());
+                await Evidence.SaveAsync(page, "work-delete-dialog");
+                await Steps.SubmitAsync(page, deletion.Locator("form"));
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/Admin/Works$"));
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Excluded titles" })).ToBeVisibleAsync();
+                await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove exclusion" }) }));
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Excluded titles" })).ToBeHiddenAsync();
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)

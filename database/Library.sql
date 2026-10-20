@@ -384,7 +384,7 @@ CREATE TABLE "ActivityEventTypes" (
 );
 INSERT INTO "ActivityEventTypes" ("Id", "Key") VALUES
     (1, 'Grabbed'), (2, 'DownloadFailed'), (3, 'Imported'), (4, 'Upgraded'), (5, 'FileRenamed'), (6, 'FileDeleted'), (7, 'ManualImport'), (8, 'Blocked'),
-    (9, 'SubtitleDownloaded');
+    (9, 'SubtitleDownloaded'), (10, 'WorkDeleted');
 
 -- Only ever added. The texts keep an event readable after its Work, release, file or connection is gone; the history's days and size bound it.
 CREATE TABLE "ActivityEvents" (

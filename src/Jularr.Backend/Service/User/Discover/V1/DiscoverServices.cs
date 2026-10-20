@@ -273,6 +273,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // The provider identity resolves to one canonical Work before the request exists.
             await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.RequireNotExcludedAsync(WorkMetadata.Namespace(Parameters.MediaTypeId), Parameters.TmdbId.ToString(global::System.Globalization.CultureInfo.InvariantCulture), ct);
+                return true;
+            }, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
@@ -530,6 +535,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // The catalog identity resolves to one canonical Work before the request exists.
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.RequireNotExcludedAsync(Data.Namespace, Data.ExternalId, ct);
+                return true;
+            }, CancellationToken);
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
                 Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);

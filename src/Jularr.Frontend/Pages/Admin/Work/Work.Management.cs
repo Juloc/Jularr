@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Frontend.Framework;
@@ -35,7 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (isSeries && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
             tabs.Add(new("work.tab.metadata", Address(WorkTab.Metadata), Tab == WorkTab.Metadata));
             page.Content.Add(new NavigationTabs([.. tabs], "work.tabs"));
-            if (FormError is not null && _choice is null && Tab == WorkTab.Units) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
+            if (FormError is not null && _choice is null && _deleteInput is null && Tab == WorkTab.Units) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             switch (Tab)
             {
                 case WorkTab.History:
@@ -53,6 +54,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             }
 
             if (_wanted is not null && CanAcquire && _profiles.Count > 0) page.Content.Add(EditDialog(work, csrf));
+            if (texts.CanManageMedia()) page.Content.Add(DeleteDialog(csrf));
+            if (texts.CanManageMedia() && (isSeries ? Tab == WorkTab.Files : Tab == WorkTab.Units) && work.Files.Any(file => !file.IsMissing)) page.Content.Add(EditFilesDialog(work, csrf));
         }
 
         // The cover on its banner, the title with its facts and figures, and the actions of an administrator.
@@ -102,12 +105,19 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 actions.Add(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
             }
 
+            if (texts.CanManageMedia()) actions.Add(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("work-delete"));
+
             var status = new List<IUiComponent>();
             if (TempData["WorkFilesDeleted"] is int deleted)
             {
                 var kept = TempData["WorkFilesKept"] as int? ?? 0;
                 status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.deleted"], deleted) + (kept > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["work.files.kept"], kept) : "")))
                     .Attribute("role", "status").Class("work-hero__status"));
+            }
+
+            if (TempData["WorkFilesUpdated"] is int updated)
+            {
+                status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.updated"], updated))).Attribute("role", "status").Class("work-hero__status"));
             }
 
             if (TempData["WorkRenamed"] is int renamed)
@@ -229,7 +239,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             var cells = new Dictionary<string, Td> { ["title"] = Cell("title", new Span(new ValueText(Path.GetFileName(file.RelativePath))).Class("work-title-text"), Path.GetFileName(file.RelativePath)) };
             foreach (var (key, cell) in FileCells(file, null, file)) cells[key] = cell;
-            var icons = DeleteIcon(file, csrf).ToArray();
+            var icons = DeleteIcon(file, csrf, canEdit: unitId is null).ToArray();
             if (icons.Length > 0)
             {
                 var actionsCell = new Td(new Div(icons).Class("work-icons"));
@@ -366,9 +376,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
             .Attribute("data-versions-toggle", unitId.ToString(CultureInfo.InvariantCulture)).Attribute("type", "button").Attribute("aria-expanded", "false");
 
         // A file goes at once, as in Sonarr; what happens to it follows the setting of replaced files.
-        private IEnumerable<IUiComponent> DeleteIcon(WorkManagementFileV1 file, string? csrf)
+        private IEnumerable<IUiComponent> DeleteIcon(WorkManagementFileV1 file, string? csrf, bool canEdit = false)
         {
             if (!texts.CanManageMedia()) yield break;
+            if (canEdit) yield return IconSubmit("pencil", "work.file.edit").Attribute("type", "button").Attribute("data-edit-file", file.Id.ToString(CultureInfo.InvariantCulture));
             yield return new PostForm(Address(Tab, "DeleteFiles"), csrf, [("storedFileIds", file.Id.ToString(CultureInfo.InvariantCulture))], IconSubmit("trash", "work.file.delete"));
         }
 
@@ -417,7 +428,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     new Button(Icon("tag"), new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.manage.rename"], plan.Total))).Attribute("type", "submit")).Class("work-manage__bar"));
             }
 
-            content.Add(new PostForm(Address(WorkTab.Files, "DeleteFiles"), csrf, [], new Div(new Button(Icon("trash"), new Text("work.manage.delete")).Attribute("type", "submit")).Class("work-manage__bar"), table));
+            content.Add(new PostForm(Address(WorkTab.Files, "DeleteFiles"), csrf, [], new Div(new Button(Icon("pencil"), new Text("work.manage.edit")).Attribute("type", "button").Attribute("data-edit-selected", ""),
+                new Button(Icon("trash"), new Text("work.manage.delete")).Attribute("type", "submit")).Class("work-manage__bar"), table));
             return new Div([.. content]).Class("work-manage");
         }
 
@@ -491,6 +503,36 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 .Class("work-dialog").Attribute("id", "work-edit").Attribute("data-open", isOpen ? "true" : "false");
         }
 
+        // Sonarr's dialog: the title leaves the library, with its files when ticked, and with an exclusion when ticked.
+        private IUiComponent DeleteDialog(string? csrf)
+        {
+            var isOpen = _deleteInput is not null && FormError is not null;
+            var form = new Form<DeleteWorkDataV1>(form =>
+            {
+                form.Toggle(data => data.DeletesFiles, "work.delete.files");
+                form.Toggle(data => data.AddsExclusion, "work.delete.exclusion");
+                form.Submit("work.delete.title");
+            }, Address(Tab, "DeleteTitle"), csrf, _deleteInput ?? new DeleteWorkDataV1(false, false), _deleteInput is null ? null : FormError);
+            return new Dialog(new Div(new H2(new Text("work.delete.title")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)
+                .Class("work-dialog").Attribute("id", "work-delete").Attribute("data-open", isOpen ? "true" : "false");
+        }
+
+        // Quality and audio language of the chosen files; what is left unchanged stays as it is. The boxes or the row's pencil fill in the files.
+        private IUiComponent EditFilesDialog(WorkManagementV1 work, string? csrf)
+        {
+            var qualities = new[] { new SelectOption("", texts["work.files.unchanged"]) }.Concat(ProfileQualities.For(work.MediaTypeId, work.MediaSubtypeId).Select(quality => new SelectOption(quality, quality)));
+            var languages = new[] { new SelectOption("", texts["work.files.unchanged"]) }.Concat(FileLanguages.Known.Select(language => new SelectOption(language.Three, WorkLanguages.Name(language.Two))));
+            var form = new Form<UpdateLibraryFileFactsDataV1>(form =>
+            {
+                form.Content(new Div().Attribute("data-edit-ids", ""));
+                form.Select(data => data.QualityKey, "work.files.quality", [.. qualities]);
+                form.Select(data => data.AudioLanguage, "work.files.audioLanguage", [.. languages]);
+                form.Submit("common.save");
+            }, Address(Tab, "EditFiles"), csrf, new UpdateLibraryFileFactsDataV1([]));
+            return new Dialog(new Div(new H2(new Text("work.files.editTitle")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)
+                .Class("work-dialog").Attribute("id", "work-files-edit");
+        }
+
         private Button Labeled(string icon, string labelKey) => new(Icon(icon), new Text(labelKey));
 
         private IUiComponent Icon(string name, int size = 20) => new Framework.Icon(name, assets, size, "2.4");
@@ -499,17 +541,6 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         private sealed class Td(params IUiComponent[] children) : HtmlElement("td", children);
 
-        // A form that posts hidden values to a handler of this page; the page's own forms are built from their data contracts.
-        private sealed class PostForm : HtmlElement
-        {
-            public PostForm(string action, string? csrf, IEnumerable<(string Name, string Value)> hidden, params IUiComponent[] children)
-                : base("form", [new Input().Attribute("type", "hidden").Attribute("name", "__RequestVerificationToken").Attribute("value", csrf ?? ""),
-                    .. hidden.Select(item => (IUiComponent)new Input().Attribute("type", "hidden").Attribute("name", item.Name).Attribute("value", item.Value)), .. children])
-            {
-                Attribute("method", "post");
-                Attribute("action", action);
-            }
-        }
 
         private sealed class Dialog(params IUiComponent[] children) : HtmlElement("dialog", children);
 

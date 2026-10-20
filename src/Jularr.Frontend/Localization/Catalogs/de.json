@@ -2156,6 +2156,10 @@
    "When on, deleting a file by hand also stops monitoring its episode or volume; otherwise it stays monitored and is searched again.",
    "Wenn aktiv, beendet das Löschen einer Datei von Hand auch die Überwachung ihrer Folge oder ihres Bands; sonst bleibt sie überwacht und wird erneut gesucht."
   ],
+  "hint.StoredFileFields.AudioLanguage.info": [
+   "Replaces the language of every audio track of the chosen files, until a changed file is read again.",
+   "Ersetzt die Sprache jeder Tonspur der gewählten Dateien, bis eine geänderte Datei neu gelesen wird."
+  ],
   "hint.InstanceSettingsFields.RecyclePath.placeholder": [
    "Recycle",
    "Recycle"
@@ -2639,6 +2643,14 @@
   "admin.works.title": [
    "Works",
    "Werke"
+  ],
+  "admin.works.exclusions": [
+   "Excluded titles",
+   "Ausgeschlossene Titel"
+  ],
+  "admin.works.exclusion.remove": [
+   "Remove exclusion",
+   "Ausschluss entfernen"
   ],
   "app.name": [
    "Jularr",
@@ -4680,6 +4692,10 @@
    "Subtitle added",
    "Untertitel hinzugefügt"
   ],
+  "history.event.WorkDeleted": [
+   "Title deleted",
+   "Titel gelöscht"
+  ],
   "request.step.Grabbed": [
    "Downloading",
    "Wird heruntergeladen"
@@ -6476,6 +6492,34 @@
    "Rename {0} files",
    "{0} Dateien umbenennen"
   ],
+  "work.manage.edit": [
+   "Edit selected files",
+   "Ausgewählte Dateien bearbeiten"
+  ],
+  "work.file.edit": [
+   "Edit file",
+   "Datei bearbeiten"
+  ],
+  "work.files.editTitle": [
+   "Edit files",
+   "Dateien bearbeiten"
+  ],
+  "work.files.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "work.files.audioLanguage": [
+   "Audio language",
+   "Sprache der Tonspur"
+  ],
+  "work.files.unchanged": [
+   "Leave unchanged",
+   "Unverändert lassen"
+  ],
+  "work.files.updated": [
+   "{0} updated",
+   "{0} geändert"
+  ],
   "work.manage.matches": [
    "Matches the naming",
    "Entspricht der Benennung"
@@ -6551,6 +6595,22 @@
   "work.edit": [
    "Edit",
    "Bearbeiten"
+  ],
+  "work.delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "work.delete.title": [
+   "Delete title",
+   "Titel löschen"
+  ],
+  "work.delete.files": [
+   "Also delete the files",
+   "Auch die Dateien löschen"
+  ],
+  "work.delete.exclusion": [
+   "Add an exclusion so a request does not bring the title back",
+   "Ausschluss hinzufügen, damit eine Anfrage den Titel nicht zurückbringt"
   ],
   "work.collapseAll": [
    "Collapse all",
@@ -7135,6 +7195,18 @@
   "errors.validation.library_rename_changed": [
    "The library changed since the preview. Please check the new preview.",
    "Die Bibliothek hat sich seit der Vorschau geändert. Bitte prüfe die neue Vorschau."
+  ],
+  "errors.validation.excluded": [
+   "This title was deleted with an exclusion. Remove the exclusion first.",
+   "Dieser Titel wurde mit einem Ausschluss gelöscht. Entferne zuerst den Ausschluss."
+  ],
+  "errors.validation.download_active": [
+   "A download of this title is running. Cancel it first.",
+   "Ein Download dieses Titels läuft. Brich ihn zuerst ab."
+  ],
+  "errors.validation.files_stay": [
+   "Some files could not be removed, so the title stays.",
+   "Einige Dateien konnten nicht entfernt werden, deshalb bleibt der Titel."
   ],
   "errors.validation.invalid_placeholders": [
    "The translation must preserve its placeholders.",

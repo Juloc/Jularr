@@ -28,6 +28,8 @@ Playback gates playback. Disabling a module retains data. Public presentation ex
 capabilities expose implemented grants, and Razor consumes both. Setup module
 progress, per-media/profile visibility and Tracking remain pending.
 
+`Media.sql` also holds `WorkExclusions` and their provider identities (`WorkExclusionIdentities`): titles an administrator deleted with an exclusion, which requests refuse until the exclusion is removed.
+
 `Media.sql` follows `Account.sql` in a new installation. It also holds a profile's
 Collections (hand-picked CollectionWorks or a saved filter) and WorkUnitGroups, named display
 sections over a Work's unit numbers (UnitGroups module), and Franchises, TMDB film series a
