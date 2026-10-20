@@ -765,6 +765,17 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await _direct.DownloadAsync(connection, download, path + ".part", paths, CancellationToken);
                     File.Move(path + ".part", path);
                 }
+                catch (DirectSourceWaitException wait)
+                {
+                    // The source's own countdown runs between jobs, so waiting never holds a download slot.
+                    var eta = Math.Max(1, (int)Math.Ceiling(wait.Wait.TotalSeconds));
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SetDownloadWaitAsync(new DownloadWaitData(download.OperationId, _time.GetUtcNow().UtcDateTime + wait.Wait, eta), ct);
+                        return true;
+                    }, CancellationToken);
+                    return;
+                }
                 catch (DirectSourceException exception) when (exception.ErrorKey is "source_gate" or DirectSources.ManualLinkKey)
                 {
                     // A login or challenge waits for a person; nothing is bypassed.

@@ -37,9 +37,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         // The download waits for a person to pass the source's own check and paste the file link.
         public const string ManualLinkKey = "source_manual_link";
 
-        // The longest waiting page Jularr sits through itself.
-        private static readonly TimeSpan SlowWait = TimeSpan.FromSeconds(90);
-
         public static bool IsDirect(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive;
 
         // Offer ids are "<source>:<key>:<format>"; the format names the stored file.
@@ -115,7 +112,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             break;
                         }
 
-                        // Without a key: the person's file link, else the slow download; checks, long waits and dead links go to a person.
+                        // Without a key: the person's file link, else the slow download; a check or a dead link goes to a person.
                         try
                         {
                             if (download.SourceLinkUrl is { } link)
@@ -124,10 +121,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             }
                             else
                             {
-                                await _annas.SlowDownloadAsync(site, md5, destination, SlowWait, ct, paths.Settings.MaxJobBytes, Reserve);
+                                var page = await _annas.ReadSlowPageAsync(site, md5, ct);
+
+                                // The page's own countdown is served once per attempt; a repeated rendering does not restart it.
+                                if (page.Wait > TimeSpan.Zero && download.DownloadWaitUntil is null)
+                                {
+                                    throw new DirectSourceWaitException(page.Wait);
+                                }
+
+                                await _annas.DownloadFileAsync(page.File, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                             }
                         }
-                        catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate or AnnasArchiveFailure.WaitTooLong)
+                        catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate)
                         {
                             throw new DirectSourceException(ManualLinkKey, AnnasArchiveClient.SlowPageUri(site, md5));
                         }
@@ -184,5 +189,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         // The page a person opens to pass the source's check.
         public Uri? ManualUrl { get; } = manualUrl;
+    }
+
+    // A source states its own countdown; the job returns and the monitor resumes it when the wait ends.
+    internal sealed class DirectSourceWaitException(TimeSpan wait) : Exception("The direct source asks to wait.")
+    {
+        public TimeSpan Wait { get; } = wait;
     }
 }
