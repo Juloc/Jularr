@@ -1,12 +1,12 @@
 ﻿{
  "locale": "fr",
- "name": "FranÃ§ais",
+ "name": "Français",
  "reviewed": false,
  "enabled": false,
  "texts": {
   "progress.saveFailed": [
    "Progress could not be saved. Jularr will retry temporary failures.",
-   "La progression n'a pas pu Ãªtre enregistrÃ©e. Jularr rÃ©essaiera en cas d'Ã©chec temporaire."
+   "La progression n'a pas pu être enregistrée. Jularr réessaiera en cas d'échec temporaire."
   ],
   "discover.loadRecommendations": [
    "Load recommendations",
@@ -50,7 +50,7 @@
   ],
   "appearance.devicePreference": [
    "Appearance choices are stored in this browser.",
-   "Les choix d'apparence sont enregistrÃ©s dans ce navigateur."
+   "Les choix d'apparence sont enregistrés dans ce navigateur."
   ],
   "design.title": [
    "Design lab",
@@ -58,23 +58,23 @@
   ],
   "design.cards.title": [
    "Approved cover card states",
-   "Ã‰tats validÃ©s des cartes de couverture"
+   "États validés des cartes de couverture"
   ],
   "design.cards.notice": [
-   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellowâ€“orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
-   "Exemples de design uniquement ; les marque-pages s'activent localement et les actions ouvrent un aperÃ§u, sans lecture de la bibliothÃ¨que, demandes ni modification du compte. Vert : complet dans la langue audio du profil. Jaune : complet dans d'autres langues audio. Orange : partiel dans la langue du profil. Jaune-orangÃ© : partiel dans d'autres langues audio. Les sous-titres ne modifient pas cet Ã©tat. Survolez plus longtemps pour la bande-annonce officielle sans le son."
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "Exemples de design uniquement ; les marque-pages s'activent localement et les actions ouvrent un aperçu, sans lecture de la bibliothèque, demandes ni modification du compte. Vert : complet dans la langue audio du profil. Jaune : complet dans d'autres langues audio. Orange : partiel dans la langue du profil. Jaune-orangé : partiel dans d'autres langues audio. Les sous-titres ne modifient pas cet état. Survolez plus longtemps pour la bande-annonce officielle sans le son."
   ],
   "design.introduction": [
    "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages.",
-   "Un atelier de composants rÃ©servÃ© au dÃ©veloppement. Ce sont des exemples signalÃ©s comme tels, pas des Ã©lÃ©ments de bibliothÃ¨que ni des actions de compte rÃ©elles. Les modifications des composants partagÃ©s affectent les vraies pages."
+   "Un atelier de composants réservé au développement. Ce sont des exemples signalés comme tels, pas des éléments de bibliothèque ni des actions de compte réelles. Les modifications des composants partagés affectent les vraies pages."
   ],
   "design.controls": [
    "Buttons and icons",
-   "Boutons et icÃ´nes"
+   "Boutons et icônes"
   ],
   "design.icons": [
    "Original Jularr icon catalog",
-   "Catalogue d'icÃ´nes Jularr originales"
+   "Catalogue d'icônes Jularr originales"
   ],
   "design.tagGenre": [
    "Fantasy",
@@ -86,31 +86,31 @@
   ],
   "design.toggleOff": [
    "Off example",
-   "Exemple dÃ©sactivÃ©"
+   "Exemple désactivé"
   ],
   "design.toggleOn": [
    "On example",
-   "Exemple activÃ©"
+   "Exemple activé"
   ],
   "design.toggleNotice": [
    "These switches demonstrate local control states only. They do not save settings.",
-   "Ces commutateurs illustrent uniquement des Ã©tats de contrÃ´le locaux. Ils n'enregistrent aucun rÃ©glage."
+   "Ces commutateurs illustrent uniquement des états de contrôle locaux. Ils n'enregistrent aucun réglage."
   ],
   "design.imageCredit": [
    "Development artwork examples from TMDB. Poster and film artwork rights belong to their respective owners.",
-   "Exemples d'illustrations de dÃ©veloppement issus de TMDB. Les droits des affiches et illustrations de films appartiennent Ã  leurs propriÃ©taires respectifs."
+   "Exemples d'illustrations de développement issus de TMDB. Les droits des affiches et illustrations de films appartiennent à leurs propriétaires respectifs."
   ],
   "design.trailerCredit": [
    "Official Your Name trailer from TOHO. Playback connects to YouTube after Play or a sustained hover on cards with a trailer.",
-   "Bande-annonce officielle de Your Name par TOHO. La lecture se connecte Ã  YouTube aprÃ¨s Lire ou un survol prolongÃ© des cartes avec bande-annonce."
+   "Bande-annonce officielle de Your Name par TOHO. La lecture se connecte à YouTube après Lire ou un survol prolongé des cartes avec bande-annonce."
   ],
   "media.preview.title": [
    "Title preview",
-   "AperÃ§u du titre"
+   "Aperçu du titre"
   ],
   "media.preview.close": [
    "Close preview",
-   "Fermer l'aperÃ§u"
+   "Fermer l'aperçu"
   ],
   "media.preview.playTrailer": [
    "Play trailer",
@@ -126,11 +126,11 @@
   ],
   "media.preview.seriesStatus": [
    "Series status",
-   "Statut de la sÃ©rie"
+   "Statut de la série"
   ],
   "media.preview.availability": [
    "Library availability",
-   "DisponibilitÃ© dans la bibliothÃ¨que"
+   "Disponibilité dans la bibliothèque"
   ],
   "media.preview.requestStatus": [
    "Request status",
@@ -138,15 +138,15 @@
   ],
   "media.preview.downloadStatus": [
    "Download status",
-   "Statut du tÃ©lÃ©chargement"
+   "Statut du téléchargement"
   ],
   "media.preview.noDownload": [
    "No active download",
-   "Aucun tÃ©lÃ©chargement en cours"
+   "Aucun téléchargement en cours"
   ],
   "design.branding": [
    "Branding and Original artwork",
-   "IdentitÃ© visuelle et illustrations originales"
+   "Identité visuelle et illustrations originales"
   ],
   "design.forms": [
    "Forms and validation",
@@ -158,7 +158,7 @@
   ],
   "design.media": [
    "Media components",
-   "Composants mÃ©dia"
+   "Composants média"
   ],
   "design.player": [
    "Player controls",
@@ -166,7 +166,7 @@
   ],
   "design.playerNotice": [
    "Layout preview only. No playback session or stream is started here.",
-   "AperÃ§u de la mise en page uniquement. Aucune session de lecture ni aucun flux n'est dÃ©marrÃ© ici."
+   "Aperçu de la mise en page uniquement. Aucune session de lecture ni aucun flux n'est démarré ici."
   ],
   "design.primary": [
    "Primary",
@@ -178,19 +178,19 @@
   ],
   "design.disabled": [
    "Disabled",
-   "DÃ©sactivÃ©"
+   "Désactivé"
   ],
   "design.selected": [
    "Selected",
-   "SÃ©lectionnÃ©"
+   "Sélectionné"
   ],
   "design.exampleTitle": [
    "Example work",
-   "Å’uvre d'exemple"
+   "Œuvre d'exemple"
   ],
   "design.exampleOtherTitle": [
    "Another example work",
-   "Autre Å“uvre d'exemple"
+   "Autre œuvre d'exemple"
   ],
   "design.exampleContext": [
    "Component example",
@@ -198,11 +198,11 @@
   ],
   "design.exampleOverview": [
    "Artwork, title, context and actions use the same media components as Library and Discover.",
-   "L'illustration, le titre, le contexte et les actions utilisent les mÃªmes composants mÃ©dia que BibliothÃ¨que et DÃ©couvrir."
+   "L'illustration, le titre, le contexte et les actions utilisent les mêmes composants média que Bibliothèque et Découvrir."
   ],
   "design.exampleStatus": [
    "Preview only",
-   "AperÃ§u uniquement"
+   "Aperçu uniquement"
   ],
   "design.primaryArea": [
    "Primary area",
@@ -222,11 +222,11 @@
   ],
   "setup.start.title": [
    "Start and system",
-   "DÃ©marrage et systÃ¨me"
+   "Démarrage et système"
   ],
   "setup.owner.title": [
    "Create the first Owner",
-   "CrÃ©er le premier propriÃ©taire"
+   "Créer le premier propriétaire"
   ],
   "setup.owner.passwordConfirmation": [
    "Confirm password",
@@ -234,11 +234,11 @@
   ],
   "setup.owner.create": [
    "Create Owner",
-   "CrÃ©er le propriÃ©taire"
+   "Créer le propriétaire"
   ],
   "setup.owner.closed": [
    "Initial Owner creation is no longer available.",
-   "La crÃ©ation du premier propriÃ©taire n'est plus disponible."
+   "La création du premier propriétaire n'est plus disponible."
   ],
   "account.field.email": [
    "Email",
@@ -262,7 +262,7 @@
   ],
   "account.login.remember": [
    "Stay signed in",
-   "Rester connectÃ©"
+   "Rester connecté"
   ],
   "account.login.showPassword": [
    "Show password",
@@ -278,11 +278,11 @@
   ],
   "account.logout.title": [
    "Sign out",
-   "DÃ©connexion"
+   "Déconnexion"
   ],
   "account.logout.submit": [
    "Sign out",
-   "Se dÃ©connecter"
+   "Se déconnecter"
   ],
   "account.plex.start": [
    "Sign in with Plex",
@@ -294,11 +294,11 @@
   ],
   "account.plex.pending": [
    "Confirm sign-in in Plex, then continue here. Wait at least five seconds before checking again.",
-   "Confirmez la connexion dans Plex, puis revenez ici. Attendez au moins cinq secondes avant de vÃ©rifier Ã  nouveau."
+   "Confirmez la connexion dans Plex, puis revenez ici. Attendez au moins cinq secondes avant de vérifier à nouveau."
   ],
   "account.plex.complete": [
    "Check Plex confirmation",
-   "VÃ©rifier la confirmation Plex"
+   "Vérifier la confirmation Plex"
   ],
   "account.plex.approval": [
    "Your registration request is awaiting administrator approval.",
@@ -306,7 +306,7 @@
   ],
   "account.profile.required": [
    "Choose a profile before changing profile settings.",
-   "Choisissez un profil avant de modifier les rÃ©glages du profil."
+   "Choisissez un profil avant de modifier les réglages du profil."
   ],
   "account.profile.title": [
    "Choose a profile",
@@ -318,7 +318,7 @@
   ],
   "account.profile.locked": [
    "PIN protected",
-   "ProtÃ©gÃ© par un code PIN"
+   "Protégé par un code PIN"
   ],
   "account.profile.pin": [
    "PIN",
@@ -326,7 +326,7 @@
   ],
   "account.profile.pin.submit": [
    "Unlock",
-   "DÃ©verrouiller"
+   "Déverrouiller"
   ],
   "profile.pin.save": [
    "Save PIN",
@@ -338,7 +338,7 @@
   ],
   "request.quality": [
    "Quality",
-   "QualitÃ©"
+   "Qualité"
   ],
   "reader.comic.page": [
    "Page",
@@ -354,15 +354,15 @@
   ],
   "request.quality.default": [
    "Default quality",
-   "QualitÃ© par dÃ©faut"
+   "Qualité par défaut"
   ],
   "request.rule.add": [
    "Add rule",
-   "Ajouter une rÃ¨gle"
+   "Ajouter une règle"
   ],
   "request.rule.name": [
    "Rule name",
-   "Nom de la rÃ¨gle"
+   "Nom de la règle"
   ],
   "request.rule.description": [
    "Description",
@@ -370,7 +370,7 @@
   ],
   "request.rule.limit": [
    "Requests per period",
-   "Demandes par pÃ©riode"
+   "Demandes par période"
   ],
   "request.rule.limitColumn": [
    "Request limit",
@@ -378,7 +378,7 @@
   ],
   "request.rule.period": [
    "Rolling period (days)",
-   "PÃ©riode glissante (jours)"
+   "Période glissante (jours)"
   ],
   "request.rule.approval": [
    "Approval",
@@ -394,19 +394,19 @@
   ],
   "request.rule.media": [
    "Allowed request media",
-   "MÃ©dias pouvant Ãªtre demandÃ©s"
+   "Médias pouvant être demandés"
   ],
   "request.rule.profiles": [
    "Qualities requesters may choose",
-   "QualitÃ©s au choix des demandeurs"
+   "Qualités au choix des demandeurs"
   ],
   "request.rule.isDefault": [
    "Default",
-   "Par dÃ©faut"
+   "Par défaut"
   ],
   "request.rule.delete": [
    "Delete rule",
-   "Supprimer la rÃ¨gle"
+   "Supprimer la règle"
   ],
   "request.rule.summary": [
    "{0} requests / {1} days",
@@ -414,39 +414,39 @@
   ],
   "request.rule.unlimited": [
    "Unlimited",
-   "IllimitÃ©"
+   "Illimité"
   ],
   "request.rule.profile": [
    "Request rule",
-   "RÃ¨gle de demande"
+   "Règle de demande"
   ],
   "request.rule.inherited": [
    "inherited",
-   "hÃ©ritÃ©e"
+   "héritée"
   ],
   "request.rule.overridden": [
    "adjusted",
-   "ajustÃ©e"
+   "ajustée"
   ],
   "request.rule.override": [
    "Override the rule's values",
-   "Remplacer les valeurs de la rÃ¨gle"
+   "Remplacer les valeurs de la règle"
   ],
   "request.rule.inheritDefault": [
    "Default ({0})",
-   "Par dÃ©faut ({0})"
+   "Par défaut ({0})"
   ],
   "account.profile.create": [
    "Create profile",
-   "CrÃ©er un profil"
+   "Créer un profil"
   ],
   "profile.delete.warning": [
    "Deleting removes this profile's progress and lists and cancels its open requests. This cannot be undone.",
-   "La suppression efface la progression et les listes de ce profil et annule ses demandes en cours. Cette action est irrÃ©versible."
+   "La suppression efface la progression et les listes de ce profil et annule ses demandes en cours. Cette action est irréversible."
   ],
   "profile.delete.confirm": [
    "Delete permanently",
-   "Supprimer dÃ©finitivement"
+   "Supprimer définitivement"
   ],
   "profile.pin.remove": [
    "Remove PIN",
@@ -454,11 +454,11 @@
   ],
   "admin.accounts.profilePinReset": [
    "Reset PIN",
-   "RÃ©initialiser le code PIN"
+   "Réinitialiser le code PIN"
   ],
   "account.profile.empty": [
    "No profiles are assigned to this account.",
-   "Aucun profil n'est attribuÃ© Ã  ce compte."
+   "Aucun profil n'est attribué à ce compte."
   ],
   "session.current": [
    "Current session",
@@ -486,7 +486,7 @@
   ],
   "common.previous": [
    "Previous",
-   "PrÃ©cÃ©dent"
+   "Précédent"
   ],
   "common.actions": [
    "Actions",
@@ -530,11 +530,11 @@
   ],
   "admin.languages.enabled": [
    "Enabled",
-   "ActivÃ©e"
+   "Activée"
   ],
   "admin.languages.disabled": [
    "Disabled",
-   "DÃ©sactivÃ©e"
+   "Désactivée"
   ],
   "admin.languages.direction": [
    "Text direction",
@@ -542,11 +542,11 @@
   ],
   "admin.languages.leftToRight": [
    "Left to right",
-   "De gauche Ã  droite"
+   "De gauche à droite"
   ],
   "admin.languages.rightToLeft": [
    "Right to left",
-   "De droite Ã  gauche"
+   "De droite à gauche"
   ],
   "admin.languages.add": [
    "Add language",
@@ -554,7 +554,7 @@
   ],
   "admin.localization.key": [
    "Resource key",
-   "ClÃ© de ressource"
+   "Clé de ressource"
   ],
   "admin.localization.english": [
    "English source",
@@ -582,7 +582,7 @@
   ],
   "admin.localization.status.generated": [
    "Generated",
-   "GÃ©nÃ©rÃ©e"
+   "Générée"
   ],
   "admin.localization.status.reviewed": [
    "Reviewed",
@@ -594,7 +594,7 @@
   ],
   "admin.localization.status.outdated": [
    "Outdated",
-   "ObsolÃ¨te"
+   "Obsolète"
   ],
   "admin.accounts.title": [
    "Accounts",
@@ -606,11 +606,11 @@
   ],
   "admin.accounts.role": [
    "Role",
-   "RÃ´le"
+   "Rôle"
   ],
   "admin.accounts.role.owner": [
    "Owner",
-   "PropriÃ©taire"
+   "Propriétaire"
   ],
   "admin.accounts.role.user": [
    "User",
@@ -618,7 +618,7 @@
   ],
   "admin.accounts.role.mediamanager": [
    "Media manager",
-   "Gestionnaire de mÃ©dias"
+   "Gestionnaire de médias"
   ],
   "admin.accounts.status": [
    "Account status",
@@ -626,19 +626,19 @@
   ],
   "admin.accounts.mayConfirmSources": [
    "May confirm source checks for own requests",
-   "Peut confirmer les vÃ©rifications de source pour ses propres demandes"
+   "Peut confirmer les vérifications de source pour ses propres demandes"
   ],
   "admin.accounts.enabled": [
    "Enabled",
-   "ActivÃ©"
+   "Activé"
   ],
   "admin.accounts.disabled": [
    "Disabled / awaiting approval",
-   "DÃ©sactivÃ© / en attente d'approbation"
+   "Désactivé / en attente d'approbation"
   ],
   "admin.accounts.sessionWarning": [
    "Role or status changes end this account's existing sessions. Enabling an account does not verify its email address.",
-   "Un changement de rÃ´le ou de statut met fin aux sessions existantes de ce compte. L'activation d'un compte ne vÃ©rifie pas son adresse e-mail."
+   "Un changement de rôle ou de statut met fin aux sessions existantes de ce compte. L'activation d'un compte ne vérifie pas son adresse e-mail."
   ],
   "admin.accounts.profileId": [
    "Existing profile ID",
@@ -646,19 +646,19 @@
   ],
   "admin.accounts.profiles": [
    "Assigned profiles",
-   "Profils attribuÃ©s"
+   "Profils attribués"
   ],
   "admin.accounts.profileAdd": [
    "Assign profile access",
-   "Attribuer l'accÃ¨s au profil"
+   "Attribuer l'accès au profil"
   ],
   "admin.accounts.profileRemove": [
    "Remove profile access and end affected sessions",
-   "Retirer l'accÃ¨s au profil et mettre fin aux sessions concernÃ©es"
+   "Retirer l'accès au profil et mettre fin aux sessions concernées"
   ],
   "admin.accounts.profileOwned": [
    "Owned profile: its ownership link cannot be removed here.",
-   "Profil propre : le lien de propriÃ©tÃ© ne peut pas Ãªtre retirÃ© ici."
+   "Profil propre : le lien de propriété ne peut pas être retiré ici."
   ],
   "admin.providers.title": [
    "Providers",
@@ -666,15 +666,15 @@
   ],
   "admin.plex.notConnected": [
    "Plex server: not connected",
-   "Serveur Plex : non connectÃ©"
+   "Serveur Plex : non connecté"
   ],
   "admin.plex.connected": [
-   "Plex server connected Â· {0} titles linked Â· last sync {1}",
-   "Serveur Plex connectÃ© Â· {0} titres liÃ©s Â· derniÃ¨re synchro {1}"
+   "Plex server connected · {0} titles linked · last sync {1}",
+   "Serveur Plex connecté · {0} titres liés · dernière synchro {1}"
   ],
   "admin.plex.notSynced": [
    "not synced yet",
-   "pas encore synchronisÃ©"
+   "pas encore synchronisé"
   ],
   "admin.plex.baseUrl": [
    "Plex server address",
@@ -690,7 +690,7 @@
   ],
   "admin.plex.sync": [
    "Sync availability now",
-   "Synchroniser la disponibilitÃ© maintenant"
+   "Synchroniser la disponibilité maintenant"
   ],
   "admin.plex.signIn": [
    "Sign in with Plex",
@@ -706,15 +706,15 @@
   ],
   "admin.plex.registrationSections": [
    "Libraries whose users may register",
-   "BibliothÃ¨ques dont les utilisateurs peuvent s'inscrire"
+   "Bibliothèques dont les utilisateurs peuvent s'inscrire"
   ],
   "hint.PlexFields.SignIn.info": [
    "Accounts linked to Plex sign in through Plex.",
-   "Les comptes liÃ©s Ã  Plex se connectent via Plex."
+   "Les comptes liés à Plex se connectent via Plex."
   ],
   "hint.PlexFields.Registration.info": [
    "Someone with access to the connected server can ask for an account by signing in with Plex.",
-   "Toute personne ayant accÃ¨s au serveur connectÃ© peut demander un compte en se connectant avec Plex."
+   "Toute personne ayant accès au serveur connecté peut demander un compte en se connectant avec Plex."
   ],
   "hint.PlexFields.RegistrationApproval.info": [
    "An administrator enables each new account first.",
@@ -722,27 +722,27 @@
   ],
   "hint.PlexFields.SectionKeys.info": [
    "None chosen: users of any library may register.",
-   "Aucune choisie : les utilisateurs de toute bibliothÃ¨que peuvent s'inscrire."
+   "Aucune choisie : les utilisateurs de toute bibliothèque peuvent s'inscrire."
   ],
   "admin.plex.disconnect": [
    "Disconnect Plex server",
-   "DÃ©connecter le serveur Plex"
+   "Déconnecter le serveur Plex"
   ],
   "admin.plex.tested": [
    "Plex {0} answered; libraries: {1}",
-   "Plex {0} a rÃ©pondu ; bibliothÃ¨ques : {1}"
+   "Plex {0} a répondu ; bibliothèques : {1}"
   ],
   "admin.plex.synced": [
    "{0} titles linked, {1} new titles added",
-   "{0} titres liÃ©s, {1} nouveaux titres ajoutÃ©s"
+   "{0} titres liés, {1} nouveaux titres ajoutés"
   ],
   "admin.mediaServer.notConnected": [
    "Not connected",
-   "Non connectÃ©"
+   "Non connecté"
   ],
   "admin.mediaServer.connected": [
-   "Connected Â· last progress sync {0}",
-   "ConnectÃ© Â· derniÃ¨re synchro de la progression {0}"
+   "Connected · last progress sync {0}",
+   "Connecté · dernière synchro de la progression {0}"
   ],
   "admin.mediaServer.baseUrl": [
    "Server address",
@@ -750,11 +750,11 @@
   ],
   "admin.mediaServer.apiKey": [
    "API key",
-   "ClÃ© API"
+   "Clé API"
   ],
   "admin.mediaServer.tested": [
    "{0} {1} answered; {2} users",
-   "{0} {1} a rÃ©pondu ; {2} utilisateurs"
+   "{0} {1} a répondu ; {2} utilisateurs"
   ],
   "admin.mediaServer.sync": [
    "Sync progress now",
@@ -762,11 +762,11 @@
   ],
   "admin.mediaServer.synced": [
    "{0} positions taken over, {1} sent to the server",
-   "{0} positions reprises, {1} envoyÃ©es au serveur"
+   "{0} positions reprises, {1} envoyées au serveur"
   ],
   "admin.mediaServer.disconnect": [
    "Disconnect server",
-   "DÃ©connecter le serveur"
+   "Déconnecter le serveur"
   ],
   "admin.mediaServer.linked": [
    "{0} shares progress with {1}",
@@ -774,7 +774,7 @@
   ],
   "admin.mediaServer.proposed": [
    "{0}: proposed profile {1}, not confirmed",
-   "{0} : profil {1} proposÃ©, non confirmÃ©"
+   "{0} : profil {1} proposé, non confirmé"
   ],
   "admin.mediaServer.unlinked": [
    "{0} shares no progress",
@@ -802,7 +802,7 @@
   ],
   "reader.notFound": [
    "This book cannot be opened.",
-   "Ce livre ne peut pas Ãªtre ouvert."
+   "Ce livre ne peut pas être ouvert."
   ],
   "reader.contents": [
    "Contents",
@@ -822,7 +822,7 @@
   ],
   "reader.download": [
    "Download",
-   "TÃ©lÃ©charger"
+   "Télécharger"
   ],
   "reader.download.epub": [
    "EPUB",
@@ -858,11 +858,11 @@
   ],
   "reader.searchMore": [
    "Only the first 50 sections with the words are listed.",
-   "Seules les 50 premiÃ¨res sections contenant ces mots sont listÃ©es."
+   "Seules les 50 premières sections contenant ces mots sont listées."
   ],
   "reader.notesEmpty": [
    "Select text to highlight it or add a note.",
-   "SÃ©lectionnez du texte pour le surligner ou ajouter une note."
+   "Sélectionnez du texte pour le surligner ou ajouter une note."
   ],
   "reader.notesPages": [
    "Note pages",
@@ -898,11 +898,11 @@
   ],
   "reader.settings": [
    "Settings",
-   "RÃ©glages"
+   "Réglages"
   ],
   "reader.previous": [
    "Previous",
-   "PrÃ©cÃ©dent"
+   "Précédent"
   ],
   "reader.next": [
    "Next",
@@ -926,7 +926,7 @@
   ],
   "reader.theme": [
    "Theme",
-   "ThÃ¨me"
+   "Thème"
   ],
   "reader.theme.light": [
    "Light",
@@ -934,7 +934,7 @@
   ],
   "reader.theme.sepia": [
    "Sepia",
-   "SÃ©pia"
+   "Sépia"
   ],
   "reader.theme.dark": [
    "Dark",
@@ -946,7 +946,7 @@
   ],
   "reader.mode.scroll": [
    "Scroll",
-   "DÃ©filement"
+   "Défilement"
   ],
   "reader.mode.paged": [
    "Pages",
@@ -954,7 +954,7 @@
   ],
   "reader.notCached": [
    "This book is still being saved for reading without the storage.",
-   "Ce livre est encore en cours d'enregistrement pour Ãªtre lu sans le stockage."
+   "Ce livre est encore en cours d'enregistrement pour être lu sans le stockage."
   ],
   "details.read": [
    "Read",
@@ -962,7 +962,7 @@
   ],
   "admin.instance.title": [
    "Instance settings",
-   "RÃ©glages de l'instance"
+   "Réglages de l'instance"
   ],
   "admin.instance.name": [
    "Instance name",
@@ -974,19 +974,19 @@
   ],
   "admin.instance.readingCacheWorks": [
    "Reading cache: most recently read books",
-   "Cache de lecture : livres lus le plus rÃ©cemment"
+   "Cache de lecture : livres lus le plus récemment"
   ],
   "admin.instance.libraryScanIntervalHours": [
    "Library scan interval (hours)",
-   "Intervalle d'analyse de la bibliothÃ¨que (heures)"
+   "Intervalle d'analyse de la bibliothèque (heures)"
   ],
   "admin.instance.historyRetentionDays": [
    "Keep finished activity for days",
-   "Conserver l'activitÃ© terminÃ©e (jours)"
+   "Conserver l'activité terminée (jours)"
   ],
   "admin.instance.historyMegabytes": [
    "Activity history size in MB",
-   "Taille de l'historique d'activitÃ© en MB"
+   "Taille de l'historique d'activité en MB"
   ],
   "admin.instance.collectionLimit": [
    "Collections per profile",
@@ -998,15 +998,15 @@
   ],
   "admin.instance.subtitleLanguages": [
    "Wanted subtitle languages",
-   "Langues de sous-titres recherchÃ©es"
+   "Langues de sous-titres recherchées"
   ],
   "admin.instance.usersConfirmSources": [
    "Users may confirm source checks",
-   "Les utilisateurs peuvent confirmer les vÃ©rifications de source"
+   "Les utilisateurs peuvent confirmer les vérifications de source"
   ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
-   "Activez ou dÃ©sactivez les intÃ©grations enregistrÃ©es. Les capacitÃ©s de connexion et d'authentification nÃ©cessitent toujours leur configuration d'hÃ´te existante."
+   "Activez ou désactivez les intégrations enregistrées. Les capacités de connexion et d'authentification nécessitent toujours leur configuration d'hôte existante."
   ],
   "admin.providers.state": [
    "Provider status",
@@ -1014,11 +1014,11 @@
   ],
   "admin.providers.enabled": [
    "Enabled",
-   "ActivÃ©"
+   "Activé"
   ],
   "admin.providers.disabled": [
    "Disabled",
-   "DÃ©sactivÃ©"
+   "Désactivé"
   ],
   "profile.field.displayName": [
    "Profile name",
@@ -1030,19 +1030,19 @@
   ],
   "profile.settings.title": [
    "Profile settings",
-   "RÃ©glages du profil"
+   "Réglages du profil"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
-   "Vos modifications ont Ã©tÃ© enregistrÃ©es."
+   "Vos modifications ont été enregistrées."
   ],
   "admin.library.description": [
    "Imported media and file availability",
-   "MÃ©dias importÃ©s et disponibilitÃ© des fichiers"
+   "Médias importés et disponibilité des fichiers"
   ],
   "admin.activity.title": [
    "Activity",
-   "ActivitÃ©"
+   "Activité"
   ],
   "admin.requests.title": [
    "Requests",
@@ -1050,11 +1050,11 @@
   ],
   "admin.rules.description": [
    "Approval and request rules",
-   "RÃ¨gles d'approbation et de demande"
+   "Règles d'approbation et de demande"
   ],
   "admin.rules.title": [
    "Rules",
-   "RÃ¨gles"
+   "Règles"
   ],
   "admin.users.description": [
    "Account assignments and request permissions",
@@ -1066,19 +1066,19 @@
   ],
   "admin.wanted.description": [
    "Acquisition needs after request approval",
-   "Besoins d'acquisition aprÃ¨s approbation des demandes"
+   "Besoins d'acquisition après approbation des demandes"
   ],
   "admin.wanted.title": [
    "Wanted",
-   "RecherchÃ©s"
+   "Recherchés"
   ],
   "admin.acquisition.title": [
    "Indexers & download clients",
-   "Indexeurs et clients de tÃ©lÃ©chargement"
+   "Indexeurs et clients de téléchargement"
   ],
   "admin.profiles.title": [
    "Quality profiles",
-   "Profils de qualitÃ©"
+   "Profils de qualité"
   ],
   "admin.sources.title": [
    "Sources",
@@ -1090,7 +1090,7 @@
   ],
   "sources.setUpResult": [
    "Added: {0}. Waiting for a login or key: {1}.",
-   "AjoutÃ©es : {0}. En attente d'une connexion ou d'une clÃ© : {1}."
+   "Ajoutées : {0}. En attente d'une connexion ou d'une clé : {1}."
   ],
   "sources.name": [
    "Source",
@@ -1102,7 +1102,7 @@
   ],
   "sources.configured": [
    "Set up",
-   "ConfigurÃ©e"
+   "Configurée"
   ],
   "sources.add": [
    "Add",
@@ -1158,7 +1158,7 @@
   ],
   "takeover.source.Sonarr": [
    "Sonarr (indexers, client, missing series)",
-   "Sonarr (indexeurs, client, sÃ©ries manquantes)"
+   "Sonarr (indexeurs, client, séries manquantes)"
   ],
   "takeover.source.Radarr": [
    "Radarr (indexers, client, missing movies)",
@@ -1178,7 +1178,7 @@
   ],
   "takeover.preview": [
    "Preview",
-   "AperÃ§u"
+   "Aperçu"
   ],
   "takeover.apply": [
    "Take over now",
@@ -1190,7 +1190,7 @@
   ],
   "takeover.empty": [
    "Nothing to take over.",
-   "Rien Ã  reprendre."
+   "Rien à reprendre."
   ],
   "takeover.kind": [
    "Kind",
@@ -1202,7 +1202,7 @@
   ],
   "takeover.kind.Client": [
    "Download client",
-   "Client de tÃ©lÃ©chargement"
+   "Client de téléchargement"
   ],
   "takeover.kind.Movie": [
    "Movie",
@@ -1210,7 +1210,7 @@
   ],
   "takeover.kind.Series": [
    "Series",
-   "SÃ©rie"
+   "Série"
   ],
   "takeover.kind.Album": [
    "Album",
@@ -1222,11 +1222,11 @@
   ],
   "takeover.kind.Profile": [
    "Quality profile",
-   "Profil de qualitÃ©"
+   "Profil de qualité"
   ],
   "takeover.kind.Format": [
    "Custom format",
-   "Format personnalisÃ©"
+   "Format personnalisé"
   ],
   "takeover.kind.RootFolder": [
    "Root folder",
@@ -1242,11 +1242,11 @@
   ],
   "session.audioQuality.High": [
    "High (256 kbit/s)",
-   "Ã‰levÃ©e (256 kbit/s)"
+   "Élevée (256 kbit/s)"
   ],
   "session.audioQuality.Small": [
    "Small (128 kbit/s)",
-   "RÃ©duite (128 kbit/s)"
+   "Réduite (128 kbit/s)"
   ],
   "takeover.rootFolders": [
    "Root folders",
@@ -1254,31 +1254,31 @@
   ],
   "takeover.assign": [
    "Take into this library",
-   "Reprendre dans cette bibliothÃ¨que"
+   "Reprendre dans cette bibliothèque"
   ],
   "takeover.outcome.takeover_no_library": [
    "No library of this type",
-   "Aucune bibliothÃ¨que de ce type"
+   "Aucune bibliothèque de ce type"
   ],
   "takeover.outcome.takeover_not_monitored": [
    "Release type not monitored there",
-   "Type de release non surveillÃ© lÃ -bas"
+   "Type de release non surveillé là-bas"
   ],
   "takeover.outcome.takeover_exists": [
    "Already set up",
-   "DÃ©jÃ  configurÃ©"
+   "Déjà configuré"
   ],
   "takeover.outcome.takeover_needs_key": [
    "Key needed",
-   "ClÃ© requise"
+   "Clé requise"
   ],
   "takeover.outcome.takeover_will_add": [
    "Will be added",
-   "Sera ajoutÃ©"
+   "Sera ajouté"
   ],
   "takeover.outcome.takeover_added": [
    "Added",
-   "AjoutÃ©"
+   "Ajouté"
   ],
   "takeover.outcome.takeover_no_id": [
    "No provider id",
@@ -1290,7 +1290,7 @@
   ],
   "takeover.outcome.takeover_will_want": [
    "Will be wanted (paused)",
-   "Sera surveillÃ© (en pause)"
+   "Sera surveillé (en pause)"
   ],
   "takeover.outcome.takeover_wanted": [
    "Wanted (paused)",
@@ -1298,11 +1298,11 @@
   ],
   "takeover.outcome.takeover_next_run": [
    "Next run",
-   "Prochaine exÃ©cution"
+   "Prochaine exécution"
   ],
   "takeover.outcome.takeover_no_qualities": [
    "No quality Jularr knows",
-   "Aucune qualitÃ© connue de Jularr"
+   "Aucune qualité connue de Jularr"
   ],
   "takeover.outcome.takeover_format_skipped": [
    "Not taken over: conditions Jularr does not support",
@@ -1326,7 +1326,7 @@
   ],
   "sources.capability.Metadata": [
    "metadata",
-   "mÃ©tadonnÃ©es"
+   "métadonnées"
   ],
   "sources.capability.Search": [
    "search",
@@ -1334,7 +1334,7 @@
   ],
   "sources.capability.Download": [
    "download",
-   "tÃ©lÃ©chargement"
+   "téléchargement"
   ],
   "sources.capability.Monitoring": [
    "chapter monitoring",
@@ -1350,19 +1350,19 @@
   ],
   "sources.availability.Ready": [
    "Ready",
-   "PrÃªte"
+   "Prête"
   ],
   "sources.availability.Account": [
    "Needs a login or key",
-   "Connexion ou clÃ© requise"
+   "Connexion ou clé requise"
   ],
   "sources.availability.Planned": [
    "Planned",
-   "PrÃ©vue"
+   "Prévue"
   ],
   "sources.availability.ReferenceOnly": [
    "Reference only",
-   "RÃ©fÃ©rence uniquement"
+   "Référence uniquement"
   ],
   "profile.name": [
    "Name",
@@ -1370,15 +1370,15 @@
   ],
   "profile.qualities": [
    "Allowed qualities",
-   "QualitÃ©s autorisÃ©es"
+   "Qualités autorisées"
   ],
   "profile.usage": [
    "Used by",
-   "UtilisÃ© par"
+   "Utilisé par"
   ],
   "profile.default": [
    "Default",
-   "Par dÃ©faut"
+   "Par défaut"
   ],
   "profile.add.Movie": [
    "Add movie profile",
@@ -1386,7 +1386,7 @@
   ],
   "profile.add.Series": [
    "Add series profile",
-   "Ajouter un profil de sÃ©rie"
+   "Ajouter un profil de série"
   ],
   "profile.add.Book": [
    "Add book profile",
@@ -1402,31 +1402,31 @@
   ],
   "profile.isDefault": [
    "Default for its media type",
-   "Par dÃ©faut pour son type de mÃ©dia"
+   "Par défaut pour son type de média"
   ],
   "profile.upgradeAllowed": [
    "Upgrade to better releases",
-   "Passer Ã  de meilleures releases"
+   "Passer à de meilleures releases"
   ],
   "profile.cutoff": [
    "Stop upgrading at",
-   "ArrÃªter les amÃ©liorations Ã "
+   "Arrêter les améliorations à"
   ],
   "profile.noCutoff": [
    "No upgrades",
-   "Aucune amÃ©lioration"
+   "Aucune amélioration"
   ],
   "profile.section.general": [
    "General",
-   "GÃ©nÃ©ral"
+   "Général"
   ],
   "profile.section.qualities": [
    "Qualities",
-   "QualitÃ©s"
+   "Qualités"
   ],
   "profile.allowed": [
    "Allowed",
-   "AutorisÃ©e"
+   "Autorisée"
   ],
   "profile.minimumSize": [
    "Minimum size (MB)",
@@ -1438,11 +1438,11 @@
   ],
   "wanted.profile": [
    "Quality profile",
-   "Profil de qualitÃ©"
+   "Profil de qualité"
   ],
   "wanted.library": [
    "Library",
-   "BibliothÃ¨que"
+   "Bibliothèque"
   ],
   "setup.title": [
    "Setup",
@@ -1450,7 +1450,7 @@
   ],
   "setup.steps": [
    "Setup steps",
-   "Ã‰tapes de configuration"
+   "Étapes de configuration"
   ],
   "setup.step.Instance": [
    "Instance",
@@ -1466,7 +1466,7 @@
   ],
   "setup.step.Downloads": [
    "Download clients",
-   "Clients de tÃ©lÃ©chargement"
+   "Clients de téléchargement"
   ],
   "setup.step.Providers": [
    "Providers",
@@ -1478,7 +1478,7 @@
   ],
   "setup.step.Media": [
    "Existing media",
-   "MÃ©dias existants"
+   "Médias existants"
   ],
   "setup.step.Finish": [
    "Finish",
@@ -1498,15 +1498,15 @@
   ],
   "setup.warnings": [
    "Worth a look",
-   "Ã€ vÃ©rifier"
+   "À vérifier"
   ],
   "setup.check.library": [
    "no library yet",
-   "aucune bibliothÃ¨que pour le moment"
+   "aucune bibliothèque pour le moment"
   ],
   "setup.check.tmdb": [
    "Movies and series need a TMDB key.",
-   "Les films et sÃ©ries nÃ©cessitent une clÃ© TMDB."
+   "Les films et séries nécessitent une clé TMDB."
   ],
   "setup.check.indexer": [
    "Arr+ has no indexer yet.",
@@ -1514,11 +1514,11 @@
   ],
   "setup.check.downloader": [
    "Arr+ has no download client yet.",
-   "Arr+ n'a pas encore de client de tÃ©lÃ©chargement."
+   "Arr+ n'a pas encore de client de téléchargement."
   ],
   "setup.check.ffmpeg": [
    "FFmpeg is not configured; files play only as they are.",
-   "FFmpeg n'est pas configurÃ© ; les fichiers sont lus tels quels."
+   "FFmpeg n'est pas configuré ; les fichiers sont lus tels quels."
   ],
   "admin.works.source": [
    "Source",
@@ -1554,47 +1554,47 @@
   ],
   "admin.matches.empty": [
    "No match waits for a decision.",
-   "Aucune correspondance n'attend de dÃ©cision."
+   "Aucune correspondance n'attend de décision."
   ],
   "admin.matches.hint": [
    "For a series, choose the entry of its first season.",
-   "Pour une sÃ©rie, choisissez l'entrÃ©e de sa premiÃ¨re saison."
+   "Pour une série, choisissez l'entrée de sa première saison."
   ],
   "admin.matches.accept": [
    "Use this entry",
-   "Utiliser cette entrÃ©e"
+   "Utiliser cette entrée"
   ],
   "admin.matches.aniListId": [
    "AniList entry number",
-   "NumÃ©ro de l'entrÃ©e AniList"
+   "Numéro de l'entrée AniList"
   ],
   "admin.matches.dismiss": [
    "No AniList entry",
-   "Aucune entrÃ©e AniList"
+   "Aucune entrée AniList"
   ],
   "admin.instance.media": [
    "Media types",
-   "Types de mÃ©dia"
+   "Types de média"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
-   "Pas encore de bibliothÃ¨que ; rien n'est tÃ©lÃ©chargÃ© pour ce type."
+   "Pas encore de bibliothèque ; rien n'est téléchargé pour ce type."
   ],
   "profile.media.hidden": [
    "Hidden media types",
-   "Types de mÃ©dia masquÃ©s"
+   "Types de média masqués"
   ],
   "admin.accounts.profileMediaBlocked": [
    "Blocked media types",
-   "Types de mÃ©dia bloquÃ©s"
+   "Types de média bloqués"
   ],
   "wanted.library.default": [
    "Default library",
-   "BibliothÃ¨que par dÃ©faut"
+   "Bibliothèque par défaut"
   ],
   "wanted.profile.default": [
    "Default for this media type",
-   "Par dÃ©faut pour ce type de mÃ©dia"
+   "Par défaut pour ce type de média"
   ],
   "wanted.release.block": [
    "Block",
@@ -1602,7 +1602,7 @@
   ],
   "wanted.release.unblock": [
    "Allow again",
-   "Autoriser Ã  nouveau"
+   "Autoriser à nouveau"
   ],
   "acquisition.connection.name": [
    "Name",
@@ -1642,7 +1642,7 @@
   ],
   "request.readsTranslated": [
    "Not published in it; read translated",
-   "Non publiÃ© dans cette langue ; lu traduit"
+   "Non publié dans cette langue ; lu traduit"
   ],
   "hint.AccountFields.Email.placeholder": [
    "name@example.com",
@@ -1650,23 +1650,23 @@
   ],
   "hint.AccountFields.Email.info": [
    "Used to sign in and for password resets.",
-   "Sert Ã  se connecter et Ã  rÃ©initialiser le mot de passe."
+   "Sert à se connecter et à réinitialiser le mot de passe."
   ],
   "hint.AccountFields.DisplayName.info": [
    "Shown to other users, for example on requests.",
-   "AffichÃ© aux autres utilisateurs, par exemple sur les demandes."
+   "Affiché aux autres utilisateurs, par exemple sur les demandes."
   ],
   "hint.AccountFields.AccountRoleTypeId.info": [
    "Owner: everything. Media manager: titles, requests and wanted lists. User: watch, read and request.",
-   "PropriÃ©taire : tout. Gestionnaire de mÃ©dias : titres, demandes et listes de recherchÃ©s. Utilisateur : regarder, lire et demander."
+   "Propriétaire : tout. Gestionnaire de médias : titres, demandes et listes de recherchés. Utilisateur : regarder, lire et demander."
   ],
   "hint.AccountFields.IsEnabled.info": [
    "A disabled account cannot sign in; its profiles and history stay.",
-   "Un compte dÃ©sactivÃ© ne peut pas se connecter ; ses profils et son historique sont conservÃ©s."
+   "Un compte désactivé ne peut pas se connecter ; ses profils et son historique sont conservés."
   ],
   "hint.AccountFields.MayConfirmSources.info": [
    "Lets this account confirm a found source itself instead of waiting for an administrator.",
-   "Permet Ã  ce compte de confirmer lui-mÃªme une source trouvÃ©e au lieu d'attendre un administrateur."
+   "Permet à ce compte de confirmer lui-même une source trouvée au lieu d'attendre un administrateur."
   ],
   "hint.AccountSessionFields.DeviceName.placeholder": [
    "Living room TV",
@@ -1678,23 +1678,23 @@
   ],
   "hint.AccountSessionFields.AudioQuality.info": [
    "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Original lit le fichier tel quel. Ã‰levÃ©e et RÃ©duite convertissent Ã  la volÃ©e les fichiers musicaux volumineux, ce qui Ã©conomise des donnÃ©es en dÃ©placement."
+   "Original lit le fichier tel quel. Élevée et Réduite convertissent à la volée les fichiers musicaux volumineux, ce qui économise des données en déplacement."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
-   "Le nom affichÃ© lors du choix d'un profil."
+   "Le nom affiché lors du choix d'un profil."
   ],
   "hint.ProfileFields.UiLocaleId.info": [
    "Language of the interface and of titles and summaries where a translation exists.",
-   "Langue de l'interface, ainsi que des titres et rÃ©sumÃ©s lorsqu'une traduction existe."
+   "Langue de l'interface, ainsi que des titres et résumés lorsqu'une traduction existe."
   ],
   "hint.ProfilePinFields.Pin.info": [
    "Three to six digits asked when switching to this profile.",
-   "Trois Ã  six chiffres demandÃ©s lors du passage Ã  ce profil."
+   "Trois à six chiffres demandés lors du passage à ce profil."
   ],
   "hint.AuthenticationFields.NewPassword.info": [
    "At least 12 characters; a passphrase of several words is easiest to remember.",
-   "Au moins 12 caractÃ¨res ; une phrase de passe de plusieurs mots est la plus facile Ã  retenir."
+   "Au moins 12 caractères ; une phrase de passe de plusieurs mots est la plus facile à retenir."
   ],
   "hint.DevicePairingFields.Code.placeholder": [
    "123456",
@@ -1702,7 +1702,7 @@
   ],
   "hint.DevicePairingFields.Code.info": [
    "The six-digit code the TV, phone or app shows.",
-   "Le code Ã  six chiffres affichÃ© par la TV, le tÃ©lÃ©phone ou l'application."
+   "Le code à six chiffres affiché par la TV, le téléphone ou l'application."
   ],
   "hint.AcquisitionConnectionFields.Host.placeholder": [
    "news.newshosting.com",
@@ -1722,7 +1722,7 @@
   ],
   "hint.AcquisitionConnectionFields.UseSsl.info": [
    "Encrypts the connection to the news server. Leave it on unless your provider has no SSL.",
-   "Chiffre la connexion au serveur de news. Laissez-le activÃ©, sauf si votre fournisseur ne prend pas en charge SSL."
+   "Chiffre la connexion au serveur de news. Laissez-le activé, sauf si votre fournisseur ne prend pas en charge SSL."
   ],
   "hint.AcquisitionConnectionFields.Username.info": [
    "The login from your provider; leave empty for open servers.",
@@ -1734,11 +1734,11 @@
   ],
   "hint.AcquisitionConnectionFields.MaxConnections.info": [
    "Parallel connections Jularr opens. Use at most what your plan allows; more is faster.",
-   "Connexions parallÃ¨les ouvertes par Jularr. Ne dÃ©passez pas ce que permet votre abonnement ; plus il y en a, plus c'est rapide."
+   "Connexions parallèles ouvertes par Jularr. Ne dépassez pas ce que permet votre abonnement ; plus il y en a, plus c'est rapide."
   ],
   "hint.AcquisitionConnectionFields.Priority.placeholder": [
    "1 to 100",
-   "1 Ã  100"
+   "1 à 100"
   ],
   "hint.AcquisitionConnectionFields.Priority.info": [
    "1 comes first.",
@@ -1746,7 +1746,7 @@
   ],
   "hint.AcquisitionConnectionFields.IsEnabled.info": [
    "A switched-off connection keeps its settings but is not used.",
-   "Une connexion dÃ©sactivÃ©e garde ses rÃ©glages mais n'est pas utilisÃ©e."
+   "Une connexion désactivée garde ses réglages mais n'est pas utilisée."
   ],
   "hint.AcquisitionConnectionFields.Categories.placeholder": [
    "2000, 5000",
@@ -1754,15 +1754,15 @@
   ],
   "hint.AcquisitionConnectionFields.Categories.info": [
    "Newznab category numbers, separated by commas. Empty uses the usual ranges of each media type.",
-   "NumÃ©ros de catÃ©gories Newznab, sÃ©parÃ©s par des virgules. Vide : les plages habituelles de chaque type de mÃ©dia."
+   "Numéros de catégories Newznab, séparés par des virgules. Vide : les plages habituelles de chaque type de média."
   ],
   "hint.AcquisitionConnectionFields.MediaTypeIds.info": [
    "None chosen: the indexer is asked for every media type.",
-   "Aucun choix : l'indexeur est interrogÃ© pour tous les types de mÃ©dia."
+   "Aucun choix : l'indexeur est interrogé pour tous les types de média."
   ],
   "hint.AcquisitionConnectionFields.SearchesAutomatically.info": [
    "Manual only: the indexer is asked only when you search by hand.",
-   "Manuel uniquement : l'indexeur n'est interrogÃ© que lorsque vous cherchez Ã  la main."
+   "Manuel uniquement : l'indexeur n'est interrogé que lorsque vous cherchez à la main."
   ],
   "hint.AcquisitionConnectionFields.QueryLimit.placeholder": [
    "No limit",
@@ -1770,7 +1770,7 @@
   ],
   "hint.AcquisitionConnectionFields.QueryLimit.info": [
    "Searches per day, as your indexer plan allows; once reached it rests until midnight.",
-   "Recherches par jour, selon l'abonnement de votre indexeur ; une fois la limite atteinte, il se repose jusqu'Ã  minuit."
+   "Recherches par jour, selon l'abonnement de votre indexeur ; une fois la limite atteinte, il se repose jusqu'à minuit."
   ],
   "hint.AcquisitionConnectionFields.GrabLimit.placeholder": [
    "No limit",
@@ -1778,7 +1778,7 @@
   ],
   "hint.AcquisitionConnectionFields.GrabLimit.info": [
    "Downloads per day, as your indexer plan allows.",
-   "TÃ©lÃ©chargements par jour, selon l'abonnement de votre indexeur."
+   "Téléchargements par jour, selon l'abonnement de votre indexeur."
   ],
   "hint.AcquisitionConnectionFields.DownloadCategory.placeholder": [
    "movies",
@@ -1786,7 +1786,7 @@
   ],
   "hint.AcquisitionConnectionFields.DownloadCategory.info": [
    "The SABnzbd category Jularr gives its downloads; empty uses SABnzbd's default.",
-   "La catÃ©gorie SABnzbd que Jularr donne Ã  ses tÃ©lÃ©chargements ; vide : celle par dÃ©faut de SABnzbd."
+   "La catégorie SABnzbd que Jularr donne à ses téléchargements ; vide : celle par défaut de SABnzbd."
   ],
   "hint.AcquisitionConnectionFields.RemotePath.placeholder": [
    "/downloads/complete",
@@ -1794,7 +1794,7 @@
   ],
   "hint.AcquisitionConnectionFields.RemotePath.info": [
    "Where SABnzbd says it stores finished downloads. Only needed when SABnzbd sees them under another path than Jularr.",
-   "L'emplacement oÃ¹ SABnzbd indique stocker les tÃ©lÃ©chargements terminÃ©s. NÃ©cessaire uniquement si SABnzbd les voit sous un autre chemin que Jularr."
+   "L'emplacement où SABnzbd indique stocker les téléchargements terminés. Nécessaire uniquement si SABnzbd les voit sous un autre chemin que Jularr."
   ],
   "hint.AcquisitionConnectionFields.LocalPath.placeholder": [
    "/mnt/downloads/complete",
@@ -1802,7 +1802,7 @@
   ],
   "hint.AcquisitionConnectionFields.LocalPath.info": [
    "The same folder as Jularr sees it.",
-   "Le mÃªme dossier tel que Jularr le voit."
+   "Le même dossier tel que Jularr le voit."
   ],
   "hint.AcquisitionConnectionFields.SearchQuery.placeholder": [
    "The Matrix 1999",
@@ -1846,7 +1846,7 @@
   ],
   "hint.acquisition.AnnasArchive.info": [
    "Only HTTPS; the member key travels in the address.",
-   "HTTPS uniquement ; la clÃ© de membre transite dans l'adresse."
+   "HTTPS uniquement ; la clé de membre transite dans l'adresse."
   ],
   "hint.acquisition.OpenSubtitles.placeholder": [
    "https://api.opensubtitles.com",
@@ -1866,11 +1866,11 @@
   ],
   "hint.AcquisitionProfileFields.IsDefault.info": [
    "New requests of this media type use the default profile.",
-   "Les nouvelles demandes de ce type de mÃ©dia utilisent le profil par dÃ©faut."
+   "Les nouvelles demandes de ce type de média utilisent le profil par défaut."
   ],
   "hint.AcquisitionProfileFields.UpgradeAllowed.info": [
    "Replaces a present file with a better quality until the cutoff is reached.",
-   "Remplace un fichier existant par une meilleure qualitÃ© jusqu'Ã  atteindre la qualitÃ© cible."
+   "Remplace un fichier existant par une meilleure qualité jusqu'à atteindre la qualité cible."
   ],
   "hint.AcquisitionProfileFields.MinimumSizeMb.placeholder": [
    "No minimum",
@@ -1878,7 +1878,7 @@
   ],
   "hint.AcquisitionProfileFields.MinimumSizeMb.info": [
    "Smaller releases are skipped, often fakes or samples.",
-   "Les releases plus petites sont ignorÃ©es ; ce sont souvent des faux ou des extraits."
+   "Les releases plus petites sont ignorées ; ce sont souvent des faux ou des extraits."
   ],
   "hint.AcquisitionProfileFields.MaximumSizeMb.placeholder": [
    "No maximum",
@@ -1886,15 +1886,15 @@
   ],
   "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
    "Larger releases are skipped.",
-   "Les releases plus grandes sont ignorÃ©es."
+   "Les releases plus grandes sont ignorées."
   ],
   "hint.RequestRuleFields.Description.info": [
    "Shown to users the rule applies to.",
-   "AffichÃ© aux utilisateurs concernÃ©s par la rÃ¨gle."
+   "Affiché aux utilisateurs concernés par la règle."
   ],
   "hint.RequestRuleFields.MediaKeys.info": [
    "The media types users of this rule may request.",
-   "Les types de mÃ©dia que les utilisateurs de cette rÃ¨gle peuvent demander."
+   "Les types de média que les utilisateurs de cette règle peuvent demander."
   ],
   "hint.RequestRuleFields.PeriodDays.placeholder": [
    "7",
@@ -1910,23 +1910,23 @@
   ],
   "hint.RequestRuleFields.RequestLimit.info": [
    "Requests allowed within the period.",
-   "Demandes autorisÃ©es pendant la pÃ©riode."
+   "Demandes autorisées pendant la période."
   ],
   "hint.RequestRuleFields.IsAutomaticApproval.info": [
    "Requests within the limit are approved without an administrator.",
-   "Les demandes dans la limite sont approuvÃ©es sans administrateur."
+   "Les demandes dans la limite sont approuvées sans administrateur."
   ],
   "hint.RequestRuleFields.AcquisitionProfileIds.info": [
    "Quality profiles users of this rule may choose.",
-   "Profils de qualitÃ© que les utilisateurs de cette rÃ¨gle peuvent choisir."
+   "Profils de qualité que les utilisateurs de cette règle peuvent choisir."
   ],
   "hint.RequestRuleFields.IsDefault.info": [
    "Applies to every account without its own rule.",
-   "S'applique Ã  tous les comptes sans rÃ¨gle propre."
+   "S'applique à tous les comptes sans règle propre."
   ],
   "hint.RequestRuleFields.IsOverridden.info": [
    "This account uses its own limits instead of the default rule.",
-   "Ce compte utilise ses propres limites au lieu de la rÃ¨gle par dÃ©faut."
+   "Ce compte utilise ses propres limites au lieu de la règle par défaut."
   ],
   "hint.AcquisitionReleaseFields.ParentUnitNumber.placeholder": [
    "1",
@@ -1934,7 +1934,7 @@
   ],
   "hint.AcquisitionReleaseFields.ParentUnitNumber.info": [
    "Season or volume to search; empty searches the whole title.",
-   "Saison ou tome Ã  rechercher ; vide : tout le titre."
+   "Saison ou tome à rechercher ; vide : tout le titre."
   ],
   "hint.AcquisitionReleaseFields.UnitStart.placeholder": [
    "1",
@@ -1942,11 +1942,11 @@
   ],
   "hint.AcquisitionReleaseFields.UnitStart.info": [
    "Episode or chapter to search; empty searches the whole season.",
-   "Ã‰pisode ou chapitre Ã  rechercher ; vide : toute la saison."
+   "Épisode ou chapitre à rechercher ; vide : toute la saison."
   ],
   "hint.InstanceSettingsFields.Name.info": [
    "Shown in the browser tab and on paired devices.",
-   "AffichÃ© dans l'onglet du navigateur et sur les appareils associÃ©s."
+   "Affiché dans l'onglet du navigateur et sur les appareils associés."
   ],
   "hint.InstanceSettingsFields.PublicUrl.placeholder": [
    "https://media.example.com/",
@@ -1954,7 +1954,7 @@
   ],
   "hint.InstanceSettingsFields.PublicUrl.info": [
    "The address Jularr is reached at from outside; the pairing QR code for TVs and apps points to it.",
-   "L'adresse Ã  laquelle Jularr est joignable depuis l'extÃ©rieur ; le QR code d'association des TV et applications y renvoie."
+   "L'adresse à laquelle Jularr est joignable depuis l'extérieur ; le QR code d'association des TV et applications y renvoie."
   ],
   "hint.InstanceSettingsFields.TrustedProxies.placeholder": [
    "192.168.1.2, 172.16.0.0/12",
@@ -1962,7 +1962,7 @@
   ],
   "hint.InstanceSettingsFields.TrustedProxies.info": [
    "Reverse proxies whose forwarded client address Jularr believes, as addresses or ranges separated by commas. Empty without a proxy.",
-   "Reverse proxies dont Jularr fait confiance Ã  l'adresse client transmise, sous forme d'adresses ou de plages sÃ©parÃ©es par des virgules. Vide sans proxy."
+   "Reverse proxies dont Jularr fait confiance à l'adresse client transmise, sous forme d'adresses ou de plages séparées par des virgules. Vide sans proxy."
   ],
   "hint.InstanceSettingsFields.LibraryScanIntervalHours.placeholder": [
    "24",
@@ -1970,7 +1970,7 @@
   ],
   "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
    "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
-   "Heures entre deux analyses automatiques de la bibliothÃ¨que ; 0 les dÃ©sactive. Les NAS en veille ne sont pas rÃ©veillÃ©s."
+   "Heures entre deux analyses automatiques de la bibliothèque ; 0 les désactive. Les NAS en veille ne sont pas réveillés."
   ],
   "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
    "30",
@@ -1978,7 +1978,7 @@
   ],
   "hint.InstanceSettingsFields.HistoryRetentionDays.info": [
    "History and finished operations older than this are removed.",
-   "L'historique et les opÃ©rations terminÃ©es plus anciens sont supprimÃ©s."
+   "L'historique et les opérations terminées plus anciens sont supprimés."
   ],
   "hint.InstanceSettingsFields.HistoryMegabytes.placeholder": [
    "10",
@@ -1986,7 +1986,7 @@
   ],
   "hint.InstanceSettingsFields.HistoryMegabytes.info": [
    "The oldest history is removed once it is larger than this.",
-   "L'historique le plus ancien est supprimÃ© dÃ¨s qu'il dÃ©passe cette taille."
+   "L'historique le plus ancien est supprimé dès qu'il dépasse cette taille."
   ],
   "hint.InstanceSettingsFields.CollectionLimit.placeholder": [
    "100",
@@ -2002,7 +2002,7 @@
   ],
   "hint.InstanceSettingsFields.UnitGroupLimit.info": [
    "Most episode or chapter groups a profile may keep.",
-   "Nombre maximal de groupes d'Ã©pisodes ou de chapitres qu'un profil peut conserver."
+   "Nombre maximal de groupes d'épisodes ou de chapitres qu'un profil peut conserver."
   ],
   "hint.InstanceSettingsFields.ReadingCacheMegabytes.placeholder": [
    "2048",
@@ -2010,7 +2010,7 @@
   ],
   "hint.InstanceSettingsFields.ReadingCacheMegabytes.info": [
    "Space for prepared books and comics; the oldest are removed first.",
-   "Espace pour les livres et BD prÃ©parÃ©s ; les plus anciens sont supprimÃ©s en premier."
+   "Espace pour les livres et BD préparés ; les plus anciens sont supprimés en premier."
   ],
   "hint.InstanceSettingsFields.ReadingCacheWorks.placeholder": [
    "100",
@@ -2018,7 +2018,7 @@
   ],
   "hint.InstanceSettingsFields.ReadingCacheWorks.info": [
    "Most books and comics kept prepared at once.",
-   "Nombre maximal de livres et BD gardÃ©s prÃ©parÃ©s en mÃªme temps."
+   "Nombre maximal de livres et BD gardés préparés en même temps."
   ],
   "hint.InstanceSettingsFields.SubtitleLanguages.placeholder": [
    "de, en",
@@ -2026,19 +2026,19 @@
   ],
   "hint.InstanceSettingsFields.SubtitleLanguages.info": [
    "Two-letter languages searched automatically, in this order.",
-   "Langues sur deux lettres recherchÃ©es automatiquement, dans cet ordre."
+   "Langues sur deux lettres recherchées automatiquement, dans cet ordre."
   ],
   "hint.InstanceSettingsFields.UsersConfirmSources.info": [
    "Lets users confirm found sources for their own requests.",
-   "Permet aux utilisateurs de confirmer les sources trouvÃ©es pour leurs propres demandes."
+   "Permet aux utilisateurs de confirmer les sources trouvées pour leurs propres demandes."
   ],
   "hint.InstanceSettingsFields.KeepsReleases.info": [
    "Keeps the earlier file when a new release of the same film, episode or volume is imported, instead of replacing it.",
-   "Conserve le fichier prÃ©cÃ©dent lorsqu'une nouvelle release du mÃªme film, Ã©pisode ou tome est importÃ©e, au lieu de le remplacer."
+   "Conserve le fichier précédent lorsqu'une nouvelle release du même film, épisode ou tome est importée, au lieu de le remplacer."
   ],
   "hint.InstanceSettingsFields.RecycleModeId.info": [
    "Delete removes files for good. A recycle folder keeps them for the days below.",
-   "Supprimer efface les fichiers dÃ©finitivement. Un dossier corbeille les garde pendant le nombre de jours ci-dessous."
+   "Supprimer efface les fichiers définitivement. Un dossier corbeille les garde pendant le nombre de jours ci-dessous."
   ],
   "hint.InstanceSettingsFields.RecycleDays.placeholder": [
    "7",
@@ -2046,7 +2046,7 @@
   ],
   "hint.InstanceSettingsFields.RecycleDays.info": [
    "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
-   "Jours pendant lesquels un fichier supprimÃ© reste dans la corbeille ; 0 le garde jusqu'Ã  ce que vous le supprimiez."
+   "Jours pendant lesquels un fichier supprimé reste dans la corbeille ; 0 le garde jusqu'à ce que vous le supprimiez."
   ],
   "hint.InstanceSettingsFields.RecyclePath.placeholder": [
    "Recycle",
@@ -2054,11 +2054,11 @@
   ],
   "hint.InstanceSettingsFields.RecyclePath.info": [
    "A folder on the chosen storage, relative to its share.",
-   "Un dossier du stockage choisi, relatif Ã  son partage."
+   "Un dossier du stockage choisi, relatif à son partage."
   ],
   "hint.InstanceModuleFields.IsEnabled.info": [
    "Switched-off modules disappear from menus and pages; their data stays.",
-   "Les modules dÃ©sactivÃ©s disparaissent des menus et des pages ; leurs donnÃ©es sont conservÃ©es."
+   "Les modules désactivés disparaissent des menus et des pages ; leurs données sont conservées."
   ],
   "hint.UiLocaleFields.Locale.placeholder": [
    "de-DE",
@@ -2066,11 +2066,11 @@
   ],
   "hint.UiLocaleFields.Locale.info": [
    "Language and region code, such as de-DE or pt-BR.",
-   "Code de langue et de rÃ©gion, comme de-DE ou pt-BR."
+   "Code de langue et de région, comme de-DE ou pt-BR."
   ],
   "hint.UiLocaleFields.IsRightToLeft.info": [
    "For Arabic, Hebrew and other right-to-left scripts.",
-   "Pour l'arabe, l'hÃ©breu et les autres Ã©critures de droite Ã  gauche."
+   "Pour l'arabe, l'hébreu et les autres écritures de droite à gauche."
   ],
   "hint.UiTranslationFields.Text.info": [
    "Placeholders in braces, such as {0}, must stay.",
@@ -2090,11 +2090,11 @@
   ],
   "hint.StorageMountFields.SharePath.info": [
    "The share or exported path on the NAS.",
-   "Le partage ou le chemin exportÃ© sur le NAS."
+   "Le partage ou le chemin exporté sur le NAS."
   ],
   "hint.StorageMountFields.Username.info": [
    "An account of the NAS with access to the share.",
-   "Un compte du NAS ayant accÃ¨s au partage."
+   "Un compte du NAS ayant accès au partage."
   ],
   "hint.StorageMountFields.Domain.placeholder": [
    "WORKGROUP",
@@ -2102,7 +2102,7 @@
   ],
   "hint.StorageMountFields.Password.info": [
    "Leave empty to keep the saved one.",
-   "Laissez vide pour conserver celui enregistrÃ©."
+   "Laissez vide pour conserver celui enregistré."
   ],
   "hint.mediaServer.baseUrl.placeholder": [
    "http://192.168.1.10:8096",
@@ -2110,11 +2110,11 @@
   ],
   "hint.StorageMountFields.Domain.info": [
    "Only for Windows domains; usually empty.",
-   "Uniquement pour les domaines Windows ; gÃ©nÃ©ralement vide."
+   "Uniquement pour les domaines Windows ; généralement vide."
   ],
   "hint.StorageMountFields.IsReadOnly.info": [
    "Read-only storage is played and scanned, but downloads are never placed on it.",
-   "Un stockage en lecture seule est lu et analysÃ©, mais aucun tÃ©lÃ©chargement n'y est jamais placÃ©."
+   "Un stockage en lecture seule est lu et analysé, mais aucun téléchargement n'y est jamais placé."
   ],
   "hint.StorageMountFields.WakeMacAddress.placeholder": [
    "00:11:22:AA:BB:CC",
@@ -2122,7 +2122,7 @@
   ],
   "hint.StorageMountFields.WakeMacAddress.info": [
    "The NAS network card, for Wake-on-LAN.",
-   "La carte rÃ©seau du NAS, pour le Wake-on-LAN."
+   "La carte réseau du NAS, pour le Wake-on-LAN."
   ],
   "hint.StorageMountFields.WakeBroadcastAddress.placeholder": [
    "192.168.1.255",
@@ -2130,11 +2130,11 @@
   ],
   "hint.StorageMountFields.WakeBroadcastAddress.info": [
    "The broadcast address of the NAS network; empty uses 255.255.255.255.",
-   "L'adresse de broadcast du rÃ©seau du NAS ; vide : 255.255.255.255."
+   "L'adresse de broadcast du réseau du NAS ; vide : 255.255.255.255."
   ],
   "hint.StorageMountFields.WakeOnDemand.info": [
    "Wakes the NAS when something is played from it.",
-   "RÃ©veille le NAS lorsqu'un contenu en est lu."
+   "Réveille le NAS lorsqu'un contenu en est lu."
   ],
   "hint.SynologyFields.SynologyUrl.placeholder": [
    "https://nas.local:5001",
@@ -2142,7 +2142,7 @@
   ],
   "hint.SynologyFields.SynologyUrl.info": [
    "DSM's address, to show the NAS state and switch it on and off.",
-   "L'adresse de DSM, pour afficher l'Ã©tat du NAS et l'allumer ou l'Ã©teindre."
+   "L'adresse de DSM, pour afficher l'état du NAS et l'allumer ou l'éteindre."
   ],
   "hint.LibraryRootFields.RelativePath.placeholder": [
    "Movies",
@@ -2150,11 +2150,11 @@
   ],
   "hint.LibraryRootFields.RelativePath.info": [
    "The folder below the storage's share.",
-   "Le dossier situÃ© sous le partage du stockage."
+   "Le dossier situé sous le partage du stockage."
   ],
   "hint.LibraryRootFields.MediaTypeId.info": [
    "What the library holds; it decides naming, matching and downloads.",
-   "Ce que contient la bibliothÃ¨que ; cela dÃ©termine le nommage, la correspondance et les tÃ©lÃ©chargements."
+   "Ce que contient la bibliothèque ; cela détermine le nommage, la correspondance et les téléchargements."
   ],
   "hint.NamingPatternFields.Folder.placeholder": [
    "{Title} ({Year})",
@@ -2162,7 +2162,7 @@
   ],
   "hint.NamingPatternFields.Folder.info": [
    "Folder for each title, below the library; a slash starts the next folder.",
-   "Dossier de chaque titre, sous la bibliothÃ¨que ; une barre oblique ouvre le dossier suivant."
+   "Dossier de chaque titre, sous la bibliothèque ; une barre oblique ouvre le dossier suivant."
   ],
   "hint.NamingPatternFields.File.placeholder": [
    "{Title} ({Year}) {Quality}",
@@ -2170,7 +2170,7 @@
   ],
   "hint.NamingPatternFields.File.info": [
    "The placeholders below are filled for every file; the extension is added.",
-   "Les variables ci-dessous sont remplies pour chaque fichier ; l'extension est ajoutÃ©e."
+   "Les variables ci-dessous sont remplies pour chaque fichier ; l'extension est ajoutée."
   ],
   "hint.StoredFileFields.SubtitleLanguage.placeholder": [
    "de",
@@ -2182,7 +2182,7 @@
   ],
   "hint.WorkFields.CanonicalTitle.info": [
    "The title shown everywhere; providers' titles stay as alternatives.",
-   "Le titre affichÃ© partout ; les titres des fournisseurs restent disponibles comme alternatives."
+   "Le titre affiché partout ; les titres des fournisseurs restent disponibles comme alternatives."
   ],
   "hint.WorkFields.ReleaseYear.placeholder": [
    "1999",
@@ -2190,7 +2190,7 @@
   ],
   "hint.WorkFields.ReleaseYear.info": [
    "Helps tell titles of the same name apart when searching.",
-   "Aide Ã  distinguer des titres de mÃªme nom lors de la recherche."
+   "Aide à distinguer des titres de même nom lors de la recherche."
   ],
   "hint.WorkMetadataFields.Query.placeholder": [
    "The Matrix",
@@ -2198,23 +2198,23 @@
   ],
   "hint.WorkMetadataFields.Query.info": [
    "A title, optionally with its year.",
-   "Un titre, Ã©ventuellement suivi de l'annÃ©e."
+   "Un titre, éventuellement suivi de l'année."
   ],
   "hint.CollectionFields.IsSmart.info": [
    "A smart collection fills itself from the filters below.",
-   "Une collection intelligente se remplit d'elle-mÃªme d'aprÃ¨s les filtres ci-dessous."
+   "Une collection intelligente se remplit d'elle-même d'après les filtres ci-dessous."
   ],
   "hint.CollectionFields.ReleaseYear.placeholder": [
    "Any year",
-   "Toutes les annÃ©es"
+   "Toutes les années"
   ],
   "hint.CollectionFields.OnlyAvailable.info": [
    "Only titles that can be played or read now.",
-   "Uniquement les titres qui peuvent Ãªtre lus maintenant."
+   "Uniquement les titres qui peuvent être lus maintenant."
   ],
   "hint.CollectionFields.OnlyUnfinished.info": [
    "Hides titles this profile has finished.",
-   "Masque les titres que ce profil a terminÃ©s."
+   "Masque les titres que ce profil a terminés."
   ],
   "hint.FranchiseFields.Name.placeholder": [
    "The Lord of the Rings",
@@ -2222,7 +2222,7 @@
   ],
   "hint.FranchiseFields.Name.info": [
    "Empty lets the providers decide the series again.",
-   "Vide : les fournisseurs redÃ©terminent la sÃ©rie."
+   "Vide : les fournisseurs redéterminent la série."
   ],
   "hint.FranchiseFields.Position.placeholder": [
    "2",
@@ -2230,7 +2230,7 @@
   ],
   "hint.FranchiseFields.Position.info": [
    "The title's place in the series; 1.5 sits between 1 and 2.",
-   "La place du titre dans la sÃ©rie ; 1,5 se place entre 1 et 2."
+   "La place du titre dans la série ; 1,5 se place entre 1 et 2."
   ],
   "hint.IdentityMatchFields.ProviderId.placeholder": [
    "21",
@@ -2238,7 +2238,7 @@
   ],
   "hint.IdentityMatchFields.ProviderId.info": [
    "The provider's number for the title, from its address.",
-   "Le numÃ©ro du titre chez le fournisseur, visible dans son adresse."
+   "Le numéro du titre chez le fournisseur, visible dans son adresse."
   ],
   "hint.MediaAssetFields.UnitNumber.placeholder": [
    "1",
@@ -2246,11 +2246,11 @@
   ],
   "hint.MediaAssetFields.UnitNumber.info": [
    "Episode, track or chapter number.",
-   "NumÃ©ro d'Ã©pisode, de piste ou de chapitre."
+   "Numéro d'épisode, de piste ou de chapitre."
   ],
   "hint.ProviderCredentialFields.Secret.info": [
    "Stored encrypted and never shown again; leave empty to keep the saved one.",
-   "StockÃ© chiffrÃ© et jamais rÃ©affichÃ© ; laissez vide pour conserver celui enregistrÃ©."
+   "Stocké chiffré et jamais réaffiché ; laissez vide pour conserver celui enregistré."
   ],
   "hint.ProviderFields.BaseUrl.placeholder": [
    "http://192.168.1.10:32400",
@@ -2262,19 +2262,19 @@
   ],
   "hint.ProviderFields.ExternalId.info": [
    "The application id from the provider's developer settings.",
-   "L'ID d'application tirÃ© des rÃ©glages dÃ©veloppeur du fournisseur."
+   "L'ID d'application tiré des réglages développeur du fournisseur."
   ],
   "hint.ProviderFields.IsEnabled.info": [
    "A switched-off provider is not asked; its key stays saved.",
-   "Un fournisseur dÃ©sactivÃ© n'est pas interrogÃ© ; sa clÃ© reste enregistrÃ©e."
+   "Un fournisseur désactivé n'est pas interrogé ; sa clé reste enregistrée."
   ],
   "hint.TakeoverFields.TakeoverSourceTypeId.info": [
    "The program whose settings and missing titles are taken over once.",
-   "Le programme dont les rÃ©glages et les titres manquants sont repris une fois."
+   "Le programme dont les réglages et les titres manquants sont repris une fois."
   ],
   "hint.TakeoverFields.Apply.info": [
    "A preview shows what would happen and changes nothing.",
-   "Un aperÃ§u montre ce qui se passerait et ne modifie rien."
+   "Un aperçu montre ce qui se passerait et ne modifie rien."
   ],
   "hint.BackupFields.Name.placeholder": [
    "before-update",
@@ -2282,11 +2282,11 @@
   ],
   "acquisition.connection.apiKey": [
    "API key",
-   "ClÃ© API"
+   "Clé API"
   ],
   "acquisition.connection.priority": [
    "Priority",
-   "PrioritÃ©"
+   "Priorité"
   ],
   "acquisition.connection.enabled": [
    "State",
@@ -2294,15 +2294,15 @@
   ],
   "acquisition.connection.on": [
    "Enabled",
-   "ActivÃ©e"
+   "Activée"
   ],
   "acquisition.connection.off": [
    "Disabled",
-   "DÃ©sactivÃ©e"
+   "Désactivée"
   ],
   "acquisition.connection.category": [
    "Download category",
-   "CatÃ©gorie de tÃ©lÃ©chargement"
+   "Catégorie de téléchargement"
   ],
   "acquisition.connection.type.Gutenberg": [
    "Project Gutenberg (public-domain books)",
@@ -2338,11 +2338,11 @@
   ],
   "acquisition.connection.memberKey": [
    "Member key",
-   "ClÃ© de membre"
+   "Clé de membre"
   ],
   "acquisition.outcome.source_manual_link": [
    "Confirm at the source, then paste the file link",
-   "Confirmez Ã  la source, puis collez le lien du fichier"
+   "Confirmez à la source, puis collez le lien du fichier"
   ],
   "acquisition.outcome.source_gate": [
    "The source asks for a manual login or confirmation",
@@ -2350,15 +2350,15 @@
   ],
   "acquisition.connection.categories": [
    "Categories",
-   "CatÃ©gories"
+   "Catégories"
   ],
   "acquisition.connection.remotePath": [
    "Path reported by the client",
-   "Chemin indiquÃ© par le client"
+   "Chemin indiqué par le client"
   ],
   "acquisition.connection.localPath": [
    "Same path for Jularr",
-   "MÃªme chemin pour Jularr"
+   "Même chemin pour Jularr"
   ],
   "acquisition.connection.addIndexer": [
    "Add indexer",
@@ -2366,7 +2366,7 @@
   ],
   "acquisition.connection.addClient": [
    "Add download client",
-   "Ajouter un client de tÃ©lÃ©chargement"
+   "Ajouter un client de téléchargement"
   ],
   "acquisition.connection.addUsenet": [
    "Add news server",
@@ -2374,7 +2374,7 @@
   ],
   "nav.group.media": [
    "Media",
-   "MÃ©dias"
+   "Médias"
   ],
   "nav.group.requests": [
    "Requests",
@@ -2390,7 +2390,7 @@
   ],
   "acquisition.role.Download": [
    "Download clients",
-   "Clients de tÃ©lÃ©chargement"
+   "Clients de téléchargement"
   ],
   "acquisition.role.Subtitles": [
    "Subtitles",
@@ -2402,7 +2402,7 @@
   ],
   "acquisition.connection.none.Download": [
    "No download clients yet.",
-   "Aucun client de tÃ©lÃ©chargement pour le moment."
+   "Aucun client de téléchargement pour le moment."
   ],
   "acquisition.connection.none.Subtitles": [
    "No subtitle providers yet.",
@@ -2418,7 +2418,7 @@
   ],
   "acquisition.connection.deleteConfirm": [
    "Delete this connection? Searches and downloads stop using it.",
-   "Supprimer cette connexion ? Les recherches et tÃ©lÃ©chargements cesseront de l'utiliser."
+   "Supprimer cette connexion ? Les recherches et téléchargements cesseront de l'utiliser."
   ],
   "acquisition.connection.searchTitle": [
    "Test search",
@@ -2450,11 +2450,11 @@
   ],
   "acquisition.connection.unchecked": [
    "Not tested",
-   "Non testÃ©e"
+   "Non testée"
   ],
   "acquisition.connection.today": [
    "Used today",
-   "UtilisÃ©e aujourd'hui"
+   "Utilisée aujourd'hui"
   ],
   "acquisition.connection.queries": [
    "queries",
@@ -2462,15 +2462,15 @@
   ],
   "acquisition.connection.grabs": [
    "grabs",
-   "rÃ©cupÃ©rations"
+   "récupérations"
   ],
   "acquisition.connection.backoff": [
    "Failing, paused until",
-   "En Ã©chec, en pause jusqu'Ã "
+   "En échec, en pause jusqu'à"
   ],
   "acquisition.connection.mediaTypes": [
    "Media types",
-   "Types de mÃ©dia"
+   "Types de média"
   ],
   "acquisition.connection.searches": [
    "Searches",
@@ -2490,7 +2490,7 @@
   ],
   "acquisition.connection.grabLimit": [
    "Grabs per day",
-   "RÃ©cupÃ©rations par jour"
+   "Récupérations par jour"
   ],
   "acquisition.connection.healthy": [
    "Reachable",
@@ -2498,15 +2498,15 @@
   ],
   "admin.work.description": [
    "Canonical Work details, versions and monitoring",
-   "DÃ©tails canoniques de l'Å“uvre, versions et surveillance"
+   "Détails canoniques de l'œuvre, versions et surveillance"
   ],
   "admin.work.files": [
    "Local files and versions",
    "Fichiers locaux et versions"
   ],
   "admin.work.hierarchy": [
-   "Work â†’ Structure â†’ Edition â†’ Version â†’ Asset â†’ File",
-   "Å’uvre â†’ Structure â†’ Ã‰dition â†’ Version â†’ Ressource â†’ Fichier"
+   "Work → Structure → Edition → Version → Asset → File",
+   "Œuvre → Structure → Édition → Version → Ressource → Fichier"
   ],
   "admin.work.structure": [
    "Structure and monitoring",
@@ -2514,15 +2514,15 @@
   ],
   "admin.work.title": [
    "Work",
-   "Å’uvre"
+   "Œuvre"
   ],
   "admin.works.description": [
    "Canonical media and monitoring",
-   "MÃ©dias canoniques et surveillance"
+   "Médias canoniques et surveillance"
   ],
   "admin.works.title": [
    "Works",
-   "Å’uvres"
+   "Œuvres"
   ],
   "app.name": [
    "Jularr",
@@ -2534,7 +2534,7 @@
   ],
   "instance.module.Library": [
    "Library",
-   "BibliothÃ¨que"
+   "Bibliothèque"
   ],
   "instance.module.Requests": [
    "Requests",
@@ -2550,11 +2550,11 @@
   ],
   "request.language": [
    "Requested language",
-   "Langue demandÃ©e"
+   "Langue demandée"
   ],
   "request.create": [
    "Request this work",
-   "Demander cette Å“uvre"
+   "Demander cette œuvre"
   ],
   "request.approve": [
    "Approve",
@@ -2578,7 +2578,7 @@
   ],
   "request.tab.Approved": [
    "Approved",
-   "ApprouvÃ©es"
+   "Approuvées"
   ],
   "request.tab.InProgress": [
    "In progress",
@@ -2586,11 +2586,11 @@
   ],
   "request.tab.Done": [
    "Done",
-   "TerminÃ©es"
+   "Terminées"
   ],
   "request.tab.Rejected": [
    "Rejected",
-   "RefusÃ©es"
+   "Refusées"
   ],
   "request.status.Open": [
    "Open",
@@ -2598,7 +2598,7 @@
   ],
   "request.status.Approved": [
    "Approved",
-   "ApprouvÃ©e"
+   "Approuvée"
   ],
   "request.status.Searching": [
    "Searching",
@@ -2606,7 +2606,7 @@
   ],
   "request.status.Downloading": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "request.status.Importing": [
    "Importing",
@@ -2614,19 +2614,19 @@
   ],
   "request.status.Completed": [
    "Completed",
-   "TerminÃ©e"
+   "Terminée"
   ],
   "request.status.Rejected": [
    "Rejected",
-   "RefusÃ©e"
+   "Refusée"
   ],
   "request.status.Failed": [
    "Failed",
-   "Ã‰chouÃ©e"
+   "Échouée"
   ],
   "request.status.Cancelled": [
    "Cancelled",
-   "AnnulÃ©e"
+   "Annulée"
   ],
   "request.state.Open": [
    "Waiting for approval",
@@ -2634,19 +2634,19 @@
   ],
   "request.state.Approved": [
    "Looking for media",
-   "Recherche du mÃ©dia"
+   "Recherche du média"
   ],
   "request.state.Searching": [
    "Looking for media",
-   "Recherche du mÃ©dia"
+   "Recherche du média"
   ],
   "request.state.Downloading": [
    "Getting media",
-   "RÃ©cupÃ©ration du mÃ©dia"
+   "Récupération du média"
   ],
   "request.state.Importing": [
    "Preparing",
-   "PrÃ©paration"
+   "Préparation"
   ],
   "request.state.Completed": [
    "Available",
@@ -2654,7 +2654,7 @@
   ],
   "request.state.Rejected": [
    "Declined",
-   "RefusÃ©e"
+   "Refusée"
   ],
   "request.state.Failed": [
    "Could not complete the request",
@@ -2662,11 +2662,11 @@
   ],
   "request.state.Cancelled": [
    "Request cancelled",
-   "Demande annulÃ©e"
+   "Demande annulée"
   ],
   "media.notForProfile": [
    "Media is not available for this profile.",
-   "Ce mÃ©dia n'est pas disponible pour ce profil."
+   "Ce média n'est pas disponible pour ce profil."
   ],
   "media.remove": [
    "Remove",
@@ -2674,15 +2674,15 @@
   ],
   "collections.deleteConfirm": [
    "Delete this collection? The titles themselves stay.",
-   "Supprimer cette collection ? Les titres eux-mÃªmes sont conservÃ©s."
+   "Supprimer cette collection ? Les titres eux-mêmes sont conservés."
   ],
   "collections.addMedia": [
    "Add media",
-   "Ajouter des mÃ©dias"
+   "Ajouter des médias"
   ],
   "collections.find": [
    "Find in the library",
-   "Chercher dans la bibliothÃ¨que"
+   "Chercher dans la bibliothèque"
   ],
   "collections.add": [
    "Add",
@@ -2694,7 +2694,7 @@
   ],
   "wanted.empty": [
    "No wanted works on this page.",
-   "Aucune Å“uvre recherchÃ©e sur cette page."
+   "Aucune œuvre recherchée sur cette page."
   ],
   "wanted.paused": [
    "Paused",
@@ -2714,7 +2714,7 @@
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
-   "DÃ©sactiver BibliothÃ¨que bloque les services mÃ©dia et masque leur navigation. Les mÃ©dias et listes de suivi existants sont conservÃ©s."
+   "Désactiver Bibliothèque bloque les services média et masque leur navigation. Les médias et listes de suivi existants sont conservés."
   ],
   "common.all": [
    "All",
@@ -2726,15 +2726,15 @@
   ],
   "details.heroDescription": [
    "Title, artwork and availability will come from the canonical Work.",
-   "Le titre, l'illustration et la disponibilitÃ© proviendront de l'Å“uvre canonique."
+   "Le titre, l'illustration et la disponibilité proviendront de l'œuvre canonique."
   ],
   "details.recommendations": [
    "More like this",
-   "Dans le mÃªme esprit"
+   "Dans le même esprit"
   ],
   "details.related": [
    "Related works",
-   "Å’uvres liÃ©es"
+   "Œuvres liées"
   ],
   "details.structure": [
    "Seasons / structure",
@@ -2742,11 +2742,11 @@
   ],
   "details.title": [
    "Media details",
-   "DÃ©tails du mÃ©dia"
+   "Détails du média"
   ],
   "details.units": [
    "Episodes / editions",
-   "Ã‰pisodes / Ã©ditions"
+   "Épisodes / éditions"
   ],
   "details.versions": [
    "Versions & languages",
@@ -2758,23 +2758,23 @@
   ],
   "details.episodes": [
    "Episodes",
-   "Ã‰pisodes"
+   "Épisodes"
   ],
   "details.episodeCount": [
    "{0} episodes",
-   "{0} Ã©pisodes"
+   "{0} épisodes"
   ],
   "details.specials": [
    "Specials",
-   "Ã‰pisodes spÃ©ciaux"
+   "Épisodes spéciaux"
   ],
   "details.upcoming": [
    "Upcoming",
-   "Ã€ venir"
+   "À venir"
   ],
   "details.noEpisodes": [
    "No episodes known for this season yet.",
-   "Aucun Ã©pisode connu pour cette saison pour le moment."
+   "Aucun épisode connu pour cette saison pour le moment."
   ],
   "details.minutes": [
    "{0} min",
@@ -2786,19 +2786,19 @@
   ],
   "details.cast": [
    "Cast & crew",
-   "Distribution et Ã©quipe"
+   "Distribution et équipe"
   ],
   "discover.mediaTypes": [
    "Media types",
-   "Types de mÃ©dia"
+   "Types de média"
   ],
   "discover.continueWatching": [
    "Continue watching",
-   "Continuer Ã  regarder"
+   "Continuer à regarder"
   ],
   "discover.continueListening": [
    "Continue listening",
-   "Continuer Ã  Ã©couter"
+   "Continuer à écouter"
   ],
   "media.continueReading": [
    "Continue reading",
@@ -2806,11 +2806,11 @@
   ],
   "continueReading.dismiss": [
    "Hide this bar; your reading position stays",
-   "Masquer cette barre ; votre position de lecture est conservÃ©e"
+   "Masquer cette barre ; votre position de lecture est conservée"
   ],
   "discover.title": [
    "Discover",
-   "DÃ©couvrir"
+   "Découvrir"
   ],
   "discover.all": [
    "All",
@@ -2822,7 +2822,7 @@
   ],
   "discover.type.series": [
    "Series",
-   "SÃ©ries"
+   "Séries"
   ],
   "discover.type.anime": [
    "Anime",
@@ -2858,47 +2858,47 @@
   ],
   "discover.feed.Top": [
    "Top rated",
-   "Les mieux notÃ©s"
+   "Les mieux notés"
   ],
   "discover.feed.New": [
    "New releases",
-   "NouveautÃ©s"
+   "Nouveautés"
   ],
   "discover.feed.Upcoming": [
    "Upcoming",
-   "Ã€ venir"
+   "À venir"
   ],
   "discover.providerUnavailable": [
    "Discovery is unavailable right now; your library still works.",
-   "La dÃ©couverte est indisponible pour le moment ; votre bibliothÃ¨que fonctionne toujours."
+   "La découverte est indisponible pour le moment ; votre bibliothèque fonctionne toujours."
   ],
   "discover.empty": [
    "Nothing to show here yet.",
-   "Rien Ã  afficher ici pour le moment."
+   "Rien à afficher ici pour le moment."
   ],
   "discover.noResults": [
    "Nothing matches this search.",
-   "Aucun rÃ©sultat pour cette recherche."
+   "Aucun résultat pour cette recherche."
   ],
   "discover.recentlyAdded": [
    "Recently added",
-   "AjoutÃ©s rÃ©cemment"
+   "Ajoutés récemment"
   ],
   "discover.pages": [
    "Result pages",
-   "Pages de rÃ©sultats"
+   "Pages de résultats"
   ],
   "discover.loadFailed": [
    "Results could not be loaded. Try again or open the next page.",
-   "Les rÃ©sultats n'ont pas pu Ãªtre chargÃ©s. RÃ©essayez ou ouvrez la page suivante."
+   "Les résultats n'ont pas pu être chargés. Réessayez ou ouvrez la page suivante."
   ],
   "media.state.NotRequested": [
    "Not requested",
-   "Non demandÃ©"
+   "Non demandé"
   ],
   "media.state.Requested": [
    "Requested",
-   "DemandÃ©"
+   "Demandé"
   ],
   "media.state.Available": [
    "Available",
@@ -2946,7 +2946,7 @@
   ],
   "media.shelfPrevious": [
    "Previous titles",
-   "Titres prÃ©cÃ©dents"
+   "Titres précédents"
   ],
   "media.shelfNext": [
    "Next titles",
@@ -2954,7 +2954,7 @@
   ],
   "media.availability.Available": [
    "All monitored episodes or units are available.",
-   "Tous les Ã©pisodes ou unitÃ©s suivis sont disponibles."
+   "Tous les épisodes ou unités suivis sont disponibles."
   ],
   "media.rating": [
    "Rating",
@@ -2974,11 +2974,11 @@
   ],
   "media.availability.PartialOtherAudio": [
    "{0} of {1} monitored episodes or units are available, but only in other audio languages.",
-   "{0} Ã©pisodes ou unitÃ©s suivis sur {1} sont disponibles, mais uniquement dans d'autres langues audio."
+   "{0} épisodes ou unités suivis sur {1} sont disponibles, mais uniquement dans d'autres langues audio."
   ],
   "media.availability.Requested": [
    "Requested",
-   "DemandÃ©"
+   "Demandé"
   ],
   "media.availability.badge.Available": [
    "Available locally",
@@ -2993,8 +2993,8 @@
    "Autres langues audio"
   ],
   "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} Â· Other audio",
-   "{0}/{1} Â· Autre audio"
+   "{0}/{1} · Other audio",
+   "{0}/{1} · Autre audio"
   ],
   "media.availability.badge.Partial": [
    "{0}/{1} available",
@@ -3002,7 +3002,7 @@
   ],
   "media.availability.badge.Downloading": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "media.availability.badge.Searching": [
    "Searching",
@@ -3010,19 +3010,19 @@
   ],
   "media.availability.badge.Requested": [
    "Requested",
-   "DemandÃ©"
+   "Demandé"
   ],
   "media.availability.Partial": [
    "{0} of {1} monitored episodes or units are available.",
-   "{0} Ã©pisodes ou unitÃ©s suivis sur {1} sont disponibles."
+   "{0} épisodes ou unités suivis sur {1} sont disponibles."
   ],
   "media.availability.Missing": [
    "No monitored episodes or units are available.",
-   "Aucun Ã©pisode ou unitÃ© suivi n'est disponible."
+   "Aucun épisode ou unité suivi n'est disponible."
   ],
   "media.availability.Downloading": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "media.availability.Searching": [
    "Searching or queued for another search",
@@ -3038,15 +3038,15 @@
   ],
   "media.series.Ended": [
    "Ended",
-   "TerminÃ©e"
+   "Terminée"
   ],
   "media.series.Canceled": [
    "Canceled",
-   "AnnulÃ©e"
+   "Annulée"
   ],
   "media.series.Announced": [
    "Announced",
-   "AnnoncÃ©e"
+   "Annoncée"
   ],
   "design.languageGerman": [
    "German",
@@ -3066,15 +3066,15 @@
   ],
   "design.mediaNotice": [
    "Sample cards and previews only. Statuses and languages are illustrative; request and library playback actions are disabled. The official trailer is available on Play.",
-   "Cartes et aperÃ§us d'exemple uniquement. Les statuts et les langues sont illustratifs ; les actions de demande et de lecture de la bibliothÃ¨que sont dÃ©sactivÃ©es. La bande-annonce officielle est disponible avec Lire."
+   "Cartes et aperçus d'exemple uniquement. Les statuts et les langues sont illustratifs ; les actions de demande et de lecture de la bibliothèque sont désactivées. La bande-annonce officielle est disponible avec Lire."
   ],
   "design.mediaLibrary": [
    "Library cards",
-   "Cartes de la bibliothÃ¨que"
+   "Cartes de la bibliothèque"
   ],
   "design.mediaDiscover": [
    "Discover cards",
-   "Cartes de DÃ©couvrir"
+   "Cartes de Découvrir"
   ],
   "media.watch": [
    "Watch",
@@ -3082,11 +3082,11 @@
   ],
   "media.details": [
    "Details",
-   "DÃ©tails"
+   "Détails"
   ],
   "search.global": [
    "Search movies and series",
-   "Rechercher des films et sÃ©ries"
+   "Rechercher des films et séries"
   ],
   "library.scope.all": [
    "All",
@@ -3098,7 +3098,7 @@
   ],
   "library.scope.series": [
    "Series",
-   "SÃ©ries"
+   "Séries"
   ],
   "library.scope.anime": [
    "Anime",
@@ -3126,7 +3126,7 @@
   ],
   "library.search": [
    "Search your library",
-   "Rechercher dans votre bibliothÃ¨que"
+   "Rechercher dans votre bibliothèque"
   ],
   "library.sort": [
    "Sort",
@@ -3134,7 +3134,7 @@
   ],
   "library.sort.RecentlyAdded": [
    "Recently added",
-   "AjoutÃ©s rÃ©cemment"
+   "Ajoutés récemment"
   ],
   "library.sort.Title": [
    "Title",
@@ -3142,7 +3142,7 @@
   ],
   "library.sort.Year": [
    "Year",
-   "AnnÃ©e"
+   "Année"
   ],
   "library.paging": [
    "Pages",
@@ -3150,7 +3150,7 @@
   ],
   "library.userEmpty": [
    "Your library is empty. Discover finds something to watch.",
-   "Votre bibliothÃ¨que est vide. DÃ©couvrir vous propose de quoi regarder."
+   "Votre bibliothèque est vide. Découvrir vous propose de quoi regarder."
   ],
   "form.error": [
    "Something went wrong.",
@@ -3162,7 +3162,7 @@
   ],
   "form.out_of_range": [
    "The value is outside the allowed range.",
-   "La valeur est en dehors de la plage autorisÃ©e."
+   "La valeur est en dehors de la plage autorisée."
   ],
   "form.required": [
    "This field is required.",
@@ -3198,7 +3198,7 @@
   ],
   "media.series": [
    "Series",
-   "SÃ©ries"
+   "Séries"
   ],
   "nav.breadcrumb": [
    "Breadcrumb",
@@ -3218,7 +3218,7 @@
   ],
   "nav.library": [
    "Library",
-   "BibliothÃ¨que"
+   "Bibliothèque"
   ],
   "nav.mobile": [
    "Mobile navigation",
@@ -3242,7 +3242,7 @@
   ],
   "nav.settings": [
    "Settings",
-   "RÃ©glages"
+   "Réglages"
   ],
   "nav.watchlist": [
    "Watchlist",
@@ -3254,11 +3254,11 @@
   ],
   "player.unavailable": [
    "Playback is not connected yet.",
-   "La lecture n'est pas encore connectÃ©e."
+   "La lecture n'est pas encore connectée."
   ],
   "preview.admin-library": [
    "Admin library",
-   "BibliothÃ¨que (admin)"
+   "Bibliothèque (admin)"
   ],
   "preview.admin-requests": [
    "Admin requests",
@@ -3266,7 +3266,7 @@
   ],
   "preview.admin-rules": [
    "Admin rules",
-   "RÃ¨gles (admin)"
+   "Règles (admin)"
   ],
   "preview.admin-users": [
    "Admin users",
@@ -3274,15 +3274,15 @@
   ],
   "preview.admin-wanted": [
    "Admin wanted",
-   "RecherchÃ©s (admin)"
+   "Recherchés (admin)"
   ],
   "preview.admin-work": [
    "Admin work",
-   "Å’uvre (admin)"
+   "Œuvre (admin)"
   ],
   "preview.admin-works": [
    "Admin works",
-   "Å’uvres (admin)"
+   "Œuvres (admin)"
   ],
   "appearance.title": [
    "Appearance",
@@ -3294,7 +3294,7 @@
   ],
   "appearance.brightness": [
    "Brightness",
-   "LuminositÃ©"
+   "Luminosité"
   ],
   "appearance.original": [
    "Original",
@@ -3302,11 +3302,11 @@
   ],
   "appearance.clean": [
    "Clean",
-   "Ã‰purÃ©"
+   "Épuré"
   ],
   "appearance.system": [
    "System",
-   "SystÃ¨me"
+   "Système"
   ],
   "appearance.light": [
    "Light",
@@ -3318,11 +3318,11 @@
   ],
   "preview.details": [
    "Details",
-   "DÃ©tails"
+   "Détails"
   ],
   "preview.discover": [
    "Discover",
-   "DÃ©couvrir"
+   "Découvrir"
   ],
   "preview.player": [
    "Player",
@@ -3330,7 +3330,7 @@
   ],
   "preview.settings": [
    "Settings",
-   "RÃ©glages"
+   "Réglages"
   ],
   "preview.shell": [
    "Shell",
@@ -3342,11 +3342,11 @@
   ],
   "requests.approved": [
    "Approved",
-   "ApprouvÃ©es"
+   "Approuvées"
   ],
   "requests.done": [
    "Done",
-   "TerminÃ©es"
+   "Terminées"
   ],
   "requests.inProgress": [
    "In progress",
@@ -3358,11 +3358,11 @@
   ],
   "requests.rejected": [
    "Rejected",
-   "RefusÃ©es"
+   "Refusées"
   ],
   "settings.accessibility": [
    "Accessibility",
-   "AccessibilitÃ©"
+   "Accessibilité"
   ],
   "settings.account": [
    "Account",
@@ -3382,19 +3382,19 @@
   ],
   "settings.general": [
    "General",
-   "GÃ©nÃ©ral"
+   "Général"
   ],
   "settings.language": [
    "Language & region",
-   "Langue et rÃ©gion"
+   "Langue et région"
   ],
   "settings.library": [
    "Library & display",
-   "BibliothÃ¨que et affichage"
+   "Bibliothèque et affichage"
   ],
   "settings.media": [
    "Media",
-   "MÃ©dias"
+   "Médias"
   ],
   "settings.modules": [
    "Modules & features",
@@ -3410,11 +3410,11 @@
   ],
   "settings.privacy": [
    "Profile & privacy",
-   "Profil et confidentialitÃ©"
+   "Profil et confidentialité"
   ],
   "settings.profileNotice": [
    "This will be the Settings tab of your profile.",
-   "Ce sera l'onglet RÃ©glages de votre profil."
+   "Ce sera l'onglet Réglages de votre profil."
   ],
   "settings.ratings": [
    "Ratings",
@@ -3426,7 +3426,7 @@
   ],
   "settings.security": [
    "Account & security",
-   "Compte et sÃ©curitÃ©"
+   "Compte et sécurité"
   ],
   "settings.sessions": [
    "Devices & sessions",
@@ -3434,15 +3434,15 @@
   ],
   "settings.title": [
    "Settings",
-   "RÃ©glages"
+   "Réglages"
   ],
   "shell.preview": [
    "Shell preview",
-   "AperÃ§u de la structure"
+   "Aperçu de la structure"
   ],
   "shell.previewInfo": [
    "Presentation preview only. No account or profile data is loaded.",
-   "AperÃ§u de prÃ©sentation uniquement. Aucune donnÃ©e de compte ou de profil n'est chargÃ©e."
+   "Aperçu de présentation uniquement. Aucune donnée de compte ou de profil n'est chargée."
   ],
   "shell.search": [
    "Search",
@@ -3454,7 +3454,7 @@
   ],
   "skeleton.unconnected": [
    "This view will show live data when its backend service is available.",
-   "Cette vue affichera des donnÃ©es en direct lorsque son service backend sera disponible."
+   "Cette vue affichera des données en direct lorsque son service backend sera disponible."
   ],
   "table.actions": [
    "Actions",
@@ -3466,7 +3466,7 @@
   ],
   "table.availability": [
    "Availability",
-   "DisponibilitÃ©"
+   "Disponibilité"
   ],
   "table.language": [
    "Language / version",
@@ -3474,7 +3474,7 @@
   ],
   "table.lastSearch": [
    "Last search",
-   "DerniÃ¨re recherche"
+   "Dernière recherche"
   ],
   "table.limit": [
    "Limit",
@@ -3490,7 +3490,7 @@
   ],
   "table.requestedAt": [
    "Requested at",
-   "DemandÃ© le"
+   "Demandé le"
   ],
   "table.requester": [
    "Requester",
@@ -3498,15 +3498,15 @@
   ],
   "table.role": [
    "Role",
-   "RÃ´le"
+   "Rôle"
   ],
   "table.rule": [
    "Rule",
-   "RÃ¨gle"
+   "Règle"
   ],
   "table.size": [
    "Storage used",
-   "Espace utilisÃ©"
+   "Espace utilisé"
   ],
   "table.status": [
    "Status",
@@ -3526,7 +3526,7 @@
   ],
   "table.work": [
    "Work / unit",
-   "Å’uvre / unitÃ©"
+   "Œuvre / unité"
   ],
   "toolbar.filter": [
    "Filter",
@@ -3550,7 +3550,7 @@
   ],
   "wanted.requested": [
    "Requested",
-   "DemandÃ©"
+   "Demandé"
   ],
   "wanted.available": [
    "Available",
@@ -3558,11 +3558,11 @@
   ],
   "wanted.downloading": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "wanted.lastSearch": [
    "Last search",
-   "DerniÃ¨re recherche"
+   "Dernière recherche"
   ],
   "wanted.open": [
    "Open",
@@ -3578,11 +3578,11 @@
   ],
   "wanted.section.choice": [
    "Profile and library",
-   "Profil et bibliothÃ¨que"
+   "Profil et bibliothèque"
   ],
   "wanted.section.episodes": [
    "Seasons and episodes",
-   "Saisons et Ã©pisodes"
+   "Saisons et épisodes"
   ],
   "wanted.section.volumes": [
    "Volumes",
@@ -3598,7 +3598,7 @@
   ],
   "admin.work.wanted": [
    "Search and downloads",
-   "Recherche et tÃ©lÃ©chargements"
+   "Recherche et téléchargements"
   ],
   "wanted.monitoring": [
    "Monitoring",
@@ -3610,7 +3610,7 @@
   ],
   "wanted.grabQueued": [
    "The release was sent to the download client.",
-   "La release a Ã©tÃ© envoyÃ©e au client de tÃ©lÃ©chargement."
+   "La release a été envoyée au client de téléchargement."
   ],
   "wanted.tab.search": [
    "Search",
@@ -3634,19 +3634,19 @@
   ],
   "wanted.view.CutoffUnmet": [
    "Cutoff unmet",
-   "QualitÃ© cible non atteinte"
+   "Qualité cible non atteinte"
   ],
   "wanted.belowCutoff": [
    "Below cutoff",
-   "Sous la qualitÃ© cible"
+   "Sous la qualité cible"
   ],
   "wanted.monitorsNewUnits": [
    "New episodes and volumes",
-   "Nouveaux Ã©pisodes et tomes"
+   "Nouveaux épisodes et tomes"
   ],
   "wanted.unit": [
    "Season, episode or volume",
-   "Saison, Ã©pisode ou tome"
+   "Saison, épisode ou tome"
   ],
   "wanted.unit.releasedOn": [
    "Released",
@@ -3654,19 +3654,19 @@
   ],
   "wanted.unit.present": [
    "Present",
-   "PrÃ©sent"
+   "Présent"
   ],
   "wanted.unit.monitored": [
    "Monitored",
-   "SurveillÃ©"
+   "Surveillé"
   ],
   "wanted.unit.unmonitored": [
    "Not monitored",
-   "Non surveillÃ©"
+   "Non surveillé"
   ],
   "wanted.unit.partly": [
    "Partly monitored",
-   "Partiellement surveillÃ©"
+   "Partiellement surveillé"
   ],
   "wanted.unit.start": [
    "Monitor",
@@ -3674,7 +3674,7 @@
   ],
   "wanted.unit.stop": [
    "Stop monitoring",
-   "ArrÃªter la surveillance"
+   "Arrêter la surveillance"
   ],
   "wanted.search.season": [
    "Season",
@@ -3682,7 +3682,7 @@
   ],
   "wanted.search.episode": [
    "Episode",
-   "Ã‰pisode"
+   "Épisode"
   ],
   "wanted.search.volume": [
    "Volume",
@@ -3690,11 +3690,11 @@
   ],
   "wanted.search.empty": [
    "No releases were found.",
-   "Aucune release trouvÃ©e."
+   "Aucune release trouvée."
   ],
   "wanted.search.decision": [
    "Decision",
-   "DÃ©cision"
+   "Décision"
   ],
   "wanted.search.score": [
    "Score",
@@ -3710,7 +3710,7 @@
   ],
   "wanted.search.age": [
    "Age (days)",
-   "Ã‚ge (jours)"
+   "Âge (jours)"
   ],
   "wanted.search.size": [
    "Size",
@@ -3718,7 +3718,7 @@
   ],
   "wanted.search.quality": [
    "Quality",
-   "QualitÃ©"
+   "Qualité"
   ],
   "wanted.search.reason": [
    "Reason",
@@ -3726,11 +3726,11 @@
   ],
   "wanted.search.grab": [
    "Select and download",
-   "SÃ©lectionner et tÃ©lÃ©charger"
+   "Sélectionner et télécharger"
   ],
   "wanted.history.empty": [
    "No releases have been taken yet.",
-   "Aucune release rÃ©cupÃ©rÃ©e pour le moment."
+   "Aucune release récupérée pour le moment."
   ],
   "wanted.history.date": [
    "Date",
@@ -3738,51 +3738,51 @@
   ],
   "acquisition.decision.Eligible": [
    "Eligible",
-   "Ã‰ligible"
+   "Éligible"
   ],
   "acquisition.decision.ManualReview": [
    "Review",
-   "Ã€ vÃ©rifier"
+   "À vérifier"
   ],
   "acquisition.decision.Rejected": [
    "Rejected",
-   "RejetÃ©e"
+   "Rejetée"
   ],
   "acquisition.release.Grabbed": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "acquisition.release.Imported": [
    "Imported",
-   "ImportÃ©e"
+   "Importée"
   ],
   "acquisition.release.Failed": [
    "Failed",
-   "Ã‰chouÃ©e"
+   "Échouée"
   ],
   "acquisition.release.Blocked": [
    "Blocked",
-   "BloquÃ©e"
+   "Bloquée"
   ],
   "acquisition.release.Allowed": [
    "Allowed again",
-   "AutorisÃ©e Ã  nouveau"
+   "Autorisée à nouveau"
   ],
   "acquisition.outcome.release_found": [
    "Release found",
-   "Release trouvÃ©e"
+   "Release trouvée"
   ],
   "acquisition.outcome.grabbed": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "acquisition.outcome.imported": [
    "Imported",
-   "ImportÃ©e"
+   "Importée"
   ],
   "acquisition.outcome.manual_review": [
    "Needs review",
-   "Ã€ vÃ©rifier"
+   "À vérifier"
   ],
   "acquisition.outcome.profile_rejected": [
    "No release fits the profile",
@@ -3794,7 +3794,7 @@
   ],
   "acquisition.outcome.no_candidates": [
    "Nothing found",
-   "Rien trouvÃ©"
+   "Rien trouvé"
   ],
   "acquisition.outcome.indexers_unavailable": [
    "Indexers unavailable",
@@ -3806,39 +3806,39 @@
   ],
   "acquisition.outcome.download_failed": [
    "Download failed",
-   "Ã‰chec du tÃ©lÃ©chargement"
+   "Échec du téléchargement"
   ],
   "acquisition.outcome.download_interrupted": [
    "Download interrupted",
-   "TÃ©lÃ©chargement interrompu"
+   "Téléchargement interrompu"
   ],
   "acquisition.outcome.acquisition_unavailable": [
    "Download client unavailable",
-   "Client de tÃ©lÃ©chargement indisponible"
+   "Client de téléchargement indisponible"
   ],
   "acquisition.outcome.acquisition_no_download_client": [
    "No download client",
-   "Aucun client de tÃ©lÃ©chargement"
+   "Aucun client de téléchargement"
   ],
   "acquisition.outcome.acquisition_grab_failed": [
    "Download client refused",
-   "RefusÃ©e par le client de tÃ©lÃ©chargement"
+   "Refusée par le client de téléchargement"
   ],
   "acquisition.outcome.acquisition_limit_reached": [
    "Indexer grab limit reached",
-   "Limite de rÃ©cupÃ©rations de l'indexeur atteinte"
+   "Limite de récupérations de l'indexeur atteinte"
   ],
   "acquisition.outcome.acquisition_download_path_unconfigured": [
    "Download workspace is not configured or is unavailable",
-   "Le dossier temporaire des tÃ©lÃ©chargements n'est pas configurÃ© ou est indisponible"
+   "Le dossier temporaire des téléchargements n'est pas configuré ou est indisponible"
   ],
   "acquisition.workspace.title": [
    "Download storage",
-   "Stockage des tÃ©lÃ©chargements"
+   "Stockage des téléchargements"
   ],
   "acquisition.workspace.hint": [
    "Configured paths (not a mount or writeability check). Native downloads pause if their workspaces are unavailable.",
-   "Chemins configurÃ©s (sans vÃ©rification du montage ni de l'Ã©criture). Les tÃ©lÃ©chargements natifs sont suspendus si le stockage est indisponible."
+   "Chemins configurés (sans vérification du montage ni de l'écriture). Les téléchargements natifs sont suspendus si le stockage est indisponible."
   ],
   "acquisition.workspace.usenet": [
    "Usenet temporary files",
@@ -3846,59 +3846,59 @@
   ],
   "acquisition.workspace.direct": [
    "Direct book downloads",
-   "TÃ©lÃ©chargements directs de livres"
+   "Téléchargements directs de livres"
   ],
   "acquisition.workspace.limit": [
    "Per-Usenet-job limit",
-   "Limite par tÃ¢che Usenet"
+   "Limite par tâche Usenet"
   ],
   "acquisition.workspace.unset": [
    "Not configured",
-   "Non configurÃ©"
+   "Non configuré"
   ],
   "acquisition.workspace.hostAllow": [
    "Host filesystem: explicitly allowed",
-   "SystÃ¨me de fichiers hÃ´te : autorisÃ© explicitement"
+   "Système de fichiers hôte : autorisé explicitement"
   ],
   "acquisition.workspace.hostDeny": [
    "Host filesystem: blocked unless a mounted workspace is selected",
-   "SystÃ¨me de fichiers hÃ´te : bloquÃ© sans stockage montÃ©"
+   "Système de fichiers hôte : bloqué sans stockage monté"
   ],
   "acquisition.workspace.manageHint": [
    "To change these paths and the limit, update the server configuration and restart Jularr. In-app editing is not available yet.",
-   "Pour changer les chemins et la limite, modifiez la configuration du serveur et redÃ©marrez Jularr. La modification dans l'application n'est pas encore disponible."
+   "Pour changer les chemins et la limite, modifiez la configuration du serveur et redémarrez Jularr. La modification dans l'application n'est pas encore disponible."
   ],
   "acquisition.outcome.usenet_disk_budget": [
    "Download exceeds the configured size limit",
-   "Le tÃ©lÃ©chargement dÃ©passe la limite de taille configurÃ©e"
+   "Le téléchargement dépasse la limite de taille configurée"
   ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
-   "Le dossier de tÃ©lÃ©chargement n'est pas associÃ© au stockage"
+   "Le dossier de téléchargement n'est pas associé au stockage"
   ],
   "acquisition.outcome.import_no_library": [
    "No library path for this media type",
-   "Aucun chemin de bibliothÃ¨que pour ce type de mÃ©dia"
+   "Aucun chemin de bibliothèque pour ce type de média"
   ],
   "acquisition.outcome.import_source_unavailable": [
    "Download folder is unreachable",
-   "Le dossier de tÃ©lÃ©chargement est inaccessible"
+   "Le dossier de téléchargement est inaccessible"
   ],
   "acquisition.outcome.import_library_unavailable": [
    "Library storage is unreachable",
-   "Le stockage de la bibliothÃ¨que est inaccessible"
+   "Le stockage de la bibliothèque est inaccessible"
   ],
   "acquisition.reason.Eligible": [
    "Eligible",
-   "Ã‰ligible"
+   "Éligible"
   ],
   "acquisition.reason.Blocked": [
    "Failed or blocked before",
-   "Ã‰chouÃ©e ou bloquÃ©e auparavant"
+   "Échouée ou bloquée auparavant"
   ],
   "acquisition.reason.NoDownload": [
    "No download link",
-   "Aucun lien de tÃ©lÃ©chargement"
+   "Aucun lien de téléchargement"
   ],
   "acquisition.reason.Unparseable": [
    "Name not recognized",
@@ -3910,11 +3910,11 @@
   ],
   "acquisition.reason.MatchesTitleAndAuthor": [
    "Matches title and author",
-   "Correspond au titre et Ã  l'auteur"
+   "Correspond au titre et à l'auteur"
   ],
   "acquisition.reason.AuthorMissing": [
    "Author not named",
-   "Auteur non indiquÃ©"
+   "Auteur non indiqué"
   ],
   "acquisition.reason.MatchesById": [
    "Matches by provider ID",
@@ -3922,15 +3922,15 @@
   ],
   "acquisition.reason.MatchesTitleAndYear": [
    "Matches title and year",
-   "Correspond au titre et Ã  l'annÃ©e"
+   "Correspond au titre et à l'année"
   ],
   "acquisition.reason.WrongTitle": [
    "Different title",
-   "Titre diffÃ©rent"
+   "Titre différent"
   ],
   "acquisition.reason.WrongYear": [
    "Different year",
-   "AnnÃ©e diffÃ©rente"
+   "Année différente"
   ],
   "acquisition.reason.AmbiguousTitle": [
    "Title is ambiguous",
@@ -3946,7 +3946,7 @@
   ],
   "acquisition.reason.WrongEpisode": [
    "Wrong episode",
-   "Mauvais Ã©pisode"
+   "Mauvais épisode"
   ],
   "acquisition.reason.ContainsTarget": [
    "Contains the target",
@@ -3954,11 +3954,11 @@
   ],
   "acquisition.reason.QualityNotAllowed": [
    "Quality not allowed",
-   "QualitÃ© non autorisÃ©e"
+   "Qualité non autorisée"
   ],
   "acquisition.reason.NotAnUpgrade": [
    "No upgrade of the present quality",
-   "N'amÃ©liore pas la qualitÃ© existante"
+   "N'améliore pas la qualité existante"
   ],
   "acquisition.reason.SizeUnknown": [
    "Size unknown",
@@ -3978,7 +3978,7 @@
   ],
   "acquisition.reason.ContainsRejectedTerm": [
    "Contains a rejected term",
-   "Contient un terme rejetÃ©"
+   "Contient un terme rejeté"
   ],
   "acquisition.reason.MissingRequiredPattern": [
    "Required pattern missing",
@@ -3986,35 +3986,35 @@
   ],
   "acquisition.reason.MatchesRejectedPattern": [
    "Matches a rejected pattern",
-   "Correspond Ã  un motif rejetÃ©"
+   "Correspond à un motif rejeté"
   ],
   "acquisition.reason.MissingRequiredRule": [
    "Required rule not met",
-   "RÃ¨gle obligatoire non respectÃ©e"
+   "Règle obligatoire non respectée"
   ],
   "acquisition.reason.MatchesRejectRule": [
    "Matches a reject rule",
-   "Correspond Ã  une rÃ¨gle de rejet"
+   "Correspond à une règle de rejet"
   ],
   "acquisition.reason.RuleScore": [
    "Rule score",
-   "Score de la rÃ¨gle"
+   "Score de la règle"
   ],
   "acquisition.reason.OnlyCandidate": [
    "Only eligible release",
-   "Seule release Ã©ligible"
+   "Seule release éligible"
   ],
   "acquisition.reason.HigherQuality": [
    "Best quality",
-   "Meilleure qualitÃ©"
+   "Meilleure qualité"
   ],
   "acquisition.reason.PreferredLanguage": [
    "Preferred language",
-   "Langue prÃ©fÃ©rÃ©e"
+   "Langue préférée"
   ],
   "acquisition.reason.HigherPreference": [
    "Highest score",
-   "Score le plus Ã©levÃ©"
+   "Score le plus élevé"
   ],
   "acquisition.reason.BetterCoverage": [
    "Covers more",
@@ -4026,15 +4026,15 @@
   ],
   "acquisition.reason.IndexerPriority": [
    "Indexer priority",
-   "PrioritÃ© de l'indexeur"
+   "Priorité de l'indexeur"
   ],
   "acquisition.reason.PostedLater": [
    "Newer post",
-   "Publication plus rÃ©cente"
+   "Publication plus récente"
   ],
   "acquisition.reason.StableOrder": [
    "Equal candidates",
-   "Candidats Ã©quivalents"
+   "Candidats équivalents"
   ],
   "acquisition.reason.MatchesTitle": [
    "Matches the title",
@@ -4042,11 +4042,11 @@
   ],
   "acquisition.reason.MatchesArtistAndAlbum": [
    "Matches artist and album",
-   "Correspond Ã  l'artiste et Ã  l'album"
+   "Correspond à l'artiste et à l'album"
   ],
   "acquisition.reason.MatchesTitleAndPlatform": [
    "Matches title and platform",
-   "Correspond au titre et Ã  la plateforme"
+   "Correspond au titre et à la plateforme"
   ],
   "acquisition.reason.ArtistMissing": [
    "Album has no artist",
@@ -4054,11 +4054,11 @@
   ],
   "acquisition.reason.PlatformMissing": [
    "Platform not named",
-   "Plateforme non indiquÃ©e"
+   "Plateforme non indiquée"
   ],
   "acquisition.reason.WrongArtist": [
    "Not the wanted artist",
-   "Pas l'artiste recherchÃ©"
+   "Pas l'artiste recherché"
   ],
   "acquisition.reason.WrongVolume": [
    "Wrong volume",
@@ -4066,11 +4066,11 @@
   ],
   "acquisition.reason.WrongPlatform": [
    "Different platform",
-   "Plateforme diffÃ©rente"
+   "Plateforme différente"
   ],
   "acquisition.reason.OtherEdition": [
    "Other part or edition",
-   "Autre partie ou Ã©dition"
+   "Autre partie ou édition"
   ],
   "acquisition.reason.ChaptersOnly": [
    "Chapters only",
@@ -4078,7 +4078,7 @@
   ],
   "acquisition.reason.VolumesUnknown": [
    "Series volumes unknown",
-   "Tomes de la sÃ©rie inconnus"
+   "Tomes de la série inconnus"
   ],
   "acquisition.reason.PartOfGame": [
    "Part of a game",
@@ -4086,23 +4086,23 @@
   ],
   "acquisition.reason.BestQuality": [
    "Best quality present",
-   "Meilleure qualitÃ© prÃ©sente"
+   "Meilleure qualité présente"
   ],
   "acquisition.reason.BelowCutoff": [
    "Below the quality goal",
-   "Sous la qualitÃ© cible"
+   "Sous la qualité cible"
   ],
   "acquisition.reason.CutoffMet": [
    "Quality goal reached",
-   "QualitÃ© cible atteinte"
+   "Qualité cible atteinte"
   ],
   "acquisition.reason.UpgradesDisabled": [
    "Upgrades off",
-   "AmÃ©liorations dÃ©sactivÃ©es"
+   "Améliorations désactivées"
   ],
   "acquisition.reason.InstalledQualityUnknown": [
    "Installed quality unknown",
-   "QualitÃ© installÃ©e inconnue"
+   "Qualité installée inconnue"
   ],
   "watchlist.title": [
    "Watchlist",
@@ -4113,8 +4113,8 @@
    "Stockage"
   ],
   "setup.storage.title": [
-   "Setup Â· Storage",
-   "Configuration Â· Stockage"
+   "Setup · Storage",
+   "Configuration · Stockage"
   ],
   "storage.name": [
    "Name",
@@ -4122,7 +4122,7 @@
   ],
   "storage.host": [
    "Server hostname or IPv4 address",
-   "Nom d'hÃ´te ou adresse IPv4 du serveur"
+   "Nom d'hôte ou adresse IPv4 du serveur"
   ],
   "storage.sharePath": [
    "Share or export path",
@@ -4146,7 +4146,7 @@
   ],
   "storage.access": [
    "Access",
-   "AccÃ¨s"
+   "Accès"
   ],
   "storage.readOnly": [
    "Read only",
@@ -4154,7 +4154,7 @@
   ],
   "storage.readWrite": [
    "Read and write",
-   "Lecture et Ã©criture"
+   "Lecture et écriture"
   ],
   "storage.protocol.Smb": [
    "SMB",
@@ -4174,7 +4174,7 @@
   ],
   "storage.credentialsHint": [
    "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
-   "Les mots de passe sont protÃ©gÃ©s dans le stockage et jamais affichÃ©s. Les autorisations NFS reposent sur l'export du serveur et les identitÃ©s du systÃ¨me de fichiers."
+   "Les mots de passe sont protégés dans le stockage et jamais affichés. Les autorisations NFS reposent sur l'export du serveur et les identités du système de fichiers."
   ],
   "admin.backup.title": [
    "Backups",
@@ -4182,7 +4182,7 @@
   ],
   "admin.backup.notConfigured": [
    "Backups need pg_dump and pg_restore, which this server does not have.",
-   "Les sauvegardes nÃ©cessitent pg_dump et pg_restore, absents de ce serveur."
+   "Les sauvegardes nécessitent pg_dump et pg_restore, absents de ce serveur."
   ],
   "admin.backup.running": [
    "A backup is being made.",
@@ -4190,11 +4190,11 @@
   ],
   "admin.backup.failed": [
    "The last backup failed.",
-   "La derniÃ¨re sauvegarde a Ã©chouÃ©."
+   "La dernière sauvegarde a échoué."
   ],
   "admin.backup.restored": [
    "The backup was restored. Restart Jularr, then sign in with an account of the restored instance.",
-   "La sauvegarde a Ã©tÃ© restaurÃ©e. RedÃ©marrez Jularr, puis connectez-vous avec un compte de l'instance restaurÃ©e."
+   "La sauvegarde a été restaurée. Redémarrez Jularr, puis connectez-vous avec un compte de l'instance restaurée."
   ],
   "admin.backup.create": [
    "Back up now",
@@ -4202,7 +4202,7 @@
   ],
   "admin.backup.createdAt": [
    "Made",
-   "CrÃ©Ã©e"
+   "Créée"
   ],
   "admin.backup.empty": [
    "No backups yet.",
@@ -4222,7 +4222,7 @@
   ],
   "admin.backup.passphrase": [
    "Backup passphrase",
-   "Phrase secrÃ¨te de la sauvegarde"
+   "Phrase secrète de la sauvegarde"
   ],
   "admin.backup.delete": [
    "Delete",
@@ -4230,7 +4230,7 @@
   ],
   "setup.restore": [
    "Restore a backup instead",
-   "Restaurer plutÃ´t une sauvegarde"
+   "Restaurer plutôt une sauvegarde"
   ],
   "storage.synology.title": [
    "Synology",
@@ -4238,7 +4238,7 @@
   ],
   "storage.synology.hint": [
    "Reads the NAS's health and can shut it down or restart it. Needs a DSM administrator account without two-step verification; an empty address removes the access.",
-   "Lit l'Ã©tat de santÃ© du NAS et peut l'Ã©teindre ou le redÃ©marrer. NÃ©cessite un compte administrateur DSM sans validation en deux Ã©tapes ; une adresse vide supprime l'accÃ¨s."
+   "Lit l'état de santé du NAS et peut l'éteindre ou le redémarrer. Nécessite un compte administrateur DSM sans validation en deux étapes ; une adresse vide supprime l'accès."
   ],
   "storage.synology.url": [
    "DSM address",
@@ -4254,15 +4254,15 @@
   ],
   "storage.synology.status": [
    "Read NAS health",
-   "Lire l'Ã©tat de santÃ© du NAS"
+   "Lire l'état de santé du NAS"
   ],
   "storage.synology.certificate": [
    "Check certificate",
-   "VÃ©rifier le certificat"
+   "Vérifier le certificat"
   ],
   "storage.synology.certificate.valid": [
    "Certificate confirmed by a public authority:",
-   "Certificat confirmÃ© par une autoritÃ© publique :"
+   "Certificat confirmé par une autorité publique :"
   ],
   "storage.synology.certificate.trusted": [
    "Certificate you trusted:",
@@ -4270,11 +4270,11 @@
   ],
   "storage.synology.certificate.untrusted": [
    "Unknown certificate; compare its fingerprint with the one DSM shows before you trust it:",
-   "Certificat inconnu ; comparez son empreinte Ã  celle affichÃ©e par DSM avant de lui faire confiance :"
+   "Certificat inconnu ; comparez son empreinte à celle affichée par DSM avant de lui faire confiance :"
   ],
   "storage.synology.certificate.trust": [
    "Trust this certificate",
-   "Faire confiance Ã  ce certificat"
+   "Faire confiance à ce certificat"
   ],
   "storage.synology.certificate.none": [
    "Plain HTTP uses no certificate.",
@@ -4282,35 +4282,35 @@
   ],
   "storage.synology.power.Shutdown": [
    "Shut down NAS",
-   "Ã‰teindre le NAS"
+   "Éteindre le NAS"
   ],
   "storage.synology.power.Restart": [
    "Restart NAS",
-   "RedÃ©marrer le NAS"
+   "Redémarrer le NAS"
   ],
   "storage.synology.confirm.Shutdown": [
    "Shut down the NAS now? Playback, downloads and scans on it stop until it is started again.",
-   "Ã‰teindre le NAS maintenant ? La lecture, les tÃ©lÃ©chargements et les analyses qui en dÃ©pendent s'arrÃªtent jusqu'Ã  son redÃ©marrage."
+   "Éteindre le NAS maintenant ? La lecture, les téléchargements et les analyses qui en dépendent s'arrêtent jusqu'à son redémarrage."
   ],
   "storage.synology.confirm.Restart": [
    "Restart the NAS now? Playback, downloads and scans on it stop for a few minutes.",
-   "RedÃ©marrer le NAS maintenant ? La lecture, les tÃ©lÃ©chargements et les analyses qui en dÃ©pendent s'arrÃªtent pendant quelques minutes."
+   "Redémarrer le NAS maintenant ? La lecture, les téléchargements et les analyses qui en dépendent s'arrêtent pendant quelques minutes."
   ],
   "storage.synology.sent": [
    "The NAS accepted the command.",
-   "Le NAS a acceptÃ© la commande."
+   "Le NAS a accepté la commande."
   ],
   "storage.synology.keepRunning": [
    "Keep it running",
-   "Le laisser allumÃ©"
+   "Le laisser allumé"
   ],
   "storage.synology.used": [
    "{0} of {1} used",
-   "{0} utilisÃ©s sur {1}"
+   "{0} utilisés sur {1}"
   ],
   "storage.synology.temperature": [
-   "{0} Â°C",
-   "{0} Â°C"
+   "{0} °C",
+   "{0} °C"
   ],
   "statistics.title": [
    "Statistics",
@@ -4318,7 +4318,7 @@
   ],
   "statistics.periods": [
    "Period",
-   "PÃ©riode"
+   "Période"
   ],
   "statistics.period.7": [
    "7 days",
@@ -4346,27 +4346,27 @@
   ],
   "statistics.games": [
    "Retro games, all time",
-   "Jeux rÃ©tro, depuis toujours"
+   "Jeux rétro, depuis toujours"
   ],
   "statistics.completed.Movie": [
    "Movies finished",
-   "Films terminÃ©s"
+   "Films terminés"
   ],
   "statistics.completed.Series": [
    "Episodes finished",
-   "Ã‰pisodes terminÃ©s"
+   "Épisodes terminés"
   ],
   "statistics.completed.Book": [
    "Books and volumes finished",
-   "Livres et tomes terminÃ©s"
+   "Livres et tomes terminés"
   ],
   "statistics.completed.Music": [
    "Albums and tracks finished",
-   "Albums et pistes terminÃ©s"
+   "Albums et pistes terminés"
   ],
   "statistics.completed.Game": [
    "Games finished",
-   "Jeux terminÃ©s"
+   "Jeux terminés"
   ],
   "statistics.top": [
    "Most played",
@@ -4382,11 +4382,11 @@
   ],
   "system.title": [
    "System",
-   "SystÃ¨me"
+   "Système"
   ],
   "system.database": [
    "Database size",
-   "Taille de la base de donnÃ©es"
+   "Taille de la base de données"
   ],
   "system.profiles": [
    "Profiles",
@@ -4394,11 +4394,11 @@
   ],
   "system.queued": [
    "Queued operations",
-   "OpÃ©rations en attente"
+   "Opérations en attente"
   ],
   "system.failed": [
    "Failures to look at",
-   "Ã‰checs Ã  examiner"
+   "Échecs à examiner"
   ],
   "system.storageOffline": [
    "Storage connections offline",
@@ -4406,7 +4406,7 @@
   ],
   "system.lastBackup": [
    "Last backup",
-   "DerniÃ¨re sauvegarde"
+   "Dernière sauvegarde"
   ],
   "system.never": [
    "Never",
@@ -4430,11 +4430,11 @@
   ],
   "system.tool.par2": [
    "par2 (download repair)",
-   "par2 (rÃ©paration des tÃ©lÃ©chargements)"
+   "par2 (réparation des téléchargements)"
   ],
   "system.tool.sevenZip": [
    "7-Zip (unpacking, CBR/CB7)",
-   "7-Zip (dÃ©compression, CBR/CB7)"
+   "7-Zip (décompression, CBR/CB7)"
   ],
   "system.tool.pgDump": [
    "pg_dump (backups)",
@@ -4442,11 +4442,11 @@
   ],
   "system.configured": [
    "Configured",
-   "ConfigurÃ©"
+   "Configuré"
   ],
   "system.missing": [
    "Not configured",
-   "Non configurÃ©"
+   "Non configuré"
   ],
   "person.title": [
    "Person",
@@ -4454,7 +4454,7 @@
   ],
   "franchise.title": [
    "Series",
-   "SÃ©rie"
+   "Série"
   ],
   "admin.history.title": [
    "History",
@@ -4490,79 +4490,79 @@
   ],
   "history.empty": [
    "Nothing has happened yet.",
-   "Rien ne s'est encore passÃ©."
+   "Rien ne s'est encore passé."
   ],
   "history.event.Grabbed": [
    "Grabbed",
-   "RÃ©cupÃ©rÃ©e"
+   "Récupérée"
   ],
   "history.event.DownloadFailed": [
    "Download failed",
-   "Ã‰chec du tÃ©lÃ©chargement"
+   "Échec du téléchargement"
   ],
   "history.event.Imported": [
    "Imported",
-   "ImportÃ©e"
+   "Importée"
   ],
   "history.event.Upgraded": [
    "Replaced by a better release",
-   "RemplacÃ©e par une meilleure release"
+   "Remplacée par une meilleure release"
   ],
   "history.event.FileRenamed": [
    "Renamed",
-   "RenommÃ©"
+   "Renommé"
   ],
   "history.event.FileDeleted": [
    "Deleted",
-   "SupprimÃ©"
+   "Supprimé"
   ],
   "history.event.ManualImport": [
    "Assigned by hand",
-   "AttribuÃ© manuellement"
+   "Attribué manuellement"
   ],
   "history.event.Blocked": [
    "Blocked",
-   "BloquÃ©e"
+   "Bloquée"
   ],
   "history.event.SubtitleDownloaded": [
    "Subtitle added",
-   "Sous-titre ajoutÃ©"
+   "Sous-titre ajouté"
   ],
   "request.step.Grabbed": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "request.step.DownloadFailed": [
    "Download failed, searching again",
-   "Ã‰chec du tÃ©lÃ©chargement, nouvelle recherche"
+   "Échec du téléchargement, nouvelle recherche"
   ],
   "request.step.Imported": [
    "Added",
-   "AjoutÃ©"
+   "Ajouté"
   ],
   "request.step.Upgraded": [
    "Better version added",
-   "Meilleure version ajoutÃ©e"
+   "Meilleure version ajoutée"
   ],
   "admin.work.series": [
    "Series",
-   "SÃ©rie"
+   "Série"
   ],
   "admin.work.seriesName": [
    "Series name",
-   "Nom de la sÃ©rie"
+   "Nom de la série"
   ],
   "admin.work.seriesPosition": [
    "Place in the series",
-   "Place dans la sÃ©rie"
+   "Place dans la série"
   ],
   "details.franchise": [
    "Series:",
-   "SÃ©rie :"
+   "Série :"
   ],
   "person.empty": [
    "None of their titles are in your library.",
-   "Aucun de leurs titres n'est dans votre bibliothÃ¨que."
+   "Aucun de leurs titres n'est dans votre bibliothèque."
   ],
   "home.layout": [
    "Home page",
@@ -4570,23 +4570,23 @@
   ],
   "home.shelf": [
    "Shelf",
-   "Ã‰tagÃ¨re"
+   "Étagère"
   ],
   "home.shown": [
    "Shown",
-   "AffichÃ©e"
+   "Affichée"
   ],
   "home.hidden": [
    "Hidden",
-   "MasquÃ©e"
+   "Masquée"
   ],
   "home.shelf.ContinueWatching": [
    "Continue watching",
-   "Continuer Ã  regarder"
+   "Continuer à regarder"
   ],
   "home.shelf.ContinueListening": [
    "Continue listening",
-   "Continuer Ã  Ã©couter"
+   "Continuer à écouter"
   ],
   "home.shelf.ContinueReading": [
    "Continue reading",
@@ -4594,7 +4594,7 @@
   ],
   "home.shelf.RecentlyAdded": [
    "Recently added",
-   "AjoutÃ©s rÃ©cemment"
+   "Ajoutés récemment"
   ],
   "home.shelf.Recommendations": [
    "Recommendations",
@@ -4622,7 +4622,7 @@
   ],
   "instance.module.Trickplay": [
    "Thumbnails while seeking",
-   "Miniatures lors de la navigation dans la vidÃ©o"
+   "Miniatures lors de la navigation dans la vidéo"
   ],
   "instance.module.Translation": [
    "Translate books in the reader",
@@ -4630,11 +4630,11 @@
   ],
   "instance.module.Ocr": [
    "Recognize the text of scanned books",
-   "ReconnaÃ®tre le texte des livres numÃ©risÃ©s"
+   "Reconnaître le texte des livres numérisés"
   ],
   "instance.module.Diagnostics": [
    "Diagnostics in memory",
-   "Diagnostic en mÃ©moire"
+   "Diagnostic en mémoire"
   ],
   "instance.module.Subtitles": [
    "Subtitles from providers",
@@ -4642,11 +4642,11 @@
   ],
   "instance.module.Uploads": [
    "Upload manga volumes",
-   "TÃ©lÃ©verser des tomes de manga"
+   "Téléverser des tomes de manga"
   ],
   "work.upload": [
    "Upload a volume",
-   "TÃ©lÃ©verser un tome"
+   "Téléverser un tome"
   ],
   "work.upload.file": [
    "Volume file",
@@ -4654,19 +4654,19 @@
   ],
   "work.upload.volume": [
    "Volume number (empty: the whole series)",
-   "NumÃ©ro du tome (vide : toute la sÃ©rie)"
+   "Numéro du tome (vide : toute la série)"
   ],
   "work.upload.submit": [
    "Upload",
-   "TÃ©lÃ©verser"
+   "Téléverser"
   ],
   "work.upload.done": [
    "The volume is in the library.",
-   "Le tome est dans la bibliothÃ¨que."
+   "Le tome est dans la bibliothèque."
   ],
   "instance.module.Franchises": [
    "Series",
-   "SÃ©ries"
+   "Séries"
   ],
   "system.performance": [
    "Performance",
@@ -4678,15 +4678,15 @@
   ],
   "system.performance.memory": [
    "Memory",
-   "MÃ©moire"
+   "Mémoire"
   ],
   "system.performance.processorHistory": [
    "Processor use over the last six hours",
-   "Utilisation du processeur sur les six derniÃ¨res heures"
+   "Utilisation du processeur sur les six dernières heures"
   ],
   "system.performance.memoryHistory": [
    "Memory use over the last six hours",
-   "Utilisation de la mÃ©moire sur les six derniÃ¨res heures"
+   "Utilisation de la mémoire sur les six dernières heures"
   ],
   "system.performance.service": [
    "Service",
@@ -4710,15 +4710,15 @@
   ],
   "system.performance.empty": [
    "No calls in the last hour.",
-   "Aucun appel durant la derniÃ¨re heure."
+   "Aucun appel durant la dernière heure."
   ],
   "system.logs": [
    "Recent warnings and errors",
-   "Avertissements et erreurs rÃ©cents"
+   "Avertissements et erreurs récents"
   ],
   "system.logs.empty": [
    "Nothing went wrong since Jularr started.",
-   "Aucun problÃ¨me depuis le dÃ©marrage de Jularr."
+   "Aucun problème depuis le démarrage de Jularr."
   ],
   "system.logs.at": [
    "Time",
@@ -4766,11 +4766,11 @@
   ],
   "calendar.earlier": [
    "Earlier",
-   "Plus tÃ´t"
+   "Plus tôt"
   ],
   "calendar.today": [
    "From today",
-   "Ã€ partir d'aujourd'hui"
+   "À partir d'aujourd'hui"
   ],
   "calendar.later": [
    "Later",
@@ -4782,7 +4782,7 @@
   ],
   "calendar.empty": [
    "Nothing is released in these two weeks for your watchlist, requests or library.",
-   "Aucune sortie ces deux semaines pour votre liste de suivi, vos demandes ou votre bibliothÃ¨que."
+   "Aucune sortie ces deux semaines pour votre liste de suivi, vos demandes ou votre bibliothèque."
   ],
   "instance.module.Calendar": [
    "Release calendar",
@@ -4802,11 +4802,11 @@
   ],
   "collections.smartToggle": [
    "Smart filter instead of hand-picked titles",
-   "Filtre intelligent au lieu de titres choisis Ã  la main"
+   "Filtre intelligent au lieu de titres choisis à la main"
   ],
   "collections.manual": [
    "Hand-picked",
-   "Choisis Ã  la main"
+   "Choisis à la main"
   ],
   "collections.smart": [
    "Smart filter",
@@ -4822,7 +4822,7 @@
   ],
   "collections.create": [
    "Create",
-   "CrÃ©er"
+   "Créer"
   ],
   "collections.edit": [
    "Edit collection",
@@ -4834,15 +4834,15 @@
   ],
   "collections.noWorks": [
    "Add titles from their details page.",
-   "Ajoutez des titres depuis leur page de dÃ©tails."
+   "Ajoutez des titres depuis leur page de détails."
   ],
   "collections.noMatch": [
    "Nothing matches this filter yet.",
-   "Rien ne correspond encore Ã  ce filtre."
+   "Rien ne correspond encore à ce filtre."
   ],
   "collections.type": [
    "Media type",
-   "Type de mÃ©dia"
+   "Type de média"
   ],
   "collections.subtype": [
    "Subtype",
@@ -4858,7 +4858,7 @@
   ],
   "collections.yearFrom": [
    "Released from",
-   "Sorti Ã  partir de"
+   "Sorti à partir de"
   ],
   "collections.yearTo": [
    "Released until",
@@ -4866,11 +4866,11 @@
   ],
   "collections.onlyAvailable": [
    "Only what is in the library",
-   "Uniquement ce qui est dans la bibliothÃ¨que"
+   "Uniquement ce qui est dans la bibliothèque"
   ],
   "collections.onlyUnfinished": [
    "Only what is not finished",
-   "Uniquement ce qui n'est pas terminÃ©"
+   "Uniquement ce qui n'est pas terminé"
   ],
   "collections.addTo": [
    "Add",
@@ -4905,8 +4905,8 @@
    "Pages de notifications"
   ],
   "notifications.times": [
-   "({0}Ã—)",
-   "({0}Ã—)"
+   "({0}×)",
+   "({0}×)"
   ],
   "notifications.settings": [
    "What to notify about",
@@ -4922,11 +4922,11 @@
   ],
   "notifications.message.RequestApproved": [
    "Your request for {0} was approved.",
-   "Votre demande pour {0} a Ã©tÃ© approuvÃ©e."
+   "Votre demande pour {0} a été approuvée."
   ],
   "notifications.message.RequestRejected": [
    "Your request for {0} was declined.",
-   "Votre demande pour {0} a Ã©tÃ© refusÃ©e."
+   "Votre demande pour {0} a été refusée."
   ],
   "notifications.message.MediaAvailable": [
    "{0} is available.",
@@ -4934,7 +4934,7 @@
   ],
   "notifications.message.DownloadFailed": [
    "A download of {0} failed.",
-   "Un tÃ©lÃ©chargement de {0} a Ã©chouÃ©."
+   "Un téléchargement de {0} a échoué."
   ],
   "notifications.message.StorageOffline": [
    "The storage connection {0} stays offline.",
@@ -4942,19 +4942,19 @@
   ],
   "notifications.type.RequestApproved": [
    "Approved requests",
-   "Demandes approuvÃ©es"
+   "Demandes approuvées"
   ],
   "notifications.type.RequestRejected": [
    "Declined requests",
-   "Demandes refusÃ©es"
+   "Demandes refusées"
   ],
   "notifications.type.MediaAvailable": [
    "New media from requests",
-   "Nouveaux mÃ©dias issus de demandes"
+   "Nouveaux médias issus de demandes"
   ],
   "notifications.type.DownloadFailed": [
    "Failed downloads",
-   "TÃ©lÃ©chargements Ã©chouÃ©s"
+   "Téléchargements échoués"
   ],
   "notifications.type.StorageOffline": [
    "Offline storage",
@@ -4966,11 +4966,11 @@
   ],
   "storage.health": [
    "State",
-   "Ã‰tat"
+   "État"
   ],
   "storage.health.Unknown": [
    "Not checked yet",
-   "Pas encore vÃ©rifiÃ©"
+   "Pas encore vérifié"
   ],
   "storage.health.Online": [
    "Online",
@@ -4986,7 +4986,7 @@
   ],
   "storage.health.Error": [
    "No access",
-   "Pas d'accÃ¨s"
+   "Pas d'accès"
   ],
   "storage.space": [
    "{0} free of {1}",
@@ -4994,7 +4994,7 @@
   ],
   "storage.checkedAt": [
    "checked {0}",
-   "vÃ©rifiÃ© {0}"
+   "vérifié {0}"
   ],
   "storage.problem.permission_denied": [
    "Jularr may not read this share",
@@ -5002,15 +5002,15 @@
   ],
   "storage.problem.probe_timeout": [
    "The share does not answer",
-   "Le partage ne rÃ©pond pas"
+   "Le partage ne répond pas"
   ],
   "storage.problem.storage_unavailable": [
    "Not reachable or not mounted",
-   "Injoignable ou non montÃ©"
+   "Injoignable ou non monté"
   ],
   "storage.saved": [
    "Connection saved.",
-   "Connexion enregistrÃ©e."
+   "Connexion enregistrée."
   ],
   "storage.add.Local": [
    "Add local path",
@@ -5030,7 +5030,7 @@
   ],
   "storage.localPath": [
    "Permitted container path",
-   "Chemin de conteneur autorisÃ©"
+   "Chemin de conteneur autorisé"
   ],
   "storage.wake.macAddress": [
    "Wake-on-LAN MAC address",
@@ -5046,19 +5046,19 @@
   ],
   "storage.wake.ownerOnly": [
    "Only the Owner wakes this device",
-   "Seul le propriÃ©taire rÃ©veille cet appareil"
+   "Seul le propriétaire réveille cet appareil"
   ],
   "storage.wake.onDemand": [
    "Wake automatically when someone opens media",
-   "RÃ©veiller automatiquement quand quelqu'un ouvre un mÃ©dia"
+   "Réveiller automatiquement quand quelqu'un ouvre un média"
   ],
   "storage.wake.send": [
    "Wake device",
-   "RÃ©veiller l'appareil"
+   "Réveiller l'appareil"
   ],
   "storage.wake.sent": [
    "Wake-on-LAN packet sent.",
-   "Paquet Wake-on-LAN envoyÃ©."
+   "Paquet Wake-on-LAN envoyé."
   ],
   "storage.remove": [
    "Remove connection",
@@ -5082,7 +5082,7 @@
   ],
   "storage.paths.scanQueued": [
    "Scan queued. Progress appears under Admin library.",
-   "Analyse en attente. La progression apparaÃ®t dans BibliothÃ¨que (admin)."
+   "Analyse en attente. La progression apparaît dans Bibliothèque (admin)."
   ],
   "storage.paths.remove": [
    "Remove path",
@@ -5090,7 +5090,7 @@
   ],
   "storage.paths.removeHint": [
    "Removing a path forgets its file inventory. Works and media files remain untouched.",
-   "Supprimer un chemin efface son inventaire de fichiers. Les Å“uvres et les fichiers mÃ©dias restent intacts."
+   "Supprimer un chemin efface son inventaire de fichiers. Les œuvres et les fichiers médias restent intacts."
   ],
   "storage.paths.connectionRoot": [
    "Connection root",
@@ -5098,7 +5098,7 @@
   ],
   "storage.paths.selected": [
    "Selected folder",
-   "Dossier sÃ©lectionnÃ©"
+   "Dossier sélectionné"
   ],
   "storage.paths.noFolders": [
    "This folder has no subfolders.",
@@ -5110,15 +5110,15 @@
   ],
   "storage.paths.add": [
    "Add library path",
-   "Ajouter un chemin de bibliothÃ¨que"
+   "Ajouter un chemin de bibliothèque"
   ],
   "library.tab.Overview": [
    "Libraries",
-   "BibliothÃ¨ques"
+   "Bibliothèques"
   ],
   "library.tab.Unmatched": [
    "Unidentified",
-   "Non identifiÃ©s"
+   "Non identifiés"
   ],
   "library.tab.Files": [
    "All files",
@@ -5142,7 +5142,7 @@
   ],
   "library.naming.Series": [
    "Episode files",
-   "Fichiers d'Ã©pisodes"
+   "Fichiers d'épisodes"
   ],
   "library.naming.folder": [
    "Folders",
@@ -5162,7 +5162,7 @@
   ],
   "library.naming.rules": [
    "Empty placeholders leave with their brackets; the file name always names the film or the episode.",
-   "Les variables vides disparaissent avec leurs parenthÃ¨ses ; le nom du fichier dÃ©signe toujours le film ou l'Ã©pisode."
+   "Les variables vides disparaissent avec leurs parenthèses ; le nom du fichier désigne toujours le film ou l'épisode."
   ],
   "library.naming.token.Title": [
    "The title",
@@ -5170,23 +5170,23 @@
   ],
   "library.naming.token.Year": [
    "The year of release",
-   "L'annÃ©e de sortie"
+   "L'année de sortie"
   ],
   "library.naming.token.Season": [
    "The season number, with :00 two digits",
-   "Le numÃ©ro de la saison, avec :00 sur deux chiffres"
+   "Le numéro de la saison, avec :00 sur deux chiffres"
   ],
   "library.naming.token.Episode": [
    "The episode number, with :00 two digits",
-   "Le numÃ©ro de l'Ã©pisode, avec :00 sur deux chiffres"
+   "Le numéro de l'épisode, avec :00 sur deux chiffres"
   ],
   "library.naming.token.EpisodeTitle": [
    "The episode title",
-   "Le titre de l'Ã©pisode"
+   "Le titre de l'épisode"
   ],
   "library.naming.token.Quality": [
    "The quality, such as WEBDL-1080p",
-   "La qualitÃ©, comme WEBDL-1080p"
+   "La qualité, comme WEBDL-1080p"
   ],
   "library.naming.token.ReleaseGroup": [
    "The release group",
@@ -5194,15 +5194,15 @@
   ],
   "library.naming.token.Edition": [
    "The edition, such as Director's Cut",
-   "L'Ã©dition, comme Director's Cut"
+   "L'édition, comme Director's Cut"
   ],
   "library.naming.token.Proper": [
    "Proper or Repack for a corrected release",
-   "Proper ou Repack pour une release corrigÃ©e"
+   "Proper ou Repack pour une release corrigée"
   ],
   "library.overview.empty": [
    "No libraries yet. Add one with its storage.",
-   "Aucune bibliothÃ¨que pour le moment. Ajoutez-en une avec son stockage."
+   "Aucune bibliothèque pour le moment. Ajoutez-en une avec son stockage."
   ],
   "library.overview.place": [
    "Storage and folder",
@@ -5210,7 +5210,7 @@
   ],
   "library.overview.attention": [
    "Needs attention",
-   "Ã€ examiner"
+   "À examiner"
   ],
   "library.overview.fine": [
    "Nothing",
@@ -5218,7 +5218,7 @@
   ],
   "library.overview.scanned": [
    "Last scan",
-   "DerniÃ¨re analyse"
+   "Dernière analyse"
   ],
   "library.overview.scanning": [
    "Scanning now",
@@ -5230,11 +5230,11 @@
   ],
   "library.overview.manage": [
    "Manage storage and libraries",
-   "GÃ©rer le stockage et les bibliothÃ¨ques"
+   "Gérer le stockage et les bibliothèques"
   ],
   "nav.group.library": [
    "Library",
-   "BibliothÃ¨que"
+   "Bibliothèque"
   ],
   "library.replacement.keepsReleases": [
    "Keep several releases",
@@ -5242,7 +5242,7 @@
   ],
   "library.replacement.mode": [
    "Replaced files",
-   "Fichiers remplacÃ©s"
+   "Fichiers remplacés"
   ],
   "library.replacement.mode.Delete": [
    "Delete",
@@ -5250,19 +5250,19 @@
   ],
   "library.replacement.mode.LibraryFolder": [
    "Recycle bin in the library",
-   "Corbeille dans la bibliothÃ¨que"
+   "Corbeille dans la bibliothèque"
   ],
   "library.replacement.mode.OwnFolder": [
    "Own recycle bin",
-   "Corbeille dÃ©diÃ©e"
+   "Corbeille dédiée"
   ],
   "library.replacement.mount": [
    "Own recycle bin: connection",
-   "Corbeille dÃ©diÃ©e : connexion"
+   "Corbeille dédiée : connexion"
   ],
   "library.replacement.path": [
    "Own recycle bin: folder",
-   "Corbeille dÃ©diÃ©e : dossier"
+   "Corbeille dédiée : dossier"
   ],
   "library.replacement.days": [
    "Days in the recycle bin",
@@ -5274,11 +5274,11 @@
   ],
   "library.protect": [
    "Protect from automatic upgrades",
-   "ProtÃ©ger des amÃ©liorations automatiques"
+   "Protéger des améliorations automatiques"
   ],
   "library.unprotect": [
    "Allow automatic upgrades",
-   "Autoriser les amÃ©liorations automatiques"
+   "Autoriser les améliorations automatiques"
   ],
   "devices.link.title": [
    "Connect this device",
@@ -5286,7 +5286,7 @@
   ],
   "devices.link.hint": [
    "On a phone signed in to Jularr, scan the code or open Settings, Pair a device, and enter these digits.",
-   "Sur un tÃ©lÃ©phone connectÃ© Ã  Jularr, scannez le code ou ouvrez RÃ©glages, Associer un appareil, et saisissez ces chiffres."
+   "Sur un téléphone connecté à Jularr, scannez le code ou ouvrez Réglages, Associer un appareil, et saisissez ces chiffres."
   ],
   "devices.link.qr": [
    "QR code to pair this device",
@@ -5306,11 +5306,11 @@
   ],
   "devices.pair.code": [
    "Code shown on the device",
-   "Code affichÃ© sur l'appareil"
+   "Code affiché sur l'appareil"
   ],
   "devices.pair.submit": [
    "Pair with this profile",
-   "Associer Ã  ce profil"
+   "Associer à ce profil"
   ],
   "devices.pair.show": [
    "Show the device",
@@ -5318,11 +5318,11 @@
   ],
   "devices.pair.device": [
    "{0} ({1}) asks to be paired with this profile with this code:",
-   "{0} ({1}) demande Ã  Ãªtre associÃ© Ã  ce profil avec ce code :"
+   "{0} ({1}) demande à être associé à ce profil avec ce code :"
   ],
   "devices.pair.warning": [
    "Confirm only if your own device shows exactly this code; whoever holds it signs in as you.",
-   "Ne confirmez que si votre propre appareil affiche exactement ce code ; celui qui le dÃ©tient se connecte en votre nom."
+   "Ne confirmez que si votre propre appareil affiche exactement ce code ; celui qui le détient se connecte en votre nom."
   ],
   "devices.link.start": [
    "Show a pairing code",
@@ -5330,19 +5330,19 @@
   ],
   "devices.pair.done": [
    "The device is paired; it signs in by itself.",
-   "L'appareil est associÃ© ; il se connecte tout seul."
+   "L'appareil est associé ; il se connecte tout seul."
   ],
   "instance.module.Devices": [
    "Pair TVs, phones and apps by code",
-   "Associer des TV, tÃ©lÃ©phones et applications par code"
+   "Associer des TV, téléphones et applications par code"
   ],
   "instance.module.Registration": [
    "Let visitors ask for an account an administrator enables",
-   "Permettre aux visiteurs de demander un compte activÃ© par un administrateur"
+   "Permettre aux visiteurs de demander un compte activé par un administrateur"
   ],
   "account.register.title": [
    "Create an account",
-   "CrÃ©er un compte"
+   "Créer un compte"
   ],
   "account.register.submit": [
    "Ask for an account",
@@ -5350,7 +5350,7 @@
   ],
   "account.register.pending": [
    "Your account waits until an administrator enables it.",
-   "Votre compte attend d'Ãªtre activÃ© par un administrateur."
+   "Votre compte attend d'être activé par un administrateur."
   ],
   "admin.instance.trustedProxies": [
    "Trusted reverse proxies",
@@ -5370,11 +5370,11 @@
   ],
   "library.renameEmpty": [
    "All identified files follow the library layout.",
-   "Tous les fichiers identifiÃ©s suivent l'organisation de la bibliothÃ¨que."
+   "Tous les fichiers identifiés suivent l'organisation de la bibliothèque."
   ],
   "library.renamed": [
    "Files renamed: {0}. Skipped: {1}.",
-   "Fichiers renommÃ©s : {0}. IgnorÃ©s : {1}."
+   "Fichiers renommés : {0}. Ignorés : {1}."
   ],
   "library.file": [
    "File",
@@ -5382,7 +5382,7 @@
   ],
   "library.root": [
    "Library path",
-   "Chemin de la bibliothÃ¨que"
+   "Chemin de la bibliothèque"
   ],
   "library.present": [
    "Available",
@@ -5398,27 +5398,27 @@
   ],
   "library.unmatched": [
    "Not identified",
-   "Non identifiÃ©"
+   "Non identifié"
   ],
   "library.empty": [
    "No files have been scanned yet.",
-   "Aucun fichier n'a encore Ã©tÃ© analysÃ©."
+   "Aucun fichier n'a encore été analysé."
   ],
   "library.emptyUnmatched": [
    "All scanned files are identified.",
-   "Tous les fichiers analysÃ©s sont identifiÃ©s."
+   "Tous les fichiers analysés sont identifiés."
   ],
   "library.newWork": [
    "New work title",
-   "Titre de la nouvelle Å“uvre"
+   "Titre de la nouvelle œuvre"
   ],
   "library.unitType": [
    "Unit",
-   "UnitÃ©"
+   "Unité"
   ],
   "library.unit.None": [
    "Whole work",
-   "Å’uvre entiÃ¨re"
+   "Œuvre entière"
   ],
   "library.unit.Season": [
    "Season",
@@ -5426,7 +5426,7 @@
   ],
   "library.unit.Episode": [
    "Episode",
-   "Ã‰pisode"
+   "Épisode"
   ],
   "library.unit.Volume": [
    "Volume",
@@ -5442,7 +5442,7 @@
   ],
   "library.unitNumber": [
    "Number",
-   "NumÃ©ro"
+   "Numéro"
   ],
   "library.parentNumber.Series": [
    "Season",
@@ -5462,11 +5462,11 @@
   ],
   "library.createAndAssign": [
    "Create work and identify",
-   "CrÃ©er l'Å“uvre et identifier"
+   "Créer l'œuvre et identifier"
   ],
   "library.assignExisting": [
    "Identify as existing work",
-   "Identifier comme Å“uvre existante"
+   "Identifier comme œuvre existante"
   ],
   "library.unassign": [
    "Remove identification",
@@ -5474,11 +5474,11 @@
   ],
   "operation.type.LibraryScan": [
    "Library scan",
-   "Analyse de la bibliothÃ¨que"
+   "Analyse de la bibliothèque"
   ],
   "operation.type.Download": [
    "Download",
-   "TÃ©lÃ©chargement"
+   "Téléchargement"
   ],
   "operation.type.Backup": [
    "Backup",
@@ -5494,15 +5494,15 @@
   ],
   "operation.status.Completed": [
    "Completed",
-   "TerminÃ©e"
+   "Terminée"
   ],
   "operation.status.Failed": [
    "Failed",
-   "Ã‰chouÃ©e"
+   "Échouée"
   ],
   "operation.created": [
    "Queued at",
-   "Mise en attente Ã "
+   "Mise en attente à"
   ],
   "activity.tab.History": [
    "History",
@@ -5510,7 +5510,7 @@
   ],
   "activity.item": [
    "Item",
-   "Ã‰lÃ©ment"
+   "Élément"
   ],
   "activity.progress": [
    "Progress",
@@ -5538,7 +5538,7 @@
   ],
   "activity.state.Downloading": [
    "Downloading",
-   "TÃ©lÃ©chargement en cours"
+   "Téléchargement en cours"
   ],
   "activity.state.Paused": [
    "Paused",
@@ -5546,11 +5546,11 @@
   ],
   "activity.state.PostProcessing": [
    "Unpacking",
-   "DÃ©compression"
+   "Décompression"
   ],
   "activity.retry": [
    "Retry",
-   "RÃ©essayer"
+   "Réessayer"
   ],
   "activity.dismiss": [
    "Dismiss",
@@ -5566,23 +5566,23 @@
   ],
   "activity.continueDownload": [
    "Continue download",
-   "Poursuivre le tÃ©lÃ©chargement"
+   "Poursuivre le téléchargement"
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",
-   "Rien n'est encore terminÃ©."
+   "Rien n'est encore terminé."
   ],
   "details.availability": [
    "Available media",
-   "MÃ©dias disponibles"
+   "Médias disponibles"
   ],
   "details.unit": [
    "Unit",
-   "UnitÃ©"
+   "Unité"
   ],
   "details.quality": [
    "Quality",
-   "QualitÃ©"
+   "Qualité"
   ],
   "details.audio": [
    "Audio",
@@ -5594,7 +5594,7 @@
   ],
   "subtitles.present": [
    "Present:",
-   "PrÃ©sents :"
+   "Présents :"
   ],
   "subtitles.language": [
    "Language",
@@ -5606,7 +5606,7 @@
   ],
   "subtitles.none": [
    "No subtitles found in this language.",
-   "Aucun sous-titre trouvÃ© dans cette langue."
+   "Aucun sous-titre trouvé dans cette langue."
   ],
   "subtitles.provider": [
    "Provider",
@@ -5622,7 +5622,7 @@
   ],
   "subtitles.downloads": [
    "Downloads",
-   "TÃ©lÃ©chargements"
+   "Téléchargements"
   ],
   "subtitles.download": [
    "Use this subtitle",
@@ -5630,19 +5630,19 @@
   ],
   "subtitles.saved": [
    "The subtitle was saved beside the video.",
-   "Le sous-titre a Ã©tÃ© enregistrÃ© Ã  cÃ´tÃ© de la vidÃ©o."
+   "Le sous-titre a été enregistré à côté de la vidéo."
   ],
   "subtitles.exists": [
    "A subtitle of this language is already beside the video.",
-   "Un sous-titre de cette langue se trouve dÃ©jÃ  Ã  cÃ´tÃ© de la vidÃ©o."
+   "Un sous-titre de cette langue se trouve déjà à côté de la vidéo."
   ],
   "details.duration": [
    "Duration",
-   "DurÃ©e"
+   "Durée"
   ],
   "details.wholeWork": [
    "Whole work",
-   "Å’uvre entiÃ¨re"
+   "Œuvre entière"
   ],
   "details.pages": [
    "Version pages",
@@ -5650,7 +5650,7 @@
   ],
   "media.asset.Video": [
    "Video",
-   "VidÃ©o"
+   "Vidéo"
   ],
   "media.asset.Audio": [
    "Audio",
@@ -5658,7 +5658,7 @@
   ],
   "media.asset.Ebook": [
    "E-book",
-   "Livre numÃ©rique"
+   "Livre numérique"
   ],
   "media.asset.Comic": [
    "Comic",
@@ -5682,11 +5682,11 @@
   ],
   "instance.module.Emulation": [
    "Retro games in the browser",
-   "Jeux rÃ©tro dans le navigateur"
+   "Jeux rétro dans le navigateur"
   ],
   "instance.module.UnitGroups": [
    "Named sections for episodes and volumes",
-   "Sections nommÃ©es pour les Ã©pisodes et les tomes"
+   "Sections nommées pour les épisodes et les tomes"
   ],
   "instance.module.ProgressSync": [
    "Share watch progress with Jellyfin and Emby",
@@ -5710,7 +5710,7 @@
   ],
   "unitGroups.to": [
    "To",
-   "Ã€"
+   "À"
   ],
   "unitGroups.fromParent": [
    "From season",
@@ -5718,7 +5718,7 @@
   ],
   "unitGroups.toParent": [
    "To season",
-   "Ã€ la saison"
+   "À la saison"
   ],
   "unitGroups.add": [
    "Add section",
@@ -5738,23 +5738,23 @@
   ],
   "game.saveFailed": [
    "The save could not be stored on the server; it stays in this browser for now.",
-   "La sauvegarde n'a pas pu Ãªtre stockÃ©e sur le serveur ; elle reste pour l'instant dans ce navigateur."
+   "La sauvegarde n'a pas pu être stockée sur le serveur ; elle reste pour l'instant dans ce navigateur."
   ],
   "game.stateSaved": [
    "State saved to your profile",
-   "Ã‰tat enregistrÃ© dans votre profil"
+   "État enregistré dans votre profil"
   ],
   "game.stateMissing": [
    "No saved state yet",
-   "Aucun Ã©tat enregistrÃ© pour le moment"
+   "Aucun état enregistré pour le moment"
   ],
   "game.playedMinutes": [
    "Played {0} min",
-   "JouÃ© {0} min"
+   "Joué {0} min"
   ],
   "game.playedHours": [
    "Played {0} h {1} min",
-   "JouÃ© {0} h {1} min"
+   "Joué {0} h {1} min"
   ],
   "player.play": [
    "Play",
@@ -5770,7 +5770,7 @@
   ],
   "player.previous": [
    "Previous",
-   "PrÃ©cÃ©dent"
+   "Précédent"
   ],
   "player.next": [
    "Next",
@@ -5802,7 +5802,7 @@
   ],
   "player.minimize": [
    "Minimize",
-   "RÃ©duire"
+   "Réduire"
   ],
   "player.expand": [
    "Open full player",
@@ -5810,7 +5810,7 @@
   ],
   "player.stop": [
    "Stop playback",
-   "ArrÃªter la lecture"
+   "Arrêter la lecture"
   ],
   "player.subtitles": [
    "Subtitles",
@@ -5818,11 +5818,11 @@
   ],
   "player.subtitles.off": [
    "Off",
-   "DÃ©sactivÃ©s"
+   "Désactivés"
   ],
   "player.subtitles.forced": [
    "forced",
-   "forcÃ©s"
+   "forcés"
   ],
   "player.track.unknown": [
    "Track",
@@ -5834,7 +5834,7 @@
   ],
   "player.channels.stereo": [
    "Stereo",
-   "StÃ©rÃ©o"
+   "Stéréo"
   ],
   "player.channels.count": [
    "{0} channels",
@@ -5850,7 +5850,7 @@
   ],
   "player.fullscreen": [
    "Fullscreen",
-   "Plein Ã©cran"
+   "Plein écran"
   ],
   "player.more": [
    "More",
@@ -5874,7 +5874,7 @@
   ],
   "player.status.storage_waking": [
    "The storage device is waking up. Playback starts automatically when it is ready.",
-   "L'appareil de stockage se rÃ©veille. La lecture dÃ©marre automatiquement dÃ¨s qu'il est prÃªt."
+   "L'appareil de stockage se réveille. La lecture démarre automatiquement dès qu'il est prêt."
   ],
   "player.status.storage_unavailable": [
    "The storage holding this file is unavailable.",
@@ -5886,11 +5886,11 @@
   ],
   "player.status.not_found": [
    "This media is no longer available.",
-   "Ce mÃ©dia n'est plus disponible."
+   "Ce média n'est plus disponible."
   ],
   "player.status.failed": [
    "Playback could not be started.",
-   "La lecture n'a pas pu dÃ©marrer."
+   "La lecture n'a pas pu démarrer."
   ],
   "details.play": [
    "Play",
@@ -5902,7 +5902,7 @@
   ],
   "details.resume": [
    "Continue at",
-   "Reprendre Ã "
+   "Reprendre à"
   ],
   "common.back": [
    "Back",
@@ -5922,19 +5922,19 @@
   ],
   "media.type": [
    "Media type",
-   "Type de mÃ©dia"
+   "Type de média"
   ],
   "media.year": [
    "Year",
-   "AnnÃ©e"
+   "Année"
   ],
   "admin.works.searchMetadata": [
    "Search metadata",
-   "Rechercher des mÃ©tadonnÃ©es"
+   "Rechercher des métadonnées"
   ],
   "admin.works.noMetadata": [
    "No match found.",
-   "Aucune correspondance trouvÃ©e."
+   "Aucune correspondance trouvée."
   ],
   "admin.works.originalTitle": [
    "Original title",
@@ -5946,7 +5946,7 @@
   ],
   "admin.work.refreshMetadata": [
    "Update from the provider",
-   "Mettre Ã  jour depuis le fournisseur"
+   "Mettre à jour depuis le fournisseur"
   ],
   "admin.work.match": [
    "Wrong match",
@@ -5962,7 +5962,7 @@
   ],
   "admin.providers.secret": [
    "API key or read access token",
-   "ClÃ© API ou jeton d'accÃ¨s en lecture"
+   "Clé API ou jeton d'accès en lecture"
   ],
   "admin.providers.clientId": [
    "Twitch application client ID",
@@ -5974,19 +5974,19 @@
   ],
   "admin.providers.secretSet": [
    "A key is stored.",
-   "Une clÃ© est enregistrÃ©e."
+   "Une clé est enregistrée."
   ],
   "admin.providers.secretMissing": [
    "No key is stored.",
-   "Aucune clÃ© n'est enregistrÃ©e."
+   "Aucune clé n'est enregistrée."
   ],
   "media.create": [
    "Create work",
-   "CrÃ©er l'Å“uvre"
+   "Créer l'œuvre"
   ],
   "media.empty": [
    "No works have been added yet.",
-   "Aucune Å“uvre n'a encore Ã©tÃ© ajoutÃ©e."
+   "Aucune œuvre n'a encore été ajoutée."
   ],
   "media.type.Movie": [
    "Movie",
@@ -5994,7 +5994,7 @@
   ],
   "media.type.Series": [
    "Series",
-   "SÃ©rie"
+   "Série"
   ],
   "media.type.Book": [
    "Book",
@@ -6030,11 +6030,11 @@
   ],
   "media.watchlist.add": [
    "Add to watchlist",
-   "Ajouter Ã  la liste de suivi"
+   "Ajouter à la liste de suivi"
   ],
   "media.watchlist.manage": [
    "Manage watchlist in Details",
-   "GÃ©rer la liste de suivi dans DÃ©tails"
+   "Gérer la liste de suivi dans Détails"
   ],
   "media.watchlist.remove": [
    "Remove from watchlist",
@@ -6046,7 +6046,7 @@
   ],
   "errors.invalid_data": [
    "Please check the supplied values.",
-   "Veuillez vÃ©rifier les valeurs saisies."
+   "Veuillez vérifier les valeurs saisies."
   ],
   "errors.authentication_required": [
    "Please sign in to continue.",
@@ -6058,15 +6058,15 @@
   ],
   "errors.not_found": [
    "The requested resource was not found.",
-   "La ressource demandÃ©e est introuvable."
+   "La ressource demandée est introuvable."
   ],
   "errors.invalid_antiforgery_token": [
    "Please reload the page and try again.",
-   "Veuillez recharger la page et rÃ©essayer."
+   "Veuillez recharger la page et réessayer."
   ],
   "errors.invalid_request": [
    "The request could not be processed.",
-   "La requÃªte n'a pas pu Ãªtre traitÃ©e."
+   "La requête n'a pas pu être traitée."
   ],
   "errors.provider_unavailable": [
    "The external provider is currently unavailable.",
@@ -6074,75 +6074,75 @@
   ],
   "errors.storage_unavailable": [
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
-   "Le stockage est inaccessible. VÃ©rifiez que le NAS est allumÃ© et que le partage est montÃ©."
+   "Le stockage est inaccessible. Vérifiez que le NAS est allumé et que le partage est monté."
   ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
-   "L'appareil de stockage se rÃ©veille. Veuillez rÃ©essayer dans un instant."
+   "L'appareil de stockage se réveille. Veuillez réessayer dans un instant."
   ],
   "errors.playback_conversion_unavailable": [
    "This file cannot be played directly, and conversion is not available yet.",
-   "Ce fichier ne peut pas Ãªtre lu directement, et la conversion n'est pas encore disponible."
+   "Ce fichier ne peut pas être lu directement, et la conversion n'est pas encore disponible."
   ],
   "errors.playback_conversion_failed": [
    "The media conversion failed. Please try again.",
-   "La conversion du mÃ©dia a Ã©chouÃ©. Veuillez rÃ©essayer."
+   "La conversion du média a échoué. Veuillez réessayer."
   ],
   "errors.playback_subtitle_unavailable": [
    "This subtitle cannot be shown.",
-   "Ce sous-titre ne peut pas Ãªtre affichÃ©."
+   "Ce sous-titre ne peut pas être affiché."
   ],
   "errors.playback_capacity_exhausted": [
    "The server is converting as many streams as it allows. Please try again shortly.",
-   "Le serveur convertit dÃ©jÃ  le maximum de flux autorisÃ©. Veuillez rÃ©essayer dans un instant."
+   "Le serveur convertit déjà le maximum de flux autorisé. Veuillez réessayer dans un instant."
   ],
   "errors.storage_wake_failed": [
    "The Wake-on-LAN packet could not be sent.",
-   "Le paquet Wake-on-LAN n'a pas pu Ãªtre envoyÃ©."
+   "Le paquet Wake-on-LAN n'a pas pu être envoyé."
   ],
   "errors.scan_incomplete": [
    "Some folders could not be read. Nothing was marked as missing.",
-   "Certains dossiers n'ont pas pu Ãªtre lus. Rien n'a Ã©tÃ© marquÃ© comme manquant."
+   "Certains dossiers n'ont pas pu être lus. Rien n'a été marqué comme manquant."
   ],
   "errors.synology_unavailable": [
    "The Synology NAS could not be reached at its DSM address.",
-   "Le NAS Synology est injoignable Ã  son adresse DSM."
+   "Le NAS Synology est injoignable à son adresse DSM."
   ],
   "errors.synology_certificate_untrusted": [
    "The NAS presents a certificate nobody vouches for.",
-   "Le NAS prÃ©sente un certificat dont personne ne se porte garant."
+   "Le NAS présente un certificat dont personne ne se porte garant."
   ],
   "errors.synology_login_failed": [
    "DSM rejected the account or password.",
-   "DSM a refusÃ© le compte ou le mot de passe."
+   "DSM a refusé le compte ou le mot de passe."
   ],
   "errors.synology_two_factor": [
    "This DSM account uses two-step verification; use an administrator account without it.",
-   "Ce compte DSM utilise la validation en deux Ã©tapes ; utilisez un compte administrateur sans elle."
+   "Ce compte DSM utilise la validation en deux étapes ; utilisez un compte administrateur sans elle."
   ],
   "errors.synology_not_admin": [
    "This DSM account may not read health or change power; use an administrator account.",
-   "Ce compte DSM ne peut ni lire l'Ã©tat de santÃ© ni modifier l'alimentation ; utilisez un compte administrateur."
+   "Ce compte DSM ne peut ni lire l'état de santé ni modifier l'alimentation ; utilisez un compte administrateur."
   ],
   "errors.synology_blocked": [
    "DSM blocks Jularr's address after failed logins; unblock it in DSM.",
-   "DSM bloque l'adresse de Jularr aprÃ¨s des connexions Ã©chouÃ©es ; dÃ©bloquez-la dans DSM."
+   "DSM bloque l'adresse de Jularr après des connexions échouées ; débloquez-la dans DSM."
   ],
   "errors.backup_unavailable": [
    "Backups need pg_dump and pg_restore, which this server does not have.",
-   "Les sauvegardes nÃ©cessitent pg_dump et pg_restore, absents de ce serveur."
+   "Les sauvegardes nécessitent pg_dump et pg_restore, absents de ce serveur."
   ],
   "errors.backup_failed": [
    "The backup tool did not finish. The server log has its message.",
-   "L'outil de sauvegarde ne s'est pas terminÃ©. Son message figure dans le journal du serveur."
+   "L'outil de sauvegarde ne s'est pas terminé. Son message figure dans le journal du serveur."
   ],
   "errors.backup_tool_missing": [
    "pg_dump or pg_restore was not found at the configured path.",
-   "pg_dump ou pg_restore est introuvable au chemin configurÃ©."
+   "pg_dump ou pg_restore est introuvable au chemin configuré."
   ],
   "errors.backup_auth_failed": [
    "PostgreSQL refused the database login of the backup tool.",
-   "PostgreSQL a refusÃ© la connexion Ã  la base de donnÃ©es de l'outil de sauvegarde."
+   "PostgreSQL a refusé la connexion à la base de données de l'outil de sauvegarde."
   ],
   "errors.backup_version_mismatch": [
    "pg_dump or pg_restore is older than the PostgreSQL server.",
@@ -6154,31 +6154,31 @@
   ],
   "errors.backup_timeout": [
    "The backup tool ran too long and was stopped.",
-   "L'outil de sauvegarde a durÃ© trop longtemps et a Ã©tÃ© arrÃªtÃ©."
+   "L'outil de sauvegarde a duré trop longtemps et a été arrêté."
   ],
   "errors.backup_running": [
    "A restore is already running.",
-   "Une restauration est dÃ©jÃ  en cours."
+   "Une restauration est déjà en cours."
   ],
   "errors.metadata_unavailable": [
    "The metadata source is not configured or cannot be reached.",
-   "La source de mÃ©tadonnÃ©es n'est pas configurÃ©e ou est injoignable."
+   "La source de métadonnées n'est pas configurée ou est injoignable."
   ],
   "errors.metadata_authentication_failed": [
    "TMDB rejected the stored key.",
-   "TMDB a refusÃ© la clÃ© enregistrÃ©e."
+   "TMDB a refusé la clé enregistrée."
   ],
   "errors.metadata_rate_limited": [
    "TMDB limits requests right now. Please try again shortly.",
-   "TMDB limite actuellement les requÃªtes. Veuillez rÃ©essayer dans un instant."
+   "TMDB limite actuellement les requêtes. Veuillez réessayer dans un instant."
   ],
   "errors.reading_unavailable": [
    "This book is not saved for reading while its storage is offline.",
-   "Ce livre n'est pas enregistrÃ© pour la lecture tant que son stockage est hors ligne."
+   "Ce livre n'est pas enregistré pour la lecture tant que son stockage est hors ligne."
   ],
   "errors.reading_invalid_file": [
    "This book file cannot be opened.",
-   "Ce fichier de livre ne peut pas Ãªtre ouvert."
+   "Ce fichier de livre ne peut pas être ouvert."
   ],
   "errors.translation_unavailable": [
    "Translation files cannot be fetched right now; the book stays in its language.",
@@ -6186,7 +6186,7 @@
   ],
   "errors.reading_pdf_without_text": [
    "This PDF holds scanned pages without text; it opens as a PDF.",
-   "Ce PDF contient des pages numÃ©risÃ©es sans texte ; il s'ouvre en PDF."
+   "Ce PDF contient des pages numérisées sans texte ; il s'ouvre en PDF."
   ],
   "errors.reading_translation_incomplete": [
    "This book is not translated into that language in every section yet.",
@@ -6194,15 +6194,15 @@
   ],
   "errors.reading_pdf_recognizing": [
    "The scanned pages are being turned into text; until then the book opens as a PDF.",
-   "Les pages numÃ©risÃ©es sont en cours de conversion en texte ; d'ici lÃ , le livre s'ouvre en PDF."
+   "Les pages numérisées sont en cours de conversion en texte ; d'ici là, le livre s'ouvre en PDF."
   ],
   "errors.ocr_unavailable": [
    "The text recognition models cannot be fetched right now.",
-   "Les modÃ¨les de reconnaissance de texte ne peuvent pas Ãªtre tÃ©lÃ©chargÃ©s pour le moment."
+   "Les modèles de reconnaissance de texte ne peuvent pas être téléchargés pour le moment."
   ],
   "errors.reading_unsupported": [
    "This comic needs 7-Zip, which is not configured on the server.",
-   "Cette BD nÃ©cessite 7-Zip, qui n'est pas configurÃ© sur le serveur."
+   "Cette BD nécessite 7-Zip, qui n'est pas configuré sur le serveur."
   ],
   "errors.plex_unavailable": [
    "The Plex server could not be reached.",
@@ -6210,71 +6210,71 @@
   ],
   "errors.plex_authentication_failed": [
    "The Plex server rejected the token.",
-   "Le serveur Plex a refusÃ© le jeton."
+   "Le serveur Plex a refusé le jeton."
   ],
   "errors.plex_invalid_response": [
    "The Plex server returned an invalid response.",
-   "Le serveur Plex a renvoyÃ© une rÃ©ponse non valide."
+   "Le serveur Plex a renvoyé une réponse non valide."
   ],
   "errors.media_server_unavailable": [
    "The media server could not be reached.",
-   "Le serveur multimÃ©dia est injoignable."
+   "Le serveur multimédia est injoignable."
   ],
   "errors.media_server_authentication_failed": [
    "The media server refused the API key.",
-   "Le serveur multimÃ©dia a refusÃ© la clÃ© API."
+   "Le serveur multimédia a refusé la clé API."
   ],
   "errors.media_server_invalid_response": [
    "The media server returned an invalid response.",
-   "Le serveur multimÃ©dia a renvoyÃ© une rÃ©ponse non valide."
+   "Le serveur multimédia a renvoyé une réponse non valide."
   ],
   "errors.media_server_outdated": [
    "Jellyfin 10.9 or newer is needed.",
-   "Jellyfin 10.9 ou plus rÃ©cent est requis."
+   "Jellyfin 10.9 ou plus récent est requis."
   ],
   "errors.device_pairing_busy": [
    "No pairing code is free right now; try again in a minute.",
-   "Aucun code d'association n'est libre pour le moment ; rÃ©essayez dans une minute."
+   "Aucun code d'association n'est libre pour le moment ; réessayez dans une minute."
   ],
   "errors.device_pairing_attempts": [
    "Too many wrong codes; try again in ten minutes.",
-   "Trop de codes erronÃ©s ; rÃ©essayez dans dix minutes."
+   "Trop de codes erronés ; réessayez dans dix minutes."
   ],
   "errors.validation.invalid_code": [
    "This code is unknown or has expired.",
-   "Ce code est inconnu ou a expirÃ©."
+   "Ce code est inconnu ou a expiré."
   ],
   "errors.validation.translation_mismatch": [
    "The translation does not fit this section.",
-   "La traduction ne correspond pas Ã  cette section."
+   "La traduction ne correspond pas à cette section."
   ],
   "errors.validation.indexer_removed": [
    "The indexer of this release was removed; search again.",
-   "L'indexeur de cette release a Ã©tÃ© supprimÃ© ; relancez la recherche."
+   "L'indexeur de cette release a été supprimé ; relancez la recherche."
   ],
   "errors.validation.invalid_network": [
    "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8.",
-   "Saisissez des adresses IP ou des rÃ©seaux comme 192.168.1.10 ou 10.0.0.0/8."
+   "Saisissez des adresses IP ou des réseaux comme 192.168.1.10 ou 10.0.0.0/8."
   ],
   "errors.validation.pairing_expired": [
    "This code has expired; show a new code on the device.",
-   "Ce code a expirÃ© ; affichez un nouveau code sur l'appareil."
+   "Ce code a expiré ; affichez un nouveau code sur l'appareil."
   ],
   "errors.acquisition_unavailable": [
    "The indexer or download client could not be reached.",
-   "L'indexeur ou le client de tÃ©lÃ©chargement est injoignable."
+   "L'indexeur ou le client de téléchargement est injoignable."
   ],
   "errors.acquisition_authentication_failed": [
    "The indexer or download client rejected the API key.",
-   "L'indexeur ou le client de tÃ©lÃ©chargement a refusÃ© la clÃ© API."
+   "L'indexeur ou le client de téléchargement a refusé la clé API."
   ],
   "errors.acquisition_rate_limited": [
    "The indexer limits requests right now. Please try again later.",
-   "L'indexeur limite actuellement les requÃªtes. Veuillez rÃ©essayer plus tard."
+   "L'indexeur limite actuellement les requêtes. Veuillez réessayer plus tard."
   ],
   "errors.acquisition_limit_reached": [
    "The indexer's daily grab limit is reached.",
-   "La limite quotidienne de rÃ©cupÃ©rations de l'indexeur est atteinte."
+   "La limite quotidienne de récupérations de l'indexeur est atteinte."
   ],
   "errors.acquisition_query_limit_reached": [
    "The indexer's daily query limit is reached.",
@@ -6282,23 +6282,23 @@
   ],
   "errors.acquisition_invalid_response": [
    "The indexer or download client returned an invalid response.",
-   "L'indexeur ou le client de tÃ©lÃ©chargement a renvoyÃ© une rÃ©ponse non valide."
+   "L'indexeur ou le client de téléchargement a renvoyé une réponse non valide."
   ],
   "errors.acquisition_download_path_unconfigured": [
    "Download workspace is not configured or is unavailable",
-   "Le dossier temporaire des tÃ©lÃ©chargements n'est pas configurÃ© ou est indisponible"
+   "Le dossier temporaire des téléchargements n'est pas configuré ou est indisponible"
   ],
   "errors.acquisition_no_download_client": [
    "No enabled download client is configured.",
-   "Aucun client de tÃ©lÃ©chargement activÃ© n'est configurÃ©."
+   "Aucun client de téléchargement activé n'est configuré."
   ],
   "errors.acquisition_grab_failed": [
    "The download client did not accept the release.",
-   "Le client de tÃ©lÃ©chargement n'a pas acceptÃ© la release."
+   "Le client de téléchargement n'a pas accepté la release."
   ],
   "errors.concurrent_change": [
    "Another change was made at the same time. Please reload and try again.",
-   "Une autre modification a Ã©tÃ© effectuÃ©e en mÃªme temps. Veuillez recharger et rÃ©essayer."
+   "Une autre modification a été effectuée en même temps. Veuillez recharger et réessayer."
   ],
   "errors.internal_error": [
    "An unknown error occurred.",
@@ -6306,11 +6306,11 @@
   ],
   "errors.import_no_library": [
    "No writable library of this kind exists.",
-   "Il n'existe aucune bibliothÃ¨que accessible en Ã©criture de ce type."
+   "Il n'existe aucune bibliothèque accessible en écriture de ce type."
   ],
   "errors.rate_limit_exceeded": [
    "Too many requests. Please try again later.",
-   "Trop de requÃªtes. Veuillez rÃ©essayer plus tard."
+   "Trop de requêtes. Veuillez réessayer plus tard."
   ],
   "errors.validation.required": [
    "A value is required.",
@@ -6322,7 +6322,7 @@
   ],
   "errors.validation.out_of_range": [
    "The value is outside the allowed range.",
-   "La valeur est en dehors de la plage autorisÃ©e."
+   "La valeur est en dehors de la plage autorisée."
   ],
   "errors.validation.invalid_uuid": [
    "The identifier is invalid.",
@@ -6330,7 +6330,7 @@
   ],
   "errors.validation.invalid_text": [
    "The text contains invalid characters.",
-   "Le texte contient des caractÃ¨res non valides."
+   "Le texte contient des caractères non valides."
   ],
   "errors.validation.too_short": [
    "The value is too short.",
@@ -6358,11 +6358,11 @@
   ],
   "errors.validation.invalid_host": [
    "Please enter a hostname or IPv4 address without a scheme or path.",
-   "Veuillez saisir un nom d'hÃ´te ou une adresse IPv4 sans schÃ©ma ni chemin."
+   "Veuillez saisir un nom d'hôte ou une adresse IPv4 sans schéma ni chemin."
   ],
   "errors.validation.invalid_path": [
    "Please enter a path without traversal segments.",
-   "Veuillez saisir un chemin sans segments de remontÃ©e."
+   "Veuillez saisir un chemin sans segments de remontée."
   ],
   "errors.validation.invalid_mac_address": [
    "Please enter a MAC address such as 00:11:22:AA:BB:CC.",
@@ -6370,11 +6370,11 @@
   ],
   "errors.validation.overlapping_path": [
    "This path overlaps another library path on the same connection.",
-   "Ce chemin chevauche un autre chemin de bibliothÃ¨que de la mÃªme connexion."
+   "Ce chemin chevauche un autre chemin de bibliothèque de la même connexion."
   ],
   "errors.validation.in_use": [
    "This item is still in use.",
-   "Cet Ã©lÃ©ment est encore utilisÃ©."
+   "Cet élément est encore utilisé."
   ],
   "errors.validation.invalid_pin": [
    "The PIN is incorrect.",
@@ -6386,27 +6386,27 @@
   ],
   "errors.validation.request_media_blocked": [
    "Your request rule does not allow this kind of media.",
-   "Votre rÃ¨gle de demande n'autorise pas ce type de mÃ©dia."
+   "Votre règle de demande n'autorise pas ce type de média."
   ],
   "errors.validation.profile_limit": [
    "An account can own up to ten profiles.",
-   "Un compte peut possÃ©der jusqu'Ã  dix profils."
+   "Un compte peut posséder jusqu'à dix profils."
   ],
   "errors.validation.invalid_pin_format": [
    "The PIN must have three to six digits.",
-   "Le code PIN doit comporter trois Ã  six chiffres."
+   "Le code PIN doit comporter trois à six chiffres."
   ],
   "errors.validation.pin_locked": [
    "Too many incorrect PINs. Please try again in a minute.",
-   "Trop de codes PIN incorrects. Veuillez rÃ©essayer dans une minute."
+   "Trop de codes PIN incorrects. Veuillez réessayer dans une minute."
   ],
   "errors.validation.duplicate_value": [
    "This value is already in use.",
-   "Cette valeur est dÃ©jÃ  utilisÃ©e."
+   "Cette valeur est déjà utilisée."
   ],
   "errors.validation.collection_limit": [
    "This profile has as many collections as the Admin allows.",
-   "Ce profil a atteint le nombre de collections autorisÃ© par l'administrateur."
+   "Ce profil a atteint le nombre de collections autorisé par l'administrateur."
   ],
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
@@ -6414,27 +6414,27 @@
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",
-   "Ces unitÃ©s appartiennent dÃ©jÃ  Ã  une autre section."
+   "Ces unités appartiennent déjà à une autre section."
   ],
   "errors.validation.group_limit": [
    "This title has as many sections as the Admin allows.",
-   "Ce titre a atteint le nombre de sections autorisÃ© par l'administrateur."
+   "Ce titre a atteint le nombre de sections autorisé par l'administrateur."
   ],
   "errors.validation.utc_required": [
    "The timestamp must use UTC.",
-   "L'horodatage doit Ãªtre en UTC."
+   "L'horodatage doit être en UTC."
   ],
   "errors.validation.unknown_catalog_value": [
    "The selection is invalid.",
-   "La sÃ©lection n'est pas valide."
+   "La sélection n'est pas valide."
   ],
   "errors.validation.unknown_reference": [
    "The referenced resource is unavailable.",
-   "La ressource rÃ©fÃ©rencÃ©e est indisponible."
+   "La ressource référencée est indisponible."
   ],
   "errors.validation.outdated_version": [
    "The data has changed. Please reload and try again.",
-   "Les donnÃ©es ont changÃ©. Veuillez recharger et rÃ©essayer."
+   "Les données ont changé. Veuillez recharger et réessayer."
   ],
   "errors.validation.invalid_transition": [
    "This change is not available.",
@@ -6442,11 +6442,11 @@
   ],
   "errors.validation.invalid_file_type": [
    "This kind of file is not accepted here.",
-   "Ce type de fichier n'est pas acceptÃ© ici."
+   "Ce type de fichier n'est pas accepté ici."
   ],
   "errors.validation.invalid_value": [
    "This value cannot be used here.",
-   "Cette valeur ne peut pas Ãªtre utilisÃ©e ici."
+   "Cette valeur ne peut pas être utilisée ici."
   ],
   "errors.validation.unknown_language": [
    "Use two-letter language codes such as de or en.",
@@ -6454,15 +6454,15 @@
   ],
   "errors.validation.backup_passphrase": [
    "The passphrase does not open this backup's key ring.",
-   "La phrase secrÃ¨te n'ouvre pas le trousseau de clÃ©s de cette sauvegarde."
+   "La phrase secrète n'ouvre pas le trousseau de clés de cette sauvegarde."
   ],
   "errors.validation.naming_unknown_token": [
    "The pattern uses an unknown placeholder.",
-   "Le modÃ¨le utilise une variable inconnue."
+   "Le modèle utilise une variable inconnue."
   ],
   "errors.validation.naming_incomplete": [
    "The pattern needs the title, and for episodes the season and episode.",
-   "Le modÃ¨le nÃ©cessite le titre et, pour les Ã©pisodes, la saison et l'Ã©pisode."
+   "Le modèle nécessite le titre et, pour les épisodes, la saison et l'épisode."
   ],
   "errors.validation.naming_needs_release_token": [
    "Several releases need {Quality}, {Release Group} or {Edition} in every file name.",
@@ -6470,19 +6470,19 @@
   ],
   "errors.validation.naming_invalid_path": [
    "Each folder of the pattern needs a name.",
-   "Chaque dossier du modÃ¨le doit avoir un nom."
+   "Chaque dossier du modèle doit avoir un nom."
   ],
   "errors.validation.setup_completed": [
    "Only an instance that has not finished setup can be replaced by a backup.",
-   "Seule une instance dont la configuration n'est pas terminÃ©e peut Ãªtre remplacÃ©e par une sauvegarde."
+   "Seule une instance dont la configuration n'est pas terminée peut être remplacée par une sauvegarde."
   ],
   "errors.validation.backup_incompatible": [
    "This backup belongs to another Jularr version.",
-   "Cette sauvegarde appartient Ã  une autre version de Jularr."
+   "Cette sauvegarde appartient à une autre version de Jularr."
   ],
   "errors.validation.library_rename_changed": [
    "The library changed since the preview. Please check the new preview.",
-   "La bibliothÃ¨que a changÃ© depuis l'aperÃ§u. Veuillez consulter le nouvel aperÃ§u."
+   "La bibliothèque a changé depuis l'aperçu. Veuillez consulter le nouvel aperçu."
   ],
   "errors.validation.invalid_placeholders": [
    "The translation must preserve its placeholders.",
@@ -6490,19 +6490,19 @@
   ],
   "errors.validation.unknown_id": [
    "The referenced item is unavailable.",
-   "L'Ã©lÃ©ment rÃ©fÃ©rencÃ© est indisponible."
+   "L'élément référencé est indisponible."
   ],
   "errors.validation.duplicate_id": [
    "The item was supplied more than once.",
-   "L'Ã©lÃ©ment a Ã©tÃ© fourni plusieurs fois."
+   "L'élément a été fourni plusieurs fois."
   ],
   "errors.validation.unknown_or_duplicate_id": [
    "The item is unavailable or was supplied more than once.",
-   "L'Ã©lÃ©ment est indisponible ou a Ã©tÃ© fourni plusieurs fois."
+   "L'élément est indisponible ou a été fourni plusieurs fois."
   ],
   "storage.check": [
    "Check now",
-   "VÃ©rifier maintenant"
+   "Vérifier maintenant"
   ],
   "storage.volume.title": [
    "Docker volume",
@@ -6510,11 +6510,11 @@
   ],
   "storage.volume.info": [
    "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
-   "Ajoutez ces lignes Ã  compose.yaml et redÃ©marrez le conteneur. Un mot de passe SMB va dans .env sous la variable qui y est nommÃ©e, chaque virgule Ã©crite deux fois. Docker monte le partage au dÃ©marrage du conteneur : le NAS doit alors Ãªtre allumÃ©."
+   "Ajoutez ces lignes à compose.yaml et redémarrez le conteneur. Un mot de passe SMB va dans .env sous la variable qui y est nommée, chaque virgule écrite deux fois. Docker monte le partage au démarrage du conteneur : le NAS doit alors être allumé."
   ],
   "storage.reach": [
    "Connected by",
-   "ConnectÃ© par"
+   "Connecté par"
   ],
   "storage.reach.direct": [
    "Jularr",
@@ -6526,11 +6526,11 @@
   ],
   "hint.StorageMountFields.IsVolume.info": [
    "Jularr opens the share only when needed, so a NAS may sleep. A Docker volume is mounted when the container starts and needs lines in compose.yaml.",
-   "Jularr n'ouvre le partage qu'au besoin, le NAS peut donc se mettre en veille. Un volume Docker est montÃ© au dÃ©marrage du conteneur et demande des lignes dans compose.yaml."
+   "Jularr n'ouvre le partage qu'au besoin, le NAS peut donc se mettre en veille. Un volume Docker est monté au démarrage du conteneur et demande des lignes dans compose.yaml."
   ],
   "setup.step.Owner": [
    "Owner & language",
-   "PropriÃ©taire et langue"
+   "Propriétaire et langue"
   ],
   "setup.step.Sources": [
    "Sources",
@@ -6546,7 +6546,7 @@
   ],
   "setup.presets": [
    "Module presets",
-   "PrÃ©rÃ©glages des modules"
+   "Préréglages des modules"
   ],
   "setup.locale.machine": [
    "{0} (machine translated)",
@@ -6558,7 +6558,7 @@
   ],
   "setup.preset.mediaServer": [
    "Media server",
-   "Serveur multimÃ©dia"
+   "Serveur multimédia"
   ],
   "setup.preset.requests": [
    "Requests",
@@ -6566,11 +6566,11 @@
   ],
   "setup.modules.media": [
    "Media",
-   "MÃ©dias"
+   "Médias"
   ],
   "setup.modules.requests": [
    "Requests & downloads",
-   "Demandes et tÃ©lÃ©chargements"
+   "Demandes et téléchargements"
   ],
   "setup.modules.personal": [
    "Profiles & personal features",
@@ -6582,19 +6582,19 @@
   ],
   "setup.sources.metadata": [
    "Metadata",
-   "MÃ©tadonnÃ©es"
+   "Métadonnées"
   ],
   "setup.sources.tmdbKey": [
    "TMDB API key",
-   "ClÃ© API TMDB"
+   "Clé API TMDB"
   ],
   "setup.sources.tmdbAccount": [
    "Get a TMDB API key",
-   "Obtenir une clÃ© API TMDB"
+   "Obtenir une clé API TMDB"
   ],
   "setup.sources.acquisition": [
    "Search & downloads",
-   "Recherche et tÃ©lÃ©chargements"
+   "Recherche et téléchargements"
   ],
   "setup.sources.providers": [
    "Provider connections",
@@ -6606,15 +6606,15 @@
   ],
   "arr.settings": [
    "Arr+ settings",
-   "ParamÃ¨tres Arr+"
+   "Paramètres Arr+"
   ],
   "arr.formats": [
    "Custom formats",
-   "Formats personnalisÃ©s"
+   "Formats personnalisés"
   ],
   "arr.sizes": [
    "Quality sizes",
-   "Tailles par qualitÃ©"
+   "Tailles par qualité"
   ],
   "arr.releaseProfiles": [
    "Release profiles",
@@ -6622,11 +6622,11 @@
   ],
   "arr.tags": [
    "Tags",
-   "Ã‰tiquettes"
+   "Étiquettes"
   ],
   "arr.qualityGroups": [
    "Quality groups",
-   "Groupes de qualitÃ©s"
+   "Groupes de qualités"
   ],
   "arr.refreshGroups": [
    "Apply group changes",
@@ -6638,7 +6638,7 @@
   ],
   "arr.cutoffScore": [
    "Upgrade until this format score",
-   "Mettre Ã  niveau jusqu'Ã  ce score"
+   "Mettre à niveau jusqu'à ce score"
   ],
   "arr.upgradeScore": [
    "Minimum score increase",
@@ -6682,7 +6682,7 @@
   ],
   "arr.resolution": [
    "Resolution",
-   "RÃ©solution"
+   "Résolution"
   ],
   "arr.minimum": [
    "Minimum",
@@ -6698,7 +6698,7 @@
   ],
   "arr.removeCondition": [
    "Remove last condition",
-   "Supprimer la derniÃ¨re condition"
+   "Supprimer la dernière condition"
   ],
   "arr.importJson": [
    "Sonarr, Radarr or TRaSH JSON",
@@ -6714,7 +6714,7 @@
   ],
   "arr.preferredMb": [
    "Preferred (MB/min)",
-   "PrÃ©fÃ©rÃ© (Mo/min)"
+   "Préféré (Mo/min)"
   ],
   "arr.maximumMb": [
    "Maximum (MB/min)",
@@ -6734,7 +6734,7 @@
   ],
   "arr.condition.Edition": [
    "Edition",
-   "Ã‰dition"
+   "Édition"
   ],
   "arr.condition.Language": [
    "Language",
@@ -6750,11 +6750,11 @@
   ],
   "arr.condition.Resolution": [
    "Resolution",
-   "RÃ©solution"
+   "Résolution"
   ],
   "arr.condition.QualityModifier": [
    "Quality modifier",
-   "Modificateur de qualitÃ©"
+   "Modificateur de qualité"
   ],
   "arr.condition.IndexerFlag": [
    "Indexer flag",
@@ -6770,11 +6770,11 @@
   ],
   "arr.condition.Year": [
    "Year",
-   "AnnÃ©e"
+   "Année"
   ],
   "takeover.outcome.takeover_profile_unsupported": [
    "Profile needs review before importing titles",
-   "VÃ©rifier le profil avant les titres"
+   "Vérifier le profil avant les titres"
   ],
   "arr.terms.info": [
    "One term per line. Patterns use /expression/i.",
@@ -6782,7 +6782,7 @@
   ],
   "arr.condition.info": [
    "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",
-   "Utilisez un motif pour titres, Ã©ditions et groupes ; un code Ã  deux lettres ou original, any, unknown pour les langues. Sources et modificateurs suivent Sonarr ou Radarr. RÃ©solution numÃ©rique ; taille et annÃ©e par limites."
+   "Utilisez un motif pour titres, éditions et groupes ; un code à deux lettres ou original, any, unknown pour les langues. Sources et modificateurs suivent Sonarr ou Radarr. Résolution numérique ; taille et année par limites."
   ],
   "common.remove": [
    "Remove",
@@ -6790,15 +6790,15 @@
   ],
   "acquisition.reason.SizeBelowQualityMinimum": [
    "Below the minimum size for this quality",
-   "Sous la taille minimale de cette qualitÃ©"
+   "Sous la taille minimale de cette qualité"
   ],
   "acquisition.reason.SizeAboveQualityMaximum": [
    "Above the maximum size for this quality",
-   "Au-dessus de la taille maximale de cette qualitÃ©"
+   "Au-dessus de la taille maximale de cette qualité"
   ],
   "acquisition.reason.FormatScore": [
    "Custom format score",
-   "Score de format personnalisÃ©"
+   "Score de format personnalisé"
   ],
   "acquisition.reason.FormatScoreBelowMinimum": [
    "Format score below minimum",
@@ -6806,7 +6806,7 @@
   ],
   "takeover.newLibraries": [
    "Create libraries from root folders",
-   "CrÃ©er des bibliothÃ¨ques depuis les dossiers racines"
+   "Créer des bibliothèques depuis les dossiers racines"
   ],
   "takeover.keepLibrary": [
    "Use existing library assignment",
@@ -6814,7 +6814,7 @@
   ],
   "takeover.inlineKeys": [
    "Complete missing API keys",
-   "ComplÃ©ter les clÃ©s API manquantes"
+   "Compléter les clés API manquantes"
   ],
   "profile.section.size": [
    "Size",
@@ -6822,11 +6822,11 @@
   ],
   "profile.deleteConfirm": [
    "Delete this unused profile?",
-   "Supprimer ce profil inutilisÃ© ?"
+   "Supprimer ce profil inutilisé ?"
   ],
   "acquisition.reason.FormatEvaluationFailed": [
    "Custom format could not be evaluated",
-   "Le format personnalisÃ© n'a pas pu Ãªtre Ã©valuÃ©"
+   "Le format personnalisé n'a pas pu être évalué"
   ],
   "arr.applyCondition": [
    "Apply condition type",
