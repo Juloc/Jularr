@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Backend.Data.User.Discover.V1;
@@ -24,7 +25,7 @@ namespace Jularr.Frontend.Pages.User.Details
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, ReadDiscoverScopesV1 readScopes, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
-        private IReadOnlyList<WorkCardV1> _related = [];
+        private IReadOnlyList<LibraryItemV1> _related = [];
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
         private IReadOnlyList<DiscoverScopeV1> _scopes = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
@@ -192,9 +193,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 // The other titles of its film series, then similar titles leading to their Work or their request.
                 if (work.FranchiseId is { } series)
                 {
-                    page.Content.Add(new MediaShelf(assets, "details.related", "/Franchise/" + series.ToString(CultureInfo.InvariantCulture), [.. _related.Select(item => (IUiComponent)new MediaCard(assets,
-                        item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
-                        MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)).Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]));
+                    page.Content.Add(new MediaShelf(assets, "details.related", "/Franchise/" + series.ToString(CultureInfo.InvariantCulture), [.. _related.Select(item => (IUiComponent)MediaCard.For(assets, item).Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]));
                 }
 
                 page.Content.Add(new MediaShelf(assets, "details.recommendations", null, [.. _recommendations.Where(item => item.WorkId is not null || _scopes.Any(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog)).Select(Recommendation)]));
@@ -237,9 +236,8 @@ namespace Jularr.Frontend.Pages.User.Details
         // A known title also goes into the favorites from its card.
         private IUiComponent Recommendation(DiscoverItemV1 item)
         {
-            var card = new MediaCard(assets, item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
-                    : "/Discover/" + _scopes.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
-                item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId);
+            var card = MediaCard.For(assets, item, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
+                : "/Discover/" + _scopes.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture));
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
         }
@@ -375,7 +373,7 @@ namespace Jularr.Frontend.Pages.User.Details
             _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             if (_work.FranchiseId is { } franchiseId)
             {
-                _related = [.. (await readFranchise.ExecuteAsync<PageResult<WorkCardV1>>(new FranchiseWorksParametersV1(franchiseId, pageSize: 20), HttpContext.RequestAborted)).Items
+                _related = [.. (await readFranchise.ExecuteAsync<PageResult<LibraryItemV1>>(new FranchiseWorksParametersV1(franchiseId, pageSize: 20), HttpContext.RequestAborted)).Items
                     .Where(item => item.Id != Id)];
             }
 

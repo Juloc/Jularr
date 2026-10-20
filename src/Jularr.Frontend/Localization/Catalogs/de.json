@@ -3236,6 +3236,62 @@
    "All monitored episodes or units are available.",
    "Alle überwachten Folgen oder Einheiten sind verfügbar."
   ],
+  "media.episodeCode": [
+   "S{0} E{1}",
+   "S{0} E{1}"
+  ],
+  "media.episodeOnly": [
+   "E{0}",
+   "E{0}"
+  ],
+  "media.timeLeft.minutes": [
+   "{0} min left",
+   "noch {0} Min."
+  ],
+  "media.timeLeft.hours": [
+   "{0} h left",
+   "noch {0} Std."
+  ],
+  "media.timeLeft.hoursMinutes": [
+   "{0} h {1} min left",
+   "noch {0} Std. {1} Min."
+  ],
+  "media.progressShare": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "media.availability.tag.Available": [
+   "Available",
+   "Verfügbar"
+  ],
+  "media.availability.tag.ProfileAudio": [
+   "Available",
+   "Verfügbar"
+  ],
+  "media.availability.tag.OtherAudio": [
+   "Other audio",
+   "Anderes Audio"
+  ],
+  "media.availability.tag.Partial": [
+   "{0}/{1}",
+   "{0}/{1}"
+  ],
+  "media.availability.tag.PartialOtherAudio": [
+   "{0}/{1}",
+   "{0}/{1}"
+  ],
+  "media.availability.tag.Downloading": [
+   "Downloading",
+   "Lädt"
+  ],
+  "media.availability.tag.Searching": [
+   "Searching",
+   "Suche"
+  ],
+  "media.availability.tag.Requested": [
+   "Requested",
+   "Angefragt"
+  ],
   "media.rating": [
    "Rating",
    "Bewertung"
@@ -3257,38 +3313,6 @@
    "{0} von {1} überwachten Folgen oder Einheiten sind verfügbar, aber nur in anderen Audiosprachen."
   ],
   "media.availability.Requested": [
-   "Requested",
-   "Angefragt"
-  ],
-  "media.availability.badge.Available": [
-   "Available locally",
-   "Lokal verfügbar"
-  ],
-  "media.availability.badge.ProfileAudio": [
-   "Profile audio available",
-   "Profil-Audio verfügbar"
-  ],
-  "media.availability.badge.OtherAudio": [
-   "Other audio languages",
-   "Andere Audiosprachen"
-  ],
-  "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · Anderes Audio"
-  ],
-  "media.availability.badge.Partial": [
-   "{0}/{1} available",
-   "{0}/{1} verfügbar"
-  ],
-  "media.availability.badge.Downloading": [
-   "Downloading",
-   "Wird heruntergeladen"
-  ],
-  "media.availability.badge.Searching": [
-   "Searching",
-   "Wird gesucht"
-  ],
-  "media.availability.badge.Requested": [
    "Requested",
    "Angefragt"
   ],

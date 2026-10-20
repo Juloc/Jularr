@@ -2980,38 +2980,6 @@
    "Requested",
    "Aangevraagd"
   ],
-  "media.availability.badge.Available": [
-   "Available locally",
-   "Lokaal beschikbaar"
-  ],
-  "media.availability.badge.ProfileAudio": [
-   "Profile audio available",
-   "Profielaudio beschikbaar"
-  ],
-  "media.availability.badge.OtherAudio": [
-   "Other audio languages",
-   "Andere audiotalen"
-  ],
-  "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · Andere audio"
-  ],
-  "media.availability.badge.Partial": [
-   "{0}/{1} available",
-   "{0}/{1} beschikbaar"
-  ],
-  "media.availability.badge.Downloading": [
-   "Downloading",
-   "Downloaden"
-  ],
-  "media.availability.badge.Searching": [
-   "Searching",
-   "Zoeken"
-  ],
-  "media.availability.badge.Requested": [
-   "Requested",
-   "Aangevraagd"
-  ],
   "media.availability.Partial": [
    "{0} of {1} monitored episodes or units are available.",
    "{0} van {1} gevolgde afleveringen of onderdelen zijn beschikbaar."

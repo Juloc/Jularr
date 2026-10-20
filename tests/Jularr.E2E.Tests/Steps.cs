@@ -167,7 +167,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
             await card.HoverAsync();
-            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }));
+            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request", Exact = true }));
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
@@ -177,7 +177,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?type=" + type + "&q=" + Uri.EscapeDataString(title));
             var card = page.Locator(".media-card", new() { HasText = title }).Filter(new() { Has = page.Locator("a[href*='/" + type + "/" + source + "/']") }).First;
             await card.HoverAsync();
-            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }));
+            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request", Exact = true }));
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 

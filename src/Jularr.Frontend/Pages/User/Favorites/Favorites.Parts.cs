@@ -74,6 +74,8 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (TempData["FavoritesNotice"] is string notice && notice == "favorites.removedFromCollections") page.Content.Add(new P(new Text("favorites.removedFromCollections")).Class("favorites-notice").Attribute("role", "status"));
 
             page.Asset("Pages/User/Favorites/Favorites.entry.scss");
+
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             page.Asset("Pages/User/Favorites/Favorites.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
@@ -235,14 +237,14 @@ namespace Jularr.Frontend.Pages.User.Favorites
                         .Class("button button--icon favorites-heart__manage").Attribute("aria-pressed", entry.IsFavorite ? "true" : "false").Attribute("data-favorites-picker", id)));
             }
 
-            var card = new MediaCard(assets, entry.Title, "/Details/" + id, entry.PosterUrl, entry.Year?.ToString(CultureInfo.InvariantCulture), entry.StatusKey).Bookmark(heart);
-            if (entry.Progress == ProgressStateType.InProgress) card.Continue(entry.ProgressPercent, 100);
-            var parts = new List<IUiComponent> { card };
+            var card = MediaCard.For(assets, entry.Item).Bookmark(heart);
             if (entry.Progress != ProgressStateType.NotStarted)
             {
-                parts.Add(new Span(entry.Progress == ProgressStateType.Finished ? new Text("favorites.status.finished") : new ValueText(entry.ProgressPercent.ToString(CultureInfo.CurrentCulture) + "%"))
+                card.Label(new Span(entry.Progress == ProgressStateType.Finished ? new Text("favorites.status.finished") : new ValueText(entry.ProgressPercent.ToString(CultureInfo.CurrentCulture) + "%"))
                     .Class("favorites-entry__badge"));
             }
+
+            var parts = new List<IUiComponent> { card };
 
             var holding = _membership.TryGetValue(entry.Id, out var held) ? held : [];
             if (canCollect)

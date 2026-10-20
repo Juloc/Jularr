@@ -105,6 +105,7 @@ namespace Jularr.Backend.Logic.Media
                     work."Creator",
                     work."ImageUrl",
                     work."BackdropUrl",
+                    work."Rating",
                     work."FetchedAt"
                 FROM
                     "ExternalWorks" AS work
@@ -191,6 +192,7 @@ namespace Jularr.Backend.Logic.Media
                     work."Creator",
                     work."ImageUrl",
                     work."BackdropUrl",
+                    work."Rating",
                     known."WorkId",
                     known."MediaStateTypeId",
                     known."PlexUrl"
@@ -319,6 +321,7 @@ namespace Jularr.Backend.Logic.Media
                     found."Creator",
                     found."ImageUrl",
                     found."BackdropUrl",
+                    found."Rating",
                     found."WorkId",
                     found."MediaStateTypeId",
                     found."PlexUrl"
@@ -335,6 +338,7 @@ namespace Jularr.Backend.Logic.Media
                             work."Creator",
                             work."ImageUrl",
                             work."BackdropUrl",
+                            work."Rating",
                             known."WorkId",
                             known."MediaStateTypeId",
                             known."PlexUrl"

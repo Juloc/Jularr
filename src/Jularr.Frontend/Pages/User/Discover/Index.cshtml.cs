@@ -205,8 +205,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     HomeShelfType.ContinueListening => ContinueShelf("discover.continueListening", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Audio) : []),
                     HomeShelfType.ContinueReading => ContinueShelf("media.continueReading",
                         texts.CanRead() ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
-                    HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Where(item => MediaTypeChosen(item.MediaTypeId)).Select(item => new MediaCard(assets, item.Title,
-                        "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, null, "media.state." + item.MediaStateTypeId)
+                    HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Where(item => MediaTypeChosen(item.MediaTypeId)).Select(item => MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]),
                     _ => Recommendations()
                 });
@@ -346,9 +345,9 @@ namespace Jularr.Frontend.Pages.User.Discover
         private MediaShelf ContinueShelf(string titleKey, IEnumerable<ContinueItemV1> items) => new(assets, titleKey, null, [.. items.Select(item =>
         {
             var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
-            var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
-                (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
+            var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl)
+                .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), null).Resume(ContinueDetail.Format(key => texts[key], item))
+                .Action("media.continue", (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
                 .Bookmark(new MediaBookmark(assets, item.WorkId));
             return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
         })]);
@@ -715,7 +714,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Card(DiscoverItemV1 item)
         {
             var (actionKey, actionHref) = Action(item);
-            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, null, "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            var card = MediaCard.For(assets, item, DetailsHref(item));
+            if (actionKey is not null && actionHref is not null) card.Action(actionKey, actionHref);
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
         }
@@ -723,15 +723,12 @@ namespace Jularr.Frontend.Pages.User.Discover
         // A known title opens its Work; any other opens its request.
         private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
-            var meta = item.Author;
-            if (item.WorkId is { } workId)
-            {
-                return new MediaCard(assets, item.Title, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), item.PosterUrl, meta, "discover.known")
-                    .Bookmark(new MediaBookmark(assets, workId));
-            }
-
-            var href = "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            return new MediaCard(assets, item.Title, href, item.PosterUrl, meta, "media.state." + MediaStateType.NotRequested, texts.CanRequest() ? "request.create" : null, texts.CanRequest() ? href : null);
+            var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
+                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating);
+            if (item.MediaStateTypeId is { } state) card.State(state);
+            if (item.WorkId is { } known) return card.Bookmark(new MediaBookmark(assets, known));
+            return texts.CanRequest() ? card.Action("media.request", href) : card;
         }
 
         // The canonical next step: use what exists, request what is missing.
@@ -739,7 +736,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             MediaStateType.Available when item.PlexUrl is { } plex && !texts.CanPlay() => ("media.openInPlex", plex),
             MediaStateType.Available => ("media.watch", DetailsHref(item)),
-            MediaStateType.NotRequested when texts.CanRequest() => ("request.create", DetailsHref(item)),
+            MediaStateType.NotRequested when texts.CanRequest() => ("media.request", DetailsHref(item)),
             _ => (null, null)
         };
 
