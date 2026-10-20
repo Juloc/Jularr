@@ -5504,14 +5504,6 @@
    "Queued at",
    "In de wachtrij gezet om"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Activiteit"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "Te doen"
-  ],
   "activity.tab.History": [
    "History",
    "Geschiedenis"
@@ -5575,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Download voortzetten"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Er loopt niets."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Niets heeft aandacht nodig."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

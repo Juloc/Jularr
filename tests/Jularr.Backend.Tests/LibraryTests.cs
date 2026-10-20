@@ -171,7 +171,7 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default);
             Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\""));
 
-            using var operations = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Activity");
+            using var operations = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.LibraryScan, (await operations.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
         }
 
