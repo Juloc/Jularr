@@ -106,5 +106,6 @@ The keyboard is the TV's own: no system keyboard, no cursor, no text selection.
 2. **The app contract** (done, #1323): the canonical card, the watchlist, the instance presentation and the texts in `core-model`/`core-api`.
 3. **The shared tokens** (done, #1324): the one file with the colors of a skin, the radii and the type scale; the web builds its stylesheet from it and the instance serves it to the clients.
 4. **The TV shell** (done, #1328): the rail, the top row, the profile, the app settings, the type capsule and the shelves of the profile in the desktop's card.
-5. **The TV player and the rest**: the previous client's player, the details page, the search with the D-pad keyboard and the offline engine, rebuilt on the new contract and in the desktop's look.
-6. **The phone shell**: the WebView shell and the native player from the previous client, on the new contract.
+5. **The TV search and the details** (done, #1339): the magnifier of the top row opens the search; the field, the suggestions of the instance, the titles that match and the keyboard of the television on the left and on the right; OK opens the title and its details.
+6. **The TV player and the rest**: the previous client's player, the actions of a title and the offline engine, rebuilt on the new contract and in the desktop's look.
+7. **The phone shell**: the WebView shell and the native player from the previous client, on the new contract.
