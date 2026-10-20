@@ -215,9 +215,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         public async Task<IActionResult> OnPostEditFilesAsync(long[]? storedFileIds, string? qualityKey, string? audioLanguage)
         {
-            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage)) return LocalRedirect(Address(Tab));
+            // The audio tracks of one file may each get a language; a track left unchanged sends nothing.
+            var tracks = Request.Form.Where(field => field.Key.StartsWith("trackLanguage-", StringComparison.Ordinal) && !string.IsNullOrEmpty(field.Value.ToString()))
+                .Select(field => new { StreamIndex = int.Parse(field.Key["trackLanguage-".Length..], CultureInfo.InvariantCulture), Language = field.Value.ToString() }).ToArray();
+            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage) && tracks.Length == 0) return LocalRedirect(Address(Tab));
             var result = await updateFacts.ExecuteAsync<UpdateLibraryFileFactsResultV1>(new UpdateLibraryFileFactsParametersV1(),
-                new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage), HttpContext.RequestAborted);
+                new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage,
+                    tracks.Length == 0 ? null : global::System.Text.Json.JsonSerializer.Serialize(tracks)), HttpContext.RequestAborted);
             TempData["WorkFilesUpdated"] = result.UpdatedCount;
             return LocalRedirect(Address(Tab));
         }

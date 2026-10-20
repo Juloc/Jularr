@@ -512,6 +512,9 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     .work-strip--file .work-title-text { color: var(--muted); font-weight: 500; }
 }
 
+.work-tracks { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; legend { padding: 0 6px; font-size: 13px; color: var(--muted); } }
+.work-track { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 14px; }
+
 .work-columns--sheet {
     left: 0;
     right: 0;

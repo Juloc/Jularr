@@ -606,11 +606,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"MediaTrackTypeId\" = 2 AND \"Language\" = 'ger'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"MediaTrackTypeId\" = 3 AND \"Language\" = 'eng'"));
 
+            // The page offers each audio track of a file for a language of its own.
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + workId + "/management");
+            var page = (await read.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            CollectionAssert.AreEqual(new[] { 1, 2 }, page.Files.Single().AudioTracks.Select(track => track.StreamIndex).ToArray());
+
+            // One audio track of one file gets a language of its own; several files cannot be told apart by track.
+            using var track = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], null, null, "[{\"StreamIndex\":1,\"Language\":\"jpn\"}]"));
+            Assert.AreEqual(HttpStatusCode.OK, track.StatusCode, await track.Content.ReadAsStringAsync());
+            Assert.AreEqual("jpn", await host.ScalarAsync("SELECT \"Language\" FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"StreamIndex\" = 1"));
+            Assert.AreEqual("ger", await host.ScalarAsync("SELECT \"Language\" FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"StreamIndex\" = 2"));
+            using var many = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId, fileId + 1], null, null, "[{\"StreamIndex\":1,\"Language\":\"jpn\"}]"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, many.StatusCode);
+            using var wrong = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], null, null, "[{\"StreamIndex\":1,\"Language\":\"xxx\"}]"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, wrong.StatusCode);
+
             // Only the quality: the languages stay.
             using var quality = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], "Bluray-1080p"));
             Assert.AreEqual(HttpStatusCode.OK, quality.StatusCode, await quality.Content.ReadAsStringAsync());
             Assert.AreEqual("Bluray-1080p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"Language\" = 'ger'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"Language\" = 'ger'"));
         }
 
         // Deleting a title takes its requests, targets and files, the history keeps its texts, and an exclusion refuses a request until it is removed.

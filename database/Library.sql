@@ -30,6 +30,9 @@ CREATE TABLE "StoredFiles" (
     "LastSeenAt" timestamptz NOT NULL,
     "MissingSince" timestamptz NULL,
     "ProbedAt" timestamptz NULL,
+    -- The pages of a comic archive, counted once per version of the file.
+    "PageCount" integer NULL CHECK ("PageCount" > 0),
+    "PagesCheckedAt" timestamptz NULL,
     "Container" varchar(64) NULL,
     "DurationMs" bigint NULL CHECK ("DurationMs" >= 0),
     "BitRate" bigint NULL CHECK ("BitRate" >= 0),

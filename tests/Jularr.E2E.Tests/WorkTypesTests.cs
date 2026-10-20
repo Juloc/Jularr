@@ -63,16 +63,19 @@ namespace Jularr.E2E.Tests
                 StringAssert.Contains(await rows.First.InnerTextAsync(), "Volume 2");
                 StringAssert.Contains(await rows.First.InnerTextAsync(), "Missing");
                 await Assertions.Expect(page.Locator("th[data-col=released]").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("th[data-col=pages]").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "work-manga-volumes");
 
                 // An album lists its tracks in order, with no switch and no search of their own: the album is monitored and searched as a whole.
                 var album = await CreateAsync(page, "Music", "None", "Test Album");
-                await jularr.RunSqlAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") VALUES ({album}, 5, 1), ({album}, 5, 2), ({album}, 5, 3);");
+                await jularr.RunSqlAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\", \"DiscNumber\") VALUES ({album}, 5, 1, 1), ({album}, 5, 2, 1), ({album}, 5, 3, 2);");
                 await page.GotoAsync("/Admin/Works/" + album);
                 await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = "Tracks" })).ToBeVisibleAsync();
                 var tracks = page.Locator("[data-work-table=tracks] tr.work-row");
                 Assert.AreEqual(3, await tracks.CountAsync());
-                StringAssert.Contains(await tracks.First.InnerTextAsync(), "Track 1");
+                await Assertions.Expect(tracks.First).ToContainTextAsync("Track 1");
+                Assert.AreEqual(2, await page.Locator(".work-season").CountAsync(), "Two discs, two accordions.");
+                await Assertions.Expect(page.Locator(".work-season").Last).ToContainTextAsync("Disc 2");
                 Assert.AreEqual(0, await page.Locator("[data-work-table=tracks] th[data-col=monitored]").CountAsync());
                 await Assertions.Expect(page.Locator("th[data-col=length]").First).ToBeVisibleAsync();
 

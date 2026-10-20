@@ -22,6 +22,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly LongArrayField UnitIds = new() { Minimum = 1, MaximumLength = 1000 };
         public static readonly BoolField IsMissing = new();
         public static readonly IntField AbsoluteNumber = new() { Minimum = 1, Required = false };
+        public static readonly IntField DiscNumber = new() { Minimum = 1, Required = false };
         public static readonly EnumField WorkGroupKindId = new(typeof(WorkGroupKind));
         public static readonly LongField GroupId = new() { Minimum = 1, Required = false };
         public static readonly StringField GroupName = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };

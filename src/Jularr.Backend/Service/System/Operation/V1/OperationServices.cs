@@ -199,6 +199,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 await ProbeAsync(root.Id, storage, directory);
             }
 
+            // The pages of new and changed comic archives.
+            await CountPagesAsync(root.Id, storage, directory);
+
             // Verified game dumps name their game.
             if (root.MediaTypeId == MediaType.Game)
             {
@@ -243,6 +246,64 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 return await ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed + count, OperationStatusType.Running), ct);
             }, CancellationToken);
             return count;
+        }
+
+        private async Task CountPagesAsync(long libraryRootId, StorageFiles storage, string directory)
+        {
+            for (var afterId = 0L; ;)
+            {
+                var files = await Context.ExecuteBatchAsync((ctx, ct) =>
+                {
+                    var sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        SELECT
+                            file."Id",
+                            file."RelativePath",
+                            file."SizeBytes",
+                            file."ModifiedAt",
+                            NULL::bigint AS "WorkId"
+                        FROM
+                            "StoredFiles" AS file
+                        WHERE
+                            file."LibraryRootId" = @LibraryRootId
+                            AND file."Id" > @AfterId
+                            AND file."PagesCheckedAt" IS NULL
+                            AND file."MissingSince" IS NULL
+                            AND file."RelativePath" ~* '\.cbz$'
+                        ORDER BY
+                            file."Id"
+                        LIMIT 50;
+                        """;
+                    sql.Parameters.Add(new StoredFileCursorData(libraryRootId, afterId));
+                    return ctx.ReadSql.ReadListAsync<StoredFileCandidateData>(sql, ct);
+                }, CancellationToken);
+                if (files.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var file in files)
+                {
+                    // An unreadable archive is recorded without pages, so it is not tried at every scan.
+                    int? pages = null;
+                    try
+                    {
+                        await using var input = await storage.OpenReadAsync(StoragePath.Combine(directory, file.RelativePath), CancellationToken);
+                        pages = Logic.Reading.PageCounter.Count(input, file.RelativePath);
+                    }
+                    catch (Exception exception) when (exception is InvalidDataException or IOException or Integrations.Data.Nas.NasMountException)
+                    {
+                    }
+
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.SaveStoredFilePagesAsync(new StoredFilePagesData(file.Id, file.SizeBytes, file.ModifiedAt, pages), ct);
+                        return true;
+                    }, CancellationToken);
+                    afterId = file.Id;
+                }
+            }
         }
 
         private async Task ProbeAsync(long libraryRootId, StorageFiles storage, string directory)

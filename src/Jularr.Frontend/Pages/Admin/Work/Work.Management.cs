@@ -16,13 +16,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
     {
         // Columns of the unit table in their default order; the ones after "quality" start hidden.
         private static readonly string[] UnitColumns = ["monitored", "number", "title", "aired", "languages", "group", "size", "status", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
-        private static readonly string[] VolumeColumns = ["monitored", "number", "title", "released", "format", "group", "size", "status", "quality", "path"];
+        private static readonly string[] VolumeColumns = ["monitored", "number", "title", "released", "format", "pages", "group", "size", "status", "quality", "path"];
         private static readonly string[] EditionColumns = ["title", "format", "group", "size", "quality", "path"];
         private static readonly string[] GameColumns = ["title", "format", "region", "version", "group", "size", "quality", "rom", "path"];
         private static readonly string[] TrackColumns = ["number", "title", "length", "format", "group", "size", "status", "quality", "path"];
         private static readonly string[] FileColumns = ["title", "languages", "group", "size", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly HashSet<string> HiddenByDefault = ["languagesIso", "languagesNames", "path", "codec", "range"];
-        private static readonly string[] SortableColumns = ["region", "version", "number", "absolute", "title", "aired", "released", "format", "length", "size", "status", "quality", "group", "rom"];
+        private static readonly string[] SortableColumns = ["pages", "region", "version", "number", "absolute", "title", "aired", "released", "format", "length", "size", "status", "quality", "group", "rom"];
 
         // Anime counts episodes across seasons as well.
         private static string[] ColumnsOf(WorkManagementV1 work) => work.MediaTypeId == MediaType.Music ? TrackColumns : work.MediaTypeId == MediaType.Book ? VolumeColumns
@@ -220,8 +220,35 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var units = work.Units.Where(unit => unit.WorkUnitTypeId == type).OrderBy(unit => tracks ? unit.Number : -unit.Number).ToArray();
             if (units.Length == 0) return new P(new Text(tracks ? "work.empty.tracks" : "work.empty.volumes")).Attribute("role", "status");
             var kind = tracks ? "tracks" : "volumes";
+            if (tracks && units.Select(unit => unit.DiscNumber).Distinct().Count() > 1) return Discs(work, units, csrf);
             return new Div(new Div(new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", kind).Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools"),
                 UnitTable(units, work, [], csrf, kind), ColumnPicker()).Class("work-seasons work-volumes");
+        }
+
+        // An album of several discs: one accordion per disc with its tracks.
+        private IUiComponent Discs(WorkManagementV1 work, WorkManagementUnitV1[] tracks, string? csrf)
+        {
+            var content = new List<IUiComponent>();
+            var first = true;
+            foreach (var disc in tracks.GroupBy(unit => unit.DiscNumber ?? 1).OrderBy(group => group.Key))
+            {
+                var panelId = "work-disc-" + disc.Key.ToString(CultureInfo.InvariantCulture);
+                var open = first;
+                first = false;
+                var units = disc.ToArray();
+                var present = units.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Present);
+                var bytes = work.Files.Where(file => !file.IsMissing && file.WorkUnitIds.Any(id => units.Any(unit => unit.Id == id))).Sum(file => file.SizeBytes);
+                var info = string.Format(CultureInfo.CurrentCulture, texts["work.coverage"], present, units.Length) + (bytes > 0 ? " · " + ByteSize.Format(bytes) : "");
+                content.Add(new Div(
+                    new Div(
+                        new Div(new H2(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.disc"], disc.Key))), new Div(new Span(new ValueText(info))).Class("work-coverage")).Class("work-season__lead"),
+                        new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", panelId).Attribute("aria-expanded", open ? "true" : "false")
+                            .Attribute("aria-controls", panelId).TextAttribute("aria-label", "work.toggleSeason")).Class("work-season__head"),
+                    new Div(UnitTable(units, work, [], csrf, "tracks")).Class("work-season__panel").Attribute("id", panelId).Attribute("data-open", open ? "true" : "false")).Class("work-season"));
+            }
+
+            return new Div([new Div(new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", "tracks").Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools"),
+                .. content, ColumnPicker()]).Class("work-seasons work-discs");
         }
 
         private IUiComponent UnitTable(WorkManagementUnitV1[] episodes, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf, string kind = "units")
@@ -440,6 +467,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             facts["languagesNames"] = new(LanguageGroup(shown, WorkLanguages.Mode.Names), null, noLanguages);
             facts["length"] = new(new ValueText(shown.DurationMs is { } milliseconds ? Duration(milliseconds) : ""), (shown.DurationMs ?? 0).ToString("D12", CultureInfo.InvariantCulture), shown.DurationMs is null);
             facts["format"] = new(new ValueText(Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant()), Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant(), Path.GetExtension(shown.RelativePath).Length < 2);
+            facts["pages"] = new(new ValueText(shown.PageCount?.ToString(CultureInfo.InvariantCulture) ?? ""), (shown.PageCount ?? 0).ToString("D8", CultureInfo.InvariantCulture), shown.PageCount is null);
             facts["region"] = new(new ValueText(shown.GameRegion ?? ""), shown.GameRegion ?? "", string.IsNullOrEmpty(shown.GameRegion));
             facts["version"] = new(new ValueText(shown.GameVersion ?? ""), shown.GameVersion ?? "", string.IsNullOrEmpty(shown.GameVersion));
             facts["rom"] = new(shown.IsRomVerified is null ? new Span() : new Span(new Text(shown.IsRomVerified == true ? "work.rom.verified" : "work.rom.unverified")).Class("work-rom work-rom--" + (shown.IsRomVerified == true ? "ok" : "off")),
@@ -735,7 +763,17 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 if (work.MediaTypeId is MediaType.Movie or MediaType.Series) form.Select(data => data.AudioLanguage, "work.files.audioLanguage", [.. languages]);
                 form.Submit("common.save");
             }, Address(Tab, "EditFiles"), csrf, new UpdateLibraryFileFactsDataV1([]));
-            return new Dialog(new Div(new H2(new Text("work.files.editTitle")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)
+            // A file with several audio tracks offers each its own language, shown when it alone is chosen.
+            var templates = work.MediaTypeId is MediaType.Movie or MediaType.Series
+                ? work.Files.Where(file => !file.IsMissing && file.AudioTracks.Count > 1).Select(file => (IUiComponent)new Template(new Fieldset([new Legend(new Text("work.files.tracks")),
+                    .. file.AudioTracks.Select(track => (IUiComponent)new Label(
+                        new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.track"], track.StreamIndex + 1) + (track.Codec is null ? "" : " · " + track.Codec) + (track.Channels is { } channels ? " " + channels.ToString(CultureInfo.InvariantCulture) + "ch" : ""))),
+                        new Select([new Option(new ValueText(texts["work.files.unchanged"])).Attribute("value", ""),
+                            .. FileLanguages.Known.Select(language => new Option(new ValueText(WorkLanguages.Name(language.Two))).Attribute("value", language.Three)
+                                .Attribute("data-current", track.Language == language.Three ? "true" : "false"))]).Attribute("name", "trackLanguage-" + track.StreamIndex.ToString(CultureInfo.InvariantCulture))
+                            .Attribute("data-current", track.Language ?? "")).Class("work-track"))]).Class("work-tracks")).Attribute("data-tracks-for", file.Id.ToString(CultureInfo.InvariantCulture)))
+                : [];
+            return new Dialog([new Div(new H2(new Text("work.files.editTitle")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form, .. templates])
                 .Class("work-dialog").Attribute("id", "work-files-edit");
         }
 
@@ -746,6 +784,16 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private HtmlElement IconSubmit(string icon, string labelKey) => new IconButton(Icon(icon, 22)).Attribute("type", "submit").Class("work-icon").TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
 
         private sealed class Label(params IUiComponent[] children) : HtmlElement("label", children);
+
+        private sealed class Template(params IUiComponent[] children) : HtmlElement("template", children);
+
+        private sealed class Fieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
+
+        private sealed class Legend(params IUiComponent[] children) : HtmlElement("legend", children);
+
+        private sealed class Select(params IUiComponent[] children) : HtmlElement("select", children);
+
+        private sealed class Option(params IUiComponent[] children) : HtmlElement("option", children);
 
         private sealed class Td(params IUiComponent[] children) : HtmlElement("td", children);
 
