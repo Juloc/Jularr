@@ -40,8 +40,8 @@ namespace Jularr.E2E.Tests
                 fakes.Offer(album, otherArtist);
                 await Steps.OpenSearchAsync(page, FakeServices.AlbumTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = otherArtist.Title }).InnerTextAsync(), "Not the wanted artist");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = album.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = otherArtist.Title })).ToContainTextAsync("Not the wanted artist");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = album.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, album);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(album).ToString() }, fakes.Grabbed.ToArray());
 

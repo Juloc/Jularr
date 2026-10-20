@@ -418,17 +418,17 @@ namespace Jularr.E2E.Tests
                 fakes.Offer(book);
                 await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = book.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = book.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, book);
                 fakes.Offer(volume);
                 await Steps.OpenSearchAsync(page, FakeServices.MangaTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = volume.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = volume.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, volume);
                 fakes.Offer(novel);
                 await Steps.OpenSearchAsync(page, FakeServices.NovelTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = novel.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = novel.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, novel);
                 CollectionAssert.AreEqual(new[] { book, volume, novel }.Select(release => fakes.NzbAddress(release).ToString()).ToArray(), fakes.Grabbed.ToArray());
 
@@ -442,7 +442,7 @@ namespace Jularr.E2E.Tests
 
                 // Reading on saves the position in each.
                 await Steps.OpenReaderAsync(page, bookDetails);
-                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter One");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
                 await AssertPaperReaderAsync(page);
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.OpenReaderAsync(page, mangaDetails);
@@ -454,12 +454,12 @@ namespace Jularr.E2E.Tests
                 // Signed out and in again, both open where reading stopped.
                 await Steps.SignOutAndInAsync(page);
                 await Steps.OpenReaderAsync(page, bookDetails);
-                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter Two");
                 await Steps.OpenReaderAsync(page, mangaDetails);
                 // A wide window shows two pages side by side.
                 StringAssert.Matches((await page.Locator("[data-role=position]").InnerTextAsync()).Trim(), new System.Text.RegularExpressions.Regex("^2(–3)? / 3$"));
                 await Steps.OpenReaderAsync(page, novelDetails);
-                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter Two");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
@@ -711,7 +711,7 @@ namespace Jularr.E2E.Tests
                 await seek.FocusAsync();
                 await page.Keyboard.PressAsync("End");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '2'");
-                StringAssert.Contains(await page.Locator("[data-role=position]").InnerTextAsync(), "3 / 3");
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToContainTextAsync("3 / 3");
                 await Evidence.SaveAsync(page, "reader-comic-seek");
                 await page.Keyboard.PressAsync("Home");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '0'");
@@ -758,7 +758,7 @@ namespace Jularr.E2E.Tests
 
                 // The reader reflows it by chapter, keeps the original at hand and continues where reading stopped.
                 await Steps.OpenReaderAsync(page, details);
-                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "must be in want of a wife.");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("must be in want of a wife.");
                 await page.Locator("[data-action=more]").ClickAsync();
                 var download = page.Locator("[data-panel=more] [data-action=download]");
                 await download.ClickAsync();
@@ -769,7 +769,7 @@ namespace Jularr.E2E.Tests
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.SignOutAndInAsync(page);
                 await Steps.OpenReaderAsync(page, details);
-                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter Two");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

@@ -60,8 +60,8 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(0, await page.Locator(".work-season").CountAsync(), "A manga has no seasons.");
                 var rows = page.Locator("[data-work-table=volumes] tr.work-row");
                 Assert.AreEqual(2, await rows.CountAsync());
-                StringAssert.Contains(await rows.First.InnerTextAsync(), "Volume 2");
-                StringAssert.Contains(await rows.First.InnerTextAsync(), "Missing");
+                await Assertions.Expect(rows.First).ToContainTextAsync("Volume 2");
+                await Assertions.Expect(rows.First).ToContainTextAsync("Missing");
                 await Assertions.Expect(page.Locator("th[data-col=released]").First).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("th[data-col=pages]").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "work-manga-volumes");

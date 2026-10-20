@@ -18,7 +18,7 @@ namespace Jularr.E2E.Tests
             try
             {
                 await page.GotoAsync("/Setup");
-                StringAssert.Contains(await page.Locator("select[name=UiLocaleId]").InnerTextAsync(), "machine translated");
+                await Assertions.Expect(page.Locator("select[name=UiLocaleId]")).ToContainTextAsync("machine translated");
                 await page.FillAsync("[name=Email]", Owner.Email);
                 await page.FillAsync("[name=DisplayName]", "Owner");
                 await page.FillAsync("[name=Password]", Owner.Password);

@@ -7,6 +7,8 @@ using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Wanted.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -24,6 +26,39 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             new(connection.HttpAddress, AcquisitionConnectionInput.Unprotect(protector, connection.ProtectedApiKey));
 
         public static bool IsSabnzbd(DownloadActionData download) => download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd;
+
+        // Jularr's own downloaders wait when told to: their jobs are simply not run while paused.
+        public static bool IsNative(DownloadActionData download) => download.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet || DirectSources.IsDirect(download.AcquisitionConnectionTypeId);
+
+        // Tells the client, or marks the own downloader's job, to wait or to go on; false when the download cannot be paused.
+        public static async Task<bool> SetPausedAsync(LogicContext context, SabnzbdClient sabnzbd, IDataProtector protector, DownloadActionData download, bool isPaused, CancellationToken ct)
+        {
+            var usable = download.AttentionKey is null && (IsSabnzbd(download) && download.ExternalId is not null || IsNative(download));
+            if (!usable)
+            {
+                return false;
+            }
+
+            if (IsSabnzbd(download))
+            {
+                var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, token), ct);
+                try
+                {
+                    await sabnzbd.PauseJobAsync(Connection(connection, protector), download.ExternalId!, isPaused, ct);
+                }
+                catch (Exception exception) when (exception is HttpRequestException or SabnzbdException || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    throw new ServiceUnavailableException("acquisition_unavailable");
+                }
+            }
+
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.SetDownloadPausedAsync(new DownloadPauseData(download.OperationId, isPaused), token);
+                return true;
+            }, ct);
+            return true;
+        }
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/remove")]
@@ -121,27 +156,45 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var download = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadDownloadActionAsync(Parameters.OperationId, ct), CancellationToken)
                 ?? throw new KeyNotFoundException("The download is not in the queue.");
 
-            // Only SABnzbd can be told to wait.
-            if (!DownloadActions.IsSabnzbd(download) || download.ExternalId is not { } nzoId || download.AttentionKey is not null)
+            // SABnzbd is told to wait, Jularr's own downloaders skip the job.
+            if (!await DownloadActions.SetPausedAsync(Context, _sabnzbd, _protector, download, Data.IsPaused, CancellationToken))
             {
                 throw new DataValidationException(nameof(PauseActivityDownloadDataV1.IsPaused), "invalid_transition");
             }
 
-            var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, ct), CancellationToken);
-            try
+            return new UpdateResult(true);
+        }
+    }
+
+    // The whole queue waits or goes on: every running download that can be paused, each as if it had been chosen on its own.
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/queue/pause")]
+    public sealed class PauseActivityQueueV1 : AdminService<PauseActivityQueueParametersV1, PauseActivityDownloadDataV1>
+    {
+        private readonly SabnzbdClient _sabnzbd;
+        private readonly IDataProtector _protector;
+
+        internal PauseActivityQueueV1(SabnzbdClient sabnzbd, IDataProtectionProvider protection)
+        {
+            _sabnzbd = sabnzbd;
+            _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(PauseActivityQueueParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(PauseActivityQueueParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var ids = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadRunningDownloadIdsAsync(ct), CancellationToken);
+            foreach (var id in ids)
             {
-                await _sabnzbd.PauseJobAsync(DownloadActions.Connection(connection, _protector), nzoId, Data.IsPaused, CancellationToken);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or SabnzbdException || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
-            {
-                throw new ServiceUnavailableException("acquisition_unavailable");
+                if (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadDownloadActionAsync(id, ct), CancellationToken) is { } download)
+                {
+                    await DownloadActions.SetPausedAsync(Context, _sabnzbd, _protector, download, Data.IsPaused, CancellationToken);
+                }
             }
 
-            await Context.ExecuteBatchAsync(async (ctx, ct) =>
-            {
-                await ctx.SetDownloadPausedAsync(new DownloadPauseData(Parameters.OperationId, Data.IsPaused), ct);
-                return true;
-            }, CancellationToken);
             return new UpdateResult(true);
         }
     }

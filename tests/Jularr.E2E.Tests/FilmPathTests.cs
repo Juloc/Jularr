@@ -43,14 +43,14 @@ namespace Jularr.E2E.Tests
                 fakes.Offer(film, otherFilm);
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = otherFilm.Title }).InnerTextAsync(), "Different title");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = film.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = otherFilm.Title })).ToContainTextAsync("Different title");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = film.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, film);
 
                 // A single episode is searched by its season and number.
                 fakes.Offer(episode);
                 await Steps.SearchEpisodeAsync(page, FakeServices.SeriesTitle, "1");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = episode.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = episode.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, episode);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(film).ToString(), fakes.NzbAddress(episode).ToString() }, fakes.Grabbed.ToArray());
 
@@ -68,7 +68,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
                 Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
                 await page.GotoAsync("/Admin/Requests");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).InnerTextAsync(), "Completed");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = FakeServices.SeriesTitle })).ToContainTextAsync("Completed");
 
                 // Playing needs a real file; FFmpeg makes one.
                 if (ffmpeg is null)

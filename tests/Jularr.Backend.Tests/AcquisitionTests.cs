@@ -200,6 +200,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("import_assignment_failed", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.IsTrue(File.Exists(sourceFile), "A DB assignment failure must never delete a completed SAB download.");
+            Assert.AreEqual(0, Directory.EnumerateFiles(storage.Path, "*.mkv", SearchOption.AllDirectories).Count(), "The files placed for the failed import must not stay in the library.");
         }
 
         // A finished download of another film is excluded and the target is searched again at once.
@@ -374,6 +375,30 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync($"UPDATE \"Operations\" SET \"AttentionKey\" = 'import_storage_full' WHERE \"Id\" = {operation}");
             using var refused = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/pause", new PauseActivityDownloadDataV1(true));
             Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+
+        // The whole queue waits and goes on together; a download that waits for a person is left alone.
+        [TestMethod]
+        public async Task QueueAction_PauseAndResumeTheWholeQueue_TouchesEveryRunningDownload()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+
+            using var paused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, paused.StatusCode, await paused.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            using var resumed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause", new PauseActivityDownloadDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await host.ScalarAsync($"SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            CollectionAssert.AreEqual(new[] { "queue:pause:SABnzbd_nzo_1:", "queue:resume:SABnzbd_nzo_1:" }, usenet.Commands);
+
+            await host.Fixture.RunSqlAsync($"UPDATE \"Operations\" SET \"AttentionKey\" = 'import_storage_full' WHERE \"Id\" = {operation}");
+            using var left = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/queue/pause", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, left.StatusCode);
+            Assert.AreEqual(2, usenet.Commands.Count, "A download waiting for a person is not told to pause.");
         }
 
         // A waiting download is read again on request; one that is not waiting has nothing to retry.

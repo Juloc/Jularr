@@ -52,8 +52,8 @@ namespace Jularr.E2E.Tests
 
                 // Its name, quality and the name the library would give it show; the film is ticked.
                 var row = page.Locator(".ui-form__row").First;
-                StringAssert.Contains(await row.InnerTextAsync(), "Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR.webm");
-                StringAssert.Contains(await row.InnerTextAsync(), "→ Big Buck Bunny (2008)");
+                await Assertions.Expect(row).ToContainTextAsync("Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR.webm");
+                await Assertions.Expect(row).ToContainTextAsync("→ Big Buck Bunny (2008)");
                 await Assertions.Expect(row.Locator("input[type=checkbox]")).ToBeCheckedAsync();
                 await Evidence.SaveAsync(page, "manual-import-files");
 

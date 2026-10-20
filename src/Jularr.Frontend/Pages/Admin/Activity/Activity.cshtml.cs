@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Activity
 {
     public sealed class ActivityModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove, PauseActivityDownloadV1 pause,
-        RetryActivityImportV1 retryImport, IAntiforgery antiforgery) : JularrPage
+        RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, IAntiforgery antiforgery) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
 
@@ -48,6 +48,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 {
                     // What needs a person comes first; a failure is retried or put aside, a download is told to wait, read again or taken out.
                     table = table.Content("common.actions", item => Actions(item, csrf));
+                }
+
+                if (Tab == ActivityTabType.Queue && items.Items.Count > 0)
+                {
+                    page.Content.Add(new Div(PostForm("PauseAll", "activity.pauseAll", csrf), PostForm("ResumeAll", "activity.resumeAll", csrf)).Class("activity-actions activity-queue-actions"));
                 }
 
                 page.Content.Add(table);
@@ -89,13 +94,20 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             if (item.CanImportManually) actions.Add(new A(new Text("activity.importManually")).Class("button").Attribute("href", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
             if (item.CanRetryImport) actions.Add(Action(item, "RetryImport", "activity.retryImport", csrf));
             if (item.CanPause) actions.Add(item.DownloadStateTypeId == DownloadStateType.Paused ? Action(item, "Resume", "activity.resume", csrf) : Action(item, "Pause", "activity.pause", csrf));
-            actions.Add(Action(item, "Remove", "activity.remove", csrf));
-            actions.Add(Action(item, "RemoveAndBlock", "activity.removeAndBlock", csrf));
+            actions.Add(Confirmed(item, "Remove", "activity.remove", "activity.removeConfirm", csrf));
+            actions.Add(Confirmed(item, "RemoveAndBlock", "activity.removeAndBlock", "activity.removeAndBlockConfirm", csrf));
             return new Div([.. actions]).Class("activity-actions");
         }
 
         private Form<ActivityOperationParametersV1> Action(ActivityItemV1 item, string handler, string labelKey, string? csrf) =>
             new(form => form.Submit(labelKey), Address(handler: handler) + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new ActivityOperationParametersV1(item.Id));
+
+        // Taking a job out deletes its partial files, so the button first asks: it opens the one that does it.
+        private IUiComponent Confirmed(ActivityItemV1 item, string handler, string labelKey, string confirmKey, string? csrf) =>
+            new Details(new Summary(new Text(labelKey)), Action(item, handler, confirmKey, csrf)).Class("activity-confirm");
+
+        private IUiComponent PostForm(string handler, string labelKey, string? csrf) =>
+            new Framework.PostForm(Address(handler: handler), csrf, [], new Button(new Text(labelKey)).Attribute("type", "submit"));
 
         // The person passes the source's check in their own browser; the server takes the file link from there.
         private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
@@ -164,6 +176,16 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private async Task<IActionResult> PauseAsync(long operationId, bool isPaused)
         {
             await pause.ExecuteAsync<UpdateResult>(new ActivityOperationParametersV1(operationId), new PauseActivityDownloadDataV1(isPaused), HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostPauseAllAsync() => await PauseQueueAsync(true);
+
+        public async Task<IActionResult> OnPostResumeAllAsync() => await PauseQueueAsync(false);
+
+        private async Task<IActionResult> PauseQueueAsync(bool isPaused)
+        {
+            await pauseQueue.ExecuteAsync<UpdateResult>(new PauseActivityQueueParametersV1(), new PauseActivityDownloadDataV1(isPaused), HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
 

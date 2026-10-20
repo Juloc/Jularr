@@ -174,6 +174,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 foreach (var group in placements.GroupBy(placement => placement.Group))
                 {
                     var stem = await FreeStemAsync(library, directory, group.First().TargetStem, group.Select(placement => placement.Extension).ToArray(), ct);
+                    if (stem is null)
+                    {
+                        // No numbered name is free: nothing is written over an existing library file, and what this call placed so far goes.
+                        await RollbackAsync(library, directory, imported);
+                        return new ImportCommit("import_target_conflict", []);
+                    }
+
                     foreach (var placement in group)
                     {
                         var relativePath = stem + placement.Extension;
@@ -189,11 +196,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
+                // What this call already placed goes again, so a retry does not find its own leftovers and name the files anew.
+                await RollbackAsync(library, directory, imported);
                 return new ImportCommit("import_storage_unavailable", []);
             }
 
             if (media.Count == 0)
             {
+                await RollbackAsync(library, directory, imported);
                 return new ImportCommit("import_assignment_failed", []);
             }
 
@@ -233,8 +243,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             catch (ImportAssignmentException)
             {
-                // The database transaction rolls back; keep the download for manual-safe recovery.
+                // The database transaction rolls back; the files this call placed go, the download stays for manual-safe recovery.
+                await RollbackAsync(library, directory, imported);
                 return new ImportCommit("import_assignment_failed", []);
+            }
+            catch
+            {
+                await RollbackAsync(library, directory, imported);
+                throw;
             }
 
             // A move leaves nothing behind, but only once the library holds the files.
@@ -248,6 +264,26 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, request.MediaTypeId, ct);
             return new ImportCommit(null, assets);
+        }
+
+        // The files this import itself placed, which did not exist before it chose their names, and the folders that leaves empty. A source is never touched.
+        private static async Task RollbackAsync(StorageFiles library, string directory, IReadOnlyList<ImportedFile> placed)
+        {
+            try
+            {
+                foreach (var file in placed)
+                {
+                    await library.DeleteFileAsync(StoragePath.Combine(directory, file.RelativePath), CancellationToken.None);
+                }
+
+                foreach (var folder in placed.Select(file => StoragePath.Parent(file.RelativePath)).Where(folder => folder.Length > 0).Distinct(StringComparer.Ordinal))
+                {
+                    await library.DeleteEmptyFoldersAsync(StoragePath.Combine(directory, folder), directory, CancellationToken.None);
+                }
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+            }
         }
 
         // What a move took from its folder goes, and so do the folders it emptied; a source that cannot be changed keeps its files.
@@ -288,9 +324,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         }
 
         // The first numbered alternative whose files are all free.
-        private static async Task<string> FreeStemAsync(StorageFiles library, string directory, string stem, IReadOnlyList<string> extensions, CancellationToken ct)
+        internal static async Task<string?> FreeStemAsync(StorageFiles library, string directory, string stem, IReadOnlyList<string> extensions, CancellationToken ct)
         {
-            for (var attempt = 1; ; attempt++)
+            for (var attempt = 1; attempt <= 99; attempt++)
             {
                 var candidate = LibraryNaming.Alternative(stem, attempt);
                 var free = true;
@@ -299,11 +335,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     free &= !await library.ExistsAsync(StoragePath.Combine(directory, candidate + extension), ct);
                 }
 
-                if (free || attempt == 99)
+                if (free)
                 {
                     return candidate;
                 }
             }
+
+            return null;
         }
 
         private static async Task<bool> IsDocumentAsync(StorageFiles source, string path, string extension, CancellationToken ct)

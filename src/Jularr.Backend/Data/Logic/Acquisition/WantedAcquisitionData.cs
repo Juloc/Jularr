@@ -301,6 +301,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string ExternalId { get; }
     }
 
+    internal sealed class OperationIdData(long operationId) : BaseData
+    {
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; } = operationId;
+    }
+
     internal sealed class DownloadLookupData(long? operationId) : BaseData
     {
         [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
@@ -311,8 +317,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
-            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, int? expectedParentUnitNumber = null, int? expectedUnitStart = null, int? expectedUnitEnd = null)
+            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, int? expectedParentUnitNumber = null, int? expectedUnitStart = null, int? expectedUnitEnd = null,
+            bool isPaused = false)
         {
+            IsPaused = isPaused;
             ExpectedParentUnitNumber = expectedParentUnitNumber;
             ExpectedUnitStart = expectedUnitStart;
             ExpectedUnitEnd = expectedUnitEnd;
@@ -380,6 +388,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl))]
         public string? SourceLinkUrl { get; }
+
+        // A download told to wait is not run.
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsPaused))]
+        public bool IsPaused { get; }
 
         // Tracks the album's edition names; files are tied to them only when the counts agree.
         [DataField(typeof(WorkFields), nameof(WorkFields.TrackCount))]
