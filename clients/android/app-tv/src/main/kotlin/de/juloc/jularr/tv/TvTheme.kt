@@ -71,5 +71,22 @@ fun neutralColors(): TvColors = TvColors(
     success = Color(0xFF7FE0A9),
 )
 
+/**
+ * The color of the availability of a title, as the shared tokens know it. The nine states of
+ * the Backend are the states of the web.
+ */
+fun availabilityStateName(stateId: Int?): String? = when (stateId) {
+    1 -> "available"
+    2 -> "partial"
+    3 -> "missing"
+    4 -> "downloading"
+    5 -> "searching"
+    6 -> "requested"
+    7 -> "profileAudio"
+    8 -> "otherAudio"
+    9 -> "partialOtherAudio"
+    else -> null
+}
+
 private fun parse(value: String): Color = runCatching { Color(android.graphics.Color.parseColor(value)) }
     .getOrDefault(Color(0xFF7C3AED))

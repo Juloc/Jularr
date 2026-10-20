@@ -31,6 +31,14 @@ enum class TvFocusArea {
     Content,
 }
 
+/** The directions of the D-pad. */
+enum class TvFocusDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
 /**
  * One card of a shelf. The client shows what the server says: the title, the poster, the
  * meta line of the work and how far it is watched, read or listened to.

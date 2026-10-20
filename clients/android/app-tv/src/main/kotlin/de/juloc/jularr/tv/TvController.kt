@@ -2,6 +2,7 @@ package de.juloc.jularr.tv
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import de.juloc.jularr.core.api.AppApiClient
@@ -107,6 +108,13 @@ class TvController(context: Context) {
 
     /** Where the focus is now; the D-pad moves between the areas in the reading order. */
     var focusArea by mutableStateOf(TvFocusArea.Rail)
+        private set
+
+    /** The order of the focus inside the content: the rows from top to bottom. */
+    val focusOrder = TvFocusOrder()
+
+    /** The entry of the content the focus is in. */
+    var focusedEntry by mutableStateOf<FocusRequester?>(null)
         private set
 
     /** The plan of the running playback. */
@@ -223,6 +231,34 @@ class TvController(context: Context) {
     /** The focus moved into an area of the screen. */
     fun focusMovedTo(area: TvFocusArea) {
         focusArea = area
+    }
+
+    /** The focus moved onto an entry of the content. */
+    fun focusMovedTo(entry: FocusRequester?) {
+        focusedEntry = entry
+    }
+
+    /**
+     * The D-pad moves the focus inside the content: left and right inside the row, up and down
+     * to the row above or below.
+     */
+    fun moveFocus(direction: TvFocusDirection): Boolean {
+        val entry = focusedEntry ?: return false
+        val next = when (direction) {
+            TvFocusDirection.Left -> focusOrder.moveInside(entry, forward = false)
+            TvFocusDirection.Right -> focusOrder.moveInside(entry, forward = true)
+            TvFocusDirection.Up -> focusOrder.moveToRow(entry, up = true)
+            TvFocusDirection.Down -> focusOrder.moveToRow(entry, up = false)
+        } ?: return false
+        next.requestFocus()
+        return true
+    }
+
+    /** The first entry of the content; the D-pad returns here from the top row. */
+    fun focusFirstEntry(): Boolean {
+        val first = focusOrder.firstEntry() ?: return false
+        first.requestFocus()
+        return true
     }
 
     /**

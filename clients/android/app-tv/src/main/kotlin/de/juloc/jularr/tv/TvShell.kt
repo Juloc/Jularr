@@ -55,17 +55,27 @@ fun TvShell(controller: TvController) {
             modifier = Modifier
                 .fillMaxSize()
                 .onKeyEvent { event ->
-                    // The reading order: the rail, then the top row, then the content.
+                    // The reading order: the rail, then the top row, then the content. Inside
+                    // the content the D-pad walks the rows of the screen.
                     val native = event.nativeKeyEvent
-                    if (native.action == android.view.KeyEvent.ACTION_DOWN &&
-                        native.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
-                        controller.focusArea == TvFocusArea.Content
-                    ) {
-                        controller.focusMovedTo(TvFocusArea.TopRow)
-                        topRowFocus.requestFocus()
-                        true
-                    } else {
-                        false
+                    if (native.action != android.view.KeyEvent.ACTION_DOWN) {
+                        return@onKeyEvent false
+                    }
+                    when (native.keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_LEFT ->
+                            controller.moveFocus(TvFocusDirection.Left)
+
+                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+                            controller.moveFocus(TvFocusDirection.Right)
+
+                        android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                            controller.moveFocus(TvFocusDirection.Up) ||
+                                enterTopRow(controller, topRowFocus)
+
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                            controller.moveFocus(TvFocusDirection.Down)
+
+                        else -> false
                     }
                 },
         ) {
@@ -109,6 +119,18 @@ fun TvShell(controller: TvController) {
             }
         }
     }
+}
+
+/**
+ * The D-pad's up leaves the content for the top row; the magnifier of the search waits there.
+ */
+private fun enterTopRow(controller: TvController, focus: FocusRequester): Boolean {
+    if (controller.focusArea != TvFocusArea.Content) {
+        return false
+    }
+    controller.focusMovedTo(TvFocusArea.TopRow)
+    focus.requestFocus()
+    return true
 }
 
 /**

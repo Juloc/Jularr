@@ -180,12 +180,12 @@ fun TvSearchScreen(controller: TvController) {
                     color = colors.text,
                 )
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Fixed(4),
                     horizontalArrangement = Arrangement.spacedBy(TvLayout.Gap),
                     verticalArrangement = Arrangement.spacedBy(TvLayout.Gap),
                 ) {
                     items(titles, key = { "${it.workId ?: it.tmdbId}-${it.title}" }) { item ->
-                        TvCardView(item.toTvCard(controller.texts), controller)
+                        TvCardView(item.toTvCard(controller.texts), controller, "trending")
                     }
                 }
             } else if (controller.searchQuery.isNotEmpty()) {
