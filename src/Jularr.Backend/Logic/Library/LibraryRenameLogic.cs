@@ -19,6 +19,7 @@ namespace Jularr.Backend.Logic.Library
                 """
                 SELECT
                     file."Id",
+                    work."Id" AS "WorkId",
                     file."LibraryRootId",
                     root."Name" AS "LibraryRootName",
                     root."MediaTypeId",
@@ -149,6 +150,19 @@ namespace Jularr.Backend.Logic.Library
             }
 
             return renames;
+        }
+
+        // The part of the plan that names one title's files; the whole plan still decides which names are taken.
+        public static IReadOnlyList<LibraryRenameData> PlanFor(IReadOnlyList<LibraryRenameFileData> files, NamingSet patterns, long? workId)
+        {
+            var plan = Plan(files, patterns);
+            if (workId is null)
+            {
+                return plan;
+            }
+
+            var own = files.Where(file => file.WorkId == workId).Select(file => file.Id).ToHashSet();
+            return plan.Where(rename => own.Contains(rename.MediaStoredFileId)).ToArray();
         }
 
         // Applying refuses a plan that differs from the preview.

@@ -6,6 +6,7 @@ using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
@@ -535,6 +536,76 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("WEBDL-1080p", file.QualityKey);
             Assert.AreNotEqual(FileQualityGrade.Unknown, file.FileQualityGradeId);
             Assert.AreEqual(4096L, page.OnDiskBytes);
+        }
+
+        // An administrator deletes a file at once: it leaves the disk and the library, the film is searched again, and a unit is only switched off when the setting says so.
+        [TestMethod]
+        public async Task DeleteLibraryFiles_RemovesTheFile_AndSearchesTheTargetAgain()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"))!;
+            var path = Directory.EnumerateFiles(Path.Combine(storage.Path, "1"), "*.mkv", SearchOption.AllDirectories).Single(file => !file.Contains("Incoming", StringComparison.Ordinal));
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '30 days'");
+
+            using var deleted = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/files/deletion", new DeleteLibraryFilesDataV1([fileId]));
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            var result = (await deleted.Content.ReadFromJsonAsync<DeleteLibraryFilesResultV1>())!;
+            Assert.AreEqual(1, result.DeletedCount);
+            Assert.AreEqual(0, result.KeptCount);
+            Assert.IsFalse(File.Exists(path), "The file is still on disk.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"Id\" = " + fileId));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = " + wantedId));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = " + (byte)ActivityEventType.FileDeleted + " AND \"Path\" IS NOT NULL"));
+
+            // A file already gone is refused nowhere: its record just leaves.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/files/deletion", new DeleteLibraryFilesDataV1([fileId]));
+            Assert.AreEqual(0, (await again.Content.ReadFromJsonAsync<DeleteLibraryFilesResultV1>())!.DeletedCount);
+        }
+
+        [TestMethod]
+        public async Task DeleteLibraryFiles_SwitchesTheEpisodeOff_OnlyWhenTheSettingSaysSo()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Show"));
+            var workId = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") VALUES ({workId}, 1, 1);
+                INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "IsMonitored")
+                SELECT {workId}, season."Id", 2, episode."Number", TRUE
+                FROM (VALUES (1), (2)) AS episode ("Number") CROSS JOIN "WorkUnits" AS season
+                WHERE season."WorkId" = {workId} AND season."WorkUnitTypeId" = 1;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (900, {workId});
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (900, {workId}, 900);
+                INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                SELECT {workId}, 900, unit."Id", 1 FROM "WorkUnits" AS unit WHERE unit."WorkUnitTypeId" = 2;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "MissingSince")
+                SELECT (SELECT "Id" FROM "LibraryRoots" WHERE "RelativePath" = 'Movies'), 'Show/E' || unit."Number" || '.mkv', 10, now(), asset."Id", now(), now()
+                FROM "MediaAssets" AS asset JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId";
+                """);
+            var files = (await host.ScalarAsync("SELECT array_agg(\"Id\" ORDER BY \"Id\") FROM \"StoredFiles\""))!;
+            var ids = ((long[])files);
+
+            // Off by default: the episode stays monitored and is searched again.
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/files/deletion", new DeleteLibraryFilesDataV1([ids[0]]));
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""));
+
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"UnmonitorsDeletedUnits\" = TRUE");
+            using var second = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/files/deletion", new DeleteLibraryFilesDataV1([ids[1]]));
+            Assert.AreEqual(HttpStatusCode.OK, second.StatusCode, await second.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""));
         }
 
         // Episodes show as missing, unaired or not monitored, counted without the specials.

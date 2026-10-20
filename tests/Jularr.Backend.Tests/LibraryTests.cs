@@ -974,6 +974,20 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new[] { "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv", "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).en.srt" },
                 plan.Items.Select(item => item.TargetPath).ToArray());
             Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
+            Assert.AreEqual(2L, plan.Total);
+
+            // A title's own page sees only its files, and applies only that part.
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + workId);
+            var ownPlan = (await own.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(2, ownPlan.Items.Count);
+            using var other = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + (workId + 1000));
+            var otherPlan = (await other.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(0, otherPlan.Items.Count);
+            Assert.AreEqual(0L, otherPlan.Total);
+            using var foreign = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(plan.Fingerprint, workId + 1000));
+            Assert.AreEqual(HttpStatusCode.BadRequest, foreign.StatusCode);
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
 
             // Only the exact preview is applied.
             using var changed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(new string('0', 64)));

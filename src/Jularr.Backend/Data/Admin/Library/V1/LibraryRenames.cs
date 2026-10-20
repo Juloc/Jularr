@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Library;
+using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Library.V1
 {
@@ -11,14 +12,19 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class ReadLibraryRenamesParametersV1 : BaseParameters
     {
-        public ReadLibraryRenamesParametersV1(int page = 1, int pageSize = 100)
+        public ReadLibraryRenamesParametersV1(int page = 1, int pageSize = 100, long? workId = null)
         {
             Page = page;
             PageSize = pageSize;
+            WorkId = workId;
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        // Only the renames of this title's files.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
     }
 
     public sealed class LibraryRenameV1 : BaseResponse
@@ -47,11 +53,16 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     // One page of the whole plan; applying needs the fingerprint of exactly this plan.
     public sealed class LibraryRenamePlanV1 : BaseResponse
     {
-        public LibraryRenamePlanV1(BaseDataList<LibraryRenameV1> items, string fingerprint)
+        public LibraryRenamePlanV1(BaseDataList<LibraryRenameV1> items, string fingerprint, long total = 0)
         {
             Items = items;
             Fingerprint = fingerprint;
+            Total = total;
         }
+
+        // How many files the whole plan renames; one page of them is listed.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
+        public long Total { get; }
 
         public BaseDataList<LibraryRenameV1> Items { get; }
 
@@ -61,10 +72,15 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class ApplyLibraryRenamesDataV1 : BaseData
     {
-        public ApplyLibraryRenamesDataV1(string fingerprint)
+        public ApplyLibraryRenamesDataV1(string fingerprint, long? workId = null)
         {
             Fingerprint = fingerprint;
+            WorkId = workId;
         }
+
+        // Only the renames of this title's files; the fingerprint is that of this part.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RenameFingerprint))]
         public string Fingerprint { get; }

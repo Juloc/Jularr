@@ -18,7 +18,7 @@ whether several releases of a film or episode are kept and what happens to a rep
 file (deleted, moved to a recycle folder inside its library or to one folder on a storage
 connection) and after how many days recycled files leave, plus the public address for QR
 codes and the trusted reverse proxies (`cidr[]`). RecycledFiles lists what Jularr
-moved there, the only files its cleanup removes; MediaAssets.IsProtected keeps versions
+moved there, the only files its cleanup removes; `UnmonitorsDeletedUnits` (off) switches an episode or volume off when an administrator deletes its file; MediaAssets.IsProtected keeps versions
 an administrator added or protected from automatic upgrades. Library gates manual
 media/watchlist Services; Profiles (off by default) allows several profiles per account,
 otherwise the view SelectableProfiles offers each account its main profile only; Requests gates request creation/moderation and manual

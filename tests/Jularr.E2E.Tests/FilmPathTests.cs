@@ -103,6 +103,26 @@ namespace Jularr.E2E.Tests
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The episode started at " + resumed + " s instead of continuing.");
 
+                // An administrator deletes the film's file on its page and the episode's in Manage files; both are missing again and the files are gone.
+                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete file" }) }));
+                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.GetByText("This film has no file yet.")).ToBeVisibleAsync();
+                Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film's file is still there.");
+
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await Evidence.SaveAsync(page, "work-series-with-file");
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Manage files", Exact = true }));
+                var managed = page.Locator("tr.work-row").Filter(new() { HasText = ".webm" });
+                StringAssert.Contains(await managed.InnerTextAsync(), "Matches the naming");
+                await Evidence.SaveAsync(page, "work-manage-files");
+                await managed.GetByRole(AriaRole.Checkbox).CheckAsync();
+                await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete selected files" }) }));
+                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
+                Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode's file is still there.");
+                await page.GotoAsync(page.Url.Split('?')[0]);
+                StringAssert.Contains(await EpisodeRow(page, "1").InnerTextAsync(), "Missing");
+
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)

@@ -28,6 +28,8 @@ CREATE TABLE "InstanceSettings" (
     "RecycleStorageMountId" bigint NULL,
     "RecyclePath" varchar(500) NULL CHECK ("RecyclePath" IS NULL OR length("RecyclePath") > 0 AND "RecyclePath" NOT LIKE '/%'),
     "RecycleDays" smallint NOT NULL DEFAULT 7 CHECK ("RecycleDays" BETWEEN 0 AND 3650),
+    -- An episode or volume whose file an administrator deleted is switched off; otherwise it stays monitored and is searched again.
+    "UnmonitorsDeletedUnits" boolean NOT NULL DEFAULT FALSE,
     CHECK (("RecycleModeId" = 3) = ("RecycleStorageMountId" IS NOT NULL) AND ("RecycleStorageMountId" IS NULL) = ("RecyclePath" IS NULL)),
     -- Plex sign-in for linked accounts; registration lets users of the connected server's chosen libraries (any, when none is chosen) ask for an account.
     "PlexSignIn" boolean NOT NULL DEFAULT FALSE,

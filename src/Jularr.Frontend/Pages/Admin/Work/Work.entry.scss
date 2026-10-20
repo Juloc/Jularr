@@ -273,6 +273,15 @@
     td[data-col="monitored"] { width: 1%; }
 }
 
+// Manage files
+
+.work-manage { display: grid; gap: 12px; }
+.work-manage__bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.work-table--manage td:first-child, .work-table--manage th:first-child { width: 1%; }
+.work-manage__file { display: grid; gap: 2px; }
+.work-manage__target { color: var(--accent-text); }
+.work-manage__matches { color: var(--muted); font-size: 12px; }
+
 .work-title-text { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 
 .work-sort {
