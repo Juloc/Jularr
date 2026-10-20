@@ -1,8 +1,9 @@
+// The mockups' switch: a 40px pill with a 16px knob; off keeps a muted outline and knob so the state stays readable.
 .toggle {
     position: relative;
     display: inline-flex;
     align-items: center;
-    min-height: 44px;
+    min-height: var(--control-height);
     gap: 12px;
     cursor: pointer;
 
@@ -11,21 +12,23 @@
     &__label { font-weight: 600; overflow-wrap: anywhere; }
     &__track {
         position: relative;
-        flex: 0 0 46px;
-        height: 28px;
+        flex: 0 0 40px;
+        height: 24px;
         border: 1px solid var(--muted);
         border-radius: 999px;
-        background: var(--surface-hover);
+        background: var(--field);
+        transition: background-color var(--transition), border-color var(--transition);
 
         &::after {
             content: "";
             position: absolute;
-            inset-block-start: 4px;
-            inset-inline-start: 4px;
-            width: 18px;
-            height: 18px;
+            inset-block-start: 3px;
+            inset-inline-start: 3px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             background: var(--muted);
+            transition: inset-inline-start var(--transition), background-color var(--transition);
         }
     }
 
@@ -33,9 +36,9 @@
         border-color: var(--accent);
         background: var(--accent);
 
-        &::after { inset-inline-start: 22px; background: var(--accent-contrast); }
+        &::after { inset-inline-start: 19px; background: var(--accent-contrast); }
     }
-    & > input:focus-visible + &__track { outline: 2px solid var(--focus); outline-offset: 2px; }
+    & > input:focus-visible + &__track { outline: 3px solid var(--focus); outline-offset: 2px; }
     & > input:disabled ~ span { opacity: .6; cursor: not-allowed; }
     & > input[aria-invalid="true"] + &__track { border-color: var(--danger); }
 }

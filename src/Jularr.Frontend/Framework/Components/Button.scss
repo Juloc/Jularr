@@ -1,44 +1,42 @@
+// The mockups' button: a pill on the quiet line; hover moves the line and the text to the accent, press shrinks it a hair.
 .button {
     background: var(--surface);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 44px;
-    padding: 9px 15px;
+    min-height: var(--control-height);
+    padding: 8px 17px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     color: var(--text);
     cursor: pointer;
-    font-weight: 650;
+    font-size: var(--text-control);
+    font-weight: var(--weight-control);
     text-decoration: none;
     gap: 8px;
-    transition: background-color .12s, border-color .12s;
+    transition: background-color var(--transition), border-color var(--transition), color var(--transition), transform var(--transition);
 
-    &:hover:not(:disabled) { background-color: var(--surface-hover); }
+    &:hover:not(:disabled) { border-color: var(--accent-outline); color: var(--accent-text); }
+    &:active:not(:disabled) { transform: scale(.985); }
     &[aria-pressed="true"] {
         border-color: var(--accent);
         background-color: var(--accent);
         color: var(--accent-contrast);
 
-        &:hover:not(:disabled) { background-color: var(--accent-hover); }
+        &:hover:not(:disabled) { border-color: var(--accent-hover); background-color: var(--accent-hover); color: var(--accent-contrast); }
     }
 
-    &--compact { min-height: 32px; padding: 5px 10px; font-size: 12px; }
-    &--icon { width: 36px; min-height: 36px; padding: 0; border-radius: 50%; .ui-icon { width: 18px; height: 18px; } }
-
-    @media (pointer: coarse) {
-        &--compact { min-height: 44px; }
-        &--icon { width: 44px; min-height: 44px; }
-    }
+    &--compact { min-height: var(--control-height-compact); padding: 4px 12px; font-size: var(--text-small); }
+    &--icon { width: var(--control-height); min-height: var(--control-height); padding: 0; border-radius: 50%; .ui-icon { width: var(--icon-size); height: var(--icon-size); } }
 
     &--primary {
         border-color: var(--accent);
         background-color: var(--accent);
         color: var(--accent-contrast);
 
-        &:hover:not(:disabled) { background-color: var(--accent-hover); }
+        &:hover:not(:disabled) { border-color: var(--accent-hover); background-color: var(--accent-hover); color: var(--accent-contrast); }
     }
 
     // Opaque, quietly muted state.
-    &:disabled { opacity: 1; background: var(--surface-hover); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+    &:disabled { opacity: 1; background: var(--field); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
 }
