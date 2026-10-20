@@ -67,6 +67,7 @@ namespace Jularr.Integrations.Logic.Browser
                     // A source that refuses this client gets a new one next time.
                     if (_refused)
                     {
+                        await ForgetAsync(uri, ct);
                         Reset();
                     }
 
@@ -159,6 +160,20 @@ namespace Jularr.Integrations.Logic.Browser
                 {
                     // The profile stays; the next attempt uses it as it is.
                 }
+            }
+        }
+
+        // A refused client is worth nothing: the source's own state of it goes, so the next attempt is a new one.
+        private async Task ForgetAsync(Uri uri, CancellationToken ct)
+        {
+            try
+            {
+                await _client!.SendAsync("Network.clearBrowserCookies", null, ct);
+                await _client.SendAsync("Storage.clearDataForOrigin", new { origin = uri.GetLeftPart(UriPartial.Authority), storageTypes = "all" }, ct);
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
+            {
+                // The browser is gone; the next attempt starts a new one.
             }
         }
 
