@@ -1,0 +1,33 @@
+.choice-group {
+    padding: 14px 0;
+    min-width: 0;
+
+    &__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+    &__label { font-size: 13px; font-weight: 770; }
+    &__items { display: flex; flex-wrap: wrap; gap: 7px; }
+
+    &__item {
+        position: relative;
+        display: inline-flex;
+        cursor: pointer;
+
+        // The native input stays the control; the pill shows its state.
+        input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+        span {
+            display: inline-flex;
+            align-items: center;
+            min-height: 40px;
+            padding: 0 15px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 710;
+        }
+
+        &:hover span { border-color: var(--accent-line); color: var(--text); }
+        input:checked + span { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+        input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+    }
+}

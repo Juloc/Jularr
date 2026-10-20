@@ -7,4 +7,4 @@
     var definition = (ViewContext.ViewData.Model as JularrPage)?.Definition;
     var titleKey = definition?.TitleKey ?? "nav.home";
 }
-@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" ? Context.Request.Query["type"].FirstOrDefault() : null, definition?.Parents, definition?.DocumentTitle), T))
+@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" && Context.Request.Query["type"].ToString() is { Length: > 0 } scopes ? scopes : null, definition?.Parents, definition?.DocumentTitle), T))

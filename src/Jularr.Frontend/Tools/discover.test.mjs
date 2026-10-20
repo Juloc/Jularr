@@ -59,6 +59,7 @@ function discover(landing = false) {
         exports: {},
         require: name => {
             if (name === '../../../Framework/Components/MediaCard') return { initializeCards() {} };
+            if (name === '../../../Framework/Components/HeroCarousel') return { initializeHero() {} };
             if (name === '../../../Modules/Navigation/PageSwap') return { onPage: (_, setup) => setup(), inserted() {} };
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
@@ -183,9 +184,9 @@ test('recommendation fragments preserve local content and obsolete responses are
 
 test('Hero never arrives in an asynchronous recommendations fragment', () => {
     const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');
-    assert.match(source, /await LoadFeaturedAsync\(selected\)/);
+    assert.match(source, /await LoadHeroAsync\(selected\)/);
     assert.doesNotMatch(source, /discover-featured/);
-    assert.match(source, /if \(_featured is not null\)/);
+    assert.match(source, /if \(_hero\.Count > 0\)/);
 });
 
 test('suggestions follow typing, drop obsolete answers and close on Escape', async () => {
