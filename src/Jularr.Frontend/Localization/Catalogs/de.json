@@ -1068,6 +1068,18 @@
    "Remove last window",
    "Letztes Fenster entfernen"
   ],
+  "admin.catalog.covers": [
+   "Images of other titles",
+   "Bilder anderer Titel"
+  ],
+  "admin.catalog.coversKeepDays": [
+   "Keep unused images for days",
+   "Ungenutzte Bilder aufbewahren (Tage)"
+  ],
+  "admin.catalog.coversMaximumMegabytes": [
+   "Largest size in MB, 0 keeps none",
+   "Größte Menge in MB, 0 speichert nichts"
+  ],
   "form.time.hour": [
    "Hour",
    "Stunde"

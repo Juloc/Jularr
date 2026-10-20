@@ -1,6 +1,6 @@
 export interface SpeechItem { text: string; range: Range }
 export interface SpeechOptions { rate: number; pitch: number; volume: number; language: string; voice?: SpeechSynthesisVoice }
-export type SpeechState = 'idle' | 'speaking' | 'paused' | 'failed';
+export type SpeechState = 'idle' | 'loading' | 'speaking' | 'paused' | 'failed';
 
 export function chunkEnd(text: string, start: number): number {
     let end = Math.min(text.length, start + 240);

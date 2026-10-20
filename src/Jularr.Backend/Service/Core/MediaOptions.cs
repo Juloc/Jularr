@@ -11,6 +11,9 @@ namespace Jularr.Backend.Service.Core
         // Seek thumbnails; by default under the data folder.
         public string TrickplayPath { get; set; } = "";
 
+        // Posters, backdrops and episode images fetched from the providers, one folder per Work; by default under the data folder.
+        public string CoversPath { get; set; } = "";
+
         // The Bergamot engine and language models, kept once a reader needs them; by default under the data folder.
         public string TranslationPath { get; set; } = "";
 

@@ -11,9 +11,20 @@ const files = Object.values(manifest).flatMap(entry => [entry.file, ...(entry.cs
 
 test("all published assets exist with content fingerprints", () => {
     for (const file of [...new Set([...files, icons.file])]) {
-        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif)$/i, file);
+        assert.match(file, /^assets\/[A-Za-z0-9_./-]+-[A-Za-z0-9_-]{8,}\.(?:css|js|svg|png|jpe?g|webp|avif|txt|wasm|data)$/i, file);
         assert.ok(existsSync(join(build, file)), "missing compiled " + file);
     }
+});
+
+test("Speech notices and matched worker runtime are published with fingerprints", () => {
+    const assets = readdirSync(join(build, "assets"));
+    for (const pattern of [/^NOTICE\.generated-[\w-]{8,}\.txt$/, /^sherpa-onnx-wasm-main-tts-[\w-]{8,}\.wasm$/,
+        /^sherpa-onnx-wasm-main-tts-[\w-]{8,}\.data$/, /^neural\.worker-[\w-]{8,}\.js$/]) {
+        assert.equal(assets.filter(file => pattern.test(file)).length, 1, String(pattern));
+    }
+    const notices = readFileSync(join(build, "assets", assets.find(file => /^NOTICE\.generated-/.test(file))), "utf8");
+    assert.ok(notices.includes("GNU GENERAL PUBLIC LICENSE"));
+    assert.match(notices, /Matching public browser-client source snapshot:|DEVELOPMENT BUILD:/);
 });
 
 test("shared asset and page/module entries have separate manifests", () => {

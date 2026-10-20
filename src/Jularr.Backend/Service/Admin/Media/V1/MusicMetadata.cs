@@ -4,13 +4,14 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.MusicBrainz;
 using Jularr.Integrations.Logic.MusicBrainz;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // MusicBrainz lookups and imports: an album is the Work, its tracks are the units.
-    internal sealed class MusicMetadata(MusicBrainzClient musicBrainz)
+    internal sealed class MusicMetadata(MusicBrainzClient musicBrainz, CoverStore covers)
     {
         public const string Namespace = "musicbrainz";
 
@@ -58,12 +59,16 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // The album's artists, and a track's own where they differ.
             var people = WorkPeopleLogic.Rows(album.People)
                 .Concat(details.Tracks.SelectMany(track => WorkPeopleLogic.Rows(track.People, WorkUnitType.Track, null, track.Number))).ToArray();
-            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
                 return workId;
             }, ct);
+
+            // The cover is kept locally.
+            await covers.StoreAsync(context, saved, ct);
+            return saved;
         }
 
         private static Exception Translate(MusicBrainzException exception) => exception.Failure switch
