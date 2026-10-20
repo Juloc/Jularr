@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Reading;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
 {
@@ -202,6 +203,50 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public bool? IsRomVerified { get; }
     }
 
+    // A language a book's sections were machine translated into while it was read: one document, one language, how much of it, how big it is.
+    public sealed class WorkManagementTranslationV1 : BaseResponse
+    {
+        public WorkManagementTranslationV1(long documentId, string language, long? workEditionId, int coveragePercent, long bytes)
+        {
+            DocumentId = documentId;
+            Language = language;
+            WorkEditionId = workEditionId;
+            CoveragePercent = coveragePercent;
+            Bytes = bytes;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationLanguage))]
+        public string Language { get; }
+
+        // The edition the translated file belongs to.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
+        public long? WorkEditionId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.CoveragePercent))]
+        public int CoveragePercent { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationBytes))]
+        public long Bytes { get; }
+    }
+
+    public sealed class DeleteTranslationParametersV1 : BaseParameters
+    {
+        public DeleteTranslationParametersV1(long documentId, string language)
+        {
+            DocumentId = documentId;
+            Language = language;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationLanguage))]
+        public string Language { get; }
+    }
+
     // An edition of a book or a platform of a game with what the page shows of it; a platform carries the target that is monitored and searched for it.
     public sealed class WorkManagementGroupV1 : BaseResponse
     {
@@ -261,8 +306,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public WorkManagementV1(long id, long? wantedItemId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, int? runtimeMinutes, DateOnly? releasedOn,
             string? overview, string? genres, string? studio, string? posterUrl, string? backdropUrl, long onDiskBytes, long missingCount, long upgradeWantedCount, long unairedCount, long seasonCount,
-            long episodeCount, BaseDataList<WorkManagementUnitV1> units, BaseDataList<WorkManagementFileV1> files, BaseDataList<WorkManagementGroupV1>? groups = null)
+            long episodeCount, BaseDataList<WorkManagementUnitV1> units, BaseDataList<WorkManagementFileV1> files, BaseDataList<WorkManagementGroupV1>? groups = null, BaseDataList<WorkManagementTranslationV1>? translations = null)
         {
+            Translations = translations ?? new BaseDataList<WorkManagementTranslationV1>([]);
             Groups = groups ?? new BaseDataList<WorkManagementGroupV1>([]);
             Id = id;
             WantedItemId = wantedItemId;
@@ -349,5 +395,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public BaseDataList<WorkManagementFileV1> Files { get; }
 
         public BaseDataList<WorkManagementGroupV1> Groups { get; }
+
+        public BaseDataList<WorkManagementTranslationV1> Translations { get; }
     }
 }

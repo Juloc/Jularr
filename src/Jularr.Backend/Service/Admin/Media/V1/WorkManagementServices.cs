@@ -367,6 +367,47 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 groups = await Context.ReadSql.ReadListAsync<WorkManagementGroupV1>(sql, CancellationToken);
             }
 
+            // What readers had translated of the book's files
+            IReadOnlyList<WorkManagementTranslationV1> translations = [];
+            if (hero.MediaTypeId == MediaType.Book)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        document."Id" AS "DocumentId",
+                        split_part(translated."Path", '/', 2) AS "Language",
+                        version."WorkEditionId",
+                        least(100, round(100.0 * count(*) / greatest(1, (
+                            SELECT
+                                count(*)
+                            FROM
+                                "ReadingResources" AS section
+                            WHERE
+                                section."ReadingDocumentId" = document."Id"
+                                AND section."Path" LIKE ':section/%'
+                        ))))::integer AS "CoveragePercent",
+                        sum(length(translated."Bytes"))::bigint AS "Bytes"
+                    FROM
+                        "ReadingDocuments" AS document
+                        JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                        JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
+                        JOIN "ReadingResources" AS translated ON translated."ReadingDocumentId" = document."Id" AND translated."Path" LIKE ':translation/%'
+                    WHERE
+                        asset."WorkId" = @WorkId
+                    GROUP BY
+                        document."Id",
+                        split_part(translated."Path", '/', 2),
+                        version."WorkEditionId"
+                    ORDER BY
+                        "Language",
+                        document."Id";
+                    """;
+                sql.Parameters.Add(Parameters);
+                translations = await Context.ReadSql.ReadListAsync<WorkManagementTranslationV1>(sql, CancellationToken);
+            }
+
             // Further units of a file with several episodes
             sql = new SqlStatement();
             sql.Statement =
@@ -410,7 +451,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return new WorkManagementV1(hero.Id, hero.WantedItemId, hero.MediaTypeId, hero.MediaSubtypeId, hero.CanonicalTitle, hero.ReleaseYear, hero.RuntimeMinutes, hero.ReleasedOn, hero.Overview, hero.Genres,
                 hero.Studio, hero.PosterUrl, hero.BackdropUrl, present.Sum(file => file.SizeBytes), leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Missing), upgrades,
                 leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Unaired), units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number > 0), episodes.Length,
-                new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files), new BaseDataList<WorkManagementGroupV1>(groups));
+                new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files), new BaseDataList<WorkManagementGroupV1>(groups), new BaseDataList<WorkManagementTranslationV1>(translations));
         }
     }
 }

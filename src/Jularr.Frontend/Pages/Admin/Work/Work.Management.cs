@@ -221,8 +221,30 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (units.Length == 0) return new P(new Text(tracks ? "work.empty.tracks" : "work.empty.volumes")).Attribute("role", "status");
             var kind = tracks ? "tracks" : "volumes";
             if (tracks && units.Select(unit => unit.DiscNumber).Distinct().Count() > 1) return Discs(work, units, csrf);
-            return new Div(new Div(new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", kind).Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools"),
-                UnitTable(units, work, [], csrf, kind), ColumnPicker()).Class("work-seasons work-volumes");
+            return new Div([new Div(new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", kind).Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools"),
+                UnitTable(units, work, [], csrf, kind), .. Translations(work, csrf) is { } translations ? new[] { translations } : [], ColumnPicker()]).Class("work-seasons work-volumes");
+        }
+
+        // What readers had machine translated of a book, language by language, with a delete that clears one language only; shown to those who may and only with translations present.
+        private IUiComponent? Translations(WorkManagementV1 work, string? csrf)
+        {
+            if (work.Translations.Count == 0 || !texts.Can("media.manual.update", "Library", "Reading", "Translation")) return null;
+            var editions = work.Groups.Where(group => group.WorkGroupKindId == WorkGroupKind.Edition).ToDictionary(group => group.Id);
+            string From(WorkManagementTranslationV1 item) => item.WorkEditionId is { } id && editions.TryGetValue(id, out var edition)
+                ? edition.Name ?? edition.Title ?? (edition.LanguageCode is { } code ? WorkLanguages.Name(WorkLanguages.Code(code)) : texts["work.edition.plain"]) : "";
+            var rows = work.Translations.Select(item => (IUiComponent)new Tr(
+                new Td(new ValueText(WorkLanguages.Name(WorkLanguages.Code(item.Language)))), new Td(new ValueText(From(item))),
+                new Td(new ValueText(item.CoveragePercent.ToString(CultureInfo.InvariantCulture) + " %")), new Td(new ValueText(ByteSize.Format(item.Bytes))),
+                new Td(new Div(new PostForm(Address(Tab, "DeleteTranslation"), csrf, [("documentId", item.DocumentId.ToString(CultureInfo.InvariantCulture)), ("language", item.Language)],
+                    IconSubmit("trash", "work.translation.delete"))).Class("work-icons"))).Class("work-row")).ToArray();
+            var table = new Div(new TableElement([new Thead(new Tr(new Th(new Text("work.col.language")).Attribute("scope", "col"), new Th(new Text("work.translations.source")).Attribute("scope", "col"),
+                new Th(new Text("work.translations.coverage")).Attribute("scope", "col"), new Th(new Text("work.col.size")).Attribute("scope", "col"), new Th(new Span()).Attribute("scope", "col"))), new Tbody([.. rows])])
+                .Class("work-table work-table--manage")).Class("work-table-wrap");
+            return new Div(
+                new Div(new Div(new H2(new Text("work.translations")), new Div(new Span(new ValueText(work.Translations.Count.ToString(CultureInfo.InvariantCulture)))).Class("work-coverage")).Class("work-season__lead"),
+                    new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", "work-translations").Attribute("aria-expanded", "false")
+                        .Attribute("aria-controls", "work-translations").TextAttribute("aria-label", "work.toggleSeason")).Class("work-season__head"),
+                new Div(table).Class("work-season__panel").Attribute("id", "work-translations").Attribute("data-open", "false")).Class("work-season");
         }
 
         // An album of several discs: one accordion per disc with its tracks.
@@ -421,11 +443,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     else if (group.ReleaseYear is { } releaseYear) facts.Add(releaseYear.ToString(CultureInfo.InvariantCulture));
                     if (group.Isbn is { } isbn) facts.Add("ISBN " + isbn);
                     if (size is not null) facts.Add(size);
+                    if (files.Length == 0 && group.LanguageCode is { } wanted && work.Translations.Any(item => WorkLanguages.Code(item.Language) == WorkLanguages.Code(wanted))) facts.Add(texts["work.edition.readsTranslated"]);
                     Add(group.Id.ToString(CultureInfo.InvariantCulture), group.Name ?? group.Title ?? texts["work.edition.plain"], string.Join(" · ", facts), null, [], files);
                 }
             }
 
             if (others.Length > 0) Add("other", texts["work.group.other"], ByteSize.Format(others.Sum(file => file.SizeBytes)), null, [], others);
+            if (Translations(work, csrf) is { } translations) content.Add(translations);
             content.Add(ColumnPicker());
             return new Div([.. content]).Class("work-seasons work-groups");
         }

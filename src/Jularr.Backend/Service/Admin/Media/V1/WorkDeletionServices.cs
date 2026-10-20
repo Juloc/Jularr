@@ -54,6 +54,36 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         }
     }
 
+    // Clears one language of a document's machine translation; the file and what readers noted stay.
+    [ServiceEndpoint("DELETE", "/api/v1/admin/library/documents/{documentId:long}/translations/{language}")]
+    public sealed class DeleteDocumentTranslationV1 : AdminService<DeleteTranslationParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(DeleteTranslationParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ServicePermission GetPermission(DeleteTranslationParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnDelete()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "ReadingResources" AS resource
+                WHERE
+                    resource."ReadingDocumentId" = @DocumentId
+                    AND resource."Path" LIKE ':translation/' || @Language || '/%';
+                """;
+            sql.Parameters.Add(Parameters);
+            if (await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken) == 0)
+            {
+                throw new KeyNotFoundException("The translation was not found.");
+            }
+
+            return new UpdateResult(true);
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/works/exclusions")]
     public sealed class ReadWorkExclusionsV1 : AdminService<ReadWorkExclusionsParametersV1>
     {

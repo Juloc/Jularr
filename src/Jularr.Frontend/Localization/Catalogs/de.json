@@ -6641,8 +6641,8 @@
    "Alle zuklappen"
   ],
   "work.toggleSeason": [
-   "Show or hide the episodes of this season",
-   "Folgen dieser Staffel zeigen oder verbergen"
+   "Show or hide this section",
+   "Bereich zeigen oder verbergen"
   ],
   "work.specials": [
    "Specials",
@@ -6719,6 +6719,26 @@
   "work.edition.plain": [
    "Edition",
    "Ausgabe"
+  ],
+  "work.translations": [
+   "Translations",
+   "Übersetzungen"
+  ],
+  "work.translations.source": [
+   "Translated from",
+   "Übersetzt aus"
+  ],
+  "work.translations.coverage": [
+   "Translated",
+   "Übersetzt"
+  ],
+  "work.translation.delete": [
+   "Delete translation",
+   "Übersetzung löschen"
+  ],
+  "work.edition.readsTranslated": [
+   "Reads translated",
+   "Liest sich übersetzt"
   ],
   "work.edition.format.Print": [
    "Print",
@@ -6803,6 +6823,10 @@
   "work.col.rom": [
    "ROM check",
    "ROM-Prüfung"
+  ],
+  "work.col.language": [
+   "Language",
+   "Sprache"
   ],
   "work.col.region": [
    "Region",

@@ -118,6 +118,52 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // The machine translations of a book's file are listed on its page with the language, the coverage and a delete.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task Book_ListsItsTranslations_AndClearsOneLanguage()
+        {
+            using var folders = new Folders("Books");
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                var book = await CreateAsync(page, "Book", "None", "Translated Novel");
+                await jularr.RunSqlAsync($"""
+                    UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Reading', 'Translation');
+                    INSERT INTO "WorkEditions" ("Id", "WorkId", "LanguageCode", "EditionFormatId") VALUES (820, {book}, 'en', 2), (821, {book}, 'de', 2);
+                    INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (820, {book}, 820);
+                    INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (820, {book}, 820, 1);
+                    INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt")
+                    SELECT 820, (SELECT min("Id") FROM "LibraryRoots" WHERE "Name" = 'Books'), 'Translated Novel/Translated Novel.epub', 100, now(), 820, now();
+                    INSERT INTO "ReadingDocuments" ("Id", "StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
+                    VALUES (820, 820, 100, now(), decode(repeat('cd', 32), 'hex'), 1, 1, '[]', 0);
+                    INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                    SELECT 820, item."Path", 'text/html', convert_to('0123456789', 'UTF8')
+                    FROM (VALUES (':section/00000'), (':section/00001'), (':translation/de/00000')) AS item ("Path");
+                    """);
+                await page.GotoAsync("/Admin/Works/" + book);
+                var translations = page.Locator(".work-season", new() { HasText = "Translations" });
+                await Assertions.Expect(translations).ToBeVisibleAsync();
+                await translations.GetByRole(AriaRole.Button, new() { Name = "Show or hide this section" }).ClickAsync();
+                await Assertions.Expect(translations.Locator("tr.work-row")).ToContainTextAsync("50 %");
+
+                // The edition in German has no file but reads translated.
+                await Assertions.Expect(page.Locator(".work-season", new() { HasText = "German" }).First).ToContainTextAsync("Reads translated");
+                await Steps.SubmitAsync(page, translations.Locator("tr.work-row form"));
+                await Assertions.Expect(page.Locator(".work-season", new() { HasText = "Translations" })).ToHaveCountAsync(0);
+                CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-work-translations");
+                throw;
+            }
+        }
+
         // A title made by hand on the Works page, as far as its management page.
         private static async Task<string> CreateAsync(IPage page, string type, string subtype, string title)
         {
