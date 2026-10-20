@@ -1,15 +1,14 @@
 @use "MediaImage";
 
-// Seconds one highlight stays; the script advances when the progress of its bar ends.
+// Seconds one highlight stays; the script advances when the countdown of its bar ends.
 $interval: 9s;
 
 .hero-carousel {
-    container: hero-carousel / inline-size;
     position: relative;
     isolation: isolate;
     overflow: hidden;
     height: clamp(330px, 26vw, 402px);
-    margin-bottom: 16px;
+    margin-bottom: 17px;
     border-radius: 23px;
     background: color-mix(in srgb, var(--accent) 30%, #14111d);
     color: #fff;
@@ -30,12 +29,14 @@ $interval: 9s;
             &::after {
                 content: "";
                 position: absolute;
+                top: 23%;
                 right: 9%;
-                top: 18%;
-                width: 260px;
-                height: 260px;
-                border: 38px solid rgb(255 255 255 / 12%);
-                border-radius: 50%;
+                width: 250px;
+                height: 220px;
+                border: 40px solid rgb(255 255 255 / 7%);
+                border-radius: 60px;
+                filter: blur(1px);
+                transform: rotate(-23deg);
             }
         }
     }
@@ -60,7 +61,7 @@ $interval: 9s;
         inset: 0;
         overflow: hidden;
 
-        .media-image { height: 100%; object-position: center 42%; }
+        .media-image { height: 100%; object-position: center 42%; filter: saturate(1.08); }
 
         &--blur .media-image { transform: scale(1.3); filter: blur(26px) saturate(1.15); }
     }
@@ -90,17 +91,17 @@ $interval: 9s;
         width: 63%;
         max-width: 700px;
         height: 100%;
-        padding: 48px 65px 58px;
+        padding: 49px 65px 58px;
     }
 
-    &__overline { margin: 0; color: #f2edfd; font-size: 12px; font-weight: 740; }
+    &__overline { margin: 0; color: #f2edfd; font-size: 12px; font-weight: 740; line-height: 1.35; }
 
     &__title {
         max-width: 635px;
         margin: 12px 0 10px;
         font-size: clamp(30px, 3.2vw, 45px);
         font-weight: 800;
-        letter-spacing: -.03em;
+        letter-spacing: -1.2px;
         line-height: 1.07;
         text-wrap: balance;
         text-shadow: 0 3px 16px rgb(0 0 0 / 20%);
@@ -120,7 +121,17 @@ $interval: 9s;
 
     &__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 
-    // Over artwork the secondary action is a dark translucent outline, whatever the skin.
+    // The icon with a short word; over artwork the secondary action is a dark translucent outline, whatever the skin.
+    &__actions .button {
+        gap: 7px;
+        min-height: 42px;
+        padding: 0 17px;
+        font-size: 12px;
+        font-weight: 720;
+    }
+
+    &__actions .button--primary { box-shadow: 0 4px 18px rgb(93 37 180 / 22%); }
+
     &__details.button, &__details.button:hover:not(:disabled) {
         border-color: rgb(255 255 255 / 44%);
         background: rgb(23 23 32 / 45%);
@@ -134,11 +145,13 @@ $interval: 9s;
         width: 37px;
         min-height: 37px;
         border-color: rgb(255 255 255 / 49%);
-        background: rgb(14 16 32 / 45%);
+        background: rgb(14 16 32 / 36%);
         color: #fff;
+        backdrop-filter: blur(6px);
         transform: translateY(-50%);
 
         &:hover:not(:disabled) { background: rgb(58 49 92 / 65%); }
+        &:active:not(:disabled) { transform: translateY(-50%) scale(.96); }
         &[hidden] { display: none; }
     }
 
@@ -147,20 +160,22 @@ $interval: 9s;
 
     &__controls {
         position: absolute;
-        bottom: 16px;
+        bottom: 18px;
         left: 50%;
         z-index: 5;
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 14px;
-        max-width: calc(100% - 110px);
+        max-width: calc(100% - 100px);
         transform: translateX(-50%);
 
         &[hidden] { display: none; }
     }
 
-    &__segments { display: flex; align-items: center; gap: 8px; max-width: 100%; overflow: hidden; }
+    &__segments { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
 
+    // A dot is white and the current one a longer white track; only its countdown is the accent.
     &__segment {
         position: relative;
         flex: 0 0 6px;
@@ -171,32 +186,33 @@ $interval: 9s;
         border: 0;
         border-radius: 100px;
         background: rgb(255 255 255 / 88%);
+        box-shadow: 0 0 1px rgb(0 0 0 / 20%);
         cursor: pointer;
-        transition: width .2s ease, flex-basis .2s ease;
+        transition: width .2s ease;
 
         &--current { flex-basis: 38px; width: 38px; height: 5px; background: rgb(255 255 255 / 38%); }
-        // Fills while the highlight stays.
-        span { display: block; width: 100%; height: 100%; border-radius: inherit; background: var(--accent); transform-origin: left; }
-        &--current span { animation: hero-carousel-progress $interval linear forwards; }
+        span { display: block; width: 100%; height: 100%; border-radius: 100px; background: var(--accent); transform: scaleX(0); transform-origin: left; }
+        &--current span { animation: hero-carousel-countdown $interval linear forwards; }
     }
 
     &__pause.button {
-        flex: none;
+        flex: 0 0 30px;
         width: 30px;
         min-height: 30px;
         border-color: rgb(255 255 255 / 50%);
         background: rgb(23 22 36 / 50%);
         color: #fff;
+        backdrop-filter: blur(6px);
 
-        &:hover:not(:disabled), &[aria-pressed="true"], &[aria-pressed="true"]:hover:not(:disabled) { background: rgb(91 71 125 / 60%); border-color: rgb(255 255 255 / 50%); }
+        &:hover:not(:disabled), &[aria-pressed="true"], &[aria-pressed="true"]:hover:not(:disabled) { background: rgb(91 71 125 / 57%); border-color: rgb(255 255 255 / 50%); }
     }
 
     &__pause-icon { display: grid; place-items: center; &--play { display: none; } }
     &__pause[aria-pressed="true"] &__pause-icon { &--pause { display: none; } &--play { display: grid; } }
 
-    &__counter { position: absolute; left: calc(100% + 7px); min-width: 35px; color: rgb(255 255 255 / 71%); font-size: 10px; font-weight: 650; white-space: nowrap; }
+    &__counter { position: absolute; left: calc(100% + 7px); min-width: 35px; color: rgb(255 255 255 / 71%); font-size: 10px; font-weight: 700; white-space: nowrap; }
 
-    // Hovering or focusing the highlight, a paused carousel, a hidden tab or an open panel stops the bar.
+    // Hovering or focusing the highlight, a paused carousel, a hidden tab or an open panel stops the countdown.
     &:hover &__segment--current span,
     &:focus-within &__segment--current span,
     &[data-paused] &__segment--current span,
@@ -204,13 +220,13 @@ $interval: 9s;
     &[data-hidden] &__segment--current span { animation-play-state: paused; }
 }
 
-@keyframes hero-carousel-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes hero-carousel-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
 html:has(.drawer[open]) .hero-carousel__segment--current span { animation-play-state: paused; }
 
 @media (prefers-reduced-motion: reduce) {
     // Nothing advances by itself; the bar only shows where the carousel is.
-    .hero-carousel__segment--current span { animation: none; }
+    .hero-carousel__segment--current span { animation: none; transform: scaleX(1); }
 }
 
 [dir="rtl"] .hero-carousel__arrow {
@@ -218,29 +234,22 @@ html:has(.drawer[open]) .hero-carousel__segment--current span { animation-play-s
     &--next .ui-icon { transform: none; }
 }
 
-@container hero-carousel (max-width: 899px) {
-    .hero-carousel__body { width: 78%; padding-inline: 50px; }
-    .hero-carousel__poster { right: 7%; height: 64%; }
-}
-
-@container hero-carousel (max-width: 560px) {
+@media (max-width: 760px) {
+    .hero-carousel { height: 370px; margin-bottom: 12px; border-radius: 19px; }
     .hero-carousel__body { justify-content: flex-end; width: 100%; max-width: none; padding: 30px 24px 61px; }
-    .hero-carousel__title { max-width: 94%; font-size: 27px; }
+    .hero-carousel__title { max-width: 94%; margin: 9px 0; font-size: 27px; }
     .hero-carousel__overview { max-width: 91%; font-size: 12px; line-height: 1.45; }
-    .hero-carousel__actions { margin-top: 13px; }
+    .hero-carousel__actions { margin-top: 13px; margin-bottom: 2px; }
     .hero-carousel__poster { top: 16px; right: 54px; height: 118px; transform: rotate(5deg); }
     .hero-carousel__art::after { background: linear-gradient(0deg, rgb(10 10 22 / 96%) 0%, rgb(13 11 28 / 87%) 39%, rgb(18 16 28 / 30%) 72%, rgb(16 16 32 / 9%) 100%); }
-    .hero-carousel__arrow.button { top: 26%; width: 31px; min-height: 31px; }
+    .hero-carousel__backdrop .media-image { object-position: 55% 50%; }
+    .hero-carousel__arrow.button { top: 44%; width: 31px; min-height: 31px; }
     .hero-carousel__arrow--previous.button { inset-inline-start: 10px; }
     .hero-carousel__arrow--next.button { inset-inline-end: 10px; }
     .hero-carousel__controls { bottom: 11px; gap: 9px; max-width: calc(100% - 60px); }
-    .hero-carousel__segments { gap: 5px; }
+    .hero-carousel__segments { gap: 5px; overflow: hidden; }
+    .hero-carousel__segment { flex-basis: 5px; width: 5px; height: 5px; }
     .hero-carousel__segment--current { flex-basis: 28px; width: 28px; }
     .hero-carousel__counter { display: none; }
-    .hero-carousel__pause.button { width: 28px; min-height: 28px; }
-}
-
-// The carousel's own height on phones.
-@media (max-width: 760px) {
-    .hero-carousel { height: 370px; border-radius: 19px; }
+    .hero-carousel__pause.button { flex-basis: 28px; width: 28px; min-height: 28px; }
 }

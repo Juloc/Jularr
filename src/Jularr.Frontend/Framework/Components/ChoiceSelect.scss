@@ -4,15 +4,14 @@
     gap: 6px;
 
     &__control {
-        min-height: 36px;
-        max-width: 170px;
-        padding: 0 14px;
+        height: 34px;
+        max-width: 150px;
+        padding: 0 11px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
         background: var(--surface);
-        color: var(--text);
-        font-size: 12px;
-        font-weight: 650;
+        color: var(--muted);
+        font-size: 11px;
 
         &:focus-visible { outline: none; border-color: var(--accent); }
     }

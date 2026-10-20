@@ -24,8 +24,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         private static readonly (string LabelKey, string Icon, string[] Slugs)[] Areas =
         [
             ("discover.area.watch", "play", ["movies", "series", "anime"]),
-            ("discover.area.read", "books", ["books", "manga", "lightnovels"]),
-            ("discover.area.hear", "headphones", ["music"]),
+            ("discover.area.read", "book", ["books", "manga", "lightnovels"]),
+            ("discover.area.hear", "music", ["music"]),
             ("discover.area.play", "gamepad", ["games"])
         ];
 
@@ -240,14 +240,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var narrowed = (Availability is not null ? 1 : 0) + (Year is not null ? 1 : 0);
-            var filter = new List<IUiComponent> { new Icon("filter", assets) };
+            var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
             if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
             var tools = new List<IUiComponent>
             {
-                Drawer.Opener(new Button(new Icon("sliders", assets)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-view"),
-                Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-filter"),
-                ViewDrawer(),
-                FilterDrawer()
+                Drawer.Opener(new Button(new Icon("sliders", assets, 16)).IconOnly(texts["discover.view.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "view"),
+                Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"),
+                new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()])
             };
             return new CapsuleBar(assets, "discover.mediaTypes", "discover.all", Types([]), IsAll, groups, tools);
         }
@@ -255,14 +254,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         // Feed lists, how they are ordered and whether the shelves wrap into a grid.
         private IUiComponent Toolbar()
         {
-            var feedTabs = new List<NavigationTab> { new("discover.all", Address(Current with { Feed = null, Page = 1 }), Feed is null) };
-            var supported = Chosen.SelectMany(scope => scope.Feeds).ToHashSet();
-            foreach (var (feed, slug) in new[] { (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.Upcoming, "upcoming") })
-            {
-                if (supported.Contains(feed)) feedTabs.Add(new NavigationTab("discover.feed." + feed, Address(Current with { Feed = slug, Page = 1 }), Feed == slug));
-            }
-
-            if (_continue.Count > 0) feedTabs.Add(new NavigationTab("discover.feed.Continue", Address(Current with { Feed = "continue", Page = 1 }), ContinueOnly));
+            var feedTabs = FeedOptions().Select(option => new NavigationTab(option.LabelKey, Address(Current with { Feed = option.Slug, Page = 1 }), Feed == option.Slug)).ToList();
 
             // The sort keeps every other choice of the address as hidden fields.
             var keep = new Dictionary<string, string>();
@@ -273,22 +265,79 @@ namespace Jularr.Frontend.Pages.User.Discover
             return new Div(new NavigationTabs(feedTabs, "discover.feeds", "chips"),
                 new Div(new ChoiceSelect("/", "sort", "discover.sort", [new("discover.sort.ranking", "", Sort is null), new("discover.sort.newest", "newest", Sort == "newest"),
                     new("discover.sort.az", "az", Sort == "az")], keep),
-                    new Button(new Icon("grid", assets), new Icon("list", assets)).IconOnly(texts["discover.view.toggle"]).Class("button button--icon discover-toolbar__layout")
+                    new Button(new Icon("grid", assets, 18), new Icon("list", assets, 18)).IconOnly(texts["discover.view.toggle"]).Class("button button--icon discover-toolbar__layout")
                         .Attribute("data-discover-layout", "")).Class("discover-toolbar__settings")).Class("discover-toolbar");
         }
 
-        // Which highlights show and for how long is the device's own choice.
-        private IUiComponent ViewDrawer() => new Drawer(assets, "discover-view", "discover.view.title",
+        // The lists of the feed chips and of the filter: all, then each one a chosen type has, then Continue when something continues.
+        private List<(string? Slug, string LabelKey)> FeedOptions()
+        {
+            var options = new List<(string? Slug, string LabelKey)> { (null, "discover.all") };
+            var supported = Chosen.SelectMany(scope => scope.Feeds).ToHashSet();
+            foreach (var (feed, slug) in new[] { (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.Upcoming, "upcoming") })
+            {
+                if (supported.Contains(feed)) options.Add((slug, "discover.feed." + feed));
+            }
+
+            if (_continue.Count > 0) options.Add(("continue", "discover.feed.Continue"));
+            return options;
+        }
+
+        // Types per area, availability, release year and feed; one GET form, so the address holds the choice.
+        private DrawerPane FilterPane()
+        {
+            var chosen = Chosen.Select(scope => scope.Slug).ToHashSet();
+            var chooser = new List<IUiComponent>
+            {
+                new Span(new Text("discover.chooseMedia")).Class("drawer__field-title"),
+                new Button(new Icon("grid", assets, 16), new Text("discover.allTypes")).Class("button discover-all").Attribute("data-discover-all", "").Attribute("aria-pressed", IsAll ? "true" : "false")
+            };
+            foreach (var (labelKey, icon, slugs) in Areas)
+            {
+                var members = slugs.Where(slug => Listed.Any(scope => scope.Slug == slug)).ToList();
+                if (members.Count == 0) continue;
+
+                var all = members.All(chosen.Contains);
+                chooser.Add(new ChoiceGroup(assets, labelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "discover.type." + slug))],
+                    new ChoiceOptions(true, ChoiceLayout.Section, icon, "discover.selected",
+                        Aside: [new Button(new Text(all ? "discover.clearAll" : "discover.pickAll")).Class("button button--compact discover-pick").Attribute("data-discover-pick", "")
+                            .Attribute("data-pick-label", texts["discover.pickAll"]).Attribute("data-clear-label", texts["discover.clearAll"])])));
+            }
+
+            var body = new List<IUiComponent>
+            {
+                new Div([.. chooser]).Class("drawer__section"),
+                new ChoiceGroup(assets, "discover.filter.availability", "availability", [new("", Availability is null, "discover.all"), new("local", Availability == "local", "discover.known"),
+                    new("request", Availability == "request", "discover.availability.request")]),
+                new ChoiceGroup(assets, "discover.filter.year", "year", [new("", Year is null, "discover.all"), new("2020", Year == "2020", "discover.year.since2020"),
+                    new("old", Year == "old", "discover.year.before2020")]),
+                new ChoiceGroup(assets, "discover.filter.feed", "feed", [.. FeedOptions().Select(option => new ChoicePick(option.Slug ?? "", Feed == option.Slug, option.LabelKey))])
+            };
+            if (Sort is not null) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", Sort));
+            if (!string.IsNullOrWhiteSpace(Query)) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "q").Attribute("value", Query.Trim()));
+
+            return new DrawerPane("filter", "discover.tab.filter", "discover.filter.title", "filter", body,
+            [
+                new A(new Text("discover.reset")).Class("button").Attribute("href", "/"),
+                new Button(new Icon("check", assets, 16), new Text("discover.applyClose")).Primary().Submit()
+            ], "/");
+        }
+
+        // How many highlights show, whether they turn, and the layout of the shelves are the device's own choice.
+        private DrawerPane ViewPane() => new("view", "discover.tab.view", "discover.view.title", "sliders",
         [
-            new ChoiceGroup("discover.hero.perType", "hero-perType", [new("1", false, "discover.hero.perType.1"), new("2", true, "discover.hero.perType.2"), new("3", false, "discover.hero.perType.3")],
-                attributes: new Dictionary<string, string> { ["data-hero-pref"] = "perType" }),
-            new ChoiceGroup("discover.hero.max", "hero-max", [new("8", false), new("19", true), new("27", false), new("0", false, "discover.all")],
-                attributes: new Dictionary<string, string> { ["data-hero-pref"] = "max" }),
-            new Div(HeroToggle("discover.hero.continue", "withContinue"), HeroToggle("discover.hero.auto", "auto")).Class("discover-switches")
+            new Div(
+                new ChoiceGroup(assets, "discover.hero.perType", "hero-perType", [new("1", false, "discover.hero.perType.1"), new("2", true, "discover.hero.perType.2"), new("3", false, "discover.hero.perType.3")],
+                    new ChoiceOptions(Attributes: new Dictionary<string, string> { ["data-hero-pref"] = "perType" })),
+                new ChoiceGroup(assets, "discover.hero.max", "hero-max", [new("8", false), new("19", true), new("27", false), new("0", false, "discover.all")],
+                    new ChoiceOptions(Minor: true, Attributes: new Dictionary<string, string> { ["data-hero-pref"] = "max" })),
+                new Div(HeroToggle("discover.hero.continue", "withContinue"), HeroToggle("discover.hero.auto", "auto")).Class("discover-switches")).Class("drawer__section"),
+            new ChoiceGroup(assets, "discover.layout", "discover-layout", [new("rows", true, "discover.layout.rows"), new("grid", false, "discover.layout.grid")],
+                new ChoiceOptions(Attributes: new Dictionary<string, string> { ["data-discover-layout-choice"] = "" }))
         ],
         [
             new Button(new Text("discover.reset")).Attribute("data-hero-reset", ""),
-            new Button(new Text("common.close")).Primary().Attribute("data-drawer-close", "")
+            new Button(new Icon("check", assets, 16), new Text("discover.applyClose")).Primary().Attribute("data-drawer-close", "")
         ]);
 
         private static IUiComponent HeroToggle(string labelKey, string preference)
@@ -296,37 +345,6 @@ namespace Jularr.Frontend.Pages.User.Discover
             var toggle = new Toggle(labelKey);
             toggle.Control.Attribute("data-hero-pref", preference);
             return toggle;
-        }
-
-        // Types per area, availability and release year; one GET form, so the address holds the choice.
-        private IUiComponent FilterDrawer()
-        {
-            var chosen = Chosen.Select(scope => scope.Slug).ToHashSet();
-            var body = new List<IUiComponent>();
-            foreach (var (labelKey, _, slugs) in Areas)
-            {
-                var members = slugs.Where(slug => Listed.Any(scope => scope.Slug == slug)).ToList();
-                if (members.Count == 0) continue;
-
-                var all = members.All(chosen.Contains);
-                body.Add(new ChoiceGroup(labelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "discover.type." + slug))], true,
-                    [new Button(new Text(all ? "discover.clearAll" : "discover.pickAll")).Class("button button--compact discover-pick").Attribute("data-discover-pick", "")
-                        .Attribute("data-pick-label", texts["discover.pickAll"]).Attribute("data-clear-label", texts["discover.clearAll"])]));
-            }
-
-            body.Add(new ChoiceGroup("discover.filter.availability", "availability", [new("", Availability is null, "discover.all"), new("local", Availability == "local", "discover.known"),
-                new("request", Availability == "request", "discover.availability.request")]));
-            body.Add(new ChoiceGroup("discover.filter.year", "year", [new("", Year is null, "discover.all"), new("2020", Year == "2020", "discover.year.since2020"),
-                new("old", Year == "old", "discover.year.before2020")]));
-            if (Feed is not null) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "feed").Attribute("value", Feed));
-            if (Sort is not null) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", Sort));
-            if (!string.IsNullOrWhiteSpace(Query)) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "q").Attribute("value", Query.Trim()));
-
-            return new Drawer(assets, "discover-filter", "discover.filter.title", body,
-            [
-                new A(new Text("discover.reset")).Class("button").Attribute("href", "/"),
-                new Button(new Text("common.apply")).Primary().Submit()
-            ], "/");
         }
 
         private IUiComponent Recommendations()
@@ -556,9 +574,11 @@ namespace Jularr.Frontend.Pages.User.Discover
                 {
                     var scope = Chosen.FirstOrDefault(scope => scope.MediaTypeId == item.MediaTypeId);
                     var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
-                    slides.Add(new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed.Continue"), null, "media.continue",
-                        (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture), "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
-                        scope?.Slug ?? "", 0, true));
+                    var listening = item.MediaAssetTypeId == MediaAssetType.Audio;
+                    slides.Add(new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed.Continue"), null,
+                        readable ? "discover.action.continueRead" : listening ? "discover.action.continueHear" : "media.continue",
+                        (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture), readable ? "book" : "play",
+                        "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), scope?.Slug ?? "", 0, true));
                 }
             }
 
@@ -633,15 +653,15 @@ namespace Jularr.Frontend.Pages.User.Discover
                 ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
                 : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
             var requestable = item.WorkId is null && texts.CanRequest();
-            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "request.create" : "media.details", href,
-                requestable ? href : null, scope.Slug, rank);
+            return new HeroSlide(item.Title, null, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Author, requestable ? "discover.action.request" : "media.details", href,
+                requestable ? "plus" : null, requestable ? href : null, scope.Slug, rank);
         }
 
         private HeroSlide ItemSlide(DiscoverScopeV1 scope, DiscoverItemV1 item, DiscoverFeedType feed, int rank)
         {
             var (actionKey, actionHref) = Action(item);
-            return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Overview, actionKey ?? "media.details", actionHref ?? DetailsHref(item),
-                actionKey is null ? null : DetailsHref(item), scope.Slug, rank);
+            return new HeroSlide(item.Title, item.BackdropUrl, item.PosterUrl, Overline(scope, "discover.feed." + feed), item.Overview, ShortKey(actionKey) ?? "media.details", actionHref ?? DetailsHref(item),
+                actionKey switch { "request.create" => "plus", "media.watch" => "play", _ => null }, actionKey is null ? null : DetailsHref(item), scope.Slug, rank);
         }
 
         private async Task LoadRecommendationsAsync()
@@ -715,7 +735,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Card(DiscoverItemV1 item)
         {
             var (actionKey, actionHref) = Action(item);
-            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, null, "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, null, "media.state." + item.MediaStateTypeId, ShortKey(actionKey), actionHref);
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
         }
@@ -731,8 +751,16 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var href = "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            return new MediaCard(assets, item.Title, href, item.PosterUrl, meta, "media.state." + MediaStateType.NotRequested, texts.CanRequest() ? "request.create" : null, texts.CanRequest() ? href : null);
+            return new MediaCard(assets, item.Title, href, item.PosterUrl, meta, "media.state." + MediaStateType.NotRequested, texts.CanRequest() ? "discover.action.request" : null, texts.CanRequest() ? href : null);
         }
+
+        // The word on an action is short: the icon and the verb.
+        private static string? ShortKey(string? key) => key switch
+        {
+            "request.create" => "discover.action.request",
+            "media.watch" => "discover.action.watch",
+            _ => key
+        };
 
         // The canonical next step: use what exists, request what is missing.
         private (string? Key, string? Href) Action(DiscoverItemV1 item) => item.MediaStateTypeId switch

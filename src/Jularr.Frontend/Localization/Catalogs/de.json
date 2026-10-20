@@ -3172,6 +3172,62 @@
    "Rotate automatically",
    "Automatisch wechseln"
   ],
+  "discover.action.request": [
+   "Request",
+   "Anfragen"
+  ],
+  "discover.action.watch": [
+   "Play",
+   "Abspielen"
+  ],
+  "discover.action.continueRead": [
+   "Continue reading",
+   "Weiterlesen"
+  ],
+  "discover.action.continueHear": [
+   "Continue listening",
+   "Weiterhören"
+  ],
+  "discover.chooseMedia": [
+   "Choose media",
+   "Medien auswählen"
+  ],
+  "discover.allTypes": [
+   "All media types",
+   "Alle Medientypen"
+  ],
+  "discover.selected": [
+   "{0} of {1} selected",
+   "{0} von {1} ausgewählt"
+  ],
+  "discover.tab.filter": [
+   "Filter",
+   "Filter"
+  ],
+  "discover.tab.view": [
+   "View & highlights",
+   "Ansicht & Hero"
+  ],
+  "discover.applyClose": [
+   "Apply & close",
+   "Anwenden & schließen"
+  ],
+  "discover.filter.feed": [
+   "Result list",
+   "Ergebnisfeed"
+  ],
+  "discover.layout": [
+   "Show shelves as",
+   "Medien-Reihen anzeigen"
+  ],
+  "discover.layout.rows": [
+   "Rows",
+   "Reihen"
+  ],
+  "discover.layout.grid": [
+   "Grid",
+   "Raster"
+  ],
   "media.state.NotRequested": [
    "Not requested",
    "Nicht angefragt"

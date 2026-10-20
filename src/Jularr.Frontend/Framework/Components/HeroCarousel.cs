@@ -4,8 +4,8 @@ namespace Jularr.Frontend.Framework
 {
     // One highlight. Group and Pass order the choice: Pass is the title's rank within its group; a continued title ignores both.
     // A slide without a backdrop shows its poster over a blurred copy of itself.
-    public sealed record HeroSlide(string Title, string? BackdropUrl, string? PosterUrl, string? Overline, string? Overview, string? ActionKey, string? ActionHref, string? DetailsHref,
-        string Group, int Pass, bool IsContinue = false);
+    public sealed record HeroSlide(string Title, string? BackdropUrl, string? PosterUrl, string? Overline, string? Overview, string? ActionKey, string? ActionHref, string? ActionIcon,
+        string? DetailsHref, string Group, int Pass, bool IsContinue = false);
 
     // The page decides which titles are highlighted; this shows one at a time with arrows, a position bar and a pause.
     // The script chooses from the slides by the device's preferences (see HeroCarousel.ts) and turns itself off for reduced motion.
@@ -39,12 +39,12 @@ namespace Jularr.Frontend.Framework
                 var actions = new List<IUiComponent>();
                 if (slide.ActionKey is not null && slide.ActionHref is not null)
                 {
-                    actions.Add(new A(new Text(slide.ActionKey)).Class("button button--primary").Attribute("href", slide.ActionHref));
+                    actions.Add(new A([.. slide.ActionIcon is null ? [] : new IUiComponent[] { new Icon(slide.ActionIcon, assets, 18) }, new Text(slide.ActionKey)]).Class("button button--primary").Attribute("href", slide.ActionHref));
                 }
 
                 if (slide.DetailsHref is not null)
                 {
-                    actions.Add(new A(new Icon("info", assets, 16), new Text("media.details")).Class("button hero-carousel__details").Attribute("href", slide.DetailsHref));
+                    actions.Add(new A(new Icon("info", assets, 18), new Text("media.details")).Class("button hero-carousel__details").Attribute("href", slide.DetailsHref));
                 }
 
                 if (actions.Count > 0) body.Add(new Div([.. actions]).Class("hero-carousel__actions"));

@@ -45,16 +45,16 @@ namespace Jularr.E2E.Tests
                 // Another type is added; the filter drawer shows the choice and applies its availability.
                 await page.Locator(".capsule-group__item", new() { HasText = "Movies" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("type=movies,series"));
-                await page.Locator("[data-drawer-open=discover-filter]").ClickAsync();
-                var drawer = page.Locator("#discover-filter");
+                await page.Locator("[data-drawer-pane=filter]").ClickAsync();
+                var drawer = page.Locator("#discover-panel");
                 await Assertions.Expect(drawer).ToBeVisibleAsync();
                 await Assertions.Expect(drawer.Locator("input[name=type][value=movies]")).ToBeCheckedAsync();
                 await Assertions.Expect(drawer.Locator("input[name=type][value=anime]")).Not.ToBeCheckedAsync();
                 await drawer.Locator(".choice-group__item", new() { HasText = "Can be requested" }).ClickAsync();
                 await Evidence.SaveAsync(page, "discover-filter");
-                await drawer.GetByRole(AriaRole.Button, new() { Name = "Apply" }).ClickAsync();
+                await drawer.GetByRole(AriaRole.Button, new() { Name = "Apply & close" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("availability=request"));
-                await Assertions.Expect(page.Locator("[data-drawer-open=discover-filter] .capsule-bar__badge")).ToHaveTextAsync("1");
+                await Assertions.Expect(page.Locator("[data-drawer-pane=filter] .capsule-bar__badge")).ToHaveTextAsync("1");
 
                 // The sort reorders every list; the layout toggle wraps the shelves and is remembered on the device.
                 await page.Locator(".choice-select__control").SelectOptionAsync("az");
@@ -63,8 +63,8 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");
 
                 // One highlight per type leaves one slide for each of the two types.
-                await page.Locator("[data-drawer-open=discover-view]").ClickAsync();
-                await page.Locator("#discover-view .choice-group__item", new() { HasText = "1 title" }).ClickAsync();
+                await page.Locator("[data-drawer-pane=view]").ClickAsync();
+                await page.Locator("#discover-panel .choice-group__item", new() { HasText = "1 title" }).ClickAsync();
                 await Assertions.Expect(page.Locator(".hero-carousel__counter")).ToHaveTextAsync("1 / 2");
                 await Evidence.SaveAsync(page, "discover-layout");
             }
