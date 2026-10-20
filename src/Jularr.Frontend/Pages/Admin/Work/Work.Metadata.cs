@@ -62,7 +62,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 }
 
                 // A manga volume from the Admin's own device.
-                if (work.MediaTypeId == MediaType.Book && work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes())
+                if (standalone && work.MediaTypeId == MediaType.Book && work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes())
                 {
                     page.Content.Add(new A(new Text("work.upload")).Class("button").Attribute("href", Home + "/Upload"));
                     if (TempData["VolumeUploaded"] is true) page.Content.Add(new P(new Text("work.upload.done")).Attribute("role", "status"));

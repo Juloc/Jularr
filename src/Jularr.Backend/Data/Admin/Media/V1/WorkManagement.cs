@@ -10,8 +10,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // A season, an episode or a volume of the title with where it stands.
     public sealed class WorkManagementUnitV1 : BaseResponse
     {
-        public WorkManagementUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, WorkUnitStatus workUnitStatusId)
+        public WorkManagementUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, WorkUnitStatus workUnitStatusId,
+            int? absoluteNumber = null, decimal? aniListNumber = null)
         {
+            AbsoluteNumber = absoluteNumber;
+            AniListNumber = aniListNumber;
             Id = id;
             ParentWorkUnitId = parentWorkUnitId;
             WorkUnitTypeId = workUnitTypeId;
@@ -45,6 +48,14 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.WorkUnitStatusId))]
         public WorkUnitStatus WorkUnitStatusId { get; }
+
+        // An episode's place among all episodes of the title, specials left out; anime releases count this way.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.AbsoluteNumber))]
+        public int? AbsoluteNumber { get; }
+
+        // The number the episode has in its AniList entry, when its season is mapped to one.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? AniListNumber { get; }
     }
 
     // One video file of the title: what it is, how good it is and where it lies.

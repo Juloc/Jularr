@@ -16,9 +16,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
     {
         // Columns of the unit table in their default order; the ones after "quality" start hidden.
         private static readonly string[] UnitColumns = ["monitored", "number", "title", "aired", "languages", "group", "size", "status", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
+        private static readonly string[] VolumeColumns = ["monitored", "number", "title", "released", "format", "group", "size", "status", "quality", "path"];
         private static readonly string[] FileColumns = ["title", "languages", "group", "size", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly HashSet<string> HiddenByDefault = ["languagesIso", "languagesNames", "path", "codec", "range"];
-        private static readonly string[] SortableColumns = ["number", "title", "aired", "size", "status", "quality", "group"];
+        private static readonly string[] SortableColumns = ["number", "absolute", "title", "aired", "released", "format", "size", "status", "quality", "group"];
+
+        // Anime counts episodes across seasons as well.
+        private static string[] ColumnsOf(WorkManagementV1 work) => work.MediaTypeId == MediaType.Book ? VolumeColumns
+            : work.MediaSubtypeId == MediaSubtype.Anime ? [.. UnitColumns.Take(2), "absolute", .. UnitColumns.Skip(2)] : UnitColumns;
 
         private void DefineManagement(Page page, WorkManagementV1 work)
         {
@@ -30,10 +35,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Asset("Pages/Admin/Work/Work.entry.ts");
             page.Asset("Framework/Components/Form.entry.ts");
             var isSeries = work.MediaTypeId == MediaType.Series;
+            var hasVolumes = work.MediaTypeId == MediaType.Book;
+            var hasUnits = isSeries || hasVolumes;
 
             page.Content.Add(Hero(work, csrf));
-            var tabs = new List<NavigationTab> { new(isSeries ? "work.tab.seasons" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History) };
-            if (isSeries && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
+            var tabs = new List<NavigationTab> { new(isSeries ? "work.tab.seasons" : hasVolumes ? "work.tab.volumes" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History) };
+            if (hasUnits && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
             tabs.Add(new("work.tab.metadata", Address(WorkTab.Metadata), Tab == WorkTab.Metadata));
             page.Content.Add(new NavigationTabs([.. tabs], "work.tabs"));
             if (FormError is not null && _choice is null && _deleteInput is null && Tab == WorkTab.Units) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
@@ -45,17 +52,17 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 case WorkTab.Metadata:
                     DefineMetadata(page, standalone: false);
                     break;
-                case WorkTab.Files when isSeries && texts.CanManageMedia():
+                case WorkTab.Files when hasUnits && texts.CanManageMedia():
                     page.Content.Add(ManageFiles(work, csrf));
                     break;
                 default:
-                    page.Content.Add(isSeries ? Seasons(work, csrf) : Files(work, csrf));
+                    page.Content.Add(isSeries ? Seasons(work, csrf) : hasVolumes ? Volumes(work, csrf) : Files(work, csrf));
                     break;
             }
 
             if (_wanted is not null && CanAcquire && _profiles.Count > 0) page.Content.Add(EditDialog(work, csrf));
             if (texts.CanManageMedia()) page.Content.Add(DeleteDialog(csrf));
-            if (texts.CanManageMedia() && (isSeries ? Tab == WorkTab.Files : Tab == WorkTab.Units) && work.Files.Any(file => !file.IsMissing)) page.Content.Add(EditFilesDialog(work, csrf));
+            if (texts.CanManageMedia() && (hasUnits ? Tab == WorkTab.Files : Tab == WorkTab.Units) && work.Files.Any(file => !file.IsMissing)) page.Content.Add(EditFilesDialog(work, csrf));
         }
 
         // The cover on its banner, the title with its facts and figures, and the actions of an administrator.
@@ -81,6 +88,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 Figure("work.figure.episodes", "work.figure.episodeOne", work.EpisodeCount);
             }
 
+            if (work.MediaTypeId == MediaType.Book) Figure("work.figure.volumes", "work.figure.volumeOne", work.Units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Volume));
+
             if (work.OnDiskBytes > 0 || work.Files.Count > 0) figures.Add(new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.figure.onDisk"], ByteSize.Format(work.OnDiskBytes)))).Class("work-figures__item"));
             if (work.MissingCount > 0) Figure("work.figure.missing", "work.figure.missing", work.MissingCount, "bad");
             if (work.UpgradeWantedCount > 0) Figure("work.figure.upgrades", "work.figure.upgradeOne", work.UpgradeWantedCount, "warn");
@@ -105,6 +114,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 actions.Add(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
             }
 
+            // A manga volume from the administrator's own device.
+            if (work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes()) actions.Add(new A(Icon("document"), new Text("work.upload")).Class("button").Attribute("href", Home + "/Upload"));
             if (texts.CanManageMedia()) actions.Add(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("button work-delete"));
 
             var status = new List<IUiComponent>();
@@ -115,6 +126,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     .Attribute("role", "status").Class("work-hero__status"));
             }
 
+            if (TempData["VolumeUploaded"] is true) status.Add(new P(new Text("work.upload.done")).Attribute("role", "status").Class("work-hero__status"));
             if (TempData["WorkFilesUpdated"] is int updated)
             {
                 status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.updated"], updated))).Attribute("role", "status").Class("work-hero__status"));
@@ -150,7 +162,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var seasonNumbers = seasons.ToDictionary(season => season.Id, season => season.Number);
             var content = new List<IUiComponent>
             {
-                new Div(new Button(Icon("chevron-down", 22), new Text("work.collapseAll")).Attribute("data-collapse-all", "").Attribute("type", "button"),
+                new Div(NumberingSwitch(work), new Button(Icon("chevron-down", 22), new Text("work.collapseAll")).Attribute("data-collapse-all", "").Attribute("type", "button"),
                     new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", "units").Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools")
             };
             var first = true;
@@ -193,8 +205,19 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return new Div(FileTable(work, csrf), ColumnPicker()).Class("work-files");
         }
 
-        private IUiComponent UnitTable(WorkManagementUnitV1[] episodes, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf)
+        // Volumes of a manga or light novel in one table, newest first; there are no seasons to open.
+        private IUiComponent Volumes(WorkManagementV1 work, string? csrf)
         {
+            var volumes = work.Units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Volume).ToArray();
+            if (volumes.Length == 0) return new P(new Text("work.empty.volumes")).Attribute("role", "status");
+            return new Div(new Div(new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", "volumes").Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools"),
+                UnitTable(volumes, work, [], csrf, "volumes"), ColumnPicker()).Class("work-seasons work-volumes");
+        }
+
+        private IUiComponent UnitTable(WorkManagementUnitV1[] episodes, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf, string kind = "units")
+        {
+            var columns = ColumnsOf(work);
+            var isVolume = work.MediaTypeId == MediaType.Book;
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             var rows = new List<IUiComponent>();
             var strips = new List<IUiComponent>();
@@ -205,9 +228,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 var cells = new Dictionary<string, Td>
                 {
                     ["monitored"] = Cell("monitored", UnitSwitch(episode, work, csrf)),
-                    ["number"] = Cell("number", new ValueText(episode.Number.ToString("0.###", CultureInfo.InvariantCulture)), episode.Number.ToString("000000.000", CultureInfo.InvariantCulture)),
-                    ["title"] = Cell("title", new Span(new ValueText(episode.Title ?? "")).Class("work-title-text"), episode.Title ?? "", files.Length > 1 ? VersionsButton(episode.Id, files.Length) : null),
-                    ["aired"] = Cell("aired", new ValueText(episode.ReleasedOn?.ToString("d MMM yyyy", CultureInfo.CurrentCulture) ?? ""), episode.ReleasedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? ""),
+                    ["number"] = Cell("number", NumberText(episode), episode.Number.ToString("000000.000", CultureInfo.InvariantCulture)),
+                    ["absolute"] = Cell("absolute", new ValueText(episode.AbsoluteNumber?.ToString(CultureInfo.InvariantCulture) ?? ""), (episode.AbsoluteNumber ?? 0).ToString("000000", CultureInfo.InvariantCulture)),
+                    ["title"] = Cell("title", new Span(new ValueText(UnitTitle(episode))).Class("work-title-text"), UnitTitle(episode), files.Length > 1 ? VersionsButton(episode.Id, files.Length) : null),
+                    [isVolume ? "released" : "aired"] = Cell(isVolume ? "released" : "aired", new ValueText(episode.ReleasedOn?.ToString("d MMM yyyy", CultureInfo.CurrentCulture) ?? ""), episode.ReleasedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? ""),
                     ["status"] = Cell("status", StatusPill(episode, today), ((int)episode.WorkUnitStatusId).ToString(CultureInfo.InvariantCulture))
                 };
                 foreach (var (key, cell) in FileCells(files.Length > 1 ? null : best, files.Length > 1 ? files.Sum(file => file.SizeBytes) : null, files.Length > 1 ? files[0] : null)) cells[key] = cell;
@@ -219,13 +243,29 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     cells["actions"] = actionsCell;
                 }
 
-                rows.Add(new Tbody([RowOf(UnitColumns, cells), .. files.Length > 1 ? files.Select(file => FileRow(file, episode.Id, UnitColumns, csrf)) : []]).Class("work-unit"));
-                strips.Add(UnitStrip(episode, files, today, work, seasonNumbers, csrf));
+                rows.Add(new Tbody([RowOf(columns, cells), .. files.Length > 1 ? files.Select(file => FileRow(file, episode.Id, columns, csrf)) : []]).Class("work-unit"));
+                strips.Add(UnitStrip(episode, files, today, work, seasonNumbers, csrf, columns));
             }
 
             // A narrow container shows the strips instead of the table.
-            return new Div(Table("units", UnitColumns, rows), new Div([.. strips]).Class("work-strips").Attribute("data-work-strips", "units"));
+            return new Div(Table(kind, columns, rows), new Div([.. strips]).Class("work-strips").Attribute("data-work-strips", kind));
         }
+
+        // Anime numbers episodes as the library does or as AniList does; the choice only changes what is shown.
+        private IUiComponent NumberingSwitch(WorkManagementV1 work) => work.MediaSubtypeId != MediaSubtype.Anime || !work.Units.Any(unit => unit.AniListNumber is not null) ? new Span()
+            : new Div(new Button(new Text("work.numbering.standard")).Attribute("type", "button").Attribute("data-numbering-set", "standard").Attribute("aria-pressed", "true"),
+                new Button(new Text("work.numbering.anilist")).Attribute("type", "button").Attribute("data-numbering-set", "anilist").Attribute("aria-pressed", "false")).Class("work-numbering").Attribute("role", "group").TextAttribute("aria-label", "work.numbering.label");
+
+        // The number of a unit; anime may show the AniList number instead, which a switch above the list chooses.
+        private IUiComponent NumberText(WorkManagementUnitV1 unit)
+        {
+            var standard = unit.Number.ToString("0.###", CultureInfo.InvariantCulture);
+            return _management?.MediaSubtypeId != MediaSubtype.Anime || unit.WorkUnitTypeId != WorkUnitType.Episode ? new ValueText(standard)
+                : new Span(new Span(new ValueText(standard)).Attribute("data-numbering", "standard"), new Span(new ValueText((unit.AniListNumber ?? unit.Number).ToString("0.###", CultureInfo.InvariantCulture))).Attribute("data-numbering", "anilist").Attribute("hidden", "hidden"));
+        }
+
+        // A volume without a title of its own is named by its number.
+        private string UnitTitle(WorkManagementUnitV1 unit) => unit.Title ?? (unit.WorkUnitTypeId == WorkUnitType.Volume ? MediaUnitLabel.Format(texts, WorkUnitType.Volume, unit.Number, null) ?? "" : "");
 
         // Search, interactive search and delete of one unit; each call builds its own forms.
         private List<IUiComponent> UnitIcons(WorkManagementUnitV1 episode, WorkManagementFileV1[] files, Dictionary<long, decimal> seasonNumbers, string? csrf)
@@ -242,31 +282,34 @@ namespace Jularr.Frontend.Pages.Admin.Work
         }
 
         // A unit on a narrow screen is two lines: the first stays in view (switch, number, name, actions), the second is a strip of facts that slides sideways with those of the other units of its season.
-        private IUiComponent UnitStrip(WorkManagementUnitV1 episode, WorkManagementFileV1[] files, DateOnly today, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf)
+        private IUiComponent UnitStrip(WorkManagementUnitV1 episode, WorkManagementFileV1[] files, DateOnly today, WorkManagementV1 work, Dictionary<long, decimal> seasonNumbers, string? csrf, string[] columns)
         {
+            var released = new Fact(new ValueText(episode.ReleasedOn?.ToString("d MMM yyyy", CultureInfo.CurrentCulture) ?? ""), null, episode.ReleasedOn is null);
             var facts = new Dictionary<string, Fact>
             {
-                ["aired"] = new(new ValueText(episode.ReleasedOn?.ToString("d MMM yyyy", CultureInfo.CurrentCulture) ?? ""), null, episode.ReleasedOn is null),
+                ["aired"] = released,
+                ["released"] = released,
+                ["absolute"] = new(new ValueText(episode.AbsoluteNumber?.ToString(CultureInfo.InvariantCulture) ?? ""), null, episode.AbsoluteNumber is null),
                 ["status"] = new(StatusPill(episode, today))
             };
             foreach (var (key, fact) in FileFacts(files.Length > 1 ? null : files.FirstOrDefault(), files.Length > 1 ? files.Sum(file => file.SizeBytes) : null, files.Length > 1 ? files[0] : null)) facts[key] = fact;
-            var title = new List<IUiComponent> { new Span(new ValueText(episode.Title ?? "")).Class("work-title-text") };
+            var title = new List<IUiComponent> { new Span(new ValueText(UnitTitle(episode))).Class("work-title-text") };
             if (files.Length > 1) title.Add(VersionsButton(episode.Id, files.Length));
             var icons = UnitIcons(episode, files, seasonNumbers, csrf);
             var unit = new Div(
-                new Div(UnitSwitch(episode, work, csrf), new Span(new ValueText(episode.Number.ToString("0.###", CultureInfo.InvariantCulture))).Class("work-strip__number"), new Div([.. title]).Class("work-strip__title"),
+                new Div(UnitSwitch(episode, work, csrf), new Span(NumberText(episode)).Class("work-strip__number"), new Div([.. title]).Class("work-strip__title"),
                     new Div([.. icons]).Class("work-icons")).Class("work-strip__main"),
-                StripFacts(facts, UnitColumns)).Class("work-strip");
-            return new Div([unit, .. files.Length > 1 ? files.Select(file => FileStrip(file, csrf)) : []]).Class("work-strip-group");
+                StripFacts(facts, columns)).Class("work-strip");
+            return new Div([unit, .. files.Length > 1 ? files.Select(file => FileStrip(file, csrf, columns)) : []]).Class("work-strip-group");
         }
 
         // A version of a unit below its strip, shown with the unit's versions button.
-        private IUiComponent FileStrip(WorkManagementFileV1 file, string? csrf)
+        private IUiComponent FileStrip(WorkManagementFileV1 file, string? csrf, string[] columns)
         {
             var icons = DeleteIcon(file, csrf).ToArray();
             return new Div(
                 new Div(new Span().Class("work-strip__number"), new Div(new Span(new ValueText(Path.GetFileName(file.RelativePath))).Class("work-title-text")).Class("work-strip__title"), new Div(icons).Class("work-icons")).Class("work-strip__main"),
-                StripFacts(FileFacts(file, null, file), FileColumns)).Class("work-strip work-strip--file").Attribute("hidden", "hidden");
+                StripFacts(FileFacts(file, null, file), columns)).Class("work-strip work-strip--file").Attribute("hidden", "hidden");
         }
 
         // The facts of the second line in the order of the columns; one that has nothing to say is left out.
@@ -316,6 +359,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             facts["languages"] = new(LanguageGroup(shown, WorkLanguages.Mode.Flags), null, noLanguages);
             facts["languagesIso"] = new(LanguageGroup(shown, WorkLanguages.Mode.Iso), null, noLanguages);
             facts["languagesNames"] = new(LanguageGroup(shown, WorkLanguages.Mode.Names), null, noLanguages);
+            facts["format"] = new(new ValueText(Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant()), Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant(), Path.GetExtension(shown.RelativePath).Length < 2);
             facts["path"] = new(new ValueText(shown.RelativePath));
             facts["codec"] = new(new ValueText(codec), null, codec.Length == 0);
             facts["range"] = new(new ValueText(shown.DynamicRange ?? ""), null, string.IsNullOrEmpty(shown.DynamicRange));
@@ -377,7 +421,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IUiComponent SearchIcon(WorkManagementUnitV1 unit, Dictionary<long, decimal> seasonNumbers, string? csrf, string labelKey, bool automaticSearch)
         {
             static int? Whole(decimal number) => number == decimal.Truncate(number) && number is >= 0 and <= int.MaxValue ? (int)number : null;
-            var scope = unit.WorkUnitTypeId == WorkUnitType.Season
+            var scope = unit.WorkUnitTypeId == WorkUnitType.Volume
+                ? _management?.MediaSubtypeId == MediaSubtype.Manga && Whole(unit.Number) is { } volume ? new SearchWantedDataV1(null, volume) : null
+                : unit.WorkUnitTypeId == WorkUnitType.Season
                 ? Whole(unit.Number) is { } season ? new SearchWantedDataV1(season) : null
                 : unit.ParentWorkUnitId is { } parent && seasonNumbers.TryGetValue(parent, out var number) && Whole(number) is { } seasonNumber && Whole(unit.Number) is { } episode ? new SearchWantedDataV1(seasonNumber, episode) : null;
             if (scope is null || _wanted is null) return new Span();
@@ -445,10 +491,11 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (files.Length == 0) return new P(new Text("work.manage.empty")).Attribute("role", "status");
             var targets = _renames is null ? new Dictionary<long, string>() : _renames.Items.ToDictionary(item => item.StoredFileId, item => item.TargetPath);
             var seasons = work.Units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Season).ToDictionary(unit => unit.Id, unit => unit.Number);
-            var episodes = work.Units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).ToDictionary(unit => unit.Id);
+            var episodes = work.Units.Where(unit => unit.WorkUnitTypeId is WorkUnitType.Episode or WorkUnitType.Volume).ToDictionary(unit => unit.Id);
+            var video = work.MediaTypeId != MediaType.Book;
             decimal SeasonOf(WorkManagementUnitV1 unit) => unit.ParentWorkUnitId is { } parent && seasons.TryGetValue(parent, out var season) ? season : 0;
             string Label(WorkManagementFileV1 file) => string.Join(", ", file.WorkUnitIds.Where(episodes.ContainsKey).Select(id => episodes[id]).OrderBy(SeasonOf).ThenBy(unit => unit.Number)
-                .Select(unit => MediaUnitLabel.Format(texts, WorkUnitType.Episode, unit.Number, SeasonOf(unit)) ?? ""));
+                .Select(unit => MediaUnitLabel.Format(texts, unit.WorkUnitTypeId, unit.Number, unit.WorkUnitTypeId == WorkUnitType.Volume ? null : SeasonOf(unit)) ?? ""));
             decimal Position(WorkManagementFileV1 file) => file.WorkUnitIds.Where(episodes.ContainsKey).Select(id => SeasonOf(episodes[id]) * 100000 + episodes[id].Number).DefaultIfEmpty(decimal.MaxValue).Min();
 
             var rows = files.OrderBy(Position).ThenBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase).Select(file =>
@@ -466,14 +513,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     new Td(new ValueText(Label(file))),
                     new Td(new Div([.. name]).Class("work-manage__file")),
                     new Td(QualityBadge(file)),
-                    new Td(LanguageGroup(file, WorkLanguages.Mode.Flags)),
+                    video ? new Td(LanguageGroup(file, WorkLanguages.Mode.Flags)) : new Td(new Span()),
                     new Td(SizeBlock(file, null))).Class("work-row");
             }).ToArray();
 
             var head = new Tr(
                 new Th(new Input().Attribute("type", "checkbox").Attribute("data-select-all", "").TextAttribute("aria-label", "work.manage.selectAll")).Attribute("scope", "col"),
                 new Th(new Text("work.manage.col.unit")).Attribute("scope", "col"), new Th(new Text("work.manage.col.file")).Attribute("scope", "col"), new Th(new Text("work.col.quality")).Attribute("scope", "col"),
-                new Th(new Text("work.col.languages")).Attribute("scope", "col"), new Th(new Text("work.col.size")).Attribute("scope", "col"));
+                new Th(new Text(video ? "work.col.languages" : "work.col.format")).Attribute("scope", "col"), new Th(new Text("work.col.size")).Attribute("scope", "col"));
             var table = new Div(new TableElement([new Thead(head), new Tbody([.. rows])]).Class("work-table work-table--manage")).Class("work-table-wrap");
 
             var content = new List<IUiComponent>();
@@ -581,7 +628,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             {
                 form.Content(new Div().Attribute("data-edit-ids", ""));
                 form.Select(data => data.QualityKey, "work.files.quality", [.. qualities]);
-                form.Select(data => data.AudioLanguage, "work.files.audioLanguage", [.. languages]);
+                if (work.MediaTypeId != MediaType.Book) form.Select(data => data.AudioLanguage, "work.files.audioLanguage", [.. languages]);
                 form.Submit("common.save");
             }, Address(Tab, "EditFiles"), csrf, new UpdateLibraryFileFactsDataV1([]));
             return new Dialog(new Div(new H2(new Text("work.files.editTitle")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)

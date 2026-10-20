@@ -204,8 +204,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         {
             await LoadDataAsync();
 
-            // Films and series are managed on the page of their title.
-            if (_item is { MediaTypeId: MediaType.Movie or MediaType.Series } item)
+            // Films, series, manga and light novels are managed on the page of their title.
+            if (_item is { MediaTypeId: MediaType.Movie or MediaType.Series or MediaType.Book } item && (item.MediaTypeId != MediaType.Book || item.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel))
             {
                 return LocalRedirect("/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
             }
