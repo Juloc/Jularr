@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Enums.Media;
 
 namespace Jularr.Frontend.Framework
 {

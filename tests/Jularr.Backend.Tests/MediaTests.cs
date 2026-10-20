@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
@@ -212,6 +213,136 @@ namespace Jularr.Backend.Tests
             using var missing = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/999", new UpdateWatchlistDataV1(true));
             Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WatchlistEntries\""));
+        }
+
+        [TestMethod]
+        public async Task WorkCard_LibraryAndWatchlist_ShowTheCanonicalAvailabilityOfEveryTitle()
+        {
+            await using var host = await CreateHostAsync();
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Series", MediaType.Series);
+            // The profile reads and hears English.
+            await host.Fixture.RunSqlAsync($"""UPDATE "Profiles" SET "UiLocaleId" = (SELECT "Id" FROM "UiLocales" WHERE "Locale" = 'en') WHERE "Id" = {host.Fixture.ProfileAId}""");
+            await host.Fixture.RunSqlAsync($"""
+                WITH work AS (
+                    INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES
+                        (10, 2, 'One Show'), (20, 1, 'One Film'), (30, 1, 'Other Film'), (40, 1, 'Missing Film')
+                    RETURNING "Id"
+                ), edition AS (
+                    INSERT INTO "WorkEditions" ("WorkId") SELECT "Id" FROM work RETURNING "Id", "WorkId"
+                ), version AS (
+                    INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")
+                    SELECT "WorkId", "Id" FROM edition RETURNING "Id", "WorkId"
+                ), season AS (
+                    INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number")
+                    SELECT 10, 1, 1 RETURNING "Id", "WorkId"
+                ), episode AS (
+                    INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                    SELECT version."WorkId", season."Id", 2, number
+                    FROM version
+                        JOIN season ON season."WorkId" = version."WorkId"
+                    CROSS JOIN generate_series(1, 2) AS number
+                    RETURNING "Id", "WorkId", "Number"
+                ), asset AS (
+                    INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                    SELECT episode."WorkId", version."Id", episode."Id", 1
+                    FROM episode
+                        JOIN version ON version."WorkId" = episode."WorkId"
+                    WHERE episode."Number" = 1
+                    UNION ALL
+                    SELECT version."WorkId", version."Id", NULL, 1 FROM version WHERE version."WorkId" IN (20, 30, 40)
+                    RETURNING "Id", "WorkId"
+                ), file AS (
+                    INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                    SELECT {rootId}, 'media/' || asset."Id" || '.mkv', 100, now(), now(), asset."Id"
+                    FROM asset
+                    WHERE asset."WorkId" IN (10, 20, 30)
+                    RETURNING "Id"
+                )
+                SELECT file."Id" FROM file;
+                """);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Language", "IsDefault", "IsForced")
+                SELECT file."Id", track."Index", track."TypeId",
+                    CASE WHEN asset."WorkId" = 30 THEN 'ja' ELSE track."Language" END, TRUE, FALSE
+                FROM
+                    "StoredFiles" AS file
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                    CROSS JOIN (VALUES (1, 2, 'en'), (2, 3, 'de')) AS track("Index", "TypeId", "Language")
+                WHERE
+                    asset."WorkId" IN (10, 20, 30);
+                """);
+            foreach (var workId in new long[] { 10, 20, 30, 40 })
+            {
+                using var added = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/" + workId, new UpdateWatchlistDataV1(true));
+                Assert.AreEqual(HttpStatusCode.OK, added.StatusCode, await added.Content.ReadAsStringAsync());
+            }
+
+            Assert.AreEqual("en", await host.ScalarAsync($"""SELECT lower(split_part(locale."Locale", '-', 1)) FROM "UiLocales" AS locale JOIN "Profiles" AS profile ON profile."UiLocaleId" = locale."Id" WHERE profile."Id" = {host.Fixture.ProfileAId}"""));
+
+            // One of two episodes is here: the card is partial and names the real tracks.
+            var show = await ReadCardAsync(host, "/api/v1/watchlist", 10);
+            Assert.AreEqual(MediaAvailabilityState.Partial, show.AvailabilityStateId);
+            Assert.AreEqual(1, show.AvailableUnits);
+            Assert.AreEqual(2, show.MonitoredUnits);
+            CollectionAssert.AreEquivalent(new[] { "en" }, show.AudioLanguages);
+            CollectionAssert.AreEquivalent(new[] { "de" }, show.SubtitleLanguages);
+
+            // A film has no units; with the profile's audio it is complete.
+            var film = await ReadCardAsync(host, "/api/v1/watchlist", 20);
+            Assert.AreEqual(MediaAvailabilityState.ProfileAudio, film.AvailabilityStateId);
+            Assert.AreEqual(1, film.AvailableUnits);
+            Assert.AreEqual(1, film.MonitoredUnits);
+
+            // The same film in another audio language is complete, but in the wrong language.
+            var other = await ReadCardAsync(host, "/api/v1/watchlist", 30);
+            Assert.AreEqual(MediaAvailabilityState.OtherAudio, other.AvailabilityStateId);
+            CollectionAssert.AreEquivalent(new[] { "ja" }, other.AudioLanguages);
+
+            // Nothing of it is here.
+            var missing = await ReadCardAsync(host, "/api/v1/watchlist", 40);
+            Assert.AreEqual(MediaAvailabilityState.Missing, missing.AvailabilityStateId);
+            Assert.AreEqual(0, missing.AvailableUnits);
+            Assert.AreEqual(1, missing.MonitoredUnits);
+
+            // The library shows the same card as the watchlist.
+            var library = await ReadCardAsync(host, "/api/v1/library", 10);
+            Assert.AreEqual(show.Id, library.Id);
+            Assert.AreEqual(show.AvailabilityStateId, library.AvailabilityStateId);
+            Assert.AreEqual(show.AvailableUnits, library.AvailableUnits);
+            CollectionAssert.AreEquivalent(library.SubtitleLanguages, show.SubtitleLanguages);
+
+            // A running download of the title replaces the state of the library.
+            await host.Fixture.RunSqlAsync("""
+                WITH wanted AS (
+                    INSERT INTO "WantedItems" ("WorkId") VALUES (40) RETURNING "Id"
+                ), release AS (
+                    INSERT INTO "AcquisitionReleases" ("WantedItemId", "ReleaseIdentity", "Title", "AcquisitionReleaseStatusTypeId")
+                    SELECT wanted."Id", 'release-1', 'Missing Film 1080p', 1 FROM wanted RETURNING "Id"
+                )
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId")
+                SELECT 2, 2, release."Id" FROM release;
+                """);
+            Assert.AreEqual(MediaAvailabilityState.Downloading, (await ReadCardAsync(host, "/api/v1/watchlist", 40)).AvailabilityStateId);
+
+            // Without the running download the request of the profile waits.
+            await host.Fixture.RunSqlAsync("""DELETE FROM "Operations" WHERE "OperationTypeId" = 2""");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId")
+                VALUES (40, 101, 41, 1, 1);
+                """);
+            Assert.AreEqual(MediaAvailabilityState.Requested, (await ReadCardAsync(host, "/api/v1/watchlist", 40)).AvailabilityStateId);
+
+            // A wanted title without a request searches for itself.
+            await host.Fixture.RunSqlAsync("""DELETE FROM "AcquisitionRequests" WHERE "WorkId" = 40""");
+            Assert.AreEqual(MediaAvailabilityState.Searching, (await ReadCardAsync(host, "/api/v1/watchlist", 40)).AvailabilityStateId);
+        }
+
+        private static async Task<LibraryItemV1> ReadCardAsync(Host host, string route, long workId)
+        {
+            using var read = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            return (await read.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single(item => item.Id == workId);
         }
 
         [TestMethod]

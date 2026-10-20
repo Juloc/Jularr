@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding.Binders;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Primitives;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Public.Authentication.V1;
