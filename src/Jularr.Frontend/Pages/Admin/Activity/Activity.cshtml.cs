@@ -35,7 +35,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 var table = new Table<ActivityItemV1>(items.Items)
                     .Resource(item => item.OperationTypeId, "table.type", type => "operation.type." + type)
-                    .Content("activity.item", item => item.WorkId is { } workId
+                    .Content("activity.item", item => item.OperationTypeId == OperationType.Job ? new Text("jobs.job." + item.Title)
+                        : item.WorkId is { } workId
                         ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), new Span(new ValueText(item.Title))).Class("activity-item")
                         : new ValueText(item.Title))
                     .Content("table.status", item => new Text(item.IsWaiting ? "activity.waiting" : "operation.status." + item.OperationStatusTypeId));
@@ -79,6 +80,12 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private IUiComponent Actions(ActivityItemV1 item, string? csrf)
         {
+            // A background job runs again by itself; the Jobs page shows it.
+            if (item.OperationTypeId == OperationType.Job)
+            {
+                return new Div(new A(new Text("jobs.open")).Class("button").Attribute("href", "/Admin/Jobs"), Action(item, "Dismiss", "activity.dismiss", csrf)).Class("activity-actions");
+            }
+
             if (item.OperationStatusTypeId == OperationStatusType.Failed)
             {
                 return new Div(Action(item, "Retry", "activity.retry", csrf), Action(item, "Dismiss", "activity.dismiss", csrf)).Class("activity-actions");

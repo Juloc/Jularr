@@ -1,4 +1,4 @@
-// State as a chip: available in the success colour, requested or in progress in the accent, anything else light.
+// State as a chip: available in the success colour, requested or in progress in the accent, a failure in the danger colour, anything else light.
 .state-chip {
     display: inline-flex;
     align-items: center;
@@ -24,16 +24,24 @@
     }
 
     &--available,
-    &--known {
+    &--known,
+    &--idle {
         border-color: color-mix(in srgb, var(--success) 30%, var(--surface));
         background: color-mix(in srgb, var(--success) 12%, var(--surface));
         color: var(--success);
     }
 
     &--requested,
-    &--inprogress {
+    &--inprogress,
+    &--running {
         border-color: var(--accent-line);
         background: var(--accent-soft);
         color: var(--accent-text);
+    }
+
+    &--failed {
+        border-color: color-mix(in srgb, var(--danger) 30%, var(--surface));
+        background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+        color: var(--danger);
     }
 }

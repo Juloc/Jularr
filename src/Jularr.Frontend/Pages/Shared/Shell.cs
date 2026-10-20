@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Shared
 
             if (texts.CanAdminister())
             {
-                secondary.Add(new ShellLink("system.title", "/Admin/System", "server"));
+                secondary.Add(Group("nav.group.system", "server", new("nav.system.overview", "/Admin/System", ""), new("admin.jobs.title", "/Admin/Jobs", "")));
             }
 
             // Administration areas open into their pages.

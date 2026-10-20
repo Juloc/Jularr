@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Backup.V1;
@@ -10,7 +11,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    internal sealed class OperationWorker(IServiceScopeFactory scopes, ILogger<OperationWorker> logger) : BackgroundService
+    // Queued scans and backups one after another; a restart resumes what it interrupted.
+    internal sealed class OperationWorker(TimeProvider time, WorkerJobRunner runner, ILogger<OperationWorker> logger) : BackgroundService
     {
         private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(30);
@@ -18,40 +20,26 @@ namespace Jularr.Workers
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var recovered = false;
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    await using var scope = scopes.CreateAsyncScope();
+                    var result = await runner.RunWhileBusyAsync("operations", async (services, token) =>
+                    {
+                        // Resume work interrupted by a restart.
+                        if (!recovered)
+                        {
+                            await services.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, token);
+                            recovered = true;
+                        }
 
-                    // Resume work interrupted by a restart.
-                    if (!recovered)
-                    {
-                        await scope.ServiceProvider.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, stoppingToken);
-                        recovered = true;
-                    }
-
-                    if (!await RunNextAsync(scope.ServiceProvider, logger, stoppingToken))
-                    {
-                        await Task.Delay(PollInterval, stoppingToken);
-                    }
+                        return await RunNextAsync(services, logger, token);
+                    }, TimeSpan.Zero, time, stoppingToken);
+                    await Task.Delay(result == WorkerJobResultType.Failed ? RetryInterval : PollInterval, time, stoppingToken);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    return;
-                }
-                catch (Exception exception)
-                {
-                    logger.LogError(exception, "Background operations are unavailable.");
-                    try
-                    {
-                        await Task.Delay(RetryInterval, stoppingToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
-                    }
-                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
             }
         }
 

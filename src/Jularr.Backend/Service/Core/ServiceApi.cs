@@ -176,6 +176,8 @@ namespace Jularr.Backend.Service.Core
             // Recent warnings and errors for the Owner's system page.
             services.TryAddSingleton<AcquisitionSearchSignal>();
             services.TryAddSingleton<UserActivity>();
+            services.TryAddSingleton<WorkerJobs>();
+            services.TryAddSingleton<WorkerJobRunner>();
             services.TryAddSingleton<RecentLogs>();
             services.TryAddSingleton<ServiceTimings>();
             services.TryAddSingleton<ResourceHistory>();
