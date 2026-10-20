@@ -34,7 +34,24 @@ namespace Jularr.E2E.Tests
 
                 // Still signed in; the running job, not a new one, is picked up again and imported once it finishes.
                 await page.GotoAsync("/Admin/Activity");
-                await Assertions.Expect(page.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Downloading");
+                var queued = page.Locator("tr", new() { HasText = FakeServices.MovieTitle });
+                await Assertions.Expect(queued).ToContainTextAsync("Downloading");
+                await Assertions.Expect(queued).ToContainTextAsync("40 %");
+
+                // The client moves on: the queue and the request show it without a reload.
+                await page.EvaluateAsync("window.liveMarker = 1");
+                fakes.HeldPercent = 70;
+                var slow = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
+                await Assertions.Expect(queued).ToContainTextAsync("70 %", slow);
+                await Assertions.Expect(queued.Locator("progress")).ToHaveAttributeAsync("value", "70");
+                Assert.AreEqual(1, await page.EvaluateAsync<int>("window.liveMarker ?? 0"), "The queue was reloaded instead of updated.");
+                await page.GotoAsync("/Requests");
+                var request = page.Locator("tr", new() { HasText = FakeServices.MovieTitle });
+                await Assertions.Expect(request).ToContainTextAsync("Downloading 70 %", slow);
+                await page.EvaluateAsync("window.liveMarker = 2");
+                fakes.HeldPercent = 90;
+                await Assertions.Expect(request).ToContainTextAsync("Downloading 90 %", slow);
+                Assert.AreEqual(2, await page.EvaluateAsync<int>("window.liveMarker ?? 0"), "The requests were reloaded instead of updated.");
                 fakes.FinishDownloads();
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 Assert.AreEqual(1, fakes.Grabbed.Count);

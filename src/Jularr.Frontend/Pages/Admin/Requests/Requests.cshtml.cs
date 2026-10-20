@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
         {
             page.Title("admin.requests.title");
             page.Navigation("nav.admin");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Content.Add(new NavigationTabs(Enum.GetValues<RequestTabType>()
                 .Select(tab => new NavigationTab("request.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.requests.title"));
 
@@ -37,7 +38,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
                     .Text(item => item.RequesterName, "table.requester")
                     .Text(item => item.RequestedLanguage, "request.language")
                     .Text(item => item.CreatedAt, "table.requestedAt")
-                    .Resource(item => item.AcquisitionRequestStatusTypeId, "table.status", status => "request.status." + status)
+                    .Content("table.status", item => new LiveProgress(LiveKeys.AdminRequest(item.Id)).Request(item.AcquisitionRequestStatusTypeId, admin: true).Details())
                     .Content("common.actions", item => item.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Open
                         ? new Div(Decision(item, AcquisitionRequestStatusType.Approved, csrf), Decision(item, AcquisitionRequestStatusType.Rejected, csrf))
                         : new Span()));

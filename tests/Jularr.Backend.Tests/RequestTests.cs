@@ -256,10 +256,10 @@ namespace Jularr.Backend.Tests
             // The requester reads where the request stands and reaches the title; the details show it instead of a second request.
             var requestedWork = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""))!;
             StringAssert.Contains(mineHtml, "href=\"/Details/" + requestedWork + "\"");
-            StringAssert.Contains(mineHtml, "Looking for media");
+            StringAssert.Contains(mineHtml, "Requested");
             using var requestedDetails = await host.SendAsync(HttpMethod.Get, "/Details/" + requestedWork);
             var detailsHtml = await requestedDetails.Content.ReadAsStringAsync();
-            StringAssert.Contains(detailsHtml, "Looking for media");
+            StringAssert.Contains(detailsHtml, "Requested");
             Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
 
             // Disabled does not erase data.
