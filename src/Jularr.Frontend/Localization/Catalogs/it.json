@@ -1004,10 +1004,6 @@
    "Users may confirm source checks",
    "Gli utenti possono confermare i controlli delle fonti"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "Le impostazioni dell'istanza sono state salvate."
-  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "Attiva o disattiva le integrazioni registrate. Le funzioni di connessione e accesso richiedono comunque la loro configurazione esistente sull'host."
@@ -1035,10 +1031,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Impostazioni del profilo"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Salva modifiche"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1575,6 @@
   "admin.instance.media": [
    "Media types",
    "Tipi di media"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Disponibilità"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2711,6 @@
   "admin.instance.modules": [
    "Modules",
    "Moduli"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Stato del modulo"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
@@ -5520,14 +5504,6 @@
    "Queued at",
    "In coda dal"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Attività"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "Da fare"
-  ],
   "activity.tab.History": [
    "History",
    "Cronologia"
@@ -5591,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Continua il download"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Non c'è nulla in esecuzione."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Niente richiede attenzione."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

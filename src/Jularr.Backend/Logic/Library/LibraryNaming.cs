@@ -46,6 +46,14 @@ namespace Jularr.Backend.Logic.Library
             }
         }
 
+        // A value inside a name: characters no file system takes become spaces, or vanish when the Admin does not want them replaced; its ends keep dots, as in "Title...".
+        public static string CleanPart(string value, bool replaces = true)
+        {
+            static bool IsInvalid(char character) => InvalidNameCharacters.Contains(character) || char.IsControl(character);
+            var kept = value.Where(character => replaces || !IsInvalid(character)).Select(character => IsInvalid(character) ? ' ' : character);
+            return string.Join(' ', new string(kept.ToArray()).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        }
+
         public static string SafeName(string value)
         {
             var cleaned = new string(value.Select(character => InvalidNameCharacters.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray());

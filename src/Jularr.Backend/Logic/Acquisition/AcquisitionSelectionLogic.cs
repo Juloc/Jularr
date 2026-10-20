@@ -131,7 +131,7 @@ namespace Jularr.Backend.Logic.Acquisition
             new(existing.Title, existing.ConnectionId, existing.ConnectionName, existing.ConnectionPriority, existing.Guid, existing.DownloadUri, existing.InfoUrl, existing.SizeBytes,
                 existing.PublishedAt, [.. existing.Stages.Union(found.Stages)]);
 
-        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers)
+        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers, string? focusLanguage = null)
         {
             var installed = scope is null || scope.UnitNumber is not null ? Installed(profile, target, scope?.Unit.Id) : null;
             // Failed and blocked releases stay visible but are never taken.
@@ -151,7 +151,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 {
                     IndexerId = offer.ConnectionId,
                     IndexerFlags = offer.IndexerFlags,
-                    SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection,
+                    SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection
+                        ?? (EditionLanguageFilter.Rejects(judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [], target.MonitoredEditionLanguages, target.UnmonitoredEditionLanguages, focusLanguage) ? "EditionNotMonitored" : null),
                     ContextScore = judgement.ContextScore,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
                     InstalledQuality = installed?.Quality,

@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Framework
         private readonly string _prefix;
         private readonly string? _antiforgeryToken;
         private readonly bool _local;
+        private bool _saves;
 
         public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null, bool local = false)
             : this(define, action, antiforgeryToken, data, error, "", true, local)
@@ -87,6 +88,37 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null) =>
             Add(field, FieldControl.Password, labelKey, autocomplete, help);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
+
+        public Form<TData> Range<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
+        {
+            var field = Declare(selector, FieldControl.Range, labelKey, help);
+            if (!field.Required || field.ValueType != typeof(int) && field.ValueType != typeof(long) && field.ValueType != typeof(decimal)
+                || field.Minimum is not { } minimum || field.Maximum is not { } maximum || minimum >= maximum)
+            {
+                throw new InvalidOperationException("Range controls require a required numeric field with increasing minimum and maximum bounds.");
+            }
+
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "range").Attribute("step", "1")
+                .Attribute("data-range-precision", (field.Scale ?? 0).ToString(CultureInfo.InvariantCulture));
+            if (Value(field) is { } value) input.Attribute("value", value);
+            Configure(field, input);
+            AddField(field, new Div(input,
+                new HtmlOutput(new ValueText(_data is null ? "" : Convert.ToString(field.ReadValue(_data), CultureInfo.CurrentCulture) ?? ""))
+                    .Attribute("for", _id + "-" + field.Name).Attribute("aria-hidden", "true")).Class("ui-range"));
+            return this;
+        }
+
+        // A wall-clock time: hour and minute fields on a desktop, a wheel on Android, the system's own picker on iOS (TimePicker.entry.ts).
+        public Form<TData> Time<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
+        {
+            var field = Declare(selector, FieldControl.Text, labelKey, help);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "time").Attribute("data-time-picker", "")
+                .TextAttribute("data-time-hour", "form.time.hour").TextAttribute("data-time-minute", "form.time.minute").TextAttribute("data-time-done", "form.time.done");
+            if (Value(field) is { } value) input.Attribute("value", value);
+            Configure(field, input);
+            AddField(field, input);
+            return this;
+        }
 
         public Form<TData> Color(Expression<Func<TData, string>> selector, string labelKey)
         {
@@ -339,6 +371,15 @@ namespace Jularr.Frontend.Framework
             return Submit(button);
         }
 
+        // The page's save pill saves this form together with every other changed one; without script the button saves it alone.
+        public Form<TData> Save()
+        {
+            _saves = true;
+            var button = new Button(new Text("common.save")).Primary();
+            button.Attribute("data-form-save", "");
+            return Submit(button);
+        }
+
         public Form<TData> Submit(Button button)
         {
             if (_local) throw new InvalidOperationException("Local fields cannot declare a submit action.");
@@ -368,6 +409,7 @@ namespace Jularr.Frontend.Framework
             {
                 form.Attribute("action", _action).Attribute("method", "post");
                 if (_isUpload) form.Attribute("enctype", "multipart/form-data");
+                if (_saves) form.Attribute("data-save", "");
             }
 
             form.WriteTo(writer, encoder, texts);
@@ -418,6 +460,7 @@ namespace Jularr.Frontend.Framework
             {
                 DateTime timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
                 DateTimeOffset timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+                TimeOnly time => time.ToString("HH:mm", CultureInfo.InvariantCulture),
                 string[] list => string.Join(", ", list),
                 int[] list => string.Join(", ", list.Select(item => item.ToString(CultureInfo.InvariantCulture))),
                 Enum catalogValue => Convert.ToByte(catalogValue).ToString(CultureInfo.InvariantCulture),
@@ -480,6 +523,7 @@ namespace Jularr.Frontend.Framework
         private sealed class HtmlTextarea(params IUiComponent[] children) : HtmlElement("textarea", children);
         private sealed class HtmlFieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
         private sealed class HtmlLegend(params IUiComponent[] children) : HtmlElement("legend", children);
+        private sealed class HtmlOutput(params IUiComponent[] children) : HtmlElement("output", children);
         private sealed class HtmlTable(params IUiComponent[] children) : HtmlElement("table", children);
         private sealed class HtmlHead(params IUiComponent[] children) : HtmlElement("thead", children);
         private sealed class HtmlBody(params IUiComponent[] children) : HtmlElement("tbody", children);

@@ -1,6 +1,6 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
-import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
+import { keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -23,6 +23,8 @@ if (element) {
             status.textContent = element.querySelector('[data-status=failed]')?.textContent ?? '';
             status.hidden = false;
         }
+        const loading = element.querySelector<HTMLElement>('[data-role=loading]');
+        if (loading) loading.hidden = true;
     });
 }
 
@@ -33,6 +35,39 @@ async function start(player: HTMLElement): Promise<void> {
     const volume = player.querySelector<HTMLInputElement>("[data-role=volume]")!;
     const toggle = player.querySelector<HTMLButtonElement>("[data-action=toggle]")!;
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
+    const loading = player.querySelector<HTMLElement>("[data-role=loading]")!;
+    const feedback = player.querySelector<HTMLElement>("[data-role=transport-feedback]")!;
+    let loadingTimer = 0;
+    let feedbackTimer = 0;
+
+    // Avoid showing a spinner for very short buffer/seek events.
+    function stopLoading(): void {
+        clearTimeout(loadingTimer);
+        loading.hidden = true;
+    }
+
+    function showLoading(): void {
+        clearTimeout(loadingTimer);
+        loadingTimer = window.setTimeout(() => {
+            if (status.hidden && !video.error && !video.ended) loading.hidden = false;
+        }, 220);
+    }
+
+    // Only explicit transport actions flash a symbol; automatic starts and track changes do not.
+    function showTransportFeedback(action: "play" | "pause"): void {
+        if (player.classList.contains("player--mini")) return;
+        clearTimeout(feedbackTimer);
+        feedback.dataset.state = action;
+        feedback.hidden = false;
+        feedback.classList.remove("player__feedback--animate");
+        void feedback.offsetWidth; // Restart the animation on rapid repeated taps.
+        feedback.classList.add("player__feedback--animate");
+        feedbackTimer = window.setTimeout(() => {
+            feedback.hidden = true;
+            feedback.classList.remove("player__feedback--animate");
+        }, 600);
+    }
+
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
     let hls: { destroy(): void } | null = null;
@@ -40,6 +75,8 @@ async function start(player: HTMLElement): Promise<void> {
     let switching = false;
     let idle = 0;
     let seeking = false;
+    let sourceReady = false;
+    let sourcePosition = 0;
     let lastSubtitle: HTMLButtonElement | undefined;
     const settings = player.querySelector<HTMLElement>('#player-settings')!;
     const sidebar = player.querySelector<HTMLElement>('#player-sidebar');
@@ -69,6 +106,7 @@ async function start(player: HTMLElement): Promise<void> {
     try { player.classList.toggle('player--theater', localStorage.getItem('jularr.player.layout') === 'wide'); } catch { /* Storage is optional. */ }
     layout();
 
+    showLoading();
     plan = await requestPlan(null);
     if (!plan) return;
     await attach(plan, plan.resumePositionMs / 1000);
@@ -80,9 +118,9 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
-        if (!plan) return;
+        if (!plan || !sourceReady && !ended) return;
         save({
-            positionMs: Math.floor(video.currentTime * 1000),
+            positionMs: Math.floor((sourceReady ? video.currentTime : sourcePosition) * 1000),
             durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
             isEnded: ended,
             isCompleted: completed
@@ -164,6 +202,10 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Conversions use HLS: native where available, otherwise hls.js on demand.
     async function attach(next: PlaybackPlan, position: number, autoplay = true): Promise<void> {
+        if (autoplay) showLoading();
+        else stopLoading();
+        sourceReady = false;
+        sourcePosition = position;
         const rate = video.playbackRate;
         hls?.destroy();
         hls = null;
@@ -204,8 +246,9 @@ async function start(player: HTMLElement): Promise<void> {
             player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
             if (position > 0 && position < video.duration) video.currentTime = position;
             video.playbackRate = rate;
+            sourceReady = true;
             player.querySelector('[data-role=resolution]')!.textContent = video.videoWidth > 0 ? `${video.videoWidth} × ${video.videoHeight}` : '';
-            if (autoplay) void video.play().catch(() => undefined);
+            if (autoplay) void video.play().catch(() => stopLoading());
             else video.pause();
         }, { once: true });
     }
@@ -253,7 +296,13 @@ async function start(player: HTMLElement): Promise<void> {
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => show("failed"));
+    video.addEventListener("error", () => { stopLoading(); show("failed"); });
+    video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
+    video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
+    video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
+    video.addEventListener("playing", stopLoading);
+    video.addEventListener("pause", stopLoading);
+    video.addEventListener("ended", stopLoading);
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
@@ -284,7 +333,18 @@ async function start(player: HTMLElement): Promise<void> {
     volume.style.setProperty('--played', `${video.volume * 100}%`);
 
     const actions: Record<string, () => void> = {
-        toggle: () => void (video.paused ? video.play() : video.pause()),
+        toggle: () => {
+            if (video.paused) {
+                showTransportFeedback("play");
+                void video.play().catch(() => {
+                    feedback.hidden = true;
+                    stopLoading();
+                });
+            } else {
+                video.pause();
+                showTransportFeedback("pause");
+            }
+        },
         back: () => seek(-10),
         forward: () => seek(30),
         mute: () => { video.muted = !video.muted; },
@@ -367,23 +427,23 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Minimize keeps the same session in a bar while the app is browsed around it.
     async function minimize(): Promise<void> {
+        shrink();
+        keepAddress(playerAddress, () => expand(false), shrink);
+        await visit(backHref);
+    }
+
+    function shrink(): void {
         settings.hidePopover(); sidebar?.hasAttribute('popover') && sidebar.hidePopover();
         player.classList.add("player--mini");
         document.body.classList.add("player-mini");
         document.body.classList.remove("player-page");
-        enableNavigation(url => {
-            if (url.pathname + url.search !== playerAddress) return false;
-            expand(false);
-            return true;
-        });
-        await navigate(backHref, true);
     }
 
     function expand(push: boolean): void {
         player.classList.remove("player--mini");
         document.body.classList.remove("player-mini");
         document.body.classList.add("player-page");
-        if (push) history.pushState(null, "", playerAddress);
+        if (push) pushAddress(playerAddress);
     }
 
     // Stop ends the session and leaves the app as it is; progress stays.
@@ -393,7 +453,7 @@ async function start(player: HTMLElement): Promise<void> {
         hls?.destroy();
         video.removeAttribute("src");
         video.load();
-        disableNavigation();
+        releaseAddress();
         document.body.classList.remove("player-active", "player-mini");
         player.closest(".player-main")?.remove();
     }
@@ -449,6 +509,7 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     function show(code: string): void {
+        stopLoading();
         status.textContent = text("data-status", code) || text("data-status", "failed");
         status.hidden = false;
     }

@@ -62,18 +62,19 @@ namespace Jularr.Backend.Tests
             // Native actions, encoded text.
             writer.GetStringBuilder().Clear();
             var card = new MediaCard(assets, "<Title>", "/Details/1", null, "2026", "media.state.InProgress", "media.continue", "/Player/2")
-                .Availability(availability).Continue(30000, 90000).Trailer("k4xGqY5IDBE");
+                .Availability(availability).Continue(30000, 90000);
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
             StringAssert.Contains(html, "media-availability-badge--partialotheraudio");
             StringAssert.Contains(html, "href=\"/Player/2\"");
-            StringAssert.Contains(html, texts["media.details"]);
+            StringAssert.Contains(html, "class=\"media-card__title\"");
+            StringAssert.Contains(html, "class=\"media-card__details\"");
             StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\"");
-            StringAssert.Contains(html, "data-trailer-label=\"" + texts["media.preview.playTrailer"] + "\"");
+            Assert.IsFalse(html.Contains("data-trailer-id", StringComparison.Ordinal));
+            Assert.AreEqual(1, Regex.Matches(html, "media-card__actions").Count);
             foreach (var omitted in new[] { "media-card__series", "media-card__genres", "media-card__languages", "media-card__remaining", "<iframe", "disabled=\"disabled\"" })
                 Assert.IsFalse(html.Contains(omitted, StringComparison.Ordinal), omitted);
-            Assert.ThrowsExactly<ArgumentException>(() => card.Trailer("../../bad"));
 
             // Progression has no invented duration.
             writer.GetStringBuilder().Clear();
@@ -87,7 +88,7 @@ namespace Jularr.Backend.Tests
             // Preview keeps real fallback links.
             writer.GetStringBuilder().Clear();
             card.Preview("preview-test").WriteTo(writer, HtmlEncoder.Default, texts);
-            Assert.AreEqual(2, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
+            Assert.AreEqual(1, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
             writer.GetStringBuilder().Clear();
             availability.WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.AreEqual(symbol, writer.ToString());
@@ -227,7 +228,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
             StringAssert.Contains(html, "data-media-card=\"true\"");
-            StringAssert.Contains(html, "media-card__actions");
+            StringAssert.Contains(html, "media-card__title");
+            StringAssert.Contains(html, "media-card__details");
             StringAssert.Contains(html, "data-shelf-direction=\"next\"");
             StringAssert.Contains(html, "class=\"media-shelf__items\" tabindex=\"0\" role=\"region\"");
             foreach (var state in new[] { MediaAvailabilityState.Available, MediaAvailabilityState.Partial, MediaAvailabilityState.Missing, MediaAvailabilityState.Downloading, MediaAvailabilityState.Searching })
@@ -235,6 +237,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
             Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
             StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
+            // MediaPreview still supports trailers independently of the simplified MediaCard.
             StringAssert.Contains(html, "data-trailer-id=\"k4xGqY5IDBE\"");
             StringAssert.Contains(html, "#icon-close");
             Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
@@ -398,6 +401,86 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "value=\"#f7f3ec\"");
             StringAssert.Contains(html, "minlength=\"7\"");
             Assert.AreEqual(!editable, html.Contains("disabled=\"disabled\"", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [DataRow("en-US", "server")]
+        [DataRow("de-DE", "server")]
+        [DataRow("en-US", "local")]
+        [DataRow("de-DE", "local")]
+        [DataRow("en-US", "readonly")]
+        public async Task Form_Range_PreservesNumericMetadataBindingAndWriteGuard(string locale, string mode)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+            var culture = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(locale);
+                var form = new Form<RangeData>(fields => fields.Range(item => item.Fraction, "reader.spacing"),
+                    mode == "server" ? "/Settings" : null, mode == "server" ? "token" : null, new RangeData(), local: mode == "local");
+                using var writer = new StringWriter();
+                form.WriteTo(writer, HtmlEncoder.Default, texts);
+                var html = writer.ToString();
+                var input = Regex.Match(html, "<input[^>]*name=\"Fraction\"[^>]*>").Value;
+                StringAssert.Contains(input, "type=\"range\"");
+                StringAssert.Contains(input, "step=\"0.01\"");
+                StringAssert.Contains(input, "data-range-precision=\"2\"");
+                StringAssert.Contains(input, "value=\"1.25\"");
+                StringAssert.Contains(html, "min=\"0.25\" max=\"2.75\"");
+                Assert.AreEqual(mode == "readonly", html.Contains("disabled=\"disabled\"", StringComparison.Ordinal));
+                Assert.AreEqual(mode == "server", html.Contains("name=\"__Invariant\" value=\"Fraction\"", StringComparison.Ordinal));
+                Assert.AreEqual(mode == "local", html.StartsWith("<div", StringComparison.Ordinal));
+                var id = Regex.Match(html, "<input id=\"([^\"]+)\" name=\"Fraction\"").Groups[1].Value;
+                Assert.IsFalse(string.IsNullOrEmpty(id));
+                StringAssert.Contains(html, "for=\"" + id + "\"");
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = culture;
+            }
+        }
+
+        [TestMethod]
+        public async Task Form_Range_PreservesIndexedNamesAndFieldErrors()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+            var form = new Form<RangeRows>(fields => fields.Rows(item => item.Items, (row, _) => row.Range(item => item.Fraction, "reader.spacing")),
+                "/Settings", "token", new RangeRows(), ServiceError.FromException(new DataValidationException("Items[0].Fraction", "out_of_range")));
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+            StringAssert.Contains(html, "name=\"Items[0].Fraction\" type=\"range\"");
+            StringAssert.Contains(html, "name=\"__Invariant\" value=\"Items[0].Fraction\"");
+            StringAssert.Contains(html, "aria-invalid=\"true\"");
+            StringAssert.Contains(html, "-Items[0].Fraction-error\"");
+            StringAssert.Contains(html, "role=\"alert\"");
+            Assert.ThrowsExactly<InvalidOperationException>(() => new Form<LoginDataV1>(fields => fields.Range(item => item.Password, "account.field.password"), local: true));
+        }
+
+        private sealed class RangeData : BaseData
+        {
+            [DataField(typeof(RangeFields), nameof(RangeFields.Fraction))]
+            public decimal Fraction { get; } = 1.25m;
+        }
+
+        private sealed class RangeRows : BaseData
+        {
+            public BaseDataList<RangeData> Items { get; } = new([new RangeData()]);
+        }
+
+        private static class RangeFields
+        {
+            public static readonly Jularr.Backend.Data.Fields.DecimalField Fraction = new() { Minimum = .25m, Maximum = 2.75m, Scale = 2 };
         }
 
         [TestMethod]

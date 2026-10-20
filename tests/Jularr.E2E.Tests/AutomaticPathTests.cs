@@ -39,7 +39,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Series", "Series"));
-                await Steps.AddUsenetAsync(page, fakes, "5000,5040");
+                await Steps.AddUsenetAsync(page, fakes, "5000,5040", searchesAutomatically: true);
 
                 // The preview assigns Sonarr's root folder to the only series library; taking over brings the profile and the missing series.
                 fakes.Offer(television, x265, first, second);
@@ -114,7 +114,7 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"), new LibraryPath("Anime", "Series", "Anime"));
-                await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5070");
+                await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5070", searchesAutomatically: true);
                 await CreateProfileAsync(page, "Movie", "German", mustContain: "German");
                 await RegisterAsync(page, user);
 
@@ -181,7 +181,7 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
-                await Steps.AddUsenetAsync(page, fakes, "7000,7020");
+                await Steps.AddUsenetAsync(page, fakes, "7000,7020", searchesAutomatically: true);
                 await RegisterAsync(page, user);
 
                 // The user asks for the novel; once approved, nobody searches by hand.
@@ -233,7 +233,7 @@ namespace Jularr.E2E.Tests
             await format.Locator("[name=Name]").FillAsync(name);
             await format.Locator("[name='Conditions[0].Name']").FillAsync(name);
             await format.Locator("[name='Conditions[0].Value']").FillAsync(mustContain);
-            await format.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+            await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
             await page.GotoAsync("/Admin/Acquisition/Profiles/New?type=" + type);
             var form = page.Locator("main form", new() { Has = page.Locator("[name=MinimumFormatScore]") });
@@ -243,7 +243,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("tr", new() { HasText = name }).GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).ClickAsync();
             await form.Locator("[name='FormatScores[0].Score']").FillAsync("100");
             await form.Locator("[name=MinimumFormatScore]").FillAsync("100");
-            await form.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+            await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("main [role=alert]")).ToHaveCountAsync(0);
         }
 
@@ -259,7 +259,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
             await Steps.SubmitAsync(user, form);
             await page.GotoAsync("/Admin/Accounts");
-            await page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }).ClickAsync();
+            await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
             var account = page.Locator("main form", new() { Has = page.Locator("[name=IsEnabled]") });
             await account.Locator("[name=IsEnabled]").SelectOptionAsync("True");
             await Steps.SubmitAsync(page, account);

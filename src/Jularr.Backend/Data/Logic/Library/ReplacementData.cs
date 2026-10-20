@@ -12,8 +12,9 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class ReplacementSettingsData : BaseData
     {
         public ReplacementSettingsData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId,
-            bool? isReadOnly, string? recyclePath, int recycleDays)
+            bool? isReadOnly, string? recyclePath, int recycleDays, bool unmonitorsDeletedUnits = false)
         {
+            UnmonitorsDeletedUnits = unmonitorsDeletedUnits;
             IsReadOnly = isReadOnly;
             KeepsReleases = keepsReleases;
             RecycleModeId = recycleModeId;
@@ -42,12 +43,16 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleDays))]
         public int RecycleDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UnmonitorsDeletedUnits))]
+        public bool UnmonitorsDeletedUnits { get; }
     }
 
     internal sealed class ReplacementSettingsSaveData : BaseData
     {
-        public ReplacementSettingsSaveData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
+        public ReplacementSettingsSaveData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits = false)
         {
+            UnmonitorsDeletedUnits = unmonitorsDeletedUnits;
             KeepsReleases = keepsReleases;
             RecycleModeId = recycleModeId;
             RecycleStorageMountId = recycleStorageMountId;
@@ -70,6 +75,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleDays))]
         public int RecycleDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UnmonitorsDeletedUnits))]
+        public bool UnmonitorsDeletedUnits { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Version))]
         public long Version { get; }

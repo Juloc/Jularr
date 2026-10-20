@@ -176,6 +176,8 @@ References: [Docker volume options](https://docs.docker.com/reference/compose-fi
 
 ## SABnzbd completed category folders (first release)
 
+When saving a SAB connection through the regular Admin form, Jularr reads the resolved Complete directory from SAB's status API and the selected category's directory from SAB's config API (including the default '*' category, which can have its own directory). The Owner chooses the exact corresponding category Complete folder visible to Jularr (local mount or direct SMB), not its parent download folder. A missing category, unsafe parent traversal, disabled per-job folder, or unavailable SAB API prevents an automatic mapping; Jularr must not guess. Existing API clients with explicit RemotePath/LocalPath mapping stay compatible. Jularr does not change SAB's folders or cleanup settings.
+
 SABnzbd controls its own temporary and completed download directories, including
 category subfolders such as `complete/movies` and `complete/tv`. Jularr does
 **not** change SABnzbd's physical paths. On the download connection, set

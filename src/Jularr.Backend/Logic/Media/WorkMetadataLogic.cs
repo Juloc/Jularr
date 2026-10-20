@@ -131,23 +131,82 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task<long> SaveWorkMetadataAsync(this LogicContext ctx, WorkMetadataData data, CancellationToken ct)
         {
-            // The provider identity finds the Work again; manual edits stay.
+            // Video provider IDs must agree on one canonical Work before any metadata is written.
             var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    work."Id"
-                FROM
-                    "WorkExternalIdentities" AS identity
-                    JOIN "Works" AS work ON work."Id" = identity."WorkId"
-                WHERE
-                    identity."Namespace" = @Namespace
-                    AND identity."Value" = @Value
-                    AND work."MediaTypeId" = @MediaTypeId
-                FOR UPDATE OF work;
-                """;
-            sql.Parameters.Add(data);
-            var workId = (await ctx.ReadOptionalAsync<WorkIdData>(sql, ct))?.Id;
+            long? workId;
+            if (data.MediaTypeId is MediaType.Movie or MediaType.Series)
+            {
+                sql.Statement =
+                    """
+                    WITH requested AS (
+                        SELECT @Namespace::text AS "Namespace", @Value::text AS "Value"
+                        UNION
+                        SELECT item."Namespace", item."Value"
+                        FROM jsonb_to_recordset(@ExternalIdentities::jsonb) AS item ("Namespace" text, "Value" text)
+                    )
+                    SELECT
+                        work."Id",
+                        work."MediaTypeId"
+                    FROM
+                        requested
+                        JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = requested."Namespace" AND identity."Value" = requested."Value"
+                        JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                    FOR UPDATE OF work;
+                    """;
+                sql.Parameters.Add(data);
+                var matches = (await ctx.Sql.ReadListAsync<WorkIdentityCandidateData>(sql, ct)).DistinctBy(candidate => candidate.Id).ToArray();
+                if (matches.Length > 1 || matches.Any(candidate => candidate.MediaTypeId != data.MediaTypeId))
+                {
+                    throw new DataValidationException(nameof(data.ExternalIdentities), "in_use");
+                }
+
+                workId = matches.SingleOrDefault()?.Id;
+                if (workId is { } known)
+                {
+                    // An unchanged shared IMDb ID cannot silently replace a different stored TMDB or TVDB ID.
+                    sql = new SqlStatement();
+                    sql.Statement =
+                        """
+                        WITH requested AS (
+                            SELECT @Namespace::text AS "Namespace", @Value::text AS "Value"
+                            UNION
+                            SELECT item."Namespace", item."Value"
+                            FROM jsonb_to_recordset(@ExternalIdentities::jsonb) AS item ("Namespace" text, "Value" text)
+                        )
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM requested
+                            JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = requested."Namespace"
+                            WHERE identity."WorkId" = @Id AND identity."Value" <> requested."Value"
+                        );
+                        """;
+                    sql.Parameters.Add(data);
+                    sql.Parameters.Add(new WorkIdData(known));
+                    if ((bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!)
+                    {
+                        throw new DataValidationException(nameof(data.ExternalIdentities), "in_use");
+                    }
+                }
+            }
+            else
+            {
+                // Other catalog types retain their existing provider-specific matching.
+                sql.Statement =
+                    """
+                    SELECT
+                        work."Id"
+                    FROM
+                        "WorkExternalIdentities" AS identity
+                        JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                    WHERE
+                        identity."Namespace" = @Namespace
+                        AND identity."Value" = @Value
+                        AND work."MediaTypeId" = @MediaTypeId
+                    FOR UPDATE OF work;
+                    """;
+                sql.Parameters.Add(data);
+                workId = (await ctx.ReadOptionalAsync<WorkIdData>(sql, ct))?.Id;
+            }
 
             // A Book of the same subtype, title and year from another provider is the same Work; anything less clear becomes a new one.
             if (workId is null && data.MediaTypeId == MediaType.Book)
@@ -421,7 +480,7 @@ namespace Jularr.Backend.Logic.Media
                         *
                     FROM
                         jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Track" integer, "Title" text, "ReleasedOn" date,
-                            "Overview" text, "ImageUrl" text, "RuntimeMinutes" integer)
+                            "Overview" text, "ImageUrl" text, "RuntimeMinutes" integer, "Disc" integer)
                 ), monitoring AS (
                     SELECT
                         COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE) AS "MonitorsNewUnits"
@@ -431,7 +490,7 @@ namespace Jularr.Backend.Logic.Media
                         wanted."WorkId" = @Id
                 ), leaves AS (
                     INSERT INTO
-                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored")
+                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored", "DiscNumber")
                     SELECT
                         @Id,
                         NULL,
@@ -439,7 +498,8 @@ namespace Jularr.Backend.Logic.Media
                         COALESCE(item."Volume", item."Track"),
                         NULLIF(btrim(item."Title"), ''),
                         item."ReleasedOn",
-                        monitoring."MonitorsNewUnits"
+                        monitoring."MonitorsNewUnits",
+                        item."Disc"
                     FROM
                         item
                         CROSS JOIN monitoring
@@ -449,7 +509,8 @@ namespace Jularr.Backend.Logic.Media
                     ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                     SET
                         "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
-                        "ReleasedOn" = COALESCE(EXCLUDED."ReleasedOn", "WorkUnits"."ReleasedOn")
+                        "ReleasedOn" = COALESCE(EXCLUDED."ReleasedOn", "WorkUnits"."ReleasedOn"),
+                        "DiscNumber" = COALESCE(EXCLUDED."DiscNumber", "WorkUnits"."DiscNumber")
                 ), seasons AS (
                     INSERT INTO
                         "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "ImageUrl")

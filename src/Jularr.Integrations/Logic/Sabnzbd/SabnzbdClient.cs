@@ -39,6 +39,66 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
         }
 
+        // Discover the actual SAB folder; categories can override the global Complete folder.
+        public async Task<string> GetCompletedFolderAsync(SabnzbdConnection connection, string? category, CancellationToken ct)
+        {
+            using var status = await SendAsync(connection, [new("mode", "status"), new("skip_dashboard", "1")], ct);
+            var statusJson = await RequireBodyAsync(status, ct);
+            // Even the default '*' category can have its own configured target folder.
+            using var config = await SendAsync(connection, [new("mode", "get_config"), new("section", "categories")], ct);
+            return ParseCompletedFolder(statusJson, await RequireBodyAsync(config, ct), string.IsNullOrWhiteSpace(category) ? "*" : category);
+        }
+
+        internal static string ParseCompletedFolder(string statusJson, string? configJson = null, string? category = null)
+        {
+            using var status = JsonDocument.Parse(statusJson);
+            if (status.RootElement.ValueKind != JsonValueKind.Object || !status.RootElement.TryGetProperty("status", out var details)
+                || details.ValueKind != JsonValueKind.Object)
+                throw new SabnzbdException("SABnzbd did not provide a completed download folder.");
+            var root = AbsoluteFolder(ReadString(details, "completedir"));
+            if (configJson is null)
+            {
+                if (category is null) return root;
+                throw new SabnzbdException("SABnzbd category configuration is missing.");
+            }
+            category = string.IsNullOrWhiteSpace(category) ? "*" : category;
+            using var config = JsonDocument.Parse(configJson);
+            if (config.RootElement.ValueKind != JsonValueKind.Object || !config.RootElement.TryGetProperty("config", out var settings)
+                || settings.ValueKind != JsonValueKind.Object || !settings.TryGetProperty("categories", out var categories)
+                || categories.ValueKind != JsonValueKind.Array)
+                throw new SabnzbdException("SABnzbd category folders could not be read.");
+
+            var matches = categories.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object
+                && string.Equals(ReadString(item, "name"), category, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length != 1) throw new SabnzbdException("SABnzbd category folder is missing or ambiguous.");
+
+            if (!matches[0].TryGetProperty("dir", out var categoryDir) || categoryDir.ValueKind != JsonValueKind.String)
+                throw new SabnzbdException("SABnzbd category directory could not be read.");
+            var folder = categoryDir.GetString() ?? "";
+            // The trailing '*' disables per-job folders; never assume which media belongs to Jularr.
+            if (folder.EndsWith('*')) throw new SabnzbdException("SABnzbd category must create individual job folders.");
+            folder = folder.Replace('\\', '/').Trim('/');
+            if (folder.Length == 0) return root;
+            if (folder.Split('/').Any(part => part is "." or "..") || folder.Any(char.IsControl))
+                throw new SabnzbdException("SABnzbd category folder is unsafe.");
+
+            var raw = ReadString(matches[0], "dir")!.Replace('\\', '/');
+            return IsAbsoluteFolder(raw) ? AbsoluteFolder(raw) : AbsoluteFolder(root.TrimEnd('/') + "/" + folder);
+        }
+
+        private static bool IsAbsoluteFolder(string value) => value.StartsWith('/') || value.Length >= 3
+            && char.IsAsciiLetter(value[0]) && value[1] == ':' && value[2] is '/' or '\\';
+
+        private static string AbsoluteFolder(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) throw new SabnzbdException("SABnzbd completed folder is empty.");
+            var path = value.Replace('\\', '/').TrimEnd('/');
+            if (path.Length == 0 && value.StartsWith('/')) path = "/";
+            if (!IsAbsoluteFolder(path) || path.Any(char.IsControl) || path.Split('/').Any(part => part is "." or ".."))
+                throw new SabnzbdException("SABnzbd completed folder is not a safe absolute path.");
+            return path;
+        }
+
         public async Task<SabnzbdGrabResult> GrabAsync(SabnzbdConnection connection, SabnzbdGrabRequest grab, CancellationToken ct)
         {
             if (!grab.NzbUrl.IsAbsoluteUri || grab.NzbUrl.Scheme is not ("http" or "https"))
@@ -87,6 +147,40 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
 
             return new SabnzbdHistorySnapshot(jobs);
+        }
+
+        // The job leaves the queue and the history; its files go with it when asked.
+        public async Task RemoveJobAsync(SabnzbdConnection connection, string nzoId, bool deleteFiles, CancellationToken ct)
+        {
+            ValidateNzoId(nzoId);
+            foreach (var mode in new[] { "queue", "history" })
+            {
+                using var response = await SendAsync(connection, [new("mode", mode), new("name", "delete"), new("value", nzoId), new("del_files", deleteFiles ? "1" : "0")], ct);
+                RequireStatus(await RequireBodyAsync(response, ct));
+            }
+        }
+
+        public async Task PauseJobAsync(SabnzbdConnection connection, string nzoId, bool isPaused, CancellationToken ct)
+        {
+            ValidateNzoId(nzoId);
+            using var response = await SendAsync(connection, [new("mode", "queue"), new("name", isPaused ? "pause" : "resume"), new("value", nzoId)], ct);
+            RequireStatus(await RequireBodyAsync(response, ct));
+        }
+
+        private static void RequireStatus(string json)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (ReadBool(document.RootElement, "status") is not true)
+                {
+                    throw new SabnzbdException("SABnzbd did not accept the command.");
+                }
+            }
+            catch (JsonException exception)
+            {
+                throw new SabnzbdException("SABnzbd returned an invalid answer.", exception);
+            }
         }
 
         public async Task<string?> FindJobAsync(SabnzbdConnection connection, string name, CancellationToken ct)

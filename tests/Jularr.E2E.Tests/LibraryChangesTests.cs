@@ -69,7 +69,7 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() > 0, "The upgraded film is not offered.");
                 File.Delete(files.Single(file => !file.Contains(".jularr-recycle", StringComparison.Ordinal)));
                 await page.GotoAsync("/Admin/Storage");
-                await page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }));
                 await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "/Movies" }).Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Scan" }) }));
                 await WaitForAsync(async () =>
                 {

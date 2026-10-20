@@ -1,10 +1,10 @@
 using System.IO.Compression;
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
+using Jularr.Integrations.Logic.Database;
 
 namespace Jularr.Backend.Service.Core
 {
@@ -17,23 +17,16 @@ namespace Jularr.Backend.Service.Core
         private static readonly byte[] SealedMagic = "JKR1"u8.ToArray();
         private const string ManifestName = "backup.json";
 
-        [GeneratedRegex(@"^jularr-\d{8}-\d{6}\z")]
+        [GeneratedRegex(@"^jularr-\d{8}-\d{6}(?:\d{7})?\z")]
         private static partial Regex Name();
 
-        // Restores need the same schema; line endings differ between checkouts.
-        public static string SchemaFingerprint { get; } = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(typeof(Service).Assembly.GetManifestResourceNames()
-            .Where(name => name.StartsWith("Jularr.Database.", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .Select(name =>
-            {
-                using var reader = new StreamReader(typeof(Service).Assembly.GetManifestResourceStream(name)!);
-                return name + "\n" + reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
-            })))));
+        public static string SchemaFingerprint => DatabaseBaseline.CurrentFingerprint;
 
-        public static string NewName(DateTime now) => "jularr-" + now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        public static string NewName(DateTime now) => "jularr-" + now.ToString("yyyyMMdd-HHmmssfffffff", CultureInfo.InvariantCulture);
 
         // The name carries the time; copies to another machine keep it.
-        private static DateTime CreatedAt(string name) => DateTime.ParseExact(name["jularr-".Length..], "yyyyMMdd-HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+        private static DateTime CreatedAt(string name) => DateTime.ParseExact(name["jularr-".Length..], ["yyyyMMdd-HHmmss", "yyyyMMdd-HHmmssfffffff"], CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
 
         // Dumps and key copies are readable by the Jularr user only.
         public static string CreatePrivate(string path)
@@ -61,8 +54,59 @@ namespace Jularr.Backend.Service.Core
         public static string Resolve(string root, string name) =>
             Name().IsMatch(name) && Directory.Exists(Path.Combine(root, name)) ? Path.Combine(root, name) : throw new KeyNotFoundException("The backup was not found.");
 
-        public static async Task WriteManifestAsync(string folder, DateTime createdAt, CancellationToken ct) =>
-            await File.WriteAllTextAsync(Path.Combine(folder, ManifestName), JsonSerializer.Serialize(new BackupManifest(SchemaFingerprint, createdAt)), ct);
+        private static Task WriteManifestAsync(string folder, DateTime createdAt, int schemaVersion, string fingerprint, CancellationToken ct) =>
+            File.WriteAllTextAsync(Path.Combine(folder, ManifestName), JsonSerializer.Serialize(new BackupManifest(fingerprint, createdAt, schemaVersion)), ct);
+
+        // Startup upgrades and scheduled backups publish the same complete folder format.
+        public static async Task CreateAsync(BackupOptions options, PostgresBackupTools tools, DateTime now, int schemaVersion, string fingerprint, CancellationToken ct, bool requiresKeys = false)
+        {
+            if (!Path.IsPathFullyQualified(options.Path))
+            {
+                throw new InvalidOperationException("The backup directory must be an absolute persistent path.");
+            }
+
+            if (requiresKeys && (options.KeyDirectory is null || !Directory.Exists(options.KeyDirectory) || !Directory.EnumerateFiles(options.KeyDirectory, "*.xml").Any()))
+            {
+                throw new InvalidDataException("The pre-upgrade backup requires the instance's persistent key ring. No schema changes were applied.");
+            }
+
+            var name = NewName(now);
+            var partial = Path.Combine(options.Path, name + "-" + Guid.NewGuid().ToString("N") + ".partial");
+            CreatePrivate(partial);
+            try
+            {
+                var dump = Path.Combine(partial, DumpName);
+                await tools.DumpAsync(dump, ct);
+                await using (var file = File.OpenRead(dump))
+                {
+                    var header = new byte[5];
+                    await file.ReadExactlyAsync(header, ct);
+                    if (!header.AsSpan().SequenceEqual("PGDMP"u8))
+                    {
+                        throw new InvalidDataException("The backup tool did not produce a PostgreSQL custom-format dump.");
+                    }
+                }
+
+                if (options.Passphrase is { Length: > 0 } passphrase)
+                {
+                    SealKeys(options.KeyDirectory, Path.Combine(partial, SealedKeysName), passphrase);
+                }
+                else
+                {
+                    CopyKeys(options.KeyDirectory, Path.Combine(partial, "keys"));
+                }
+
+                await WriteManifestAsync(partial, now, schemaVersion, fingerprint, ct);
+                Directory.Move(partial, Path.Combine(options.Path, name));
+            }
+            finally
+            {
+                if (Directory.Exists(partial))
+                {
+                    Directory.Delete(partial, true);
+                }
+            }
+        }
 
         // The key ring as one file: a ZIP of its keys, AES-GCM with a key from the passphrase.
         public static void SealKeys(string? from, string file, string passphrase)
@@ -182,10 +226,11 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        private sealed class BackupManifest(string schemaFingerprint, DateTime createdAt)
+        private sealed class BackupManifest(string schemaFingerprint, DateTime createdAt, int schemaVersion = 0)
         {
             public string SchemaFingerprint { get; } = schemaFingerprint;
             public DateTime CreatedAt { get; } = createdAt;
+            public int SchemaVersion { get; } = schemaVersion;
         }
     }
 

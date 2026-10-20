@@ -1,0 +1,79 @@
+@mixin paper-light {
+    background-image: var(--paper-cross-light, linear-gradient(90deg, transparent, transparent)), linear-gradient(var(--paper-light-angle, 125deg), rgb(255 253 242 / calc(var(--light, .75) * .05)), rgb(40 31 22 / calc(var(--light, .75) * .035)));
+}
+
+.reader-book {
+    --paper: #f5f0e9; --paper-ink: #302a23; --texture: .3; --bleed: 0; --curve: .24; --finish: 0;
+    --cover: #84b6cb; --lining: #84b6cb; --columns: 2; --book-scale: .97;
+    --edge-colour: #9b8054; --edge-strength: 0;
+    position: relative; grid-area: 1 / 1; width: min(100%, calc(100cqh * var(--reader-columns, 1) * 148 / 204));
+    aspect-ratio: calc(var(--reader-columns, 1) * 148 / 204); touch-action: pinch-zoom; cursor: grab;
+    &:active { cursor: grabbing; }
+    &[hidden] { display: none; }
+    &[data-book-columns="1"] { --columns: 1; clip-path: inset(-50px -45px -60px 0); }
+    &__camera { position: absolute; inset: 0; }
+    &[data-book-direction=rtl] &__camera { transform: scaleX(-1); }
+    &[data-book-direction=rtl] .reader__page-print { transform: scaleX(-1); }
+    &__page-number { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; font: 11px/1 Georgia, serif; }
+        --paper-shade: color-mix(in srgb, var(--paper) 30%, #554432);
+        --paper-bounce: color-mix(in srgb, var(--paper) 82%, #fff3d6);
+        --paper-cut: color-mix(in srgb, var(--edge-colour) calc(var(--edge-strength) * 100%), var(--paper));
+        --grain-image: url("./BookGrain.svg?no-inline");
+        --edge-wash: .65; --edge-line: .2;
+        --gutter-light: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper-bounce) 12%, transparent) 18%, color-mix(in srgb, var(--paper-shade) 22%, transparent) 48%, color-mix(in srgb, var(--paper-shade) 22%, transparent) 52%, color-mix(in srgb, var(--paper-bounce) 12%, transparent) 82%, transparent);
+        &[data-paper-grain="recycled"] { --grain-image: url("./BookRecycled.svg?no-inline"); }
+        &[data-paper-edge="aged"] { --edge-wash: 1.4; --edge-line: .3; }
+    &__body {
+        position: absolute; top: 0; left: calc(100% - 200% / var(--columns)); width: calc(200% / var(--columns)); height: 100%;
+        transform: scale(var(--book-scale)); transform-origin: center 65%;
+    }
+    &__body--overlay { z-index: 2; transform-style: flat; pointer-events: none; }
+    &__solid { position: absolute; inset: 0; pointer-events: none;
+        > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+        &::before { content: ""; position: absolute; inset: 0 -5px -5px; border-radius: 2px; background: rgb(40 31 21 / 20%); box-shadow: 1px 2px 3px rgb(40 31 21 / 25%), 4px 12px 16px rgb(40 31 21 / 16%), 8px 22px 28px rgb(40 31 21 / 9%); }
+    }
+    &__half { position: absolute; top: 0; width: 50%; height: 100%; }
+    &__half--left { left: 0; }
+    &__half--right { right: 0; }
+    &__sheet, &__fold-front, &__fold-back, &__curl-band {
+        position: absolute; inset: 0; background-color: var(--paper); color: var(--paper-ink);
+        @include paper-light;
+        &::before { content: ""; position: absolute; inset: 0; background-image: var(--grain-image); background-size: 21.621622% auto; opacity: var(--texture); pointer-events: none; }
+    }
+    &__sheet {
+        top: calc(-1 * var(--page-lift, 0%)); background-color: transparent;
+    }
+    &__sheet, &__fold-front, &__fold-back {
+        &::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: calc(var(--finish) * .1); background: linear-gradient(105deg, transparent, #fffdf0 27%, transparent 55%); }
+    }
+    &__print, &__bleed { position: absolute; inset: 0; }
+    &__paper-rim { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; fill: none; stroke: var(--edge-colour);
+        > path:first-child { stroke-width: var(--edge-wash); opacity: calc(var(--edge-strength) * .24); }
+        > path:last-child { stroke-width: var(--edge-line); opacity: calc(var(--edge-strength) * .65); } }
+    &__print { z-index: 1; }
+    &__bleed { opacity: var(--bleed); transform: scaleX(-1); pointer-events: none; }
+    &__turn { position: absolute; top: calc(-1 * var(--right-lift, 0px)); bottom: 0; left: 50%; width: 50%; pointer-events: none; }
+    &__turn--backward { left: 0; }
+    &__gutter { position: absolute; top: calc(-1 * var(--spine-lift, 0%)); bottom: 0; left: calc(50% - 7px); width: 14px; z-index: 1100; pointer-events: none;
+        background: var(--gutter-light); opacity: var(--light, .75); }
+    &__bundle { position: absolute; inset: 0; pointer-events: none; > svg { width: 100%; height: 100%; overflow: visible; } }
+    &__fold-surface { position: absolute; inset: 0; }
+    &__fold-front { z-index: 1; }
+    &__fold-back { z-index: 22; transform-origin: 0 0; background-image: none; }
+    &__fold-front::after, &__fold-back::after { height: var(--face-height, 100%); bottom: auto; }
+    &__fold-back::before, &__fold-back::after { transform: scaleX(-1); }
+    &__back-light { position: absolute; inset: 0; pointer-events: none; @include paper-light; }
+    &__back-light--landing { --paper-light-angle: 235deg; }
+    &__landing-gutter { position: absolute; top: 0; bottom: 0; left: -7px; width: 14px; background: var(--gutter-light); pointer-events: none; }
+    &__turn--backward &__landing-gutter { left: calc(100% - 7px); }
+    &__back-print { position: relative; z-index: 1; height: 100%; transform: scaleX(-1); }
+    &__band-print { height: 100%; }
+    &__curl { position: absolute; inset: 0; }
+    &__bend-substrate { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; fill: var(--paper); stroke: var(--paper); stroke-width: 2px; stroke-linejoin: round; pointer-events: none; }
+    &__curl-band { transform-origin: 0 0; background-image: none; &::before { content: none; } }
+    &__bend-light { position: absolute; inset: 0; pointer-events: none; }
+    &__fold-shadow, &__fold-light { position: absolute; top: 0; left: 0; transform-origin: 0 0; pointer-events: none; }
+    &__fold-shadow { z-index: 0; width: 100%; height: 100%; > svg { width: 100%; height: 100%; overflow: visible; } }
+    &__fold-light { z-index: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper-bounce) 10%, transparent) 20%, color-mix(in srgb, var(--paper-shade) 40%, transparent) 45%, color-mix(in srgb, var(--paper-shade) 55%, transparent) 55%, transparent);
+        mask-image: linear-gradient(180deg, transparent, #000 4%, #000 96%, transparent); }
+}

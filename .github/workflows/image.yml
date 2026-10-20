@@ -11,16 +11,29 @@ on:
       - '.github/workflows/image.yml'
   push:
     branches: [clean-start]
+    paths:
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - '.dockerignore'
+      - 'database/**'
+      - 'src/**'
+      - '.github/workflows/image.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   minimal-compose:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      # Local builds are faster here than exporting gigabytes of remote layer cache.
+      # Docker Compose still validates the exact image this job just built.
       - name: Build the image
         run: docker build --tag ghcr.io/juloc/jularr:ci .
       - name: Start the shipped compose.yaml with nothing but its variables

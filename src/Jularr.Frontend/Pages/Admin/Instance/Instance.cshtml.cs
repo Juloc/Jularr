@@ -55,16 +55,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     if (texts.Can(null, "Devices")) form.Text(item => item.PublicUrl, "admin.instance.publicUrl");
                     else form.Hidden(item => item.PublicUrl);
                     form.Text(item => item.TrustedProxies, "admin.instance.trustedProxies");
-                    form.Submit("common.save");
+                    form.Save();
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
                         settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes, settings.CollectionLimit,
                         settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl, settings.TrustedProxies), _moduleId is null && _mediaInput is null ? FormError : null));
-
-                if (TempData["InstanceSaved"] is true)
-                {
-                    page.Content.Add(new P(new Text("admin.instance.saved")).Attribute("role", "status"));
-                }
             }
             else if (FormError is not null)
             {
@@ -76,12 +71,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             var moduleForms = new List<IUiComponent> { new P(new Text("admin.instance.module.retained")) };
             foreach (var module in _modules)
             {
-                moduleForms.Add(new P(new Text("instance.module." + module.Key)));
                 moduleForms.Add(new Form<UpdateInstanceModuleDataV1>(form =>
                 {
                     form.Hidden(item => item.Version);
-                    form.Select(item => item.IsEnabled, "admin.instance.module.state", stateOptions);
-                    form.Submit("common.save");
+                    form.Select(item => item.IsEnabled, "instance.module." + module.Key, stateOptions);
+                    form.Save();
                 }, Home + "?handler=Module&instanceModuleId=" + module.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _moduleId == module.Id ? _moduleInput : new UpdateInstanceModuleDataV1(module.IsEnabled, module.Version), _moduleId == module.Id ? FormError : null));
             }
@@ -92,16 +86,15 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             var mediaForms = new List<IUiComponent>();
             foreach (var media in _media)
             {
-                mediaForms.Add(new P(new Text(MediaTypeLabel.Key(media.Key, media.IsSubtype))));
-                if (media.IsEnabled && !media.HasLibrary) mediaForms.Add(new P(new Text("admin.instance.media.noLibrary")).Attribute("role", "status"));
                 mediaForms.Add(new Form<UpdateInstanceMediaDataV1>(form =>
                 {
                     form.Hidden(item => item.Key);
                     form.Hidden(item => item.Version);
-                    form.Select(item => item.IsEnabled, "admin.instance.media.state", stateOptions);
-                    form.Submit("common.save");
+                    form.Select(item => item.IsEnabled, MediaTypeLabel.Key(media.Key, media.IsSubtype), stateOptions);
+                    form.Save();
                 }, Home + "?handler=Media", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _mediaInput?.Key == media.Key ? _mediaInput : new UpdateInstanceMediaDataV1(media.Key, media.IsEnabled, media.Version), _mediaInput?.Key == media.Key ? FormError : null));
+                if (media.IsEnabled && !media.HasLibrary) mediaForms.Add(new P(new Text("admin.instance.media.noLibrary")).Attribute("role", "status"));
             }
 
             if (_media.Count > 0) page.Content.Add(new UiSection("admin.instance.media", mediaForms));
@@ -123,7 +116,6 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                 historyRetentionDays, historyMegabytes, collectionLimit, unitGroupLimit,
                 subtitleLanguages is null ? null : [subtitleLanguages], publicUrl);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
-            TempData["InstanceSaved"] = true;
             return LocalRedirect(Home);
         }
 

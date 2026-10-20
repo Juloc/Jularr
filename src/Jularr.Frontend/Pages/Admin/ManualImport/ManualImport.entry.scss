@@ -1,0 +1,13 @@
+// The file first, what its name says and where it would go below.
+.manual-import-file {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.manual-import-file span {
+    color: var(--muted);
+    font-size: 0.85em;
+}

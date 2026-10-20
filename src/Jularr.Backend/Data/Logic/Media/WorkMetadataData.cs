@@ -159,6 +159,21 @@ namespace Jularr.Backend.Data.Logic.Media
         public string People { get; }
     }
 
+    internal sealed class WorkIdentityCandidateData : BaseData
+    {
+        public WorkIdentityCandidateData(long id, MediaType mediaTypeId)
+        {
+            Id = id;
+            MediaTypeId = mediaTypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+    }
+
     internal sealed class WorkIdentityData : BaseData
     {
         public WorkIdentityData(string @namespace, string value, long workId)

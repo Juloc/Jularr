@@ -105,7 +105,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                 if (tagPage.Page > 1) form.Content(TagPaging("common.previous", tagPage.Page - 1));
                 if (tagPage.Items.Count == tagPage.PageSize) form.Content(TagPaging("common.next", tagPage.Page + 1));
             }
-            form.Submit("common.save");
+            form.Save();
         }, Address("Choice"), csrf, _choice ?? new UpdateWantedDataV1(item.IsPaused, item.Version, item.AcquisitionProfileId, item.LibraryRootId, tagIds: item.TagIds));
 
         // Seasons open their episodes; every row is monitored and searched on its own.
@@ -118,7 +118,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                 {
                     form.Select(data => data.MonitorsNewUnits, "wanted.monitorsNewUnits",
                         [new SelectOption("True", texts["wanted.unit.monitored"]), new SelectOption("False", texts["wanted.unit.unmonitored"])]);
-                    form.Submit("common.save");
+                    form.Save();
                 }, Address("MonitorsNewUnits"), csrf, new UpdateWantedDataV1(item.IsPaused, item.Version, item.AcquisitionProfileId, item.LibraryRootId, item.MonitorsNewUnits)),
                 new Table<WantedUnitV1>(_units)
                     .Content("wanted.unit", unit => unit.WorkUnitTypeId == WorkUnitType.Season
@@ -203,6 +203,13 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
+
+            // Films, series, manga and light novels are managed on the page of their title.
+            if (_item is { MediaTypeId: MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Music } item && (item.MediaTypeId != MediaType.Book || item.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel))
+            {
+                return LocalRedirect("/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
+            }
+
             PreparePage();
             return Page();
         }

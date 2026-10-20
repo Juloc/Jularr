@@ -326,6 +326,17 @@ namespace Jularr.Backend.Data.Fields
         }
     }
 
+    public sealed class TimeField : DataField
+    {
+        public TimeField() : base(typeof(TimeOnly), NpgsqlDbType.Time)
+        {
+        }
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+        }
+    }
+
     public sealed class ByteArrayField : DataField
     {
         public ByteArrayField() : base(typeof(byte[]), NpgsqlDbType.Bytea)

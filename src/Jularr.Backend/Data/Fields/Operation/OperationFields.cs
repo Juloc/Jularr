@@ -13,9 +13,17 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
+        public static readonly StringField AttentionProposal = new() { Required = false };
         public static readonly StringField SourceLinkUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
         public static readonly DateTimeField DismissedAt = new() { Required = false };
         public static readonly BoolField IsFinished = new();
+        public static readonly BoolField HasProposal = new();
+        public static readonly BoolField BlocksRelease = new();
+        public static readonly BoolField IsPaused = new();
+        public static readonly BoolField CanPause = new();
+        public static readonly BoolField CanRetryImport = new();
+        public static readonly BoolField IsWaiting = new();
+        public static readonly BoolField CanImportManually = new();
         public static readonly EnumField ActivityTabTypeId = new(typeof(ActivityTabType));
         public static readonly StringField Title = new() { MaximumLength = 1000 };
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };

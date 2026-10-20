@@ -100,6 +100,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 5"));
+            CollectionAssert.AreEqual(new short[] { 1, 1, 2 }, (short[])(await host.ScalarAsync("SELECT array_agg(\"DiscNumber\" ORDER BY \"Number\") FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 5"))!);
             Assert.AreEqual("Example Artist", await host.ScalarAsync("SELECT person.\"Name\" FROM \"WorkPeople\" AS credit JOIN \"People\" AS person ON person.\"Id\" = credit.\"PersonId\" WHERE credit.\"PersonRoleId\" = 9"));
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")

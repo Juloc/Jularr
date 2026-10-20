@@ -20,11 +20,19 @@ namespace Jularr.Backend.Data.Enums.Library
             "Quality Full", "Quality Title", "Edition Tags", "Original Title", "Original Filename",
             "Custom Formats", "Custom Format", "MediaInfo Simple", "MediaInfo Full",
             "MediaInfo AudioCodec", "MediaInfo AudioChannels", "MediaInfo AudioLanguages",
-            "MediaInfo AudioLanguagesAll", "MediaInfo SubtitleLanguages", "MediaInfo VideoCodec"
+            "MediaInfo AudioLanguagesAll", "MediaInfo SubtitleLanguages", "MediaInfo VideoCodec",
+            "Episode CleanTitle", "Absolute", "Air Date", "Quality Proper", "Quality Real", "Release Hash",
+            "MediaInfo Audio", "MediaInfo Video", "MediaInfo SubtitleLanguagesAll", "MediaInfo VideoBitDepth",
+            "MediaInfo VideoDynamicRange", "MediaInfo VideoDynamicRangeType", "MediaInfo 3D"
         ];
 
         // The placeholders that take a number format.
-        public static IReadOnlyList<string> Numbered { get; } = ["Season", "Episode"];
+        public static IReadOnlyList<string> Numbered { get; } = ["Season", "Episode", "Absolute"];
+
+        private static readonly Dictionary<string, string> ByName = Supported.ToDictionary(name => name, StringComparer.OrdinalIgnoreCase);
+
+        // A written token in any case, separator or spelling of its words resolves to its name; unknown ones to nothing.
+        public static string? Canonical(string written) => ByName.GetValueOrDefault(written);
 
         public static string Display(string token) => "{" + token + (Numbered.Contains(token) ? ":00" : "") + "}";
     }

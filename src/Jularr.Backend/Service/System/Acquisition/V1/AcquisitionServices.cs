@@ -418,7 +418,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         var complete = await paths.CompleteAsync(download.OperationId, pass.OutputPath!, extensions, CancellationToken);
                         var state = new StorageScanState();
                         var files = StorageFileSystem.EnumerateFiles(complete, extensions, state, CancellationToken).ToArray();
-                        await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), "", files, state.IsComplete, CancellationToken);
+                        await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), files, state.IsComplete, CancellationToken);
                     }
                     catch (ServiceUnavailableException exception)
                     {
@@ -656,6 +656,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             IReadOnlyList<StorageFile> files;
             StorageFiles source;
             string sourceDirectory;
+            long? sourceMountId = null;
+            string? sourceRoot = null;
             var state = new StorageScanState();
             try
             {
@@ -664,11 +666,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     var mount = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(storageMountId, ct), CancellationToken);
                     source = _storage.Open(mount);
+                    sourceMountId = storageMountId;
                     prefix = connection.LocalPath ?? "";
                 }
                 else
                 {
-                    source = new LocalStorageFiles(StorageFileSystem.ResolveDirectory(connection.LocalPath!, ""));
+                    sourceRoot = StorageFileSystem.ResolveDirectory(connection.LocalPath!, "");
+                    source = new LocalStorageFiles(sourceRoot);
                 }
 
                 var path = StoragePath.Combine(prefix, relative);
@@ -696,7 +700,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            await _import.PlaceAsync(Context, download, source, sourceDirectory, files, state.IsComplete, CancellationToken);
+            await _import.PlaceAsync(Context, download, source, new ImportSourceRef(sourceMountId, sourceRoot, sourceDirectory), files, state.IsComplete, CancellationToken);
         }
 
 
@@ -789,7 +793,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             {
                 var complete = await paths.CompleteAsync(download.OperationId, staging, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), CancellationToken);
                 var file = new FileInfo(Path.Combine(complete, name));
-                await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), "", [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
+                await _import.PlaceAsync(Context, download, new LocalStorageFiles(complete), new ImportSourceRef(null, complete, ""), [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
             }
             catch (ServiceUnavailableException exception)
             {

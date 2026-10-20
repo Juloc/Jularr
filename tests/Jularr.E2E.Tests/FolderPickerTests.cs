@@ -25,7 +25,7 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await page.GotoAsync(address);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Add local path", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add local path", Exact = true }));
                 var mount = page.Locator("form").Filter(new() { Has = page.Locator("[name=SharePath]") });
                 await mount.Locator("[name=Name]").FillAsync("Library");
                 await mount.Locator("[name=SharePath]").SelectOptionAsync(folders.Library);

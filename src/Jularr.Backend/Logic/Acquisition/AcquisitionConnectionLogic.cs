@@ -11,7 +11,10 @@ namespace Jularr.Backend.Logic.Acquisition
 {
     internal static class AcquisitionConnectionLogic
     {
-        public static Task<AcquisitionConnectionData> ReadAcquisitionConnectionAsync(this LogicContext ctx, long acquisitionConnectionId, CancellationToken ct)
+        public static Task<AcquisitionConnectionData> ReadAcquisitionConnectionAsync(this LogicContext ctx, long acquisitionConnectionId, CancellationToken ct) =>
+            ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(ReadAcquisitionConnectionStatement(acquisitionConnectionId), ct);
+
+        internal static SqlStatement ReadAcquisitionConnectionStatement(long acquisitionConnectionId)
         {
             // Connection facts for external work.
             var sql = new SqlStatement();
@@ -30,6 +33,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Priority",
                     connection."Categories",
                     connection."DownloadCategory",
+                    connection."RemovesCompleted",
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."DownloadStorageMountId",
@@ -51,7 +55,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Id" = @AcquisitionConnectionId;
                 """;
             sql.Parameters.Add(new AcquisitionConnectionParameters(acquisitionConnectionId));
-            return ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(sql, ct);
+            return sql;
         }
 
         // The enabled connections of one role, best priority first.
@@ -73,6 +77,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Priority",
                     connection."Categories",
                     connection."DownloadCategory",
+                    connection."RemovesCompleted",
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."DownloadStorageMountId",
@@ -264,9 +269,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "Host", "Port", "UseSsl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories",
-                        "DownloadCategory", "RemotePath", "LocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
+                        "DownloadCategory", "RemovesCompleted", "RemotePath", "LocalPath", "DownloadStorageMountId", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
                 VALUES
-                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath,
+                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @Host, @Port, @UseSsl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemovesCompleted, @RemotePath,
                         @LocalPath, @DownloadStorageMountId, @Username, @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
                 RETURNING
                     "Id";
@@ -309,6 +314,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "Priority" = @Priority,
                     "Categories" = @Categories,
                     "DownloadCategory" = @DownloadCategory,
+                    "RemovesCompleted" = @RemovesCompleted,
                     "RemotePath" = @RemotePath,
                     "LocalPath" = @LocalPath,
                     "DownloadStorageMountId" = @DownloadStorageMountId,

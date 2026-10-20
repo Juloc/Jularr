@@ -96,7 +96,7 @@ namespace Jularr.Frontend.Pages.Admin.Rules
                 // The default stays until another rule takes its place.
                 if (input.IsDefault && _selected is { IsDefault: true }) form.Hidden(item => item.IsDefault);
                 else form.Toggle(item => item.IsDefault, "request.rule.isDefault");
-                form.Submit("common.save");
+                form.Save();
             }, Address(RequestRuleId, New), csrf, input, _input is null ? null : FormError);
         }
 

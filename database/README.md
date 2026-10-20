@@ -2,8 +2,12 @@
 
 `Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql`. The host applies all baselines in installation order
-in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs));
-it never changes or migrates a database that has one.
+in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs)).
+`Schema.sql` records the installation's ordered schema history. Existing unversioned
+pre-release databases keep their current startup behavior and are not adopted or migrated.
+Explicitly versioned release schemas use the same startup owner for backup-first upgrades;
+see [release upgrades](../docs/DATABASE_UPGRADES.md).
+`Media.sql` also holds the provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) and its full-sync state `ExternalWorkSyncs`. Until the first release schema changes go into these baselines; `DatabaseBaseline.Migrations` stays empty.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
@@ -14,7 +18,7 @@ whether several releases of a film or episode are kept and what happens to a rep
 file (deleted, moved to a recycle folder inside its library or to one folder on a storage
 connection) and after how many days recycled files leave, plus the public address for QR
 codes and the trusted reverse proxies (`cidr[]`). RecycledFiles lists what Jularr
-moved there, the only files its cleanup removes; MediaAssets.IsProtected keeps versions
+moved there, the only files its cleanup removes; `UnmonitorsDeletedUnits` (off) switches an episode or volume off when an administrator deletes its file; MediaAssets.IsProtected keeps versions
 an administrator added or protected from automatic upgrades. Library gates manual
 media/watchlist Services; Profiles (off by default) allows several profiles per account,
 otherwise the view SelectableProfiles offers each account its main profile only; Requests gates request creation/moderation and manual
@@ -23,6 +27,8 @@ grabs, monitoring and import, so Requests also work without automatic acquisitio
 Playback gates playback. Disabling a module retains data. Public presentation exposes only name/default language, User
 capabilities expose implemented grants, and Razor consumes both. Setup module
 progress, per-media/profile visibility and Tracking remain pending.
+
+`Media.sql` also holds `WorkExclusions` and their provider identities (`WorkExclusionIdentities`): titles an administrator deleted with an exclusion, which requests refuse until the exclusion is removed.
 
 `Media.sql` follows `Account.sql` in a new installation. It also holds a profile's
 Collections (hand-picked CollectionWorks or a saved filter) and WorkUnitGroups, named display
