@@ -8,7 +8,11 @@ function load(path) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
     const script = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
     const exports = {};
-    runInNewContext(script, { exports });
+    runInNewContext(script, { exports, require: name => {
+        if (name === './ModelStore') return load('../Modules/Speech/ModelStore.ts');
+        if (name === './Runtime/NOTICE.generated.txt?url') return { default: '/notices.txt' };
+        throw new Error('Unexpected speech test dependency: ' + name);
+    } });
     return exports;
 }
 const { DeviceSession, chunkEnd } = load('../Modules/Speech/DeviceSession.ts');

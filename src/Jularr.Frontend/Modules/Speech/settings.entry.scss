@@ -1,0 +1,5 @@
+.speech-settings {
+    [hidden] { display: none; }
+    input[aria-disabled="true"], select[inert] { opacity: .5; }
+    &__actions, &__licenses { display: flex; flex-wrap: wrap; gap: .5rem; }
+}
