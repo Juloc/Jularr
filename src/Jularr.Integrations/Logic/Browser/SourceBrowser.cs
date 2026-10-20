@@ -35,9 +35,16 @@ namespace Jularr.Integrations.Logic.Browser
         private readonly string? _path;
         private readonly string _profile;
         private readonly string _downloads;
+        private readonly List<SourceBrowserEvent> _events = [];
+        private readonly Lock _eventsLock = new();
         private Process? _process;
         private DevToolsClient? _client;
         private bool _refused;
+        private string? _version;
+        private string? _lastUrl;
+        private string? _lastOutcome;
+        private string? _lastError;
+        private DateTime? _lastAttemptAt;
 
         public SourceBrowser(BrowserOptions options)
         {
@@ -49,6 +56,79 @@ namespace Jularr.Integrations.Logic.Browser
 
         public bool IsAvailable => _path is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress);
 
+        public SourceBrowserStatus Status => new(_path, _options.RemoteAddress, _profile, _client is not null, _version, _lastUrl, _lastOutcome, _lastError, _lastAttemptAt, Events.Count);
+
+        public IReadOnlyList<SourceBrowserEvent> Events
+        {
+            get
+            {
+                lock (_eventsLock)
+                {
+                    return [.. _events];
+                }
+            }
+        }
+
+        public async Task<SourceBrowserStatus> StartAsync(CancellationToken ct)
+        {
+            await _gate.WaitAsync(ct);
+            try
+            {
+                await StartBrowserAsync(ct);
+                return Status;
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        public async Task StopAsync()
+        {
+            await CloseAsync();
+            Note("stopped", "the browser is stopped");
+        }
+
+        // A new client: the profile and the state the source knows of the old one go.
+        public async Task ResetAsync()
+        {
+            await _gate.WaitAsync(CancellationToken.None);
+            try
+            {
+                var running = _client;
+                if (running is not null)
+                {
+                    try
+                    {
+                        await running.SendAsync("Network.clearBrowserCookies", null, CancellationToken.None);
+                    }
+                    catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
+                    {
+                        // The browser is gone; the profile goes with it.
+                    }
+                }
+
+                await CloseAsync();
+                if (Directory.Exists(_profile))
+                {
+                    try
+                    {
+                        Directory.Delete(_profile, true);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        // The profile stays; the next attempt uses it as it is.
+                    }
+                }
+
+                Note("reset", "the browser begins as a new client");
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
         public async Task<string?> ReadPageAsync(Uri uri, CancellationToken ct)
         {
             if (!IsAvailable)
@@ -59,27 +139,39 @@ namespace Jularr.Integrations.Logic.Browser
             await _gate.WaitAsync(ct);
             try
             {
-                await StartAsync(ct);
+                await StartBrowserAsync(ct);
+                _lastUrl = uri.AbsoluteUri;
+                _lastAttemptAt = DateTime.UtcNow;
+                Note("navigate", uri.AbsoluteUri);
                 await _client!.SendAsync("Page.navigate", new { url = uri.AbsoluteUri }, ct);
                 var page = await WaitForPageAsync(uri, ct);
                 if (page is null)
                 {
+                    _lastOutcome = _refused ? "refused" : "no answer";
+                    _lastError = _refused ? "the source refused this browser" : null;
+                    Note(_lastOutcome, _lastError ?? $"no answer for {uri.AbsoluteUri}");
                     // A source that refuses this client gets a new one next time.
                     if (_refused)
                     {
                         await ForgetAsync(uri, ct);
-                        Reset();
+                        await CloseAsync();
                     }
 
                     return null;
                 }
 
+                _lastOutcome = "read";
+                _lastError = null;
+                Note("read", $"{uri.AbsoluteUri} ({page.Length} bytes)");
                 return page;
             }
-            catch (SourceBrowserException)
+            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
             {
+                _lastOutcome = "error";
+                _lastError = exception.Message;
+                Note("error", exception.Message);
                 // A browser that cannot answer leaves the source as it was; the next attempt starts a new one.
-                Reset();
+                await CloseAsync();
                 return null;
             }
             finally
@@ -98,7 +190,7 @@ namespace Jularr.Integrations.Logic.Browser
             await _gate.WaitAsync(ct);
             try
             {
-                await StartAsync(ct);
+                await StartBrowserAsync(ct);
                 Directory.CreateDirectory(_downloads);
                 foreach (var stale in Directory.GetFiles(_downloads))
                 {
@@ -107,7 +199,8 @@ namespace Jularr.Integrations.Logic.Browser
 
                 await _client!.SendAsync("Browser.setDownloadBehavior", new { behavior = "allowAndName", downloadPath = _downloads }, ct);
                 await _client.SendAsync("Page.navigate", new { url = file.AbsoluteUri }, ct);
-                var downloaded = await WaitForFileAsync(ct);                try
+                var downloaded = await WaitForFileAsync(ct);
+                try
                 {
                     await using var source = new FileStream(downloaded, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
                     await DirectDownload.CopyAsync(source, destination, maximumBytes, reserveWrite, ct);
@@ -125,14 +218,38 @@ namespace Jularr.Integrations.Logic.Browser
 
         public void Dispose()
         {
-            Reset();
+            var client = _client;
+            _client = null;
+            if (client is not null)
+            {
+                // The browser is gone; its answer is not waited for.
+                _ = client.DisposeAsync();
+            }
+
+            if (_process is { } process)
+            {
+                try
+                {
+                    process.Kill(true);
+                    process.WaitForExit(5000);
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or SystemException)
+                {
+                    // The browser is already gone.
+                }
+            }
         }
 
-        private void Reset()
+        private async Task CloseAsync()
         {
-            _client?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            var client = _client;
             _client = null;
             _refused = false;
+            if (client is not null)
+            {
+                await client.DisposeAsync();
+            }
+
             if (_process is not { } process)
             {
                 // A browser elsewhere keeps its own profile.
@@ -178,7 +295,7 @@ namespace Jularr.Integrations.Logic.Browser
         }
 
         // The browser starts on the first use and keeps its profile, so the source's check is passed once.
-        private async Task StartAsync(CancellationToken ct)
+        private async Task StartBrowserAsync(CancellationToken ct)
         {
             if (_client is not null)
             {
@@ -188,14 +305,24 @@ namespace Jularr.Integrations.Logic.Browser
             // A browser that already runs elsewhere is used as it is; its profile is its own.
             if (!string.IsNullOrWhiteSpace(_options.RemoteAddress))
             {
-                var remote = await ReadPageSocketAsync(new Uri(_options.RemoteAddress), ct);
-                _client = new DevToolsClient();
-                await _client.ConnectAsync(remote, ct);
-                await _client.SendAsync("Page.enable", null, ct);
+                await UseRemoteBrowserAsync(ct);
                 return;
             }
 
             Directory.CreateDirectory(_profile);
+
+            // A lock of an earlier run on this machine would keep the browser from starting.
+            foreach (var stale in Directory.GetFiles(_profile, "Singleton*"))
+            {
+                try
+                {
+                    File.Delete(stale);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // The lock stays; the browser tells us that it cannot start.
+                }
+            }
 
             // A browser with a chosen port answers the source's check; one that picks its own does not.
             var port = _options.Port > 0 ? _options.Port : FreePort();
@@ -205,14 +332,81 @@ namespace Jularr.Integrations.Logic.Browser
                 arguments += " --no-sandbox";
             }
 
-            _process = Process.Start(new ProcessStartInfo(_path!) { UseShellExecute = false, Arguments = arguments });
+            // A browser that does not open its port may have met the remains of an earlier one; it is tried again.
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                _process = Process.Start(new ProcessStartInfo(_path!) { UseShellExecute = false, Arguments = arguments });
 
-            // The browser needs a moment before its first page counts.
-            await Task.Delay(StartMilliseconds, ct);
-            var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
+                // The browser needs a moment before its first page counts.
+                await Task.Delay(StartMilliseconds, ct);
+                try
+                {
+                    var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
+                    _client = new DevToolsClient();
+                    await _client.ConnectAsync(socket, ct);
+                    await _client.SendAsync("Page.enable", null, ct);
+                    await RememberVersionAsync(ct);
+                    Note("started", $"the browser {_path} answers on port {port}");
+                    return;
+                }
+                catch (SourceBrowserException)
+                {
+                    await CloseProcessAsync();
+                    if (attempt < 3)
+                    {
+                        Note("retry", $"the browser did not answer on port {port}; it is started again");
+                    }
+                }
+            }
+
+            throw new SourceBrowserException("The browser did not open its debugging port.");
+        }
+
+        // The browser that runs elsewhere is used as it is; its profile is its own.
+        private async Task UseRemoteBrowserAsync(CancellationToken ct)
+        {
+            var remote = await ReadPageSocketAsync(new Uri(_options.RemoteAddress!), ct);
             _client = new DevToolsClient();
-            await _client.ConnectAsync(socket, ct);
+            await _client.ConnectAsync(remote, ct);
             await _client.SendAsync("Page.enable", null, ct);
+            await RememberVersionAsync(ct);
+            Note("started", $"the browser at {_options.RemoteAddress} answers");
+        }
+
+        private async Task CloseProcessAsync()
+        {
+            if (_process is not { } process)
+            {
+                return;
+            }
+
+            try
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or SystemException)
+            {
+                // The browser is already gone.
+            }
+        }
+
+        // The browser tells which one it is.
+        private async Task RememberVersionAsync(CancellationToken ct)
+        {
+            try
+            {
+                var answer = await _client!.SendAsync("Browser.getVersion", null, ct);
+                using var document = System.Text.Json.JsonDocument.Parse(answer);
+                if (document.RootElement.TryGetProperty("result", out var result) && result.TryGetProperty("product", out var product))
+                {
+                    _version = product.GetString();
+                }
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or System.Text.Json.JsonException or OperationCanceledException)
+            {
+                // The version stays unknown.
+            }
         }
 
         // A port of its own for the browser to answer on.
@@ -334,6 +528,19 @@ namespace Jularr.Integrations.Logic.Browser
         private static string Location(string address)
         {
             return Uri.TryCreate(address, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Path) : address;
+        }
+
+        // What the browser did, for the administrator to see.
+        private void Note(string kind, string message)
+        {
+            lock (_eventsLock)
+            {
+                _events.Add(new SourceBrowserEvent(DateTime.UtcNow, kind, message));
+                if (_events.Count > 50)
+                {
+                    _events.RemoveRange(0, _events.Count - 50);
+                }
+            }
         }
 
         private static bool IsCheck(string html)

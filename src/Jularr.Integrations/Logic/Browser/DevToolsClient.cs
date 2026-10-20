@@ -9,7 +9,7 @@ namespace Jularr.Integrations.Logic.Browser
     // The DevTools protocol of one browser page: commands go out, answers and events come back.
     internal sealed class DevToolsClient : IAsyncDisposable
     {
-        private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(60);
+        private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(20);
 
         private readonly ClientWebSocket _socket = new();
         private readonly ConcurrentDictionary<int, TaskCompletionSource<string>> _pending = new();
@@ -38,6 +38,10 @@ namespace Jularr.Integrations.Logic.Browser
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, _stop.Token);
                 timeout.CancelAfter(CommandTimeout);
                 return await completion.Task.WaitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new SourceBrowserException($"The browser did not answer '{method}'.");
             }
             finally
             {
@@ -83,7 +87,7 @@ namespace Jularr.Integrations.Logic.Browser
                     await HandleAsync(builder.ToString());
                 }
             }
-            catch (Exception exception) when (exception is OperationCanceledException or WebSocketException or ObjectDisposedException)
+            catch (Exception)
             {
                 // The browser is gone; the waiting commands fail with it.
             }
@@ -100,21 +104,28 @@ namespace Jularr.Integrations.Logic.Browser
 
         private async Task HandleAsync(string message)
         {
-            using var document = JsonDocument.Parse(message);
-            var root = document.RootElement;
-            if (root.TryGetProperty("id", out var id) && id.TryGetInt32(out var number))
+            try
             {
-                if (_pending.TryRemove(number, out var completion))
+                using var document = JsonDocument.Parse(message);
+                var root = document.RootElement;
+                if (root.TryGetProperty("id", out var id) && id.TryGetInt32(out var number))
                 {
-                    completion.TrySetResult(message);
+                    if (_pending.TryRemove(number, out var completion))
+                    {
+                        completion.TrySetResult(message);
+                    }
+
+                    return;
                 }
 
-                return;
+                if (root.TryGetProperty("method", out var method))
+                {
+                    await _onEvent(method.GetString() ?? "", root);
+                }
             }
-
-            if (root.TryGetProperty("method", out var method))
+            catch (JsonException)
             {
-                await _onEvent(method.GetString() ?? "", root);
+                // A message that is no answer is left alone.
             }
         }
     }
