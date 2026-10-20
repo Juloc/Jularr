@@ -47,6 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Content.Add(Hero(work, csrf));
             var tabs = new List<NavigationTab> { new(isSeries ? "work.tab.seasons" : hasVolumes ? "work.tab.volumes" : hasTracks ? "work.tab.tracks" : hasGroups ? work.MediaTypeId == MediaType.Game ? "work.tab.platforms" : "work.tab.editions" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History) };
             if (hasUnits && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
+            if (isSeries && texts.CanEditMarkers()) tabs.Add(new("work.tab.markers", Home + "/Markers", false));
             tabs.Add(new("work.tab.metadata", Address(WorkTab.Metadata), Tab == WorkTab.Metadata));
             page.Content.Add(new NavigationTabs([.. tabs], "work.tabs"));
             if (FormError is not null && _choice is null && _deleteInput is null && Tab == WorkTab.Units) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
