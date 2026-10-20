@@ -70,5 +70,69 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        // A download whose file names another year waits in the queue; the person imports its file by hand from there, and it finishes like any import.
+        [TestMethod]
+        [Timeout(600_000)]
+        public async Task WaitingDownload_FromTheQueue_IsImportedByHand()
+        {
+            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
+            using var folders = new Folders("Movies");
+            var video = await Steps.WriteVideoAsync(ffmpeg, Path.Combine(folders.Fixtures, "video.webm"));
+            var wrong = Path.Combine(folders.Fixtures, "wrong-year");
+            Directory.CreateDirectory(wrong);
+            File.Copy(video, Path.Combine(wrong, "Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm"));
+            var film = new FakeRelease("Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR", "bunny", 2040, wrong);
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library,
+                ["Media:FfmpegPath"] = ffmpeg ?? "",
+                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.SetTmdbKeyAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"));
+                await Steps.AddUsenetAsync(page, fakes, "2000,2040", searchesAutomatically: true);
+                fakes.Offer(film);
+                await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
+
+                // The doubt shows in the queue with its reason and the way to settle it.
+                ILocator? waiting = null;
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (waiting is null)
+                {
+                    Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
+                    await page.GotoAsync("/Admin/Activity?Tab=Queue");
+                    var row = page.Locator("tr", new() { HasText = "does not clearly match the film" });
+                    if (await row.CountAsync() > 0) waiting = row.First;
+                    else await page.WaitForTimeoutAsync(3000);
+                }
+
+                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import by hand", Exact = true }));
+                var file = page.Locator(".ui-form__row").First;
+                StringAssert.Contains(await file.InnerTextAsync(), "Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm");
+                await Assertions.Expect(file.Locator("input[type=checkbox]")).ToBeCheckedAsync();
+                await Evidence.SaveAsync(page, "manual-import-queue");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import"));
+
+                // It leaves the queue's waiting entries and the film is in the library.
+                await Assertions.Expect(page.Locator("tr", new() { HasText = "does not clearly match the film" })).ToHaveCountAsync(0);
+                await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
+                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-manual-import-queue");
+                throw;
+            }
+        }
     }
 }

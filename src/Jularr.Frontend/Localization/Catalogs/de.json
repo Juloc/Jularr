@@ -6420,6 +6420,10 @@
    "Imported files: {0}",
    "Importierte Dateien: {0}"
   ],
+  "activity.importManually": [
+   "Import by hand",
+   "Von Hand importieren"
+  ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
    "Das Speichergerät wacht auf. Bitte versuche es gleich erneut."

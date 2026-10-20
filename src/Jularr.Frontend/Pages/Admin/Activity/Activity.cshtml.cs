@@ -86,6 +86,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
             var actions = new List<IUiComponent>();
             if (item.ManualUrl is { } manual) actions.Add(ManualLink(item, manual, csrf));
+            if (item.CanImportManually) actions.Add(new A(new Text("activity.importManually")).Class("button").Attribute("href", "/Admin/ManualImport?operationId=" + item.Id.ToString(CultureInfo.InvariantCulture)));
             if (item.CanRetryImport) actions.Add(Action(item, "RetryImport", "activity.retryImport", csrf));
             if (item.CanPause) actions.Add(item.DownloadStateTypeId == DownloadStateType.Paused ? Action(item, "Resume", "activity.resume", csrf) : Action(item, "Pause", "activity.pause", csrf));
             actions.Add(Action(item, "Remove", "activity.remove", csrf));

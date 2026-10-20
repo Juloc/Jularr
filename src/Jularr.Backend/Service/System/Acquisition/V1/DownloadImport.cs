@@ -32,8 +32,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
     internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection)
     {
-        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, string sourceDirectory, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
+        public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
+            var sourceDirectory = sourceRef.Directory;
             if (!isComplete)
             {
                 await AttentionAsync(context, download.OperationId, "import_source_unavailable", null, ct);
@@ -64,7 +65,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             if (verdict.Kind == ImportVerdictKind.Doubt)
             {
-                await AttentionAsync(context, download.OperationId, verdict.ReasonKey!, null, ct, verdict.ProposalJson);
+                await AttentionAsync(context, download.OperationId, verdict.ReasonKey!, null, ct, ImportProposal.Write(sourceRef, verdict.Proposal));
                 return;
             }
 
@@ -117,7 +118,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Its job leaves SABnzbd with its files, when the connection is set to; a library file placed by link stays.
-            await RemoveFromClientAsync(context, download, ct);
+            await RemoveFromClientAsync(context, download.AcquisitionConnectionId, download.ExternalId, ct);
         }
 
         // Links, copies or moves the planned files into the library and assigns them to their work; the failure key names what a person must settle, and nothing is left half done.
@@ -270,12 +271,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         }
 
         // Tidying is no reason to fail an import that worked: a client that cannot be reached keeps the job.
-        private async Task RemoveFromClientAsync(LogicContext context, DownloadData download, CancellationToken ct)
+        public async Task RemoveFromClientAsync(LogicContext context, long acquisitionConnectionId, string? externalId, CancellationToken ct)
         {
             try
             {
-                var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, token), ct);
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && connection.RemovesCompleted && download.ExternalId is { } nzoId)
+                var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(acquisitionConnectionId, token), ct);
+                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && connection.RemovesCompleted && externalId is { } nzoId)
                 {
                     var key = AcquisitionConnectionInput.Unprotect(protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose), connection.ProtectedApiKey);
                     await sabnzbd.RemoveJobAsync(new SabnzbdConnection(connection.HttpAddress, key), nzoId, true, ct);

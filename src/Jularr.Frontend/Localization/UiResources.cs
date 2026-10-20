@@ -1485,6 +1485,7 @@ namespace Jularr.Frontend.Localization
             new("manualImport.episode", "Episode"),
             new("manualImport.run", "Import"),
             new("manualImport.done", "Imported files: {0}"),
+            new("activity.importManually", "Import by hand"),
             new("downloadStorage.unset", "Not selected"),
             new("downloadStorage.readOnly", "This storage is read-only. Choose writable download storage."),
             new("downloadStorage.mountRequired", "This direct SMB connection can serve libraries. Downloading and unpacking need the share mounted inside the Jularr container; configure that mount first."),

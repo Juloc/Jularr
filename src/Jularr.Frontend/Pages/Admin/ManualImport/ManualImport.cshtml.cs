@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
@@ -16,7 +17,8 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace Jularr.Frontend.Pages.Admin.ManualImport
 {
     // A folder on any connected storage, imported by hand as a film or as the episodes of a series: choose it, check what each file is, import.
-    public sealed class ManualImportModel(FindManualImportWorksV1 find, ReadManualImportWorkV1 readWork, ReadManualImportFilesV1 readFiles, RunManualImportV1 run, ReadStorageMountsV1 mounts,
+    public sealed class ManualImportModel(FindManualImportWorksV1 find, ReadManualImportWorkV1 readWork, ReadManualImportFilesV1 readFiles, RunManualImportV1 run,
+        ReadManualImportDownloadV1 readDownload, RunManualImportDownloadV1 runDownload, ReadStorageMountsV1 mounts,
         ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private BaseDataList<ManualImportWorkV1>? _works;
@@ -38,6 +40,10 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
         [BindProperty(SupportsGet = true)]
         public int? Imported { get; set; }
+
+        // A waiting download of the queue: its folder and film or series are known.
+        [BindProperty(SupportsGet = true)]
+        public long? OperationId { get; set; }
 
         protected override void Define(Page page)
         {
@@ -71,15 +77,19 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             }
 
             page.Content.Add(new Div(new H2(new ValueText(_work.CanonicalTitle + (_work.ReleaseYear is { } released ? " (" + released.ToString(CultureInfo.InvariantCulture) + ")" : ""))),
-                new A(new Text("manualImport.change")).Attribute("href", Address())).Class("page-actions"));
-            page.Content.Add(new Form<ReadManualImportDataV1>(form =>
+                OperationId is null ? new A(new Text("manualImport.change")).Attribute("href", Address()) : new Span()).Class("page-actions"));
+            if (OperationId is null)
             {
-                form.Hidden(item => item.StorageMountId);
-                form.Hidden(item => item.RelativePath);
-                form.Content(Picker());
-                form.Submit("manualImport.read");
-            }, Address("Read", _work.WantedItemId), csrf, new ReadManualImportDataV1(StorageMountId ?? 0, RelativePath ?? ""), _folder is null ? FormError : null));
-            if (_folder is not { } folder || StorageMountId is not { } mountId)
+                page.Content.Add(new Form<ReadManualImportDataV1>(form =>
+                {
+                    form.Hidden(item => item.StorageMountId);
+                    form.Hidden(item => item.RelativePath);
+                    form.Content(Picker());
+                    form.Submit("manualImport.read");
+                }, Address("Read", _work.WantedItemId), csrf, new ReadManualImportDataV1(StorageMountId ?? 0, RelativePath ?? ""), _folder is null ? FormError : null));
+            }
+
+            if (_folder is not { } folder || OperationId is null && StorageMountId is null)
             {
                 return;
             }
@@ -96,26 +106,41 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var isMovie = _work.MediaTypeId == MediaType.Movie;
             var rows = new BaseDataList<ManualImportChoiceV1>(folder.Files.Select(file => new ManualImportChoiceV1(file.Path, isMovie ? file.Path == largest : file.Season is not null && file.Episode is not null,
                 file.Season, file.Episode)));
+            if (OperationId is { } operationId)
+            {
+                page.Content.Add(new Form<RunManualImportDownloadDataV1>(form =>
+                {
+                    ChoiceRows(form, item => item.Files, item => item.ImportTransferModeId, found, isMovie);
+                    form.Submit("manualImport.run");
+                }, Address("RunDownload", operationId: operationId), csrf, new RunManualImportDownloadDataV1(ImportTransferMode.Link, rows), FormError));
+                return;
+            }
+
             page.Content.Add(new Form<RunManualImportDataV1>(form =>
             {
                 form.Hidden(item => item.StorageMountId);
                 form.Hidden(item => item.RelativePath);
-                form.Rows(item => item.Files, (row, choice) =>
-                {
-                    row.Hidden(item => item.Path);
-                    var file = found[choice.Path];
-                    row.Content(new Div(new Strong(new ValueText(choice.Path)), new Span(new ValueText(Details(file)))).Class("manual-import-file"));
-                    row.Toggle(item => item.Imports, "manualImport.import");
-                    if (!isMovie)
-                    {
-                        row.Number(item => item.Season, "manualImport.season");
-                        row.Number(item => item.Episode, "manualImport.episode");
-                    }
-                });
-                form.Select(item => item.ImportTransferModeId, "manualImport.mode", Enum.GetValues<ImportTransferMode>()
-                    .Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["manualImport.mode." + mode])));
+                ChoiceRows(form, item => item.Files, item => item.ImportTransferModeId, found, isMovie);
                 form.Submit("manualImport.run");
-            }, Address("Run", _work.WantedItemId), csrf, new RunManualImportDataV1(mountId, RelativePath ?? "", ImportTransferMode.Link, rows), FormError));
+            }, Address("Run", _work.WantedItemId), csrf, new RunManualImportDataV1(StorageMountId!.Value, RelativePath ?? "", ImportTransferMode.Link, rows), FormError));
+        }
+
+        // Each file with what its name says, whether it comes along and, for episodes, which one it is; then how the files are placed.
+        private void ChoiceRows<TData>(Form<TData> form, Expression<Func<TData, BaseDataList<ManualImportChoiceV1>>> files, Expression<Func<TData, ImportTransferMode>> mode,
+            Dictionary<string, ManualImportFileV1> found, bool isMovie) where TData : BaseData
+        {
+            form.Rows(files, (row, choice) =>
+            {
+                row.Hidden(item => item.Path);
+                row.Content(new Div(new Strong(new ValueText(choice.Path)), new Span(new ValueText(Details(found[choice.Path])))).Class("manual-import-file"));
+                row.Toggle(item => item.Imports, "manualImport.import");
+                if (!isMovie)
+                {
+                    row.Number(item => item.Season, "manualImport.season");
+                    row.Number(item => item.Episode, "manualImport.episode");
+                }
+            });
+            form.Select(mode, "manualImport.mode", Enum.GetValues<ImportTransferMode>().Select(value => new SelectOption(((byte)value).ToString(CultureInfo.InvariantCulture), texts["manualImport.mode." + value])));
         }
 
         // The quality its name says, its size, and the name the library would give it.
@@ -152,6 +177,14 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var result = await run.ExecuteAsync<ManualImportResultV1>(new ManualImportParametersV1(wantedItemId),
                 new RunManualImportDataV1(storageMountId, relativePath ?? "", importTransferModeId, choices), HttpContext.RequestAborted);
             return LocalRedirect(Address(wantedItemId: wantedItemId, imported: result.Imported));
+        }
+
+        public async Task<IActionResult> OnPostRunDownloadAsync(ImportTransferMode importTransferModeId, List<FileRow>? files)
+        {
+            var operationId = OperationId ?? throw new KeyNotFoundException("The download is missing.");
+            var choices = new BaseDataList<ManualImportChoiceV1>((files ?? []).Where(row => row.Path is not null).Select(row => new ManualImportChoiceV1(row.Path!, row.Imports, row.Season, row.Episode)));
+            await runDownload.ExecuteAsync<ManualImportResultV1>(new ActivityOperationParametersV1(operationId), new RunManualImportDownloadDataV1(importTransferModeId, choices), HttpContext.RequestAborted);
+            return LocalRedirect("/Admin/Activity?Tab=Queue");
         }
 
         public async Task<IActionResult> OnGetFoldersAsync(long? storageMountId, string? path, string? afterName, int mountPage = 1)
@@ -191,6 +224,13 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
+            if (OperationId is { } operationId)
+            {
+                var download = await readDownload.ExecuteAsync<ManualImportDownloadV1>(new ActivityOperationParametersV1(operationId), default, ct);
+                WantedItemId = download.WantedItemId;
+                _folder = new ManualImportFolderV1(download.Files);
+            }
+
             if (WantedItemId is not { } wantedItemId)
             {
                 if (!string.IsNullOrWhiteSpace(Query)) _works = await find.ExecuteAsync<BaseDataList<ManualImportWorkV1>>(new ManualImportWorksParametersV1(Query.Trim()), ct);
@@ -198,7 +238,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             }
 
             _work = await readWork.ExecuteAsync<ManualImportWorkV1>(new ManualImportParametersV1(wantedItemId), ct);
-            if (StorageMountId is { } mountId)
+            if (OperationId is null && StorageMountId is { } mountId)
             {
                 _mountName = (await mount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(mountId), ct)).Name;
                 if (RelativePath is { } path)
@@ -208,7 +248,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             }
         }
 
-        private string Address(string? handler = null, long? wantedItemId = null, long? storageMountId = null, string? relativePath = null, string? query = null, int? imported = null) =>
+        private string Address(string? handler = null, long? wantedItemId = null, long? storageMountId = null, string? relativePath = null, string? query = null, int? imported = null, long? operationId = null) =>
             QueryHelpers.AddQueryString("/Admin/ManualImport", new Dictionary<string, string?>
             {
                 ["handler"] = handler,
@@ -216,7 +256,8 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 ["storageMountId"] = storageMountId?.ToString(CultureInfo.InvariantCulture),
                 ["relativePath"] = relativePath,
                 ["query"] = query,
-                ["imported"] = imported?.ToString(CultureInfo.InvariantCulture)
+                ["imported"] = imported?.ToString(CultureInfo.InvariantCulture),
+                ["operationId"] = operationId?.ToString(CultureInfo.InvariantCulture)
             });
 
         public sealed record FileRow(string? Path, bool Imports, int? Season, int? Episode);

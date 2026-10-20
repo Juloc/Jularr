@@ -516,6 +516,34 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     }
 
     // The download an action is about, whatever its client.
+    // A download that waits for a person and knows where its files are.
+    internal sealed class ManualImportDownloadData : BaseData
+    {
+        public ManualImportDownloadData(long operationId, long wantedItemId, long acquisitionConnectionId, string? externalId, string attentionProposal)
+        {
+            OperationId = operationId;
+            WantedItemId = wantedItemId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            ExternalId = externalId;
+            AttentionProposal = attentionProposal;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId))]
+        public string? ExternalId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
+        public string AttentionProposal { get; }
+    }
+
     internal sealed class DownloadActionData : BaseData
     {
         public DownloadActionData(long operationId, long acquisitionConnectionId, string? externalId, AcquisitionConnectionType acquisitionConnectionTypeId, string? attentionKey, bool hasProposal,
