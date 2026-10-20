@@ -18,11 +18,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private static readonly string[] UnitColumns = ["monitored", "number", "title", "aired", "languages", "group", "size", "status", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly string[] VolumeColumns = ["monitored", "number", "title", "released", "format", "pages", "group", "size", "status", "quality", "path"];
         private static readonly string[] EditionColumns = ["title", "format", "group", "size", "quality", "path"];
+        private static readonly string[] AudiobookColumns = ["title", "format", "codec", "length", "perhour", "group", "size", "quality", "path"];
         private static readonly string[] GameColumns = ["title", "format", "region", "version", "group", "size", "quality", "rom", "path"];
         private static readonly string[] TrackColumns = ["number", "title", "length", "format", "group", "size", "status", "quality", "path"];
         private static readonly string[] FileColumns = ["title", "languages", "group", "size", "quality", "languagesIso", "languagesNames", "path", "codec", "range"];
         private static readonly HashSet<string> HiddenByDefault = ["languagesIso", "languagesNames", "path", "codec", "range"];
-        private static readonly string[] SortableColumns = ["pages", "region", "version", "number", "absolute", "title", "aired", "released", "format", "length", "size", "status", "quality", "group", "rom"];
+        private static readonly string[] SortableColumns = ["perhour", "pages", "region", "version", "number", "absolute", "title", "aired", "released", "format", "length", "size", "status", "quality", "group", "rom"];
 
         // Anime counts episodes across seasons as well.
         private static string[] ColumnsOf(WorkManagementV1 work) => work.MediaTypeId == MediaType.Music ? TrackColumns : work.MediaTypeId == MediaType.Book ? VolumeColumns
@@ -399,7 +400,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var listed = work.Groups.Select(group => group.Id).ToHashSet();
             var others = present.Where(file => file.GroupId is not { } id || !listed.Contains(id)).ToArray();
             if (work.Groups.Count == 0 && others.Length == 0) return new P(new Text("work.empty.groups")).Attribute("role", "status");
-            void Add(string? panelKey, string name, string info, IUiComponent? lead, IEnumerable<IUiComponent> actions, WorkManagementFileV1[] files)
+            void Add(string? panelKey, string name, string info, IUiComponent? lead, IEnumerable<IUiComponent> actions, WorkManagementFileV1[] files, string[]? groupColumns = null)
             {
                 var panelId = "work-group-" + panelKey;
                 var open = first;
@@ -410,7 +411,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                         new Button(Icon("chevron-down", 22)).Class("work-season__toggle").Attribute("type", "button").Attribute("data-season-toggle", panelId).Attribute("aria-expanded", open ? "true" : "false")
                             .Attribute("aria-controls", panelId).TextAttribute("aria-label", "work.toggleSeason"),
                         new Div([.. actions]).Class("work-season__actions work-icons")).Class("work-season__head"),
-                    new Div(files.Length == 0 ? new P(new Text("work.empty.noFile")).Attribute("role", "status") : FileTable(files, columns, csrf, isGame ? "games" : "editions")).Class("work-season__panel").Attribute("id", panelId)
+                    new Div(files.Length == 0 ? new P(new Text("work.empty.noFile")).Attribute("role", "status") : FileTable(files, groupColumns ?? columns, csrf, isGame ? "games" : groupColumns is not null && groupColumns == AudiobookColumns ? "audiobooks" : "editions")).Class("work-season__panel").Attribute("id", panelId)
                         .Attribute("data-open", open ? "true" : "false")).Class("work-season"));
             }
 
@@ -443,8 +444,22 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     else if (group.ReleaseYear is { } releaseYear) facts.Add(releaseYear.ToString(CultureInfo.InvariantCulture));
                     if (group.Isbn is { } isbn) facts.Add("ISBN " + isbn);
                     if (size is not null) facts.Add(size);
+                    IUiComponent? lead = null;
+                    var icons = new List<IUiComponent>();
+                    if (texts.CanManageMedia())
+                    {
+                        lead = new PostForm(Address(Tab, "EditionMonitor"), csrf, [("workEditionId", group.Id.ToString(CultureInfo.InvariantCulture)), ("isMonitored", group.IsPaused == true ? "true" : "false")],
+                            new SwitchButton(group.IsPaused != true, group.IsPaused == true ? "work.edition.monitor" : "work.edition.unmonitor"));
+                    }
+
+                    if (_wanted is not null && CanAcquire && group.LanguageCode is { } searchLanguage)
+                    {
+                        icons.Add(new PostForm(Address(Tab, "Automatic"), csrf, [("language", searchLanguage)], IconSubmit("search", "work.edition.search")));
+                    }
+
                     if (files.Length == 0 && group.LanguageCode is { } wanted && work.Translations.Any(item => WorkLanguages.Code(item.Language) == WorkLanguages.Code(wanted))) facts.Add(texts["work.edition.readsTranslated"]);
-                    Add(group.Id.ToString(CultureInfo.InvariantCulture), group.Name ?? group.Title ?? texts["work.edition.plain"], string.Join(" · ", facts), null, [], files);
+                    Add(group.Id.ToString(CultureInfo.InvariantCulture), group.Name ?? group.Title ?? texts["work.edition.plain"], string.Join(" · ", facts), lead, icons,
+                        files, group.EditionFormatId == EditionFormat.Audiobook ? AudiobookColumns : columns);
                 }
             }
 
@@ -482,6 +497,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var shown = file ?? best;
             if (shown is null) return facts;
             var codec = string.Join(" ", new[] { shown.VideoCodec, shown.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : null }.Where(text => text is not null));
+            if (codec.Length == 0 && shown.AudioTracks.Count > 0 && shown.AudioTracks[0].Codec is { } audioCodec) codec = audioCodec;
+            var perHour = shown.DurationMs is > 0 ? (decimal)(totalBytes ?? shown.SizeBytes) / 1048576m / (shown.DurationMs.Value / 3_600_000m) : (decimal?)null;
             var noLanguages = shown.AudioLanguages.Length + shown.SubtitleLanguages.Length == 0;
             facts["quality"] = new(QualityBadge(shown), ((int)Rank(shown.FileQualityGradeId)).ToString(CultureInfo.InvariantCulture), shown.QualityKey is null);
             facts["size"] = new(SizeBlock(shown, totalBytes), (totalBytes ?? shown.SizeBytes).ToString("D20", CultureInfo.InvariantCulture));
@@ -490,6 +507,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             facts["languagesIso"] = new(LanguageGroup(shown, WorkLanguages.Mode.Iso), null, noLanguages);
             facts["languagesNames"] = new(LanguageGroup(shown, WorkLanguages.Mode.Names), null, noLanguages);
             facts["length"] = new(new ValueText(shown.DurationMs is { } milliseconds ? Duration(milliseconds) : ""), (shown.DurationMs ?? 0).ToString("D12", CultureInfo.InvariantCulture), shown.DurationMs is null);
+            facts["perhour"] = new(new ValueText(perHour is { } mb ? mb.ToString("0", CultureInfo.CurrentCulture) + " MB/h" : ""), (perHour ?? 0).ToString("000000000.0", CultureInfo.InvariantCulture), perHour is null);
             facts["format"] = new(new ValueText(Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant()), Path.GetExtension(shown.RelativePath).TrimStart('.').ToUpperInvariant(), Path.GetExtension(shown.RelativePath).Length < 2);
             facts["pages"] = new(new ValueText(shown.PageCount?.ToString(CultureInfo.InvariantCulture) ?? ""), (shown.PageCount ?? 0).ToString("D8", CultureInfo.InvariantCulture), shown.PageCount is null);
             facts["region"] = new(new ValueText(shown.GameRegion ?? ""), shown.GameRegion ?? "", string.IsNullOrEmpty(shown.GameRegion));

@@ -166,6 +166,26 @@ namespace Jularr.Backend.Logic.Acquisition
                             edition."WorkId" = work."Id"
                             AND edition."LanguageCode" = ANY(requested."Languages")
                     ) AS "Isbns",
+                    ARRAY(
+                        SELECT DISTINCT
+                            edition."LanguageCode"
+                        FROM
+                            "WorkEditions" AS edition
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" IS NOT NULL
+                            AND edition."IsMonitored"
+                    ) AS "MonitoredEditionLanguages",
+                    ARRAY(
+                        SELECT DISTINCT
+                            edition."LanguageCode"
+                        FROM
+                            "WorkEditions" AS edition
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" IS NOT NULL
+                            AND NOT edition."IsMonitored"
+                    ) AS "UnmonitoredEditionLanguages",
                     work."OriginalLanguage",
                     coalesce((
                         SELECT

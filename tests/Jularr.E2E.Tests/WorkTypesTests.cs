@@ -92,6 +92,11 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".work-season").First).ToContainTextAsync("E-book");
                 Assert.AreEqual(0, await page.Locator(".navigation-tabs__link", new() { HasText = "Manage files" }).CountAsync(), "A book has no Manage files tab.");
 
+                // An edition is switched off from its header.
+                await Assertions.Expect(page.Locator(".work-season").First.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Stop monitoring this edition");
+                await Steps.SubmitAsync(page, page.Locator(".work-season").First.Locator("form").First);
+                await Assertions.Expect(page.Locator(".work-season").First.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Monitor this edition");
+
                 var game = await CreateAsync(page, "Game", "None", "Test Game");
                 await jularr.RunSqlAsync($"""
                     INSERT INTO "GamePlatforms" ("Id", "Name", "Abbreviation") VALUES (710, 'Switch', 'NSW'), (711, 'PC', NULL);

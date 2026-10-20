@@ -303,7 +303,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                 AND identity."Namespace" = 'isbn'
                         ) AS "Isbn",
                         NULL::bigint AS "WantedItemId",
-                        NULL::boolean AS "IsPaused"
+                        NOT edition."IsMonitored" AS "IsPaused"
                     FROM
                         "WorkEditions" AS edition
                     WHERE

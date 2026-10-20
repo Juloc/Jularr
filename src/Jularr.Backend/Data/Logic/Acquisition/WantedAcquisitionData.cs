@@ -28,8 +28,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
-            int? runtimeMinutes = null, string? releaseProfiles = null)
+            int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null)
         {
+            MonitoredEditionLanguages = monitoredEditionLanguages ?? [];
+            UnmonitoredEditionLanguages = unmonitoredEditionLanguages ?? [];
             ReleaseProfiles = releaseProfiles ?? "[]";
             QualitySizes = qualitySizes ?? "[]";
             RuntimeMinutes = runtimeMinutes;
@@ -133,6 +135,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Isbns))]
         public string[] Isbns { get; }
+
+        // The languages of the book's editions an administrator wants and those switched off.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionLanguages))]
+        public string[] MonitoredEditionLanguages { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionLanguages))]
+        public string[] UnmonitoredEditionLanguages { get; }
 
         // The language the Work was made in; an untagged book release is taken to be in it.
         [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]

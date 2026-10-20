@@ -31,6 +31,8 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField Publisher = new(NpgsqlDbType.Varchar) { MaximumLength = 300, Required = false };
         public static readonly StringField Isbn = new() { MaximumLength = 400, Required = false };
         public static readonly BoolField IsRomVerified = new();
+        public static readonly StringArrayField EditionLanguages = new() { ItemMaximumLength = 3 };
+        public static readonly BoolField IsMonitoredEdition = new();
         public static readonly StringField TranslationLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 35 };
         public static readonly IntField CoveragePercent = new() { Minimum = 0, Maximum = 100 };
         public static readonly LongField TranslationBytes = new() { Minimum = 0 };
