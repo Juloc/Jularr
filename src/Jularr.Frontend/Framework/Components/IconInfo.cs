@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Framework
             if (_previewId is not null)
             {
                 new Div(new A(icon).Class("icon-info__trigger").Attribute("href", _href!)
-                    .Attribute("aria-label", label).Attribute("aria-haspopup", "dialog").Attribute("data-preview-open", _previewId))
+                    .Attribute("aria-label", label).Attribute("aria-haspopup", "dialog").Attribute("data-preview-open", _previewId).Attribute("data-navigation", "full"))
                     .Class("icon-info").WriteTo(writer, encoder, texts);
                 return;
             }

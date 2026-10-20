@@ -1,6 +1,7 @@
 import "./FolderPicker.scss";
+import { onPage } from "../../Modules/Navigation/PageSwap";
 
-document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker => {
+onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker => {
     if (picker.dataset.folderReady) return;
     const dialog = picker.querySelector<HTMLDialogElement>('dialog');
     const content = picker.querySelector<HTMLElement>('[data-folder-content]');
@@ -104,4 +105,4 @@ document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker =>
         pending?.abort();
         opener.focus({ preventScroll: true });
     });
-});
+}));

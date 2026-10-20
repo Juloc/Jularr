@@ -10,8 +10,10 @@ namespace Jularr.Backend.Data.Logic.Library
     {
         public LibraryRenameFileData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string relativePath, DateTime? missingSince,
             long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber,
-            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}", string mediaTracks = "[]", string customFormats = "{}", string? releaseName = null, string? collection = null, string localizedTitles = "{}")
+            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width, string providerIds = "{}", string mediaTracks = "[]", string customFormats = "{}", string? releaseName = null, string? collection = null, string localizedTitles = "{}", DateOnly? unitReleasedOn = null, long? workId = null)
         {
+            WorkId = workId;
+            UnitReleasedOn = unitReleasedOn;
             ProviderIds = providerIds;
             MediaTracks = mediaTracks;
             CustomFormats = customFormats;
@@ -42,6 +44,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
         public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
         public long LibraryRootId { get; }
@@ -84,6 +89,10 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
+
+        // When the episode first aired.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleasedOn))]
+        public DateOnly? UnitReleasedOn { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
         public string ProviderIds { get; }

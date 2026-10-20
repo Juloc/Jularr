@@ -110,12 +110,65 @@ namespace Jularr.Integrations.Logic.Media
                     var language = tags.ValueKind == JsonValueKind.Object ? Text(tags, "language") : null;
                     streams.Add(new MediaProbeStream(index.GetInt32(), type, Text(stream, "codec_name"), language is "und" ? null : language,
                         tags.ValueKind == JsonValueKind.Object ? Text(tags, "title") : null, Number(stream, "width"), Number(stream, "height"), Number(stream, "channels"),
-                        Flag(disposition, "default"), Flag(disposition, "forced")));
+                        Flag(disposition, "default"), Flag(disposition, "forced"),
+                        type == "video" ? BitDepth(stream) : null, type == "video" ? DynamicRange(stream) : null, type == "video" && IsStereo(stream, tags)));
                 }
             }
 
             return new MediaProbe(container, durationMs, bitRate, streams);
         }
+
+        // Bits per colour: the raw sample size, else the pixel format's own (yuv420p10le is ten).
+        private static int? BitDepth(JsonElement stream)
+        {
+            if (Text(stream, "bits_per_raw_sample") is { } raw && int.TryParse(raw, CultureInfo.InvariantCulture, out var bits) && bits is > 0 and <= 32)
+            {
+                return bits;
+            }
+
+            return Text(stream, "pix_fmt") is { } format && System.Text.RegularExpressions.Regex.Match(format, @"(?<bits>9|10|12|14|16)(?:le|be)?$") is { Success: true } match
+                ? int.Parse(match.Groups["bits"].Value, CultureInfo.InvariantCulture)
+                : Text(stream, "pix_fmt") is not null ? 8 : null;
+        }
+
+        // The dynamic range the *arrs name: from the transfer function and the side data of the stream.
+        private static string? DynamicRange(JsonElement stream)
+        {
+            var sideData = new List<JsonElement>();
+            if (stream.TryGetProperty("side_data_list", out var list) && list.ValueKind == JsonValueKind.Array)
+            {
+                sideData.AddRange(list.EnumerateArray());
+            }
+
+            bool Has(string type) => sideData.Any(item => Text(item, "side_data_type") is { } name && name.Contains(type, StringComparison.OrdinalIgnoreCase));
+            var transfer = Text(stream, "color_transfer");
+            var baseRange = transfer switch
+            {
+                "smpte2084" => Has("Mastering display") ? "HDR10" : "PQ",
+                "arib-std-b67" => "HLG",
+                _ => null
+            };
+            if (Has("HDR10+") || Has("2094-40"))
+            {
+                baseRange = "HDR10Plus";
+            }
+
+            if (sideData.FirstOrDefault(item => Text(item, "side_data_type") is { } name && (name.Contains("DOVI", StringComparison.OrdinalIgnoreCase) || name.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase)))
+                is { ValueKind: JsonValueKind.Object } dolby)
+            {
+                // The base layer's compatibility id tells what a player without Dolby Vision sees.
+                return dolby.TryGetProperty("dv_bl_signal_compatibility_id", out var id) && id.ValueKind == JsonValueKind.Number
+                    ? id.GetInt32() switch { 1 => "DV HDR10", 2 => "DV SDR", 4 => "DV HLG", _ => "DV" }
+                    : "DV";
+            }
+
+            return baseRange;
+        }
+
+        private static bool IsStereo(JsonElement stream, JsonElement tags) =>
+            tags.ValueKind == JsonValueKind.Object && Text(tags, "stereo_mode") is not null
+            || stream.TryGetProperty("side_data_list", out var list) && list.ValueKind == JsonValueKind.Array
+                && list.EnumerateArray().Any(item => Text(item, "side_data_type") is "Stereo 3D");
 
         private static string? Text(JsonElement element, string name) =>
             element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text ? text : null;

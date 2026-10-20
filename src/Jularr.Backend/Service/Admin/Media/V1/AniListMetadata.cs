@@ -116,6 +116,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public static string Title(AniListMedia media) => media.EnglishTitle ?? media.RomajiTitle;
 
+        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
+        {
+            try
+            {
+                return await aniList.ReadCatalogPageAsync(afterId, ct);
+            }
+            catch (AniListException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         private static Exception Translate(AniListException exception) => exception.Failure switch
         {
             AniListFailure.NotFound => new KeyNotFoundException("AniList does not know this title."),

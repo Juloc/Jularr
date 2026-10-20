@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
-const source = readFileSync(new URL('../Pages/User/Discover/Index.entry.ts', import.meta.url), 'utf8');
+// The page script registers its setup with the in-place navigation; outside a module it names itself.
+const source = readFileSync(new URL('../Pages/User/Discover/Index.entry.ts', import.meta.url), 'utf8').replace('import.meta.url', "'discover'");
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
@@ -13,9 +14,13 @@ function discover(landing = false) {
     const inputEvents = {};
     const formEvents = {};
     const documentEvents = {};
-    const input = { value: '', addEventListener: (name, action) => { inputEvents[name] = action; } };
-    const form = { action: 'https://jularr.test/', querySelector: () => input, addEventListener: (name, action) => { formEvents[name] = action; } };
+    const popupEvents = {};
+    const input = { value: '', focused: false, setAttribute() {}, focus() { this.focused = true; }, addEventListener: (name, action) => { inputEvents[name] = action; } };
+    const popup = { hidden: false, children: [], replaceChildren(...nodes) { this.children = nodes; }, querySelector: () => null, querySelectorAll: () => [],
+        addEventListener: (name, action) => { popupEvents[name] = action; } };
+    const form = { action: 'https://jularr.test/', querySelector: () => input, append() {}, contains: node => node === input, addEventListener: (name, action) => { formEvents[name] = action; } };
     const requests = [];
+    const suggestions = [];
     const pages = new Map();
     const timers = new Map();
     let timerId = 0;
@@ -35,7 +40,6 @@ function discover(landing = false) {
             querySelector: selector => selector === '.media-grid' ? grid : selector === '.discover-paging' ? paging
                 : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? paging.next
                 : selector === '[data-discover-recommendations]' ? recommendations ? { href: 'https://jularr.test/?handler=Recommendations' } : null
-                : selector === '#discover-featured' ? { replaceWith: value => slots.featured = value }
                 : selector === '#discover-recommendations' ? { replaceWith: value => slots.shelves = value } : null,
             querySelectorAll: () => cards,
             setAttribute(name, value) { this.attributes[name] = value; },
@@ -55,26 +59,34 @@ function discover(landing = false) {
         exports: {},
         require: name => {
             if (name === '../../../Framework/Components/MediaCard') return { initializeCards() {} };
+            if (name === '../../../Modules/Navigation/PageSwap') return { onPage: (_, setup) => setup(), inserted() {} };
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },
-        document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; } },
+        document: { querySelector: selector => selector.includes('search-box') ? form : active, createElement: () => popup, addEventListener: (name, action) => { documentEvents[name] = action; } },
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
         AbortController, URL, Set, Error,
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
         DOMParser: class { parseFromString(key) { return { querySelector: selector => {
             const value = pages.get(key);
-            return value?.featured ? selector === '#discover-featured' ? value.featured : value.shelves : value;
+            return value?.shelves ? selector === '#discover-recommendations' ? value.shelves : null : value;
         } }; } },
         history: { replaceState: (_, __, url) => { address = url.href; } },
-        fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
+        fetch: (url, options) => new Promise((resolve, reject) => (String(url).includes('handler=Suggestions') ? suggestions : requests).push({ url, options, resolve, reject })),
         setTimeout: action => { timers.set(++timerId, action); return timerId; },
         clearTimeout: id => timers.delete(id),
         MouseEvent: class {}
     });
 
     return {
-        requests, region,
+        requests, region, suggestions, popup, input,
+        key(name) { inputEvents.keydown({ key: name, preventDefault() {} }); },
+        async suggest(index, list) {
+            const key = 'suggestion' + index;
+            pages.set(key, list);
+            suggestions[index].resolve({ ok: true, redirected: false, text: async () => key });
+            await settle();
+        },
         get active() { return active; }, get address() { return address; }, get observing() { return !!observed; },
         type(value) { input.value = value; inputEvents.input(); },
         flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(action => action()); },
@@ -155,15 +167,51 @@ test('recommendation fragments preserve local content and obsolete responses are
     const local = ui.active;
     assert.equal(ui.requests.length, 1);
     assert.equal(ui.requests[0].options.headers['X-Jularr-Fragment'], 'recommendations');
-    const providers = { featured: {}, shelves: {} };
+    const providers = { shelves: {} };
     await ui.answer(0, providers);
     assert.equal(ui.active, local);
     assert.equal(local.cards.length, 2);
-    assert.equal(local.slots.featured, providers.featured);
+    assert.equal(local.slots.shelves, providers.shelves);
 
     const obsolete = discover(true);
     obsolete.type('Matrix');
     assert.equal(obsolete.requests[0].options.signal.aborted, true);
     await obsolete.answer(0, providers);
-    assert.equal(obsolete.active.slots.featured, undefined);
+    assert.equal(obsolete.active.slots.shelves, undefined);
+});
+
+
+test('Hero never arrives in an asynchronous recommendations fragment', () => {
+    const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');
+    assert.match(source, /await LoadFeaturedAsync\(selected\)/);
+    assert.doesNotMatch(source, /discover-featured/);
+    assert.match(source, /if \(_featured is not null\)/);
+});
+
+test('suggestions follow typing, drop obsolete answers and close on Escape', async () => {
+    const ui = discover();
+    ui.type('M');
+    ui.flush();
+    assert.equal(ui.suggestions.length, 0, 'one letter suggests nothing');
+
+    ui.type('Ma');
+    ui.type('Matr');
+    ui.flush();
+    assert.equal(ui.suggestions.length, 1);
+    assert.equal(ui.suggestions[0].url.searchParams.get('handler'), 'Suggestions');
+    assert.equal(ui.suggestions[0].url.searchParams.get('q'), 'Matr');
+    assert.equal(ui.suggestions[0].url.searchParams.get('type'), 'movies');
+
+    const list = { childElementCount: 2 };
+    await ui.suggest(0, list);
+    assert.equal(ui.popup.hidden, false);
+    assert.deepEqual(ui.popup.children, [list]);
+
+    ui.type('Matrix');
+    ui.flush();
+    assert.equal(ui.suggestions[1].options.signal.aborted, false);
+    ui.key('Escape');
+    assert.equal(ui.suggestions[1].options.signal.aborted, true);
+    assert.equal(ui.popup.hidden, true);
+    assert.deepEqual(ui.popup.children, []);
 });

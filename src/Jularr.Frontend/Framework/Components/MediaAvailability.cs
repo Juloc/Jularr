@@ -1,22 +1,10 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Enums.Media;
 
 namespace Jularr.Frontend.Framework
 {
-    // Visual projection supplied by Backend.
-    public enum MediaAvailabilityState
-    {
-        Available,
-        Partial,
-        Missing,
-        Downloading,
-        Searching,
-        Requested,
-        ProfileAudio,
-        OtherAudio,
-        PartialOtherAudio
-    }
-
+    // The visual projection of the Backend's media availability state.
     public sealed class MediaAvailability(FrontendAssets assets, MediaAvailabilityState state, int availableUnits = 0, int monitoredUnits = 0) : IUiComponent
     {
         private MediaAvailabilityState State { get; } = state;
@@ -81,7 +69,7 @@ namespace Jularr.Frontend.Framework
                     .Class("media-availability-badge__body"), new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))
                     .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant())
                     .Attribute("href", href).Attribute("aria-label", label);
-                if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog");
+                if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full");
                 link.WriteTo(writer, encoder, texts);
             }
         }

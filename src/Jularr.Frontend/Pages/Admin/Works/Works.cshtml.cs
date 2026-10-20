@@ -11,9 +11,10 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Works
 {
-    public sealed class WorksModel(ReadWorksV1 read, CreateWorkV1 create, SearchMetadataV1 search, ImportMetadataWorkV1 import, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class WorksModel(ReadWorksV1 read, ReadWorkExclusionsV1 readExclusions, DeleteWorkExclusionV1 deleteExclusion, CreateWorkV1 create, SearchMetadataV1 search, ImportMetadataWorkV1 import, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<WorkDetailsV1>? _works;
+        private PageResult<WorkExclusionV1>? _exclusions;
         private CreateWorkDataV1? _input;
         private SearchMetadataDataV1? _search;
         private BaseDataList<MetadataSearchResultV1>? _results;
@@ -71,6 +72,16 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 form.Submit("media.create");
             }, "/Admin/Works", csrf, _input, _search is null ? FormError : null));
 
+            // Titles deleted with an exclusion stay out of requests until the exclusion is removed.
+            if (_exclusions is { Items.Count: > 0 } exclusions)
+            {
+                page.Content.Add(new UiSection("admin.works.exclusions", [new Table<WorkExclusionV1>(exclusions.Items)
+                    .Text(item => item.Title, "media.title")
+                    .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, null)))
+                    .Content("common.actions", item => new PostForm("/Admin/Works?handler=RemoveExclusion", csrf, [("workExclusionId", item.Id.ToString(CultureInfo.InvariantCulture))],
+                        new Button(new Text("admin.works.exclusion.remove")).Submit()))]));
+            }
+
             // Real catalog rows.
             if (_works is { } works)
             {
@@ -115,8 +126,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }
 
+        public async Task<IActionResult> OnPostRemoveExclusionAsync([BindRequired] long workExclusionId)
+        {
+            await deleteExclusion.ExecuteAsync<UpdateResult>(new WorkExclusionParametersV1(workExclusionId), default, HttpContext.RequestAborted);
+            return LocalRedirect("/Admin/Works");
+        }
+
         protected override async Task LoadDataAsync()
         {
+            _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(), HttpContext.RequestAborted);
             _works = await read.ExecuteAsync<PageResult<WorkDetailsV1>>(new ReadWorksParametersV1(PageNumber), HttpContext.RequestAborted);
         }
     }

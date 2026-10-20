@@ -49,6 +49,7 @@
     }
 
     &__control > :is(input, select, textarea),
+    &__control > .ui-range > input,
     &__control > .ui-form__size > :is(input, select) {
         width: 100%;
         min-height: 44px;
@@ -63,6 +64,23 @@
     }
 
     &__control > textarea { border-radius: 24px; resize: vertical; }
+    &__control > .ui-range > input {
+        appearance: none;
+        padding: 0;
+        margin: 0;
+        accent-color: var(--accent);
+        cursor: pointer;
+
+        &::-webkit-slider-runnable-track { height: 4px; border: 0; border-radius: 999px; background: linear-gradient(to right, var(--accent) var(--range-progress, 0%), color-mix(in srgb, var(--accent) 14%, var(--surface)) var(--range-progress, 0%)); }
+        &::-moz-range-track { height: 4px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+        &::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--accent); }
+        &::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: var(--accent); }
+        &::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--accent); }
+        &:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+        &:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+        &:dir(rtl)::-webkit-slider-runnable-track { background: linear-gradient(to left, var(--accent) var(--range-progress, 0%), color-mix(in srgb, var(--accent) 14%, var(--surface)) var(--range-progress, 0%)); }
+    }
+    &__control > .ui-range > input:disabled { cursor: not-allowed; }
     &__control:has(textarea) { border-radius: 24px; }
     &__control:focus-within { border-color: var(--accent); }
     &__control:focus-within > legend { color: var(--accent-text); }
@@ -111,6 +129,13 @@
     }
     &__help:hover > &__tip,
     &__help:focus-within > &__tip { display: block; }
+}
+.ui-range {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    output { min-width: 4ch; color: var(--muted); text-align: end; font-size: 12px; font-variant-numeric: tabular-nums; }
 }
 .ui-field__control--segmented { padding: 2px 4px 4px; }
 .ui-field__control--segmented > legend { margin-left: 10px; }

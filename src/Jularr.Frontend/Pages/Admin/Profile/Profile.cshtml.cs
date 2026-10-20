@@ -127,7 +127,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         if (imported.MinimumPages is { } pages) section.Content(new P(new Text("profile.monitoring.pages"), new ValueText(": " + pages.ToString(CultureInfo.InvariantCulture))));
                     });
                 }
-                fields.Submit("common.save");
+                fields.Save();
             }, Address(), token, input, FormError);
             page.Content.Add(form);
             if (_profile is { } saved && !saved.IsDefault)

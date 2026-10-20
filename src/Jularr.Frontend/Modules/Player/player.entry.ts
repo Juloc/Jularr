@@ -1,6 +1,6 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
-import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
+import { keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -427,23 +427,23 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Minimize keeps the same session in a bar while the app is browsed around it.
     async function minimize(): Promise<void> {
+        shrink();
+        keepAddress(playerAddress, () => expand(false), shrink);
+        await visit(backHref);
+    }
+
+    function shrink(): void {
         settings.hidePopover(); sidebar?.hasAttribute('popover') && sidebar.hidePopover();
         player.classList.add("player--mini");
         document.body.classList.add("player-mini");
         document.body.classList.remove("player-page");
-        enableNavigation(url => {
-            if (url.pathname + url.search !== playerAddress) return false;
-            expand(false);
-            return true;
-        });
-        await navigate(backHref, true);
     }
 
     function expand(push: boolean): void {
         player.classList.remove("player--mini");
         document.body.classList.remove("player-mini");
         document.body.classList.add("player-page");
-        if (push) history.pushState(null, "", playerAddress);
+        if (push) pushAddress(playerAddress);
     }
 
     // Stop ends the session and leaves the app as it is; progress stays.
@@ -453,7 +453,7 @@ async function start(player: HTMLElement): Promise<void> {
         hls?.destroy();
         video.removeAttribute("src");
         video.load();
-        disableNavigation();
+        releaseAddress();
         document.body.classList.remove("player-active", "player-mini");
         player.closest(".player-main")?.remove();
     }

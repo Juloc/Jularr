@@ -62,7 +62,7 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "A pending account signed in.");
 
                 await page.GotoAsync("/Admin/Accounts");
-                await page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
                 var account = page.Locator("main form", new() { Has = page.Locator("[name=IsEnabled]") });
                 await account.Locator("[name=IsEnabled]").SelectOptionAsync("True");
                 await Steps.SubmitAsync(page, account);

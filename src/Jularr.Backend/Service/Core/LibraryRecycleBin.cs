@@ -10,7 +10,10 @@ namespace Jularr.Backend.Service.Core
     internal static class LibraryRecycleBin
     {
         // Where a file of this library goes; null deletes it. A configured folder that cannot be used keeps the file where it is.
-        public static async Task<RecycleFolder?> FolderAsync(Func<long, Task<StorageFiles>> open, ReplacementSettingsData settings, ReplacedFileData file, CancellationToken ct)
+        public static Task<RecycleFolder?> FolderAsync(Func<long, Task<StorageFiles>> open, ReplacementSettingsData settings, ReplacedFileData file, CancellationToken ct) =>
+            FolderAsync(open, settings, file.StorageMountId, file.RootPath, ct);
+
+        public static async Task<RecycleFolder?> FolderAsync(Func<long, Task<StorageFiles>> open, ReplacementSettingsData settings, long storageMountId, string rootPath, CancellationToken ct)
         {
             if (settings.RecycleModeId == RecycleMode.Delete)
             {
@@ -19,7 +22,7 @@ namespace Jularr.Backend.Service.Core
 
             if (settings.RecycleModeId == RecycleMode.LibraryFolder)
             {
-                return await PrepareAsync(await open(file.StorageMountId), file.StorageMountId, StoragePath.Combine(file.RootPath, StorageFiles.RecycleFolder), ct);
+                return await PrepareAsync(await open(storageMountId), storageMountId, StoragePath.Combine(rootPath, StorageFiles.RecycleFolder), ct);
             }
 
             if (settings is not { RecycleStorageMountId: { } mountId, IsReadOnly: false, RecyclePath: { } path })

@@ -57,6 +57,91 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public int Page { get; }
     }
 
+    // The shelves of one scope, or of every listed scope without one.
+    public sealed class ReadDiscoverShelvesDataV1 : BaseData
+    {
+        public ReadDiscoverShelvesDataV1(string? scopeSlug = null)
+        {
+            ScopeSlug = scopeSlug;
+        }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug), false)]
+        public string? ScopeSlug { get; }
+    }
+
+    // A shelf answered from a whole catalog: films and series as Items, the other catalogs' titles as CatalogItems.
+    public sealed class DiscoverShelfV1 : BaseResponse
+    {
+        public DiscoverShelfV1(string scopeSlug, DiscoverFeedType discoverFeedTypeId, IReadOnlyList<DiscoverItemV1> items, IReadOnlyList<DiscoverCatalogItemV1> catalogItems)
+        {
+            ScopeSlug = scopeSlug;
+            DiscoverFeedTypeId = discoverFeedTypeId;
+            Items = items;
+            CatalogItems = catalogItems;
+        }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug))]
+        public string ScopeSlug { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverFeedTypeId))]
+        public DiscoverFeedType DiscoverFeedTypeId { get; }
+
+        public IReadOnlyList<DiscoverItemV1> Items { get; }
+
+        public IReadOnlyList<DiscoverCatalogItemV1> CatalogItems { get; }
+    }
+
+    public sealed class SuggestDiscoverDataV1 : BaseData
+    {
+        public SuggestDiscoverDataV1(string query, string? scopeSlug = null)
+        {
+            Query = query;
+            ScopeSlug = scopeSlug;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query))]
+        public string Query { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug), false)]
+        public string? ScopeSlug { get; }
+    }
+
+    // A title found while typing, in the scope it opens in.
+    public sealed class DiscoverSuggestionV1 : BaseResponse
+    {
+        public DiscoverSuggestionV1(string scopeSlug, string @namespace, string externalId, string title, int? releaseYear, string? posterUrl, long? workId)
+        {
+            ScopeSlug = scopeSlug;
+            Namespace = @namespace;
+            ExternalId = externalId;
+            Title = title;
+            ReleaseYear = releaseYear;
+            PosterUrl = posterUrl;
+            WorkId = workId;
+        }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug))]
+        public string ScopeSlug { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+    }
+
     public sealed class SearchDiscoverDataV1 : BaseData
     {
         public SearchDiscoverDataV1(string query, MediaType? mediaTypeId = null, int page = 1)

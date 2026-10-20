@@ -44,7 +44,7 @@ namespace Jularr.Frontend.Pages.Admin.Languages
                     form.Text(item => item.Name, "admin.languages.name");
                     form.Select(item => item.IsEnabled, "admin.languages.state", states);
                     form.Select(item => item.IsRightToLeft, "admin.languages.direction", directions);
-                    form.Submit("common.save");
+                    form.Save();
                 }, "/Admin/Languages?uiLocaleId=" + locale.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _localeId == locale.Id ? _update : new UpdateUiLocaleDataV1(locale.Name, locale.IsEnabled, locale.IsRightToLeft, locale.CatalogVersion),
                     _localeId == locale.Id ? FormError : null));

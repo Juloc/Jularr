@@ -1,6 +1,7 @@
 import { progressReporter } from '../Tracking/Progress';
 import { initializeReaderSettings } from './Settings';
-import type { CurlGroup, initializePaperCurl } from './PaperCurl';
+import type { BookGroup, initializeBookRenderer } from './BookRenderer';
+import { updateRangeValue } from '../../Framework/Components/Range';
 
 export function comicSpread(page: number, count: number, two: boolean, wide: ReadonlySet<number>): number[] {
     return !two || page === 0 || wide.has(page) || page + 1 >= count || wide.has(page + 1) ? [page] : [page, page + 1];
@@ -13,22 +14,26 @@ export function initializeComicPages(reader: HTMLElement): void {
     const previous = reader.querySelector<HTMLAnchorElement>('[data-role=previous]')!;
     const next = reader.querySelector<HTMLAnchorElement>('[data-role=next]')!;
     const position = reader.querySelector<HTMLElement>('[data-role=position]')!;
+    const pagePosition = reader.querySelector<HTMLElement>('[data-role=pages]')!;
     const count = Number(reader.dataset.count);
+    const seek = reader.querySelector<HTMLInputElement>('[data-role=seek] input[type=range]')!;
+    seek.max = String(count);
+    reader.querySelector<HTMLElement>('[data-role=seek]')!.hidden = false;
     const images = new Map<number, HTMLImageElement>();
     const wide = new Set<number>();
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     let page = Number(reader.dataset.page), first = page, last = page;
-    let curl: ReturnType<typeof initializePaperCurl> | undefined;
+    let book: ReturnType<typeof initializeBookRenderer> | undefined;
     let loading: Promise<void> | undefined;
     let failed = false, moved = false;
     const settings = initializeReaderSettings(reader, render);
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         reader.querySelector<HTMLElement>('[data-role=save-error]')!.hidden = !failed;
     });
-    const two = () => settings.layout === 'spread' || settings.layout === 'auto' && stage.clientWidth >= 640;
+    const two = () => settings.layout === 'spread' || settings.layout === 'auto' && canvas.clientWidth - 88 >= 640;
     const shown = (at: number): number[] => comicSpread(at, count, two(), wide);
-    const target = (delta: number): number => {
-        const at = delta > 0 ? shown(page).at(-1)! + 1 : page - 1;
+    const target = (delta: number, from = page): number => {
+        const at = delta > 0 ? shown(from).at(-1)! + 1 : from - 1;
         return delta < 0 && two() && at > 1 && !wide.has(at) && !wide.has(at - 1) ? at - 1 : at;
     };
     const image = (index: number): HTMLImageElement => {
@@ -49,7 +54,7 @@ export function initializeComicPages(reader: HTMLElement): void {
         }
         return element;
     };
-    function group(at: number): CurlGroup | undefined {
+    function group(at: number): BookGroup | undefined {
         if (at < 0 || at >= count) return;
         const source = at === page ? stage : stage.cloneNode(false) as HTMLElement;
         if (source !== stage) source.append(...shown(at).map(index => image(index).cloneNode(true)));
@@ -59,6 +64,7 @@ export function initializeComicPages(reader: HTMLElement): void {
         const current = shown(page);
         const columns = current.length;
         reader.dataset.columns = String(columns);
+        reader.querySelector<HTMLElement>('[data-role=turn-tools]')!.hidden = settings.mode !== 'paged';
         reader.style.setProperty('--reader-columns', String(columns));
         reader.dataset.page = String(page);
         if (settings.mode === 'scroll') {
@@ -67,13 +73,15 @@ export function initializeComicPages(reader: HTMLElement): void {
             requestAnimationFrame(() => { stage.scrollTop = image(page).offsetTop - stage.offsetTop; });
         } else stage.replaceChildren(...current.map(image));
         updatePosition();
-        const active = settings.mode === 'paged' && !failed && (settings.animation === 'on' || settings.animation === 'system' && !motion.matches);
-        curl?.update([group(target(-1)), group(page), group(target(1))], columns, active);
-        if (active && !curl && !loading) loading = import('./PaperCurl').then(module => {
-            curl = module.initializePaperCurl(reader, go); render();
+        const active = settings.mode === 'paged' && !failed;
+        reader.dataset.bookPageCount = String(count); reader.dataset.bookPageBefore = '0';
+        if (book && !book.update({ current: page, columns, minimum: 0, maximum: count - 1, group,
+            next: (at, delta) => target(delta, at), number: at => at + 1, commit }, active)) failed = true;
+        if (active && !book && !loading) loading = import('./BookRenderer').then(module => {
+            book = module.initializeBookRenderer(reader); render();
         }).catch(() => {
-            failed = true; reader.dataset.curl = 'false';
-            reader.querySelector<HTMLElement>('.reader__curl')?.setAttribute('hidden', 'hidden');
+            failed = true; reader.dataset.bookReady = 'false';
+            reader.querySelector<HTMLElement>('.reader-book')?.setAttribute('hidden', 'hidden');
             reader.querySelector<HTMLElement>('[data-role=animation-error]')!.hidden = false;
         });
         for (let index = current.at(-1)! + 1; index <= Math.min(count - 1, current.at(-1)! + 3); index++) image(index);
@@ -82,22 +90,29 @@ export function initializeComicPages(reader: HTMLElement): void {
     function updatePosition(): void {
         const current = settings.mode === 'paged' ? shown(page) : [page];
         position.textContent = `${current.map(index => index + 1).join('–')} / ${count}`;
+        pagePosition.textContent = position.textContent;
+        seek.value = String(page + 1);
+        seek.disabled = count <= 1;
+        updateRangeValue(seek);
         previous.hidden = page === 0;
         next.hidden = current.at(-1)! + 1 >= count;
         reader.querySelectorAll<HTMLButtonElement>('[data-turn]').forEach(button => button.disabled = Number(button.dataset.turn) < 0 ? previous.hidden : next.hidden);
-        reader.style.setProperty('--reader-stack-left', `${1 + 14 * (settings.direction === 'rtl' ? count - current.at(-1)! - 1 : page) / count}px`);
-        reader.style.setProperty('--reader-stack-right', `${1 + 14 * (settings.direction === 'rtl' ? page : count - current.at(-1)! - 1) / count}px`);
         const address = new URL(location.href);
         address.searchParams.set('p', String(page));
         history.replaceState(null, '', address.pathname + address.search);
     }
-    function go(delta: number): void {
-        const at = target(delta);
+    function commit(at: number): void {
         if (at < 0 || at >= count) return;
         page = at; moved = true;
         render(); report(false);
     }
-    const turn = (delta: number) => { if (!curl?.turn(delta)) go(delta); };
+    const turn = (delta: number) => { if (!book?.turn(delta)) commit(target(delta)); };
+    seek.addEventListener('change', () => {
+        if (!Number.isFinite(seek.valueAsNumber)) return;
+        page = seek.valueAsNumber - 1;
+        moved = true;
+        render(); report(false);
+    });
     previous.addEventListener('click', event => { event.preventDefault(); turn(-1); });
     next.addEventListener('click', event => { event.preventDefault(); turn(1); });
     reader.querySelectorAll<HTMLElement>('[data-turn]').forEach(button => button.addEventListener('click', () => turn(Number(button.dataset.turn))));
@@ -109,7 +124,7 @@ export function initializeComicPages(reader: HTMLElement): void {
         if (delta) { event.preventDefault(); turn(delta); }
     });
     let start: { x: number; y: number } | undefined;
-    stage.addEventListener('pointerdown', event => { start = settings.mode === 'paged' ? { x: event.clientX, y: event.clientY } : undefined; });
+    stage.addEventListener('pointerdown', event => { start = settings.mode === 'paged' && !book?.enabled() ? { x: event.clientX, y: event.clientY } : undefined; });
     stage.addEventListener('pointerup', event => {
         const from = start; start = undefined;
         if (!from) return;

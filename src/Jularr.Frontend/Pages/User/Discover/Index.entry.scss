@@ -24,6 +24,53 @@
     padding: 24px 0;
 }
 
+// Suggestions under the header search, as wide as the field like the combobox popup.
+.app-header .search-box { position: relative; }
+
+.discover-suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    z-index: 30;
+    overflow: hidden;
+    padding: 4px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.discover-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 12px;
+    color: var(--text);
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible { outline: none; background: var(--surface-hover); }
+
+    &__poster {
+        flex: none;
+        width: 30px;
+        height: 40px;
+        border-radius: 5px;
+        background: var(--accent-soft);
+        object-fit: cover;
+    }
+
+    &__text {
+        display: grid;
+        min-width: 0;
+
+        strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+        span { color: var(--muted); font-size: 12px; }
+    }
+}
+
 .discover-feedback {
     color: var(--muted);
 }

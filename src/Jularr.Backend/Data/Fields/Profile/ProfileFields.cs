@@ -1,4 +1,5 @@
 
+
 namespace Jularr.Backend.Data.Fields.Profile
 {
     public static class ProfileFields

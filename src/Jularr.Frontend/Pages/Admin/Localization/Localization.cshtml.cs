@@ -65,7 +65,7 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                     {
                         form.Hidden(item => item.MessageVersion);
                         form.Multiline(item => item.Description, "admin.localization.description");
-                        form.Submit("common.save");
+                        form.Save();
                     }, Address(UiLocaleId, _selected.Id, handler: "Description"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         _description ?? new UpdateUiDescriptionDataV1(_selected.Version, _selected.Description), _description is null ? null : FormError));
                     split.Secondary.Add(new Form<SaveUiTranslationDataV1>(form =>
@@ -73,14 +73,13 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                         form.Hidden(item => item.MessageVersion);
                         form.Hidden(item => item.TranslationVersion);
                         form.Multiline(item => item.Text, "admin.localization.translation");
-                        form.Submit("common.save");
+                        form.Save();
                     }, Address(UiLocaleId, _selected.Id, handler: "Translation"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         _translation ?? new SaveUiTranslationDataV1(_selected.Version, _selected.TranslationVersion, _selected.Text ?? ""), _translation is null ? null : FormError));
                 }
             }).MasterDetail(_selected is not null, Address(UiLocaleId)));
 
             if (FormError is not null && _description is null && _translation is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
-            if (TempData["CatalogSaved"] is true) page.Content.Add(new P(new Text("profile.settings.saved")).Attribute("role", "status"));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -94,7 +93,6 @@ namespace Jularr.Frontend.Pages.Admin.Localization
         {
             _description = new UpdateUiDescriptionDataV1(messageVersion, description);
             await updateDescription.ExecuteAsync<UpdateResult>(new UpdateUiDescriptionParametersV1(SelectedParameters().UiTranslationMessageId), _description, HttpContext.RequestAborted);
-            TempData["CatalogSaved"] = true;
             return LocalRedirect(Address(UiLocaleId, UiTranslationMessageId));
         }
 
@@ -102,7 +100,6 @@ namespace Jularr.Frontend.Pages.Admin.Localization
         {
             _translation = new SaveUiTranslationDataV1(messageVersion, translationVersion, text ?? "");
             await translation.ExecuteAsync<UpdateResult>(SelectedParameters(), _translation, HttpContext.RequestAborted);
-            TempData["CatalogSaved"] = true;
             return LocalRedirect(Address(UiLocaleId, UiTranslationMessageId));
         }
 

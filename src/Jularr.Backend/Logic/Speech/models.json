@@ -1,0 +1,40 @@
+{
+  "models": [
+    {
+      "id": "piper-de-thorsten",
+      "version": "50487d9c95fd",
+      "name": "Thorsten (medium)",
+      "language": "de-DE",
+      "voice": "0",
+      "license": "CC0-1.0 (dataset)",
+      "licenseUrl": "https://huggingface.co/rhasspy/piper-voices/blob/main/de/de_DE/thorsten/medium/MODEL_CARD",
+      "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-de_DE-thorsten-medium.tar.bz2",
+      "sizeBytes": 67214254,
+      "sha256": "50487d9c95fdf2191f31d2588569381063ba1591dcd4c7d4bdd30f12b2191714"
+    },
+    {
+      "id": "piper-id-news",
+      "version": "634b0169fe41",
+      "name": "News TTS (medium)",
+      "language": "id-ID",
+      "voice": "0",
+      "license": "CC-BY-NC-SA-4.0 (dataset)",
+      "licenseUrl": "https://huggingface.co/datasets/rhasspy/piper-checkpoints/blob/main/id/id_ID/news_tts/medium/MODEL_CARD",
+      "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-id_ID-news_tts-medium.tar.bz2",
+      "sizeBytes": 67243848,
+      "sha256": "634b0169fe41c368e9fafe128f30647f9e0301e852ce503cd78146db524f1f12"
+    },
+    {
+      "id": "piper-en-ljspeech",
+      "version": "00c6408d2409",
+      "name": "LJ Speech (high)",
+      "language": "en-US",
+      "voice": "0",
+      "license": "Public domain (dataset)",
+      "licenseUrl": "https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/high/MODEL_CARD",
+      "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-ljspeech-high.tar.bz2",
+      "sizeBytes": 115817679,
+      "sha256": "00c6408d2409050312193b0d40ae07fde28af7d3d45a56efcc55440db516b935"
+    }
+  ]
+}

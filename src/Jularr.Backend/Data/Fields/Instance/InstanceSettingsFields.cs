@@ -25,5 +25,6 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly LongField RecycleStorageMountId = new() { Minimum = 1, Required = false };
         public static readonly StringField RecyclePath = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.RelativePath };
         public static readonly IntField RecycleDays = new() { Minimum = 0, Maximum = 3650 };
+        public static readonly BoolField UnmonitorsDeletedUnits = new();
     }
 }

@@ -19,6 +19,7 @@ namespace Jularr.Backend.Logic.Library
                 """
                 SELECT
                     file."Id",
+                    work."Id" AS "WorkId",
                     file."LibraryRootId",
                     root."Name" AS "LibraryRootName",
                     root."MediaTypeId",
@@ -39,6 +40,7 @@ namespace Jularr.Backend.Logic.Library
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     unit."Title" AS "UnitTitle",
+                    unit."ReleasedOn" AS "UnitReleasedOn",
                     parent."Number" AS "ParentUnitNumber",
                     file."QualityKey",
                     file."ReleaseGroup",
@@ -47,7 +49,7 @@ namespace Jularr.Backend.Logic.Library
                     coalesce((SELECT jsonb_object_agg(identity."Namespace", identity."Value")::text FROM "WorkExternalIdentities" AS identity
                         WHERE identity."WorkId" = work."Id"), '{}') AS "ProviderIds",
                     coalesce((SELECT jsonb_agg(jsonb_build_object('MediaTrackTypeId', track."MediaTrackTypeId", 'Codec', track."Codec",
-                        'Language', track."Language", 'Channels', track."Channels") ORDER BY track."StreamIndex")::text
+                        'Language', track."Language", 'Channels', track."Channels", 'BitDepth', track."BitDepth", 'DynamicRange', track."DynamicRange", 'Is3D', track."Is3D") ORDER BY track."StreamIndex")::text
                         FROM "MediaTracks" AS track WHERE track."StoredFileId" = file."Id"), '[]') AS "MediaTracks",
                     coalesce((SELECT jsonb_object_agg(format."Name", format."Name")::text
                         FROM "StoredFileCustomFormats" AS evaluated
@@ -106,7 +108,7 @@ namespace Jularr.Backend.Logic.Library
             return ctx.ReadSql.ReadListAsync<LibraryRenameFileData>(sql, ct);
         }
 
-        public static IReadOnlyList<LibraryRenameData> Plan(IReadOnlyList<LibraryRenameFileData> files, IReadOnlyDictionary<MediaType, string> patterns)
+        public static IReadOnlyList<LibraryRenameData> Plan(IReadOnlyList<LibraryRenameFileData> files, NamingSet patterns)
         {
             var renames = new List<LibraryRenameData>();
             foreach (var root in files.GroupBy(file => file.LibraryRootId))
@@ -150,6 +152,19 @@ namespace Jularr.Backend.Logic.Library
             return renames;
         }
 
+        // The part of the plan that names one title's files; the whole plan still decides which names are taken.
+        public static IReadOnlyList<LibraryRenameData> PlanFor(IReadOnlyList<LibraryRenameFileData> files, NamingSet patterns, long? workId)
+        {
+            var plan = Plan(files, patterns);
+            if (workId is null)
+            {
+                return plan;
+            }
+
+            var own = files.Where(file => file.WorkId == workId).Select(file => file.Id).ToHashSet();
+            return plan.Where(rename => own.Contains(rename.MediaStoredFileId)).ToArray();
+        }
+
         // Applying refuses a plan that differs from the preview.
         public static string Fingerprint(IReadOnlyList<LibraryRenameData> renames)
         {
@@ -163,7 +178,7 @@ namespace Jularr.Backend.Logic.Library
         }
 
         // Only identities with a fixed layout are renamed; games keep their release folders.
-        private static string? Target(LibraryRenameFileData file, IReadOnlyDictionary<MediaType, string> patterns)
+        private static string? Target(LibraryRenameFileData file, NamingSet patterns)
         {
             if (file.CanonicalTitle is not { } title)
             {
@@ -172,8 +187,8 @@ namespace Jularr.Backend.Logic.Library
 
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
-                (MediaType.Movie, null) => NamingPattern.Apply(patterns[MediaType.Movie], Values(file, title, null, null)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns[MediaType.Series], Values(file, title, season, file.UnitNumber)),
+                (MediaType.Movie, null) => NamingPattern.Apply(patterns.Pattern(MediaType.Movie, file.MediaSubtypeId), Values(file, title, null, null, patterns)),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns.Pattern(MediaType.Series, file.MediaSubtypeId), Values(file, title, season, file.UnitNumber, patterns)),
                 (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => LibraryNaming.Volume(title, file.UnitNumber),
                 (MediaType.Book, null) => LibraryNaming.Book(title, file.ReleaseYear, file.Author),
                 (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is { } name => LibraryNaming.Track(file.Author, title, file.ReleaseYear, file.UnitNumber!.Value, name),
@@ -181,10 +196,12 @@ namespace Jularr.Backend.Logic.Library
             };
         }
 
-        private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
+        private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode, NamingSet patterns) =>
             new NamingValues(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision)
             {
                 MediaTypeId = file.MediaTypeId,
+                Rules = patterns.Rules(file.MediaTypeId),
+                AirDate = file.UnitReleasedOn,
                 ProviderIds = JsonSerializer.Deserialize<Dictionary<string, string>>(file.ProviderIds),
                 OriginalFilename = Path.GetFileNameWithoutExtension(file.RelativePath),
                 OriginalReleaseTitle = file.ReleaseName,
@@ -194,7 +211,7 @@ namespace Jularr.Backend.Logic.Library
                 LocalizedTitles = JsonSerializer.Deserialize<Dictionary<string, string>>(file.LocalizedTitles)
             };
 
-        private static IReadOnlyDictionary<string, string> MediaDetails(string json)
+        internal static IReadOnlyDictionary<string, string> MediaDetails(string json)
         {
             var tracks = JsonSerializer.Deserialize<NamingTrack[]>(json) ?? [];
             var video = tracks.FirstOrDefault(track => track.MediaTrackTypeId == 1);
@@ -227,12 +244,17 @@ namespace Jularr.Backend.Logic.Library
                 ["MediaInfo AudioLanguages"] = languages is ["EN"] ? "" : allAudio,
                 ["MediaInfo AudioLanguagesAll"] = allAudio,
                 ["MediaInfo SubtitleLanguages"] = subtitleText,
+                ["MediaInfo SubtitleLanguagesAll"] = subtitleText,
+                ["MediaInfo VideoBitDepth"] = video?.BitDepth?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                ["MediaInfo VideoDynamicRange"] = video?.DynamicRange is { Length: > 0 } and not "DV SDR" ? "HDR" : "",
+                ["MediaInfo VideoDynamicRangeType"] = video?.DynamicRange ?? "",
+                ["MediaInfo 3D"] = video?.Is3D == true ? "3D" : "",
                 ["MediaInfo Simple"] = string.Join(' ', new[] { videoCodec, audioCodec }.Where(value => value.Length > 0)),
                 ["MediaInfo Full"] = string.Join(' ', new[] { videoCodec, audioCodec, allAudio, subtitleText }.Where(value => value.Length > 0))
             };
         }
 
-        private sealed record NamingTrack(int MediaTrackTypeId, string? Codec, string? Language, int? Channels);
+        private sealed record NamingTrack(int MediaTrackTypeId, string? Codec, string? Language, int? Channels, int? BitDepth = null, string? DynamicRange = null, bool Is3D = false);
 
         // The stored release quality, else a tag only an older name carries, else the analysed width, wide formats included.
         private static string? QualityOf(LibraryRenameFileData file) => file.QualityKey

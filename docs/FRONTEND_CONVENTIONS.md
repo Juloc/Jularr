@@ -15,9 +15,18 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   live search and server-rendered fragments; no client hydration, client-side
   business templates or translation-bundle fetching. Preserve native navigation
   and forms wherever the feature does not inherently require JavaScript.
-- Server-rendered fragment navigation is approved to keep the application shell
-  and active Player alive. Keep normal full-page routes usable without JavaScript;
-  authorization, form validation and rendering stay server-owned.
+- Owner's decision 19 Oct: in-place navigation uses **htmx 4** (boost), not a SPA.
+  Links and forms of app pages replace `#app-content` with the same element of the
+  server's full page; the head, theme and an active Player stay. Player, Reader, Game,
+  Account, Setup, API addresses, downloads, new windows and `data-navigation="full"`
+  (also links a page script handles itself) load normally ([rules](../src/Jularr.Frontend/Modules/Navigation/Navigation.ts)).
+  Back reloads the page from the server; no page HTML is kept in browser storage.
+  Every route stays usable without JavaScript; authorization, form validation and
+  rendering stay server-owned. A POST that shows its page again adds no history entry.
+- App-page styles and scripts render inside `#app-content`. A page script registers
+  its DOM setup with `onPage(import.meta.url, setup)`: it runs once per document load
+  and again for each new page the script belongs to; document-level listeners are
+  installed once at module level. HTML a script inserts goes through `inserted(element)`.
 - Frontend owns UI appearance, accessible interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
@@ -87,6 +96,16 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   the label's (i), shown on hover, focus and tap ([FieldInfo](../src/Jularr.Frontend/Framework/Components/FieldInfo.cs)).
   A page passes `FieldHelp` only where the field means something special there; an empty key shows
   none. Labels stay short: units belong in the label, explanations in the (i).
+- Owner's decision 19 Oct: settings forms end with `form.Save()` instead of their own save button. The page's one
+  [save pill](../src/Jularr.Frontend/Framework/Components/SavePill.cs) appears centred in the content while a value
+  differs from the loaded page, marks the changed fields and saves every changed form in turn; a failing form keeps its
+  error while the others save. Discard shows the saved page again in place without asking; leaving with changes asks.
+  Actions (test, search, delete) stay their own buttons. Without script each form keeps its visible save button.
+  Pages with many small forms of one kind label each form with its item instead of repeating a field label.
+  A form shown again as a draft (a row added, a choice applied) counts as unsaved in the pill until saved or discarded.
+- Times use `Form.Time` ([TimePicker](../src/Jularr.Frontend/Framework/Components/TimePicker.ts), from the UiDesigner study): hour and
+  minute fields on a desktop, a wheel sheet on Android, the system's own picker on iOS (owner's decision 19 Oct); the native
+  time field stays the submitted value and the picker without script.
 - `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
 - `Form.Select` may declare a local draft refresh action and a fallback button label. `Form.entry.ts` replaces only the server-rendered form on a field change; the action preserves the draft and performs no mutation. The native button remains usable without JavaScript. Pages opt into the component asset.
 - Form transport values are invariant, independently of the display language.
