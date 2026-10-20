@@ -119,6 +119,9 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (10, 1, 'Old Film', 1999), (20, 2, 'New Series', 2021), (30, 3, 'A Book', 2021);
                 INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Poster', 'https://img.example.test/10.jpg', TRUE), (30, 'Poster', 'https://img.example.test/30.jpg', TRUE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (40, 1, 'Loose Film', 2010);
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs", "IsCompleted", "CompletedAt")
+                    VALUES (101, 10, 1, 500, 1000, FALSE, NULL), (101, 30, 1, 1000, 1000, TRUE, now());
                 """);
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
@@ -137,6 +140,18 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { 30L, 20L }, await FavoritesAsync("?releaseYearFrom=2020&librarySortTypeId=2"));
             CollectionAssert.AreEqual(new[] { 20L, 10L }, await FavoritesAsync("?mediaTypeIds=1&mediaTypeIds=2&librarySortTypeId=3"));
 
+            // Progress per favorite, its filter, its order and the count of all favorites.
+            var items = (await ReadAsync<PageResult<LibraryItemV1>>(host, "/api/v1/watchlist")).Items;
+            Assert.AreEqual(ProgressStateType.InProgress, items.Single(item => item.Id == 10).ProgressStateId);
+            Assert.AreEqual(50, items.Single(item => item.Id == 10).ProgressPercent);
+            Assert.AreEqual(ProgressStateType.Finished, items.Single(item => item.Id == 30).ProgressStateId);
+            Assert.AreEqual(ProgressStateType.NotStarted, items.Single(item => item.Id == 20).ProgressStateId);
+            CollectionAssert.AreEqual(new[] { 10L }, await FavoritesAsync("?progressStateId=2"));
+            CollectionAssert.AreEqual(new[] { 30L }, await FavoritesAsync("?progressStateId=3"));
+            CollectionAssert.AreEqual(new[] { 20L }, await FavoritesAsync("?progressStateId=1"));
+            CollectionAssert.AreEqual(new[] { 30L, 10L, 20L }, await FavoritesAsync("?librarySortTypeId=4"));
+            Assert.AreEqual(3, (await ReadAsync<WatchlistCountV1>(host, "/api/v1/watchlist/count")).Total);
+
             // The covers of the first titles and which collection holds which title come in single reads.
             var next = await CreateAsync(host, new CreateCollectionDataV1("Next", false));
             var shelf = await CreateAsync(host, new CreateCollectionDataV1("Shelf", false));
@@ -153,8 +168,18 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new[] { (10L, next), (30L, next), (30L, shelf) }, members.Select(member => (member.WorkId, member.CollectionId)).ToArray());
             Assert.AreEqual(0, (await ReadAsync<BaseDataList<CollectionMemberV1>>(host, Route + "/membership?workIds=20")).Count);
 
+            // A title put into a collection is a favorite; a favorite that goes leaves every collection.
+            using var loose = await host.SendAsync(HttpMethod.Put, Route + "/" + shelf + "/works/40");
+            Assert.AreEqual(HttpStatusCode.OK, loose.StatusCode, await loose.Content.ReadAsStringAsync());
+            CollectionAssert.Contains(await FavoritesAsync(""), 40L);
+            Assert.AreEqual(4, (await ReadAsync<WatchlistCountV1>(host, "/api/v1/watchlist/count")).Total);
+            using var unsaved = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/40", new UpdateWatchlistDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, unsaved.StatusCode, await unsaved.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"CollectionWorks\" WHERE \"WorkId\" = 30 AND \"CollectionId\" = " + shelf));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"CollectionWorks\" WHERE \"WorkId\" = 40"));
+
             // A collection narrows by type and orders by what was added.
-            async Task<long[]> InAsync(long collection, string query) => [.. (await ReadAsync<PageResult<WorkCardV1>>(host, Route + "/" + collection + "/works" + query)).Items.Select(item => item.Id)];
+            async Task<long[]> InAsync(long collection, string query) => [.. (await ReadAsync<PageResult<LibraryItemV1>>(host, Route + "/" + collection + "/works" + query)).Items.Select(item => item.Id)];
             CollectionAssert.AreEqual(new[] { 10L, 30L }, await InAsync(next, ""));
             CollectionAssert.AreEqual(new[] { 30L, 10L }, await InAsync(next, "?librarySortTypeId=1"));
             CollectionAssert.AreEqual(new[] { 30L }, await InAsync(next, "?mediaTypeIds=3"));
@@ -210,7 +235,7 @@ namespace Jularr.Backend.Tests
         }
 
         private static async Task<long[]> WorksAsync(Host host, long collectionId) =>
-            [.. (await ReadAsync<PageResult<WorkCardV1>>(host, Route + "/" + collectionId + "/works")).Items.Select(item => item.Id)];
+            [.. (await ReadAsync<PageResult<LibraryItemV1>>(host, Route + "/" + collectionId + "/works")).Items.Select(item => item.Id)];
 
         private static async Task<T> ReadAsync<T>(Host host, string path)
         {

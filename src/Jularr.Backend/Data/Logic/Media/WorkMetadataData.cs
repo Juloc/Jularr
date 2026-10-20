@@ -281,8 +281,9 @@ namespace Jularr.Backend.Data.Logic.Media
     // What a profile's personal list is narrowed to and how it is ordered; no scope lists every type.
     internal sealed class WorkListFilterData : BaseData
     {
-        public WorkListFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, LibrarySortType? librarySortTypeId)
+        public WorkListFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, ProgressStateType? progressStateId, LibrarySortType? librarySortTypeId)
         {
+            ProgressStateId = progressStateId;
             MediaTypeIds = mediaTypeIds;
             MediaSubtypeIds = mediaSubtypeIds;
             ReleaseYearFrom = releaseYearFrom;
@@ -301,6 +302,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
         public int? ReleaseYearTo { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId), false)]
         public LibrarySortType? LibrarySortTypeId { get; }

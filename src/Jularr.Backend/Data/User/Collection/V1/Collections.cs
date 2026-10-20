@@ -22,8 +22,9 @@ namespace Jularr.Backend.Data.User.Collection.V1
     public sealed class CollectionWorksParametersV1 : BaseParameters
     {
         public CollectionWorksParametersV1(long collectionId, int page = 1, int pageSize = 60, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null,
-            int? releaseYearTo = null, LibrarySortType? librarySortTypeId = null)
+            int? releaseYearTo = null, ProgressStateType? progressStateId = null, LibrarySortType? librarySortTypeId = null)
         {
+            ProgressStateId = progressStateId;
             CollectionId = collectionId;
             Page = page;
             PageSize = pageSize;
@@ -52,6 +53,9 @@ namespace Jularr.Backend.Data.User.Collection.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
         public int? ReleaseYearTo { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
 
         // Without a choice a hand-picked collection keeps the order its titles were added in; recently added lists the newest first.
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId), false)]
