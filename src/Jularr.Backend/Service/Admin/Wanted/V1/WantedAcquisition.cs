@@ -70,19 +70,27 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
-            // Direct book sources answer one title and author query.
-            foreach (var catalog in catalogs)
-            {
-                if (await _direct.SearchAsync(catalog, target, ct) is not { } found)
-                {
-                    failures++;
-                    continue;
-                }
+            // Direct book sources answer one title and author query; they are asked at the same time as the indexers.
+            var direct = SearchDirectSourcesAsync(catalogs, target, budget, offers, ct);
 
-                foreach (var offer in found.Take(budget.MaxResults))
-                {
-                    offers.TryAdd(offer.Identity, offer);
-                }
+            // The direct sources answer at the same time as the indexers; each of them on its own.
+            async Task SearchDirectSourcesAsync(IReadOnlyList<AcquisitionConnectionData> sources, WantedTargetData wanted, SearchBudget limits,
+                ConcurrentDictionary<string, ReleaseOffer> found, CancellationToken token)
+            {
+                await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
+                    async (source, inner) =>
+                    {
+                        if (await _direct.SearchAsync(source, wanted, inner) is not { } answers)
+                        {
+                            Interlocked.Increment(ref failures);
+                            return;
+                        }
+
+                        foreach (var offer in answers.Take(limits.MaxResults))
+                        {
+                            found.TryAdd(offer.Identity, offer);
+                        }
+                    });
             }
 
             var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
@@ -106,12 +114,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     }
                 });
 
+                // The direct sources answered at the same time; their releases belong to the choice.
+                await direct;
                 selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable) >= budget.TargetUsable)
                 {
                     break;
                 }
             }
+
+            // The direct sources are waited for; they answered at the same time as the indexers.
+            await direct;
+            selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);
 
             // Manual grabs pick from what was shown; the cache is bounded by offer count.
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
@@ -135,7 +149,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
             _offers.TryGetValue(CacheKey(wantedItemId), out Dictionary<string, ReleaseOffer>? offers) && offers!.TryGetValue(candidateId, out var offer) ? offer : null;
-
         public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
             long? accountId = null)
         {
