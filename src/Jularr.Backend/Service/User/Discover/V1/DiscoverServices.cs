@@ -54,8 +54,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
                 return new BaseDataList<DiscoverItemV1>([]);
             }
 
-            // The first trending page comes from the catalog while it is fresh, and from there too while TMDB cannot answer.
+            // A whole catalog answers every page itself.
             var list = new ExternalWorkListData(WorkMetadata.Namespace(Data.MediaTypeId), Data.MediaTypeId, null);
+            if ((await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken)).Contains(list.Namespace))
+            {
+                var shelf = new ExternalWorkShelfData(0, list.Namespace, Data.MediaTypeId, null, Data.DiscoverFeedTypeId);
+                var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
+                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime), (Data.Page - 1) * ExternalWorkLogic.ShelfSize), ct), CancellationToken);
+                return new BaseDataList<DiscoverItemV1>([.. rows.Select(row => DiscoverQueries.ToItem(Data.MediaTypeId, row))]);
+            }
+
+            // The first trending page comes from the catalog while it is fresh, and from there too while TMDB cannot answer.
             var keeps = await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken);
             var isTrending = Data.DiscoverFeedTypeId == DiscoverFeedType.Trending && Data.Page <= 1;
             var known = keeps && isTrending ? await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadTrendingExternalWorksAsync(list, ct), CancellationToken) : [];
@@ -264,6 +273,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // The provider identity resolves to one canonical Work before the request exists.
             await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.RequireNotExcludedAsync(WorkMetadata.Namespace(Parameters.MediaTypeId), Parameters.TmdbId.ToString(global::System.Globalization.CultureInfo.InvariantCulture), ct);
+                return true;
+            }, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
@@ -371,25 +385,71 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
 
-        protected override async Task<IServiceOutput> OnRead()
+        protected override async Task<IServiceOutput> OnRead() => new BaseDataList<DiscoverScopeV1>(await DiscoverQueries.ReadScopesAsync(Context, Auth.ProfileId!.Value, CancellationToken));
+    }
+
+    // The start page's shelves of whole catalogs, all in one statement; scopes of other catalogs keep their own feeds.
+    [ServiceEndpoint("POST", "/api/v1/discover/shelves")]
+    public sealed class ReadDiscoverShelvesV1 : UserService<DiscoverParametersV1, ReadDiscoverShelvesDataV1>
+    {
+        private readonly TimeProvider _time;
+
+        internal ReadDiscoverShelvesV1(TimeProvider time)
         {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    category."Key",
-                    category."MediaSubtypeId" IS NOT NULL AS "IsSubtype",
-                    category."IsHidden"
-                FROM
-                    "ProfileMediaCategories" AS category
-                WHERE
-                    category."ProfileId" = @ProfileId
-                    AND NOT category."IsHidden";
-                """;
-            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            var listed = (await Context.ReadSql.ReadListAsync<ProfileMediaV1>(sql, CancellationToken)).Select(category => category.Key).ToHashSet(StringComparer.Ordinal);
-            return new BaseDataList<DiscoverScopeV1>([.. DiscoverScopes.All.Where(scope => listed.Contains(scope.MediaTypeId.ToString())
-                && (scope.MediaSubtypeId is not { } subtype || listed.Contains(subtype.ToString())))]);
+            _time = time;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverShelfV1>>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var whole = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken);
+            if (whole.Count == 0) return new BaseDataList<DiscoverShelfV1>([]);
+
+            var scopes = await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken);
+            var shelves = scopes.Where(scope => (Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug) && whole.Contains(DiscoverQueries.Namespace(scope)))
+                .SelectMany(scope => scope.Feeds.Select(feed => (Scope: scope, Feed: feed))).ToArray();
+            if (shelves.Length == 0) return new BaseDataList<DiscoverShelfV1>([]);
+
+            var query = new ExternalWorkShelfQueryData([.. shelves.Select((shelf, index) => new ExternalWorkShelfData(index, DiscoverQueries.Namespace(shelf.Scope), shelf.Scope.MediaTypeId,
+                shelf.Scope.MediaSubtypeId, shelf.Feed))], Auth.ProfileId!.Value, DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime));
+            var rows = (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(query, ct), CancellationToken)).ToLookup(row => row.Shelf);
+            return new BaseDataList<DiscoverShelfV1>([.. shelves.Select((shelf, index) => shelf.Scope.IsCatalog
+                ? new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [], [.. rows[index].Select(DiscoverQueries.CatalogItem)])
+                : new DiscoverShelfV1(shelf.Scope.Slug, shelf.Feed, [.. rows[index].Select(row => DiscoverQueries.ToItem(shelf.Scope.MediaTypeId, row))], []))]);
+        }
+    }
+
+    // Titles while typing, from what Discover keeps; without DiscoverCache there is nothing to suggest from.
+    [ServiceEndpoint("POST", "/api/v1/discover/suggestions")]
+    public sealed class SuggestDiscoverV1 : UserService<DiscoverParametersV1, SuggestDiscoverDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverSuggestionV1>>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var text = Data.Query.Trim();
+            if (text.Length < 2 || ExternalWorkLogic.SearchTerms(text) is not { } terms
+                || !await Context.ExecuteBatchAsync((ctx, ct) => ctx.KeepsDiscoverTitlesAsync(ct), CancellationToken))
+            {
+                return new BaseDataList<DiscoverSuggestionV1>([]);
+            }
+
+            var scopes = (await Context.ExecuteBatchAsync((ctx, ct) => DiscoverQueries.ReadScopesAsync(ctx, Auth.ProfileId!.Value, ct), CancellationToken))
+                .Where(scope => Data.ScopeSlug is null || scope.Slug == Data.ScopeSlug).ToArray();
+            if (scopes.Length == 0) return new BaseDataList<DiscoverSuggestionV1>([]);
+
+            var query = new ExternalWorkSuggestionQueryData([.. scopes.Select((scope, index) => new ExternalWorkShelfData(index, DiscoverQueries.Namespace(scope), scope.MediaTypeId,
+                scope.MediaSubtypeId))], Auth.ProfileId!.Value, terms, ExternalWorkLogic.TitlePrefix(text), ExternalWorkLogic.SuggestionCount);
+            var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SuggestExternalWorksAsync(query, ct), CancellationToken);
+            return new BaseDataList<DiscoverSuggestionV1>([.. rows.Select(row => new DiscoverSuggestionV1(scopes[row.Shelf].Slug, row.Namespace, row.Value, row.Title, row.ReleaseYear,
+                row.ImageUrl, row.WorkId))]);
         }
     }
 
@@ -422,10 +482,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
     public sealed class ReadDiscoverCatalogFeedV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogFeedDataV1>
     {
         private readonly MetadataCatalog _catalog;
+        private readonly TimeProvider _time;
 
-        internal ReadDiscoverCatalogFeedV1(MetadataCatalog catalog)
+        internal ReadDiscoverCatalogFeedV1(MetadataCatalog catalog, TimeProvider time)
         {
             _catalog = catalog;
+            _time = time;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -436,6 +498,16 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            var scope = DiscoverScopes.All.FirstOrDefault(scope => scope.MediaTypeId == Data.MediaTypeId && scope.MediaSubtypeId == Data.MediaSubtypeId);
+            if (scope is not null && scope.Feeds.Contains(Data.DiscoverFeedTypeId)
+                && (await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWholeExternalWorkCatalogsAsync(ct), CancellationToken)).Contains(DiscoverQueries.Namespace(scope)))
+            {
+                var shelf = new ExternalWorkShelfData(0, DiscoverQueries.Namespace(scope), Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId);
+                var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExternalWorkShelvesAsync(new ExternalWorkShelfQueryData([shelf], Auth.ProfileId!.Value,
+                    DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime)), ct), CancellationToken);
+                return new BaseDataList<DiscoverCatalogItemV1>([.. rows.Select(DiscoverQueries.CatalogItem)]);
+            }
+
             var results = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, CancellationToken);
             return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
         }
@@ -463,6 +535,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // The catalog identity resolves to one canonical Work before the request exists.
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.RequireNotExcludedAsync(Data.Namespace, Data.ExternalId, ct);
+                return true;
+            }, CancellationToken);
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             var (request, newlyApproved) = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
                 Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
@@ -478,6 +555,44 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
     internal static class DiscoverQueries
     {
+        // The catalog that keeps a scope's titles.
+        public static string Namespace(DiscoverScopeV1 scope) => scope.MediaSubtypeId is MediaSubtype.Anime or MediaSubtype.Manga or MediaSubtype.LightNovel
+            ? AniListMetadata.Namespace
+            : scope.MediaTypeId switch
+            {
+                MediaType.Movie or MediaType.Series => WorkMetadata.Namespace(scope.MediaTypeId),
+                MediaType.Book => BookMetadata.Namespace,
+                MediaType.Music => MusicMetadata.Namespace,
+                _ => GameMetadata.Namespace
+            };
+
+        // The scopes of the profile's listed media types.
+        public static async Task<IReadOnlyList<DiscoverScopeV1>> ReadScopesAsync(LogicContext context, long profileId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    category."Key",
+                    category."MediaSubtypeId" IS NOT NULL AS "IsSubtype",
+                    category."IsHidden"
+                FROM
+                    "ProfileMediaCategories" AS category
+                WHERE
+                    category."ProfileId" = @ProfileId
+                    AND NOT category."IsHidden";
+                """;
+            sql.Parameters.Add(new ProfileParameters(profileId));
+            var listed = (await context.ReadSql.ReadListAsync<ProfileMediaV1>(sql, ct)).Select(category => category.Key).ToHashSet(StringComparer.Ordinal);
+            return [.. DiscoverScopes.All.Where(scope => listed.Contains(scope.MediaTypeId.ToString())
+                && (scope.MediaSubtypeId is not { } subtype || listed.Contains(subtype.ToString())))];
+        }
+
+        public static DiscoverItemV1 ToItem(MediaType mediaType, ExternalWorkShelfItemData work) => new(mediaType, int.Parse(work.Value, CultureInfo.InvariantCulture), work.WorkId, work.Title,
+            work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl, work.MediaStateTypeId ?? MediaStateType.NotRequested, work.PlexUrl);
+
+        public static DiscoverCatalogItemV1 CatalogItem(ExternalWorkShelfItemData work) => new(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, work.WorkId, work.ImageUrl);
+
         public static DiscoverCatalogItemV1 CatalogItem(MetadataSearchResultV1 result) =>
             new(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear, result.Author, result.WorkId, result.PosterUrl);
 

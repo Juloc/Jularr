@@ -77,8 +77,10 @@ namespace Jularr.Backend.Service.System.Media.V1
                         CancellationToken);
                 }
 
-                // A pass runs every minute: the catalog's requests a minute are its budget.
-                changed += await DetailAsync(connection, mediaType, list, sync.RequestsPerMinute);
+                // A pass runs every minute: the catalog's requests a minute are its budget; once the listed titles are all read the catalog is whole.
+                var (detailed, isDone) = await DetailAsync(connection, mediaType, list, sync.RequestsPerMinute);
+                changed += detailed;
+                if (isDone && listedOn is not null) await Context.ExecuteBatchAsync((ctx, ct) => ctx.CompleteExternalWorkSyncAsync(list.Namespace, ct), CancellationToken);
             }
 
             return new UpdateResult(changed > 0);
@@ -122,7 +124,11 @@ namespace Jularr.Backend.Service.System.Media.V1
 
             var progress = complete ? new ExternalWorkSyncProgressData(sync.Namespace, DateOnly.FromDateTime(now.UtcDateTime), null, sync.ChangesReadAt)
                 : new ExternalWorkSyncProgressData(sync.Namespace, sync.ListedOn, cursor > 0 ? cursor : null, sync.ChangesReadAt);
-            await Context.ExecuteBatchAsync((ctx, ct) => ctx.SaveExternalWorkSyncAsync(progress, ct), CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var saved = await ctx.SaveExternalWorkSyncAsync(progress, ct);
+                return complete ? saved + await ctx.CompleteExternalWorkSyncAsync(sync.Namespace, ct) : saved;
+            }, CancellationToken);
             return changed;
         }
 
@@ -146,6 +152,8 @@ namespace Jularr.Backend.Service.System.Media.V1
                     BackdropUrl = (string?)null,
                     Popularity = item.entry.Popularity,
                     Rating = item.entry.AverageScore is > 0 ? item.entry.AverageScore / 10.0 : null,
+                    // AniList shows no vote count; how many people list a title stands for it.
+                    Votes = item.entry.Popularity,
                     ImdbId = (string?)null,
                     IsAdult = false
                 }));
@@ -184,10 +192,10 @@ namespace Jularr.Backend.Service.System.Media.V1
             return changed;
         }
 
-        private async Task<int> DetailAsync(TmdbConnection connection, MediaType mediaType, ExternalWorkListData list, int limit)
+        private async Task<(int Changed, bool IsDone)> DetailAsync(TmdbConnection connection, MediaType mediaType, ExternalWorkListData list, int limit)
         {
             var values = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUndetailedExternalWorksAsync(new ExternalWorkQueueData(list.Namespace, limit), ct), CancellationToken);
-            if (values.Count == 0) return 0;
+            if (values.Count == 0) return (0, true);
 
             // A few reads at a time; a provider limit ends the pass and the next one goes on.
             var entries = new List<TmdbCatalogEntry>();
@@ -219,10 +227,11 @@ namespace Jularr.Backend.Service.System.Media.V1
                 BackdropUrl = TmdbClient.BackdropUrl(entry.BackdropPath),
                 entry.Popularity,
                 Rating = entry.VoteAverage is > 0 ? entry.VoteAverage : null,
+                Votes = entry.VoteCount,
                 entry.ImdbId,
                 entry.IsAdult
             }));
-            return await Context.ExecuteBatchAsync((ctx, ct) => ctx.DetailExternalWorksAsync(new ExternalWorkEntriesData(list, rows, [.. gone]), ct), CancellationToken);
+            return (await Context.ExecuteBatchAsync((ctx, ct) => ctx.DetailExternalWorksAsync(new ExternalWorkEntriesData(list, rows, [.. gone]), ct), CancellationToken), false);
         }
     }
 }

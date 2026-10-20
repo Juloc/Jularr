@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Media;
@@ -145,6 +146,258 @@ namespace Jularr.Backend.Logic.Media
                 : localTime >= window.StartsAt || localTime < window.EndsAt);
         }
 
+        // Discover's lists of a whole catalog: trending in its order, top by rating among titles enough people rated,
+        // new as the most popular of the last weeks and upcoming as the most popular of the coming months.
+        public const int ShelfSize = 20;
+        public const int TopVotes = 300;
+        public const int NewWithinDays = 60;
+        public const int UpcomingWithinDays = 180;
+        public const int SuggestionCount = 6;
+
+        // With full local discovery a catalog read whole answers Discover itself.
+        public static async Task<IReadOnlySet<string>> ReadWholeExternalWorkCatalogsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var modules = await ctx.ReadModuleStatesAsync(new InstanceModuleParameters(["DiscoverCache", "LocalDiscovery"]), ct);
+            if (modules.Count(module => module.IsEnabled) < 2) return new HashSet<string>(StringComparer.Ordinal);
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    sync."Namespace"
+                FROM
+                    "ExternalWorkSyncs" AS sync
+                WHERE
+                    sync."IsEnabled"
+                    AND sync."CompletedAt" IS NOT NULL;
+                """;
+            return (await ctx.ReadSql.ReadListAsync<ExternalWorkNamespaceData>(sql, ct)).Select(row => row.Namespace).ToHashSet(StringComparer.Ordinal);
+        }
+
+        // Every shelf in one statement, each in its own order; the Shelf number keeps them apart.
+        public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> ReadExternalWorkShelvesAsync(this LogicContext ctx, ExternalWorkShelfQueryData data, CancellationToken ct)
+        {
+            // Feed numbers as DiscoverFeedType: 1 trending, 2 top, 3 new, 4 upcoming; only the shelf's own list is read, in the order of its index.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    shelf."Shelf",
+                    work."Namespace",
+                    work."Value",
+                    work."Title",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    work."Overview",
+                    work."Creator",
+                    work."ImageUrl",
+                    work."BackdropUrl",
+                    known."WorkId",
+                    known."MediaStateTypeId",
+                    known."PlexUrl"
+                FROM
+                    jsonb_to_recordset(@Shelves::jsonb) AS shelf ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint, "Feed" smallint)
+                    CROSS JOIN LATERAL unnest(CASE shelf."Feed"
+                        WHEN 1 THEN ARRAY(
+                            SELECT work."Id" FROM "ExternalWorks" AS work
+                            WHERE work."Namespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."TrendingRank" IS NOT NULL
+                            ORDER BY work."TrendingRank", work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                        WHEN 2 THEN ARRAY(
+                            SELECT work."Id" FROM "ExternalWorks" AS work
+                            WHERE work."Namespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."Votes" >= @TopVotes
+                            ORDER BY work."Rating" DESC NULLS LAST, work."Votes" DESC, work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                        WHEN 3 THEN ARRAY(
+                            SELECT work."Id" FROM "ExternalWorks" AS work
+                            WHERE work."Namespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."ReleasedOn" BETWEEN @NewSince AND @Today
+                            ORDER BY work."Popularity" DESC NULLS LAST, work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                        WHEN 4 THEN ARRAY(
+                            SELECT work."Id" FROM "ExternalWorks" AS work
+                            WHERE work."Namespace" = shelf."Namespace" AND work."MediaTypeId" = shelf."MediaTypeId" AND coalesce(work."MediaSubtypeId", 0) = shelf."MediaSubtypeId"
+                                AND NOT work."IsAdult" AND work."ImageUrl" IS NOT NULL AND work."ReleasedOn" > @Today AND work."ReleasedOn" <= @UpcomingUntil
+                            ORDER BY work."Popularity" DESC NULLS LAST, work."Id"
+                            LIMIT @Limit OFFSET @Offset)
+                    END) WITH ORDINALITY AS picked ("Id", "Place")
+                    JOIN "ExternalWorks" AS work ON work."Id" = picked."Id"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            visible."WorkId",
+                            state."MediaStateTypeId",
+                            (
+                                SELECT
+                                    'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
+                                FROM
+                                    "WorkExternalIdentities" AS plex
+                                    JOIN "Providers" AS provider ON provider."Key" = 'plex' AND provider."IsEnabled" AND provider."ExternalId" IS NOT NULL
+                                WHERE
+                                    plex."WorkId" = visible."WorkId"
+                                    AND plex."Namespace" = 'plex'
+                                LIMIT 1
+                            ) AS "PlexUrl"
+                        FROM
+                            "ProfileWorks" AS visible
+                            LEFT JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = visible."WorkId"
+                        WHERE
+                            visible."ProfileId" = @ProfileId
+                            AND visible."WorkId" IN (
+                                SELECT
+                                    identity."WorkId"
+                                FROM
+                                    "WorkExternalIdentities" AS identity
+                                WHERE
+                                    identity."Namespace" = work."Namespace"
+                                    AND identity."Value" = work."Value"
+                                UNION ALL
+                                SELECT
+                                    unit."WorkId"
+                                FROM
+                                    "WorkUnitExternalIdentities" AS identity
+                                    JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
+                                WHERE
+                                    identity."Namespace" = work."Namespace"
+                                    AND identity."Value" = work."Value"
+                            )
+                        LIMIT 1
+                    ) AS known ON TRUE
+                ORDER BY
+                    shelf."Shelf",
+                    picked."Place";
+                """;
+            sql.Parameters.Add(data);
+            sql.Parameters.Add(new ExternalWorkRankingData(ShelfSize, TopVotes, data.Today.AddDays(-NewWithinDays), data.Today.AddDays(UpcomingWithinDays)));
+            return await ctx.ReadSql.ReadListAsync<ExternalWorkShelfItemData>(sql, ct);
+        }
+
+        // Typed words as a prefix search: every word has to begin a word of the title.
+        public static string? SearchTerms(string query)
+        {
+            var words = Regex.Matches(query.ToLowerInvariant(), @"[\p{L}\p{N}]+").Select(match => match.Value).Take(8).ToArray();
+            return words.Length == 0 ? null : string.Join(" & ", words.Select(word => word + ":*"));
+        }
+
+        // A title that begins with the typed text ranks higher; LIKE's own characters count literally.
+        public static string TitlePrefix(string query) =>
+            query.Trim().ToLowerInvariant().Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal) + "%";
+
+        // Suggestions while typing: titles in the profile's library first, then trending ones, titles that begin with the text,
+        // and the most popular; each catalog ranks its own titles, a title two catalogs know shows once.
+        public static async Task<IReadOnlyList<ExternalWorkShelfItemData>> SuggestExternalWorksAsync(this LogicContext ctx, ExternalWorkSuggestionQueryData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH candidate AS (
+                    SELECT
+                        scope."Shelf",
+                        work."Namespace",
+                        work."Value",
+                        work."ImdbId",
+                        row_number() OVER (
+                            PARTITION BY work."Namespace"
+                            ORDER BY work."TrendingRank" IS NULL, lower(work."Title") LIKE @TitlePrefix DESC, work."Popularity" DESC NULLS LAST, work."Id"
+                        ) AS "Place"
+                    FROM
+                        "ExternalWorks" AS work
+                        JOIN jsonb_to_recordset(@Shelves::jsonb) AS scope ("Shelf" integer, "Namespace" text, "MediaTypeId" smallint, "MediaSubtypeId" smallint)
+                            ON scope."Namespace" = work."Namespace" AND scope."MediaTypeId" = work."MediaTypeId" AND scope."MediaSubtypeId" = coalesce(work."MediaSubtypeId", 0)
+                    WHERE
+                        work."SearchText" @@ to_tsquery('simple', @SearchTerms)
+                        AND NOT work."IsAdult"
+                        AND work."ImageUrl" IS NOT NULL
+                )
+                SELECT
+                    found."Shelf",
+                    found."Namespace",
+                    found."Value",
+                    found."Title",
+                    found."ReleaseYear",
+                    found."Overview",
+                    found."Creator",
+                    found."ImageUrl",
+                    found."BackdropUrl",
+                    found."WorkId",
+                    found."MediaStateTypeId",
+                    found."PlexUrl"
+                FROM
+                    (
+                        SELECT DISTINCT ON (coalesce(candidate."ImdbId", candidate."Namespace" || ':' || candidate."Value"))
+                            candidate."Shelf",
+                            candidate."Place",
+                            work."Namespace",
+                            work."Value",
+                            work."Title",
+                            work."ReleaseYear"::integer AS "ReleaseYear",
+                            work."Overview",
+                            work."Creator",
+                            work."ImageUrl",
+                            work."BackdropUrl",
+                            known."WorkId",
+                            known."MediaStateTypeId",
+                            known."PlexUrl"
+                        FROM
+                            candidate
+                            JOIN "ExternalWorks" AS work ON work."Namespace" = candidate."Namespace" AND work."Value" = candidate."Value"
+                            LEFT JOIN LATERAL (
+                                SELECT
+                                    visible."WorkId",
+                                    state."MediaStateTypeId",
+                                    (
+                                        SELECT
+                                            'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
+                                        FROM
+                                            "WorkExternalIdentities" AS plex
+                                            JOIN "Providers" AS provider ON provider."Key" = 'plex' AND provider."IsEnabled" AND provider."ExternalId" IS NOT NULL
+                                        WHERE
+                                            plex."WorkId" = visible."WorkId"
+                                            AND plex."Namespace" = 'plex'
+                                        LIMIT 1
+                                    ) AS "PlexUrl"
+                                FROM
+                                    "ProfileWorks" AS visible
+                                    LEFT JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = visible."WorkId"
+                                WHERE
+                                    visible."ProfileId" = @ProfileId
+                                    AND visible."WorkId" IN (
+                                        SELECT
+                                            identity."WorkId"
+                                        FROM
+                                            "WorkExternalIdentities" AS identity
+                                        WHERE
+                                            identity."Namespace" = work."Namespace"
+                                            AND identity."Value" = work."Value"
+                                        UNION ALL
+                                        SELECT
+                                            unit."WorkId"
+                                        FROM
+                                            "WorkUnitExternalIdentities" AS identity
+                                            JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
+                                        WHERE
+                                            identity."Namespace" = work."Namespace"
+                                            AND identity."Value" = work."Value"
+                                    )
+                                LIMIT 1
+                            ) AS known ON TRUE
+                        WHERE
+                            candidate."Place" <= @Limit
+                        ORDER BY
+                            coalesce(candidate."ImdbId", candidate."Namespace" || ':' || candidate."Value"),
+                            known."WorkId" IS NULL,
+                            candidate."Place"
+                    ) AS found
+                ORDER BY
+                    found."WorkId" IS NULL,
+                    found."Place",
+                    found."Shelf"
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ReadSql.ReadListAsync<ExternalWorkShelfItemData>(sql, ct);
+        }
+
         public static async Task<ExternalWorkSyncData?> ReadExternalWorkSyncAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -225,6 +478,25 @@ namespace Jularr.Backend.Logic.Media
                     sync."Namespace" = @Namespace;
                 """;
             sql.Parameters.Add(data);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The first time a catalog was read whole; later passes keep the date.
+        public static async Task<int> CompleteExternalWorkSyncAsync(this LogicContext ctx, string @namespace, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "ExternalWorkSyncs" AS sync
+                SET
+                    "CompletedAt" = now(),
+                    "UpdatedAt" = now()
+                WHERE
+                    sync."Namespace" = @Namespace
+                    AND sync."CompletedAt" IS NULL;
+                """;
+            sql.Parameters.Add(new ExternalWorkSyncProgressData(@namespace, null, null, null));
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
@@ -358,13 +630,14 @@ namespace Jularr.Backend.Logic.Media
                     "BackdropUrl" = CASE WHEN entry."BackdropUrl" ~ '^https://' AND length(entry."BackdropUrl") <= 500 THEN entry."BackdropUrl" END,
                     "Popularity" = coalesce(greatest(entry."Popularity", 0), work."Popularity"),
                     "Rating" = CASE WHEN entry."Rating" BETWEEN 0 AND 10 THEN round(entry."Rating"::numeric, 2) END,
+                    "Votes" = CASE WHEN entry."Votes" >= 0 THEN entry."Votes" END,
                     "ImdbId" = CASE WHEN entry."ImdbId" ~ '^tt[0-9]{7,10}$' THEN entry."ImdbId" END,
                     "IsAdult" = entry."IsAdult",
                     "FetchedAt" = now(),
                     "DetailedAt" = now()
                 FROM
                     jsonb_to_recordset(@Entries::jsonb) AS entry ("Value" text, "Title" text, "OriginalTitle" text, "ReleasedOn" date, "Overview" text, "ImageUrl" text,
-                        "BackdropUrl" text, "Popularity" real, "Rating" double precision, "ImdbId" text, "IsAdult" boolean)
+                        "BackdropUrl" text, "Popularity" real, "Rating" double precision, "Votes" integer, "ImdbId" text, "IsAdult" boolean)
                 WHERE
                     work."Namespace" = @Namespace
                     AND work."Value" = entry."Value"

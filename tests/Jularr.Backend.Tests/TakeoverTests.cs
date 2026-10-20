@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Logic.OpenLibrary;
@@ -75,11 +76,24 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\""));
+            var signal = host.Services.GetRequiredService<AcquisitionSearchSignal>();
+            Assert.IsFalse(signal.TakeRequest(), "Taking over inventory must not wake automatic search.");
 
             // Explicitly releasing monitoring uses the existing target editor; a repeated takeover must preserve that choice.
             var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\""))!;
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now() + interval '1 day' WHERE \"Id\" = " + wantedId);
             using var released = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, 1));
             Assert.AreEqual(HttpStatusCode.OK, released.StatusCode, await released.Content.ReadAsStringAsync());
+            Assert.IsTrue(signal.TakeRequest(), "Resuming a paused takeover must wake automatic search after commit.");
+            Assert.IsFalse(signal.TakeRequest(), "A resume must only enqueue one wake-up.");
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"NextSearchAt\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId),
+                "Resuming must clear the previous search backoff.");
+            using var unchanged = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, 2));
+            Assert.AreEqual(HttpStatusCode.OK, unchanged.StatusCode);
+            Assert.IsFalse(signal.TakeRequest(), "Editing an already resumed target must not wake automatic search.");
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, 2));
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
+            Assert.IsFalse(signal.TakeRequest(), "A stale update must not wake automatic search.");
             await RunAsync(host, true);
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""));
 

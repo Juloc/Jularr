@@ -203,6 +203,13 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
+
+            // Films, series, manga and light novels are managed on the page of their title.
+            if (_item is { MediaTypeId: MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Music } item && (item.MediaTypeId != MediaType.Book || item.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel))
+            {
+                return LocalRedirect("/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
+            }
+
             PreparePage();
             return Page();
         }

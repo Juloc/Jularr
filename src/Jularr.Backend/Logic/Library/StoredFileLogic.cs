@@ -59,6 +59,12 @@ namespace Jularr.Backend.Logic.Library
                     "ProbedAt" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."ProbedAt"
                     END,
+                    "PageCount" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."PageCount"
+                    END,
+                    "PagesCheckedAt" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."PagesCheckedAt"
+                    END,
                     "Sha1" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."Sha1"
                     END,
@@ -201,6 +207,26 @@ namespace Jularr.Backend.Logic.Library
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        // The pages of a comic archive; a file changed meanwhile is counted again by the next scan.
+        public static async Task SaveStoredFilePagesAsync(this LogicContext ctx, StoredFilePagesData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "StoredFiles" AS file
+                SET
+                    "PageCount" = @PageCount,
+                    "PagesCheckedAt" = now()
+                WHERE
+                    file."Id" = @Id
+                    AND file."SizeBytes" = @SizeBytes
+                    AND file."ModifiedAt" = @ModifiedAt;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task SaveStoredFileProbeAsync(this LogicContext ctx, StoredFileProbeData data, CancellationToken ct)
         {
             // Ignore analyses of files changed meanwhile.
@@ -240,7 +266,7 @@ namespace Jularr.Backend.Logic.Library
             sql.Statement =
                 """
                 INSERT INTO
-                    "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Codec", "Language", "Title", "Width", "Height", "Channels", "IsDefault", "IsForced")
+                    "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Codec", "Language", "Title", "Width", "Height", "Channels", "BitDepth", "DynamicRange", "Is3D", "IsDefault", "IsForced")
                 SELECT
                     @Id,
                     track."StreamIndex",
@@ -251,11 +277,14 @@ namespace Jularr.Backend.Logic.Library
                     track."Width",
                     track."Height",
                     track."Channels",
+                    track."BitDepth",
+                    track."DynamicRange",
+                    coalesce(track."Is3D", FALSE),
                     track."IsDefault",
                     track."IsForced"
                 FROM
                     jsonb_to_recordset(@Tracks::jsonb) AS track("StreamIndex" integer, "MediaTrackTypeId" smallint, "Codec" text, "Language" text, "Title" text,
-                        "Width" integer, "Height" integer, "Channels" integer, "IsDefault" boolean, "IsForced" boolean);
+                        "Width" integer, "Height" integer, "Channels" integer, "BitDepth" integer, "DynamicRange" text, "Is3D" boolean, "IsDefault" boolean, "IsForced" boolean);
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

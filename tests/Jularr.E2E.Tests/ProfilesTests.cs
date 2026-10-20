@@ -57,7 +57,7 @@ namespace Jularr.E2E.Tests
                 await form.Locator("[name=Password]").FillAsync(Password);
                 await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
                 await Steps.SubmitAsync(visitor, form);
-                StringAssert.Contains(await visitor.Locator("main [role=status]").InnerTextAsync(), "waits until an administrator enables it");
+                await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync("waits until an administrator enables it");
                 await SignInAsync(visitor);
                 Assert.IsTrue(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "A pending account signed in.");
 
@@ -83,7 +83,7 @@ namespace Jularr.E2E.Tests
                 // The user's request waits for the Owner; once approved it is searched, downloaded and arrives.
                 await Steps.RequestAsync(visitor, "Bunny", FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
-                StringAssert.Contains(await visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Waiting for approval");
+                await Assertions.Expect(visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Waiting for approval");
                 await page.GotoAsync("/Admin/Requests");
                 await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).Locator("form")
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
@@ -93,7 +93,7 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, film);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
-                StringAssert.Contains(await visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Available");
+                await Assertions.Expect(visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), owner.Problems.ToArray());
                 CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.ToArray());

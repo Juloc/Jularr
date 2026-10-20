@@ -18,6 +18,13 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DateField ListedOn = new() { Required = false };
         public static readonly DateTimeField ChangesReadAt = new() { Required = false };
         public static readonly IntField Limit = new() { Minimum = 1, Maximum = 1000 };
+        public static readonly IntField Offset = new() { Minimum = 0 };
+        // The place of a Discover shelf or scope in its request.
+        public static readonly IntField Shelf = new() { Minimum = 0 };
+        public static readonly IntField TopVotes = new() { Minimum = 0 };
+        public static readonly DateField Day = new();
+        public static readonly StringField Shelves = new() { AllowBlank = false };
+        public static readonly StringField SearchTerms = new() { AllowBlank = false, MaximumLength = 1000 };
         public static readonly BoolField IsEnabled = new();
         public static readonly IntField RequestsPerMinute = new() { Minimum = 1, Maximum = 600 };
         public static readonly BoolField PausesWhileUsed = new();

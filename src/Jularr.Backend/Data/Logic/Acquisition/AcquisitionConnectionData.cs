@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt,
-            string? host, int? port, bool? useSsl, long? downloadStorageMountId = null)
+            string? host, int? port, bool? useSsl, long? downloadStorageMountId = null, bool removesCompleted = true)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -35,6 +35,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             Priority = priority;
             Categories = categories;
             DownloadCategory = downloadCategory;
+            RemovesCompleted = removesCompleted;
             RemotePath = remotePath;
             LocalPath = localPath;
             Capabilities = capabilities;
@@ -80,6 +81,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategory))]
         public string? DownloadCategory { get; }
+
+        // SABnzbd's job is removed once its files are imported.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemovesCompleted))]
+        public bool RemovesCompleted { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemotePath))]
         public string? RemotePath { get; }
@@ -135,7 +140,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string? baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, string? host = null, int? port = null,
-            bool? useSsl = null, long? downloadStorageMountId = null)
+            bool? useSsl = null, long? downloadStorageMountId = null, bool removesCompleted = true)
         {
             DownloadStorageMountId = downloadStorageMountId;
             Host = host;
@@ -157,6 +162,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             Priority = priority;
             Categories = categories;
             DownloadCategory = downloadCategory;
+            RemovesCompleted = removesCompleted;
             RemotePath = remotePath;
             LocalPath = localPath;
         }
@@ -197,6 +203,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.DownloadCategory))]
         public string? DownloadCategory { get; }
+
+        // SABnzbd's job is removed once its files are imported.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemovesCompleted))]
+        public bool RemovesCompleted { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RemotePath))]
         public string? RemotePath { get; }

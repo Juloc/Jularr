@@ -29,10 +29,10 @@ namespace Jularr.E2E.Tests
 
             // Opening the QR address shows device, platform and code; only the button pairs.
             await phone.GotoAsync("/Devices/Pair?code=" + code);
-            StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "Browser (Web) asks to be paired");
-            StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), code);
+            await Assertions.Expect(phone.Locator("main")).ToContainTextAsync("Browser (Web) asks to be paired");
+            await Assertions.Expect(phone.Locator("main")).ToContainTextAsync(code);
             await Steps.FollowAsync(phone, phone.Locator("main form button[type=submit]").Last);
-            StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "The device is paired");
+            await Assertions.Expect(phone.Locator("main")).ToContainTextAsync("The device is paired");
 
             // The TV looks again by itself and is signed in.
             await tv.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/", new PageWaitForURLOptions { Timeout = 30_000 });
@@ -61,9 +61,9 @@ namespace Jularr.E2E.Tests
 
             // The phone sees the device and confirms it.
             await phone.GotoAsync("/Devices/Pair?code=" + code);
-            StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "Living room TV (AndroidTV) asks to be paired");
+            await Assertions.Expect(phone.Locator("main")).ToContainTextAsync("Living room TV (AndroidTV) asks to be paired");
             await Steps.FollowAsync(phone, phone.Locator("main form button[type=submit]").Last);
-            StringAssert.Contains(await phone.Locator("main").InnerTextAsync(), "The device is paired");
+            await Assertions.Expect(phone.Locator("main")).ToContainTextAsync("The device is paired");
 
             // The app fetches its token once and signs in with it alone.
             var paired = await app.PostAsync(claim);

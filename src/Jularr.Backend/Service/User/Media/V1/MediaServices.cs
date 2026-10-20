@@ -9,6 +9,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.User.Library.V1;
 
 namespace Jularr.Backend.Service.User.Media.V1
 {
@@ -375,31 +376,15 @@ namespace Jularr.Backend.Service.User.Media.V1
             // One profile-scoped page.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
-                    work."Id",
-                    work."MediaTypeId",
-                    visible."Title" AS "Title",
-                    work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl",
-                    state."MediaStateTypeId",
+                    {{WorkCardProjection.Columns}},
                     TRUE AS "IsWatchlisted"
                 FROM
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                     JOIN "Works" AS work ON work."Id" = entry."WorkId"
-                    JOIN "ProfileWorkStates" AS state ON state."ProfileId" = entry."ProfileId" AND state."WorkId" = work."Id"
+                    {{WorkCardProjection.Joins}}
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"

@@ -1,22 +1,10 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Enums.Media;
 
 namespace Jularr.Frontend.Framework
 {
-    // Visual projection supplied by Backend.
-    public enum MediaAvailabilityState
-    {
-        Available,
-        Partial,
-        Missing,
-        Downloading,
-        Searching,
-        Requested,
-        ProfileAudio,
-        OtherAudio,
-        PartialOtherAudio
-    }
-
+    // The visual projection of the Backend's media availability state.
     public sealed class MediaAvailability(FrontendAssets assets, MediaAvailabilityState state, int availableUnits = 0, int monitoredUnits = 0) : IUiComponent
     {
         private MediaAvailabilityState State { get; } = state;

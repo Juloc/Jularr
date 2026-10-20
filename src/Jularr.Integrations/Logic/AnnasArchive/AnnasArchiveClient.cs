@@ -15,6 +15,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
     {
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
+        private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
 
         // Files enough to choose from; the other ways to find the work need not be asked.
         private const int EnoughRecords = 20;

@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -236,7 +236,7 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
             var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
-            using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo");
+            using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0",
                 (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("http://files.example.test/0123.epub"));
@@ -704,7 +704,7 @@ namespace Jularr.Backend.Tests
                               <a href="/search?q=Jane Austen" class="custom-a text-sm"><span class="icon-[mdi--user-edit]"></span> Jane Austen</a>
                               <a href="/search?q=" class="custom-a text-sm"><span class="icon-[mdi--company]"></span> 1813</a>
                             </div>
-                            <div>English [en] · EPUB · 1.2MB · 1813 · 📕 Book (fiction) · 🚀/lgli/zlib · Save · 24 · 1</div>
+                            <div>English [en] Â· EPUB Â· 1.2MB Â· 1813 Â· ðŸ“• Book (fiction) Â· ðŸš€/lgli/zlib Â· Save Â· 24 Â· 1</div>
                           </div>
                         </body></html>
                         """, "text/html");

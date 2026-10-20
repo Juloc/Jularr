@@ -5504,14 +5504,6 @@
    "Queued at",
    "Enfileirada em"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Atividade"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "A fazer"
-  ],
   "activity.tab.History": [
    "History",
    "Histórico"
@@ -5575,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Continuar download"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Nada em execução."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Nada precisa de atenção."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

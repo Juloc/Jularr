@@ -41,10 +41,11 @@ test('scroll Reader completes only at the loaded final image bottom, including w
         getBoundingClientRect() { return { top: this.offsetTop - stage.scrollTop, bottom: this.offsetTop + 1000 - stage.scrollTop }; }
         addEventListener() {}
     }
+    const seek = { value: '0', get valueAsNumber() { return Number(this.value); }, addEventListener(name, handler) { events['seek-' + name] = handler; } };
     const reader = {
         dataset: { count: '3', page: '0', pages: '/pages/', progressUrl: '/progress', antiforgery: 'test' },
         style: { setProperty() {} },
-        querySelector: selector => selector === '[data-role=stage]' ? stage : { addEventListener() {} },
+        querySelector: selector => selector === '[data-role=stage]' ? stage : selector.includes('input[type=range]') ? seek : { addEventListener() {} },
         querySelectorAll: () => [],
         addEventListener() {}
     };
@@ -54,7 +55,7 @@ test('scroll Reader completes only at the loaded final image bottom, including w
         exports: adapter,
         require: name => name.includes('Progress')
             ? { progressReporter: () => (value, leaving) => saves.push({ ...value, leaving }) }
-            : { initializeReaderSettings: () => settings },
+            : name.includes('Range') ? { updateRangeValue() {} } : { initializeReaderSettings: () => settings },
         Image: TestImage, URL,
         location: { href: 'https://reader.test/read' }, history: { replaceState() {} },
         matchMedia: () => ({ matches: false, addEventListener() {} }),
@@ -63,8 +64,16 @@ test('scroll Reader completes only at the loaded final image bottom, including w
         window: { addEventListener: (name, handler) => { events[name] = handler; } }
     });
     adapter.initializeComicPages(reader);
+    seek.value = '3';
+    events['seek-change']();
+    assert.equal(saves.at(-1).locator, 'p2');
+    assert.equal(saves.at(-1).isCompleted, false, 'seeking to the final image does not read its bottom');
+    seek.value = '1';
+    events['seek-change']();
+    assert.equal(saves.at(-1).locator, 'p0');
     const scroll = top => { stage.scrollTop = top; events.scroll(); return saves.at(-1); };
     let saved = scroll(2000);
+    assert.equal(Number(seek.value), 3);
     assert.equal(saved.locator, 'p2');
     assert.equal(saved.isCompleted, false, 'seeing the last page is not completion');
     assert.ok(saved.progression < 1);

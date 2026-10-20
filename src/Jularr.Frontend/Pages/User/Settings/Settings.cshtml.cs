@@ -11,6 +11,10 @@ using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Appearance;
+using Jularr.Frontend.Modules.Speech;
+using Jularr.Backend.Data.Enums.Speech;
+using Jularr.Backend.Data.User.Speech.V1;
+using Jularr.Backend.Service.User.Speech.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -27,7 +31,7 @@ namespace Jularr.Frontend.Pages.User.Settings
 
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<HomeShelfV1> _layout = [];
         private AuthenticationResultV1? _authentication;
@@ -37,12 +41,15 @@ namespace Jularr.Frontend.Pages.User.Settings
         private IReadOnlyList<ProfileMediaV1> _media = [];
         private bool _savingMedia;
         private bool _savingPin;
+        private SpeechPreferencesV1? _speech;
+        private SaveSpeechPreferencesDataV1? _speechInput;
 
         protected override void Define(Page page)
         {
             page.Title("settings.title");
             page.Navigation("nav.settings");
             page.Asset("Modules/Appearance/appearance.entry.scss");
+            page.Asset("Modules/Speech/settings.entry.ts");
             page.Content.Add(new UiSection("appearance.title", [new Appearance()]));
 
             // Show only supported profile settings.
@@ -58,7 +65,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Save();
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin ? null : FormError));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _speechInput is not null ? null : FormError));
 
                     // Hidden types leave the profile's lists; they stay reachable.
                     if (_media.Count > 0)
@@ -113,6 +120,11 @@ namespace Jularr.Frontend.Pages.User.Settings
                 }
 
                 page.Content.Add(new UiSection("profile.settings.title", content));
+                if (_speech is not null && texts.Can("profile.self.update"))
+                {
+                    page.Content.Add(new UiSection("speech.title", [new SpeechSettings(_speech, texts.Locale, "/Settings?handler=Speech",
+                        antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", _speechInput is not null ? FormError : null, _speechInput)]));
+                }
             }
             else
             {
@@ -278,6 +290,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             if (_authentication.ProfileId is { } profileId)
             {
                 _profile = await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
+                _speech = await readSpeech.ExecuteAsync<SpeechPreferencesV1>(new ReadProfileParametersV1(profileId), token);
                 _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
                 if (texts.CanArrangeHome())
@@ -285,6 +298,14 @@ namespace Jularr.Frontend.Pages.User.Settings
                     _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), token);
                 }
             }
+        }
+
+        public async Task<IActionResult> OnPostSpeechAsync([BindRequired] decimal rate, [BindRequired] decimal pitch, [BindRequired] decimal volume, long version,
+            string language, SpeechProviderType providerTypeId, string? modelId, string? voiceId)
+        {
+            _speechInput = new SaveSpeechPreferencesDataV1(rate, pitch, volume, version, language, providerTypeId, modelId, voiceId);
+            await saveSpeech.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), _speechInput, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
         }
     }
 }

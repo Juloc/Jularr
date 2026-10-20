@@ -44,11 +44,21 @@ namespace Jularr.E2E.Tests
         public static async Task FollowAsync(IPage page, ILocator element)
         {
             // A search asks every indexer rung in turn and may take its time.
-            await page.EvaluateAsync("() => { window.jularrFollowing = true; document.getElementById('app-content')?.setAttribute('data-followed', ''); }");
+            // The page counts as arrived when its content was swapped and stopped changing for a moment: scripts of the new page still rearrange it right after the swap.
+            await page.EvaluateAsync("""
+                () => {
+                    window.jularrFollowing = true;
+                    window.jularrChangedAt = window.jularrStartedAt = performance.now();
+                    window.jularrWatcher ??= new MutationObserver(() => { window.jularrChangedAt = performance.now(); });
+                    window.jularrWatcher.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+                    document.getElementById('app-content')?.setAttribute('data-followed', '');
+                }
+                """);
             await element.ClickAsync();
             await page.WaitForFunctionAsync("""
                 () => (!window.jularrFollowing || !!document.getElementById('app-content') && !document.querySelector('#app-content[data-followed]'))
                     && document.readyState !== 'loading' && !document.querySelector('.htmx-request, .htmx-swapping')
+                    && (!window.jularrWatcher || performance.now() - window.jularrChangedAt > 150 || performance.now() - window.jularrStartedAt > 5000)
                 """, null, new() { Timeout = 120_000 });
         }
 
@@ -181,7 +191,18 @@ namespace Jularr.E2E.Tests
         public static async Task OpenSearchAsync(IPage page, string title)
         {
             await OpenWantedAsync(page, title);
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true }));
+
+            // Films open on their management page, the other types on their wanted page.
+            var interactive = page.GetByRole(AriaRole.Link, new() { Name = "Interactive search", Exact = true });
+            await FollowAsync(page, interactive.Or(page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true })));
+        }
+
+        // The releases of one episode, searched from its row on the series page.
+        public static async Task SearchEpisodeAsync(IPage page, string title, string episodeNumber)
+        {
+            await OpenWantedAsync(page, title);
+            var row = page.Locator("tr.work-row").Filter(new() { Has = page.Locator("td[data-col=number]").GetByText(episodeNumber, new() { Exact = true }) });
+            await SubmitAsync(page, row.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Interactive search for this episode" }) }));
         }
 
         public static async Task GrabAsync(IPage page, FakeRelease release)
@@ -359,13 +380,13 @@ namespace Jularr.E2E.Tests
         }
 
         // A comic archive of numbered pages.
-        public static string WriteComic(string file, int pages)
+        public static string WriteComic(string file, int pages, byte[][]? pictures = null)
         {
             using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
             for (var number = 1; number <= pages; number++)
             {
                 using var stream = archive.CreateEntry(number.ToString("000", System.Globalization.CultureInfo.InvariantCulture) + ".png").Open();
-                stream.Write(Pixel);
+                stream.Write(pictures is { Length: > 0 } ? pictures[(number - 1) % pictures.Length] : Pixel);
             }
 
             return file;

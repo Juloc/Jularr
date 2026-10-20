@@ -127,6 +127,7 @@ namespace Jularr.Backend.Service.Core
                 options.TrickplayPath = Folder(options.TrickplayPath, "trickplay");
                 options.TranslationPath = Folder(options.TranslationPath, "translation");
                 options.OcrPath = Folder(options.OcrPath, "ocr");
+                options.SpeechPath = Folder(options.SpeechPath, "speech");
             });
             services.Configure<BrowserOptions>(options =>
             {
@@ -223,6 +224,8 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.TryAddTransient<ReadingContent>();
             services.TryAddSingleton<TranslationFiles>();
+            services.TryAddSingleton<SpeechFiles>();
+            services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(http => http.Timeout = TimeSpan.FromMinutes(5));
             services.TryAddSingleton<IPageRecognizer, OcrFiles>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();

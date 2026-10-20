@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Logic/Speech/models.json" LogicalName="Jularr.Speech.models.json" />
     <InternalsVisibleTo Include="Jularr.Backend.Tests" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />

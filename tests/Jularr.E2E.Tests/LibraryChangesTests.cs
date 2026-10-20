@@ -54,7 +54,7 @@ namespace Jularr.E2E.Tests
                 fakes.Offer(better);
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = better.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = better.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, better);
                 await WaitForAsync(() => Directory.Exists(Path.Combine(movies, ".jularr-recycle"))
                     && Directory.EnumerateFiles(Path.Combine(movies, ".jularr-recycle"), "*.webm", SearchOption.AllDirectories).Any(), "The earlier file did not reach the recycle bin.");
@@ -76,7 +76,7 @@ namespace Jularr.E2E.Tests
                     await page.GotoAsync(details);
                     return await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() == 0;
                 }, "The missing file is still offered.");
-                StringAssert.Contains(await page.Locator("main").InnerTextAsync(), FakeServices.MovieTitle);
+                await Assertions.Expect(page.Locator("main")).ToContainTextAsync(FakeServices.MovieTitle);
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

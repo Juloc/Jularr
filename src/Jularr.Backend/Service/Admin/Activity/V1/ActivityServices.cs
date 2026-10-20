@@ -42,7 +42,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."RemainingBytes",
                     operation."EtaSeconds",
                     operation."DownloadStateTypeId",
-                    operation."AttentionUrl" AS "ManualUrl"
+                    operation."AttentionUrl" AS "ManualUrl",
+                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" = 2 AND operation."AttentionKey" IS NULL
+                        AND connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6) AS "CanPause",
+                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL
+                        AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
+                    operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",
+                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL AS "CanImportManually"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -51,12 +57,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     LEFT JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
                     LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE
-                    CASE
-                        WHEN operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NULL THEN 1
-                        WHEN operation."OperationStatusTypeId" IN (1, 2) OR operation."DismissedAt" IS NULL AND operation."OperationStatusTypeId" = 4 THEN 2
+                    (CASE
+                        WHEN operation."OperationStatusTypeId" IN (1, 2) OR operation."DismissedAt" IS NULL AND operation."OperationStatusTypeId" = 4 THEN 1
                         ELSE 3
-                    END = @ActivityTabTypeId
+                    END) = @ActivityTabTypeId
                 ORDER BY
+                    -- What needs a person comes first, then what runs, each newest first.
+                    @ActivityTabTypeId = 1 AND (operation."OperationStatusTypeId" = 4 OR operation."AttentionKey" IS NOT NULL) DESC,
                     operation."CreatedAt" DESC,
                     operation."Id" DESC
                 LIMIT @PageSize

@@ -43,18 +43,14 @@ namespace Jularr.E2E.Tests
                 fakes.Offer(film, otherFilm);
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = otherFilm.Title }).InnerTextAsync(), "Different title");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = film.Title }).InnerTextAsync(), "Eligible");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = otherFilm.Title })).ToContainTextAsync("Different title");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = film.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, film);
 
                 // A single episode is searched by its season and number.
                 fakes.Offer(episode);
-                await Steps.OpenSearchAsync(page, FakeServices.SeriesTitle);
-                var search = Steps.FormWith(page, "Start search");
-                await search.Locator("[name=ParentUnitNumber]").FillAsync("1");
-                await search.Locator("[name=UnitNumber]").FillAsync("1");
-                await Steps.SubmitAsync(page, search);
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = episode.Title }).InnerTextAsync(), "Eligible");
+                await Steps.SearchEpisodeAsync(page, FakeServices.SeriesTitle, "1");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = episode.Title })).ToContainTextAsync("Eligible");
                 await Steps.GrabAsync(page, episode);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(film).ToString(), fakes.NzbAddress(episode).ToString() }, fakes.Grabbed.ToArray());
 
@@ -64,18 +60,15 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film was not imported once.");
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode was not imported once.");
 
-                // The second episode is switched off on the Monitoring tab: nothing monitored is missing, the request completes and the Missing list drops the series.
+                // The second episode is switched off on the title's page: nothing monitored is missing, the request completes and the Missing list drops the series.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = "Episode 1" }).InnerTextAsync(), "Present");
-                await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "Episode 2" }).Locator("form")
-                    .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Stop monitoring" }) }));
-                var season = page.Locator("tr").Filter(new() { Has = page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }) });
-                StringAssert.Contains(await season.InnerTextAsync(), "Partly monitored");
+                await Assertions.Expect(EpisodeRow(page, "1")).ToContainTextAsync("On disk");
+                await Steps.SubmitAsync(page, EpisodeRow(page, "2").Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }) }));
+                await Assertions.Expect(EpisodeRow(page, "2")).ToContainTextAsync("Not monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
                 Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
                 await page.GotoAsync("/Admin/Requests");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).InnerTextAsync(), "Completed");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = FakeServices.SeriesTitle })).ToContainTextAsync("Completed");
 
                 // Playing needs a real file; FFmpeg makes one.
                 if (ffmpeg is null)
@@ -109,6 +102,70 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync(seriesDetails);
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The episode started at " + resumed + " s instead of continuing.");
+
+                // On a narrow screen every unit is two lines: the facts of all units of the season slide together while the first line stays, and the columns are a sheet from the bottom.
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await page.SetViewportSizeAsync(390, 844);
+                var strips = page.Locator(".work-strips").First;
+                await Assertions.Expect(strips.Locator(".work-strip").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-work-table=units]")).ToBeHiddenAsync();
+                Assert.IsTrue(await strips.EvaluateAsync<bool>("element => element.scrollWidth > element.clientWidth"), "The facts do not slide.");
+                var line = strips.Locator(".work-strip__main").Last;
+                var facts = strips.Locator(".work-strip__facts .work-fact").Last;
+                var lineBefore = (await line.BoundingBoxAsync())!;
+                var factBefore = (await facts.BoundingBoxAsync())!;
+                await strips.EvaluateAsync("element => { element.scrollLeft = 120; }");
+                Assert.AreEqual(lineBefore.X, (await line.BoundingBoxAsync())!.X, 1, "The first line moved.");
+                Assert.IsTrue((await facts.BoundingBoxAsync())!.X < factBefore.X - 50, "The facts did not move.");
+                Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
+                await strips.EvaluateAsync("element => { element.scrollLeft = 0; }");
+                await Evidence.SaveAsync(page, "work-strips-mobile");
+                await strips.EvaluateAsync("element => { element.scrollLeft = 120; }");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Columns", Exact = true }).ClickAsync();
+                var sheet = page.Locator("[data-column-picker]");
+                await Assertions.Expect(sheet).ToBeVisibleAsync();
+                await Assertions.Expect(sheet).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("work-columns--sheet"));
+                var sheetBox = (await sheet.BoundingBoxAsync())!;
+                Assert.IsTrue(Math.Abs(sheetBox.Y + sheetBox.Height - 844) <= 2, "The sheet does not end at the bottom.");
+                await Evidence.SaveAsync(page, "work-strips-sheet");
+                await page.Keyboard.PressAsync("Escape");
+
+                // The film's file and the files of Manage files are strips there too.
+                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Assertions.Expect(page.Locator("[data-work-table=files]")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("[data-work-strips=files] .work-strip").First).ToBeVisibleAsync();
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Manage files", Exact = true }));
+                await Assertions.Expect(page.Locator("[data-work-strips=manage] .work-strip").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".work-table--manage")).ToBeHiddenAsync();
+                await page.SetViewportSizeAsync(1280, 900);
+
+                // An administrator deletes the film's file on its page and the episode's in Manage files; both are missing again and the files are gone.
+                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await page.Locator("[data-work-table=files] [data-edit-file]").ClickAsync();
+                var editor = page.Locator("#work-files-edit");
+                await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
+                await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
+                await Steps.SubmitAsync(page, editor.Locator("form"));
+                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 updated" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("tr.work-file")).ToContainTextAsync("HDTV-720p");
+                await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete file" }) }));
+                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.GetByText("This film has no file yet.")).ToBeVisibleAsync();
+                Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film's file is still there.");
+
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await Evidence.SaveAsync(page, "work-series-with-file");
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Manage files", Exact = true }));
+                var managed = page.Locator("tr.work-row").Filter(new() { HasText = ".webm" });
+                await Assertions.Expect(managed).ToContainTextAsync("Matches the naming");
+                await Evidence.SaveAsync(page, "work-manage-files");
+                await managed.GetByRole(AriaRole.Checkbox).CheckAsync();
+                await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete selected files" }) }));
+                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
+                Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode's file is still there.");
+                await page.GotoAsync(page.Url.Split('?')[0]);
+                await Assertions.Expect(EpisodeRow(page, "1")).ToContainTextAsync("Missing");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
@@ -204,5 +261,9 @@ namespace Jularr.E2E.Tests
                 response => response.Request.Method == "PUT" && response.Ok);
             await Evidence.SaveAsync(page, "player-design-desktop");
         }
+
+        // The row of an episode in the unit table of a title's page.
+        private static ILocator EpisodeRow(IPage page, string number) =>
+            page.Locator("tr.work-row").Filter(new() { Has = page.Locator("td[data-col=number]").GetByText(number, new() { Exact = true }) });
     }
 }

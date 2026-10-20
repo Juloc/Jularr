@@ -128,6 +128,25 @@ CREATE TABLE "Profiles" (
 );
 CREATE INDEX "IX_Profiles_OwnerAccountId" ON "Profiles" ("OwnerAccountId", "Id");
 
+-- Speech choices are shared between the profile's devices, not installed-model facts.
+CREATE TABLE "ProfileSpeechSettings" (
+    "ProfileId" bigint PRIMARY KEY REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    "Rate" numeric(3,2) NOT NULL DEFAULT 1 CHECK ("Rate" BETWEEN 0.5 AND 2.5),
+    "Pitch" numeric(3,2) NOT NULL DEFAULT 1 CHECK ("Pitch" BETWEEN 0.5 AND 2),
+    "Volume" numeric(3,2) NOT NULL DEFAULT 1 CHECK ("Volume" BETWEEN 0 AND 1),
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
+);
+CREATE TABLE "ProfileSpeechVoices" (
+    "ProfileId" bigint NOT NULL REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    "Language" varchar(64) NOT NULL CHECK (length("Language") > 0),
+    "ProviderTypeId" smallint NOT NULL CHECK ("ProviderTypeId" IN (1, 2)),
+    "ModelId" varchar(128) NULL,
+    "VoiceId" varchar(512) NULL,
+    PRIMARY KEY ("ProfileId", "Language"),
+    CHECK (("ProviderTypeId" = 1 AND "ModelId" IS NULL)
+        OR ("ProviderTypeId" = 2 AND "ModelId" IS NOT NULL AND "VoiceId" IS NOT NULL AND length("ModelId") > 0 AND length("VoiceId") > 0))
+);
+
 CREATE TABLE "AccountProfiles" (
     "AccountId" bigint NOT NULL,
     "ProfileId" bigint NOT NULL,

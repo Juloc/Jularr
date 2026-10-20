@@ -42,6 +42,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
             conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
             conventions.AuthorizePage("/Admin/Instance/Instance", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Speech/Speech", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Catalog/Catalog", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Backup/Backup", ServiceApi.BackupReadPolicyName);
             conventions.AuthorizePage("/Admin/System/System", ServiceApi.InstanceSettingsReadPolicyName);
