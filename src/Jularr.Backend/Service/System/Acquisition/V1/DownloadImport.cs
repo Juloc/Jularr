@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Media;
@@ -107,8 +108,24 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Link or copy outside transactions; an existing library file is never taken over.
+            var commit = await CommitAsync(context, new ImportCommitRequest(root, download.WorkId, download.GamePlatformId, placements, source, sourceDirectory, files, _ => facts,
+                ImportTransferMode.Link, download.OperationId, null, download.MediaTypeId, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target)), ct);
+            if (commit.FailureKey is { } failure)
+            {
+                await AttentionAsync(context, download.OperationId, failure, null, ct);
+                return;
+            }
+
+            // Its job leaves SABnzbd with its files, when the connection is set to; a library file placed by link stays.
+            await RemoveFromClientAsync(context, download, ct);
+        }
+
+        // Links, copies or moves the planned files into the library and assigns them to their work; the failure key names what a person must settle, and nothing is left half done.
+        public async Task<ImportCommit> CommitAsync(LogicContext context, ImportCommitRequest request, CancellationToken ct)
+        {
+            // Link, copy or move outside transactions; an existing library file is never taken over.
             // An offline library keeps the download waiting instead of writing elsewhere.
+            var (root, placements, source, sourceDirectory, files) = (request.Root, request.Placements, request.Source, request.SourceDirectory, request.Files);
             var directory = root.RelativePath;
             StorageFiles library;
             try
@@ -122,8 +139,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
-                await AttentionAsync(context, download.OperationId, "import_library_unavailable", null, ct);
-                return;
+                return new ImportCommit("import_library_unavailable", []);
             }
 
             var imported = new List<ImportedFile>();
@@ -136,7 +152,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     var targetDirectory = local.ResolveDirectory(directory);
                     freeBytes = StorageFileSystem.AvailableFreeSpace(targetDirectory);
-                    if (source is LocalStorageFiles localSource)
+                    if (source is LocalStorageFiles localSource && request.Mode != ImportTransferMode.Copy)
                     {
                         var volume = StorageFileSystem.DownloadFilesystemIdentity(localSource.ResolveDirectory(sourceDirectory), includeDirectory: false, includeMountPoint: true);
                         canLink = volume is not null && volume == StorageFileSystem.DownloadFilesystemIdentity(targetDirectory, includeDirectory: false, includeMountPoint: true);
@@ -151,8 +167,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 var copyBytes = canLink ? 0 : placements.Sum(placement => lengths[placement.SourcePath]);
                 if (freeBytes is null || copyBytes > freeBytes.Value)
                 {
-                    await AttentionAsync(context, download.OperationId, "import_storage_full", null, ct);
-                    return;
+                    return new ImportCommit("import_storage_full", []);
                 }
 
                 foreach (var group in placements.GroupBy(placement => placement.Group))
@@ -161,8 +176,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     foreach (var placement in group)
                     {
                         var relativePath = stem + placement.Extension;
-                        var placed = await StorageFileTransfer.PlaceAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct);
-                        imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), facts));
+                        var placed = await StorageFileTransfer.PlaceAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct,
+                            allowLink: request.Mode != ImportTransferMode.Copy);
+                        imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), request.FactsFor(placement.SourcePath)));
                         if (placement.IsMedia)
                         {
                             media.Add((relativePath, placement));
@@ -172,14 +188,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
             {
-                await AttentionAsync(context, download.OperationId, "import_storage_unavailable", null, ct);
-                return;
+                return new ImportCommit("import_storage_unavailable", []);
             }
 
             if (media.Count == 0)
             {
-                await AttentionAsync(context, download.OperationId, "import_assignment_failed", null, ct);
-                return;
+                return new ImportCommit("import_assignment_failed", []);
             }
 
             IReadOnlyList<long> assets;
@@ -198,12 +212,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             throw new ImportAssignmentException();
                         }
 
-                        assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
-                            placement.ParentUnitNumber, download.GamePlatformId, false), token)).Id);
-                        await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.Imported, operationId: download.OperationId, storedFileId: file.Id), token);
+                        assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, request.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
+                            placement.ParentUnitNumber, request.GamePlatformId, false), token)).Id);
+
+                        // A download's import is recorded with its operation, a manual one with the person who made it.
+                        await ctx.RecordActivityAsync(request.OperationId is { } operationId ? new ActivityEventData(ActivityEventType.Imported, operationId: operationId, storedFileId: file.Id)
+                            : new ActivityEventData(ActivityEventType.ManualImport, storedFileId: file.Id, accountId: request.AccountId), token);
                     }
 
-                    await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), token);
+                    if (request.OperationId is { } finished)
+                    {
+                        await ctx.CompleteDownloadAsync(new DownloadOperationParameters(finished), token);
+                    }
 
                     // The scan analyses the new streams.
                     await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), token);
@@ -213,17 +233,40 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             catch (ImportAssignmentException)
             {
                 // The database transaction rolls back; keep the download for manual-safe recovery.
-                await AttentionAsync(context, download.OperationId, "import_assignment_failed", null, ct);
-                return;
+                return new ImportCommit("import_assignment_failed", []);
             }
 
-            await replacements.ReplaceAsync(context, assets, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target), ct);
+            // A move leaves nothing behind, but only once the library holds the files.
+            if (request.Mode == ImportTransferMode.Move)
+            {
+                await RemoveSourcesAsync(request, ct);
+            }
 
-            // Its job leaves SABnzbd with its files, when the connection is set to; a library file placed by link stays.
-            await RemoveFromClientAsync(context, download, ct);
+            await replacements.ReplaceAsync(context, assets, request.Profile, ct);
 
             // A connected Plex shows the title right away.
-            await plex.RefreshAsync(context, download.MediaTypeId, ct);
+            await plex.RefreshAsync(context, request.MediaTypeId, ct);
+            return new ImportCommit(null, assets);
+        }
+
+        // What a move took from its folder goes, and so do the folders it emptied; a source that cannot be changed keeps its files.
+        private static async Task RemoveSourcesAsync(ImportCommitRequest request, CancellationToken ct)
+        {
+            try
+            {
+                foreach (var placement in request.Placements)
+                {
+                    await request.Source.DeleteFileAsync(StoragePath.Combine(request.SourceDirectory, placement.SourcePath), ct);
+                }
+
+                foreach (var folder in request.Placements.Select(placement => StoragePath.Parent(placement.SourcePath)).Distinct(StringComparer.Ordinal))
+                {
+                    await request.Source.DeleteEmptyFoldersAsync(StoragePath.Combine(request.SourceDirectory, folder), request.SourceDirectory, ct);
+                }
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+            }
         }
 
         // Tidying is no reason to fail an import that worked: a client that cannot be reached keeps the job.
@@ -312,4 +355,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             public int Revision { get; }
         }
     }
+
+    // What an import places and where it takes it from; a download names its operation, a manual import the person who made it.
+    internal sealed record ImportCommitRequest(LibraryRootLocationData Root, long WorkId, long? GamePlatformId, IReadOnlyList<ImportPlacementData> Placements, StorageFiles Source,
+        string SourceDirectory, IReadOnlyList<StorageFile> Files, Func<string, ReleaseFact?> FactsFor, ImportTransferMode Mode, long? OperationId, long? AccountId, MediaType MediaTypeId,
+        QualityProfile? Profile);
+
+    // The reason a person must settle, or null once the library holds the files.
+    internal sealed record ImportCommit(string? FailureKey, IReadOnlyList<long> Assets);
 }
