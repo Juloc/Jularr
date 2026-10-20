@@ -13,18 +13,23 @@ using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Storage;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
+using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Storage;
+using Microsoft.AspNetCore.DataProtection;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
-    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time)
+    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection)
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, string sourceDirectory, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
@@ -214,8 +219,28 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             await replacements.ReplaceAsync(context, assets, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target), ct);
 
+            // Its job leaves SABnzbd with its files, when the connection is set to; a library file placed by link stays.
+            await RemoveFromClientAsync(context, download, ct);
+
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, download.MediaTypeId, ct);
+        }
+
+        // Tidying is no reason to fail an import that worked: a client that cannot be reached keeps the job.
+        private async Task RemoveFromClientAsync(LogicContext context, DownloadData download, CancellationToken ct)
+        {
+            try
+            {
+                var connection = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, token), ct);
+                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd && connection.RemovesCompleted && download.ExternalId is { } nzoId)
+                {
+                    var key = AcquisitionConnectionInput.Unprotect(protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose), connection.ProtectedApiKey);
+                    await sabnzbd.RemoveJobAsync(new SabnzbdConnection(connection.HttpAddress, key), nzoId, true, ct);
+                }
+            }
+            catch (Exception exception) when (exception is HttpRequestException or SabnzbdException || exception is TaskCanceledException && !ct.IsCancellationRequested)
+            {
+            }
         }
 
         // The first numbered alternative whose files are all free.
