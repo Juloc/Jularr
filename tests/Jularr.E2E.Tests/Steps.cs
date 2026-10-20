@@ -359,13 +359,13 @@ namespace Jularr.E2E.Tests
         }
 
         // A comic archive of numbered pages.
-        public static string WriteComic(string file, int pages)
+        public static string WriteComic(string file, int pages, byte[][]? pictures = null)
         {
             using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
             for (var number = 1; number <= pages; number++)
             {
                 using var stream = archive.CreateEntry(number.ToString("000", System.Globalization.CultureInfo.InvariantCulture) + ".png").Open();
-                stream.Write(Pixel);
+                stream.Write(pictures is { Length: > 0 } ? pictures[(number - 1) % pictures.Length] : Pixel);
             }
 
             return file;

@@ -17,8 +17,7 @@
   },
   "dependencies": {
     "hls.js": "1.7.3",
-    "htmx.org": "4.0.0",
-    "page-flip": "2.0.7"
+    "htmx.org": "4.0.0"
   },
   "allowScripts": {
     "@parcel/watcher": false,

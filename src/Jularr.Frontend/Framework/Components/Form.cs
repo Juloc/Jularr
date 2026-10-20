@@ -89,6 +89,25 @@ namespace Jularr.Frontend.Framework
             Add(field, FieldControl.Password, labelKey, autocomplete, help);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
 
+        public Form<TData> Range<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
+        {
+            var field = Declare(selector, FieldControl.Range, labelKey, help);
+            if (!field.Required || field.ValueType != typeof(int) && field.ValueType != typeof(long) && field.ValueType != typeof(decimal)
+                || field.Minimum is not { } minimum || field.Maximum is not { } maximum || minimum >= maximum)
+            {
+                throw new InvalidOperationException("Range controls require a required numeric field with increasing minimum and maximum bounds.");
+            }
+
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "range").Attribute("step", "1")
+                .Attribute("data-range-precision", (field.Scale ?? 0).ToString(CultureInfo.InvariantCulture));
+            if (Value(field) is { } value) input.Attribute("value", value);
+            Configure(field, input);
+            AddField(field, new Div(input,
+                new HtmlOutput(new ValueText(_data is null ? "" : Convert.ToString(field.ReadValue(_data), CultureInfo.CurrentCulture) ?? ""))
+                    .Attribute("for", _id + "-" + field.Name).Attribute("aria-hidden", "true")).Class("ui-range"));
+            return this;
+        }
+
         // A wall-clock time: hour and minute fields on a desktop, a wheel on Android, the system's own picker on iOS (TimePicker.entry.ts).
         public Form<TData> Time<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
         {
@@ -504,6 +523,7 @@ namespace Jularr.Frontend.Framework
         private sealed class HtmlTextarea(params IUiComponent[] children) : HtmlElement("textarea", children);
         private sealed class HtmlFieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
         private sealed class HtmlLegend(params IUiComponent[] children) : HtmlElement("legend", children);
+        private sealed class HtmlOutput(params IUiComponent[] children) : HtmlElement("output", children);
         private sealed class HtmlTable(params IUiComponent[] children) : HtmlElement("table", children);
         private sealed class HtmlHead(params IUiComponent[] children) : HtmlElement("thead", children);
         private sealed class HtmlBody(params IUiComponent[] children) : HtmlElement("tbody", children);

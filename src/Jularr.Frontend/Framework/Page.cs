@@ -100,6 +100,7 @@ namespace Jularr.Frontend.Framework
     {
         public bool Shell { get; set; } = true;
         public bool IsPlayer { get; set; }
+        public bool IsReader { get; set; }
         public string? TitleKey { get; private set; }
         public string? DocumentTitle { get; private set; }
         public string? NavigationKey { get; private set; }
@@ -122,6 +123,7 @@ namespace Jularr.Frontend.Framework
         {
             Shell = definition.Shell;
             IsPlayer = definition.IsPlayer;
+            IsReader = definition.IsReader;
             TitleKey = definition.TitleKey;
             DocumentTitle = definition.DocumentTitle;
             NavigationKey = definition.NavigationKey;
