@@ -252,8 +252,8 @@ namespace Jularr.E2E.Tests
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
             Assert.AreEqual(1, await page.Locator("video").CountAsync());
             // Saving a form of the page beside the mini player keeps the same playback.
-            await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Add to watchlist", Exact = true }) }));
-            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Remove from watchlist", Exact = true })).ToBeVisibleAsync();
+            await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Add to favorites", Exact = true }) }));
+            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Remove from favorites", Exact = true })).ToBeVisibleAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
             await page.Locator("[data-action=expand]").ClickAsync();
             Assert.IsTrue(await video.EvaluateAsync<bool>("video => video === window.__originalPlayerVideo"));
@@ -261,6 +261,32 @@ namespace Jularr.E2E.Tests
             await page.RunAndWaitForResponseAsync(() => video.EvaluateAsync("video => { video.currentTime = 5; return video.play().then(() => video.pause()); }"),
                 response => response.Request.Method == "PUT" && response.Ok);
             await Evidence.SaveAsync(page, "player-design-desktop");
+
+            // The saved title is on the favorites page, where a collection gathers it and the filter narrows the list.
+            await page.GotoAsync("/Favorites");
+            var card = page.Locator("[data-favorites-entry]").First;
+            await Assertions.Expect(card).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = "New collection", Exact = true }).ClickAsync();
+            var create = page.Locator("dialog#favorites-create");
+            await create.GetByLabel("Name", new() { Exact = true }).FillAsync("Weekend");
+            await Steps.FollowAsync(page, create.GetByRole(AriaRole.Button, new() { Name = "Create", Exact = true }));
+            await Assertions.Expect(page.Locator(".favorites-collection__card--current")).ToContainTextAsync("Weekend");
+            await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "All favorites" }));
+            await page.Locator("[data-favorites-entry]").First.GetByRole(AriaRole.Button, new() { Name = "Add to collection", Exact = true }).ClickAsync();
+            var picker = page.Locator("#favorites-picker");
+            await Assertions.Expect(picker).ToBeVisibleAsync();
+            await picker.GetByLabel("Weekend").CheckAsync();
+            await Steps.FollowAsync(page, picker.GetByRole(AriaRole.Button, new() { Name = "Done", Exact = true }));
+            await Assertions.Expect(page.Locator("[data-favorites-entry]").First.Locator(".favorites-chip")).ToContainTextAsync("Weekend");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Open filter", Exact = true }).ClickAsync();
+            await page.Locator("dialog#favorites-filter").GetByText("Since 2020", new() { Exact = true }).ClickAsync();
+            await Steps.FollowAsync(page, page.Locator("dialog#favorites-filter").GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
+            Assert.IsTrue(page.Url.Contains("year=2020", StringComparison.Ordinal), page.Url);
+            await Assertions.Expect(page.Locator("[data-favorites-entry]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.GetByText("No favorites match these filters.")).ToBeVisibleAsync();
+            await page.SetViewportSizeAsync(390, 844);
+            Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= window.innerWidth"));
+            await Evidence.SaveAsync(page, "favorites-mobile");
         }
 
         // The row of an episode in the unit table of a title's page.

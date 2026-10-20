@@ -43,7 +43,8 @@ namespace Jularr.Frontend.Pages.User.Collection
         protected override void Define(Page page)
         {
             page.Title("collections.title", _collection?.Name);
-            page.Navigation("collections.title");
+            page.Navigation("favorites.title");
+            page.Parent("favorites.title", "/Favorites");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
             if (_collection is not { } collection)
             {
@@ -155,7 +156,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         public async Task<IActionResult> OnPostDeleteAsync()
         {
             await delete.ExecuteAsync<UpdateResult>(new CollectionParametersV1(Id), default, HttpContext.RequestAborted);
-            return LocalRedirect("/Collections");
+            return LocalRedirect("/Favorites");
         }
     }
 }

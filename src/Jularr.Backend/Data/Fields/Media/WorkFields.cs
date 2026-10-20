@@ -11,6 +11,9 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField MatchRows = new() { AllowBlank = false };
         public static readonly EnumField MediaTypeId = new(typeof(MediaType));
         public static readonly EnumField MediaSubtypeId = new(typeof(MediaSubtype)) { Required = false };
+        public static readonly EnumArrayField MediaTypeIds = new(typeof(MediaType)) { MaximumLength = 8 };
+        public static readonly EnumArrayField MediaSubtypeIds = new(typeof(MediaSubtype)) { MaximumLength = 8 };
+        public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 100, IsSet = true };
         public static readonly BoolField IsMediaSubtypeManual = new();
         public static readonly BoolField IsFranchiseManual = new();
         public static readonly StringField CanonicalTitle = new(NpgsqlDbType.Varchar) { AllowBlank = false, Trim = true, MaximumLength = 500 };

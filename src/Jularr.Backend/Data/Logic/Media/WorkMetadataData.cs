@@ -311,6 +311,34 @@ namespace Jularr.Backend.Data.Logic.Media
         public LibrarySortType LibrarySortTypeId { get; }
     }
 
+    // What a profile's personal list is narrowed to and how it is ordered; no scope lists every type.
+    internal sealed class WorkListFilterData : BaseData
+    {
+        public WorkListFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, LibrarySortType? librarySortTypeId)
+        {
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
+            ReleaseYearFrom = releaseYearFrom;
+            ReleaseYearTo = releaseYearTo;
+            LibrarySortTypeId = librarySortTypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearFrom { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearTo { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId), false)]
+        public LibrarySortType? LibrarySortTypeId { get; }
+    }
+
     // The provider's series of a Work and the Work's place in it, or none.
     internal sealed class WorkFranchiseData : BaseData
     {

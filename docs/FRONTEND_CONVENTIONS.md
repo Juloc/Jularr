@@ -195,7 +195,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.
-- Apply the same module/profile visibility gate to Watchlist, Library and
+- Apply the same module/profile visibility gate to Favorites, Library and
   every other media-type navigation, plus playback routes/actions when the
   instance Playback module is disabled.
 
@@ -367,7 +367,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   No trailer identifier means no preview request. Production list contracts still
   lack trailer IDs; workshop samples are explicitly labeled, not library records.
 - Bookmark mutations use the existing Details POST, typed Form, antiforgery and
-  Backend watchlist service. Return only to validated local URLs. If a list does not
+  Backend watchlist service (the page is called Favorites). Return only to validated local URLs. If a list does not
   supply current membership, the icon links to management in Details, not a false toggle.
   Provider-only titles without a canonical Work ID have no bookmark action yet.
   Shelves retain native touch/keyboard scrolling and local chevrons, no visible

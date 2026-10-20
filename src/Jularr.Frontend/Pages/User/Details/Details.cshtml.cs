@@ -100,7 +100,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 actions.Add(new Form<UpdateWatchlistDataV1>(form =>
                 {
                     form.Hidden(item => item.IsWatchlisted);
-                    form.Submit(work.IsWatchlisted ? "media.watchlist.remove" : "media.watchlist.add");
+                    form.Submit(work.IsWatchlisted ? "media.favorites.remove" : "media.favorites.add");
                 }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture), csrf,
                     new UpdateWatchlistDataV1(!work.IsWatchlisted), FormError));
 
@@ -234,7 +234,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 .Class("details-languages-card");
         }
 
-        // A known title also goes on the watchlist from its card.
+        // A known title also goes into the favorites from its card.
         private IUiComponent Recommendation(DiscoverItemV1 item)
         {
             var card = new MediaCard(assets, item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
