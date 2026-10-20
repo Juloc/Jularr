@@ -13,6 +13,7 @@ import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
+import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
@@ -69,6 +70,18 @@ interface AppApiClient {
 
     /** Reads the ranked lists of the Discover of the instance; without a scope every scope. */
     suspend fun discoverShelves(scopeSlug: String? = null): List<DiscoverShelfV1>
+
+    /** Starts the playback of an asset; the answer carries the stream and the resume point. */
+    suspend fun startPlayback(mediaAssetId: Long): PlaybackPlanV1
+
+    /** Writes the progress of a running playback back to the instance. */
+    suspend fun updatePlayback(
+        playbackSessionId: String,
+        positionMs: Long,
+        durationMs: Long?,
+        isEnded: Boolean,
+        isCompleted: Boolean,
+    )
 
     /** Reads the profiles the account of the device may use. */
     suspend fun profiles(): List<ProfileSelectionV1>

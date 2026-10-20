@@ -26,4 +26,5 @@ include(
     ":core-api",
     ":core-design",
     ":core-model",
+    ":core-player",
 )

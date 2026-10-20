@@ -13,6 +13,7 @@ import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
+import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
@@ -111,6 +112,15 @@ internal fun JSONObject.toDiscoverScope(): DiscoverScopeV1 =
         mediaSubtypeId = if (isNull("mediaSubtypeId")) null else getInt("mediaSubtypeId"),
         isCatalog = getBoolean("isCatalog"),
         feeds = getJSONArray("feeds").toIntList(),
+    )
+
+internal fun JSONObject.toPlaybackPlan(): PlaybackPlanV1 =
+    PlaybackPlanV1(
+        playbackSessionId = getString("playbackSessionId"),
+        playbackModeTypeId = getInt("playbackModeTypeId"),
+        streamUrl = getString("streamUrl"),
+        resumePositionMs = getLong("resumePositionMs"),
+        durationMs = if (isNull("durationMs")) null else getLong("durationMs"),
     )
 
 internal fun JSONObject.toDiscoverShelf(): DiscoverShelfV1 =

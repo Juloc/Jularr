@@ -15,6 +15,7 @@ fun WorkCardV1.toTvCard(texts: TvTexts): TvCard = TvCard(
     meta = texts["media.state." + mediaStateName(mediaStateTypeId)],
     progress = null,
     availabilityStateId = availabilityStateId,
+    workId = id,
 )
 
 /** Reads a title the profile continues: its unit and how far it is watched or read. */
@@ -25,6 +26,8 @@ fun ContinueItemV1.toTvCard(texts: TvTexts): TvCard = TvCard(
     meta = unitLabel(texts),
     progress = progression?.toFloat() ?: position(durationMs),
     availabilityStateId = null,
+    mediaAssetId = mediaAssetId,
+    workId = workId,
 )
 
 /** The name of the state of a work, as the texts of the server know it. */

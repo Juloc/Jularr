@@ -40,4 +40,10 @@ object AppApiRoutes {
 
     /** The details of a title of the instance. */
     fun work(workId: Long): String = "$Base/works/$workId"
+
+    /** Starts the playback of an asset; the answer carries the stream to read. */
+    fun playbackSessions(mediaAssetId: Long): String = "$Base/playback/assets/$mediaAssetId/sessions"
+
+    /** The progress of a running playback. */
+    fun playbackSession(playbackSessionId: String): String = "$Base/playback/sessions/$playbackSessionId"
 }

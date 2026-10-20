@@ -29,6 +29,7 @@ dependencies {
     implementation(project(":core-api"))
     implementation(project(":core-design"))
     implementation(project(":core-model"))
+    implementation(project(":core-player"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
@@ -37,6 +38,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.kotlinx.coroutines.core)

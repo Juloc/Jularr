@@ -139,7 +139,7 @@ fun TvCardView(card: TvCard, controller: TvController) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { }
+            ) { controller.openCard(card) }
             .then(
                 if (focused) {
                     Modifier.tvFocusRing(true, colors.focus, shape)

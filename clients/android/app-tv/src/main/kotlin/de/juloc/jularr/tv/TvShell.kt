@@ -103,6 +103,7 @@ fun TvShell(controller: TvController) {
                         TvRoute.Settings -> TvSettingsScreen(controller)
                         TvRoute.Search -> TvSearchScreen(controller)
                         TvRoute.Details -> TvDetailsScreen(controller)
+                        TvRoute.Player -> TvPlayerScreen(controller)
                     }
                 }
             }
@@ -217,7 +218,11 @@ private fun TvTopRow(controller: TvController, focus: FocusRequester) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = controller.texts[locationKey(controller.route)],
+            text = if (controller.route == TvRoute.Player) {
+                controller.playingTitle
+            } else {
+                controller.texts[locationKey(controller.route)]
+            },
             fontSize = type.body,
             fontWeight = FontWeight.SemiBold,
             color = colors.text,
@@ -271,4 +276,5 @@ internal fun locationKey(route: TvRoute): String = when (route) {
     TvRoute.Settings -> "tv.settings.title"
     TvRoute.Search -> "search.global"
     TvRoute.Details -> "media.details"
+    TvRoute.Player -> "media.play"
 }

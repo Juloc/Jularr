@@ -16,6 +16,7 @@ import de.juloc.jularr.core.model.DiscoverScopeV1
 import de.juloc.jularr.core.model.DiscoverShelfV1
 import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
+import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
@@ -106,6 +107,14 @@ class TvController(context: Context) {
 
     /** Where the focus is now; the D-pad moves between the areas in the reading order. */
     var focusArea by mutableStateOf(TvFocusArea.Rail)
+        private set
+
+    /** The plan of the running playback. */
+    var playbackPlan by mutableStateOf<PlaybackPlanV1?>(null)
+        private set
+
+    /** The title the television plays. */
+    var playingTitle by mutableStateOf("")
         private set
 
     var error by mutableStateOf<String?>(null)
@@ -291,6 +300,58 @@ class TvController(context: Context) {
     /** The suggestion opens the title it names. */
     fun openSuggestion(suggestion: DiscoverSuggestionV1) {
         openDetails(suggestion.workId)
+    }
+
+    /**
+     * OK on a card: a title the profile continues is played at once, every other title opens
+     * its details.
+     */
+    fun openCard(card: TvCard) {
+        val asset = card.mediaAssetId
+        if (asset != null) {
+            play(asset, card.title)
+            return
+        }
+        openDetails(card.workId)
+    }
+
+    /** Starts the playback of an asset. */
+    fun play(mediaAssetId: Long, title: String) {
+        val client = api ?: return
+        previousRoute = route
+        route = TvRoute.Player
+        playingTitle = title
+        playbackPlan = null
+        scope.launch {
+            runCatching { client.startPlayback(mediaAssetId) }
+                .onSuccess { plan ->
+                    playbackPlan = plan
+                    onPlanReady?.invoke(plan)
+                }
+                .onFailure { error = it.message ?: it::class.java.simpleName }
+        }
+    }
+
+    /** The player tells the controller that the stream is open. */
+    var onPlanReady: ((PlaybackPlanV1) -> Unit)? = null
+
+    /** The token of the device; the stream of the instance needs it. */
+    val deviceToken: String?
+        get() = deviceTokens.current
+
+    /** The address of the instance; the stream of the instance is read from there. */
+    val origin: String
+        get() = address
+
+    /** Writes the progress of the running playback back to the instance. */
+    fun reportProgress(positionMs: Long, durationMs: Long?, isEnded: Boolean, isCompleted: Boolean) {
+        val plan = playbackPlan ?: return
+        val client = api ?: return
+        scope.launch {
+            runCatching {
+                client.updatePlayback(plan.playbackSessionId, positionMs, durationMs, isEnded, isCompleted)
+            }
+        }
     }
 
     /** Back returns to the surface the television came from; it tells when it did. */

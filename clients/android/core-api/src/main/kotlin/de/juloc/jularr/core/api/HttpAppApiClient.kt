@@ -13,6 +13,7 @@ import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
+import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
@@ -98,6 +99,26 @@ class HttpAppApiClient(
             body.put("scopeSlug", scopeSlug)
         }
         return requestList("POST", AppApiRoutes.DiscoverShelves, body).map { it.toDiscoverShelf() }
+    }
+
+    override suspend fun startPlayback(mediaAssetId: Long): PlaybackPlanV1 =
+        requestObject("POST", AppApiRoutes.playbackSessions(mediaAssetId), JSONObject()).toPlaybackPlan()
+
+    override suspend fun updatePlayback(
+        playbackSessionId: String,
+        positionMs: Long,
+        durationMs: Long?,
+        isEnded: Boolean,
+        isCompleted: Boolean,
+    ) {
+        val body = JSONObject()
+            .put("positionMs", positionMs)
+            .put("isEnded", isEnded)
+            .put("isCompleted", isCompleted)
+        if (durationMs != null) {
+            body.put("durationMs", durationMs)
+        }
+        request("PUT", AppApiRoutes.playbackSession(playbackSessionId), body)
     }
 
     override suspend fun profiles(): List<ProfileSelectionV1> =
