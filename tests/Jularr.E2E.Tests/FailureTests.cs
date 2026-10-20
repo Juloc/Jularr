@@ -46,7 +46,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(queued.Locator("progress")).ToHaveAttributeAsync("value", "70");
                 Assert.AreEqual(1, await page.EvaluateAsync<int>("window.liveMarker ?? 0"), "The queue was reloaded instead of updated.");
                 await page.GotoAsync("/Requests");
-                var request = page.Locator("tr", new() { HasText = FakeServices.MovieTitle });
+                var request = page.Locator(".request-row", new() { HasText = FakeServices.MovieTitle });
                 await Assertions.Expect(request).ToContainTextAsync("Downloading 70 %", slow);
                 await page.EvaluateAsync("window.liveMarker = 2");
                 fakes.HeldPercent = 90;

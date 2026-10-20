@@ -50,7 +50,23 @@ namespace Jularr.Backend.Service.User.Request.V1
                                 edition."WorkId" = work."Id"
                                 AND edition."LanguageCode" = lower(split_part(locale."Locale", '-', 1))
                         )
-                    ) AS "ReadsTranslated"
+                    ) AS "ReadsTranslated",
+                    work."MediaTypeId",
+                    visible."MediaSubtypeId",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl",
+                    quality."Name" AS "QualityName",
+                    request."AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5) AS "IsWithdrawable"
                 FROM
                     "AcquisitionRequests" AS request
                 INNER JOIN
@@ -59,6 +75,8 @@ namespace Jularr.Backend.Service.User.Request.V1
                     "Works" AS work ON work."Id" = request."WorkId"
                 INNER JOIN
                     "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
+                LEFT JOIN
+                    "AcquisitionProfiles" AS quality ON quality."Id" = request."AcquisitionProfileId"
                 LEFT JOIN LATERAL (
                     SELECT
                         operation."Id" AS "OperationId",
@@ -98,7 +116,23 @@ namespace Jularr.Backend.Service.User.Request.V1
                 ) AS step ON TRUE
                 WHERE
                     request."RequestedByProfileId" = @ProfileId
+                    AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
+                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
+                    AND CASE @RequestListFilterTypeId::smallint
+                        WHEN 1 THEN request."AcquisitionRequestStatusTypeId" = 1
+                        WHEN 2 THEN request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 5
+                        WHEN 3 THEN request."AcquisitionRequestStatusTypeId" = 6
+                        WHEN 4 THEN request."AcquisitionRequestStatusTypeId" = 8
+                        WHEN 5 THEN request."AcquisitionRequestStatusTypeId" IN (6, 7, 9)
+                        ELSE TRUE
+                    END
                 ORDER BY
+                    CASE WHEN @RequestSortTypeId = 3 THEN
+                        CASE request."AcquisitionRequestStatusTypeId" WHEN 8 THEN 0 WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 3 WHEN 4 THEN 4 WHEN 5 THEN 5 WHEN 6 THEN 6 ELSE 7 END
+                    END,
+                    CASE WHEN @RequestSortTypeId = 4 THEN lower(visible."Title") END,
+                    CASE WHEN @RequestSortTypeId = 2 THEN request."CreatedAt" END,
+                    CASE WHEN @RequestSortTypeId = 2 THEN request."Id" END,
                     request."CreatedAt" DESC,
                     request."Id" DESC
                 LIMIT @PageSize
@@ -106,6 +140,7 @@ namespace Jularr.Backend.Service.User.Request.V1
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
+            sql.Parameters.Add(new ProfileRequestFilterData(Parameters.RequestListFilterTypeId, Parameters.RequestSortTypeId, Parameters.MediaTypeId, Parameters.MediaSubtypeId));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<RequestDetailsV1>(sql, CancellationToken);
         }
@@ -146,6 +181,22 @@ namespace Jularr.Backend.Service.User.Request.V1
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return new BaseDataList<RequestStepV1>(await Context.ReadSql.ReadListAsync<RequestStepV1>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/requests/{acquisitionRequestId:long}/withdraw")]
+    public sealed class WithdrawRequestV1 : UserService<RequestParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(RequestParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(RequestParametersV1 parameters, Type resultType) => new("profile.requests.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            // Own requests only, until they are imported.
+            await Context.WithdrawAcquisitionRequestAsync(new AcquisitionRequestWithdrawData(Parameters.AcquisitionRequestId, Auth.ProfileId!.Value), CancellationToken);
+            return new UpdateResult(true);
         }
     }
 

@@ -132,7 +132,7 @@ namespace Jularr.E2E.Tests
                 var anime = await Steps.WaitForAvailableAsync(user, FakeServices.AnimeTitle);
                 Assert.AreEqual(2, Directory.EnumerateFiles(Path.Combine(folders.Library, "Anime"), "*.webm", SearchOption.AllDirectories).Count(), "The anime episodes were not imported.");
                 await user.GotoAsync("/Requests");
-                await Assertions.Expect(user.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
+                await Assertions.Expect(user.Locator(".request-row", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
 
                 if (ffmpeg is null)
                 {
