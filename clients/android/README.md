@@ -24,6 +24,9 @@ directory needs are tracked in the native app contract issue.
 
 - `core-model`: the shared data contracts of the app services.
 - `core-api`: the HTTP client of the app services, the device token and the error contract.
+- `core-design`: the shared design tokens of the product. The instance serves them as
+  `tokens.json`; a client reads them from there, so the desktop's colors, radii and type scale
+  are the client's colors, radii and type scale.
 
 The phone shell, the TV shell, the player, the offline downloads and the speech runtime
 follow in later pull requests.
@@ -40,7 +43,7 @@ follow in later pull requests.
 From this directory with Android SDK 36 available:
 
 ```bash
-gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-model:lintDebug
+gradle :core-api:testDebugUnitTest :core-api:lintDebug :core-design:testDebugUnitTest :core-design:lintDebug :core-model:lintDebug
 ```
 
 CI runs the same commands (`.github/workflows/android.yml`).

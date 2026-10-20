@@ -264,6 +264,15 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   owning stylesheet, no competing/global copies. Shared design tokens
   are centralized; avoid deep Sass nesting and CSS selector specificity.
   Existing shell CSS retains its historical class names until migrated.
+- **The shared design tokens live in
+  [`Assets/Shared/tokens.json`](../src/Jularr.Frontend/Assets/Shared/tokens.json).**
+  It is the only place that may carry a color of a skin, a radius or a size of
+  the type scale. `Tools/tokens.mjs` writes it into the generated stylesheet
+  (`Assets/Generated/tokens.generated.scss`, not committed) that the shell
+  imports, the runtime palette reads the accents from it, and the build
+  publishes it as `tokens.json` in the public root so the native clients read
+  the same file from the instance. A new token goes into the JSON, never into
+  a stylesheet, a TypeScript file or a client.
 - Browser JS is TypeScript. Add `*.entry.ts` only when a Page/Module has
   real client interactions. CSS-only entry points use `*.entry.scss`.
   The [Vite configuration](../src/Jularr.Frontend/vite.config.ts) discovers

@@ -22,6 +22,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [In-place navigation](Modules/Navigation/PageSwap.ts), [rules](Modules/Navigation/Navigation.ts), [tests](Tools/navigation.test.mjs): htmx boost swaps `#app-content`; `onPage` page-script setup, `inserted` for script HTML, the player keeps its own address while it plays.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
+- [Design tokens](Assets/Shared/tokens.json), [generator](Tools/tokens.mjs), [tests](Tools/tokens.test.mjs): the one source of the colors, the radii and the type scale; the build writes the stylesheet and publishes the file the native clients read.
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
 - [ByteSize.cs](Framework/ByteSize.cs): file and volume sizes in decimal units for every page.
 - [FactList](Framework/Components/FactList.cs): labelled numbers and states (statistics, system overview).

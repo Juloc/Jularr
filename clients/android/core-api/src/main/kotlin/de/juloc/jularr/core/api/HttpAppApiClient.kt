@@ -1,5 +1,6 @@
 package de.juloc.jularr.core.api
 
+import de.juloc.jularr.core.design.DesignTokens
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
@@ -44,6 +45,9 @@ class HttpAppApiClient(
     override suspend fun watchlist(page: Int, pageSize: Int): List<WorkCardV1> =
         request("GET", AppApiRoutes.watchlistPage(page, pageSize), null).payload.toWorkCards()
 
+    override suspend fun designTokens(): DesignTokens =
+        DesignTokens.parse(requestText("GET", AppApiRoutes.DesignTokens))
+
     private suspend fun request(method: String, route: String, body: JSONObject?): AppResponse =
         withContext(Dispatchers.IO) {
             runInterruptible {
@@ -83,6 +87,7 @@ class HttpAppApiClient(
                     AppResponse(
                         payload = if (payload.isBlank()) JSONObject() else JSONObject(payload),
                         deviceToken = deviceToken,
+                        text = payload,
                     )
                 } finally {
                     connection.disconnect()
@@ -90,8 +95,11 @@ class HttpAppApiClient(
             }
         }
 
+    /** Reads a plain text answer, like the shared design tokens. */
+    private suspend fun requestText(method: String, route: String): String = request(method, route, null).text
+
     /** One answer of the server: its payload and the device token it carried. */
-    private class AppResponse(val payload: JSONObject, val deviceToken: String?)
+    private class AppResponse(val payload: JSONObject, val deviceToken: String?, val text: String)
 
     private companion object {
         const val ConnectTimeoutMs = 15_000

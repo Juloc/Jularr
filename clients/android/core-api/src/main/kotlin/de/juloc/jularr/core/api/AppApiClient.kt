@@ -1,5 +1,6 @@
 package de.juloc.jularr.core.api
 
+import de.juloc.jularr.core.design.DesignTokens
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
@@ -29,4 +30,7 @@ interface AppApiClient {
 
     /** Reads one page of the profile's watchlist. */
     suspend fun watchlist(page: Int = 1, pageSize: Int = 25): List<WorkCardV1>
+
+    /** Reads the shared design tokens the instance serves. */
+    suspend fun designTokens(): DesignTokens
 }

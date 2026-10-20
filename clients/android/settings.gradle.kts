@@ -23,5 +23,6 @@ rootProject.name = "JularrAndroid"
 // paired device with a device token, never with a password, an API key or a browser cookie.
 include(
     ":core-api",
+    ":core-design",
     ":core-model",
 )

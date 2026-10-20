@@ -1,32 +1,6 @@
-// Shared skin tokens.
-:root {
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    color-scheme: light;
-    --background: light-dark(#f6f5f9, #141319);
-    --surface: light-dark(#fff, #1d1b24);
-    --surface-hover: color-mix(in srgb, var(--accent) 7%, var(--surface));
-    --field: light-dark(#faf9fc, #19171f);
-    --border: light-dark(#dedbe7, #393441);
-    --text: light-dark(#25202f, #f4f0f8);
-    --muted: light-dark(#696174, #b2aaba);
-    --accent: #7c3aed;
-    --accent-contrast: #fff;
-    --accent-text: light-dark(#7041c9, #bea2ff);
-    --accent-hover: #692aca;
-    --danger: light-dark(#b12b3c, #ff9aa7);
-    --success: light-dark(#1d7a4c, #7fe0a9);
-    --shadow: 0 2px 8px light-dark(rgb(32 19 58 / 4%), rgb(0 0 0 / 14%));
-    --radius-control: 999px;
-    --radius-panel: 12px;
-    --focus: var(--accent-text);
-    --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
-    // Outlines of panels and table heads: the border with a touch of the accent.
-    --accent-line: color-mix(in srgb, var(--accent) 24%, var(--border));
-    --jularr-ring: var(--accent);
-    --jularr-ink: var(--text);
-    --art-hue-rotate: 0deg;
-    --art-saturate: 1;
-}
+// Shared skin tokens. The values come from Assets/Shared/tokens.json, which the build
+// writes into the generated stylesheet; the skins below only override what differs.
+@use "../../Assets/Generated/tokens.generated";
 
 // Brightness stays independent.
 html[data-mode="dark"] { color-scheme: dark; }
@@ -34,20 +8,9 @@ html[data-mode="dark"] { color-scheme: dark; }
     html[data-mode="system"] { color-scheme: dark; }
 }
 
-// Original ink and paper.
+// Original ink and paper. The colors come from the generated stylesheet; only the paper,
+// the landscape and the blossom stay here.
 html[data-skin="original"] {
-    --background: light-dark(#f6f1e9, #191619);
-    --surface: light-dark(#fffdf9, #242024);
-    --surface-hover: color-mix(in srgb, var(--accent) 7%, var(--surface));
-    --field: light-dark(#fcf8f2, #201b20);
-    --border: light-dark(#e1d6cc, #45373d);
-    --text: light-dark(#302426, #f5ece6);
-    --muted: light-dark(#766365, #beabb1);
-    --accent: #c8102e;
-    --accent-contrast: #fff;
-    --accent-text: light-dark(#b30e29, #ff9d9d);
-    --accent-hover: #a90d26;
-    --shadow: 0 3px 14px light-dark(rgb(70 35 30 / 6%), rgb(0 0 0 / 20%));
     --paper-opacity: .55;
     --paper-blend: multiply;
     --paper-filter: none;

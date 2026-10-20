@@ -11,6 +11,9 @@ object AppApiRoutes {
     const val InstancePresentation = "$Base/instance/presentation"
     const val Watchlist = "$Base/watchlist"
 
+    /** The shared design tokens the instance serves; a client reads them from here. */
+    const val DesignTokens = "/tokens.json"
+
     /** The server hands the device token in this header instead of a cookie. */
     const val DeviceTokenHeader = "Jularr-Device-Token"
 

@@ -9,6 +9,7 @@
     ],
     "strict": true,
     "noEmit": true,
+    "resolveJsonModule": true,
     "types": [
       "vite/client"
     ],

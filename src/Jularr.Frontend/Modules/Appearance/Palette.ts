@@ -1,9 +1,11 @@
+import tokens from "../../Assets/Shared/tokens.json";
+
 interface Color { l: number; c: number; h: number }
 type Rgb = [number, number, number];
 type Tokens = Record<string, string>;
 
-export const OriginalAccent = "#c8102e";
-export const CleanAccent = "#7c3aed";
+export const OriginalAccent = tokens.skins.original.accent;
+export const CleanAccent = tokens.skins.clean.accent;
 
 // One seed, two accessible palettes.
 export function buildPalette(seed: string): { light: Tokens; dark: Tokens; rotation: string; saturation: string } {
