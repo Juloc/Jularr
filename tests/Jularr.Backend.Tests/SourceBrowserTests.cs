@@ -91,6 +91,32 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Browser_ResetEndsTheBrowserThatHoldsTheProfile()
+        {
+            var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(browser))
+            {
+                Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            }
+
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var first = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            var page = await first.ReadPageAsync(server.Address, CancellationToken.None);
+            Assert.IsNotNull(page);
+
+            // A browser that runs with the profile is used as it is; the reset ends it, so a new one can start.
+            using var second = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            await second.ResetAsync();
+            Assert.IsFalse(Directory.Exists(Path.Combine(folder.Path, "profile")));
+
+            using var third = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            var again = await third.ReadPageAsync(server.Address, CancellationToken.None);
+            Assert.IsNotNull(again);
+            StringAssert.Contains(again, "The page behind the check");
+        }
+
+        [TestMethod]
         public async Task Browser_ReadsSeveralAddressesAtTheSameTime()
         {
             var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");

@@ -112,24 +112,80 @@ namespace Jularr.Integrations.Logic.Browser
                     }
                 }
 
+                // The browser that holds the profile goes with it.
+                await CloseBrowserAsync(CancellationToken.None);
+                await CloseRunningBrowserAsync(CancellationToken.None);
                 await CloseAsync();
-                if (Directory.Exists(_profile))
-                {
-                    try
-                    {
-                        Directory.Delete(_profile, true);
-                    }
-                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                    {
-                        // The profile stays; the next attempt uses it as it is.
-                    }
-                }
+                await DeleteProfileAsync(CancellationToken.None);
 
                 Note("reset", "the browser begins as a new client");
             }
             finally
             {
                 _gate.Release();
+            }
+        }
+
+        // The profile goes with the browser; a browser that is still leaving holds it for a moment.
+        private async Task DeleteProfileAsync(CancellationToken ct)
+        {
+            for (var attempt = 0; attempt < 10 && Directory.Exists(_profile); attempt++)
+            {
+                try
+                {
+                    Directory.Delete(_profile, true);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    await Task.Delay(500, ct);
+                }
+            }
+        }
+
+        // The browser that holds the profile goes with it; a browser that runs elsewhere is told to quit.
+        private async Task CloseBrowserAsync(CancellationToken ct)
+        {
+            var client = _client;
+            if (client is null)
+            {
+                return;
+            }
+
+            try
+            {
+                await client.SendAsync("Browser.close", null, ct);
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException or System.Text.Json.JsonException)
+            {
+                // The browser is already gone.
+            }
+        }
+
+        // The browser that runs with this profile goes with it, even when an earlier run started it.
+        private async Task CloseRunningBrowserAsync(CancellationToken ct)
+        {
+            try
+            {
+                var file = Path.Combine(_profile, PortFile);
+                if (!File.Exists(file))
+                {
+                    return;
+                }
+
+                var text = (await File.ReadAllTextAsync(file, ct)).Trim();
+                if (!int.TryParse(text, out var port) || port <= 0)
+                {
+                    return;
+                }
+
+                var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
+                await using var client = new DevToolsClient();
+                await client.ConnectAsync(socket, ct);
+                await client.SendAsync("Browser.close", null, ct);
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException or OperationCanceledException)
+            {
+                // The browser is already gone.
             }
         }
 
