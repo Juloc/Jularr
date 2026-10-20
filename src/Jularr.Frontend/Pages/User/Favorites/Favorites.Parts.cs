@@ -289,22 +289,22 @@ namespace Jularr.Frontend.Pages.User.Favorites
             foreach (var area in MediaAreas.All)
             {
                 var members = area.Slugs.Where(slug => Listed.Any(scope => scope.Slug == slug)).ToList();
-                if (members.Count > 0) body.Add(new ChoiceGroup(area.LabelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "library.scope." + slug))], true));
+                if (members.Count > 0) body.Add(new ChoiceGroup(assets, area.LabelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "library.scope." + slug))], new ChoiceOptions(Multiple: true)));
             }
 
-            body.Add(new ChoiceGroup("discover.filter.year", "year", [new("", ValidYear is null, "discover.all"), new("2020", ValidYear == "2020", "discover.year.since2020"),
+            body.Add(new ChoiceGroup(assets, "discover.filter.year", "year", [new("", ValidYear is null, "discover.all"), new("2020", ValidYear == "2020", "discover.year.since2020"),
                 new("old", ValidYear == "old", "discover.year.before2020")]));
             if (Sort != LibrarySortType.RecentlyAdded) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", Sort.ToString()));
             if (CollectionId is { } collection) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "collection").Attribute("value", collection.ToString(CultureInfo.InvariantCulture)));
 
-            return new Drawer(assets, "favorites-filter", "favorites.filter.title", body,
+            return OnePane("favorites-filter", "favorites.filter.title", "filter", body,
             [
                 new A(new Text("discover.reset")).Class("button").Attribute("href", Address(Current with { Types = [], Year = null, Page = 1 })),
                 new Button(new Text("common.apply")).Primary().Submit()
             ], "/Favorites");
         }
 
-        private IUiComponent CreateDrawer(string csrf) => new Drawer(assets, "favorites-create", "collections.new",
+        private IUiComponent CreateDrawer(string csrf) => OnePane("favorites-create", "collections.new", "plus",
         [
             new Form<CreateCollectionDataV1>(form =>
             {
@@ -329,8 +329,11 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (collection.IsSmart) body.Add(new A(new Text("favorites.collection.filter")).Class("button").Attribute("href", "/Collections/" + collection.Id.ToString(CultureInfo.InvariantCulture)));
             body.Add(new Div(new P(new Text("collections.deleteConfirm")),
                 new Form<CollectionParametersV1>(form => form.Submit("collections.delete"), Post("DeleteCollection", collection.Id), csrf, new CollectionParametersV1(collection.Id))).Class("favorites-edit__delete"));
-            return new Drawer(assets, "favorites-edit-" + collection.Id.ToString(CultureInfo.InvariantCulture), "collections.edit", body, [new Button(new Text("common.close")).Attribute("data-drawer-close", "")]);
+            return OnePane("favorites-edit-" + collection.Id.ToString(CultureInfo.InvariantCulture), "collections.edit", "sliders", body, [new Button(new Text("common.close")).Attribute("data-drawer-close", "")]);
         }
+
+        private Drawer OnePane(string id, string titleKey, string icon, IReadOnlyList<IUiComponent> body, IReadOnlyList<IUiComponent> footer, string? formAddress = null) =>
+            new(assets, id, [new DrawerPane("main", titleKey, titleKey, icon, body, footer, formAddress)]);
 
         private sealed class Strong(params IUiComponent[] children) : HtmlElement("strong", children);
 
