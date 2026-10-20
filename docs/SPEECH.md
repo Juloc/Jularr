@@ -77,12 +77,69 @@ only navigates when the word leaves view. Manual gestures temporarily suspend
 following. The speech toolbar overlays the existing grid without shifting the
 book and remains inside the Reader fullscreen element.
 
+## Optional browser neural speech
+
+The same profile/Reader fields select a device or neural provider and a real
+activated model. Installation/removal are explicitly **device-local actions**,
+separate from saving the profile voice choice. Cached models from this device
+remain visible even when the server no longer offers their archive; deactivation
+does not revoke a copy. An explicitly installed update replaces that model id's
+cached version atomically. Missing/unsupported models fail visibly; neither
+Read aloud nor opening the Reader downloads weights or silently changes provider.
+
+An explicit device installation downloads one archive from the authorized server
+endpoint, enforces its exact byte count and SHA-256, then decodes it in one Worker.
+The MIT seek-bzip port retains its bzip2 CRC checks. Tar headers, truncation, paths,
+links, duplicate models and expansion sizes are checked without extracting paths
+to a filesystem. Only one ONNX and one UTF-8 token table are retained. Browser
+limits: 128 MiB compressed, 384 MiB expanded, 192 MiB per model, 1 MiB tokens,
+180 seconds total installation time. No cache commit precedes successful archive
+verification. Failed/aborted writes roll back; leaving cancels installation.
+
+IndexedDB stores verified, extracted model files plus their individual SHA-256
+digests and original catalog identity/hash. Startup verifies the extracted bytes
+again without repeatedly spending CPU on bzip2. Metadata reads never load every
+model into memory. Storage/permission/quota failures are visible; device voices
+remain available. Removing the current model stops this Reader's neural session.
+
+The optional single-threaded sherpa/Piper WASM runtime and pronunciation data load
+only after an explicit neural Read aloud. Text remains on the device. One bounded
+chunk is synthesized at a time and played through Web Audio. Pausing playback
+retains the current source; pausing initialization/generation terminates its
+Worker and resumes the unheard chunk once. Stop, stale generations and navigation
+cannot restart obsolete audio. Errors and finite deadlines release owned audio
+and Worker references. Browser Worker shutdown notifications may lag termination;
+immediate OS memory reclamation is not claimed.
+
+Neural voices highlight the spoken chunk on canonical content and existing page
+prints, not invented word timestamps. Independent pitch is unsupported: its
+control is inert/ARIA-disabled while its typed form value remains bound, so the
+saved device-voice pitch is retained. Rate and volume work for either provider.
+Model caching/local synthesis is not a promise of offline Reader navigation or
+physical-phone/Safari/Firefox compatibility; the native/offline client is separate.
+
+## Browser runtime licenses
+
+The Owner approved a GPLv3-compatible browser client on 20 October 2026,
+including commercial reuse under GPL, without a blanket Server/project relicense.
+See [the browser-client grant](../src/Jularr.Frontend/BROWSER-LICENSE.md) and
+[pinned runtime sources, changes and build instructions](../src/Jularr.Frontend/Modules/Speech/Runtime/NOTICE.md).
+The linked runtime includes GPLv3 eSpeak NG; Apache/MIT/other original notices are
+retained, not relabelled. Models/datasets and separately supplied optional cores
+retain their own terms; this does not override their non-commercial restrictions.
+The Reader/settings link a readable complete notice bundle, built with a source
+commit URL. Dirty/unversioned previews are marked development-only. Builds from a
+source archive may specify `JULARR_BROWSER_SOURCE_REVISION`; it cannot hide a dirty
+Git checkout or disagree with its revision. Redistributors must keep matching
+sources available, including all engine/build inputs, not just offer dead links.
+
+Normal builds use the committed, pinned runtime artifacts; they do not invoke
+Docker, compile C++ or download models. The manual engine recipe preserves its
+build directory for source inspection. `prepare-speech-runtime.mjs` documents and
+checks the mechanical ESM/Uint8Array port and input hashes.
+
 ## Remaining integration
 
-The optional browser neural runtime and client-side verified model cache are
-not connected. Activating a package makes its bytes available, not a neural voice
-usable in this browser. A profile preferring neural speech gets an explicit
-unavailable state here, not an automatic model/runtime download or silent fallback.
 The Android adapter remains under #1296. Optional cross-chapter continuation and
 speaking completed translation batches while later batches load remain tracked
 under #1299; current speech stops at the section boundary and waits for a whole
@@ -95,3 +152,22 @@ controls on desktop/mobile; the device audio callbacks are deterministic test
 doubles, not a claim of audible testing on physical phones).
 The active instance database is never upgraded by this work; the fresh schema
 baseline is tested only through isolated disposable databases.
+
+`Tools/neural-speech.test.mjs` checks strict archive/CRC handling and neural
+cancellation/chunk/pause/failure behavior. `SpeechPathTests.Neural_…` uses real
+server activation/preferences, a clearly synthetic non-inference archive, real
+browser archive/cache handling and Reader controls with an explicit inference
+double. It is not an audible model-quality test.
+
+Manual real-model replay after the frontend/test builds:
+`node src/Jularr.Frontend/Tools/speech-neural-smoke.mjs <archive-directory> <catalog-id>`.
+It never fetches external models: supply the catalog-hash-verified archives.
+German Thorsten, Indonesian News TTS and English LJ Speech passed actual Worker
+generation/Web Audio playback, pause/resume, cached reload, corrupt-cache rejection
+and Worker cleanup in local Chromium. Evidence is under the ignored
+`.scratch/speech-neural-spike/browser-integration-*.json`. Initial installation was
+about 27/35/48 seconds here; extracted-file caching avoids paying that decompression
+cost per Read aloud. Those are observations, not device/battery or voice-quality
+guarantees. The test streams large packages through an ephemeral loopback fixture
+server to avoid huge base64 copies through the debugging protocol; this is not
+an additional application web host or synthesis service.
