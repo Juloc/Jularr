@@ -1,5 +1,18 @@
 package de.juloc.jularr.tv
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,5 +97,68 @@ fun TvDetailsScreen(controller: TvController) {
             color = colors.text,
             modifier = Modifier.width(TvLayout.CardWidth * 4),
         )
+        Spacer(Modifier.height(TvLayout.Gap))
+        // The collections of the profile: the viewer puts the title into one of them.
+        if (details.id > 0) {
+            Text(
+                text = controller.texts["collections.title"],
+                fontSize = type.body,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.muted,
+            )
+            LazyColumn(modifier = Modifier.height(TvLayout.CardWidth * 2)) {
+                items(controller.collections, key = { it.id }) { collection ->
+                    TvCollectionCheck(
+                        controller = controller,
+                        title = collection.name,
+                        workId = details.id,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One collection of the profile with the mark of the title. */
+@Composable
+private fun TvCollectionCheck(controller: TvController, title: String, workId: Long) {
+    val colors = LocalTvColors.current
+    val type = LocalTvType.current
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(TvLayout.RailItemRadius)
+    val collection = controller.collections.firstOrNull { it.name == title }
+    val member = controller.collectionWorks.any { it.workId == workId }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(TvLayout.RailItemHeight)
+            .clip(shape)
+            .background(colors.surface, shape)
+            .reportFocus { focused = it }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {
+                collection?.let { controller.toggleCollection(it, workId, !member) }
+            }
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            fontSize = type.body,
+            color = if (focused) colors.accentText else colors.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (member) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = colors.accentText,
+                modifier = Modifier.size(TvLayout.AvailabilitySymbol * 0.55f),
+            )
+        }
     }
 }

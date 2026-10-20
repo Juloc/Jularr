@@ -2,6 +2,7 @@ package de.juloc.jularr.core.api
 
 import de.juloc.jularr.core.design.DesignTokens
 import de.juloc.jularr.core.model.AuthenticationV1
+import de.juloc.jularr.core.model.CollectionV1
 import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
@@ -15,6 +16,7 @@ import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
 import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
+import de.juloc.jularr.core.model.UiLocaleV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
 
@@ -82,6 +84,30 @@ interface AppApiClient {
         isEnded: Boolean,
         isCompleted: Boolean,
     )
+
+    /** Reads the languages the instance offers for the interface. */
+    suspend fun locales(): List<UiLocaleV1>
+
+    /** Changes the language of the interface of the profile. */
+    suspend fun updateProfileLanguage(profileId: Long, uiLocaleId: Long)
+
+    /** Reads the collections of the profile. */
+    suspend fun collections(): List<CollectionV1>
+
+    /** Reads the titles of a collection. */
+    suspend fun collectionWorks(collectionId: Long): List<WorkCardV1>
+
+    /** Puts a title into a collection or takes it out. */
+    suspend fun setCollectionWork(collectionId: Long, workId: Long, member: Boolean)
+
+    /** Creates a collection of the profile and answers its id. */
+    suspend fun createCollection(name: String): Long
+
+    /** Changes the name of a collection. */
+    suspend fun renameCollection(collectionId: Long, name: String, version: Long)
+
+    /** Removes a collection of the profile. */
+    suspend fun deleteCollection(collectionId: Long)
 
     /** Reads the profiles the account of the device may use. */
     suspend fun profiles(): List<ProfileSelectionV1>

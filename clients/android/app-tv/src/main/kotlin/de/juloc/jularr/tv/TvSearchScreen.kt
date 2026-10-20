@@ -343,20 +343,3 @@ private val KeyWidth = 48.dp
 /** The width of one action key; the space is wider. */
 private val ActionKeyWidth = 80.dp
 
-/** Reads a search result as a card of the desktop. */
-fun DiscoverItemV1.toTvCard(texts: TvTexts): TvCard = TvCard(
-    id = if (workId != null) "work-$workId" else "tmdb-$tmdbId",
-    title = title,
-    posterUrl = posterUrl,
-    meta = texts["media.state." + mediaStateName(mediaStateTypeId)],
-    progress = null,
-    availabilityStateId = null,
-)
-
-/** The name of the state of a work, as the texts of the server know it. */
-private fun mediaStateName(mediaStateTypeId: Int): String = when (mediaStateTypeId) {
-    1 -> "NotRequested"
-    2 -> "Requested"
-    3 -> "Available"
-    else -> "NotRequested"
-}

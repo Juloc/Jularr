@@ -62,6 +62,11 @@ class JularrMedia3Player(context: Context) : Closeable {
         exoPlayer.playWhenReady = playWhenReady
     }
 
+    /** The speed of the stream. */
+    fun setSpeed(speed: Float) {
+        exoPlayer.setPlaybackSpeed(speed)
+    }
+
     /** Seeks to a place in the stream. */
     fun seekTo(positionMs: Long) {
         exoPlayer.seekTo(positionMs.coerceIn(0, exoPlayer.duration.takeIf { it > 0 } ?: Long.MAX_VALUE))

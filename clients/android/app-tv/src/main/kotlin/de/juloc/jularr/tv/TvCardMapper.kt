@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.model.ContinueItemV1
+import de.juloc.jularr.core.model.DiscoverItemV1
 import de.juloc.jularr.core.model.WorkCardV1
 import kotlin.math.roundToInt
 
@@ -30,8 +31,54 @@ fun ContinueItemV1.toTvCard(texts: TvTexts): TvCard = TvCard(
     workId = workId,
 )
 
-/** The name of the state of a work, as the texts of the server know it. */
-private fun mediaStateName(mediaStateTypeId: Int): String = when (mediaStateTypeId) {
+/** Reads a ranked title of the instance as a card of the desktop. */
+fun DiscoverItemV1.toTvCard(texts: TvTexts): TvCard = TvCard(
+    id = if (workId != null) "work-$workId" else "tmdb-$tmdbId",
+    title = title,
+    posterUrl = posterUrl,
+    meta = texts["media.state." + mediaStateName(mediaStateTypeId)],
+    progress = null,
+    availabilityStateId = null,
+    workId = workId,
+    backdropUrl = backdropUrl,
+    year = releaseYear,
+    overview = overview,
+)
+
+/** The name of a ranked list of the instance, as the texts of the server know it. */
+fun feedName(feedTypeId: Int): String = when (feedTypeId) {
+    1 -> "Trending"
+    2 -> "Top"
+    3 -> "New"
+    4 -> "Upcoming"
+    else -> "Trending"
+}
+
+/**
+ * The mark of the state of a title on its cover: the desktop names the titles it can play, the
+ * titles it continues and the titles it requested.
+ */
+fun TvCard.stateMark(texts: TvTexts): String? = when {
+    progress != null -> texts["media.continue"]
+    availabilityStateId == null -> null
+    else -> texts["media.state." + availabilityName(availabilityStateId)]
+}
+
+/** The name of the availability of a title, as the texts of the server know it. */
+private fun availabilityName(stateId: Int): String = when (stateId) {
+    1 -> "Available"
+    2 -> "Partial"
+    3 -> "Missing"
+    4 -> "Downloading"
+    5 -> "Searching"
+    6 -> "Requested"
+    7 -> "ProfileAudio"
+    8 -> "OtherAudio"
+    9 -> "PartialOtherAudio"
+    else -> "NotRequested"
+}
+
+/** The name of the state of a work, as the texts of the server know it. */private fun mediaStateName(mediaStateTypeId: Int): String = when (mediaStateTypeId) {
     1 -> "NotRequested"
     2 -> "Requested"
     3 -> "Available"

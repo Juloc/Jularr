@@ -62,6 +62,49 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                title = controller.texts["tv.settings.language"],
+                value = controller.language,
+                onClick = {
+                    controller.loadLocales()
+                    controller.open(TvRoute.Languages)
+                },
+            )
+        }
+        item {
+            // The settings of the player.
+            Text(
+                text = controller.texts["tv.player.settings"],
+                fontSize = type.body,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.muted,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        item {
+            TvSettingRow(
+                title = controller.texts["tv.player.autoplay"],
+                value = controller.texts[if (controller.autoplay) "common.yes" else "common.no"],
+                onClick = { controller.useAutoplay(!controller.autoplay) },
+            )
+        }
+        item {
+            TvSettingRow(
+                title = controller.texts["tv.player.speed"],
+                value = "${controller.speed}x",
+                onClick = {
+                    val next = when {
+                        controller.speed >= 2f -> 0.5f
+                        controller.speed >= 1.5f -> 2f
+                        controller.speed >= 1.25f -> 1.5f
+                        controller.speed >= 1f -> 1.25f
+                        else -> 1f
+                    }
+                    controller.useSpeed(next)
+                },
+            )
+        }
+        item {
+            TvSettingRow(
                 title = controller.texts["tv.settings.forget"],
                 value = "",
                 onClick = { controller.forget() },

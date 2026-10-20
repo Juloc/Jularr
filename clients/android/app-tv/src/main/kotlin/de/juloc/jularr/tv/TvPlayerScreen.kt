@@ -48,12 +48,14 @@ fun TvPlayerScreen(controller: TvController) {
         player.open(
             uri = android.net.Uri.parse(stream),
             startPositionMs = plan.resumePositionMs,
+            playWhenReady = controller.autoplay,
             requestHeaders = headers,
             metadata = de.juloc.jularr.core.player.PlaybackMetadata(
                 mediaId = plan.playbackSessionId,
                 title = controller.playingTitle,
             ),
         )
+        player.setSpeed(controller.speed)
         duration = plan.durationMs
     }
 

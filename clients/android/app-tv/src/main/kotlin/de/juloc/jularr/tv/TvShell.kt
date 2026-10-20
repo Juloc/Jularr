@@ -94,7 +94,12 @@ fun TvShell(controller: TvController) {
                         .padding(TvLayout.ContentPadding),
                 ) {
                     when (controller.route) {
-                        TvRoute.Home -> TvHomeScreen(controller)
+                        TvRoute.Home -> {
+                            TvHomeScreen(controller)
+                            if (controller.filterOpen) {
+                                TvFilterDialog(controller) { controller.filterOpen = false }
+                            }
+                        }
                         TvRoute.Watchlist -> TvCardGrid(
                             title = controller.texts["watchlist.title"],
                             cards = controller.watchlist,
@@ -114,6 +119,11 @@ fun TvShell(controller: TvController) {
                         TvRoute.Search -> TvSearchScreen(controller)
                         TvRoute.Details -> TvDetailsScreen(controller)
                         TvRoute.Player -> TvPlayerScreen(controller)
+                        TvRoute.Languages -> TvLanguagesScreen(controller)
+                        TvRoute.Collections -> {
+                            controller.loadCollections()
+                            TvCollectionsScreen(controller)
+                        }
                     }
                 }
             }
@@ -165,6 +175,7 @@ private fun TvRail(controller: TvController) {
         TvRailLink(controller, TvRoute.Home, controller.texts["nav.home"], homeFocus)
         TvRailLink(controller, TvRoute.Watchlist, controller.texts["watchlist.title"])
         TvRailLink(controller, TvRoute.Library, controller.texts["nav.library"])
+        TvRailLink(controller, TvRoute.Collections, controller.texts["collections.title"])
         Spacer(Modifier.weight(1f))
         TvRailLink(controller, TvRoute.Profiles, controller.profileName)
         TvRailLink(controller, TvRoute.Settings, controller.texts["tv.settings.title"])
@@ -299,4 +310,6 @@ internal fun locationKey(route: TvRoute): String = when (route) {
     TvRoute.Search -> "search.global"
     TvRoute.Details -> "media.details"
     TvRoute.Player -> "media.play"
+    TvRoute.Languages -> "tv.settings.language"
+    TvRoute.Collections -> "collections.title"
 }

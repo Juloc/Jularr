@@ -31,11 +31,30 @@ class TvSettings(context: Context) {
             preferences.edit().putBoolean(Dark, value).apply()
         }
 
+    /**
+     * The settings of the player on this device. They belong to the profile; until the
+     * instance keeps them (#1355), the television remembers them here.
+     */
+    var autoplay: Boolean
+        get() = preferences.getBoolean(Autoplay, true)
+        set(value) {
+            preferences.edit().putBoolean(Autoplay, value).apply()
+        }
+
+    /** The speed of the stream. */
+    var speed: Float
+        get() = preferences.getFloat(Speed, 1f)
+        set(value) {
+            preferences.edit().putFloat(Speed, value).apply()
+        }
+
     private companion object {
         const val Name = "jularr.tv"
         const val Address = "address"
         const val Skin = "skin"
         const val Dark = "dark"
+        const val Autoplay = "autoplay"
+        const val Speed = "speed"
         const val DefaultSkin = "clean"
     }
 }

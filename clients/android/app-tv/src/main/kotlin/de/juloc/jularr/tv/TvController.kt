@@ -9,6 +9,7 @@ import de.juloc.jularr.core.api.AppApiClient
 import de.juloc.jularr.core.api.DeviceTokenStore
 import de.juloc.jularr.core.api.HttpAppApiClient
 import de.juloc.jularr.core.design.DesignTokens
+import de.juloc.jularr.core.model.CollectionV1
 import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePlatform
@@ -19,6 +20,7 @@ import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
+import de.juloc.jularr.core.model.UiLocaleV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +88,22 @@ class TvController(context: Context) {
     var profileName by mutableStateOf("")
         private set
 
+    /** The languages the instance offers for the interface. */
+    var locales by mutableStateOf(emptyList<UiLocaleV1>())
+        private set
+
+    /** The language of the profile the television works as. */
+    var language by mutableStateOf("")
+        private set
+
+    /** The player starts the stream at once. */
+    var autoplay by mutableStateOf(settings.autoplay)
+        private set
+
+    /** The speed of the stream. */
+    var speed by mutableStateOf(settings.speed)
+        private set
+
     /** What the viewer types in the search. */
     var searchQuery by mutableStateOf("")
         private set
@@ -100,6 +118,42 @@ class TvController(context: Context) {
 
     /** The ranked lists of the instance; the trending ones stand on the right of the search. */
     var trending by mutableStateOf(emptyList<DiscoverItemV1>())
+        private set
+
+    /** The recommendations of the instance, as the desktop shows them below the shelves. */
+    var recommendations by mutableStateOf(emptyList<TvShelf>())
+        private set
+
+    /** The type the viewer chose; without one every type stands. */
+    var selectedScope by mutableStateOf<String?>(null)
+        private set
+
+    /** The list the viewer chose; without one every list stands. */
+    var selectedFeed by mutableStateOf<Int?>(null)
+        private set
+
+    /** The order of the titles. */
+    var sorting by mutableStateOf(TvSorting.Recommended)
+        private set
+
+    /** The folge of the hero the viewer sees. */
+    var heroIndex by mutableStateOf(0)
+        private set
+
+    /** The area the viewer chose; without one every area stands. */
+    var selectedArea by mutableStateOf<TvArea?>(null)
+        private set
+
+    /** The collections of the profile. */
+    var collections by mutableStateOf(emptyList<CollectionV1>())
+        private set
+
+    /** The collection the viewer opened; without one the list of the collections stands. */
+    var openCollection by mutableStateOf<CollectionV1?>(null)
+        private set
+
+    /** The titles of the open collection. */
+    var collectionWorks by mutableStateOf(emptyList<TvCard>())
         private set
 
     /** The details of the title the viewer opened. */
@@ -132,6 +186,7 @@ class TvController(context: Context) {
         private set
 
     private var api: AppApiClient? = null
+    private var currentProfileId: Long? = null
     private var previousRoute = TvRoute.Home
     private var searchJob: Job? = null
 
@@ -213,7 +268,183 @@ class TvController(context: Context) {
         val profiles = client.profiles()
         this.profiles = profiles
         val current = client.authentication().profileId
+        currentProfileId = current
         profileName = profiles.firstOrNull { it.id == current }?.displayName.orEmpty()
+        val localeId = client.instancePresentation().uiLocaleId
+        runCatching { client.locales() }.onSuccess { list ->
+            locales = list
+            language = list.firstOrNull { it.id == localeId }?.name.orEmpty()
+        }
+        loadRecommendations()
+    }
+
+    /** Reads the recommendations of the instance; the type the viewer chose stands alone. */
+    private fun loadRecommendations() {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.discoverShelves() }.onSuccess { shelves ->
+                recommendations = shelves
+                    .filter { selectedScope == null || it.scopeSlug == selectedScope }
+                    .filter { selectedArea == null || TvArea.of(it.scopeSlug) == selectedArea }
+                    .filter { selectedFeed == null || it.discoverFeedTypeId == selectedFeed }
+                    .map { shelf ->
+                        TvShelf(
+                            key = "feed-${shelf.scopeSlug}-${shelf.discoverFeedTypeId}",
+                            title = texts["discover.feed." + feedName(shelf.discoverFeedTypeId)],
+                            cards = shelf.items.map { it.toTvCard(texts) },
+                        )
+                    }
+                    .filter { it.cards.isNotEmpty() }
+            }
+        }
+    }
+
+    /** The viewer chooses a type of the capsule; every type stands without a choice. */
+    fun selectScope(slug: String?) {
+        selectedScope = slug
+        loadRecommendations()
+    }
+
+    /** The viewer chooses an area of the capsule; every area stands without a choice. */
+    fun selectArea(area: TvArea?) {
+        selectedArea = area
+        loadRecommendations()
+    }
+
+    /** The title of the hero: the one with a wide picture, else the one the profile continues. */
+    fun hero(): TvCard? = heroDeck.getOrNull(heroIndex) ?: heroDeck.firstOrNull()
+
+    /** The folgen des Hero: die Titel mit einem breiten Bild. */
+    val heroDeck: List<TvCard>
+        get() = recommendations.flatMap { it.cards }.filter { it.backdropUrl != null }
+            .ifEmpty { shelves.flatMap { it.cards } }
+
+    /** Der Viewer wechselt die Folge des Hero. */
+    fun showHero(index: Int) {
+        if (heroDeck.isEmpty()) {
+            return
+        }
+        heroIndex = ((index % heroDeck.size) + heroDeck.size) % heroDeck.size
+    }
+
+    /** Der Filter des Discover ist offen. */
+    var filterOpen by mutableStateOf(false)
+
+
+    /** Der Viewer Ã¶ffnet den Filter des Discover. */
+    fun openFilter() {
+        filterOpen = true
+    }
+
+    /** Der Viewer wÃ¤hlt die Liste; ohne Wahl stehen alle Listen. */
+    fun selectFeed(feedTypeId: Int?) {
+        selectedFeed = feedTypeId
+        loadRecommendations()
+    }
+
+    /** Der Viewer wÃ¤hlt die Reihenfolge der Titel. */
+    fun sortBy(sorting: TvSorting) {
+        this.sorting = sorting
+    }
+
+    /** Die Titel der Regale in der gewÃ¤hlten Reihenfolge. */
+    fun sorted(shelf: TvShelf): List<TvCard> = when (sorting) {
+        TvSorting.Recommended -> shelf.cards
+        TvSorting.Title -> shelf.cards.sortedBy { it.title.lowercase() }
+        TvSorting.Year -> shelf.cards.sortedByDescending { it.year ?: 0 }
+    }
+
+    /** Reads the collections of the profile. */
+    fun loadCollections() {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.collections() }.onSuccess { collections = it }
+        }
+    }
+
+    /** The viewer opens a collection; its titles follow. */
+    fun openCollection(collection: CollectionV1) {
+        val client = api ?: return
+        openCollection = collection
+        collectionWorks = emptyList()
+        scope.launch {
+            runCatching { client.collectionWorks(collection.id) }
+                .onSuccess { collectionWorks = it.map { work -> work.toTvCard(texts) } }
+        }
+    }
+
+    /** The viewer puts a title into a collection or takes it out. */
+    fun toggleCollection(collection: CollectionV1, workId: Long, member: Boolean) {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.setCollectionWork(collection.id, workId, member) }
+                .onSuccess {
+                    if (openCollection?.id == collection.id) {
+                        openCollection(collection)
+                    }
+                }
+        }
+    }
+
+    /** The viewer creates a collection with a name. */
+    fun createCollection(name: String) {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.createCollection(name) }
+                .onSuccess { loadCollections() }
+                .onFailure { error = it.message ?: it::class.java.simpleName }
+        }
+    }
+
+    /** The viewer changes the name of a collection. */
+    fun renameCollection(collection: CollectionV1, name: String) {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.renameCollection(collection.id, name, collection.version) }
+                .onSuccess { loadCollections() }
+                .onFailure { error = it.message ?: it::class.java.simpleName }
+        }
+    }
+
+    /** The viewer removes a collection. */
+    fun deleteCollection(collection: CollectionV1) {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.deleteCollection(collection.id) }
+                .onSuccess {
+                    if (openCollection?.id == collection.id) {
+                        openCollection = null
+                    }
+                    loadCollections()
+                }
+                .onFailure { error = it.message ?: it::class.java.simpleName }
+        }
+    }
+
+    /** Reads the languages of the instance for the settings of the television. */
+    fun loadLocales() {
+        val client = api ?: return
+        scope.launch {
+            runCatching { client.locales() }.onSuccess { locales = it }
+        }
+    }
+
+    /**
+     * The viewer chooses the language of the profile; the texts of the instance follow in the
+     * new language.
+     */
+    fun setLanguage(locale: UiLocaleV1) {
+        val client = api ?: return
+        val profileId = currentProfileId ?: return
+        scope.launch {
+            runCatching { client.updateProfileLanguage(profileId, locale.id) }
+                .onSuccess {
+                    language = locale.locale
+                    val presentation = client.instancePresentation()
+                    texts = TvTexts(client.uiTexts(presentation.uiLocaleId))
+                }
+                .onFailure { error = it.message ?: it::class.java.simpleName }
+        }
     }
 
     /** Switches the television to another profile of its account. */
@@ -296,8 +527,8 @@ class TvController(context: Context) {
     /** A key of the keyboard of the television. */
     fun type(key: String) {
         val text = when (key) {
-            "␣" -> searchQuery + " "
-            "⌫" -> searchQuery.dropLast(1)
+            "â£" -> searchQuery + " "
+            "âŒ«" -> searchQuery.dropLast(1)
             else -> searchQuery + key
         }
         searchQuery = text
@@ -426,6 +657,18 @@ class TvController(context: Context) {
     fun useDark(value: Boolean) {
         dark = value
         settings.dark = value
+    }
+
+    /** The player starts the stream at once. */
+    fun useAutoplay(value: Boolean) {
+        autoplay = value
+        settings.autoplay = value
+    }
+
+    /** The speed of the stream. */
+    fun useSpeed(value: Float) {
+        speed = value
+        settings.speed = value
     }
 
     /** Ends the pairing of this device; the television pairs again on the next start. */

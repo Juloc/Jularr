@@ -1,6 +1,7 @@
 package de.juloc.jularr.core.api
 
 import de.juloc.jularr.core.model.AuthenticationV1
+import de.juloc.jularr.core.model.CollectionV1
 import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
@@ -15,6 +16,7 @@ import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
 import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
+import de.juloc.jularr.core.model.UiLocaleV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
 import org.json.JSONArray
@@ -112,6 +114,23 @@ internal fun JSONObject.toDiscoverScope(): DiscoverScopeV1 =
         mediaSubtypeId = if (isNull("mediaSubtypeId")) null else getInt("mediaSubtypeId"),
         isCatalog = getBoolean("isCatalog"),
         feeds = getJSONArray("feeds").toIntList(),
+    )
+
+internal fun JSONObject.toCollection(): CollectionV1 =
+    CollectionV1(
+        id = getLong("id"),
+        name = getString("name"),
+        isSmart = getBoolean("isSmart"),
+        mediaTypeId = if (isNull("mediaTypeId")) null else getInt("mediaTypeId"),
+        workCount = if (isNull("workCount")) null else getInt("workCount"),
+    )
+
+internal fun JSONObject.toUiLocale(): UiLocaleV1 =
+    UiLocaleV1(
+        id = getLong("id"),
+        locale = getString("locale"),
+        name = getString("name"),
+        isRightToLeft = getBoolean("isRightToLeft"),
     )
 
 internal fun JSONObject.toPlaybackPlan(): PlaybackPlanV1 =

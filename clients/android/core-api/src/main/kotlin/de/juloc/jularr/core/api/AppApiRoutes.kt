@@ -19,6 +19,8 @@ object AppApiRoutes {
     const val DiscoverSuggestions = "$Base/discover/suggestions"
     const val DiscoverShelves = "$Base/discover/shelves"
     const val Profiles = "$Base/profiles"
+    const val Locales = "$Base/localization/locales"
+    const val Collections = "$Base/collections"
 
     /** The shared design tokens the instance serves; a client reads them from here. */
     const val DesignTokens = "/tokens.json"
@@ -37,6 +39,18 @@ object AppApiRoutes {
 
     /** Switches the device to another profile of its account. */
     fun selectProfile(profileId: Long): String = "$Base/auth/profile/$profileId"
+
+    /** The settings of a profile of the instance. */
+    fun profile(profileId: Long): String = "$Base/profiles/$profileId"
+
+    /** The titles of a collection. */
+    fun collectionWorks(collectionId: Long): String = "$Base/collections/$collectionId/works"
+
+    /** One collection of the profile. */
+    fun collection(collectionId: Long): String = "$Base/collections/$collectionId"
+
+    /** Puts a title into a collection or takes it out. */
+    fun collectionWork(collectionId: Long, workId: Long): String = "$Base/collections/$collectionId/works/$workId"
 
     /** The details of a title of the instance. */
     fun work(workId: Long): String = "$Base/works/$workId"

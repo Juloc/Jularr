@@ -22,6 +22,8 @@ enum class TvRoute(val key: String) {
     Search("search"),
     Details("details"),
     Player("player"),
+    Languages("languages"),
+    Collections("collections"),
 }
 
 /** Where the focus is now; the D-pad moves between the areas in the reading order. */
@@ -54,6 +56,12 @@ data class TvCard(
     val mediaAssetId: Long? = null,
     /** The work of the title, when the instance knows it. */
     val workId: Long? = null,
+    /** The wide picture of the title, for the hero of the desktop. */
+    val backdropUrl: String? = null,
+    /** The year of the title. */
+    val year: Int? = null,
+    /** The text of the title. */
+    val overview: String? = null,
 )
 
 /** One shelf of the home page: its heading and its cards. */

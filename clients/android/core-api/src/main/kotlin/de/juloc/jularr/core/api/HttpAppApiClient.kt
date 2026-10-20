@@ -2,6 +2,7 @@ package de.juloc.jularr.core.api
 
 import de.juloc.jularr.core.design.DesignTokens
 import de.juloc.jularr.core.model.AuthenticationV1
+import de.juloc.jularr.core.model.CollectionV1
 import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
@@ -15,6 +16,7 @@ import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
 import de.juloc.jularr.core.model.PlaybackPlanV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
+import de.juloc.jularr.core.model.UiLocaleV1
 import de.juloc.jularr.core.model.WorkCardV1
 import de.juloc.jularr.core.model.WorkDetailsV1
 import kotlinx.coroutines.Dispatchers
@@ -119,6 +121,44 @@ class HttpAppApiClient(
             body.put("durationMs", durationMs)
         }
         request("PUT", AppApiRoutes.playbackSession(playbackSessionId), body)
+    }
+
+    override suspend fun locales(): List<UiLocaleV1> =
+        requestList("GET", AppApiRoutes.Locales).map { it.toUiLocale() }
+
+    override suspend fun updateProfileLanguage(profileId: Long, uiLocaleId: Long) {
+        request("PUT", AppApiRoutes.profile(profileId), JSONObject().put("uiLocaleId", uiLocaleId))
+    }
+
+    override suspend fun collections(): List<CollectionV1> =
+        requestList("GET", AppApiRoutes.Collections).map { it.toCollection() }
+
+    override suspend fun collectionWorks(collectionId: Long): List<WorkCardV1> =
+        requestObject("GET", AppApiRoutes.collectionWorks(collectionId), null).toWorkCards()
+
+    override suspend fun setCollectionWork(collectionId: Long, workId: Long, member: Boolean) {
+        val route = AppApiRoutes.collectionWork(collectionId, workId)
+        if (member) {
+            request("PUT", route, null)
+        } else {
+            request("DELETE", route, null)
+        }
+    }
+
+    override suspend fun createCollection(name: String): Long =
+        requestObject("POST", AppApiRoutes.Collections, JSONObject().put("name", name).put("isSmart", false))
+            .getLong("id")
+
+    override suspend fun renameCollection(collectionId: Long, name: String, version: Long) {
+        request(
+            "PUT",
+            AppApiRoutes.collection(collectionId),
+            JSONObject().put("name", name).put("version", version),
+        )
+    }
+
+    override suspend fun deleteCollection(collectionId: Long) {
+        request("DELETE", AppApiRoutes.collection(collectionId), null)
     }
 
     override suspend fun profiles(): List<ProfileSelectionV1> =

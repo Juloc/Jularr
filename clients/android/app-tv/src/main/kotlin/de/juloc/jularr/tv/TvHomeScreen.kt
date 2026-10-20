@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -51,19 +56,48 @@ fun TvHomeScreen(controller: TvController) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(TvLayout.Gap),
     ) {
-        // The row of media types, as on the desktop.
-        if (controller.scopes.isNotEmpty()) {
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(TvLayout.Gap)) {
-                    items(controller.scopes) { scope ->
-                        TvCapsule(controller, controller.texts["discover.type." + scope.slug])
+        // The row of media types, as on the desktop: every area and the areas of the instance.
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(TvLayout.Gap)) {
+                item {
+                    TvAreaCapsule(
+                        controller = controller,
+                        title = controller.texts["discover.all"],
+                        chosen = controller.selectedArea == null && controller.selectedScope == null,
+                        icon = null,
+                    ) {
+                        controller.selectScope(null)
+                        controller.selectArea(null)
+                    }
+                }
+                items(TvArea.entries.toList()) { area ->
+                    TvAreaCapsule(
+                        controller = controller,
+                        title = controller.texts["discover.area." + area.key],
+                        chosen = controller.selectedArea == area,
+                        icon = area,
+                    ) {
+                        controller.selectScope(null)
+                        controller.selectArea(area)
                     }
                 }
             }
         }
 
-        if (controller.shelves.isEmpty()) {
+        // The hero of the desktop stands above the shelves.
+        val hero = controller.hero()
+        if (hero != null) {
             item {
+                TvHero(controller, hero)
+            }
+        }
+
+        // The bar of the lists, the number of the titles and the order, as on the desktop.
+        item {
+            TvFilterBar(controller)
+        }
+
+        if (controller.shelves.isEmpty() && controller.recommendations.isEmpty()) {            item {
                 Text(
                     text = controller.texts["tv.empty.home"],
                     fontSize = type.body,
@@ -74,20 +108,33 @@ fun TvHomeScreen(controller: TvController) {
             items(controller.shelves, key = { it.key }) { shelf ->
                 TvShelfRow(controller, shelf)
             }
+            // The recommendations of the instance, as on the desktop.
+            items(controller.recommendations, key = { it.key }) { shelf ->
+                TvShelfRow(controller, shelf)
+            }
         }
     }
 }
 
-/** One entry of the type capsule. */
+/**
+ * One capsule of the media areas, as the desktop groups them: the chosen area stands out, the
+ * others wait in the row.
+ */
 @Composable
-private fun TvCapsule(controller: TvController, title: String) {
+private fun TvAreaCapsule(
+    controller: TvController,
+    title: String,
+    chosen: Boolean,
+    icon: TvArea?,
+    onChoose: () -> Unit,
+) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     var focused by remember { mutableStateOf(false) }
     val requester = remember { FocusRequester() }
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
 
-    // The capsule is the first row of the content.
+    // The capsules are the first row of the content.
     LaunchedEffect(requester) {
         controller.focusOrder.register("capsule", requester)
     }
@@ -95,14 +142,11 @@ private fun TvCapsule(controller: TvController, title: String) {
         onDispose { controller.focusOrder.unregister("capsule", requester) }
     }
 
-    Text(
-        text = title,
-        fontSize = type.body,
-        fontWeight = FontWeight.Medium,
-        color = if (focused) colors.accentText else colors.muted,
+    Row(
         modifier = Modifier
-            .background(if (focused) colors.field else colors.surface, shape)
+            .height(TvLayout.RailItemHeight)
             .clip(shape)
+            .background(if (chosen) colors.accent else colors.surface, shape)
             .focusRequester(requester)
             .reportFocus {
                 focused = it
@@ -114,7 +158,7 @@ private fun TvCapsule(controller: TvController, title: String) {
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { }
+            ) { onChoose() }
             .then(
                 if (focused) {
                     Modifier.tvFocusRing(true, colors.focus, shape)
@@ -122,8 +166,187 @@ private fun TvCapsule(controller: TvController, title: String) {
                     Modifier
                 },
             )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        icon?.let { area ->
+            Icon(
+                imageVector = area.icon(),
+                contentDescription = null,
+                tint = if (chosen) colors.accentContrast else colors.muted,
+                modifier = Modifier.size(TvLayout.AvailabilitySymbol * 0.55f),
+            )
+        }
+        Text(
+            text = title,
+            fontSize = type.body,
+            fontWeight = if (chosen) FontWeight.Bold else FontWeight.Medium,
+            color = when {
+                chosen -> colors.accentContrast
+                focused -> colors.accentText
+                else -> colors.muted
+            },
+        )
+    }
+}
+
+/**
+ * The bar under the hero: the lists of the instance, the number of the titles and the order.
+ */
+@Composable
+private fun TvFilterBar(controller: TvController) {
+    val colors = LocalTvColors.current
+    val type = LocalTvType.current
+    val titles = controller.shelves.sumOf { it.cards.size } + controller.recommendations.sumOf { it.cards.size }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        TvFeedButton(controller, controller.texts["discover.all"], null)
+        listOf(1, 2, 3, 4).forEach { feed ->
+            TvFeedButton(controller, controller.texts["discover.feed." + feedName(feed)], feed)
+        }
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = controller.texts["discover.count"] + " " + titles,
+            fontSize = type.cardMeta,
+            color = colors.muted,
+        )
+        // The filter of the discover with the granular types and the language.
+        TvFilterButton(controller)
+    }
+}
+
+/** The button that opens the filter of the discover. */
+@Composable
+private fun TvFilterButton(controller: TvController) {
+    val colors = LocalTvColors.current
+    val type = LocalTvType.current
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(999.dp)
+    Text(
+        text = controller.texts["discover.filter"],
+        fontSize = type.cardMeta,
+        fontWeight = FontWeight.SemiBold,
+        color = if (focused) colors.accentText else colors.muted,
+        modifier = Modifier
+            .clip(shape)
+            .background(colors.surface, shape)
+            .reportFocus { focused = it }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { controller.openFilter() }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     )
+}
+
+/** One list of the instance in the bar. */
+@Composable
+private fun TvFeedButton(controller: TvController, title: String, feedTypeId: Int?) {
+    val colors = LocalTvColors.current
+    val type = LocalTvType.current
+    var focused by remember { mutableStateOf(false) }
+    val chosen = controller.selectedFeed == feedTypeId
+    val shape = RoundedCornerShape(TvLayout.RailItemRadius)
+    Text(
+        text = title,
+        fontSize = type.cardMeta,
+        fontWeight = if (chosen) FontWeight.Bold else FontWeight.Medium,
+        color = when {
+            chosen -> colors.accentText
+            focused -> colors.text
+            else -> colors.muted
+        },
+        modifier = Modifier
+            .height(TvLayout.RailItemHeight * 0.8f)
+            .clip(shape)
+            .background(if (chosen) colors.field else colors.surface, shape)
+            .reportFocus { focused = it }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { controller.selectFeed(feedTypeId) }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    )
+}
+
+/**
+ * The hero of the desktop: the wide picture of the title, its name, its year and its actions.
+ */
+@Composable
+private fun TvHero(controller: TvController, card: TvCard) {
+    val colors = LocalTvColors.current
+    val type = LocalTvType.current
+    val shape = RoundedCornerShape(TvLayout.HeroRadius)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(TvLayout.HeroHeight)
+            .clip(shape)
+            .background(colors.field),
+    ) {
+        if (card.backdropUrl != null) {
+            AsyncImage(
+                model = card.backdropUrl,
+                contentDescription = card.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().height(TvLayout.HeroHeight),
+            )
+        }
+        // The text of the desktop stands on the picture, in the light of the picture.
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(horizontal = TvLayout.ContentPadding * 2),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = card.title,
+                fontSize = type.heroTitle,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            card.year?.let { year ->
+                Text(text = year.toString(), fontSize = type.body, color = Color.White.copy(alpha = 0.8f))
+            }
+            card.overview?.let { overview ->
+                Text(
+                    text = overview,
+                    fontSize = type.body,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(TvLayout.CardWidth * 3),
+                )
+            }
+        }
+
+        // The folgen des Hero, as the desktop shows them.
+        if (controller.heroDeck.size > 1) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                controller.heroDeck.indices.forEach { index ->
+                    val current = index == controller.heroIndex
+                    Box(
+                        modifier = Modifier
+                            .width(if (current) 34.dp else 6.dp)
+                            .height(if (current) 5.dp else 6.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (current) colors.accent else colors.border),
+                    )
+                }
+            }
+        }
+    }
 }
 
 /** One shelf of the home page: its heading and its cards. */
@@ -228,10 +451,28 @@ fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
                         .background(mark),
                 )
             }
-            // The focused card shows its actions on the cover, as on the desktop.
-            if (showActions) {
-                TvCardActions(card, controller, rowKey, colors, type)
+            // The mark of the state of the title sits on the cover, as on the desktop.
+            card.stateMark(controller.texts)?.let { mark ->
+                Text(
+                    text = mark,
+                    fontSize = type.cardMeta,
+                    color = colors.text,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(colors.background.copy(alpha = 0.7f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
             }
+            // The action of the title stands in the middle of the cover, as on the desktop.
+            TvCardAction(
+                controller = controller,
+                card = card,
+                rowKey = rowKey,
+                colors = colors,
+                type = type,
+            )
             // The progress of the desktop sits at the lower edge of the cover.
             card.progress?.let { progress ->
                 Box(
@@ -269,6 +510,52 @@ fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+/**
+ * The action of a title in the middle of its cover: the title continues or plays, and the
+ * details open beside it.
+ */
+@Composable
+private fun BoxScope.TvCardAction(
+    card: TvCard,
+    controller: TvController,
+    rowKey: String,
+    colors: TvColors,
+    type: TvType,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val requester = remember { FocusRequester() }
+    val shape = RoundedCornerShape(999.dp)
+    val playable = card.mediaAssetId != null
+    LaunchedEffect(requester) {
+        controller.focusOrder.register(rowKey, requester)
+    }
+    DisposableEffect(requester) {
+        onDispose { controller.focusOrder.unregister(rowKey, requester) }
+    }
+    Box(
+        modifier = Modifier
+            .align(Alignment.Center)
+            .size(TvLayout.AvailabilitySymbol)
+            .clip(shape)
+            .background(if (focused) colors.accent else colors.background.copy(alpha = 0.72f))
+            .border(1.dp, colors.border, shape)
+            .focusRequester(requester)
+            .reportFocus { focused = it }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { controller.openCard(card) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (playable) Icons.Filled.PlayArrow else Icons.Filled.Info,
+            contentDescription = controller.texts[if (playable) "media.continue" else "media.details"],
+            tint = if (focused) colors.accentContrast else colors.text,
+            modifier = Modifier.size(TvLayout.AvailabilitySymbol * 0.6f),
+        )
     }
 }
 
