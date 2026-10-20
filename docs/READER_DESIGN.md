@@ -142,7 +142,9 @@ full document navigation; app-shell navigation was not expanded in this package.
 ## Verification checkpoint — 20 October 2026
 
 Passed: TypeScript/Vite build without StPageFlip; 27 affected script, Range,
-background-count and book geometry tests. Earlier focused Form binding checks passed.
+background-count and book geometry tests; six typed Form.Range binding cases
+passed on the updated clean-start base. The latter verify invariant bounds/value,
+precision, indexed fields, error output and server/local/read-only guards.
 The current local-EPUB browser case passes, including distinct first leaves, final
 paragraph, bounded printing of fonts/lists/tables/images, stationary held paper,
 return without progress, three concurrent leaves, reversal, a 12-turn compressed

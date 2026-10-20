@@ -426,7 +426,11 @@ namespace Jularr.Backend.Tests
                 using var writer = new StringWriter();
                 form.WriteTo(writer, HtmlEncoder.Default, texts);
                 var html = writer.ToString();
-                StringAssert.Contains(html, "name=\"Fraction\" type=\"range\" step=\"0.01\" value=\"1.25\"");
+                var input = Regex.Match(html, "<input[^>]*name=\"Fraction\"[^>]*>").Value;
+                StringAssert.Contains(input, "type=\"range\"");
+                StringAssert.Contains(input, "step=\"0.01\"");
+                StringAssert.Contains(input, "data-range-precision=\"2\"");
+                StringAssert.Contains(input, "value=\"1.25\"");
                 StringAssert.Contains(html, "min=\"0.25\" max=\"2.75\"");
                 Assert.AreEqual(mode == "readonly", html.Contains("disabled=\"disabled\"", StringComparison.Ordinal));
                 Assert.AreEqual(mode == "server", html.Contains("name=\"__Invariant\" value=\"Fraction\"", StringComparison.Ordinal));
