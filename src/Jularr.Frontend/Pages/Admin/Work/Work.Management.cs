@@ -38,6 +38,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Asset("Pages/Admin/Work/Work.entry.scss");
             page.Asset("Pages/Admin/Work/Work.entry.ts");
             page.Asset("Framework/Components/Form.entry.ts");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
             var isSeries = work.MediaTypeId == MediaType.Series;
             var hasVolumes = work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is not null;
             var hasGroups = work.MediaTypeId == MediaType.Game || work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is null;
@@ -127,6 +128,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (texts.CanManageMedia()) actions.Add(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("button work-delete"));
 
             var status = new List<IUiComponent>();
+
+            // What its downloads do right now, shown only while there are some.
+            if (CanAcquire && work.MediaTypeId != MediaType.Game && _wanted is { } target) status.Add(new LiveProgress(LiveKeys.Wanted(target.Id)).Details().Optional());
+            if (CanAcquire && work.MediaTypeId == MediaType.Game) status.AddRange(_platformTargets.Values.Select(platform => new LiveProgress(LiveKeys.Wanted(platform.Id)).Details().Optional()));
             if (TempData["WorkFilesDeleted"] is int deleted)
             {
                 var kept = TempData["WorkFilesKept"] as int? ?? 0;

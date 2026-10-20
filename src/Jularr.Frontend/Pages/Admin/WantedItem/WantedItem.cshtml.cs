@@ -42,6 +42,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             if (_item is not { } item) return;
             page.Title("admin.wanted.title", item.CanonicalTitle);
             page.Navigation("nav.admin");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", "/Admin/Wanted"),
@@ -56,7 +57,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         // State, then the searches of the whole title and pausing.
         private List<IUiComponent> Status(WantedDetailsV1 item, string? csrf)
         {
-            var content = new List<IUiComponent> { new P(WantedStatus.Of(item)).Class("wanted-state") };
+            var content = new List<IUiComponent> { new P(WantedStatus.Of(item)).Class("wanted-state"), new LiveProgress(LiveKeys.Wanted(Id)).Details().Optional() };
             if (item.RequestedLanguages.Length > 0) content.Add(new P(new Text("request.language"), new ValueText(": " + string.Join(", ", item.RequestedLanguages))));
             if (item.LastSearchedAt is { } searchedAt)
             {
