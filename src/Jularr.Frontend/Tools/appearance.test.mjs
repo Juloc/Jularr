@@ -8,7 +8,8 @@ const source = readFileSync(new URL("../Modules/Appearance/theme.entry.ts", impo
 const compile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const script = compile(source);
 const palette = {};
-runInNewContext(compile(readFileSync(new URL("../Modules/Appearance/Palette.ts", import.meta.url), "utf8")), { exports: palette });
+const tokens = JSON.parse(readFileSync(new URL("../Assets/Shared/tokens.json", import.meta.url), "utf8"));
+runInNewContext(compile(readFileSync(new URL("../Modules/Appearance/Palette.ts", import.meta.url), "utf8")), { exports: palette, require: () => ({ default: tokens }) });
 
 function appearance(saved = {}, unavailable = false) {
     class Element {

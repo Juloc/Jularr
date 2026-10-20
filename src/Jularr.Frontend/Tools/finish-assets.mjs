@@ -10,4 +10,7 @@ for (const file of ["manifest.json", "icons.json"]) {
     await copyFile(join(compiled, file), join(privateRoot, file));
 }
 await rm(compiled, { recursive: true, force: true });
+
+// The shared design tokens are public: the native clients read them from the instance.
+await copyFile(join(root, "Assets", "Shared", "tokens.json"), join(root, "wwwroot", "build", "tokens.json"));
 console.log("Private frontend asset manifests prepared.");

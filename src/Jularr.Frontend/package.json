@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "node Tools/emulator-assets.mjs && vite build && node Tools/build-icons.mjs && node Tools/finish-assets.mjs",
+    "build": "node Tools/tokens.mjs && node Tools/emulator-assets.mjs && vite build && node Tools/build-icons.mjs && node Tools/finish-assets.mjs",
     "check": "tsc --noEmit && npm run build",
     "test": "node --test Tools/*.test.mjs",
     "verify:ui": "node Tools/verify-ui-resources.mjs"

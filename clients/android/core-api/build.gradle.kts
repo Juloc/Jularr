@@ -17,6 +17,7 @@ android {
 }
 
 dependencies {
+    api(project(":core-design"))
     api(project(":core-model"))
     implementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit)
