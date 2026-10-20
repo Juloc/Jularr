@@ -156,7 +156,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                 WHERE
                     unit."WorkId" = @WorkId
-                    AND unit."WorkUnitTypeId" IN (1, 2, 3)
+                    AND unit."WorkUnitTypeId" IN (1, 2, 3, 5)
                 ORDER BY
                     coalesce(parent."Number", unit."Number") DESC,
                     unit."ParentWorkUnitId" NULLS FIRST,
@@ -184,10 +184,26 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     video."DynamicRange",
                     coalesce(audio."Languages", '{}') AS "AudioLanguages",
                     coalesce(subtitle."Languages", '{}') AS "SubtitleLanguages",
-                    evidence."Evidence"::text AS "Evidence"
+                    evidence."Evidence"::text AS "Evidence",
+                    coalesce(game."GamePlatformId", version."WorkEditionId") AS "GroupId",
+                    CASE
+                        WHEN game."GamePlatformId" IS NULL OR file."Sha1" IS NULL THEN NULL
+                        ELSE EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "GameRoms" AS rom
+                                JOIN "GameRomCatalogs" AS catalog ON catalog."Id" = rom."GameRomCatalogId"
+                            WHERE
+                                rom."Sha1" = file."Sha1"
+                                AND catalog."GamePlatformId" = game."GamePlatformId"
+                        )
+                    END AS "IsRomVerified"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND NOT file."IsSubtitle"
+                    JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
+                    LEFT JOIN "GameReleases" AS game ON game."WorkVersionId" = asset."WorkVersionId"
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                     LEFT JOIN "StoredFileFormatEvidence" AS evidence ON evidence."StoredFileId" = file."Id"
@@ -234,6 +250,96 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             sql.Parameters.Add(Parameters);
             var rows = await Context.ReadSql.ReadListAsync<WorkManagementFileData>(sql, CancellationToken);
 
+            // The editions of a book and the platforms of a game
+            IReadOnlyList<WorkManagementGroupV1> groups = [];
+            if (hero.MediaTypeId == MediaType.Book)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        edition."Id",
+                        1 AS "WorkGroupKindId",
+                        edition."Name",
+                        edition."Title",
+                        edition."LanguageCode",
+                        edition."EditionFormatId",
+                        edition."Publisher",
+                        edition."ReleaseYear"::integer AS "ReleaseYear",
+                        (
+                            SELECT
+                                string_agg(identity."Value", ', ' ORDER BY identity."Value")
+                            FROM
+                                "WorkEditionExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkEditionId" = edition."Id"
+                                AND identity."Namespace" = 'isbn'
+                        ) AS "Isbn",
+                        NULL::bigint AS "WantedItemId",
+                        NULL::boolean AS "IsPaused"
+                    FROM
+                        "WorkEditions" AS edition
+                    WHERE
+                        edition."WorkId" = @WorkId
+                    ORDER BY
+                        edition."Id";
+                    """;
+                sql.Parameters.Add(Parameters);
+                groups = await Context.ReadSql.ReadListAsync<WorkManagementGroupV1>(sql, CancellationToken);
+            }
+            else if (hero.MediaTypeId == MediaType.Game)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        platform."Id",
+                        2 AS "WorkGroupKindId",
+                        platform."Name",
+                        platform."Abbreviation" AS "Title",
+                        NULL::varchar AS "LanguageCode",
+                        NULL::smallint AS "EditionFormatId",
+                        NULL::varchar AS "Publisher",
+                        NULL::integer AS "ReleaseYear",
+                        NULL::text AS "Isbn",
+                        wanted."Id" AS "WantedItemId",
+                        wanted."IsPaused"
+                    FROM
+                        "GamePlatforms" AS platform
+                        LEFT JOIN "WantedItems" AS wanted ON wanted."WorkId" = @WorkId AND wanted."GamePlatformId" = platform."Id"
+                    WHERE
+                        platform."Id" IN (
+                            SELECT
+                                listed."GamePlatformId"
+                            FROM
+                                "WorkPlatforms" AS listed
+                            WHERE
+                                listed."WorkId" = @WorkId
+                            UNION
+                            SELECT
+                                target."GamePlatformId"
+                            FROM
+                                "WantedItems" AS target
+                            WHERE
+                                target."WorkId" = @WorkId
+                                AND target."GamePlatformId" IS NOT NULL
+                            UNION
+                            SELECT
+                                release."GamePlatformId"
+                            FROM
+                                "GameReleases" AS release
+                                JOIN "WorkVersions" AS owned ON owned."Id" = release."WorkVersionId"
+                            WHERE
+                                owned."WorkId" = @WorkId
+                        )
+                    ORDER BY
+                        platform."Name",
+                        platform."Id";
+                    """;
+                sql.Parameters.Add(Parameters);
+                groups = await Context.ReadSql.ReadListAsync<WorkManagementGroupV1>(sql, CancellationToken);
+            }
+
             // Further units of a file with several episodes
             sql = new SqlStatement();
             sql.Statement =
@@ -264,19 +370,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     ? ReleaseScorer.Score(profile, candidate).FormatScore : null;
                 long[] unitIds = [.. row.WorkUnitId is { } own ? new[] { own } : [], .. additional[row.MediaAssetId]];
                 return new WorkManagementFileV1(row.Id, unitIds, row.RelativePath, row.SizeBytes, row.QualityKey, WorkGradeLogic.Quality(profile, row.QualityKey), score, sizeGrade, perMinute, row.VideoCodec,
-                    row.Height, row.DynamicRange, row.AudioLanguages, row.SubtitleLanguages, row.ReleaseGroup, row.DurationMs, row.IsMissing);
+                    row.Height, row.DynamicRange, row.AudioLanguages, row.SubtitleLanguages, row.ReleaseGroup, row.DurationMs, row.IsMissing, row.GroupId, row.IsRomVerified);
             }).ToArray();
 
             // Figures: an episode, or a film as a whole, wants an upgrade while none of its files meets the cutoff and one is below it
             var episodes = units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).ToArray();
-            var leaves = units.Where(unit => unit.WorkUnitTypeId is WorkUnitType.Episode or WorkUnitType.Volume).ToArray();
+            var leaves = units.Where(unit => unit.WorkUnitTypeId is WorkUnitType.Episode or WorkUnitType.Volume or WorkUnitType.Track).ToArray();
             var present = files.Where(file => !file.IsMissing).ToArray();
             bool WantsUpgrade(IEnumerable<WorkManagementFileV1> own) => own.Any(file => file.FileQualityGradeId == FileQualityGrade.Upgrade) && !own.Any(file => file.FileQualityGradeId == FileQualityGrade.Met);
             var upgrades = leaves.Length > 0 ? leaves.Count(unit => WantsUpgrade(present.Where(file => file.WorkUnitIds.Contains(unit.Id)))) : WantsUpgrade(present) ? 1 : 0;
             return new WorkManagementV1(hero.Id, hero.WantedItemId, hero.MediaTypeId, hero.MediaSubtypeId, hero.CanonicalTitle, hero.ReleaseYear, hero.RuntimeMinutes, hero.ReleasedOn, hero.Overview, hero.Genres,
                 hero.Studio, hero.PosterUrl, hero.BackdropUrl, present.Sum(file => file.SizeBytes), leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Missing), upgrades,
                 leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Unaired), units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number > 0), episodes.Length,
-                new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files));
+                new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files), new BaseDataList<WorkManagementGroupV1>(groups));
         }
     }
 }

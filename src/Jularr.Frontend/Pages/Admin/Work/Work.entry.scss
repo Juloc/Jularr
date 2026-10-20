@@ -168,6 +168,17 @@
 
 .work-seasons { container: work / inline-size; }
 
+.work-rom {
+    display: inline-flex;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+
+    &--ok { background: light-dark(#e1f4e8, #1e3a2a); color: var(--success); }
+    &--off { background: var(--accent-soft); color: var(--muted); }
+}
+
 .work-numbering {
     display: inline-flex;
     margin-right: auto;
@@ -247,7 +258,7 @@
 
 .work-season--open .work-season__toggle svg { transform: rotate(180deg); }
 .work-season__actions { justify-self: end; }
-.work-season__panel { border-top: 1px solid var(--border); }
+.work-season__panel { border-top: 1px solid var(--border); > p { margin: 0; padding: 14px 16px; color: var(--muted); } }
 
 .work-icons { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
 
