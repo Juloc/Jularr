@@ -181,7 +181,10 @@ namespace Jularr.E2E.Tests
         public static async Task OpenSearchAsync(IPage page, string title)
         {
             await OpenWantedAsync(page, title);
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true }));
+
+            // Films and series open on their management page, the other types on their wanted page.
+            var interactive = page.GetByRole(AriaRole.Link, new() { Name = "Interactive search", Exact = true });
+            await FollowAsync(page, interactive.Or(page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true })));
         }
 
         public static async Task GrabAsync(IPage page, FakeRelease release)

@@ -203,6 +203,13 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
+
+            // Films and series are managed on the page of their title.
+            if (_item is { MediaTypeId: MediaType.Movie or MediaType.Series } item)
+            {
+                return LocalRedirect("/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture));
+            }
+
             PreparePage();
             return Page();
         }

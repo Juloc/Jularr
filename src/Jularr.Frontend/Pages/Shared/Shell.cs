@@ -4,7 +4,8 @@ using Jularr.Frontend.Framework;
 namespace Jularr.Frontend.Pages.Shared
 {
     // Shared application shell.
-    public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets, string? searchQuery = null, string? searchType = null) : IUiComponent
+    public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets, string? searchQuery = null, string? searchType = null,
+        IReadOnlyList<(string Key, string Href)>? parents = null, string? currentLabel = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -83,7 +84,8 @@ namespace Jularr.Frontend.Pages.Shared
             var header = new List<IUiComponent>
             {
                 new Brand(assets, compact: true),
-                new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
+                new Nav([.. (parents ?? []).SelectMany(parent => new IUiComponent[] { new A(new Text(parent.Key)).Attribute("href", parent.Href), new Span(new ValueText("›")).Class("app-header-separator").Attribute("aria-hidden", "true") }),
+                    new Span(parents is { Count: > 0 } && currentLabel is not null ? new ValueText(currentLabel) : new Text(pageTitleKey)).Attribute("aria-current", "page")]).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
             };
             if (texts.CanReadMedia())
             {

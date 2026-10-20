@@ -103,6 +103,7 @@ namespace Jularr.Frontend.Framework
         public string? TitleKey { get; private set; }
         public string? DocumentTitle { get; private set; }
         public string? NavigationKey { get; private set; }
+        public List<(string Key, string Href)> Parents { get; } = [];
         public List<IUiComponent> Content { get; } = [];
         public List<string> AssetEntries { get; } = [];
 
@@ -112,6 +113,9 @@ namespace Jularr.Frontend.Framework
             TitleKey = key;
             DocumentTitle = documentTitle;
         }
+        // A page below another names it in the breadcrumb; the document title then names the page itself.
+        public void Parent(string key, string href) => Parents.Add((key, href));
+
         public void Asset(string entry)
         {
             if (!AssetEntries.Contains(entry, StringComparer.Ordinal)) AssetEntries.Add(entry);
@@ -125,6 +129,7 @@ namespace Jularr.Frontend.Framework
             TitleKey = definition.TitleKey;
             DocumentTitle = definition.DocumentTitle;
             NavigationKey = definition.NavigationKey;
+            Parents.AddRange(definition.Parents);
             Content.AddRange(definition.Content);
             foreach (var asset in definition.AssetEntries) Asset(asset);
         }

@@ -4,6 +4,7 @@
 @inject FrontendAssets Assets
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
-    var titleKey = (ViewContext.ViewData.Model as JularrPage)?.Definition.TitleKey ?? "nav.home";
+    var definition = (ViewContext.ViewData.Model as JularrPage)?.Definition;
+    var titleKey = definition?.TitleKey ?? "nav.home";
 }
-@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" ? Context.Request.Query["type"].FirstOrDefault() : null), T))
+@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" ? Context.Request.Query["type"].FirstOrDefault() : null, definition?.Parents, definition?.DocumentTitle), T))

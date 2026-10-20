@@ -460,11 +460,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await taken.Content.ReadAsStringAsync(), "in_use");
 
             // The Work page searches the provider and offers the choice.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + work.Id);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + work.Id + "?Tab=Metadata");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Wrong match");
-            using var results = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + work.Id + "?handler=MatchSearch", new Dictionary<string, string>
+            using var results = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + work.Id + "?Tab=Metadata&handler=MatchSearch", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = LibraryTests.Token(html), ["MediaTypeId"] = "1", ["Query"] = "Matrix"
             });
