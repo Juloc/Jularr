@@ -69,6 +69,28 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Browser_UsesTheBrowserThatStillRunsWithItsProfile()
+        {
+            var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(browser))
+            {
+                Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            }
+
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            using var first = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            var page = await first.ReadPageAsync(server.Address, CancellationToken.None);
+            Assert.IsNotNull(page);
+
+            // A browser that still runs with this profile is used as it is; a second one is not started.
+            using var second = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            var again = await second.ReadPageAsync(server.Address, CancellationToken.None);
+            Assert.IsNotNull(again);
+            StringAssert.Contains(again, "The page behind the check");
+        }
+
+        [TestMethod]
         public async Task Browser_ReadsSeveralAddressesAtTheSameTime()
         {
             var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");

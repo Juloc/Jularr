@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -29,6 +30,9 @@ namespace Jularr.Integrations.Logic.Browser
 
         // A fresh browser needs a moment before its first page counts.
         private const int StartMilliseconds = 4000;
+
+        // The file in the profile that holds the port of the browser.
+        private const string PortFile = "browser.port";
 
         private readonly BrowserOptions _options;
         private readonly SemaphoreSlim _gate = new(1, 1);
@@ -402,6 +406,12 @@ namespace Jularr.Integrations.Logic.Browser
 
             Directory.CreateDirectory(_profile);
 
+            // A browser that still runs with this profile is used as it is; it has passed the source's check already.
+            if (await UseRunningBrowserAsync(ct))
+            {
+                return;
+            }
+
             // A lock of an earlier run on this machine would keep the browser from starting.
             foreach (var stale in Directory.GetFiles(_profile, "Singleton*"))
             {
@@ -437,6 +447,7 @@ namespace Jularr.Integrations.Logic.Browser
                     await _client.ConnectAsync(socket, ct);
                     await _client.SendAsync("Page.enable", null, ct);
                     await RememberVersionAsync(ct);
+                    await RememberPortAsync(port);
                     Note("started", $"the browser {_path} answers on port {port}");
                     return;
                 }
@@ -451,6 +462,51 @@ namespace Jularr.Integrations.Logic.Browser
             }
 
             throw new SourceBrowserException("The browser did not open its debugging port.");
+        }
+
+        // The browser that still runs with this profile answers on the port it was started with.
+        private async Task<bool> UseRunningBrowserAsync(CancellationToken ct)
+        {
+            try
+            {
+                var file = Path.Combine(_profile, PortFile);
+                if (!File.Exists(file))
+                {
+                    return false;
+                }
+
+                var text = (await File.ReadAllTextAsync(file, ct)).Trim();
+                if (!int.TryParse(text, out var port) || port <= 0)
+                {
+                    return false;
+                }
+
+                var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
+                _client = new DevToolsClient();
+                await _client.ConnectAsync(socket, ct);
+                await _client.SendAsync("Page.enable", null, ct);
+                await RememberVersionAsync(ct);
+                Note("started", $"the browser that still runs with this profile answers on port {port}");
+                return true;
+            }
+            catch (Exception exception) when (exception is SourceBrowserException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                // Nothing runs with this profile; a new browser is started.
+                return false;
+            }
+        }
+
+        // The port is written down; a browser that still runs is found after a crash.
+        private async Task RememberPortAsync(int port)
+        {
+            try
+            {
+                await File.WriteAllTextAsync(Path.Combine(_profile, PortFile), port.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // The port stays unknown; the next start tries a new browser.
+            }
         }
 
         // The browser that runs elsewhere is used as it is; its profile is its own.
