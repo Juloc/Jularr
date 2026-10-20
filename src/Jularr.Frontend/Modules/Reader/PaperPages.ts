@@ -13,7 +13,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     const seek = reader.querySelector<HTMLInputElement>('[data-role=seek] input[type=range]')!;
     reader.querySelector<HTMLElement>('[data-role=seek]')!.hidden = false;
     const bookPages = initializeBookPages(reader, content);
-    let columns = 1, pages = 1, spread = 0, step = 1, frame = 0;
+    let columns = 1, pages = 1, spread = 0, step = 1, frame = 0, navigation = 0;
     let book: ReturnType<typeof initializeBookRenderer> | undefined;
     let loading: Promise<void> | undefined;
     let failed = false;
@@ -75,6 +75,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     };
     const commit = (target: number): void => {
         if (target < 0 || target >= Math.ceil(pages / columns)) { edge(target < 0 ? -1 : 1)?.click(); return; }
+        navigation++;
         spread = target;
         paint();
         changed();
@@ -84,6 +85,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (!book?.turn(delta)) commit(spread + delta);
     };
     const reveal = (element: HTMLElement): void => {
+        navigation++;
         if (settings.mode === 'scroll') {
             content.scrollTop += element.getBoundingClientRect().top - content.getBoundingClientRect().top - 24;
             return;
@@ -99,6 +101,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     seek.addEventListener('change', () => {
         const at = seek.valueAsNumber - 1;
         if (!Number.isFinite(at)) return;
+        navigation++;
         if (settings.mode === 'paged') spread = Math.floor(at / columns);
         else content.scrollTop = Math.min(at * content.clientHeight, content.scrollHeight - content.clientHeight);
         paint();
@@ -111,8 +114,10 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     }, { passive: true });
     const layout = (): void => {
         cancelAnimationFrame(frame);
-        const anchor = current();
+        const anchor = current(), version = navigation;
         frame = requestAnimationFrame(() => {
+            // A pending view resize must not restore an anchor superseded by a seek/turn.
+            const latest = version === navigation ? anchor : current();
             const width = canvas.clientWidth - parseFloat(getComputedStyle(canvas).paddingLeft) - parseFloat(getComputedStyle(canvas).paddingRight);
             const two = settings.layout === 'spread' || settings.layout === 'auto' && width >= Math.max(640, settings.size * 36 + 40);
             columns = two ? 2 : 1;
@@ -125,7 +130,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             spread = Math.min(spread, Math.ceil(pages / columns) - 1);
             bookPages.update({ width: content.clientWidth, height: content.clientHeight, columns, gap, pages, rtl: settings.direction === 'rtl' });
             paint();
-            if (anchor) reveal(anchor);
+            if (latest) reveal(latest);
         });
     };
     new ResizeObserver(layout).observe(canvas);

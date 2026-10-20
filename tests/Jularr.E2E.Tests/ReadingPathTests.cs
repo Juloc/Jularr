@@ -58,6 +58,26 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "reader-mockup-mobile-prose");
                 await page.SetViewportSizeAsync(1280, 720);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '2'");
+                await AssertReaderViewsAsync(page);
+                var viewSeek = page.GetByRole(AriaRole.Slider, new() { Name = "Position in this chapter", Exact = true });
+                await viewSeek.FocusAsync();
+                await page.Keyboard.PressAsync("End");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
+                await page.Keyboard.PressAsync("Home");
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
+                // Keep a real layout callback pending while committing a newer seek.
+                await page.EvaluateAsync("""
+                    () => {
+                        document.fonts.dispatchEvent(new Event('loadingdone'));
+                        const seek = document.querySelector('[data-role=seek] input');
+                        seek.value = seek.max;
+                        seek.dispatchEvent(new Event('change', {bubbles:true}));
+                    }
+                    """);
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
+                await viewSeek.FocusAsync();
+                await page.Keyboard.PressAsync("Home");
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
                 var canvasBeforePopover = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
                 var appearance = page.Locator(".reader__tools [data-reader-open-settings=text]");
                 await appearance.ClickAsync();
@@ -736,12 +756,13 @@ namespace Jularr.E2E.Tests
                 // The reader reflows it by chapter, keeps the original at hand and continues where reading stopped.
                 await Steps.OpenReaderAsync(page, details);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "must be in want of a wife.");
-                var download = page.GetByRole(AriaRole.Button, new() { Name = "Download", Exact = true });
+                await page.Locator("[data-action=more]").ClickAsync();
+                var download = page.Locator("[data-panel=more] [data-action=download]");
                 await download.ClickAsync();
                 Assert.AreEqual(1, await page.GetByRole(AriaRole.Link, new() { Name = "Original PDF" }).CountAsync());
                 var epub = await page.RunAndWaitForDownloadAsync(() => page.GetByRole(AriaRole.Link, new() { Name = "EPUB", Exact = true }).ClickAsync());
                 Assert.AreEqual(".epub", Path.GetExtension(epub.SuggestedFilename));
-                await download.ClickAsync();
+                await page.Keyboard.PressAsync("Escape");
                 await Steps.ReadNextSectionAsync(page);
                 await Steps.SignOutAndInAsync(page);
                 await Steps.OpenReaderAsync(page, details);

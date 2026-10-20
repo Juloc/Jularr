@@ -80,6 +80,8 @@ change/release commits through the canonical adapter. Integer page bounds preser
 the final End-key position. Its transport presentation removes the outer form
 frame, retains an accessible label/focus indication and does not copy the control.
 Native chapter/image links remain, with compact icon presentation.
+Pending view/font reflow retains the latest explicit seek/turn rather than
+restoring an older scheduled semantic anchor.
 
 Prose retains authorized server chapter routes and `s<section>/b<block>` progress.
 Images retain `p<page>`, solitary covers/wide pages, bounded preloading and a
@@ -170,6 +172,12 @@ absence of footer borders/shadows and outer seek focus frames. The actual track
 was visually checked; Chromium does not expose its native track pseudo-element's
 computed background through the ordinary style API. Dedicated mobile PDF/RTL
 interaction checks remain outside this final local EPUB case.
+
+The first complete CI run passed Backend, frontend/assets, authorship, container
+startup and two browser groups. Its path group exposed an older PDF Download
+selector and a pending-layout/seek race after changing views. Both were corrected;
+the two failed cases plus the local EPUB view/seek regression passed together
+(three cases, 1m54s). The new commit must still pass the complete PR checks.
 
 The earlier combined renderer run is **not green**: EPUB passed, but the comic test's server
 became unreachable during Owner sign-in and the background-count test's server
