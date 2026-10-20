@@ -159,6 +159,19 @@ namespace Jularr.Backend.Logic.Media
             {
                 throw new KeyNotFoundException("The title was not found.");
             }
+
+            // A title in a collection is a favorite.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "WatchlistEntries" ("ProfileId", "WorkId")
+                VALUES
+                    (@ProfileId, @WorkId)
+                ON CONFLICT ("ProfileId", "WorkId") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task RemoveCollectionWorkAsync(this LogicContext ctx, CollectionWorkData data, CancellationToken ct)

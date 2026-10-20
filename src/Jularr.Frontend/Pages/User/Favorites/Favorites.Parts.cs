@@ -9,11 +9,21 @@ namespace Jularr.Frontend.Pages.User.Favorites
     {
         private const string PickerId = "favorites-picker";
 
-        private sealed record State(IReadOnlyList<string> Types, LibrarySortType Sort, string? Year, long? Collection, int Page);
+        private sealed record State(IReadOnlyList<string> Types, LibrarySortType Sort, string? Year, string? Status, long? Collection, int Page);
 
-        private State Current => new(Picked, Sort, ValidYear, CollectionId, Math.Max(1, PageNumber));
+        private State Current => new(Picked, Sort, ValidYear, ValidStatus, CollectionId, Math.Max(1, PageNumber));
 
         private string? ValidYear => Year is "2020" or "old" ? Year : null;
+
+        private static readonly (string Slug, ProgressStateType State, string LabelKey)[] Statuses =
+        [
+            ("notstarted", ProgressStateType.NotStarted, "favorites.status.notStarted"), ("progress", ProgressStateType.InProgress, "favorites.status.inProgress"),
+            ("finished", ProgressStateType.Finished, "favorites.status.finished")
+        ];
+
+        private string? ValidStatus => Statuses.Any(status => status.Slug == Status) ? Status : null;
+
+        private ProgressStateType? ProgressState => Statuses.Where(status => status.Slug == ValidStatus).Select(status => (ProgressStateType?)status.State).FirstOrDefault();
 
         // The slugs of the address, whatever the profile lists.
         private IReadOnlyList<string> Picked => [.. Types.SelectMany(type => type.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -40,6 +50,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (TypeParameter(state.Types) is { } types) values.Add("type=" + Uri.EscapeDataString(types).Replace("%2C", ","));
             if (state.Sort != LibrarySortType.RecentlyAdded) values.Add("sort=" + state.Sort);
             if (state.Year is not null) values.Add("year=" + state.Year);
+            if (state.Status is not null) values.Add("status=" + state.Status);
             if (state.Collection is { } collection) values.Add("collection=" + collection.ToString(CultureInfo.InvariantCulture));
             if (state.Page > 1) values.Add("p=" + state.Page.ToString(CultureInfo.InvariantCulture));
             return values.Count == 0 ? "/Favorites" : "/Favorites?" + string.Join('&', values);
@@ -58,6 +69,9 @@ namespace Jularr.Frontend.Pages.User.Favorites
             page.Navigation("nav.favorites");
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
             if (!_loaded) return;
+
+            // What happened to the collections when a favorite went.
+            if (TempData["FavoritesNotice"] is string notice && notice == "favorites.removedFromCollections") page.Content.Add(new P(new Text("favorites.removedFromCollections")).Class("favorites-notice").Attribute("role", "status"));
 
             page.Asset("Pages/User/Favorites/Favorites.entry.scss");
             page.Asset("Pages/User/Favorites/Favorites.entry.ts");
@@ -94,12 +108,12 @@ namespace Jularr.Frontend.Pages.User.Favorites
         }
 
         private string EmptyKey() => _current is { IsSmart: true } ? "collections.noMatch" : _current is not null ? "favorites.noWorks"
-            : !IsAll || ValidYear is not null ? "favorites.noMatch" : "media.favorites.empty";
+            : !IsAll || ValidYear is not null || ValidStatus is not null ? "favorites.noMatch" : "media.favorites.empty";
 
         // All favorites, then one card per collection with the covers of its first titles, and the way to a new one.
         private IUiComponent CollectionStrip()
         {
-            var cards = new List<IUiComponent> { StripCard(null, "favorites.all", "heart", _newest.Select(item => item.PosterUrl), null, null) };
+            var cards = new List<IUiComponent> { StripCard(null, "favorites.all", "heart", _newest.Select(item => item.PosterUrl), _total is { } total ? string.Format(CultureInfo.CurrentCulture, texts["favorites.titles"], total) : null, null) };
             foreach (var collection in _collections)
             {
                 var count = collection.IsSmart ? texts["collections.smart"] : string.Format(CultureInfo.CurrentCulture, texts["favorites.titles"], collection.WorkCount ?? 0);
@@ -163,26 +177,28 @@ namespace Jularr.Frontend.Pages.User.Favorites
             return new CapsuleBar(assets, "discover.mediaTypes", "discover.all", Types([]), IsAll, groups, tools);
         }
 
-        // Selecting titles for their collections, the order and how the titles are laid out.
+        // Progress, then selecting titles for their collections, the order and how the titles are laid out.
         private IUiComponent Toolbar(bool canCollect)
         {
             var keep = new Dictionary<string, string>();
             if (TypeParameter(Picked) is { } types) keep["type"] = types;
             if (ValidYear is not null) keep["year"] = ValidYear;
+            if (ValidStatus is not null) keep["status"] = ValidStatus;
             if (CollectionId is { } collection) keep["collection"] = collection.ToString(CultureInfo.InvariantCulture);
             var sorts = Enum.GetValues<LibrarySortType>().Select(sort => new ChoiceOption("library.sort." + sort, sort.ToString(), sort == Sort)).ToList();
 
-            var left = new List<IUiComponent>();
+            var tabs = new List<NavigationTab> { new("discover.all", Address(Current with { Status = null, Page = 1 }), ValidStatus is null) };
+            tabs.AddRange(Statuses.Select(status => new NavigationTab(status.LabelKey, Address(Current with { Status = status.Slug, Page = 1 }), ValidStatus == status.Slug)));
+            var settings = new List<IUiComponent>();
             if (canCollect)
             {
-                left.Add(new Button(new Icon("check", assets, 16), new Span(new Text("favorites.select")).Class("favorites-toolbar__label--off"), new Span(new Text("favorites.select.done")).Class("favorites-toolbar__label--on"))
+                settings.Add(new Button(new Icon("check", assets, 16), new Span(new Text("favorites.select")).Class("favorites-toolbar__label--off"), new Span(new Text("favorites.select.done")).Class("favorites-toolbar__label--on"))
                     .Class("button button--compact favorites-toolbar__select").Attribute("aria-pressed", "false").Attribute("data-favorites-bulk-toggle", ""));
             }
 
-            var settings = new Div(new ChoiceSelect("/Favorites", "sort", "library.sort", sorts, keep),
-                new Button(new Icon("grid", assets), new Icon("list", assets)).IconOnly(texts["favorites.layout.toggle"]).Class("button button--icon favorites-toolbar__layout").Attribute("data-favorites-layout", ""))
-                .Class("favorites-toolbar__settings");
-            return new Div(new Div([.. left]).Class("favorites-toolbar__start"), settings).Class("favorites-toolbar");
+            settings.Add(new ChoiceSelect("/Favorites", "sort", "library.sort", sorts, keep));
+            settings.Add(new Button(new Icon("grid", assets), new Icon("list", assets)).IconOnly(texts["favorites.layout.toggle"]).Class("button button--icon favorites-toolbar__layout").Attribute("data-favorites-layout", ""));
+            return new Div(new NavigationTabs(tabs, "favorites.status", "chips"), new Div([.. settings]).Class("favorites-toolbar__settings")).Class("favorites-toolbar");
         }
 
         // Actions on the selected titles; script shows it while selecting.
@@ -210,9 +226,24 @@ namespace Jularr.Frontend.Pages.User.Favorites
         private IUiComponent EntryCard(FavoriteEntry entry, string csrf, bool canCollect)
         {
             var id = entry.Id.ToString(CultureInfo.InvariantCulture);
-            var card = new MediaCard(assets, entry.Title, "/Details/" + id, entry.PosterUrl, entry.Year?.ToString(CultureInfo.InvariantCulture), entry.StatusKey)
-                .Bookmark(new MediaBookmark(assets, entry.Id, entry.IsFavorite, Request.Path + Request.QueryString, csrf));
+            // With only favorites the heart toggles; with collections it opens the popover (the toggle stays without script).
+            IUiComponent heart = new MediaBookmark(assets, entry.Id, entry.IsFavorite, Request.Path + Request.QueryString, csrf);
+            if (canCollect && _collections.Any(collection => !collection.IsSmart))
+            {
+                heart = new Div(new Div(heart).Class("favorites-heart__toggle"),
+                    Opener(new Button(new Icon("heart", assets)).IconOnly(string.Format(CultureInfo.CurrentCulture, texts["favorites.heart.item"], entry.Title))
+                        .Class("button button--icon favorites-heart__manage").Attribute("aria-pressed", entry.IsFavorite ? "true" : "false").Attribute("data-favorites-picker", id)));
+            }
+
+            var card = new MediaCard(assets, entry.Title, "/Details/" + id, entry.PosterUrl, entry.Year?.ToString(CultureInfo.InvariantCulture), entry.StatusKey).Bookmark(heart);
+            if (entry.Progress == ProgressStateType.InProgress) card.Continue(entry.ProgressPercent, 100);
             var parts = new List<IUiComponent> { card };
+            if (entry.Progress != ProgressStateType.NotStarted)
+            {
+                parts.Add(new Span(entry.Progress == ProgressStateType.Finished ? new Text("favorites.status.finished") : new ValueText(entry.ProgressPercent.ToString(CultureInfo.CurrentCulture) + "%"))
+                    .Class("favorites-entry__badge"));
+            }
+
             var holding = _membership.TryGetValue(entry.Id, out var held) ? held : [];
             if (canCollect)
             {
@@ -221,8 +252,6 @@ namespace Jularr.Frontend.Pages.User.Favorites
                     : new ValueText(names[0] + (names.Count > 1 ? " +" + (names.Count - 1).ToString(CultureInfo.CurrentCulture) : ""));
                 parts.Add(Opener(new Button(new Icon(names.Count == 0 ? "plus" : "folder", assets, 14), new Span(label)).Class(names.Count == 0 ? "favorites-chip" : "favorites-chip favorites-chip--set")
                     .Attribute("data-favorites-picker", id)));
-                parts.Add(Opener(new Button(new Icon("folder", assets, 15), new Icon("plus", assets, 9)).IconOnly(string.Format(CultureInfo.CurrentCulture, texts["favorites.assign.item"], entry.Title))
-                    .Class("button button--icon favorites-entry__assign").Attribute("data-favorites-picker", id)));
                 parts.Add(new Button(new Icon("check", assets, 18)).IconOnly(string.Format(CultureInfo.CurrentCulture, texts["favorites.select.item"], entry.Title))
                     .Class("favorites-entry__select").Attribute("aria-pressed", "false").Attribute("data-favorites-select", id));
             }

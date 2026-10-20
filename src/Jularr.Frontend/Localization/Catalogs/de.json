@@ -5436,9 +5436,33 @@
    "Add to collections",
    "In Sammlungen einordnen"
   ],
-  "favorites.assign.item": [
-   "Add {0} to collections",
-   "{0} in Sammlungen einordnen"
+  "favorites.status": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "favorites.status.notStarted": [
+   "Not started",
+   "Nicht begonnen"
+  ],
+  "favorites.status.inProgress": [
+   "In progress",
+   "Begonnen"
+  ],
+  "favorites.status.finished": [
+   "Finished",
+   "Abgeschlossen"
+  ],
+  "favorites.removedFromCollections": [
+   "Removed from favorites and from its collections.",
+   "Aus Favoriten und aus den Sammlungen entfernt."
+  ],
+  "favorites.heart.item": [
+   "Favorite and collections of {0}",
+   "Favorit und Sammlungen von {0}"
+  ],
+  "library.sort.Progress": [
+   "Progress",
+   "Fortschritt"
   ],
   "favorites.removeFromCollection": [
    "Remove from this collection",

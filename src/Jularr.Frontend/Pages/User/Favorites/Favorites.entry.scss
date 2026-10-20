@@ -4,7 +4,7 @@
 
 // Controls that need script show once it has run.
 html:not(.favorites-ready) {
-    [data-favorites-bulk-toggle], [data-favorites-layout], .favorites-chip, .favorites-entry__assign, .favorites-entry__select { display: none; }
+    [data-favorites-bulk-toggle], [data-favorites-layout], .favorites-chip, .favorites-heart__manage, .favorites-entry__select { display: none; }
 }
 
 // The collections as cards with the covers of their first titles.
@@ -142,6 +142,19 @@ html:not(.favorites-ready) {
 }
 
 // What to select, how the titles are ordered and laid out.
+html.favorites-ready .favorites-heart__toggle { display: none; }
+
+.favorites-notice {
+    margin: 0 0 12px;
+    padding: 10px 16px;
+    border: 1px solid var(--accent-line);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 12px;
+    font-weight: 650;
+}
+
 .favorites-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -151,7 +164,7 @@ html:not(.favorites-ready) {
     margin-bottom: 18px;
     padding: 0 4px;
 
-    &__start, &__settings { display: flex; align-items: center; gap: 7px; }
+    &__settings { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 
     &__select[aria-pressed="true"] &__label--off, &__select[aria-pressed="false"] &__label--on { display: none; }
 
@@ -213,24 +226,20 @@ html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first
 
     .media-card { max-width: none; }
 
-    &__assign.button {
+    // Where the profile stands with the title, over the cover.
+    &__badge {
         position: absolute;
-        top: 48px;
-        right: 6px;
+        top: 10px;
+        left: 10px;
         z-index: 3;
-        width: 30px;
-        min-height: 30px;
-        opacity: 0;
-        border-color: var(--accent-line);
-        color: var(--accent-text);
-
-        .ui-icon:first-child { width: 15px; height: 15px; }
-        .ui-icon:last-child { position: absolute; top: 5px; right: 3px; width: 9px; height: 9px; stroke-width: 3; }
-        &:hover:not(:disabled) { background: var(--accent); color: var(--accent-contrast); }
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: var(--accent-contrast);
+        font-size: 10px;
+        font-weight: 760;
+        pointer-events: none;
     }
-
-    &:hover &__assign, &:focus-within &__assign { opacity: 1; }
-    @media (hover: none) { &__assign.button { opacity: 1; } }
 
     // Selecting covers the whole card.
     &__select {
@@ -259,7 +268,7 @@ html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first
 
 .favorites--bulk {
     .favorites-entry__select { display: flex; }
-    .media-card__bookmark, .favorites-entry__assign, .favorites-chip { visibility: hidden; }
+    .media-card__bookmark, .favorites-chip, .favorites-entry__badge { visibility: hidden; }
 }
 
 .favorites-chip {
@@ -307,7 +316,7 @@ html[data-favorites-layout="list"] .favorites-grid {
     .media-card__surface { flex: none; width: 74px; border-radius: 10px; }
     .media-card__details { min-height: 0; padding: 0; }
     .media-card__bookmark { top: 3px; right: 3px; .button { width: 26px; min-height: 26px; .ui-icon { width: 13px; height: 13px; } } }
-    .favorites-entry__assign { display: none; }
+    .favorites-entry__badge { top: 14px; left: 14px; padding: 3px 7px; font-size: 9px; }
     .favorites-chip { flex: none; max-width: 40%; }
     .favorites-entry__select { bottom: 0; aspect-ratio: auto; border-radius: 17px; }
 }

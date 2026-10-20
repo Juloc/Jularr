@@ -383,21 +383,21 @@ namespace Jularr.Backend.Tests
                 ["__RequestVerificationToken"] = csrf, ["IsWatchlisted"] = "True"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            using var watchlist = await host.SendAsync(HttpMethod.Get, "/Watchlist");
+            using var watchlist = await host.SendAsync(HttpMethod.Get, "/Favorites");
             Assert.AreEqual(HttpStatusCode.OK, watchlist.StatusCode, await watchlist.Content.ReadAsStringAsync());
             var watchlistHtml = await watchlist.Content.ReadAsStringAsync();
             StringAssert.Contains(watchlistHtml, "&lt;edited&gt;");
             StringAssert.Contains(watchlistHtml, "media-card__bookmark");
-            StringAssert.Contains(watchlistHtml, "aria-label=\"Remove from watchlist\"");
+            StringAssert.Contains(watchlistHtml, "aria-label=\"Remove from favorites\"");
             Assert.IsFalse(watchlistHtml.Contains("state-chip--notrequested", StringComparison.Ordinal));
             Assert.IsFalse(watchlistHtml.Contains("media-availability-badge--profileaudio", StringComparison.Ordinal));
 
             // The list narrows to a media type and keeps its order.
             var type = (MediaType)(short)(await host.ScalarAsync("SELECT \"MediaTypeId\" FROM \"Works\""))!;
             var other = type == MediaType.Movie ? MediaType.Series : MediaType.Movie;
-            using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?mediaTypeId=" + type + "&librarySortTypeId=Title");
+            using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?mediaTypeIds=" + type + "&librarySortTypeId=Title");
             Assert.AreEqual(1, (await own.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items.Count);
-            using var none = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?mediaTypeId=" + other);
+            using var none = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?mediaTypeIds=" + other);
             Assert.AreEqual(0, (await none.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items.Count);
             using var users = await host.SendAsync(HttpMethod.Get, "/Admin/Requests/Users");
             Assert.AreEqual(HttpStatusCode.OK, users.StatusCode, await users.Content.ReadAsStringAsync());

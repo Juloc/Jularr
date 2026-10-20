@@ -12,8 +12,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class ReadWatchlistParametersV1 : BaseParameters
     {
         public ReadWatchlistParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null,
-            int? releaseYearTo = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
+            int? releaseYearTo = null, ProgressStateType? progressStateId = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
         {
+            ProgressStateId = progressStateId;
             MediaTypeIds = mediaTypeIds ?? [];
             MediaSubtypeIds = mediaSubtypeIds ?? [];
             ReleaseYearFrom = releaseYearFrom;
@@ -39,9 +40,29 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
         public int? ReleaseYearTo { get; }
 
+        // Only titles the profile has not started, is in the middle of or has finished.
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
+
         // Recently added means added to the watchlist.
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
         public LibrarySortType LibrarySortTypeId { get; }
+    }
+
+    public sealed class ReadWatchlistCountParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class WatchlistCountV1 : BaseResponse
+    {
+        public WatchlistCountV1(int total)
+        {
+            Total = total;
+        }
+
+        // Every favorite the profile can open, whatever a list narrows it to.
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailableUnits))]
+        public int Total { get; }
     }
 
     public sealed class PersonParametersV1 : BaseParameters

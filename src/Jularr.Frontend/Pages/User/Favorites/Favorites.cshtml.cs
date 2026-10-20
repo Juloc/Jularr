@@ -19,7 +19,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Favorites
 {
     // The profile's favorites by media type, in the chosen order, and its collections of them; each title with its state and the collections it is in.
-    public sealed partial class FavoritesModel(ReadAuthenticationV1 authentication, ReadWatchlistV1 read, ReadProfileMediaV1 readMedia, UpdateWatchlistV1 update, ReadCollectionsV1 readCollections,
+    public sealed partial class FavoritesModel(ReadAuthenticationV1 authentication, ReadWatchlistV1 read, ReadProfileMediaV1 readMedia, UpdateWatchlistV1 update, ReadWatchlistCountV1 readCount, ReadCollectionsV1 readCollections,
         ReadCollectionV1 readCollection, ReadCollectionWorksV1 readCollectionWorks, ReadCollectionMembershipV1 readMembership, CreateCollectionV1 createCollection,
         UpdateCollectionV1 updateCollection, DeleteCollectionV1 deleteCollection, AddCollectionWorkV1 addWork, RemoveCollectionWorkV1 removeWork, IAntiforgery antiforgery, UiText texts,
         FrontendAssets assets) : JularrPage
@@ -34,6 +34,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
         private CollectionV1? _current;
         private bool _loaded;
         private bool _hasMore;
+        private int? _total;
 
         // Media types as slugs, repeated or separated by commas; none shows all of them.
         [BindProperty(SupportsGet = true, Name = "type")]
@@ -41,6 +42,10 @@ namespace Jularr.Frontend.Pages.User.Favorites
 
         [BindProperty(SupportsGet = true, Name = "sort")]
         public LibrarySortType Sort { get; set; } = LibrarySortType.RecentlyAdded;
+
+        // Not started, in progress or finished; none shows every title.
+        [BindProperty(SupportsGet = true, Name = "status")]
+        public string? Status { get; set; }
 
         [BindProperty(SupportsGet = true, Name = "year")]
         public string? Year { get; set; }
@@ -71,6 +76,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
                 _collections = await readCollections.ExecuteAsync<BaseDataList<CollectionV1>>(new CollectionsParametersV1(), token);
                 _current = _collections.FirstOrDefault(collection => collection.Id == CollectionId);
                 _newest = (await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(1, 4), token)).Items;
+                _total = (await readCount.ExecuteAsync<WatchlistCountV1>(new ReadWatchlistCountParametersV1(), token)).Total;
             }
 
             // One bounded page of the favorites or of the chosen collection.
@@ -79,14 +85,14 @@ namespace Jularr.Frontend.Pages.User.Favorites
             var (yearFrom, yearTo) = YearRange();
             if (_current is { } collection)
             {
-                var works = await readCollectionWorks.ExecuteAsync<PageResult<WorkCardV1>>(new CollectionWorksParametersV1(collection.Id, page, PageSize, types, subtypes, yearFrom, yearTo, Sort), token);
-                _entries = [.. works.Items.Select(item => new FavoriteEntry(item.Id, item.CanonicalTitle, item.PosterUrl, item.ReleaseYear, "media.state.NotRequested", item.IsWatchlisted))];
+                var works = await readCollectionWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(collection.Id, page, PageSize, types, subtypes, yearFrom, yearTo, ProgressState, Sort), token);
+                _entries = [.. works.Items.Select(Entry)];
                 _hasMore = works.Items.Count == works.PageSize;
             }
             else
             {
-                var works = await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(page, PageSize, types, subtypes, yearFrom, yearTo, Sort), token);
-                _entries = [.. works.Items.Select(item => new FavoriteEntry(item.Id, item.Title, item.PosterUrl, item.ReleaseYear, "media.state." + item.MediaStateTypeId, true))];
+                var works = await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(page, PageSize, types, subtypes, yearFrom, yearTo, ProgressState, Sort), token);
+                _entries = [.. works.Items.Select(Entry)];
                 _hasMore = works.Items.Count == works.PageSize;
             }
 
@@ -100,10 +106,19 @@ namespace Jularr.Frontend.Pages.User.Favorites
             _loaded = true;
         }
 
-        // Removing changes only this list.
+        private static FavoriteEntry Entry(LibraryItemV1 item) => new(item.Id, item.Title, item.PosterUrl, item.ReleaseYear, "media.state." + item.MediaStateTypeId, item.IsWatchlisted, item.ProgressStateId, item.ProgressPercent);
+
+        // A favorite that goes leaves its collections too, which the notice tells.
         public async Task<IActionResult> OnPostRemoveAsync(long[]? workIds)
         {
-            foreach (var workId in workIds ?? [])
+            var token = HttpContext.RequestAborted;
+            var titles = (workIds ?? []).Distinct().ToArray();
+            if (titles.Length > 0 && texts.CanCollect() && (await readMembership.ExecuteAsync<BaseDataList<CollectionMemberV1>>(new CollectionMembershipParametersV1(titles), token)).Count > 0)
+            {
+                TempData["FavoritesNotice"] = "favorites.removedFromCollections";
+            }
+
+            foreach (var workId in titles)
             {
                 await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(workId), new UpdateWatchlistDataV1(false), HttpContext.RequestAborted);
             }
@@ -194,5 +209,5 @@ namespace Jularr.Frontend.Pages.User.Favorites
     }
 
     // One title of the list with what its card shows.
-    public sealed record FavoriteEntry(long Id, string Title, string? PosterUrl, int? Year, string StatusKey, bool IsFavorite);
+    public sealed record FavoriteEntry(long Id, string Title, string? PosterUrl, int? Year, string StatusKey, bool IsFavorite, ProgressStateType Progress, int ProgressPercent);
 }

@@ -13,6 +13,8 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly EnumField MediaSubtypeId = new(typeof(MediaSubtype)) { Required = false };
         public static readonly EnumArrayField MediaTypeIds = new(typeof(MediaType)) { MaximumLength = 8 };
         public static readonly EnumArrayField MediaSubtypeIds = new(typeof(MediaSubtype)) { MaximumLength = 8 };
+        public static readonly EnumField ProgressStateId = new(typeof(ProgressStateType));
+        public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100 };
         public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 100, IsSet = true };
         public static readonly BoolField IsMediaSubtypeManual = new();
         public static readonly BoolField IsFranchiseManual = new();
