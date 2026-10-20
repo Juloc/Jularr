@@ -6424,6 +6424,242 @@
    "Import by hand",
    "Von Hand importieren"
   ],
+  "work.tabs": [
+   "Sections of this title",
+   "Bereiche dieses Titels"
+  ],
+  "work.tab.seasons": [
+   "Seasons",
+   "Staffeln"
+  ],
+  "work.tab.files": [
+   "Files",
+   "Dateien"
+  ],
+  "work.tab.history": [
+   "History",
+   "Verlauf"
+  ],
+  "work.tab.metadata": [
+   "Metadata",
+   "Metadaten"
+  ],
+  "work.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "work.monitor.start": [
+   "Start monitoring",
+   "Überwachung starten"
+  ],
+  "work.monitor.stop": [
+   "Stop monitoring",
+   "Überwachung beenden"
+  ],
+  "work.monitor.on": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "work.monitor.off": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "work.search": [
+   "Search",
+   "Suchen"
+  ],
+  "work.searchMonitored": [
+   "Search monitored",
+   "Überwachte suchen"
+  ],
+  "work.interactive": [
+   "Interactive search",
+   "Interaktive Suche"
+  ],
+  "work.refresh": [
+   "Refresh metadata",
+   "Metadaten aktualisieren"
+  ],
+  "work.edit": [
+   "Edit",
+   "Bearbeiten"
+  ],
+  "work.collapseAll": [
+   "Collapse all",
+   "Alle zuklappen"
+  ],
+  "work.toggleSeason": [
+   "Show or hide the episodes of this season",
+   "Folgen dieser Staffel zeigen oder verbergen"
+  ],
+  "work.specials": [
+   "Specials",
+   "Specials"
+  ],
+  "work.coverage": [
+   "{0} / {1}",
+   "{0} / {1}"
+  ],
+  "work.figure.seasons": [
+   "{0} seasons",
+   "{0} Staffeln"
+  ],
+  "work.figure.episodes": [
+   "{0} episodes",
+   "{0} Folgen"
+  ],
+  "work.figure.onDisk": [
+   "{0} on disk",
+   "{0} auf der Platte"
+  ],
+  "work.figure.missing": [
+   "{0} missing",
+   "{0} fehlen"
+  ],
+  "work.figure.upgrades": [
+   "{0} upgrades wanted",
+   "{0} Upgrades gewünscht"
+  ],
+  "work.figure.unaired": [
+   "{0} unaired",
+   "{0} noch nicht gesendet"
+  ],
+  "work.empty": [
+   "This title has no seasons yet.",
+   "Dieser Titel hat noch keine Staffeln."
+  ],
+  "work.empty.files": [
+   "This film has no file yet.",
+   "Dieser Film hat noch keine Datei."
+  ],
+  "work.status.Present": [
+   "On disk",
+   "Vorhanden"
+  ],
+  "work.status.Missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "work.status.Downloading": [
+   "Downloading",
+   "Lädt"
+  ],
+  "work.status.Unaired": [
+   "Unaired",
+   "Noch nicht gesendet"
+  ],
+  "work.status.NotMonitored": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "work.status.tba": [
+   "TBA",
+   "Offen"
+  ],
+  "work.status.airsIn": [
+   "Airs in {0} days",
+   "Erscheint in {0} Tagen"
+  ],
+  "work.versions": [
+   "{0} versions",
+   "{0} Versionen"
+  ],
+  "work.col.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "work.col.number": [
+   "#",
+   "#"
+  ],
+  "work.col.title": [
+   "Title",
+   "Titel"
+  ],
+  "work.col.aired": [
+   "Aired",
+   "Datum"
+  ],
+  "work.col.languages": [
+   "Audio · Subtitles (flags)",
+   "Ton · Untertitel (Flaggen)"
+  ],
+  "work.col.languagesIso": [
+   "Audio · Subtitles (codes)",
+   "Ton · Untertitel (Kürzel)"
+  ],
+  "work.col.languagesNames": [
+   "Audio · Subtitles (names)",
+   "Ton · Untertitel (Namen)"
+  ],
+  "work.col.group": [
+   "Group",
+   "Gruppe"
+  ],
+  "work.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "work.col.status": [
+   "Status",
+   "Status"
+  ],
+  "work.col.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "work.col.path": [
+   "Path",
+   "Pfad"
+  ],
+  "work.col.codec": [
+   "Video codec",
+   "Videocodec"
+  ],
+  "work.col.range": [
+   "Dynamic range",
+   "Dynamikumfang"
+  ],
+  "work.columns": [
+   "Columns",
+   "Spalten"
+  ],
+  "work.search.episode": [
+   "Search for this episode",
+   "Diese Folge suchen"
+  ],
+  "work.interactive.episode": [
+   "Interactive search for this episode",
+   "Interaktive Suche für diese Folge"
+  ],
+  "work.search.season": [
+   "Search monitored episodes of this season",
+   "Überwachte Folgen dieser Staffel suchen"
+  ],
+  "work.interactive.season": [
+   "Interactive search for this season",
+   "Interaktive Suche für diese Staffel"
+  ],
+  "work.releases": [
+   "Releases",
+   "Releases"
+  ],
+  "work.figure.seasonOne": [
+   "{0} season",
+   "{0} Staffel"
+  ],
+  "work.figure.episodeOne": [
+   "{0} episode",
+   "{0} Folge"
+  ],
+  "work.figure.upgradeOne": [
+   "{0} upgrade wanted",
+   "{0} Upgrade gewünscht"
+  ],
+  "work.columns.move": [
+   "Move column",
+   "Spalte verschieben"
+  ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
    "Das Speichergerät wacht auf. Bitte versuche es gleich erneut."

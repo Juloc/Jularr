@@ -49,11 +49,7 @@ namespace Jularr.E2E.Tests
 
                 // A single episode is searched by its season and number.
                 fakes.Offer(episode);
-                await Steps.OpenSearchAsync(page, FakeServices.SeriesTitle);
-                var search = Steps.FormWith(page, "Start search");
-                await search.Locator("[name=ParentUnitNumber]").FillAsync("1");
-                await search.Locator("[name=UnitNumber]").FillAsync("1");
-                await Steps.SubmitAsync(page, search);
+                await Steps.SearchEpisodeAsync(page, FakeServices.SeriesTitle, "1");
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = episode.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, episode);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(film).ToString(), fakes.NzbAddress(episode).ToString() }, fakes.Grabbed.ToArray());
@@ -64,14 +60,11 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film was not imported once.");
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode was not imported once.");
 
-                // The second episode is switched off on the Monitoring tab: nothing monitored is missing, the request completes and the Missing list drops the series.
+                // The second episode is switched off on the title's page: nothing monitored is missing, the request completes and the Missing list drops the series.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = "Episode 1" }).InnerTextAsync(), "Present");
-                await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "Episode 2" }).Locator("form")
-                    .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Stop monitoring" }) }));
-                var season = page.Locator("tr").Filter(new() { Has = page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }) });
-                StringAssert.Contains(await season.InnerTextAsync(), "Partly monitored");
+                StringAssert.Contains(await EpisodeRow(page, "1").InnerTextAsync(), "On disk");
+                await Steps.SubmitAsync(page, EpisodeRow(page, "2").Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }) }));
+                StringAssert.Contains(await EpisodeRow(page, "2").InnerTextAsync(), "Not monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
                 Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
                 await page.GotoAsync("/Admin/Requests");
@@ -204,5 +197,9 @@ namespace Jularr.E2E.Tests
                 response => response.Request.Method == "PUT" && response.Ok);
             await Evidence.SaveAsync(page, "player-design-desktop");
         }
+
+        // The row of an episode in the unit table of a title's page.
+        private static ILocator EpisodeRow(IPage page, string number) =>
+            page.Locator("tr.work-row").Filter(new() { Has = page.Locator("td[data-col=number]").GetByText(number, new() { Exact = true }) });
     }
 }
