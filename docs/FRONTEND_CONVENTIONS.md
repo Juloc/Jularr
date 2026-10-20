@@ -170,6 +170,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
 - Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration areas, all open; the user
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
+  The Instance area exists in admin mode only. On a narrow header a breadcrumb part with sub-pages opens them as a menu.
   The header is one row at every width: the search shrinks to its icon on a phone, the trail scrolls.
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations

@@ -48,9 +48,11 @@ namespace Jularr.Frontend.Pages.Shared
             }
 
             // Administration is its own sidebar mode: every area open, the user entries out of the way.
-            var administration = AdministrationLinks(texts);
+            // The Instance area belongs to admin mode only; the user menu keeps the other areas as entry points.
+            var adminPath = currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
+            var administration = AdministrationLinks(texts, adminPath);
             secondary.AddRange(administration);
-            var adminMode = administration.Count > 0 && currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
+            var adminMode = administration.Count > 0 && adminPath;
 
             // The one global search sits in the header.
             var header = new List<IUiComponent> { new Brand(assets, compact: true), Breadcrumb(administration, texts) };
@@ -91,7 +93,7 @@ namespace Jularr.Frontend.Pages.Shared
         }
 
         // Administration areas open into their pages; an area with one page is a plain link.
-        private static List<ShellLink> AdministrationLinks(UiText texts)
+        private static List<ShellLink> AdministrationLinks(UiText texts, bool withInstance)
         {
             var links = new List<ShellLink>();
             if (texts.CanAdminister())
@@ -137,7 +139,7 @@ namespace Jularr.Frontend.Pages.Shared
             if (texts.Can("localization.read")) instance.Add(new("admin.localization.title", "/Admin/Localization", ""));
             if (texts.CanAdminister()) instance.Add(new("admin.catalog.title", "/Admin/Catalog", ""));
             if (texts.Can("backup.read")) instance.Add(new("admin.backup.title", "/Admin/Backup", ""));
-            if (instance.Count > 0) links.Add(Group("nav.group.instance", "settings", [.. instance]));
+            if (withInstance && instance.Count > 0) links.Add(Group("nav.group.instance", "settings", [.. instance]));
 
             return links;
         }
@@ -147,22 +149,34 @@ namespace Jularr.Frontend.Pages.Shared
         private IUiComponent Breadcrumb(IReadOnlyList<ShellLink> administration, UiText texts)
         {
             var trail = new List<IUiComponent>();
-            void Add(IUiComponent label, string? href)
+            // A part with sub-pages is also a menu of them; a phone shows the menu instead of the link (CSS).
+            void Add(IUiComponent label, string? href, IReadOnlyList<ShellLink>? menu = null)
             {
-                var item = href is null ? new Li(label).Attribute("aria-current", "page") : new Li(new A(label).Attribute("href", href));
-                trail.Add(item.Class("breadcrumb__item"));
+                if (href is null)
+                {
+                    trail.Add(new Li(label).Attribute("aria-current", "page").Class("breadcrumb__item"));
+                    return;
+                }
+
+                var link = new A(label).Attribute("href", href);
+                trail.Add(menu is { Count: > 1 }
+                    ? new Li(link.Class("breadcrumb__link"), new LinkMenu(label, [.. menu.Select(entry => new LinkMenuItem(new Text(entry.Key), entry.Href, IsActive(entry)))])).Class("breadcrumb__item breadcrumb__item--menu")
+                    : new Li(link).Class("breadcrumb__item"));
             }
 
-            if (administration.Count > 0 && currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase))
+            var adminTrail = administration.Count > 0 && currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
+            if (adminTrail)
             {
-                Add(new Text("nav.admin"), administration[0].Href);
+                Add(new Text("nav.admin"), administration[0].Href, administration);
                 var group = administration.FirstOrDefault(link => link.Children is not null && Current(link.Children) is not null);
-                if (group is not null) Add(new Text(group.Key), group.Href);
+                if (group is not null) Add(new Text(group.Key), group.Href, group.Children);
             }
 
             foreach (var parent in parents ?? [])
             {
-                Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href);
+                // A parent that is a page of an area offers that area's pages.
+                var area = adminTrail ? administration.FirstOrDefault(link => link.Children?.Any(page => page.Href == parent.Href) == true)?.Children : null;
+                Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href, area);
             }
 
             Add(parents is { Count: > 0 } && currentLabel is not null ? new ValueText(currentLabel) : new Text(pageTitleKey), null);
@@ -188,7 +202,7 @@ namespace Jularr.Frontend.Pages.Shared
                 }
 
                 // On the phone an area is one button to its first page.
-                var active = link.Children is { } area ? Current(area) is not null : Matches(link);
+                var active = IsActive(link);
                 var anchor = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key)))
                     .Class(active ? className + " is-active" : className)
                     .Attribute("href", link.Href);
@@ -199,6 +213,9 @@ namespace Jularr.Frontend.Pages.Shared
             return new Nav(children).Class(cssClass)
                 .Attribute("aria-label", texts[titleKey]);
         }
+
+        // An area is current when one of its pages is.
+        private bool IsActive(ShellLink link) => link.Children is { } area ? Current(area) is not null : Matches(link);
 
         private bool Matches(ShellLink link) => link.Href == "/"
             ? currentPath == "/"

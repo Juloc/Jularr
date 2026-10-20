@@ -57,6 +57,9 @@ test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", (
     assert.match(shell, /adminMode/);
     assert.match(shell, /expand: true/);
     assert.match(shell, /new Ol\(/);
+    assert.match(shell, /new LinkMenu\(/);
+    assert.match(shell, /AdministrationLinks\(texts, adminPath\)/);
+    assert.match(styles, /breadcrumb__item--menu \.link-menu \{ display: block/);
     assert.match(shell, /Add\(new Text\("nav\.admin"\)/);
     assert.match(styles, /\.app-header\s*\{[^}]*height: 64px/);
     assert.match(styles, /container: crumbs/);
