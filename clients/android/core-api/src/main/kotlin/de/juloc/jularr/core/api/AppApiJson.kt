@@ -5,12 +5,17 @@ import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
+import de.juloc.jularr.core.model.DiscoverCatalogItemV1
+import de.juloc.jularr.core.model.DiscoverItemV1
 import de.juloc.jularr.core.model.DiscoverScopeV1
+import de.juloc.jularr.core.model.DiscoverShelfV1
+import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
+import de.juloc.jularr.core.model.WorkDetailsV1
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -108,6 +113,25 @@ internal fun JSONObject.toDiscoverScope(): DiscoverScopeV1 =
         feeds = getJSONArray("feeds").toIntList(),
     )
 
+internal fun JSONObject.toDiscoverShelf(): DiscoverShelfV1 =
+    DiscoverShelfV1(
+        scopeSlug = getString("scopeSlug"),
+        discoverFeedTypeId = getInt("discoverFeedTypeId"),
+        items = getJSONArray("items").mapObjects { it.toDiscoverItem() },
+        catalogItems = getJSONArray("catalogItems").mapObjects { it.toDiscoverCatalogItem() },
+    )
+
+internal fun JSONObject.toDiscoverCatalogItem(): DiscoverCatalogItemV1 =
+    DiscoverCatalogItemV1(
+        namespace = getString("namespace"),
+        externalId = getString("externalId"),
+        title = getString("title"),
+        releaseYear = if (isNull("releaseYear")) null else getInt("releaseYear"),
+        author = if (isNull("author")) null else getString("author"),
+        workId = if (isNull("workId")) null else getLong("workId"),
+        posterUrl = if (isNull("posterUrl")) null else getString("posterUrl"),
+    )
+
 internal fun JSONObject.toAuthentication(): AuthenticationV1 =
     AuthenticationV1(
         accountId = if (isNull("accountId")) null else getLong("accountId"),
@@ -116,8 +140,54 @@ internal fun JSONObject.toAuthentication(): AuthenticationV1 =
         permissions = getJSONArray("permissions").toStringList(),
     )
 
-internal fun JSONObject.toProfileSelection(): ProfileSelectionV1 =
-    ProfileSelectionV1(
+internal fun JSONObject.toWorkDetails(): WorkDetailsV1 =
+    WorkDetailsV1(
+        id = getLong("id"),
+        mediaTypeId = getInt("mediaTypeId"),
+        mediaSubtypeId = if (isNull("mediaSubtypeId")) null else getInt("mediaSubtypeId"),
+        canonicalTitle = getString("canonicalTitle"),
+        isWatchlisted = getBoolean("isWatchlisted"),
+        releaseYear = if (isNull("releaseYear")) null else getInt("releaseYear"),
+        overview = if (isNull("overview")) null else getString("overview"),
+        posterUrl = if (isNull("posterUrl")) null else getString("posterUrl"),
+        backdropUrl = if (isNull("backdropUrl")) null else getString("backdropUrl"),
+        plexUrl = if (isNull("plexUrl")) null else getString("plexUrl"),
+        platforms = getJSONArray("platforms").toStringList(),
+        franchiseName = if (isNull("franchiseName")) null else getString("franchiseName"),
+        isRequestable = getBoolean("isRequestable"),
+        requestStatusTypeId = if (isNull("requestStatusTypeId")) null else getInt("requestStatusTypeId"),
+        runtimeMinutes = if (isNull("runtimeMinutes")) null else getInt("runtimeMinutes"),
+        genres = if (isNull("genres")) null else getString("genres"),
+        trailerKey = if (isNull("trailerKey")) null else getString("trailerKey"),
+        studio = if (isNull("studio")) null else getString("studio"),
+    )
+
+internal fun JSONObject.toDiscoverSuggestion(): DiscoverSuggestionV1 =
+    DiscoverSuggestionV1(
+        scopeSlug = getString("scopeSlug"),
+        namespace = getString("namespace"),
+        externalId = getString("externalId"),
+        title = getString("title"),
+        releaseYear = if (isNull("releaseYear")) null else getInt("releaseYear"),
+        posterUrl = if (isNull("posterUrl")) null else getString("posterUrl"),
+        workId = if (isNull("workId")) null else getLong("workId"),
+    )
+
+internal fun JSONObject.toDiscoverItem(): DiscoverItemV1 =
+    DiscoverItemV1(
+        mediaTypeId = getInt("mediaTypeId"),
+        tmdbId = if (isNull("tmdbId")) null else getInt("tmdbId"),
+        workId = if (isNull("workId")) null else getLong("workId"),
+        title = getString("title"),
+        releaseYear = if (isNull("releaseYear")) null else getInt("releaseYear"),
+        overview = if (isNull("overview")) null else getString("overview"),
+        posterUrl = if (isNull("posterUrl")) null else getString("posterUrl"),
+        backdropUrl = if (isNull("backdropUrl")) null else getString("backdropUrl"),
+        mediaStateTypeId = getInt("mediaStateTypeId"),
+        plexUrl = if (isNull("plexUrl")) null else getString("plexUrl"),
+    )
+
+internal fun JSONObject.toProfileSelection(): ProfileSelectionV1 =    ProfileSelectionV1(
         id = getLong("id"),
         displayName = getString("displayName"),
         isLocked = getBoolean("isLocked"),

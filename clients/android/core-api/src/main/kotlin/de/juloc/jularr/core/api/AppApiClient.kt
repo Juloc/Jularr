@@ -6,12 +6,16 @@ import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
+import de.juloc.jularr.core.model.DiscoverItemV1
 import de.juloc.jularr.core.model.DiscoverScopeV1
+import de.juloc.jularr.core.model.DiscoverShelfV1
+import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
+import de.juloc.jularr.core.model.WorkDetailsV1
 
 /**
  * The app services a client needs: pair the device, read what the instance allows and keep the
@@ -53,6 +57,18 @@ interface AppApiClient {
 
     /** Reads the media types the profile may browse. */
     suspend fun discoverScopes(): List<DiscoverScopeV1>
+
+    /** Searches the titles of the instance. */
+    suspend fun search(query: String, mediaTypeId: Int? = null, page: Int = 1): List<DiscoverItemV1>
+
+    /** Reads the titles the instance suggests for what the viewer types. */
+    suspend fun suggestions(query: String, scopeSlug: String? = null): List<DiscoverSuggestionV1>
+
+    /** Reads the details of a title of the instance. */
+    suspend fun work(workId: Long): WorkDetailsV1
+
+    /** Reads the ranked lists of the Discover of the instance; without a scope every scope. */
+    suspend fun discoverShelves(scopeSlug: String? = null): List<DiscoverShelfV1>
 
     /** Reads the profiles the account of the device may use. */
     suspend fun profiles(): List<ProfileSelectionV1>

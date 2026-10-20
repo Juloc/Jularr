@@ -85,7 +85,7 @@ private fun TvCapsule(controller: TvController, title: String) {
         modifier = Modifier
             .background(if (focused) colors.field else colors.surface, shape)
             .clip(shape)
-            .reportFocus { focused = it }
+            .reportFocus { focused = it; if (it) controller.focusMovedTo(TvFocusArea.Content) }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -116,7 +116,7 @@ fun TvShelfRow(controller: TvController, shelf: TvShelf) {
         )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(TvLayout.Gap)) {
             items(shelf.cards, key = { it.id }) { card ->
-                TvCardView(card)
+                TvCardView(card, controller)
             }
         }
     }
@@ -127,7 +127,7 @@ fun TvShelfRow(controller: TvController, shelf: TvShelf) {
  * shows its ring.
  */
 @Composable
-fun TvCardView(card: TvCard) {
+fun TvCardView(card: TvCard, controller: TvController) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     var focused by remember { mutableStateOf(false) }
@@ -135,7 +135,7 @@ fun TvCardView(card: TvCard) {
     Column(
         modifier = Modifier
             .width(TvLayout.CardWidth)
-            .reportFocus { focused = it }
+            .reportFocus { focused = it; if (it) controller.focusMovedTo(TvFocusArea.Content) }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -205,7 +205,7 @@ fun TvCardView(card: TvCard) {
 
 /** A list of cards, as the watchlist and the library show it. */
 @Composable
-fun TvCardGrid(title: String, cards: List<TvCard>, empty: String) {
+fun TvCardGrid(title: String, cards: List<TvCard>, empty: String, controller: TvController) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     LazyColumn(
@@ -228,7 +228,7 @@ fun TvCardGrid(title: String, cards: List<TvCard>, empty: String) {
             items(cards.chunked(5).withIndex().toList(), key = { it.index }) { (_, row) ->
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(TvLayout.Gap)) {
                     items(row, key = { it.id }) { card ->
-                        TvCardView(card)
+                        TvCardView(card, controller)
                     }
                 }
             }

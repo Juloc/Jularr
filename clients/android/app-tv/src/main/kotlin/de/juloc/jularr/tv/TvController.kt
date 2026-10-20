@@ -11,12 +11,17 @@ import de.juloc.jularr.core.design.DesignTokens
 import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePlatform
+import de.juloc.jularr.core.model.DiscoverItemV1
 import de.juloc.jularr.core.model.DiscoverScopeV1
+import de.juloc.jularr.core.model.DiscoverShelfV1
+import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
+import de.juloc.jularr.core.model.WorkDetailsV1
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -79,6 +84,30 @@ class TvController(context: Context) {
     var profileName by mutableStateOf("")
         private set
 
+    /** What the viewer types in the search. */
+    var searchQuery by mutableStateOf("")
+        private set
+
+    /** The titles the instance suggests for the text. */
+    var searchSuggestions by mutableStateOf(emptyList<DiscoverSuggestionV1>())
+        private set
+
+    /** The titles that match the text. */
+    var searchResults by mutableStateOf(emptyList<DiscoverItemV1>())
+        private set
+
+    /** The ranked lists of the instance; the trending ones stand on the right of the search. */
+    var trending by mutableStateOf(emptyList<DiscoverItemV1>())
+        private set
+
+    /** The details of the title the viewer opened. */
+    var details by mutableStateOf<WorkDetailsV1?>(null)
+        private set
+
+    /** Where the focus is now; the D-pad moves between the areas in the reading order. */
+    var focusArea by mutableStateOf(TvFocusArea.Rail)
+        private set
+
     var error by mutableStateOf<String?>(null)
         private set
 
@@ -86,6 +115,8 @@ class TvController(context: Context) {
         private set
 
     private var api: AppApiClient? = null
+    private var previousRoute = TvRoute.Home
+    private var searchJob: Job? = null
 
     /**
      * Starts the app: a television with a known address connects to it right away, so it shows
@@ -180,6 +211,114 @@ class TvController(context: Context) {
         route = target
     }
 
+    /** The focus moved into an area of the screen. */
+    fun focusMovedTo(area: TvFocusArea) {
+        focusArea = area
+    }
+
+    /**
+     * Opens the search of the instance. The viewer types with the keyboard of the television;
+     * the suggestions of the instance pop up while the text grows and the trending titles of
+     * the instance stand on the right.
+     */
+    fun openSearch() {
+        previousRoute = route
+        route = TvRoute.Search
+        searchQuery = ""
+        searchSuggestions = emptyList()
+        searchResults = emptyList()
+        loadTrending()
+    }
+
+    /** Reads the trending titles of the instance for the right side of the search. */
+    private fun loadTrending() {
+        if (trending.isNotEmpty()) {
+            return
+        }
+        scope.launch {
+            val client = api ?: return@launch
+            runCatching { client.discoverShelves() }.onSuccess { shelves ->
+                trending = shelves
+                    .filter { it.discoverFeedTypeId == DiscoverShelfV1.FeedTrending }
+                    .flatMap { it.items }
+                    // A title can stand in more than one scope; it appears once.
+                    .distinctBy { it.workId ?: it.tmdbId }
+                    .take(TrendingTitles)
+            }
+        }
+    }
+
+    /** A key of the keyboard of the television. */
+    fun type(key: String) {
+        val text = when (key) {
+            "␣" -> searchQuery + " "
+            "⌫" -> searchQuery.dropLast(1)
+            else -> searchQuery + key
+        }
+        searchQuery = text
+        runSearch(text)
+    }
+
+    /** What the viewer said enters the field of the search. */
+    fun heard(text: String) {
+        searchQuery = text
+        runSearch(text)
+    }
+
+    /** Clears the text of the search. */
+    fun clearSearch() {
+        searchQuery = ""
+        searchSuggestions = emptyList()
+        searchResults = emptyList()
+    }
+
+    /** Opens the title the viewer chose. */
+    fun openDetails(workId: Long?) {
+        if (workId == null) {
+            return
+        }
+        previousRoute = route
+        route = TvRoute.Details
+        details = null
+        scope.launch {
+            val client = api ?: return@launch
+            runCatching { client.work(workId) }
+                .onSuccess { details = it }
+                .onFailure { error = it.message ?: it::class.java.simpleName }
+        }
+    }
+
+    /** The suggestion opens the title it names. */
+    fun openSuggestion(suggestion: DiscoverSuggestionV1) {
+        openDetails(suggestion.workId)
+    }
+
+    /** Back returns to the surface the television came from; it tells when it did. */
+    fun back(): Boolean {
+        if (route != TvRoute.Search && route != TvRoute.Details) {
+            return false
+        }
+        route = previousRoute
+        details = null
+        return true
+    }
+
+    /** Searches the titles of the instance; the text is read after a short pause. */
+    private fun runSearch(text: String) {
+        searchJob?.cancel()
+        if (text.isBlank()) {
+            searchSuggestions = emptyList()
+            searchResults = emptyList()
+            return
+        }
+        searchJob = scope.launch {
+            delay(SearchDelayMs)
+            val client = api ?: return@launch
+            runCatching { client.suggestions(text) }.onSuccess { searchSuggestions = it }
+            runCatching { client.search(text) }.onSuccess { searchResults = it }
+        }
+    }
+
     /** Switches the skin of the television. */
     fun useSkin(name: String) {
         skin = name
@@ -262,5 +401,7 @@ class TvController(context: Context) {
 
     private companion object {
         const val ClaimIntervalMs = 5_000L
+        const val SearchDelayMs = 150L
+        const val TrendingTitles = 12
     }
 }

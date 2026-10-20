@@ -6,12 +6,16 @@ import de.juloc.jularr.core.model.ContinueItemV1
 import de.juloc.jularr.core.model.DevicePairingClaim
 import de.juloc.jularr.core.model.DevicePairingRequest
 import de.juloc.jularr.core.model.DevicePairingStarted
+import de.juloc.jularr.core.model.DiscoverItemV1
 import de.juloc.jularr.core.model.DiscoverScopeV1
+import de.juloc.jularr.core.model.DiscoverShelfV1
+import de.juloc.jularr.core.model.DiscoverSuggestionV1
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.InstanceCapabilities
 import de.juloc.jularr.core.model.InstancePresentationV1
 import de.juloc.jularr.core.model.ProfileSelectionV1
 import de.juloc.jularr.core.model.WorkCardV1
+import de.juloc.jularr.core.model.WorkDetailsV1
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -69,6 +73,33 @@ class HttpAppApiClient(
     override suspend fun discoverScopes(): List<DiscoverScopeV1> =
         requestList("GET", AppApiRoutes.DiscoverScopes).map { it.toDiscoverScope() }
 
+    override suspend fun search(query: String, mediaTypeId: Int?, page: Int): List<DiscoverItemV1> {
+        val body = JSONObject().put("query", query).put("page", page)
+        if (mediaTypeId != null) {
+            body.put("mediaTypeId", mediaTypeId)
+        }
+        return requestList("POST", AppApiRoutes.DiscoverSearch, body).map { it.toDiscoverItem() }
+    }
+
+    override suspend fun suggestions(query: String, scopeSlug: String?): List<DiscoverSuggestionV1> {
+        val body = JSONObject().put("query", query)
+        if (scopeSlug != null) {
+            body.put("scopeSlug", scopeSlug)
+        }
+        return requestList("POST", AppApiRoutes.DiscoverSuggestions, body).map { it.toDiscoverSuggestion() }
+    }
+
+    override suspend fun work(workId: Long): WorkDetailsV1 =
+        requestObject("GET", AppApiRoutes.work(workId), null).toWorkDetails()
+
+    override suspend fun discoverShelves(scopeSlug: String?): List<DiscoverShelfV1> {
+        val body = JSONObject()
+        if (scopeSlug != null) {
+            body.put("scopeSlug", scopeSlug)
+        }
+        return requestList("POST", AppApiRoutes.DiscoverShelves, body).map { it.toDiscoverShelf() }
+    }
+
     override suspend fun profiles(): List<ProfileSelectionV1> =
         requestObject("GET", "${AppApiRoutes.Profiles}?page=1&pageSize=50", null).toProfiles()
 
@@ -124,11 +155,12 @@ class HttpAppApiClient(
         JSONObject(request(method, route, body).text.ifBlank { "{}" })
 
     /** Reads a plain text answer, like the shared design tokens. */
-    private suspend fun requestText(method: String, route: String): String = request(method, route, null).text
+    private suspend fun requestText(method: String, route: String, body: JSONObject? = null): String =
+        request(method, route, body).text
 
     /** Reads a list answer; the services answer a data list as a plain array. */
-    private suspend fun requestList(method: String, route: String): List<JSONObject> {
-        val text = requestText(method, route)
+    private suspend fun requestList(method: String, route: String, body: JSONObject? = null): List<JSONObject> {
+        val text = requestText(method, route, body)
         if (text.isBlank()) {
             return emptyList()
         }

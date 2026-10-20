@@ -15,6 +15,9 @@ object AppApiRoutes {
     const val Continue = "$Base/continue"
     const val HomeLayout = "$Base/home/layout"
     const val DiscoverScopes = "$Base/discover/scopes"
+    const val DiscoverSearch = "$Base/discover/search"
+    const val DiscoverSuggestions = "$Base/discover/suggestions"
+    const val DiscoverShelves = "$Base/discover/shelves"
     const val Profiles = "$Base/profiles"
 
     /** The shared design tokens the instance serves; a client reads them from here. */
@@ -34,4 +37,7 @@ object AppApiRoutes {
 
     /** Switches the device to another profile of its account. */
     fun selectProfile(profileId: Long): String = "$Base/auth/profile/$profileId"
+
+    /** The details of a title of the instance. */
+    fun work(workId: Long): String = "$Base/works/$workId"
 }

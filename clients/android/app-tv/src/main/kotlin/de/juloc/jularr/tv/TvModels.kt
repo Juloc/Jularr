@@ -19,6 +19,15 @@ enum class TvRoute(val key: String) {
     Library("library"),
     Profiles("profiles"),
     Settings("settings"),
+    Search("search"),
+    Details("details"),
+}
+
+/** Where the focus is now; the D-pad moves between the areas in the reading order. */
+enum class TvFocusArea {
+    Rail,
+    TopRow,
+    Content,
 }
 
 /**

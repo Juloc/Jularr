@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -26,9 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,14 +45,38 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun TvShell(controller: TvController) {
     val colors = LocalTvColors.current
+    // The search of the top row; the D-pad reaches it from the content.
+    val topRowFocus = remember { FocusRequester() }
     CompositionLocalProvider(
         LocalTvColors provides colors,
         LocalTvType provides rememberTvType(controller.designTokens),
     ) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            TvRail(controller)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .onKeyEvent { event ->
+                    // The reading order: the rail, then the top row, then the content.
+                    val native = event.nativeKeyEvent
+                    if (native.action == android.view.KeyEvent.ACTION_DOWN &&
+                        native.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
+                        controller.focusArea == TvFocusArea.Content
+                    ) {
+                        controller.focusMovedTo(TvFocusArea.TopRow)
+                        topRowFocus.requestFocus()
+                        true
+                    } else {
+                        false
+                    }
+                },
+        ) {
+            if (controller.route != TvRoute.Search) {
+                TvRail(controller)
+            }
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                TvTopRow(controller)
+                // The search has no other chrome: the field and the keyboard are the screen.
+                if (controller.route != TvRoute.Search) {
+                    TvTopRow(controller, topRowFocus)
+                }
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -60,16 +89,20 @@ fun TvShell(controller: TvController) {
                             title = controller.texts["watchlist.title"],
                             cards = controller.watchlist,
                             empty = controller.texts["tv.empty.watchlist"],
+                            controller = controller,
                         )
 
                         TvRoute.Library -> TvCardGrid(
                             title = controller.texts["nav.library"],
                             cards = controller.library,
                             empty = controller.texts["tv.empty.library"],
+                            controller = controller,
                         )
 
                         TvRoute.Profiles -> TvProfilesScreen(controller)
                         TvRoute.Settings -> TvSettingsScreen(controller)
+                        TvRoute.Search -> TvSearchScreen(controller)
+                        TvRoute.Details -> TvDetailsScreen(controller)
                     }
                 }
             }
@@ -136,7 +169,12 @@ private fun TvRailLink(controller: TvController, route: TvRoute, title: String, 
                     Modifier
                 },
             )
-            .reportFocus { focused = it }
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.Rail)
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -161,11 +199,11 @@ private fun TvRailLink(controller: TvController, route: TvRoute, title: String, 
 }
 
 /**
- * The top row: the place of the current page and the profile of the instance. The search
- * opens from the magnifier of the desktop and follows in the search package.
+ * The top row: the place of the current page, the search of the instance and the profile.
+ * The search opens with the magnifier of the desktop.
  */
 @Composable
-private fun TvTopRow(controller: TvController) {
+private fun TvTopRow(controller: TvController, focus: FocusRequester) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     Row(
@@ -184,6 +222,43 @@ private fun TvTopRow(controller: TvController) {
             fontWeight = FontWeight.SemiBold,
             color = colors.text,
         )
+        Spacer(Modifier.weight(1f))
+        // The magnifier of the desktop opens the search of the instance.
+        if (controller.route != TvRoute.Search) {
+            var focused by remember { mutableStateOf(false) }
+            val shape = RoundedCornerShape(TvLayout.RailItemRadius)
+            Box(
+                modifier = Modifier
+                    .size(TvLayout.RailItemHeight)
+                    .clip(shape)
+                    .focusRequester(focus)
+                    .reportFocus {
+                        focused = it
+                        if (it) {
+                            controller.focusMovedTo(TvFocusArea.TopRow)
+                        }
+                    }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { controller.openSearch() }
+                    .then(
+                        if (focused) {
+                            Modifier.tvFocusRing(true, colors.focus, shape)
+                        } else {
+                            Modifier
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = controller.texts["search.global"],
+                    tint = if (focused) colors.accentText else colors.muted,
+                    modifier = Modifier.size(TvLayout.AvailabilitySymbol),
+                )
+            }
+        }
     }
 }
 
@@ -194,4 +269,6 @@ internal fun locationKey(route: TvRoute): String = when (route) {
     TvRoute.Library -> "nav.library"
     TvRoute.Profiles -> "tv.profiles.title"
     TvRoute.Settings -> "tv.settings.title"
+    TvRoute.Search -> "search.global"
+    TvRoute.Details -> "media.details"
 }

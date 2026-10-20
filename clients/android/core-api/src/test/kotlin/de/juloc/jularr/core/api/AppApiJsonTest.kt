@@ -1,6 +1,7 @@
 package de.juloc.jularr.core.api
 
 import de.juloc.jularr.core.model.ContinueItemV1
+import de.juloc.jularr.core.model.DiscoverShelfV1
 import de.juloc.jularr.core.model.DevicePlatform
 import de.juloc.jularr.core.model.HomeShelfV1
 import de.juloc.jularr.core.model.WorkCardV1
@@ -189,6 +190,81 @@ class AppApiJsonTest {
         assertNull(scope.mediaSubtypeId)
         assertEquals(true, scope.isCatalog)
         assertEquals(emptyList<Int>(), scope.feeds)
+    }
+
+    @Test
+    fun aSearchResultIsReadFromTheServerShape() {
+        val item = JSONObject(
+            """{"mediaTypeId":2,"tmdbId":1234,"workId":12,"title":"One Show","releaseYear":2006,"overview":"A short text.",
+               "posterUrl":"https://example.test/poster.jpg","backdropUrl":null,"mediaStateTypeId":3,"plexUrl":null}""",
+        ).toDiscoverItem()
+
+        assertEquals(2, item.mediaTypeId)
+        assertEquals(1234, item.tmdbId)
+        assertEquals(12L, item.workId)
+        assertEquals("One Show", item.title)
+        assertEquals(2006, item.releaseYear)
+        assertEquals("A short text.", item.overview)
+        assertEquals("https://example.test/poster.jpg", item.posterUrl)
+        assertNull(item.backdropUrl)
+        assertEquals(3, item.mediaStateTypeId)
+        assertNull(item.plexUrl)
+    }
+
+    @Test
+    fun aSearchResultWithoutAWorkKeepsItEmpty() {
+        val item = JSONObject(
+            """{"mediaTypeId":1,"tmdbId":99,"workId":null,"title":"One Film","releaseYear":null,"overview":null,
+               "posterUrl":null,"backdropUrl":null,"mediaStateTypeId":1,"plexUrl":null}""",
+        ).toDiscoverItem()
+
+        assertNull(item.workId)
+        assertNull(item.releaseYear)
+        assertNull(item.overview)
+        assertNull(item.posterUrl)
+    }
+
+    @Test
+    fun aSuggestionIsReadFromTheServerShape() {
+        val suggestion = JSONObject(
+            """{"scopeSlug":"anime","namespace":"tmdb","externalId":"1234","title":"One Show","releaseYear":2006,
+               "posterUrl":"https://example.test/poster.jpg","workId":12}""",
+        ).toDiscoverSuggestion()
+
+        assertEquals("anime", suggestion.scopeSlug)
+        assertEquals("tmdb", suggestion.namespace)
+        assertEquals("1234", suggestion.externalId)
+        assertEquals("One Show", suggestion.title)
+        assertEquals(2006, suggestion.releaseYear)
+        assertEquals(12L, suggestion.workId)
+    }
+
+    @Test
+    fun aSuggestionWithoutAWorkKeepsItEmpty() {
+        val suggestion = JSONObject(
+            """{"scopeSlug":"anime","namespace":"tmdb","externalId":"1234","title":"One Show","releaseYear":null,
+               "posterUrl":null,"workId":null}""",
+        ).toDiscoverSuggestion()
+
+        assertNull(suggestion.workId)
+        assertNull(suggestion.releaseYear)
+        assertNull(suggestion.posterUrl)
+    }
+
+    @Test
+    fun aShelfIsReadFromTheServerShape() {
+        val shelf = JSONObject(
+            """{"scopeSlug":"anime","discoverFeedTypeId":1,"items":[],"catalogItems":[{"namespace":"openlibrary","externalId":"OL1M",
+               "title":"One Book","releaseYear":1999,"author":"One Author","workId":null,"posterUrl":null}]}""",
+        ).toDiscoverShelf()
+
+        assertEquals("anime", shelf.scopeSlug)
+        assertEquals(DiscoverShelfV1.FeedTrending, shelf.discoverFeedTypeId)
+        assertEquals(0, shelf.items.size)
+        assertEquals(1, shelf.catalogItems.size)
+        assertEquals("One Book", shelf.catalogItems[0].title)
+        assertEquals("One Author", shelf.catalogItems[0].author)
+        assertNull(shelf.catalogItems[0].workId)
     }
 
     @Test
