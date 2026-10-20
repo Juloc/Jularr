@@ -792,6 +792,60 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, volumePage.Units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Volume));
             Assert.AreEqual(1L, volumePage.MissingCount);
             Assert.AreEqual(1L, volumePage.UnairedCount);
+
+            // An album's tracks are units too.
+            using var album = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Music, "Album"));
+            var albumId = (await album.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") VALUES ({albumId}, 5, 1), ({albumId}, 5, 2), ({albumId}, 5, 3);");
+            using var tracks = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + albumId + "/management");
+            var trackPage = (await tracks.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            Assert.AreEqual(3, trackPage.Units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Track));
+            Assert.AreEqual(3L, trackPage.MissingCount);
+        }
+
+        // A book's files belong to its editions, a game's to its platforms, each platform with its own target and a ROM check by hash.
+        [TestMethod]
+        public async Task WorkManagement_GroupsABooksFilesByEdition_AndAGamesByPlatform()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            using var book = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Novel"));
+            var bookId = (await book.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            using var game = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Game, "Game"));
+            var gameId = (await game.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            var hash = new string('a', 40);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkEditions" ("Id", "WorkId", "LanguageCode", "EditionFormatId") VALUES (800, {bookId}, 'en', 2), (801, {bookId}, 'de', 1), (802, {gameId}, NULL, NULL);
+                INSERT INTO "WorkEditionExternalIdentities" ("WorkEditionId", "Namespace", "Value") VALUES (800, 'isbn', '9780000000001'), (800, 'isbn', '9780000000002');
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (800, {bookId}, 800), (900, {gameId}, 802);
+                INSERT INTO "GamePlatforms" ("Id", "Name") VALUES (700, 'Switch'), (701, 'PC');
+                INSERT INTO "WorkPlatforms" ("WorkId", "GamePlatformId") VALUES ({gameId}, 700), ({gameId}, 701);
+                INSERT INTO "WantedItems" ("WorkId", "GamePlatformId", "IsPaused") VALUES ({gameId}, 700, TRUE);
+                INSERT INTO "GameReleases" ("WorkVersionId", "GamePlatformId") VALUES (900, 700);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (800, {bookId}, 800, 1), (900, {gameId}, 900, 1);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt", "Sha1")
+                SELECT (SELECT min("Id") FROM "LibraryRoots"), item."Path", 100, now(), item."Asset", now(), item."Sha1"
+                FROM (VALUES ('Novel/Novel.epub', 800, NULL::text), ('Game/Game.nsp', 900, '{hash}')) AS item ("Path", "Asset", "Sha1");
+                INSERT INTO "GameRomCatalogs" ("Id", "Name", "GamePlatformId", "ImportedAt") VALUES (50, 'Switch DAT', 700, now());
+                INSERT INTO "GameRoms" ("Sha1", "GameRomCatalogId", "Name") VALUES ('{hash}', 50, 'Game');
+                """);
+
+            using var books = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + bookId + "/management");
+            var bookPage = (await books.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            CollectionAssert.AreEqual(new long[] { 800, 801 }, bookPage.Groups.Select(group => group.Id).ToArray());
+            Assert.AreEqual("9780000000001, 9780000000002", bookPage.Groups[0].Isbn);
+            Assert.AreEqual(EditionFormat.Ebook, bookPage.Groups[0].EditionFormatId);
+            Assert.AreEqual(800L, bookPage.Files.Single().GroupId);
+            Assert.IsNull(bookPage.Files.Single().IsRomVerified);
+
+            using var games = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + gameId + "/management");
+            var gamePage = (await games.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            CollectionAssert.AreEqual(new long[] { 701, 700 }, gamePage.Groups.Select(group => group.Id).ToArray());
+            Assert.IsNull(gamePage.Groups[0].WantedItemId, "PC is not wanted.");
+            Assert.AreEqual(true, gamePage.Groups[1].IsPaused);
+            Assert.AreEqual(700L, gamePage.Files.Single().GroupId);
+            Assert.AreEqual(true, gamePage.Files.Single().IsRomVerified);
         }
 
         [TestMethod]
