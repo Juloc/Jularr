@@ -198,7 +198,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                     assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), meta, texts["design.exampleOverview"])
                     .Content(new P(new Text("design.exampleStatus")), new Div([.. statuses]).Class("media-preview__statuses"))
                     .Actions(new Button(new Icon("requests", assets), new Text("request.create")).Primary().Disabled(),
-                        new Button(new Icon("bookmark", assets), new Text("media.watchlist.add")).Disabled(),
+                        new Button(new Icon("heart", assets), new Text("media.favorites.add")).Disabled(),
                         new A(new Text("media.details")).Class("button").Attribute("href", "/Design#media"));
                 if (title == "Your Name.") preview.Trailer("k4xGqY5IDBE");
                 previews.Add(preview);
@@ -237,7 +237,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                     .Actions(new Button(new Icon(example.Available > 0 ? "player-play" : "requests", assets),
                             new Text(example.Watched > 0 ? "media.continue" : example.Available > 0 ? "player.play" : "media.request")).Primary().Compact()
                             .Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full"))
-                    .Bookmark(new Button(new Icon("bookmark", assets)).IconOnly(texts["nav.watchlist"]).Attribute("data-design-bookmark", "").Attribute("aria-pressed", "false"));
+                    .Bookmark(new Button(new Icon("heart", assets)).IconOnly(texts["nav.favorites"]).Attribute("data-design-bookmark", "").Attribute("aria-pressed", "false"));
                 if (example.Watched > 0) card.Continue(example.Watched, 5400000);
                 return (IUiComponent)card;
             })]));

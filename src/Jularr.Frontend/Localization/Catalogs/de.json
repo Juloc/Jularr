@@ -2841,8 +2841,8 @@
    "Module"
   ],
   "admin.instance.module.retained": [
-   "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
-   "Das Deaktivieren der Bibliothek sperrt die Mediendienste und blendet deren Navigation aus. Vorhandene Medien und Merklisten bleiben erhalten."
+   "Disabling Library blocks media services and hides their navigation. Existing media and favorites are retained.",
+   "Das Deaktivieren der Bibliothek sperrt die Mediendienste und blendet deren Navigation aus. Vorhandene Medien und Favoriten bleiben erhalten."
   ],
   "common.all": [
    "All",
@@ -3524,9 +3524,9 @@
    "Settings",
    "Einstellungen"
   ],
-  "nav.watchlist": [
-   "Watchlist",
-   "Merkliste"
+  "nav.favorites": [
+   "Favorites",
+   "Favoriten"
   ],
   "player.title": [
    "Player",
@@ -3616,9 +3616,9 @@
    "Shell",
    "Shell"
   ],
-  "preview.watchlist": [
-   "Watchlist",
-   "Merkliste"
+  "preview.favorites": [
+   "Favorites",
+   "Favoriten"
   ],
   "requests.approved": [
    "Approved",
@@ -4420,9 +4420,9 @@
    "Installed quality unknown",
    "Vorhandene Qualität unbekannt"
   ],
-  "watchlist.title": [
-   "Watchlist",
-   "Merkliste"
+  "favorites.title": [
+   "Favorites",
+   "Favoriten"
   ],
   "storage.title": [
    "Storage",
@@ -5109,8 +5109,8 @@
    "Kalenderwochen"
   ],
   "calendar.empty": [
-   "Nothing is released in these two weeks for your watchlist, requests or library.",
-   "In diesen zwei Wochen erscheint nichts aus deiner Merkliste, deinen Anfragen oder deiner Bibliothek."
+   "Nothing is released in these two weeks for your favorites, requests or library.",
+   "In diesen zwei Wochen erscheint nichts aus deinen Favoriten, deinen Anfragen oder deiner Bibliothek."
   ],
   "instance.module.Calendar": [
    "Release calendar",
@@ -5207,6 +5207,98 @@
   "collections.removeFrom": [
    "Remove",
    "Entfernen"
+  ],
+  "favorites.noMatch": [
+   "No favorites match these filters.",
+   "Keine Favoriten passen zu diesen Filtern."
+  ],
+  "favorites.noWorks": [
+   "No titles in this collection yet.",
+   "Noch keine Titel in dieser Sammlung."
+  ],
+  "favorites.collections": [
+   "Collections",
+   "Sammlungen"
+  ],
+  "favorites.all": [
+   "All favorites",
+   "Alle Favoriten"
+  ],
+  "favorites.titles": [
+   "{0} titles",
+   "{0} Titel"
+  ],
+  "favorites.collection.edit": [
+   "Edit {0}",
+   "{0} bearbeiten"
+  ],
+  "favorites.collection.filter": [
+   "Edit filter",
+   "Filter bearbeiten"
+  ],
+  "favorites.filter.open": [
+   "Open filter",
+   "Filter öffnen"
+  ],
+  "favorites.filter.title": [
+   "Filter",
+   "Filter"
+  ],
+  "favorites.layout.toggle": [
+   "Switch between grid and list",
+   "Zwischen Raster und Liste wechseln"
+  ],
+  "favorites.select": [
+   "Select",
+   "Auswählen"
+  ],
+  "favorites.select.done": [
+   "Done",
+   "Fertig"
+  ],
+  "favorites.select.item": [
+   "Select {0}",
+   "{0} auswählen"
+  ],
+  "favorites.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "favorites.selectShown": [
+   "Select all shown",
+   "Alle sichtbaren wählen"
+  ],
+  "favorites.clearSelection": [
+   "Clear selection",
+   "Abwählen"
+  ],
+  "favorites.assign": [
+   "Add to collections",
+   "In Sammlungen einordnen"
+  ],
+  "favorites.assign.item": [
+   "Add {0} to collections",
+   "{0} in Sammlungen einordnen"
+  ],
+  "favorites.removeFromCollection": [
+   "Remove from this collection",
+   "Aus dieser Sammlung entfernen"
+  ],
+  "favorites.chip.none": [
+   "Add to collection",
+   "Sammlung zuordnen"
+  ],
+  "favorites.picker.newName": [
+   "New collection name",
+   "Name der neuen Sammlung"
+  ],
+  "favorites.picker.create": [
+   "Create collection and add",
+   "Sammlung erstellen und zuordnen"
+  ],
+  "common.done": [
+   "Done",
+   "Fertig"
   ],
   "instance.module.Collections": [
    "Collections",
@@ -6476,21 +6568,21 @@
    "Game",
    "Spiel"
   ],
-  "media.watchlist.add": [
-   "Add to watchlist",
-   "Zur Merkliste hinzufügen"
+  "media.favorites.add": [
+   "Add to favorites",
+   "Zu Favoriten hinzufügen"
   ],
-  "media.watchlist.manage": [
-   "Manage watchlist in Details",
-   "Merkliste in den Details verwalten"
+  "media.favorites.manage": [
+   "Manage favorites in Details",
+   "Favoriten in den Details verwalten"
   ],
-  "media.watchlist.remove": [
-   "Remove from watchlist",
-   "Von der Merkliste entfernen"
+  "media.favorites.remove": [
+   "Remove from favorites",
+   "Aus Favoriten entfernen"
   ],
-  "media.watchlist.empty": [
-   "Your watchlist is empty.",
-   "Deine Merkliste ist leer."
+  "media.favorites.empty": [
+   "Your favorites are empty.",
+   "Du hast noch keine Favoriten."
   ],
   "errors.invalid_data": [
    "Please check the supplied values.",

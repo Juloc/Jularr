@@ -173,8 +173,8 @@ Der [Setup Wizard](docs/INSTANCE_SETUP.md) bündelt Owner und Sprache, Module, B
 
 `/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
 den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`
-und `/Watchlist` lesen persistierte Medien und bearbeiten ausschließlich die
-Merkliste des aktiven Profils. `/Admin/Requests/Users` liest das vorhandene
+und `/Favorites` (früher `/Watchlist`) lesen persistierte Medien und bearbeiten ausschließlich die
+Favoriten und Sammlungen des aktiven Profils. `/Admin/Requests/Users` liest das vorhandene
 Kontenverzeichnis; Quoten/Regelzuweisungen sind noch nicht implementiert.
 Diese Grundlage benötigt zusätzlich die frische [Media-Baseline](database/Media.sql).
 

@@ -26,31 +26,6 @@
     padding: 24px 0;
 }
 
-.capsule-bar__tool.button {
-    position: relative;
-    width: 39px;
-    min-height: 39px;
-    color: var(--muted);
-
-    &:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
-}
-
-.capsule-bar__badge {
-    position: absolute;
-    top: -4px;
-    right: -2px;
-    display: grid;
-    place-items: center;
-    min-width: 17px;
-    height: 17px;
-    border: 2px solid var(--surface);
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: 10px;
-    line-height: 1;
-}
-
 // Lists of one feed, their order and the layout of the shelves.
 .discover-toolbar {
     display: flex;

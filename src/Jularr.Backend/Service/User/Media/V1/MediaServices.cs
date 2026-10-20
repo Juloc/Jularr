@@ -388,8 +388,13 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
-                    AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
-                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
+                    AND (
+                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
+                    )
+                    AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
+                    AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
                 ORDER BY
                     CASE WHEN @LibrarySortTypeId = 1 THEN entry."CreatedAt" END DESC NULLS LAST,
                     CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
@@ -398,7 +403,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, null, Parameters.LibrarySortTypeId));
+            sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
