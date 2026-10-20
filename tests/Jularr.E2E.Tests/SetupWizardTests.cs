@@ -49,7 +49,7 @@ namespace Jularr.E2E.Tests
                 await CheckViewportAsync(page, "sources", width);
                 Assert.AreEqual(6, await page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a").CountAsync());
                 await page.FillAsync("[name=TmdbKey]", "setup-browser-key");
-                await page.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
                 await page.WaitForURLAsync("**/Setup/Sources");
                 await Assertions.Expect(page.Locator("[name=TmdbKey]")).ToHaveValueAsync("");
 
@@ -102,7 +102,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("[name=BaseUrl]").FillAsync(address);
             await form.Locator("[name=ApiKey]").FillAsync("browser-test-key");
             await form.Locator("[name=IsEnabled][value=False]").CheckAsync();
-            await form.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }).ClickAsync();
+            await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("[name=Name]")).ToHaveValueAsync(name);
             await Assertions.Expect(page.Locator("[name=ApiKey]")).ToHaveValueAsync("");
             await Assertions.Expect(page.GetByRole(AriaRole.Cell, new() { Name = name, Exact = true })).ToBeVisibleAsync();

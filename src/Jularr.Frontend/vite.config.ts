@@ -34,8 +34,6 @@ export default defineConfig({
     // Match the host asset root.
     base: "/build/",
     publicDir: false,
-    // Extract the pinned page-turn CSS rather than injecting styles at runtime.
-    resolve: { alias: { 'page-flip': resolve(root, 'node_modules/page-flip/src/PageFlip.ts') } },
     build: {
         outDir: resolve(root, "wwwroot/build"),
         emptyOutDir: true,

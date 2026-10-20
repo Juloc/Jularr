@@ -138,7 +138,7 @@ namespace Jularr.Backend.Tests
                 using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
                 for (var index = 0; index < lines.Count; index++)
                 {
-                    canvas.DrawText(lines[index], 120, 200 + index * 48, font, paint);
+                    canvas.DrawText(lines[index], 120, 200 + index * 48, SKTextAlign.Left, font, paint);
                 }
             }
 

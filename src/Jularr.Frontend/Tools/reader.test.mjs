@@ -26,6 +26,27 @@ test('Reader validates optional device settings without trusting saved shapes or
     assert.equal(exports.readerSettings({theme:'dark'}).colour, '#141414');
 });
 
+test('Reader typography keeps existing defaults and validates new local preferences', () => {
+    const defaults = exports.readerSettings({ size: 20, spacing: 165 });
+    assert.equal(defaults.font, 'serif');
+    assert.equal(defaults.width, 68);
+    assert.equal(defaults.indent, false);
+    assert.equal(defaults.hyphenation, true);
+    assert.equal(defaults.illustrations, true);
+    const changed = exports.readerSettings({ font: 'sans', width: 25, indent: true, hyphenation: false, illustrations: false });
+    assert.equal(changed.font, 'sans');
+    assert.equal(changed.width, 40);
+    assert.equal(changed.indent, true);
+    assert.equal(changed.hyphenation, false);
+    assert.equal(changed.illustrations, false);
+    const invalid = exports.readerSettings({ font: 'url(bad)', width: Infinity, indent: 'true', hyphenation: 'false' });
+    assert.equal(invalid.font, 'serif');
+    assert.equal(invalid.width, 68);
+    assert.equal(invalid.indent, false);
+    assert.equal(invalid.hyphenation, true);
+    assert.equal(exports.readerSettings({ width: 500 }).width, 90);
+});
+
 test('player planning network failure displays the localized status', async () => {
     const source = readFileSync(new URL('../Modules/Player/player.entry.ts', import.meta.url), 'utf8').replace('import "./player.scss";', '');
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
@@ -42,6 +63,10 @@ test('player planning network failure displays the localized status', async () =
         exports: {}, require: () => ({}),
         document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }), addEventListener() {} },
         matchMedia: () => ({ matches: false, addEventListener() {} }),
+        // The player starts a deferred loading indicator before requesting its plan.
+        // Provide the browser timer APIs so this fixture reaches the actual fetch.
+        window: { setTimeout: () => 1 },
+        clearTimeout() {},
         fetch: () => { requests++; return Promise.reject(new Error('Offline')); }
     });
     await new Promise(resolve => setImmediate(resolve));

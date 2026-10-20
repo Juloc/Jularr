@@ -27,7 +27,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Integration tests can finish just under 20 minutes; leave headroom for CI variability.
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
@@ -48,18 +49,18 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
             nuget-${{ runner.os }}-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: src/Jularr.Frontend/package-lock.json
       - name: Compile assets for Razor integration tests
@@ -76,12 +77,74 @@ jobs:
           sudo apt-get install --yes --no-install-recommends postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
-      - run: dotnet test tests/Jularr.Backend.Tests --configuration Release
+      # The assembly intentionally disables in-process parallelism.
+      # Isolated dotnet test processes can use independent fixture state and test databases.
+      - name: Compile backend tests once
+        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
+      - name: Run two independent backend test partitions
+        shell: bash
+        run: |
+          set -uo pipefail
+          # These heavier integration classes form one partition. Every other (including
+          # any newly added) test belongs to the complementary partition.
+          classes=(AcquisitionTests BookTests MangaTests MusicTests ReadingTests DiscoverTests GameTests
+            PlaybackTests StorageTests BackupTests TakeoverTests UsenetTests DeviceTests
+            NotificationTests LibraryTests SqlContextTests)
+          include=""
+          exclude=""
+          for class in "${classes[@]}"; do
+            pattern="Jularr.Backend.Tests.${class}."
+            include="${include:+${include}|}FullyQualifiedName~${pattern}"
+            exclude="${exclude:+${exclude}&}FullyQualifiedName!~${pattern}"
+          done
+
+          (set -o pipefail
+           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+             --filter "${include}" --logger "trx;LogFileName=backend-core.trx" \
+             --results-directory TestResults/ci/backend 2>&1 | sed -u 's/^/[core] /') &
+          core_pid=$!
+          (set -o pipefail
+           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+             --filter "${exclude}" --logger "trx;LogFileName=backend-other.trx" \
+             --results-directory TestResults/ci/backend 2>&1 | sed -u 's/^/[other] /') &
+          other_pid=$!
+
+          wait "${core_pid}"
+          core_result=$?
+          wait "${other_pid}"
+          other_result=$?
+          if [ "${core_result}" -ne 0 ] || [ "${other_result}" -ne 0 ]; then
+            echo "::error::Backend partition failure: core=${core_result}, other=${other_result}"
+            exit 1
+          fi
+      - name: Summarize slowest backend tests
+        if: always()
+        run: python3 scripts/ci-test-timings.py TestResults/ci/backend
+      - name: Keep backend timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-timings
+          path: TestResults/ci/backend/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
 
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
+    name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Three runners share the browser tests by measured class durations; every class not named belongs to "rest".
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: automatic
+            filter: FullyQualifiedName~Jularr.E2E.Tests.AutomaticPathTests.
+          - shard: paths
+            filter: FullyQualifiedName~Jularr.E2E.Tests.ReadingPathTests.|FullyQualifiedName~Jularr.E2E.Tests.FailureTests.|FullyQualifiedName~Jularr.E2E.Tests.LibraryChangesTests.|FullyQualifiedName~Jularr.E2E.Tests.MusicPathTests.
+          - shard: rest
+            filter: FullyQualifiedName!~Jularr.E2E.Tests.AutomaticPathTests.&FullyQualifiedName!~Jularr.E2E.Tests.ReadingPathTests.&FullyQualifiedName!~Jularr.E2E.Tests.FailureTests.&FullyQualifiedName!~Jularr.E2E.Tests.LibraryChangesTests.&FullyQualifiedName!~Jularr.E2E.Tests.MusicPathTests.
     services:
       postgres:
         image: postgres:18
@@ -102,18 +165,18 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
             nuget-${{ runner.os }}-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: src/Jularr.Frontend/package-lock.json
       - name: Compile assets
@@ -128,7 +191,8 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
       - name: Direct SMB HLS regression (real FFmpeg)
-        run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls
+        if: matrix.shard == 'rest'
+        run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls --logger "trx;LogFileName=ffmpeg.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
       # The test DB is PostgreSQL 18; the runner's default pg_dump may be older.
@@ -142,12 +206,24 @@ jobs:
           sudo apt-get install --yes --no-install-recommends postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/pg_dump --version
-      - run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build
+      - name: Run browser E2E tests and record per-test durations
+        run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build --filter "${{ matrix.filter }}" --logger "trx;LogFileName=e2e-${{ matrix.shard }}.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
+      - name: Summarize slowest E2E tests
+        if: always()
+        run: python3 scripts/ci-test-timings.py TestResults/ci/e2e
+      - name: Keep E2E timing report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-timings-${{ matrix.shard }}
+          path: TestResults/ci/e2e/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Keep the evidence of a failed run
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: e2e-evidence
+          name: e2e-evidence-${{ matrix.shard }}
           path: TestResults/e2e

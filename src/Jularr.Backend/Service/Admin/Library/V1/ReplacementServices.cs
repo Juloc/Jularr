@@ -27,6 +27,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     settings."RecycleStorageMountId",
                     settings."RecyclePath",
                     settings."RecycleDays",
+                    settings."UnmonitorsDeletedUnits",
                     settings."Version"
                 FROM
                     "InstanceSettings" AS settings
@@ -48,7 +49,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.SaveReplacementSettingsAsync(new ReplacementSettingsSaveData(Data.KeepsReleases, Data.RecycleModeId, Data.RecycleStorageMountId, Data.RecyclePath,
-                Data.RecycleDays, Data.Version), CancellationToken);
+                Data.RecycleDays, Data.Version, Data.UnmonitorsDeletedUnits), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -88,6 +89,29 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 ?? throw new DataValidationException(nameof(StoredFileParametersV1.StoredFileId), "invalid_transition");
             await _replacements.KeepOnlyAsync(Context, asset.Id, Auth.AccountId!.Value, CancellationToken);
             return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/library/files/deletion")]
+    public sealed class DeleteLibraryFilesV1 : AdminService<DeleteLibraryFilesParametersV1, DeleteLibraryFilesDataV1>
+    {
+        private readonly LibraryReplacements _replacements;
+
+        internal DeleteLibraryFilesV1(LibraryReplacements replacements)
+        {
+            _replacements = replacements;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DeleteLibraryFilesResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(DeleteLibraryFilesParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DeleteLibraryFilesParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // At once and without a second question, like Sonarr: the setting of replaced files decides between deleting and recycling.
+            var (deleted, kept) = await _replacements.DeleteAsync(Context, Data.StoredFileIds, Auth.AccountId!.Value, CancellationToken);
+            return new DeleteLibraryFilesResultV1(deleted, kept);
         }
     }
 

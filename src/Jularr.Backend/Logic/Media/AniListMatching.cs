@@ -29,6 +29,16 @@ namespace Jularr.Backend.Logic.Media
             _ => null
         };
 
+        // Where a catalog title belongs, by the formats Discover shows; other formats (specials, music videos) stay out.
+        public static (MediaType Type, MediaSubtype Subtype)? CatalogType(string type, string? format) => type switch
+        {
+            "ANIME" when format is not null && SeriesFormats.Contains(format) => (MediaType.Series, MediaSubtype.Anime),
+            "ANIME" when format is not null && MovieFormats.Contains(format) => (MediaType.Movie, MediaSubtype.Anime),
+            "MANGA" when format is not null && MangaFormats.Contains(format) => (MediaType.Book, MediaSubtype.Manga),
+            "MANGA" when format is not null && NovelFormats.Contains(format) => (MediaType.Book, MediaSubtype.LightNovel),
+            _ => null
+        };
+
         public static AniListMediaType? Type(MediaType mediaType, MediaSubtype? subtype) => (mediaType, subtype) switch
         {
             (MediaType.Movie or MediaType.Series, MediaSubtype.Anime) => AniListMediaType.Anime,

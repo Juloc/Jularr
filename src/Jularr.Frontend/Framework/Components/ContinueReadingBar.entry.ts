@@ -1,3 +1,4 @@
+import { onPage } from "../../Modules/Navigation/PageSwap";
 import { showContinueReading } from "./ContinueReadingBar";
 
-void showContinueReading();
+onPage(import.meta.url, () => void showContinueReading());

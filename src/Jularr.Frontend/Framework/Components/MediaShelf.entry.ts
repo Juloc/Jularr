@@ -1,3 +1,4 @@
+import { onPage } from '../../Modules/Navigation/PageSwap';
 import { initializeShelves } from './MediaShelf';
 
-initializeShelves();
+onPage(import.meta.url, () => initializeShelves());

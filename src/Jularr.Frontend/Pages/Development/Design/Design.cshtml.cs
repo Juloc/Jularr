@@ -236,7 +236,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                     .Availability(new MediaAvailability(assets, example.State, example.Available, 24)).Preview(previewId)
                     .Actions(new Button(new Icon(example.Available > 0 ? "player-play" : "requests", assets),
                             new Text(example.Watched > 0 ? "media.continue" : example.Available > 0 ? "player.play" : "media.request")).Primary().Compact()
-                            .Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog"))
+                            .Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full"))
                     .Bookmark(new Button(new Icon("bookmark", assets)).IconOnly(texts["nav.watchlist"]).Attribute("data-design-bookmark", "").Attribute("aria-pressed", "false"));
                 if (example.Watched > 0) card.Continue(example.Watched, 5400000);
                 return (IUiComponent)card;

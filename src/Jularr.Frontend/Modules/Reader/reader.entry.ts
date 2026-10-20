@@ -3,13 +3,14 @@ import { progressReporter } from '../Tracking/Progress';
 import { findings, highlights } from './highlights';
 import { translator } from './Translation/translation';
 import { createTranslationWorker } from './Translation/worker';
-import { initializeReaderSettings } from './Settings';
+import { initializeReaderChrome, initializeReaderSettings } from './Settings';
 import { initializePaperPages } from './PaperPages';
 import { initializeComicPages } from './ComicPages';
 
 const reader = document.querySelector<HTMLElement>('.reader');
-if (reader && reader.dataset.format !== 'pdf') {
-    if (reader.dataset.format === 'comic') initializeComicPages(reader);
+if (reader) {
+    if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
+    else if (reader.dataset.format === 'comic') initializeComicPages(reader);
     else if (reader.querySelector('[data-role=content]')) initializeText(reader);
 }
 

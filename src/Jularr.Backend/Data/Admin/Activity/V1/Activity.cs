@@ -11,7 +11,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 {
     public sealed class ReadActivityParametersV1 : BaseParameters
     {
-        public ReadActivityParametersV1(ActivityTabType activityTabTypeId = ActivityTabType.Activity, int page = 1, int pageSize = 25)
+        public ReadActivityParametersV1(ActivityTabType activityTabTypeId = ActivityTabType.Queue, int page = 1, int pageSize = 25)
         {
             ActivityTabTypeId = activityTabTypeId;
             Page = page;
@@ -39,8 +39,12 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false)
         {
+            CanPause = canPause;
+            CanRetryImport = canRetryImport;
+            IsWaiting = isWaiting;
+            CanImportManually = canImportManually;
             ManualUrl = manualUrl;
             Id = id;
             OperationTypeId = operationTypeId;
@@ -107,6 +111,22 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // The source page where a person passes the check and copies the file link.
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl), false)]
         public string? ManualUrl { get; }
+
+        // SABnzbd can be told to wait while the download runs.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanPause))]
+        public bool CanPause { get; }
+
+        // A waiting download is read again on request.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanRetryImport))]
+        public bool CanRetryImport { get; }
+
+        // It waits for a person, not for the client.
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsWaiting))]
+        public bool IsWaiting { get; }
+
+        // It kept where its files are, so a person can import them by hand.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanImportManually))]
+        public bool CanImportManually { get; }
     }
 
     public sealed class SaveActivitySourceLinkDataV1 : BaseData
@@ -211,5 +231,28 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // Who did it; none is Jularr itself.
         [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.AccountName))]
         public string? AccountName { get; }
+    }
+
+    // Out of the queue; the release may be blocked so that the target is searched again at once for another.
+    public sealed class RemoveActivityDownloadDataV1 : BaseData
+    {
+        public RemoveActivityDownloadDataV1(bool blocksRelease)
+        {
+            BlocksRelease = blocksRelease;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.BlocksRelease))]
+        public bool BlocksRelease { get; }
+    }
+
+    public sealed class PauseActivityDownloadDataV1 : BaseData
+    {
+        public PauseActivityDownloadDataV1(bool isPaused)
+        {
+            IsPaused = isPaused;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsPaused))]
+        public bool IsPaused { get; }
     }
 }

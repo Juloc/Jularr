@@ -1004,9 +1004,109 @@
    "Users may confirm source checks",
    "Benutzer dürfen Quellenprüfungen bestätigen"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "Die Instanzeinstellungen wurden gespeichert."
+  "admin.catalog.title": [
+   "Discover catalog",
+   "Discover-Katalog"
+  ],
+  "admin.catalog.nothingKept": [
+   "Discover keeps nothing locally and always asks the providers.",
+   "Discover speichert nichts lokal und fragt immer die Anbieter."
+  ],
+  "admin.catalog.off": [
+   "Full local discovery is off; Discover keeps only what it loaded.",
+   "Full local discovery ist aus; Discover behält nur, was es geladen hat."
+  ],
+  "admin.catalog.tmdb_movie": [
+   "TMDB films",
+   "TMDB-Filme"
+  ],
+  "admin.catalog.tmdb_tv": [
+   "TMDB series",
+   "TMDB-Serien"
+  ],
+  "admin.catalog.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "admin.catalog.entries": [
+   "Titles",
+   "Titel"
+  ],
+  "admin.catalog.pending": [
+   "Still to read",
+   "Noch zu lesen"
+  ],
+  "admin.catalog.listedOn": [
+   "Last complete",
+   "Zuletzt vollständig"
+  ],
+  "admin.catalog.enabled": [
+   "Keep whole",
+   "Ganz lokal halten"
+  ],
+  "admin.catalog.requestsPerMinute": [
+   "Requests per minute",
+   "Anfragen pro Minute"
+  ],
+  "admin.catalog.pausesWhileUsed": [
+   "Pause while Jularr is used",
+   "Pausieren, solange Jularr benutzt wird"
+  ],
+  "admin.catalog.startsAt": [
+   "From",
+   "Von"
+  ],
+  "admin.catalog.endsAt": [
+   "To",
+   "Bis"
+  ],
+  "admin.catalog.addWindow": [
+   "Add window",
+   "Fenster hinzufügen"
+  ],
+  "admin.catalog.removeWindow": [
+   "Remove last window",
+   "Letztes Fenster entfernen"
+  ],
+  "form.time.hour": [
+   "Hour",
+   "Stunde"
+  ],
+  "form.time.minute": [
+   "Minute",
+   "Minute"
+  ],
+  "form.time.done": [
+   "Done",
+   "Fertig"
+  ],
+  "savePill.region": [
+   "Unsaved changes",
+   "Ungespeicherte Änderungen"
+  ],
+  "savePill.one": [
+   "1 change",
+   "1 Änderung"
+  ],
+  "savePill.other": [
+   "{0} changes",
+   "{0} Änderungen"
+  ],
+  "savePill.failed": [
+   "{0} not saved",
+   "{0} nicht gespeichert"
+  ],
+  "savePill.saved": [
+   "Saved",
+   "Gespeichert"
+  ],
+  "savePill.discard": [
+   "Discard",
+   "Verwerfen"
+  ],
+  "savePill.leave": [
+   "Leave this page without saving your changes?",
+   "Seite verlassen, ohne die Änderungen zu speichern?"
   ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
@@ -1035,10 +1135,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Profileinstellungen"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Änderungen speichern"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1584,10 +1680,6 @@
    "Media types",
    "Medientypen"
   ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Verfügbarkeit"
-  ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
    "Noch keine Bibliothek; dafür wird nichts heruntergeladen."
@@ -2060,6 +2152,14 @@
    "Days a removed file stays in the recycle folder; 0 keeps it until you remove it.",
    "Tage, die eine entfernte Datei im Papierkorb-Ordner bleibt; 0 behält sie, bis du sie entfernst."
   ],
+  "hint.InstanceSettingsFields.UnmonitorsDeletedUnits.info": [
+   "When on, deleting a file by hand also stops monitoring its episode or volume; otherwise it stays monitored and is searched again.",
+   "Wenn aktiv, beendet das Löschen einer Datei von Hand auch die Überwachung ihrer Folge oder ihres Bands; sonst bleibt sie überwacht und wird erneut gesucht."
+  ],
+  "hint.StoredFileFields.AudioLanguage.info": [
+   "Replaces the language of every audio track of the chosen files, until a changed file is read again.",
+   "Ersetzt die Sprache jeder Tonspur der gewählten Dateien, bis eine geänderte Datei neu gelesen wird."
+  ],
   "hint.InstanceSettingsFields.RecyclePath.placeholder": [
    "Recycle",
    "Recycle"
@@ -2312,6 +2412,14 @@
    "Disabled",
    "Deaktiviert"
   ],
+  "acquisition.connection.removesCompleted": [
+   "Remove finished jobs from SABnzbd",
+   "Fertige Jobs aus SABnzbd entfernen"
+  ],
+  "hint.AcquisitionConnectionFields.RemovesCompleted.info": [
+   "After a download is imported, its job and its files are removed from SABnzbd. A hardlinked library file stays.",
+   "Nach dem Import eines Downloads werden sein Job und seine Dateien aus SABnzbd entfernt. Eine per Hardlink eingebundene Bibliotheksdatei bleibt erhalten."
+  ],
   "acquisition.connection.category": [
    "Download category",
    "Download-Kategorie"
@@ -2536,6 +2644,14 @@
    "Works",
    "Werke"
   ],
+  "admin.works.exclusions": [
+   "Excluded titles",
+   "Ausgeschlossene Titel"
+  ],
+  "admin.works.exclusion.remove": [
+   "Remove exclusion",
+   "Ausschluss entfernen"
+  ],
   "app.name": [
    "Jularr",
    "Jularr"
@@ -2724,10 +2840,6 @@
    "Modules",
    "Module"
   ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Modulstatus"
-  ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
    "Das Deaktivieren der Bibliothek sperrt die Mediendienste und blendet deren Navigation aus. Vorhandene Medien und Merklisten bleiben erhalten."
@@ -2831,6 +2943,10 @@
   "discover.all": [
    "All",
    "Alle"
+  ],
+  "discover.suggestions": [
+   "Suggestions",
+   "Vorschläge"
   ],
   "discover.type.movies": [
    "Movies",
@@ -3888,6 +4004,38 @@
    "Download exceeds the configured size limit",
    "Download überschreitet das konfigurierte Größenlimit"
   ],
+  "acquisition.outcome.import_no_media": [
+   "The download holds no video file",
+   "Der Download enthält keine Videodatei"
+  ],
+  "acquisition.outcome.import_only_extras": [
+   "The download holds only samples or extras",
+   "Der Download enthält nur Samples oder Extras"
+  ],
+  "acquisition.outcome.import_wrong_series": [
+   "The files name another series",
+   "Die Dateien nennen eine andere Serie"
+  ],
+  "acquisition.outcome.import_wrong_title": [
+   "The file names another film",
+   "Die Datei nennt einen anderen Film"
+  ],
+  "acquisition.outcome.import_wrong_episode": [
+   "The files name other episodes than the ones wanted",
+   "Die Dateien nennen andere Folgen als die gesuchten"
+  ],
+  "acquisition.outcome.import_ambiguous_title": [
+   "The file's title does not clearly match the film",
+   "Der Titel der Datei passt nicht eindeutig zum Film"
+  ],
+  "acquisition.outcome.import_unreadable_names": [
+   "The file names do not say which episode they are",
+   "Die Dateinamen sagen nicht, welche Folge sie sind"
+  ],
+  "acquisition.outcome.import_quality_not_allowed": [
+   "The quality of the files is not one the profile allows",
+   "Die Qualität der Dateien erlaubt das Profil nicht"
+  ],
   "acquisition.outcome.import_path_unmapped": [
    "Download folder is not mapped to storage",
    "Download-Ordner ist keinem Speicher zugeordnet"
@@ -4087,6 +4235,10 @@
   "acquisition.reason.OtherEdition": [
    "Other part or edition",
    "Anderer Teil oder andere Edition"
+  ],
+  "acquisition.reason.EditionNotMonitored": [
+   "Edition is not monitored",
+   "Ausgabe wird nicht überwacht"
   ],
   "acquisition.reason.ChaptersOnly": [
    "Chapters only",
@@ -4544,6 +4696,10 @@
    "Subtitle added",
    "Untertitel hinzugefügt"
   ],
+  "history.event.WorkDeleted": [
+   "Title deleted",
+   "Titel gelöscht"
+  ],
   "request.step.Grabbed": [
    "Downloading",
    "Wird heruntergeladen"
@@ -4647,6 +4803,14 @@
   "instance.module.Ocr": [
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
+  ],
+  "instance.module.DiscoverCache": [
+   "Keep Discover's titles locally",
+   "Discover-Titel lokal speichern"
+  ],
+  "instance.module.LocalDiscovery": [
+   "Keep whole provider catalogs for Discover",
+   "Ganze Anbieter-Kataloge für Discover lokal halten"
   ],
   "instance.module.Diagnostics": [
    "Diagnostics in memory",
@@ -4952,6 +5116,10 @@
    "A download of {0} failed.",
    "Ein Download von {0} ist fehlgeschlagen."
   ],
+  "notifications.message.DownloadWaiting": [
+   "A download of {0} waits for a decision: {1}.",
+   "Ein Download von {0} wartet auf eine Entscheidung: {1}."
+  ],
   "notifications.message.StorageOffline": [
    "The storage connection {0} stays offline.",
    "Die Speicherverbindung {0} bleibt offline."
@@ -4971,6 +5139,10 @@
   "notifications.type.DownloadFailed": [
    "Failed downloads",
    "Fehlgeschlagene Downloads"
+  ],
+  "notifications.type.DownloadWaiting": [
+   "Waiting downloads",
+   "Wartende Downloads"
   ],
   "notifications.type.StorageOffline": [
    "Offline storage",
@@ -5172,13 +5344,65 @@
    "Example:",
    "Beispiel:"
   ],
+  "library.naming.Series.Anime": [
+   "Anime episode files",
+   "Anime-Folgendateien"
+  ],
+  "library.naming.settings.Movie": [
+   "Film names",
+   "Filmnamen"
+  ],
+  "library.naming.settings.Series": [
+   "Episode names",
+   "Folgennamen"
+  ],
+  "library.naming.replacesIllegal": [
+   "Replace illegal characters",
+   "Unzulässige Zeichen ersetzen"
+  ],
+  "library.naming.colon": [
+   "Colon replacement",
+   "Doppelpunkt ersetzen durch"
+  ],
+  "library.naming.colonCustom": [
+   "Own replacement for the colon",
+   "Eigener Ersatz für den Doppelpunkt"
+  ],
+  "library.naming.specials": [
+   "Folder of season 0",
+   "Ordner für Staffel 0"
+  ],
+  "library.naming.colon.Delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "library.naming.colon.Dash": [
+   "Dash",
+   "Bindestrich"
+  ],
+  "library.naming.colon.SpaceDash": [
+   "Space dash",
+   "Leerzeichen und Bindestrich"
+  ],
+  "library.naming.colon.SpaceDashSpace": [
+   "Space dash space",
+   "Leerzeichen, Bindestrich, Leerzeichen"
+  ],
+  "library.naming.colon.Smart": [
+   "Smart",
+   "Intelligent"
+  ],
+  "library.naming.colon.Custom": [
+   "Own",
+   "Eigener"
+  ],
   "library.naming.placeholders": [
    "Placeholders",
    "Platzhalter"
   ],
   "library.naming.rules": [
-   "Empty placeholders leave with their brackets; the file name always names the film or the episode.",
-   "Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
+   "Formats of Sonarr and Radarr work as they are, for example {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} or {series title}. Empty placeholders leave with their brackets; the file name always names the film or the episode.",
+   "Formate von Sonarr und Radarr funktionieren unverändert, zum Beispiel {[Quality Full]}, {-Release Group}, {imdb-{ImdbId}}, {Series.Title} oder {series title}. Leere Platzhalter verschwinden samt ihren Klammern; der Dateiname nennt immer den Film oder die Folge."
   ],
   "library.naming.token.Title": [
    "The title",
@@ -5255,6 +5479,10 @@
   "library.replacement.keepsReleases": [
    "Keep several releases",
    "Mehrere Releases behalten"
+  ],
+  "library.replacement.unmonitorsDeleted": [
+   "Switch off an episode or volume whose file is deleted",
+   "Folge oder Band ausschalten, deren Datei gelöscht wird"
   ],
   "library.replacement.mode": [
    "Replaced files",
@@ -5520,13 +5748,45 @@
    "Queued at",
    "Eingereiht um"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Aktivität"
+  "activity.tab.Queue": [
+   "Queue",
+   "Warteschlange"
   ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "Zu erledigen"
+  "activity.empty.Queue": [
+   "Nothing is running or waiting.",
+   "Nichts läuft oder wartet."
+  ],
+  "activity.waiting": [
+   "Waiting",
+   "Wartet"
+  ],
+  "activity.details": [
+   "Details",
+   "Details"
+  ],
+  "activity.remove": [
+   "Remove",
+   "Entfernen"
+  ],
+  "activity.removeAndBlock": [
+   "Remove and block",
+   "Entfernen und sperren"
+  ],
+  "activity.pause": [
+   "Pause",
+   "Pausieren"
+  ],
+  "activity.resume": [
+   "Resume",
+   "Fortsetzen"
+  ],
+  "activity.retryImport": [
+   "Retry import",
+   "Import erneut versuchen"
+  ],
+  "acquisition.outcome.download_removed": [
+   "Removed from the queue",
+   "Aus der Warteschlange entfernt"
   ],
   "activity.tab.History": [
    "History",
@@ -5591,14 +5851,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Download fortsetzen"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Es läuft nichts."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Nichts braucht Aufmerksamkeit."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",
@@ -6108,6 +6360,618 @@
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
    "Der Speicher ist nicht erreichbar. Prüfe, ob das NAS an ist und die Freigabe eingebunden ist."
   ],
+  "errors.import_storage_full": [
+   "The library has too little free space or its space could not be checked.",
+   "In der Bibliothek ist zu wenig Platz frei oder er ließ sich nicht prüfen."
+  ],
+  "errors.import_storage_unavailable": [
+   "The storage became unavailable while importing.",
+   "Der Speicher war beim Import nicht mehr erreichbar."
+  ],
+  "errors.import_library_unavailable": [
+   "The library storage is not reachable.",
+   "Der Speicher der Bibliothek ist nicht erreichbar."
+  ],
+  "errors.import_source_unavailable": [
+   "The folder cannot be read.",
+   "Der Ordner lässt sich nicht lesen."
+  ],
+  "errors.import_assignment_failed": [
+   "The files could not be fully assigned to the library.",
+   "Die Dateien ließen sich nicht vollständig der Bibliothek zuordnen."
+  ],
+  "admin.manualImport.title": [
+   "Manual import",
+   "Manueller Import"
+  ],
+  "manualImport.search": [
+   "Film or series",
+   "Film oder Serie"
+  ],
+  "manualImport.find": [
+   "Search",
+   "Suchen"
+  ],
+  "manualImport.noMatch": [
+   "No film or series of the library matches.",
+   "Kein Film und keine Serie der Bibliothek passt."
+  ],
+  "manualImport.choose": [
+   "Import to this",
+   "Hierhin importieren"
+  ],
+  "manualImport.change": [
+   "Choose another",
+   "Anderen wählen"
+  ],
+  "manualImport.read": [
+   "Show files",
+   "Dateien anzeigen"
+  ],
+  "manualImport.noFiles": [
+   "The folder holds no video files.",
+   "Der Ordner enthält keine Videodateien."
+  ],
+  "manualImport.mode": [
+   "Transfer",
+   "Übertragung"
+  ],
+  "manualImport.mode.Link": [
+   "Hardlink",
+   "Hardlink"
+  ],
+  "manualImport.mode.Copy": [
+   "Copy",
+   "Kopieren"
+  ],
+  "manualImport.mode.Move": [
+   "Move",
+   "Verschieben"
+  ],
+  "manualImport.import": [
+   "Import",
+   "Importieren"
+  ],
+  "manualImport.season": [
+   "Season",
+   "Staffel"
+  ],
+  "manualImport.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "manualImport.run": [
+   "Import",
+   "Importieren"
+  ],
+  "manualImport.done": [
+   "Imported files: {0}",
+   "Importierte Dateien: {0}"
+  ],
+  "activity.importManually": [
+   "Import by hand",
+   "Von Hand importieren"
+  ],
+  "work.tabs": [
+   "Sections of this title",
+   "Bereiche dieses Titels"
+  ],
+  "work.tab.seasons": [
+   "Seasons",
+   "Staffeln"
+  ],
+  "work.tab.volumes": [
+   "Volumes",
+   "Bände"
+  ],
+  "work.tab.editions": [
+   "Editions",
+   "Ausgaben"
+  ],
+  "work.tab.platforms": [
+   "Platforms",
+   "Plattformen"
+  ],
+  "work.tab.tracks": [
+   "Tracks",
+   "Titel"
+  ],
+  "work.tab.files": [
+   "Files",
+   "Dateien"
+  ],
+  "work.tab.history": [
+   "History",
+   "Verlauf"
+  ],
+  "work.tab.metadata": [
+   "Metadata",
+   "Metadaten"
+  ],
+  "work.tab.manage": [
+   "Manage files",
+   "Dateien verwalten"
+  ],
+  "work.file.delete": [
+   "Delete file",
+   "Datei löschen"
+  ],
+  "work.manage.selectAll": [
+   "Select all files",
+   "Alle Dateien auswählen"
+  ],
+  "work.manage.select": [
+   "Select file",
+   "Datei auswählen"
+  ],
+  "work.manage.delete": [
+   "Delete selected files",
+   "Ausgewählte Dateien löschen"
+  ],
+  "work.manage.rename": [
+   "Rename {0} files",
+   "{0} Dateien umbenennen"
+  ],
+  "work.manage.edit": [
+   "Edit selected files",
+   "Ausgewählte Dateien bearbeiten"
+  ],
+  "work.file.edit": [
+   "Edit file",
+   "Datei bearbeiten"
+  ],
+  "work.files.editTitle": [
+   "Edit files",
+   "Dateien bearbeiten"
+  ],
+  "work.files.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "work.files.audioLanguage": [
+   "Audio language",
+   "Sprache der Tonspur"
+  ],
+  "work.files.tracks": [
+   "Audio tracks of this file",
+   "Tonspuren dieser Datei"
+  ],
+  "work.files.track": [
+   "Track {0}",
+   "Spur {0}"
+  ],
+  "work.files.unchanged": [
+   "Leave unchanged",
+   "Unverändert lassen"
+  ],
+  "work.files.updated": [
+   "{0} updated",
+   "{0} geändert"
+  ],
+  "work.manage.matches": [
+   "Matches the naming",
+   "Entspricht der Benennung"
+  ],
+  "work.manage.renamesTo": [
+   "renamed to",
+   "umbenannt in"
+  ],
+  "work.manage.empty": [
+   "This title has no file to manage.",
+   "Dieser Titel hat keine Datei zu verwalten."
+  ],
+  "work.manage.none": [
+   "Select files first.",
+   "Wähle zuerst Dateien aus."
+  ],
+  "work.manage.col.unit": [
+   "Episode",
+   "Folge"
+  ],
+  "work.manage.col.file": [
+   "File",
+   "Datei"
+  ],
+  "work.files.deleted": [
+   "{0} deleted",
+   "{0} gelöscht"
+  ],
+  "work.files.kept": [
+   "{0} could not be removed and stay",
+   "{0} konnten nicht entfernt werden und bleiben"
+  ],
+  "work.files.renamed": [
+   "{0} renamed, {1} skipped",
+   "{0} umbenannt, {1} übersprungen"
+  ],
+  "work.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "work.monitor.start": [
+   "Start monitoring",
+   "Überwachung starten"
+  ],
+  "work.monitor.stop": [
+   "Stop monitoring",
+   "Überwachung beenden"
+  ],
+  "work.monitor.on": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "work.monitor.off": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "work.search": [
+   "Search",
+   "Suchen"
+  ],
+  "work.searchMonitored": [
+   "Search monitored",
+   "Überwachte suchen"
+  ],
+  "work.interactive": [
+   "Interactive search",
+   "Interaktive Suche"
+  ],
+  "work.refresh": [
+   "Refresh metadata",
+   "Metadaten aktualisieren"
+  ],
+  "work.edit": [
+   "Edit",
+   "Bearbeiten"
+  ],
+  "work.delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "work.delete.title": [
+   "Delete title",
+   "Titel löschen"
+  ],
+  "work.delete.files": [
+   "Also delete the files",
+   "Auch die Dateien löschen"
+  ],
+  "work.delete.exclusion": [
+   "Add an exclusion so a request does not bring the title back",
+   "Ausschluss hinzufügen, damit eine Anfrage den Titel nicht zurückbringt"
+  ],
+  "work.collapseAll": [
+   "Collapse all",
+   "Alle zuklappen"
+  ],
+  "work.toggleSeason": [
+   "Show or hide this section",
+   "Bereich zeigen oder verbergen"
+  ],
+  "work.specials": [
+   "Specials",
+   "Specials"
+  ],
+  "work.coverage": [
+   "{0} / {1}",
+   "{0} / {1}"
+  ],
+  "work.figure.seasons": [
+   "{0} seasons",
+   "{0} Staffeln"
+  ],
+  "work.figure.volumes": [
+   "{0} volumes",
+   "{0} Bände"
+  ],
+  "work.figure.volumeOne": [
+   "{0} volume",
+   "{0} Band"
+  ],
+  "work.figure.tracks": [
+   "{0} tracks",
+   "{0} Titel"
+  ],
+  "work.figure.trackOne": [
+   "{0} track",
+   "{0} Titel"
+  ],
+  "work.disc": [
+   "Disc {0}",
+   "Disc {0}"
+  ],
+  "work.figure.episodes": [
+   "{0} episodes",
+   "{0} Folgen"
+  ],
+  "work.figure.onDisk": [
+   "{0} on disk",
+   "{0} auf der Platte"
+  ],
+  "work.figure.missing": [
+   "{0} missing",
+   "{0} fehlen"
+  ],
+  "work.figure.upgrades": [
+   "{0} upgrades wanted",
+   "{0} Upgrades gewünscht"
+  ],
+  "work.figure.unaired": [
+   "{0} unaired",
+   "{0} noch nicht gesendet"
+  ],
+  "work.empty": [
+   "This title has no seasons yet.",
+   "Dieser Titel hat noch keine Staffeln."
+  ],
+  "work.empty.volumes": [
+   "This title has no volume yet.",
+   "Dieser Titel hat noch keinen Band."
+  ],
+  "work.empty.groups": [
+   "Nothing is known about editions or platforms yet.",
+   "Zu Ausgaben oder Plattformen ist noch nichts bekannt."
+  ],
+  "work.empty.noFile": [
+   "No file yet.",
+   "Noch keine Datei."
+  ],
+  "work.group.other": [
+   "Other files",
+   "Weitere Dateien"
+  ],
+  "work.edition.plain": [
+   "Edition",
+   "Ausgabe"
+  ],
+  "work.translations": [
+   "Translations",
+   "Übersetzungen"
+  ],
+  "work.translations.source": [
+   "Translated from",
+   "Übersetzt aus"
+  ],
+  "work.translations.coverage": [
+   "Translated",
+   "Übersetzt"
+  ],
+  "work.translation.delete": [
+   "Delete translation",
+   "Übersetzung löschen"
+  ],
+  "work.edition.readsTranslated": [
+   "Reads translated",
+   "Liest sich übersetzt"
+  ],
+  "work.edition.monitor": [
+   "Monitor this edition",
+   "Diese Ausgabe überwachen"
+  ],
+  "work.edition.unmonitor": [
+   "Stop monitoring this edition",
+   "Überwachung dieser Ausgabe beenden"
+  ],
+  "work.edition.search": [
+   "Search this edition",
+   "Diese Ausgabe suchen"
+  ],
+  "work.edition.format.Print": [
+   "Print",
+   "Druck"
+  ],
+  "work.edition.format.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "work.edition.format.Audiobook": [
+   "Audiobook",
+   "Hörbuch"
+  ],
+  "work.edition.format.Comic": [
+   "Comic",
+   "Comic"
+  ],
+  "work.empty.tracks": [
+   "This album has no track yet.",
+   "Dieses Album hat noch keinen Titel."
+  ],
+  "work.empty.files": [
+   "This film has no file yet.",
+   "Dieser Film hat noch keine Datei."
+  ],
+  "work.status.Present": [
+   "On disk",
+   "Vorhanden"
+  ],
+  "work.status.Missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "work.status.Downloading": [
+   "Downloading",
+   "Lädt"
+  ],
+  "work.status.Unaired": [
+   "Unaired",
+   "Noch nicht gesendet"
+  ],
+  "work.status.NotMonitored": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "work.status.tba": [
+   "TBA",
+   "Offen"
+  ],
+  "work.status.airsIn": [
+   "Airs in {0} days",
+   "Erscheint in {0} Tagen"
+  ],
+  "work.versions": [
+   "{0} versions",
+   "{0} Versionen"
+  ],
+  "work.col.monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "work.col.number": [
+   "#",
+   "#"
+  ],
+  "work.col.absolute": [
+   "Absolute #",
+   "Absolut-Nr."
+  ],
+  "work.col.released": [
+   "Released",
+   "Erschienen"
+  ],
+  "work.col.format": [
+   "Format",
+   "Format"
+  ],
+  "work.col.pages": [
+   "Pages",
+   "Seiten"
+  ],
+  "work.col.rom": [
+   "ROM check",
+   "ROM-Prüfung"
+  ],
+  "work.col.perhour": [
+   "Size per hour",
+   "Größe pro Stunde"
+  ],
+  "work.col.language": [
+   "Language",
+   "Sprache"
+  ],
+  "work.col.region": [
+   "Region",
+   "Region"
+  ],
+  "work.col.version": [
+   "Version",
+   "Version"
+  ],
+  "work.rom.verified": [
+   "In the ROM catalog",
+   "Im ROM-Katalog"
+  ],
+  "work.rom.unverified": [
+   "Not in the catalog",
+   "Nicht im Katalog"
+  ],
+  "work.platform.notWanted": [
+   "Not requested",
+   "Nicht angefragt"
+  ],
+  "work.col.length": [
+   "Length",
+   "Länge"
+  ],
+  "work.numbering.label": [
+   "Episode numbering",
+   "Folgennummerierung"
+  ],
+  "work.numbering.standard": [
+   "Standard",
+   "Standard"
+  ],
+  "work.numbering.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "work.col.title": [
+   "Title",
+   "Titel"
+  ],
+  "work.col.aired": [
+   "Aired",
+   "Datum"
+  ],
+  "work.col.languages": [
+   "Audio · Subtitles (flags)",
+   "Ton · Untertitel (Flaggen)"
+  ],
+  "work.col.languagesIso": [
+   "Audio · Subtitles (codes)",
+   "Ton · Untertitel (Kürzel)"
+  ],
+  "work.col.languagesNames": [
+   "Audio · Subtitles (names)",
+   "Ton · Untertitel (Namen)"
+  ],
+  "work.col.group": [
+   "Group",
+   "Gruppe"
+  ],
+  "work.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "work.col.status": [
+   "Status",
+   "Status"
+  ],
+  "work.col.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "work.col.path": [
+   "Path",
+   "Pfad"
+  ],
+  "work.col.codec": [
+   "Codec",
+   "Videocodec"
+  ],
+  "work.col.range": [
+   "Dynamic range",
+   "Dynamikumfang"
+  ],
+  "work.columns": [
+   "Columns",
+   "Spalten"
+  ],
+  "work.search.episode": [
+   "Search for this episode",
+   "Diese Folge suchen"
+  ],
+  "work.interactive.episode": [
+   "Interactive search for this episode",
+   "Interaktive Suche für diese Folge"
+  ],
+  "work.search.season": [
+   "Search monitored episodes of this season",
+   "Überwachte Folgen dieser Staffel suchen"
+  ],
+  "work.interactive.season": [
+   "Interactive search for this season",
+   "Interaktive Suche für diese Staffel"
+  ],
+  "work.releases": [
+   "Releases",
+   "Releases"
+  ],
+  "work.figure.seasonOne": [
+   "{0} season",
+   "{0} Staffel"
+  ],
+  "work.figure.episodeOne": [
+   "{0} episode",
+   "{0} Folge"
+  ],
+  "work.figure.upgradeOne": [
+   "{0} upgrade wanted",
+   "{0} Upgrade gewünscht"
+  ],
+  "work.columns.move": [
+   "Move column",
+   "Spalte verschieben"
+  ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
    "Das Speichergerät wacht auf. Bitte versuche es gleich erneut."
@@ -6515,6 +7379,18 @@
   "errors.validation.library_rename_changed": [
    "The library changed since the preview. Please check the new preview.",
    "Die Bibliothek hat sich seit der Vorschau geändert. Bitte prüfe die neue Vorschau."
+  ],
+  "errors.validation.excluded": [
+   "This title was deleted with an exclusion. Remove the exclusion first.",
+   "Dieser Titel wurde mit einem Ausschluss gelöscht. Entferne zuerst den Ausschluss."
+  ],
+  "errors.validation.download_active": [
+   "A download of this title is running. Cancel it first.",
+   "Ein Download dieses Titels läuft. Brich ihn zuerst ab."
+  ],
+  "errors.validation.files_stay": [
+   "Some files could not be removed, so the title stays.",
+   "Einige Dateien konnten nicht entfernt werden, deshalb bleibt der Titel."
   ],
   "errors.validation.invalid_placeholders": [
    "The translation must preserve its placeholders.",

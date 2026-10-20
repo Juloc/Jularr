@@ -17,12 +17,14 @@ namespace Jularr.Backend.Service.Core
 
         private readonly SessionAuthentication _sessions;
         private readonly IHttpContextAccessor _accessor;
+        private readonly UserActivity _activity;
         private ServiceCaller? _caller;
 
-        public ServiceGate(SessionAuthentication sessions, IHttpContextAccessor accessor)
+        public ServiceGate(SessionAuthentication sessions, IHttpContextAccessor accessor, UserActivity activity)
         {
             _sessions = sessions;
             _accessor = accessor;
+            _activity = activity;
         }
 
         public async Task RequireModulesAsync(ModuleRequirement requirement, LogicContext context, bool canMutate, CancellationToken cancellationToken)
@@ -83,6 +85,8 @@ namespace Jularr.Backend.Service.Core
                 throw new UnauthorizedAccessException("An administrative role is required.");
             }
 
+            // A signed-in request counts as use of Jularr.
+            _activity.Touch();
             var parameters = _sessions.Parameters!;
             _caller = new ServiceCaller(session.AccountId, session.ProfileId, area,
                 parameters.SessionPublicId.ToString("D"), parameters.SessionPublicId, parameters.SessionRevision,

@@ -16,7 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
-    public sealed class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
+    public sealed class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
         IAntiforgery antiforgery) : JularrPage
     {
@@ -110,7 +110,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                 if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected?.Slug, View, PageNumber - 1)));
                 if (!_providerUnavailable && PageNumber < 500 && results.Count >= 20)
                 {
-                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("href", Address(selected?.Slug, View, PageNumber + 1)));
+                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("data-navigation", "full").Attribute("href", Address(selected?.Slug, View, PageNumber + 1)));
                 }
 
                 page.Content.Add(new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]));
@@ -216,6 +216,32 @@ namespace Jularr.Frontend.Pages.User.Discover
             return Partial("_UiComponent", Definition.Content[0]);
         }
 
+        // Titles Discover keeps, while typing; a known title opens its Work.
+        public async Task<IActionResult> OnGetSuggestionsAsync()
+        {
+            if (!texts.CanReadMedia()) return Forbid();
+            if (string.IsNullOrWhiteSpace(Query)) return Partial("_UiComponent", new Div().Class("discover-suggestions__list"));
+
+            await LoadListedAsync();
+            var found = await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new SuggestDiscoverDataV1(Query, Selected?.Slug), HttpContext.RequestAborted);
+            return Partial("_UiComponent", new Div([.. found.Where(item => Listed.Any(scope => scope.Slug == item.ScopeSlug)).Select(Suggestion)]).Class("discover-suggestions__list")
+                .Attribute("aria-label", texts["discover.suggestions"]));
+        }
+
+        private IUiComponent Suggestion(DiscoverSuggestionV1 item)
+        {
+            var scope = Listed.First(scope => scope.Slug == item.ScopeSlug);
+            var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
+                : scope.IsCatalog ? "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId)
+                : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.ExternalId);
+            var meta = texts["discover.type." + scope.Slug] + (item.ReleaseYear is { } year ? " · " + year.ToString(CultureInfo.InvariantCulture) : "");
+            IUiComponent poster = item.PosterUrl is { } url
+                ? new Img().Class("discover-suggestion__poster").Attribute("src", url).Attribute("alt", "").Attribute("loading", "lazy")
+                : new Span().Class("discover-suggestion__poster");
+            return new A(poster, new Span(new Strong(new ValueText(item.Title)), new Span(new ValueText(meta))).Class("discover-suggestion__text"))
+                .Class("discover-suggestion").Attribute("href", href);
+        }
+
         public async Task<IActionResult> OnGetRecommendationsAsync()
         {
             if (!texts.CanReadMedia()) return Forbid();
@@ -310,10 +336,20 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             await LoadListedAsync();
             var selected = Selected;
+
+            // Catalogs read whole answer all their shelves at once; the others ask their providers shelf by shelf.
+            var whole = await readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted);
             foreach (var scope in Listed.Where(type => selected is null || type.Slug == selected.Slug))
             {
                 foreach (var feed in scope.Feeds)
                 {
+                    if (whole.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == feed) is { } kept)
+                    {
+                        if (scope.IsCatalog) _catalogShelves.Add((scope, feed, kept.CatalogItems));
+                        else _shelves.Add((scope.MediaTypeId, feed, kept.Items));
+                        continue;
+                    }
+
                     try
                     {
                         if (scope.IsCatalog)

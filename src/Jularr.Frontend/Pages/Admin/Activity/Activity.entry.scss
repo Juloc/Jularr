@@ -6,3 +6,10 @@
     font-size: 0.85em;
     overflow-wrap: anywhere;
 }
+
+// A row's actions next to each other, below one another on a narrow screen.
+.activity-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

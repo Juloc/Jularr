@@ -166,6 +166,26 @@ namespace Jularr.Backend.Logic.Acquisition
                             edition."WorkId" = work."Id"
                             AND edition."LanguageCode" = ANY(requested."Languages")
                     ) AS "Isbns",
+                    ARRAY(
+                        SELECT DISTINCT
+                            edition."LanguageCode"
+                        FROM
+                            "WorkEditions" AS edition
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" IS NOT NULL
+                            AND edition."IsMonitored"
+                    ) AS "MonitoredEditionLanguages",
+                    ARRAY(
+                        SELECT DISTINCT
+                            edition."LanguageCode"
+                        FROM
+                            "WorkEditions" AS edition
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" IS NOT NULL
+                            AND NOT edition."IsMonitored"
+                    ) AS "UnmonitoredEditionLanguages",
                     work."OriginalLanguage",
                     coalesce((
                         SELECT
@@ -488,6 +508,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "ErrorKey" = NULL,
                     "AttentionKey" = NULL,
                     "AttentionUrl" = NULL,
+                    "AttentionProposal" = NULL,
                     "SourceLinkUrl" = NULL,
                     "DismissedAt" = NULL,
                     "StartedAt" = now(),
@@ -624,6 +645,9 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."ExternalId",
                     release."Title",
                     operation."StartedAt",
+                    release."ParentUnitNumber"::integer AS "ExpectedParentUnitNumber",
+                    release."UnitStart"::integer AS "ExpectedUnitStart",
+                    release."UnitEnd"::integer AS "ExpectedUnitEnd",
                     release."QualityKey",
                     release."SourceUrl",
                     operation."SourceLinkUrl",
@@ -657,6 +681,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND operation."OperationStatusTypeId" IN (1, 2)
                     AND operation."AcquisitionConnectionId" IS NOT NULL
                     AND operation."AttentionUrl" IS NULL
+                    AND operation."AttentionProposal" IS NULL
                     AND (@OperationId::bigint IS NULL OR operation."Id" = @OperationId)
                 ORDER BY
                     operation."AcquisitionConnectionId",
@@ -718,6 +743,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         "FinishedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
+                        "AttentionProposal" = NULL,
                         "SourceLinkUrl" = NULL
                     WHERE
                         operation."Id" = @OperationId
@@ -760,6 +786,159 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        public const string RemovedReasonKey = "download_removed";
+
+        // A download still in the queue, whether it runs or waits; its client says what an action does.
+        public static async Task<DownloadActionData?> ReadDownloadActionAsync(this LogicContext ctx, long operationId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId",
+                    operation."AcquisitionConnectionId",
+                    operation."ExternalId",
+                    connection."AcquisitionConnectionTypeId",
+                    operation."AttentionKey",
+                    operation."AttentionProposal" IS NOT NULL AS "HasProposal",
+                    operation."DownloadStateTypeId"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2);
+                """;
+            sql.Parameters.Add(new ActivityOperationData(operationId));
+            return await ctx.ReadSql.ReadOptionalAsync<DownloadActionData>(sql, ct);
+        }
+
+        // A download in the queue that kept where its finished files are, for a person to import them by hand.
+        public static Task<ManualImportDownloadData?> ReadManualImportDownloadAsync(this LogicContext ctx, long operationId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId",
+                    release."WantedItemId",
+                    operation."AcquisitionConnectionId",
+                    operation."ExternalId",
+                    operation."AttentionProposal"::text AS "AttentionProposal"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionProposal" IS NOT NULL;
+                """;
+            sql.Parameters.Add(new ActivityOperationData(operationId));
+            return ctx.ReadSql.ReadOptionalAsync<ManualImportDownloadData>(sql, ct);
+        }
+
+        // Taken out of the queue: it finishes as removed, its release is blocked or may be taken again, and the target is searched from the given time.
+        public static async Task RemoveDownloadAsync(this LogicContext ctx, DownloadRemovalData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH removed AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "OperationStatusTypeId" = 4,
+                        "ErrorKey" = 'download_removed',
+                        "FinishedAt" = now(),
+                        "DismissedAt" = now(),
+                        "AttentionKey" = NULL,
+                        "AttentionUrl" = NULL,
+                        "AttentionProposal" = NULL,
+                        "SourceLinkUrl" = NULL
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationTypeId" = 2
+                        AND operation."OperationStatusTypeId" IN (1, 2)
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                ), released AS (
+                    UPDATE
+                        "AcquisitionReleases" AS release
+                    SET
+                        "AcquisitionReleaseStatusTypeId" = CASE WHEN @BlocksRelease THEN 4 ELSE 5 END,
+                        "ReasonKey" = 'download_removed',
+                        "UpdatedAt" = now()
+                    FROM
+                        removed
+                    WHERE
+                        release."Id" = removed."AcquisitionReleaseId"
+                    RETURNING
+                        release."WantedItemId"
+                )
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "NextSearchAt" = @NextSearchAt,
+                    "LastOutcomeKey" = 'download_removed'
+                FROM
+                    released
+                WHERE
+                    wanted."Id" = released."WantedItemId";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
+            {
+                throw new KeyNotFoundException("The download is not in the queue.");
+            }
+
+            await ctx.RecordActivityAsync(new ActivityEventData(data.BlocksRelease ? ActivityEventType.Blocked : ActivityEventType.DownloadFailed, operationId: data.OperationId,
+                reasonKey: RemovedReasonKey), ct);
+        }
+
+        // A client's pause or resume shows at once; the next progress read confirms it.
+        public static async Task SetDownloadPausedAsync(this LogicContext ctx, DownloadPauseData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "DownloadStateTypeId" = CASE WHEN @IsPaused THEN 3 ELSE 2 END
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" = 2
+                    AND operation."AttentionKey" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // A waiting download is read again: a library that was offline, a decision that changed.
+        public static async Task<bool> RetryDownloadImportAsync(this LogicContext ctx, ActivityOperationData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "AttentionKey" = NULL,
+                    "AttentionProposal" = NULL
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionKey" IS NOT NULL
+                    AND operation."AttentionUrl" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
+        }
+
         public static async Task SetDownloadAttentionAsync(this LogicContext ctx, DownloadAttentionData data, CancellationToken ct)
         {
             // A waiting import or source tells the Owner why; unchanged reasons are not rewritten.
@@ -771,6 +950,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "AttentionKey" = @AttentionKey,
                     "AttentionUrl" = @AttentionUrl,
+                    "AttentionProposal" = @AttentionProposal::jsonb,
                     "SourceLinkUrl" = NULL
                 WHERE
                     operation."Id" = @OperationId
@@ -779,11 +959,36 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND (
                         operation."AttentionKey" IS DISTINCT FROM @AttentionKey
                         OR operation."AttentionUrl" IS DISTINCT FROM @AttentionUrl
+                        OR operation."AttentionProposal" IS DISTINCT FROM @AttentionProposal::jsonb
                         OR operation."SourceLinkUrl" IS NOT NULL
                     );
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0 || data.AttentionKey is null)
+            {
+                return;
+            }
+
+            // A person is told once per title and reason; a repeat folds into the unread notice.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                    JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                WHERE
+                    operation."Id" = @OperationId;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } waiting)
+            {
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Activity?Tab=Queue"), ct);
+            }
         }
 
         public static async Task MarkAcquisitionReleaseAsync(this LogicContext ctx, AcquisitionReleaseMarkData data, CancellationToken ct)
@@ -830,6 +1035,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "AttentionKey" = NULL,
                     "AttentionUrl" = NULL,
+                    "AttentionProposal" = NULL,
                     "SourceLinkUrl" = @SourceLinkUrl
                 WHERE
                     operation."Id" = @OperationId
@@ -892,6 +1098,7 @@ namespace Jularr.Backend.Logic.Acquisition
                         "FinishedAt" = now(),
                         "AttentionKey" = NULL,
                         "AttentionUrl" = NULL,
+                        "AttentionProposal" = NULL,
                         "SourceLinkUrl" = NULL
                     WHERE
                         operation."Id" = @OperationId

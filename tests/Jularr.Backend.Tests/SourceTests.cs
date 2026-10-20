@@ -220,7 +220,7 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
             var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
-            using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo");
+            using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0",
                 (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("http://files.example.test/0123.epub"));

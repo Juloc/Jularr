@@ -73,7 +73,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         form.Select(item => item.IsEnabled, "admin.accounts.status", states);
                         form.Select(item => item.MayConfirmSources, "admin.accounts.mayConfirmSources",
                             [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
-                        form.Submit("common.save");
+                        form.Save();
                     }, Address(_selected.Id), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources), _input is null ? null : FormError));
                     split.Secondary.Add(new P(new Text("admin.accounts.sessionWarning")));
@@ -96,7 +96,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                             {
                                 form.Choices(item => item.BlockedKeys, "admin.accounts.profileMediaBlocked",
                                     media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
-                                form.Submit("common.save");
+                                form.Save();
                             }, Address(_selected.Id) + "&handler=ProfileMedia&profileId=" + profile.ProfileId.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                                 new UpdateProfileMediaAccessDataV1([.. media.Where(item => item.IsBlocked).Select(item => item.Key)]), _mediaProfileId == profile.ProfileId ? FormError : null));
                         }
@@ -154,7 +154,6 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                 }
             }).MasterDetail(_selected is not null, Address()));
 
-            if (TempData["AccountSaved"] is true) page.Content.Add(new P(new Text("profile.settings.saved")).Attribute("role", "status"));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -168,7 +167,6 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         {
             _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled, mayConfirmSources);
             await update.ExecuteAsync<UpdateResult>(SelectedParameters(), _input, HttpContext.RequestAborted);
-            TempData["AccountSaved"] = true;
             return LocalRedirect(Address(AccountId));
         }
 

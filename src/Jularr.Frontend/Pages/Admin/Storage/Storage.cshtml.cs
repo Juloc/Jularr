@@ -158,7 +158,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 form.Select(item => item.WakeOnDemand, "storage.wake.policy", [
                     new SelectOption("False", texts["storage.wake.ownerOnly"]), new SelectOption("True", texts["storage.wake.onDemand"])
                 ]);
-                form.Submit("common.save");
+                form.Save();
             }, Address(StorageMountId), csrf, input, _failedSection == "Save" ? FormError : null);
         }
 
@@ -193,7 +193,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 form.Text(item => item.SynologyUrl, "storage.synology.url");
                 form.Text(item => item.SynologyUsername, "storage.synology.username");
                 form.Password(item => item.Password, "storage.synology.password", "new-password");
-                form.Submit("common.save");
+                form.Save();
             }, Address(mount.Id, handler: "Synology"), csrf, new UpdateStorageSynologyDataV1(mount.SynologyUrl, mount.SynologyUsername, null), _failedSection == "Synology" ? FormError : null);
             if (mount.SynologyUrl is null)
             {
@@ -316,7 +316,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 {
                     form.Text(item => item.Name, "storage.name");
                     form.Hidden(item => item.Version);
-                    form.Submit("common.save");
+                    form.Save();
                 }, Address(mount.Id, handler: "RenameRoot", libraryRootId: selected.Id), csrf, new RenameLibraryRootDataV1(selected.Name, selected.Version), _failedSection == "Root" ? FormError : null));
                 return items;
             }

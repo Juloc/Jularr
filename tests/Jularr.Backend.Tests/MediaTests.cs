@@ -229,17 +229,17 @@ namespace Jularr.Backend.Tests
             });
             Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode, await created.Content.ReadAsStringAsync());
             var id = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
-            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + id);
+            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + id + "?Tab=Metadata");
             Assert.AreEqual(HttpStatusCode.OK, editor.StatusCode, await editor.Content.ReadAsStringAsync());
             StringAssert.Contains(await editor.Content.ReadAsStringAsync(), "&lt;unsafe&gt;");
             StringAssert.Contains(await editor.Content.ReadAsStringAsync(), "name=\"__Invariant\" value=\"Version\"");
-            using var edited = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + id, new Dictionary<string, string>
+            using var edited = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + id + "?Tab=Metadata", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = csrf, ["CanonicalTitle"] = "<edited>", ["Version"] = "1"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, edited.StatusCode, await edited.Content.ReadAsStringAsync());
             Assert.AreEqual("<edited>", await host.ScalarAsync("SELECT \"CanonicalTitle\" FROM \"Works\""));
-            using var rejected = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + id, new Dictionary<string, string>
+            using var rejected = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + id + "?Tab=Metadata", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = csrf, ["CanonicalTitle"] = "Stale", ["Version"] = "1"
             });

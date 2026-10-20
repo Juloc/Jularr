@@ -1,3 +1,4 @@
+import { onPage } from '../../Modules/Navigation/PageSwap';
 import { initializeCards } from './MediaCard';
 
-initializeCards();
+onPage(import.meta.url, initializeCards);

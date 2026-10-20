@@ -1004,10 +1004,6 @@
    "Users may confirm source checks",
    "Los usuarios pueden confirmar las comprobaciones de fuentes"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "Se guardaron los ajustes de la instancia."
-  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "Activa o desactiva las integraciones registradas. Las funciones de conexión e inicio de sesión siguen requiriendo su configuración existente en el host."
@@ -1035,10 +1031,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Ajustes del perfil"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Guardar cambios"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1575,6 @@
   "admin.instance.media": [
    "Media types",
    "Tipos de contenido"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Disponibilidad"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2711,6 @@
   "admin.instance.modules": [
    "Modules",
    "Módulos"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Estado del módulo"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
@@ -5520,14 +5504,6 @@
    "Queued at",
    "En cola desde"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Actividad"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "Pendientes"
-  ],
   "activity.tab.History": [
    "History",
    "Historial"
@@ -5591,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Continuar descarga"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "No hay nada en ejecución."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Nada requiere atención."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

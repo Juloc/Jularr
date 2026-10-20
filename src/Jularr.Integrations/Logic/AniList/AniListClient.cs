@@ -54,6 +54,40 @@ namespace Jularr.Integrations.Logic.AniList
                 : throw new AniListException(AniListFailure.NotFound, "AniList does not know this title.");
         }
 
+        // Fifty titles after an id, anime and manga alike, with whether more follow; adult titles stay out.
+        public async Task<(IReadOnlyList<AniListCatalogEntry> Entries, bool HasMore)> ReadCatalogPageAsync(int afterId, CancellationToken ct)
+        {
+            using var document = await PostAsync("query ($after: Int) { Page(perPage: 50) { pageInfo { hasNextPage } media(id_greater: $after, sort: ID, isAdult: false) { "
+                + "id type format title { romaji english native } startDate { year month day } description(asHtml: false) coverImage { large } popularity averageScore } } }",
+                new Dictionary<string, object> { ["after"] = afterId }, ct);
+            if (Child(Child(document.RootElement, "data"), "Page") is not { } page || !page.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Array)
+            {
+                throw new AniListException(AniListFailure.InvalidResponse, "AniList did not answer with a page.");
+            }
+
+            var entries = media.EnumerateArray().Select(CatalogEntry).OfType<AniListCatalogEntry>().ToArray();
+            var more = Child(page, "pageInfo") is { } info && info.TryGetProperty("hasNextPage", out var next) && next.ValueKind == JsonValueKind.True;
+            return (entries, more);
+        }
+
+        private static AniListCatalogEntry? CatalogEntry(JsonElement media)
+        {
+            if (!media.TryGetProperty("id", out var id) || !id.TryGetInt32(out var mediaId) || Text(media, "type") is not { } type
+                || Child(media, "title") is not { } title || Text(title, "romaji") is not { } romaji)
+            {
+                return null;
+            }
+
+            int? Part(JsonElement date, string name) => date.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt32() : null;
+            var start = Child(media, "startDate");
+            var year = start is { } date ? Part(date, "year") : null;
+            DateOnly? released = start is { } day && year is { } y && Part(day, "month") is { } m && Part(day, "day") is { } d && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m)
+                ? new DateOnly(y, m, d) : null;
+            var description = Text(media, "description") is { } text ? Markup().Replace(text, " ").Trim() : null;
+            return new AniListCatalogEntry(mediaId, type, Text(media, "format"), Text(title, "english") ?? romaji, Text(title, "english") is null ? Text(title, "native") : romaji,
+                released, year, description, Https(Child(media, "coverImage") is { } image ? Text(image, "large") : null), Count(media, "popularity", int.MaxValue), Count(media, "averageScore", 100));
+        }
+
         private static string Name(AniListMediaType type) => type == AniListMediaType.Anime ? "ANIME" : "MANGA";
 
         private static AniListMedia? Read(JsonElement media)

@@ -40,13 +40,39 @@ namespace Jularr.E2E.Tests
         public static ILocator FormWith(IPage page, string button) =>
             page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = button, Exact = true }) });
 
+        // Clicks a link or button and waits for the page it leads to, swapped in place or loaded as a new document.
+        public static async Task FollowAsync(IPage page, ILocator element)
+        {
+            // A search asks every indexer rung in turn and may take its time.
+            // The page counts as arrived when its content was swapped and stopped changing for a moment: scripts of the new page still rearrange it right after the swap.
+            await page.EvaluateAsync("""
+                () => {
+                    window.jularrFollowing = true;
+                    window.jularrChangedAt = window.jularrStartedAt = performance.now();
+                    window.jularrWatcher ??= new MutationObserver(() => { window.jularrChangedAt = performance.now(); });
+                    window.jularrWatcher.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+                    document.getElementById('app-content')?.setAttribute('data-followed', '');
+                }
+                """);
+            await element.ClickAsync();
+            await page.WaitForFunctionAsync("""
+                () => (!window.jularrFollowing || !!document.getElementById('app-content') && !document.querySelector('#app-content[data-followed]'))
+                    && document.readyState !== 'loading' && !document.querySelector('.htmx-request, .htmx-swapping')
+                    && (!window.jularrWatcher || performance.now() - window.jularrChangedAt > 150 || performance.now() - window.jularrStartedAt > 5000)
+                """, null, new() { Timeout = 120_000 });
+        }
+
         // Submits, waits for the answering page and fails on the error it shows.
         public static async Task SubmitAsync(IPage page, ILocator form)
         {
-            // A new document has replaced the marked one; a search asks every indexer rung in turn and may take its time.
-            await page.EvaluateAsync("() => window.jularrSubmitting = true");
-            await form.Locator("button[type=submit]").Last.ClickAsync();
-            await page.WaitForFunctionAsync("() => !window.jularrSubmitting && document.readyState !== 'loading'", null, new() { Timeout = 120_000 });
+            // A form saved through the page's pill has no visible button of its own.
+            if (await form.GetAttributeAsync("data-save") is not null && await page.Locator("[data-save-pill]").CountAsync() > 0)
+            {
+                await SaveAsync(page);
+                return;
+            }
+
+            await FollowAsync(page, form.Locator("button[type=submit]").Last);
             var alert = page.Locator("main [role=alert]");
             if (await alert.CountAsync() > 0)
             {
@@ -64,20 +90,31 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, tmdb);
         }
 
-        // Switches a module on the Instance page; the form follows the module's description.
+        // Switches a module on the Instance page; its form is labelled with the module.s description.
         public static async Task SetModuleAsync(IPage page, string description, bool enabled)
         {
             await page.GotoAsync("/Admin/Instance");
-            var form = page.Locator("main p:has-text(\"" + description + "\") + form");
+            var form = page.Locator("main form[data-save]").Filter(new() { Has = page.Locator("legend", new() { HasText = description }) });
             await form.Locator("[name=IsEnabled][value=" + (enabled ? "True" : "False") + "]").CheckAsync();
-            await SubmitAsync(page, form);
+            await SaveAsync(page);
+        }
+
+        // Saves every changed form of the page through its save pill and fails on an error the page shows.
+        public static async Task SaveAsync(IPage page)
+        {
+            await FollowAsync(page, page.Locator("[data-save-pill] [data-save-submit]"));
+            var alert = page.Locator("main [role=alert]");
+            if (await alert.CountAsync() > 0)
+            {
+                Assert.Fail("The page answered: " + await alert.First.InnerTextAsync());
+            }
         }
 
         // The local folder as a writable connection with one library path per media type folder.
         public static async Task AddLibraryAsync(IPage page, string localPath, params LibraryPath[] roots)
         {
             await page.GotoAsync("/Admin/Storage");
-            await page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }));
             await page.FillAsync("form [name=Name]", "Library");
             await page.SelectOptionAsync("form [name=SharePath]", localPath);
             await page.Locator("form [name=IsReadOnly][value=False]").CheckAsync();
@@ -103,18 +140,20 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // Manual-flow tests use a manual-only indexer; automatic-flow tests explicitly opt in to automatic searching.
         // The fake indexer and SABnzbd; finished jobs appear under the downloads folder.
-        public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories)
+        public static async Task AddUsenetAsync(IPage page, FakeServices fakes, string categories, bool searchesAutomatically = false)
         {
             await page.GotoAsync("/Admin/Acquisition");
-            await page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }));
             await page.FillAsync("form [name=Name]", "Indexer");
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
             await page.FillAsync("form [name=ApiKey]", FakeServices.IndexerKey);
             await page.FillAsync("form [name=Categories]", categories);
+            await page.Locator("form [name=SearchesAutomatically]").SelectOptionAsync(searchesAutomatically ? "True" : "False");
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
-            await page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }).ClickAsync();
+            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }));
             await page.FillAsync("form [name=Name]", "SABnzbd");
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
             await page.FillAsync("form [name=ApiKey]", FakeServices.ClientKey);
@@ -128,7 +167,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?q=" + Uri.EscapeDataString(query));
             var card = page.Locator(".media-card", new() { HasText = title });
             await card.HoverAsync();
-            await card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }).ClickAsync();
+            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }));
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
@@ -138,21 +177,32 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/?type=" + type + "&q=" + Uri.EscapeDataString(title));
             var card = page.Locator(".media-card", new() { HasText = title }).Filter(new() { Has = page.Locator("a[href*='/" + type + "/" + source + "/']") }).First;
             await card.HoverAsync();
-            await card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }).ClickAsync();
+            await FollowAsync(page, card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }));
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
         public static async Task OpenWantedAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Wanted");
-            await page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
+            await FollowAsync(page, page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Open" }));
         }
 
         // The manual search page of a target.
         public static async Task OpenSearchAsync(IPage page, string title)
         {
             await OpenWantedAsync(page, title);
-            await page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true }).ClickAsync();
+
+            // Films open on their management page, the other types on their wanted page.
+            var interactive = page.GetByRole(AriaRole.Link, new() { Name = "Interactive search", Exact = true });
+            await FollowAsync(page, interactive.Or(page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true })));
+        }
+
+        // The releases of one episode, searched from its row on the series page.
+        public static async Task SearchEpisodeAsync(IPage page, string title, string episodeNumber)
+        {
+            await OpenWantedAsync(page, title);
+            var row = page.Locator("tr.work-row").Filter(new() { Has = page.Locator("td[data-col=number]").GetByText(episodeNumber, new() { Exact = true }) });
+            await SubmitAsync(page, row.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Interactive search for this episode" }) }));
         }
 
         public static async Task GrabAsync(IPage page, FakeRelease release)
@@ -171,7 +221,7 @@ namespace Jularr.E2E.Tests
                 var card = page.GetByRole(AriaRole.Link, new() { Name = title });
                 if (await card.CountAsync() > 0)
                 {
-                    await card.First.ClickAsync();
+                    await FollowAsync(page, card.First);
                     if (await page.GetByRole(AriaRole.Link, new() { Name = action, Exact = true }).CountAsync() > 0)
                     {
                         return new Uri(page.Url).PathAndQuery;
@@ -330,13 +380,13 @@ namespace Jularr.E2E.Tests
         }
 
         // A comic archive of numbered pages.
-        public static string WriteComic(string file, int pages)
+        public static string WriteComic(string file, int pages, byte[][]? pictures = null)
         {
             using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
             for (var number = 1; number <= pages; number++)
             {
                 using var stream = archive.CreateEntry(number.ToString("000", System.Globalization.CultureInfo.InvariantCulture) + ".png").Open();
-                stream.Write(Pixel);
+                stream.Write(pictures is { Length: > 0 } ? pictures[(number - 1) % pictures.Length] : Pixel);
             }
 
             return file;

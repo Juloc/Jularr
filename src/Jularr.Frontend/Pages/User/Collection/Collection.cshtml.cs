@@ -105,7 +105,7 @@ namespace Jularr.Frontend.Pages.User.Collection
                     form.Toggle(item => item.OnlyUnfinished, "collections.onlyUnfinished");
                 }
 
-                form.Submit("common.save");
+                form.Save();
             }, Home, csrf, _input ?? new UpdateCollectionDataV1(collection.Name, collection.Version, collection.MediaTypeId, collection.MediaSubtypeId, collection.ReleaseYearFrom,
                 collection.ReleaseYearTo, collection.OnlyAvailable, collection.OnlyUnfinished), FormError),
                 Delete

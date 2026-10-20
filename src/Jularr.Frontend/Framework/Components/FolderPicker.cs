@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Framework
                 new P(new Strong(new Text("storage.paths.selected")), new ValueText(": "),
                     new Span(new ValueText(selectedLabel ?? "/" + selectedPath)).Attribute("data-folder-selection", "")),
                 new A(new Text("storage.paths.browse")).Class("button").Attribute("href", fallbackUrl)
-                    .Attribute("data-folder-open", "").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath)),
+                    .Attribute("data-folder-open", "").Attribute("data-navigation", "full").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath)),
                 new NoScript(new Div([.. fallback ?? []])),
                 new Dialog(
                     new Div(new H2(new Text("storage.paths.browse")),

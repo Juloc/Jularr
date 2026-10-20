@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -27,8 +28,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, string? installedFiles = null,
             string[]? editionTitles = null, string[]? isbns = null, string? originalLanguage = null, string? formats = null, string? qualitySizes = null,
-            int? runtimeMinutes = null, string? releaseProfiles = null)
+            int? runtimeMinutes = null, string? releaseProfiles = null, string[]? monitoredEditionLanguages = null, string[]? unmonitoredEditionLanguages = null)
         {
+            MonitoredEditionLanguages = monitoredEditionLanguages ?? [];
+            UnmonitoredEditionLanguages = unmonitoredEditionLanguages ?? [];
             ReleaseProfiles = releaseProfiles ?? "[]";
             QualitySizes = qualitySizes ?? "[]";
             RuntimeMinutes = runtimeMinutes;
@@ -132,6 +135,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Isbns))]
         public string[] Isbns { get; }
+
+        // The languages of the book's editions an administrator wants and those switched off.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionLanguages))]
+        public string[] MonitoredEditionLanguages { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionLanguages))]
+        public string[] UnmonitoredEditionLanguages { get; }
 
         // The language the Work was made in; an untagged book release is taken to be in it.
         [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
@@ -301,8 +311,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
-            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName)
+            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName, int? expectedParentUnitNumber = null, int? expectedUnitStart = null, int? expectedUnitEnd = null)
         {
+            ExpectedParentUnitNumber = expectedParentUnitNumber;
+            ExpectedUnitStart = expectedUnitStart;
+            ExpectedUnitEnd = expectedUnitEnd;
             GamePlatformId = gamePlatformId;
             PlatformName = platformName;
             SourceUrl = sourceUrl;
@@ -378,6 +391,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
         public string? PlatformName { get; }
+
+        // The season and episodes the grab was made for; none for a whole season or a film.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber))]
+        public int? ExpectedParentUnitNumber { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? ExpectedUnitStart { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitEnd))]
+        public int? ExpectedUnitEnd { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData
@@ -469,11 +492,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class DownloadAttentionData : BaseData
     {
-        public DownloadAttentionData(long operationId, string? attentionKey, string? attentionUrl)
+        public DownloadAttentionData(long operationId, string? attentionKey, string? attentionUrl, string? attentionProposal = null)
         {
             OperationId = operationId;
             AttentionKey = attentionKey;
             AttentionUrl = attentionUrl;
+            AttentionProposal = attentionProposal;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
@@ -484,6 +508,120 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl))]
         public string? AttentionUrl { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
+        public string? AttentionProposal { get; }
+    }
+
+    internal sealed class ActivityOperationData : BaseData
+    {
+        public ActivityOperationData(long operationId)
+        {
+            OperationId = operationId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+    }
+
+    // The download an action is about, whatever its client.
+    // A download that waits for a person and knows where its files are.
+    internal sealed class ManualImportDownloadData : BaseData
+    {
+        public ManualImportDownloadData(long operationId, long wantedItemId, long acquisitionConnectionId, string? externalId, string attentionProposal)
+        {
+            OperationId = operationId;
+            WantedItemId = wantedItemId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            ExternalId = externalId;
+            AttentionProposal = attentionProposal;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId))]
+        public string? ExternalId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
+        public string AttentionProposal { get; }
+    }
+
+    internal sealed class DownloadActionData : BaseData
+    {
+        public DownloadActionData(long operationId, long acquisitionConnectionId, string? externalId, AcquisitionConnectionType acquisitionConnectionTypeId, string? attentionKey, bool hasProposal,
+            DownloadStateType? downloadStateTypeId)
+        {
+            OperationId = operationId;
+            AcquisitionConnectionId = acquisitionConnectionId;
+            ExternalId = externalId;
+            AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
+            AttentionKey = attentionKey;
+            HasProposal = hasProposal;
+            DownloadStateTypeId = downloadStateTypeId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId))]
+        public string? ExternalId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
+        public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionKey))]
+        public string? AttentionKey { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.HasProposal))]
+        public bool HasProposal { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadStateTypeId))]
+        public DownloadStateType? DownloadStateTypeId { get; }
+    }
+
+    // A download taken out of the queue: its release may be taken again or never, and the target is searched from this time on.
+    internal sealed class DownloadRemovalData : BaseData
+    {
+        public DownloadRemovalData(long operationId, bool blocksRelease, DateTime nextSearchAt)
+        {
+            OperationId = operationId;
+            BlocksRelease = blocksRelease;
+            NextSearchAt = nextSearchAt;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.BlocksRelease))]
+        public bool BlocksRelease { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.NextSearchAt))]
+        public DateTime NextSearchAt { get; }
+    }
+
+    internal sealed class DownloadPauseData : BaseData
+    {
+        public DownloadPauseData(long operationId, bool isPaused)
+        {
+            OperationId = operationId;
+            IsPaused = isPaused;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsPaused))]
+        public bool IsPaused { get; }
     }
 
     internal sealed class DownloadFinishedData : BaseData

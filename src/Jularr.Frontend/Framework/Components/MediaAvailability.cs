@@ -81,7 +81,7 @@ namespace Jularr.Frontend.Framework
                     .Class("media-availability-badge__body"), new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))
                     .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant())
                     .Attribute("href", href).Attribute("aria-label", label);
-                if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog");
+                if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full");
                 link.WriteTo(writer, encoder, texts);
             }
         }

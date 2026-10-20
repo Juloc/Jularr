@@ -46,8 +46,10 @@ function preview() {
         addEventListener: (name, action) => { events[name] = action; },
         createElement: name => { assert.equal(name, 'iframe'); const frame = {}; frames.push(frame); return frame; }
     };
-    runInNewContext(script, { exports: {}, document, Element, HTMLTemplateElement,
+    const exports = {};
+    runInNewContext(script, { exports, document, Element, HTMLTemplateElement,
         window: { addEventListener: (name, action) => { windowEvents[name] = action; } } });
+    exports.initializePreview();
     function click(target, options = {}) {
         const event = { target, button: 0, preventDefault() { this.prevented = true; }, ...options };
         events.click(event);

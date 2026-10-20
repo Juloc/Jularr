@@ -12,6 +12,7 @@ using Jularr.Backend.Data.User.Request.V1;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Jularr.Backend.Service.Core;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using AdminRequest = Jularr.Backend.Data.Admin.Request.V1.RequestDetailsV1;
 using UserRequest = Jularr.Backend.Data.User.Request.V1.RequestDetailsV1;
@@ -101,8 +102,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, film.StatusCode, await film.Content.ReadAsStringAsync());
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(uhd, (long)(await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"WantedItems\""))!);
+            var signals = host.Services.GetRequiredService<AcquisitionSearchSignal>();
+            Assert.IsTrue(signals.TakeRequest(), "Automatic approval must wake the acquisition worker.");
             using var repeated = await host.SendAsync(HttpMethod.Post, "/api/v1/works/10/requests", new CreateRequestDataV1(1, null, uhd));
             Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode);
+            Assert.IsFalse(signals.TakeRequest(), "Repeated requests must not start another search.");
             using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/works/30/requests", new CreateRequestDataV1(1));
             StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "request_limit");
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
@@ -164,6 +168,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT \"Version\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
+            Assert.IsFalse(host.Services.GetRequiredService<AcquisitionSearchSignal>().TakeRequest(), "A rolled-back approval must not wake acquisition.");
             await host.Fixture.RunSqlAsync("""
                 ALTER TABLE "WantedItems" DROP CONSTRAINT "TestTargetFailure";
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId") VALUES (100, 10, 202, 42, 2);
@@ -180,6 +185,9 @@ namespace Jularr.Backend.Tests
 
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"RequestTargets\""));
+            var signals = host.Services.GetRequiredService<AcquisitionSearchSignal>();
+            Assert.IsTrue(signals.TakeRequest(), "Committed moderation approval must wake acquisition.");
+            Assert.IsFalse(signals.TakeRequest(), "Several approvals coalesce into one pending wake-up.");
             using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted");
             var wanted = (await wantedRead.Content.ReadFromJsonAsync<PageResult<WantedDetailsV1>>())!.Items.Single();
             CollectionAssert.AreEquivalent(new[] { "English", "Deutsch" }, wanted.RequestedLanguages);

@@ -171,7 +171,7 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default);
             Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\""));
 
-            using var operations = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Activity");
+            using var operations = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.LibraryScan, (await operations.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
         }
 
@@ -912,6 +912,80 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void Probe_FfprobeJson_ReadsBitDepthDynamicRangeAndStereo()
+        {
+            static Jularr.Integrations.Data.Media.MediaProbeStream Video(string stream) => MediaProbeClient.Parse("{\"streams\":[" + stream + "]}").Streams.Single();
+            var hdr10 = Video("""{"index":0,"codec_type":"video","codec_name":"hevc","pix_fmt":"yuv420p10le","color_transfer":"smpte2084","color_primaries":"bt2020","side_data_list":[{"side_data_type":"Mastering display metadata"}]}""");
+            Assert.AreEqual((10, "HDR10", false), (hdr10.BitDepth, hdr10.DynamicRange, hdr10.Is3D));
+            Assert.AreEqual("HDR10Plus", Video("""{"index":0,"codec_type":"video","color_transfer":"smpte2084","side_data_list":[{"side_data_type":"Mastering display metadata"},{"side_data_type":"HDR Dynamic Metadata SMPTE2094-40 (HDR10+)"}]}""").DynamicRange);
+            Assert.AreEqual("HLG", Video("""{"index":0,"codec_type":"video","color_transfer":"arib-std-b67"}""").DynamicRange);
+            Assert.AreEqual("PQ", Video("""{"index":0,"codec_type":"video","color_transfer":"smpte2084"}""").DynamicRange);
+            Assert.AreEqual("DV HDR10", Video("""{"index":0,"codec_type":"video","color_transfer":"smpte2084","side_data_list":[{"side_data_type":"DOVI configuration record","dv_bl_signal_compatibility_id":1}]}""").DynamicRange);
+            Assert.AreEqual("DV", Video("""{"index":0,"codec_type":"video","side_data_list":[{"side_data_type":"DOVI configuration record","dv_bl_signal_compatibility_id":0}]}""").DynamicRange);
+
+            // Standard dynamic range at eight bits, a raw sample size wins, and the stereo mode marks 3D.
+            var sdr = Video("""{"index":0,"codec_type":"video","pix_fmt":"yuv420p","color_transfer":"bt709"}""");
+            Assert.AreEqual((8, (string?)null), (sdr.BitDepth, sdr.DynamicRange));
+            Assert.AreEqual(12, Video("""{"index":0,"codec_type":"video","pix_fmt":"yuv420p10le","bits_per_raw_sample":"12"}""").BitDepth);
+            Assert.IsTrue(Video("""{"index":0,"codec_type":"video","tags":{"stereo_mode":"1"}}""").Is3D);
+            Assert.IsNull(Video("""{"index":1,"codec_type":"audio","codec_name":"dts","channels":6}""").BitDepth);
+        }
+
+        // The tracks of a file give the MediaInfo tokens of its name.
+        [TestMethod]
+        public void Rename_MediaTracks_FillTheMediaInfoTokens()
+        {
+            var info = LibraryRenameLogic.MediaDetails("""
+                [{"MediaTrackTypeId":1,"Codec":"hevc","Language":null,"Channels":null,"BitDepth":10,"DynamicRange":"DV HDR10","Is3D":false},
+                {"MediaTrackTypeId":2,"Codec":"dts","Language":"ger","Channels":6},{"MediaTrackTypeId":3,"Codec":"subrip","Language":"eng"}]
+                """);
+            Assert.AreEqual("10", info["MediaInfo VideoBitDepth"]);
+            Assert.AreEqual("HDR", info["MediaInfo VideoDynamicRange"]);
+            Assert.AreEqual("DV HDR10", info["MediaInfo VideoDynamicRangeType"]);
+            Assert.AreEqual("", info["MediaInfo 3D"]);
+            Assert.AreEqual("[EN]", info["MediaInfo SubtitleLanguagesAll"]);
+            Assert.AreEqual("", LibraryRenameLogic.MediaDetails("""[{"MediaTrackTypeId":1,"Codec":"h264","DynamicRange":"DV SDR","Is3D":true}]""")["MediaInfo VideoDynamicRange"]);
+            Assert.AreEqual("3D", LibraryRenameLogic.MediaDetails("""[{"MediaTrackTypeId":1,"Codec":"h264","Is3D":true}]""")["MediaInfo 3D"]);
+        }
+
+        // A scan counts the pages of a comic archive once; only image entries are pages.
+        [TestMethod]
+        public async Task Scan_CountsThePagesOfAComicArchive_Once()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var manga = Path.Combine(storage.Path, mountId.ToString(), "Manga");
+            Directory.CreateDirectory(manga);
+            using (var archive = System.IO.Compression.ZipFile.Open(Path.Combine(manga, "Volume 1.cbz"), System.IO.Compression.ZipArchiveMode.Create))
+            {
+                foreach (var name in new[] { "001.jpg", "002.jpg", "003.png", "ComicInfo.xml", "notes.txt" })
+                {
+                    await using var entry = archive.CreateEntry(name).Open();
+                    await entry.WriteAsync(new byte[] { 1, 2, 3 });
+                }
+            }
+
+            File.WriteAllText(Path.Combine(manga, "Volume 2.epub"), "not a comic");
+            var rootId = await CreateRootAsync(host, mountId, "Manga", MediaType.Book, MediaSubtype.Manga);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(3, await host.ScalarAsync("SELECT \"PageCount\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 1.cbz'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"PagesCheckedAt\" IS NOT NULL FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 1.cbz'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"PagesCheckedAt\" IS NULL AND \"PageCount\" IS NULL FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 2.epub'"));
+
+            // A changed archive is counted again.
+            using (var archive = System.IO.Compression.ZipFile.Open(Path.Combine(manga, "Volume 1.cbz"), System.IO.Compression.ZipArchiveMode.Update))
+            {
+                await using var entry = archive.CreateEntry("004.jpg").Open();
+                await entry.WriteAsync(new byte[] { 1, 2, 3, 4 });
+            }
+
+            File.SetLastWriteTimeUtc(Path.Combine(manga, "Volume 1.cbz"), DateTime.UtcNow.AddMinutes(5));
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(4, await host.ScalarAsync("SELECT \"PageCount\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 1.cbz'"));
+        }
+
+        [TestMethod]
         public async Task Rename_MovesOnlyTheConfirmedPreviewAndKeepsIdentity()
         {
             using var storage = new TemporaryDirectory();
@@ -936,6 +1010,20 @@ namespace Jularr.Backend.Tests
             var plan = (await preview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
             CollectionAssert.AreEquivalent(new[] { "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv", "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).en.srt" },
                 plan.Items.Select(item => item.TargetPath).ToArray());
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
+            Assert.AreEqual(2L, plan.Total);
+
+            // A title's own page sees only its files, and applies only that part.
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + workId);
+            var ownPlan = (await own.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(2, ownPlan.Items.Count);
+            using var other = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames?WorkId=" + (workId + 1000));
+            var otherPlan = (await other.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(0, otherPlan.Items.Count);
+            Assert.AreEqual(0L, otherPlan.Total);
+            using var foreign = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(plan.Fingerprint, workId + 1000));
+            Assert.AreEqual(HttpStatusCode.BadRequest, foreign.StatusCode);
             Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
 
             // Only the exact preview is applied.

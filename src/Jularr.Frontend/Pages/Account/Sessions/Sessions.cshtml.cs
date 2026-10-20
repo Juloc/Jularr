@@ -34,7 +34,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                                 new Form<RenameSessionDeviceDataV1>(form =>
                                 {
                                     form.Text(item => item.DeviceName, "devices.rename");
-                                    form.Submit("common.save");
+                                    form.Save();
                                 }, Url.Page("/Account/Sessions/Sessions", "Rename", new { sessionPublicId = session.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                                     new RenameSessionDeviceDataV1(session.DeviceName))
                             }
@@ -43,7 +43,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                         {
                             form.Select(item => item.AudioQuality, "session.audioQuality", Enum.GetValues<AudioQuality>()
                                 .Select(quality => new SelectOption(((byte)quality).ToString(CultureInfo.InvariantCulture), texts["session.audioQuality." + quality])));
-                            form.Submit("common.save");
+                            form.Save();
                         }, Url.Page("/Account/Sessions/Sessions", "AudioQuality", new { sessionPublicId = session.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                             new SessionAudioQualityDataV1(session.AudioQuality)),
                         new P(new Text("session.created"), new ValueText(session.CreatedAt.ToString("u", CultureInfo.InvariantCulture))),

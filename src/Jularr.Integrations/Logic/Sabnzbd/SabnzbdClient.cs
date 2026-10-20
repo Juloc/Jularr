@@ -149,6 +149,40 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             return new SabnzbdHistorySnapshot(jobs);
         }
 
+        // The job leaves the queue and the history; its files go with it when asked.
+        public async Task RemoveJobAsync(SabnzbdConnection connection, string nzoId, bool deleteFiles, CancellationToken ct)
+        {
+            ValidateNzoId(nzoId);
+            foreach (var mode in new[] { "queue", "history" })
+            {
+                using var response = await SendAsync(connection, [new("mode", mode), new("name", "delete"), new("value", nzoId), new("del_files", deleteFiles ? "1" : "0")], ct);
+                RequireStatus(await RequireBodyAsync(response, ct));
+            }
+        }
+
+        public async Task PauseJobAsync(SabnzbdConnection connection, string nzoId, bool isPaused, CancellationToken ct)
+        {
+            ValidateNzoId(nzoId);
+            using var response = await SendAsync(connection, [new("mode", "queue"), new("name", isPaused ? "pause" : "resume"), new("value", nzoId)], ct);
+            RequireStatus(await RequireBodyAsync(response, ct));
+        }
+
+        private static void RequireStatus(string json)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (ReadBool(document.RootElement, "status") is not true)
+                {
+                    throw new SabnzbdException("SABnzbd did not accept the command.");
+                }
+            }
+            catch (JsonException exception)
+            {
+                throw new SabnzbdException("SABnzbd returned an invalid answer.", exception);
+            }
+        }
+
         public async Task<string?> FindJobAsync(SabnzbdConnection connection, string name, CancellationToken ct)
         {
             // Recovers a job whose id was never stored.

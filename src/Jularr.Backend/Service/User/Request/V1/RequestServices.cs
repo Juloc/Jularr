@@ -204,6 +204,13 @@ namespace Jularr.Backend.Service.User.Request.V1
     [ServiceEndpoint("POST", "/api/v1/works/{workId:long}/requests")]
     public sealed class CreateRequestV1 : UserService<CreateRequestParametersV1, CreateRequestDataV1>
     {
+        private readonly AcquisitionSearchSignal _searchSignal;
+        private bool _newlyApproved;
+
+        internal CreateRequestV1(AcquisitionSearchSignal searchSignal)
+        {
+            _searchSignal = searchSignal;
+        }
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CreateRequestResultV1>()];
         protected override ModuleRequirement GetInstanceModules(CreateRequestParametersV1 parameters) => ModuleRequirement.All("Requests");
@@ -211,8 +218,14 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), CancellationToken);
+            var (request, newlyApproved) = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), CancellationToken);
+            _newlyApproved = newlyApproved;
             return new CreateRequestResultV1(request.Id);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_newlyApproved) _searchSignal.RequestSearch();
         }
     }
 }

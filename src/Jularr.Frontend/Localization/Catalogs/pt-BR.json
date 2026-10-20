@@ -1004,10 +1004,6 @@
    "Users may confirm source checks",
    "Usuários podem confirmar verificações de fontes"
   ],
-  "admin.instance.saved": [
-   "Instance settings were saved.",
-   "As configurações da instância foram salvas."
-  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "Ative ou desative as integrações registradas. Os recursos de conexão e login ainda exigem a configuração existente do host."
@@ -1035,10 +1031,6 @@
   "profile.settings.title": [
    "Profile settings",
    "Configurações do perfil"
-  ],
-  "profile.settings.save": [
-   "Save changes",
-   "Salvar alterações"
   ],
   "profile.settings.saved": [
    "Your changes were saved.",
@@ -1583,10 +1575,6 @@
   "admin.instance.media": [
    "Media types",
    "Tipos de mídia"
-  ],
-  "admin.instance.media.state": [
-   "Availability",
-   "Disponibilidade"
   ],
   "admin.instance.media.noLibrary": [
    "No library yet; nothing is downloaded for it.",
@@ -2723,10 +2711,6 @@
   "admin.instance.modules": [
    "Modules",
    "Módulos"
-  ],
-  "admin.instance.module.state": [
-   "Module status",
-   "Status do módulo"
   ],
   "admin.instance.module.retained": [
    "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
@@ -5520,14 +5504,6 @@
    "Queued at",
    "Enfileirada em"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Atividade"
-  ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "A fazer"
-  ],
   "activity.tab.History": [
    "History",
    "Histórico"
@@ -5591,14 +5567,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Continuar download"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Nada em execução."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Nada precisa de atenção."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",
