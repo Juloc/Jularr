@@ -88,6 +88,11 @@ namespace Jularr.Backend.Tests
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             var wantedId = await CreateWantedAsync(host, work.Id);
 
+            // The direct source is the preferred one, so its file is the one that is taken and checked.
+            using var preferred = await host.SendAsync(HttpMethod.Put, Connections + "/3",
+                new SaveAcquisitionConnectionDataV1("Project Gutenberg", AcquisitionConnectionType.Gutenberg, "https://gutendex.example.test", null, true, 5, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, preferred.StatusCode, await preferred.Content.ReadAsStringAsync());
+
             await RunAsync<SearchDueWantedV1>(host);
             Assert.AreEqual(0, sources.SabGrabs);
             await RunAsync<MonitorDownloadsV1>(host);
