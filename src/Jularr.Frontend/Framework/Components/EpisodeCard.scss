@@ -95,7 +95,9 @@
         -webkit-line-clamp: 3;
     }
 
-    .state-chip { margin-top: auto; }
+    // The chips and the actions of one row; the actions sit at its end.
+    &__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }
+    &__actions { margin-inline-start: auto; > div { display: flex; gap: 2px; } }
 
     &--compact {
         display: grid;

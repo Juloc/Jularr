@@ -57,7 +57,7 @@ test('player planning network failure displays the localized status', async () =
         classList: { toggle() {}, contains: () => false },
         querySelectorAll: () => [],
         querySelector: selector => selector === '[data-role=status]' ? status : selector === '[data-status=failed]' ? { textContent: 'Localized failure' }
-            : selector === '#player-sidebar' ? null : { addEventListener() {}, setAttribute() {} }
+            : selector === '#player-sidebar' ? null : { dataset: {}, addEventListener() {}, setAttribute() {} }
     };
     runInNewContext(code, {
         exports: {}, require: () => ({}),

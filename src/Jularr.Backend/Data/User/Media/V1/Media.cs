@@ -307,8 +307,10 @@ namespace Jularr.Backend.Data.User.Media.V1
     {
         public WorkAvailabilityV1(long id, long workVersionId, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
             long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted, bool isEmulated,
-            string? groupName, string? unitTitle)
+            string? groupName, string? unitTitle, long? workUnitId, bool hasProgress)
         {
+            WorkUnitId = workUnitId;
+            HasProgress = hasProgress;
             UnitTitle = unitTitle;
             GroupName = groupName;
             IsEmulated = isEmulated;
@@ -384,6 +386,14 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
         public string? UnitTitle { get; }
+
+        // The unit this version is of, to mark it; none for a whole title.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id), false)]
+        public long? WorkUnitId { get; }
+
+        // The profile has a position or a completion here; a book's progress can only be changed where it exists.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
+        public bool HasProgress { get; }
     }
 
     public sealed class ReadWorkEpisodesParametersV1 : BaseParameters
@@ -404,8 +414,10 @@ namespace Jularr.Backend.Data.User.Media.V1
     // A season with its poster, year and how much of it is here.
     public sealed class WorkSeasonV1 : BaseResponse
     {
-        public WorkSeasonV1(int seasonNumber, string? title, string? imageUrl, int? releaseYear, int episodeCount, int availableCount)
+        public WorkSeasonV1(int seasonNumber, string? title, string? imageUrl, int? releaseYear, int episodeCount, int availableCount, long id, int watchedCount)
         {
+            Id = id;
+            WatchedCount = watchedCount;
             SeasonNumber = seasonNumber;
             Title = title;
             ImageUrl = imageUrl;
@@ -431,6 +443,13 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.AvailableCount))]
         public int AvailableCount { get; }
+
+        // The season's unit, to mark it, and how many of its episodes this profile has watched.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int WatchedCount { get; }
     }
 
     // An episode as a card: still, summary and length, what plays and where this profile stopped, and its state.

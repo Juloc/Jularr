@@ -1232,22 +1232,6 @@
    "Root folder",
    "ルートフォルダー"
   ],
-  "session.audioQuality": [
-   "Music on this device",
-   "このデバイスの音楽"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "オリジナル"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "高（256 kbit/s）"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "小（128 kbit/s）"
-  ],
   "takeover.rootFolders": [
    "Root folders",
    "ルートフォルダー"
@@ -1675,10 +1659,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "空欄の場合、デバイスのプラットフォームが名前として表示されます。"
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "オリジナルはファイルをそのまま再生します。高と小は大きな音楽ファイルをその場で変換するため、外出先でのデータ量を節約できます。"
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
