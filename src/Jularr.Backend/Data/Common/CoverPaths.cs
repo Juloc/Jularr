@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Integrations.Logic.Media;
 
-namespace Jularr.Backend.Logic.Media
+namespace Jularr.Backend.Data.Common
 {
     // The one rule for stored covers: their names, their addresses and the widths they are kept in.
     public static partial class CoverPaths
