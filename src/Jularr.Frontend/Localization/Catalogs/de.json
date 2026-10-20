@@ -2773,20 +2773,20 @@
    "Wartet auf Freigabe"
   ],
   "request.state.Approved": [
-   "Looking for media",
-   "Medien werden gesucht"
+   "Requested",
+   "Angefragt"
   ],
   "request.state.Searching": [
-   "Looking for media",
-   "Medien werden gesucht"
+   "Searching",
+   "Wird gesucht"
   ],
   "request.state.Downloading": [
-   "Getting media",
-   "Medien werden geholt"
+   "Downloading",
+   "Wird geladen"
   ],
   "request.state.Importing": [
-   "Preparing",
-   "Wird vorbereitet"
+   "Importing",
+   "Wird importiert"
   ],
   "request.state.Completed": [
    "Available",
@@ -2803,6 +2803,14 @@
   "request.state.Cancelled": [
    "Request cancelled",
    "Anfrage abgebrochen"
+  ],
+  "live.eta": [
+   "{0} left",
+   "noch {0}"
+  ],
+  "live.progress": [
+   "Progress",
+   "Fortschritt"
   ],
   "media.notForProfile": [
    "Media is not available for this profile.",
