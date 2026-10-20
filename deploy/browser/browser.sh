@@ -88,13 +88,13 @@ run_browser() {
     for _ in $(seq 1 60); do
         if curl -fsS "http://127.0.0.1:$port/json/version" > /dev/null 2>&1; then
             echo "the browser answers on port $port"
-            return 0
+            break
         fi
         sleep 1
     done
 
-    echo "the browser did not answer on port $port" >&2
-    exit 1
+    # The script stays with the browser, so it lives as long as the container does.
+    wait
 }
 
 case "${1:-}" in
