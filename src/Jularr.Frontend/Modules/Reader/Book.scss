@@ -18,10 +18,10 @@
         --paper-shade: color-mix(in srgb, var(--paper) 30%, #554432);
         --paper-bounce: color-mix(in srgb, var(--paper) 82%, #fff3d6);
         --paper-cut: color-mix(in srgb, var(--edge-colour) calc(var(--edge-strength) * 100%), var(--paper));
-        --grain-image: url("./BookGrain.svg");
+        --grain-image: url("./BookGrain.svg?no-inline");
         --edge-wash: .65; --edge-line: .2;
         --gutter-light: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper-bounce) 12%, transparent) 18%, color-mix(in srgb, var(--paper-shade) 22%, transparent) 48%, color-mix(in srgb, var(--paper-shade) 22%, transparent) 52%, color-mix(in srgb, var(--paper-bounce) 12%, transparent) 82%, transparent);
-        &[data-paper-grain="recycled"] { --grain-image: url("./BookRecycled.svg"); }
+        &[data-paper-grain="recycled"] { --grain-image: url("./BookRecycled.svg?no-inline"); }
         &[data-paper-edge="aged"] { --edge-wash: 1.4; --edge-line: .3; }
     &__body {
         position: absolute; top: 0; left: calc(100% - 200% / var(--columns)); width: calc(200% / var(--columns)); height: 100%;
