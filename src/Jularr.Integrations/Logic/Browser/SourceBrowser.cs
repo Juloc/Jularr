@@ -12,7 +12,9 @@ namespace Jularr.Integrations.Logic.Browser
     internal sealed class BrowserOptions
     {
         public string? Path { get; set; }
+        public string? RemoteAddress { get; set; }
         public string ProfilePath { get; set; } = "";
+        public int Port { get; set; }
         public int PageTimeoutSeconds { get; set; } = 30;
         public int DownloadTimeoutSeconds { get; set; } = 600;
         public bool NoSandbox { get; set; }
@@ -45,7 +47,7 @@ namespace Jularr.Integrations.Logic.Browser
             _downloads = Path.Combine(options.ProfilePath, "downloads");
         }
 
-        public bool IsAvailable => _path is not null;
+        public bool IsAvailable => _path is not null || !string.IsNullOrWhiteSpace(_options.RemoteAddress);
 
         public async Task<string?> ReadPageAsync(Uri uri, CancellationToken ct)
         {
@@ -130,17 +132,20 @@ namespace Jularr.Integrations.Logic.Browser
             _client?.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _client = null;
             _refused = false;
-            if (_process is { } process)
+            if (_process is not { } process)
             {
-                try
-                {
-                    process.Kill(true);
-                    process.WaitForExit(5000);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or SystemException)
-                {
-                    // The browser is already gone.
-                }
+                // A browser elsewhere keeps its own profile.
+                return;
+            }
+
+            try
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or SystemException)
+            {
+                // The browser is already gone.
             }
 
             // A refused client is worth nothing; the next one starts fresh.
@@ -165,10 +170,20 @@ namespace Jularr.Integrations.Logic.Browser
                 return;
             }
 
+            // A browser that already runs elsewhere is used as it is; its profile is its own.
+            if (!string.IsNullOrWhiteSpace(_options.RemoteAddress))
+            {
+                var remote = await ReadPageSocketAsync(new Uri(_options.RemoteAddress), ct);
+                _client = new DevToolsClient();
+                await _client.ConnectAsync(remote, ct);
+                await _client.SendAsync("Page.enable", null, ct);
+                return;
+            }
+
             Directory.CreateDirectory(_profile);
 
             // A browser with a chosen port answers the source's check; one that picks its own does not.
-            var port = FreePort();
+            var port = _options.Port > 0 ? _options.Port : FreePort();
             var arguments = $"--remote-debugging-port={port} --user-data-dir=\"{_profile}\" --no-first-run --no-default-browser-check --window-size=1280,900 about:blank";
             if (_options.NoSandbox)
             {
@@ -179,7 +194,7 @@ namespace Jularr.Integrations.Logic.Browser
 
             // The browser needs a moment before its first page counts.
             await Task.Delay(StartMilliseconds, ct);
-            var socket = await ReadPageSocketAsync(port, ct);
+            var socket = await ReadPageSocketAsync(new Uri($"http://127.0.0.1:{port}"), ct);
             _client = new DevToolsClient();
             await _client.ConnectAsync(socket, ct);
             await _client.SendAsync("Page.enable", null, ct);
@@ -195,7 +210,7 @@ namespace Jularr.Integrations.Logic.Browser
             return port;
         }
 
-        private static async Task<string> ReadPageSocketAsync(int port, CancellationToken ct)
+        private static async Task<string> ReadPageSocketAsync(Uri address, CancellationToken ct)
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
             var deadline = DateTime.UtcNow.AddSeconds(30);
@@ -203,7 +218,7 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 try
                 {
-                    using var document = JsonDocument.Parse(await http.GetStringAsync($"http://127.0.0.1:{port}/json/list", ct));
+                    using var document = JsonDocument.Parse(await http.GetStringAsync(new Uri(address, "/json/list"), ct));
                     foreach (var target in document.RootElement.EnumerateArray())
                     {
                         if (target.GetProperty("type").GetString() == "page" && target.TryGetProperty("webSocketDebuggerUrl", out var socket))

@@ -35,13 +35,57 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Browser_WithoutABinaryAnswersNothing()        {
+        public async Task Browser_UsesARunningBrowser()
+        {
+            var browser = Environment.GetEnvironmentVariable("JULARR_BROWSER");
+            if (string.IsNullOrWhiteSpace(browser))
+            {
+                Assert.Inconclusive("JULARR_BROWSER names no browser.");
+            }
+
+            using var folder = new TemporaryDirectory();
+            using var server = new CheckPage();
+            var port = FreePort();
+            var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(browser)
+            {
+                UseShellExecute = false,
+                Arguments = $"--remote-debugging-port={port} --user-data-dir=\"{Path.Combine(folder.Path, "profile")}\" --no-first-run --no-default-browser-check about:blank"
+            });
+
+            try
+            {
+                // The browser that already runs is used as it is; its profile is its own.
+                using var source = new SourceBrowser(new BrowserOptions { RemoteAddress = $"http://127.0.0.1:{port}", ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+                Assert.IsTrue(source.IsAvailable);
+                var page = await source.ReadPageAsync(server.Address, CancellationToken.None);
+                Assert.IsNotNull(page);
+                StringAssert.Contains(page, "The page behind the check");
+            }
+            finally
+            {
+                process.Kill(true);
+                process.WaitForExit(5000);
+            }
+        }
+
+        [TestMethod]
+        public async Task Browser_WithoutABinaryAnswersNothing()
+        {
             using var folder = new TemporaryDirectory();
             using var source = new SourceBrowser(new BrowserOptions { Path = "", ProfilePath = folder.Path });
             Assert.IsFalse(source.IsAvailable);
             Assert.IsNull(await source.ReadPageAsync(new Uri("https://annas.example.test/"), CancellationToken.None));
             await Assert.ThrowsExactlyAsync<Integrations.Data.Browser.SourceBrowserException>(() =>
                 source.SaveFileAsync(new Uri("https://annas.example.test/book.epub"), Path.Combine(folder.Path, "book.epub"), null, null, CancellationToken.None));
+        }
+
+        private static int FreePort()
+        {
+            var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+            return port;
         }
 
         // A page that asks a browser to come back, like the sources behind a browser check do.
@@ -99,7 +143,7 @@ namespace Jularr.Backend.Tests
                     }
                     else
                     {
-                        var check = Encoding.UTF8.GetBytes("<html><body>Checking your browser<script>document.cookie='passed';location.reload();</script></body></html>");
+                        var check = Encoding.UTF8.GetBytes("<html><head><title>DDoS-Guard</title></head><body>Checking your browser<script>document.cookie='passed';location.reload();</script></body></html>");
                         context.Response.StatusCode = 403;
                         context.Response.ContentType = "text/html";
                         context.Response.ContentLength64 = check.Length;
@@ -110,14 +154,6 @@ namespace Jularr.Backend.Tests
                 }
             }
 
-            private static int FreePort()
-            {
-                var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-                listener.Start();
-                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-                listener.Stop();
-                return port;
-            }
         }
     }
 }

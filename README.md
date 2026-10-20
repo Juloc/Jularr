@@ -29,6 +29,29 @@ Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`
 Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
 alle frischen Baselines in einer Transaktion; eine bestehende wird nie verändert oder migriert.
 
+### Browser für Quellen mit Browserprüfung
+
+Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser besteht. Jularr liest
+solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
+bleibt schlank, der Browser kommt später dazu.
+
+Im Container, einmal je Container (der Browser landet in der Schicht, sein Profil im Volume):
+
+```bash
+docker compose exec -u root jularr jularr-browser install   # Browser und Bibliotheken
+docker compose exec -d jularr jularr-browser run            # startet ihn auf Port 9222
+```
+
+`Browser:RemoteAddress` (z. B. `http://127.0.0.1:9222`) lässt Jularr einen Browser benutzen, der
+schon läuft – auch einen auf einem anderen Rechner. `Browser:Path` startet einen eigenen Browser
+mit dem Profil unter `DataPath/browser`; `Browser:Port` gibt dessen Port an, damit er von außen
+erreichbar ist. Beides zugleich geht nicht: sie teilen sich das Profil.
+
+Besteht der Browser die Prüfung der Quelle nicht (ein Captcha), bleibt die Quelle beim Menschen:
+der Link wird von Hand eingetragen. Auf einem Server ohne Grafik erkennt die Prüfung den Browser
+meist, dort hilft ein Browser auf einem Desktop-Rechner, den Jularr über `Browser:RemoteAddress`
+benutzt.
+
 ## Backend im gemeinsamen Host
 
 Das Frontend braucht ProjectReferences auf `../Jularr.Backend/Jularr.Backend.csproj`

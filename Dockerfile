@@ -39,6 +39,9 @@ RUN set -eux;     apt-get update;     apt-get install -y --no-install-recommends
 
 WORKDIR /app
 COPY --from=build /app ./
+# The browser for sources that put a browser check in front of their pages is added later, not in the image.
+COPY --from=build /src/deploy/browser/browser.sh /usr/local/bin/jularr-browser
+RUN chmod +x /usr/local/bin/jularr-browser
 ENV DataPath=/data \
     Storage__LocalPaths__0=/media \
     ASPNETCORE_HTTP_PORTS=8080
