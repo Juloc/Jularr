@@ -102,7 +102,9 @@ The keyboard is the TV's own: no system keyboard, no cursor, no text selection.
 
 ## 8. The packages
 
-1. **The client foundation** (done): the Gradle build, `core-model`, `core-api` (pairing, capabilities) and the Android CI.
-2. **The app contract**: the canonical card, the watchlist, the instance presentation and the texts in `core-model`/`core-api`, plus the shared token source the clients read.
-3. **The TV port**: the previous client's player, focus, navigation and sessions on the new contract, with the screens rebuilt in the desktop look.
-4. **The phone shell**: the WebView shell and the native player from the previous client, on the new contract.
+1. **The client foundation** (done, #1301): the Gradle build, `core-model`, `core-api` (pairing, capabilities) and the Android CI.
+2. **The app contract** (done, #1323): the canonical card, the watchlist, the instance presentation and the texts in `core-model`/`core-api`.
+3. **The shared tokens** (done, #1324): the one file with the colors of a skin, the radii and the type scale; the web builds its stylesheet from it and the instance serves it to the clients.
+4. **The TV shell** (done, #1328): the rail, the top row, the profile, the app settings, the type capsule and the shelves of the profile in the desktop's card.
+5. **The TV player and the rest**: the previous client's player, the details page, the search with the D-pad keyboard and the offline engine, rebuilt on the new contract and in the desktop's look.
+6. **The phone shell**: the WebView shell and the native player from the previous client, on the new contract.
