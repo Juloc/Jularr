@@ -373,7 +373,19 @@ namespace Jularr.Backend.Logic.Media
                     @Id,
                     item."Key",
                     CASE WHEN item."Localized" THEN settings."UiLocaleId" END,
-                    item."Value",
+                    -- An image already kept locally from this very address stays the local one.
+                    COALESCE((
+                        SELECT
+                            cover."LocalUrl"
+                        FROM
+                            "WorkCovers" AS cover
+                        WHERE
+                            cover."WorkId" = @Id
+                            AND cover."WorkUnitId" IS NULL
+                            AND cover."CoverKindId" = CASE item."Key" WHEN 'Poster' THEN 1 WHEN 'Backdrop' THEN 2 END
+                            AND cover."SourceUrl" = item."Value"
+                            AND cover."LocalUrl" IS NOT NULL
+                    ), item."Value"),
                     provider."Id"
                 FROM
                     jsonb_to_recordset(@Facts::jsonb) AS item ("Key" text, "Value" text, "Localized" boolean)
@@ -531,7 +543,16 @@ namespace Jularr.Backend.Logic.Media
                     SET
                         "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
                         "ReleasedOn" = EXCLUDED."ReleasedOn",
-                        "ImageUrl" = COALESCE(EXCLUDED."ImageUrl", "WorkUnits"."ImageUrl")
+                        "ImageUrl" = COALESCE((
+                        SELECT
+                            cover."LocalUrl"
+                        FROM
+                            "WorkCovers" AS cover
+                        WHERE
+                            cover."WorkUnitId" = "WorkUnits"."Id"
+                            AND cover."SourceUrl" = EXCLUDED."ImageUrl"
+                            AND cover."LocalUrl" IS NOT NULL
+                    ), EXCLUDED."ImageUrl", "WorkUnits"."ImageUrl")
                     RETURNING
                         "Id",
                         "Number"
@@ -560,7 +581,16 @@ namespace Jularr.Backend.Logic.Media
                     "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
                     "ReleasedOn" = EXCLUDED."ReleasedOn",
                     "Overview" = COALESCE(EXCLUDED."Overview", "WorkUnits"."Overview"),
-                    "ImageUrl" = COALESCE(EXCLUDED."ImageUrl", "WorkUnits"."ImageUrl"),
+                    "ImageUrl" = COALESCE((
+                        SELECT
+                            cover."LocalUrl"
+                        FROM
+                            "WorkCovers" AS cover
+                        WHERE
+                            cover."WorkUnitId" = "WorkUnits"."Id"
+                            AND cover."SourceUrl" = EXCLUDED."ImageUrl"
+                            AND cover."LocalUrl" IS NOT NULL
+                    ), EXCLUDED."ImageUrl", "WorkUnits"."ImageUrl"),
                     "RuntimeMinutes" = COALESCE(EXCLUDED."RuntimeMinutes", "WorkUnits"."RuntimeMinutes");
                 """;
             sql.Parameters.Add(data);

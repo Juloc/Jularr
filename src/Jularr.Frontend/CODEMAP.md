@@ -33,7 +33,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [MediaAvailability](Framework/Components/MediaAvailability.cs): dot-to-capsule status with shared vivid palette, partial counts and explicit profile/other-audio combinations. The state comes from the Backend's canonical `MediaAvailabilityState` (the library and the watchlist supply it with the work card); the Frontend infers nothing. Trailer IDs are still missing from the list contracts. Eight development samples: `/Design?pane=cards`.
 - [MediaLanguages](Framework/Components/MediaLanguages.cs), [IconInfo](Framework/Components/IconInfo.cs): supplied preferred flags/counts and native accessible disclosures; Design labels missing service fields.
 - [MediaShelf client](Framework/Components/MediaShelf.ts): shared local chevrons, native touch/keyboard scrolling and fragment observer cleanup; [tests](Tools/media-shelf.test.mjs).
-- [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
+- [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing. `MediaImage` is the one place provider images are rewritten: a stored cover gets its width variants as `srcset`, every other provider image goes through the `/api/v1/covers/external` cache (never loaded from the provider by the browser; only trailer thumbnails stay on YouTube). See Covers in the [CODEMAP](../../docs/CODEMAP.md).
 
 ## User and account pages
 
@@ -69,7 +69,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
 - [Backup](Pages/Admin/Backup/Backup.cshtml.cs): backups with their schema version, back up now, delete; under `/Setup/Backup` also restore.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
-- [Discover catalog](Pages/Admin/Catalog/Catalog.cshtml.cs) (`/Admin/Catalog`, linked from Settings): each kept catalog's titles, pending entries and last complete pass; keep whole, requests per minute, pause while Jularr is used and sync windows (`CatalogSettingsTests`).
+- [Discover catalog](Pages/Admin/Catalog/Catalog.cshtml.cs) (`/Admin/Catalog`, linked from Settings): each kept catalog's titles, pending entries and last complete pass; keep whole, requests per minute, pause while Jularr is used and sync windows, and the days and size of the cache of images of titles that are not Works (`CatalogSettingsTests`).
 - [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts with their last observed state, WOL, safe browsing and independently paged library paths.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): registry, protected TMDB/IGDB credentials, Plex server, and with ProgressSync the Jellyfin/Emby connections and which profile each server user shares progress with.
 - [DeviceLink](Pages/Account/DeviceLink/DeviceLink.cshtml.cs) (`/Devices/Link`, anonymous): a browser on a TV shows a pairing code and [QrCode](Framework/Components/QrCode.cs), kept in a strict cookie, and signs in once confirmed.

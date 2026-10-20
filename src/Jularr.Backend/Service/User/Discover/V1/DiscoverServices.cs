@@ -677,6 +677,32 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         state."MediaStateTypeId",
                         (
                             SELECT
+                                fact."Value"
+                            FROM
+                                "WorkMetadataFacts" AS fact
+                            WHERE
+                                fact."WorkId" = identity."WorkId"
+                                AND fact."FactKey" = 'Poster'
+                                AND fact."Value" LIKE '/api/v1/covers/%'
+                            ORDER BY
+                                fact."IsManual" DESC
+                            LIMIT 1
+                        ) AS "PosterUrl",
+                        (
+                            SELECT
+                                fact."Value"
+                            FROM
+                                "WorkMetadataFacts" AS fact
+                            WHERE
+                                fact."WorkId" = identity."WorkId"
+                                AND fact."FactKey" = 'Backdrop'
+                                AND fact."Value" LIKE '/api/v1/covers/%'
+                            ORDER BY
+                                fact."IsManual" DESC
+                            LIMIT 1
+                        ) AS "BackdropUrl",
+                        (
+                            SELECT
                                 'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
                             FROM
                                 "WorkExternalIdentities" AS plex
@@ -707,7 +733,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             var id = int.Parse(work.Value, CultureInfo.InvariantCulture);
             var known = overlay.GetValueOrDefault(id);
-            return new DiscoverItemV1(mediaType, id, known?.WorkId, work.Title, work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl,
+            return new DiscoverItemV1(mediaType, id, known?.WorkId, work.Title, work.ReleaseYear, work.Overview, known?.PosterUrl ?? work.ImageUrl, known?.BackdropUrl ?? work.BackdropUrl,
                 known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
         }
 
@@ -715,7 +741,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             var known = overlay.GetValueOrDefault(result.Id);
             return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, TextLimit.Cut(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000),
-                TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
+                known?.PosterUrl ?? TmdbClient.PosterUrl(result.PosterPath), known?.BackdropUrl ?? TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
         }
     }
 }
