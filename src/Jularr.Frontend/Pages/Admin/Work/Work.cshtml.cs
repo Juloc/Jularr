@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
-        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteWorkV1 deleteWork, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
+        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
@@ -223,6 +223,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage,
                     tracks.Length == 0 ? null : global::System.Text.Json.JsonSerializer.Serialize(tracks)), HttpContext.RequestAborted);
             TempData["WorkFilesUpdated"] = result.UpdatedCount;
+            return LocalRedirect(Address(Tab));
+        }
+
+        // One language of a book's machine translation goes; the file stays.
+        public async Task<IActionResult> OnPostDeleteTranslationAsync([BindRequired] long documentId, [BindRequired] string language)
+        {
+            await deleteTranslation.ExecuteAsync<UpdateResult>(new DeleteTranslationParametersV1(documentId, language), default, HttpContext.RequestAborted);
             return LocalRedirect(Address(Tab));
         }
 

@@ -855,6 +855,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(800L, bookPage.Files.Single().GroupId);
             Assert.IsNull(bookPage.Files.Single().IsRomVerified);
 
+            // What readers had machine translated of the book: a language, its coverage and size; an administrator clears one language.
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Reading', 'Translation');
+                INSERT INTO "ReadingDocuments" ("Id", "StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
+                SELECT 500, file."Id", 100, now(), decode(repeat('ab', 32), 'hex'), 1, 1, '[]', 0 FROM "StoredFiles" AS file WHERE file."RelativePath" = 'Novel/Novel.epub';
+                INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                SELECT 500, item."Path", 'text/html', convert_to('0123456789', 'UTF8')
+                FROM (VALUES (':section/00000'), (':section/00001'), (':section/00002'), (':section/00003'), (':translation/de/00000'), (':translation/de/00001')) AS item ("Path");
+                """);
+            using var translated = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + bookId + "/management");
+            var translations = (await translated.Content.ReadFromJsonAsync<WorkManagementV1>())!.Translations.Single();
+            Assert.AreEqual("de", translations.Language);
+            Assert.AreEqual(50, translations.CoveragePercent);
+            Assert.AreEqual(20L, translations.Bytes);
+            Assert.AreEqual(800L, translations.WorkEditionId);
+            using var cleared = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
+            Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = 500"));
+            using var again = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
+
             using var games = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + gameId + "/management");
             var gamePage = (await games.Content.ReadFromJsonAsync<WorkManagementV1>())!;
             CollectionAssert.AreEqual(new long[] { 701, 700 }, gamePage.Groups.Select(group => group.Id).ToArray());
