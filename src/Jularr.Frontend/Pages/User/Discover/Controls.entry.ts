@@ -56,7 +56,7 @@ function syncGroup(group: Element | null): void {
 document.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
 
-    if (event.target.closest('[data-drawer-pane="view"]')) showPreferences();
+    if (event.target.closest('[data-drawer-open][data-drawer-pane="view"]')) showPreferences();
 
     if (event.target.closest('[data-hero-reset]')) {
         writeHeroPreferences(heroKey, { ...heroDefaults });
