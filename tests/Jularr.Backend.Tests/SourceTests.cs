@@ -13,7 +13,9 @@ using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Common;
@@ -348,6 +350,44 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_SearchGathersTheFilesOfEveryWay()
+        {
+            // The first way finds one file, the second another; the files of both are gathered.
+            var sources = new FakeSources { RealRows = true };
+            sources.SearchPages["zweiterWeg"] = """
+                <html><body>
+                  <a href="/md5/11111111111111111111111111111111"><h3>Pride and Prejudice</h3><div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, Pride and Prejudice.epub</div></a>
+                </body></html>
+                """;
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var records = await client.SearchAsync(new Uri("https://annas.example.test/"), ["Pride and Prejudice Austen", "zweiterWeg"], CancellationToken.None);
+
+            Assert.AreEqual(2, records.Count);
+            Assert.AreEqual("0123456789abcdef0123456789abcdef", records[0].Md5);
+            Assert.AreEqual("11111111111111111111111111111111", records[1].Md5);
+        }
+
+        [TestMethod]
+        public void AnnaQueries_NameTheWorkInEveryWay()
+        {
+            // The work knows the ways: the title with the author, the titles of its editions and its ISBNs.
+            var target = new WantedTargetData(1, 2, MediaType.Book, null, "Rich Dad, Poor Dad", null, ["Rich Dad, Poor Dad"], null, null, null, [], false, false, false, 0, [],
+                ["de"], "Robert Kiyosaki", null, null, editionTitles: ["Rich Dad Poor Dad", "Padre Rico, Padre Pobre"], isbns: ["3959720106", "9781612681139"]);
+
+            var queries = DirectSources.AnnaQueries(target);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "Rich Dad, Poor Dad Robert Kiyosaki",
+                "Rich Dad, Poor Dad",
+                "Rich Dad Poor Dad",
+                "Padre Rico, Padre Pobre",
+                "3959720106",
+                "9781612681139"
+            }, queries.ToArray());
+        }
+
+        [TestMethod]
         [DataRow("Please wait 2 minutes before downloading.", 120)]
         [DataRow("Please wait 01:30 before downloading.", 90)]
         [DataRow("Please wait 1:05:00 before downloading.", 3900)]
@@ -564,6 +604,9 @@ namespace Jularr.Backend.Tests
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
             public string RowFileName { get; set; } = "lgli/Jane Austen - Pride and Prejudice (1813).epub";
+
+            // The page of a search whose query contains the key.
+            public Dictionary<string, string> SearchPages { get; } = new(StringComparer.OrdinalIgnoreCase);
             public int SlowWaitSeconds { get; set; } = 1;
             public string? SlowWaitText { get; set; }
             private int _signedHits;
@@ -649,7 +692,7 @@ namespace Jularr.Backend.Tests
                     return check;
                 }
 
-                if (RealRows && uri.AbsolutePath == "/search")
+                if (RealRows && uri.AbsolutePath == "/search" && !SearchPages.Keys.Any(key => uri.Query.Contains(key, StringComparison.OrdinalIgnoreCase)))
                 {
                     return Text($"""
                         <html><body>
@@ -669,7 +712,8 @@ namespace Jularr.Backend.Tests
 
                 return uri.AbsolutePath switch
                 {
-                    "/search" => Text("""
+                    "/search" => Text(SearchPages.Where(entry => uri.Query.Contains(entry.Key, StringComparison.OrdinalIgnoreCase))
+                        .Select(entry => entry.Value).FirstOrDefault() ?? """
                         <html><body>
                           <a href="/md5/0123456789abcdef0123456789abcdef"><h3>Pride and Prejudice</h3><div class="italic">Jane Austen</div><div>English [en], .epub, 1.2MB, Pride and Prejudice.epub</div></a>
                           <a href="/md5/0123456789abcdef0123456789abcdef">duplicate</a>

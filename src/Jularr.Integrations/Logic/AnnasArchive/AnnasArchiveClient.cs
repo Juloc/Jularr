@@ -15,6 +15,9 @@ namespace Jularr.Integrations.Logic.AnnasArchive
     {
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
+
+        // Files enough to choose from; the other ways to find the work need not be asked.
+        private const int EnoughRecords = 20;
         private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
 
         // The official mirrors of the source; all of them are tried, the one of the connection first.
@@ -32,38 +35,82 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static string? ReadMd5(Uri record) => Md5Path().Match(record.AbsolutePath) is { Success: true } match ? match.Groups[1].Value : null;
 
-        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct)
+        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct) =>
+            await SearchAsync(site, [query], ct);
+
+        // Every way to find the work is tried; the files of all of them are gathered.
+        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, IReadOnlyList<string> queries, CancellationToken ct)
         {
             // The source answers on one of its mirrors; all of them are tried, the fast way first.
             var mirrors = Mirrors(site);
-            string? page = null;
-            foreach (var mirror in mirrors)
+            var records = new List<AnnasArchiveRecord>();
+            var checkedSite = false;
+            var answeredAny = false;
+            Uri? answered = null;
+            foreach (var query in queries)
             {
-                page = await ReadAsync(mirror, query, ct);
-                if (page is not null)
+                string? page = null;
+                if (!checkedSite)
+                {
+                    foreach (var mirror in mirrors)
+                    {
+                        if (await ReadAsync(mirror, query, ct) is { } direct)
+                        {
+                            page = direct;
+                            answered = mirror;
+                            break;
+                        }
+                    }
+                }
+
+                if (page is null)
+                {
+                    // A check in front of the site: the browser reads the mirrors at the same time.
+                    var addresses = answered is null ? mirrors : [answered];
+                    var read = await browser.ReadPagesAsync([.. addresses.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
+                    if (read is null)
+                    {
+                        continue;
+                    }
+
+                    page = read.Html;
+                    answered = read.Address;
+                    checkedSite = true;
+                }
+
+                answeredAny = true;
+
+                foreach (var record in Records(page))
+                {
+                    if (records.All(known => known.Md5 != record.Md5))
+                    {
+                        records.Add(record);
+                    }
+                }
+
+                // Enough files to choose from; the other ways need not be asked.
+                if (records.Count >= EnoughRecords)
                 {
                     break;
                 }
             }
 
-            if (page is null)
+            if (!answeredAny)
             {
-                // A check in front of every mirror: the browser reads them at the same time.
-                var read = await browser.ReadPagesAsync([.. mirrors.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
-                if (read is null)
-                {
-                    throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
-                }
-
-                page = read.Html;
+                throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
             }
 
+            return records;
+        }
+
+        // Each record is a row: the file's facts, the title link and the author.
+        private static IReadOnlyList<AnnasArchiveRecord> Records(string page)
+        {
             if (page.Length > MaximumPageBytes)
             {
                 throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page is too large.");
             }
 
-            // Each record is a row: the file's facts, the title link and the author.
             var document = new HtmlParser().ParseDocument(page);
             var records = new List<AnnasArchiveRecord>();
             foreach (var link in document.QuerySelectorAll("a[href^='/md5/']"))
