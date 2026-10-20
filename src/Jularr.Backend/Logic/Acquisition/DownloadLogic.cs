@@ -919,7 +919,31 @@ namespace Jularr.Backend.Logic.Acquisition
                     );
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0 || data.AttentionKey is null)
+            {
+                return;
+            }
+
+            // A person is told once per title and reason; a repeat folds into the unread notice.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                    JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                WHERE
+                    operation."Id" = @OperationId;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } waiting)
+            {
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Activity?Tab=Queue"), ct);
+            }
         }
 
         public static async Task MarkAcquisitionReleaseAsync(this LogicContext ctx, AcquisitionReleaseMarkData data, CancellationToken ct)
