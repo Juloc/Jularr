@@ -800,6 +800,7 @@ namespace Jularr.Frontend.Localization
             new("nav.group.media", "Media"),
             new("nav.group.requests", "Requests"),
             new("nav.group.acquisition", "Arr+"),
+            new("nav.group.instance", "Instance"),
             new("acquisition.role.Search", "Indexers"),
             new("acquisition.role.Download", "Download clients"),
             new("acquisition.role.Subtitles", "Subtitles"),

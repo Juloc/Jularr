@@ -26,6 +26,7 @@ namespace Jularr.Frontend.Pages.User.DevicePair
         protected override void Define(Page page)
         {
             page.Title("devices.pair.title");
+            page.Parent("settings.title", "/Settings");
             page.Navigation("nav.settings");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (TempData["DevicePaired"] is true) page.Content.Add(new P(new Text("devices.pair.done")).Attribute("role", "status"));

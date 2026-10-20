@@ -24,7 +24,9 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         protected override void Define(Page page)
         {
             if (_item is not { } item) return;
-            page.Title("wanted.tab.search", item.CanonicalTitle);
+            page.Title("wanted.tab.search");
+            page.Parent("admin.wanted.title", "/Admin/Wanted");
+            page.ParentName(item.CanonicalTitle, WantedStatus.Home(Id));
             page.Navigation("nav.admin");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 

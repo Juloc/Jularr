@@ -70,7 +70,7 @@ test("CSS image URLs use the host build root and resolve to published assets", (
 });
 
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
-    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original",
+    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-mark",
         "books", "reading", "folder", "subtitles", "providers", "theme-system", "player-previous", "player-next", "close"]) {
         assert.equal(icons.symbols[key], "icon-" + key);
     }

@@ -51,6 +51,21 @@ test("Shell has one owning C# file, not feature-specific Framework wrappers", ()
     assert.match(load("Assets/Shared/shell.entry.scss"), /Pages\/Shared\/Shell/);
 });
 
+test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", () => {
+    const shell = load("Pages/Shared/Shell.cs");
+    const styles = load("Pages/Shared/Shell.scss");
+    assert.match(shell, /adminMode/);
+    assert.match(shell, /expand: true/);
+    assert.match(shell, /new Ol\(/);
+    assert.match(shell, /Add\(new Text\("nav\.admin"\)/);
+    assert.match(styles, /\.app-header\s*\{[^}]*height: 64px/);
+    assert.match(styles, /container: crumbs/);
+    assert.match(styles, /nth-last-child\(n \+ 3\)/);
+    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow/);
+    assert.ok(!existsSync(resolve(root, "Pages/Shared/brand-clean.svg")) && !existsSync(resolve(root, "Pages/Shared/brand-original.svg")));
+    assert.match(load("Pages/Shared/brand-mark.svg"), /fill="currentColor"/);
+});
+
 test("Shell does not invent optional media modules", () => {
     const shell = load("Pages/Shared/Shell.cs");
     assert.doesNotMatch(shell, /new\("nav\.watchlist"/);

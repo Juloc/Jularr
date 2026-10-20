@@ -22,6 +22,7 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#17161e" />
     <title>@title · @T.InstanceName</title>
+    <link rel="icon" type="image/svg+xml" href="@Assets.ImageUrl("Assets/Shared/favicon.svg")" />
     @Assets.Styles("Assets/Shared/shell.entry.scss")
     @if (!showShell)
     {
@@ -39,6 +40,7 @@
     @if (showShell && !isReader)
     {
         @Assets.Scripts("Framework/Components/SavePill.entry.ts")
+        @Assets.Scripts("Pages/Shared/Breadcrumb.entry.ts")
     }
     @if (!showShell)
     {

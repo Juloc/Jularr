@@ -17,7 +17,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Table.cs](Framework/Components/Table.cs): typed rows and composed cells.
 - [Button.cs](Framework/Components/Button.cs), [Tag.cs](Framework/Components/Tag.cs), [Toggle.cs](Framework/Components/Toggle.cs): shared controls.
 - [Split.cs](Framework/Components/Split.cs), [Tabs.cs](Framework/Components/Tabs.cs), [NavigationTabs.cs](Framework/Components/NavigationTabs.cs): layout and route-backed navigation.
-- [Shell.cs](Pages/Shared/Shell.cs), [Brand.cs](Pages/Shared/Brand.cs): capability-driven application chrome and branding; administration areas are collapsible sidebar groups.
+- [Shell.cs](Pages/Shared/Shell.cs), [Brand.cs](Pages/Shared/Brand.cs): capability-driven application chrome and branding; the header's breadcrumb (area and group derived there, `Page.Parent` between) and the sidebar's user and admin modes (`/Admin/*` shows every administration area open). [Breadcrumb.entry.ts](Pages/Shared/Breadcrumb.entry.ts) opens a long trail at its end; one mark, [brand-mark.svg](Pages/Shared/brand-mark.svg).
 - [Shared layout](Pages/Shared/_Layout.cshtml), [page body](Pages/Shared/_PageBody.cshtml): thin Razor bridges.
 - [FrontendAssets.cs](Framework/FrontendAssets.cs), [Vite](vite.config.ts), [build tools](Tools): fingerprinted, entry-scoped assets and SVG sprite.
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.

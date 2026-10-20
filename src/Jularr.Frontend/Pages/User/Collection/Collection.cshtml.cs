@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         protected override void Define(Page page)
         {
             page.Title("collections.title", _collection?.Name);
+            page.Parent("collections.title", "/Collections");
             page.Navigation("collections.title");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
             if (_collection is not { } collection)

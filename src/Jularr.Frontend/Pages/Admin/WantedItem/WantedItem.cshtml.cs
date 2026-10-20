@@ -41,6 +41,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         {
             if (_item is not { } item) return;
             page.Title("admin.wanted.title", item.CanonicalTitle);
+            page.Parent("admin.wanted.title", "/Admin/Wanted");
             page.Navigation("nav.admin");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 

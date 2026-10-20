@@ -22,12 +22,12 @@ namespace Jularr.Frontend.Pages.User.Person
 
         protected override void Define(Page page)
         {
-            page.Title("person.title");
+            page.Title("person.title", _person?.Name);
+            page.Parent("nav.library", "/Library");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Person/Person.entry.scss");
             if (_person is { } person && _works is { } works)
             {
-                page.Content.Add(new H2(new ValueText(person.Name)));
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(works.Items.Count > 0
                     ? new Div([.. works.Items.Select(item => new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,

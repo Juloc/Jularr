@@ -2,7 +2,7 @@
 :root {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color-scheme: light;
-    --background: light-dark(#f6f5f9, #141319);
+    --background: light-dark(#fff, #141319);
     --surface: light-dark(#fff, #1d1b24);
     --surface-hover: color-mix(in srgb, var(--accent) 7%, var(--surface));
     --field: light-dark(#faf9fc, #19171f);
@@ -22,8 +22,8 @@
     --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
     // Outlines of panels and table heads: the border with a touch of the accent.
     --accent-line: color-mix(in srgb, var(--accent) 24%, var(--border));
-    --jularr-ring: var(--accent);
-    --jularr-ink: var(--text);
+    // The quiet 1px line of the shell: sidebar, header, search and floating bars (owner's decision 20 Oct: no shadows, no grey fills).
+    --line: color-mix(in srgb, var(--border) 62%, var(--surface));
     --art-hue-rotate: 0deg;
     --art-saturate: 1;
 }

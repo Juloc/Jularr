@@ -2504,6 +2504,10 @@
    "Arr+",
    "Arr+"
   ],
+  "nav.group.instance": [
+   "Instance",
+   "Instanz"
+  ],
   "acquisition.role.Search": [
    "Indexers",
    "Indexer"
