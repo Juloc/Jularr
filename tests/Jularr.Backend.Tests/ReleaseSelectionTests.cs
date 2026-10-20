@@ -15,9 +15,9 @@ namespace Jularr.Backend.Tests
                 OriginalLanguage = "EN"
             };
 
-        private static SelectionCandidate Candidate(string title, bool isPart = false)
+        private static SelectionCandidate Candidate(string title, bool isPart = false, int priority = 0, string connection = "Anna")
         {
-            var offer = new ReleaseOffer(title, 1, "Anna", 0, title, new Uri("https://example.org/file"), null, 1_000_000, null, ["title"]) { IsPart = isPart };
+            var offer = new ReleaseOffer(title, 1, connection, priority, title, new Uri("https://example.org/file"), null, 1_000_000, null, ["title"]) { IsPart = isPart };
             var judgement = BookReleaseJudge.Judge(["Ikigai"], "García", offer, "EN");
             return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt,
                 judgement.Evidence, judgement.Coverage)
@@ -65,6 +65,28 @@ namespace Jularr.Backend.Tests
             // A part is only a part, even in the language the request asks for.
             var result = ReleaseSelectionEngine.Select(Profile(),
                 [Candidate("Héctor García - IKIGAI (DE) (epub)", true), Candidate("Héctor García - IKIGAI (EN) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (EN) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_TheSourceWithTheHigherPriority_Comes_First()
+        {
+            // As in Readarr: the preferred source decides, the quality only among its own releases.
+            var result = ReleaseSelectionEngine.Select(Profile(),
+                [Candidate("Héctor García - IKIGAI (EN) (epub)", false, 2, "Usenet"), Candidate("Héctor García - IKIGAI (DE) (epub)", false, 1, "Anna")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (DE) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+            Assert.AreEqual("IndexerPriority", result.WinnerReason!.Code);
+        }
+
+        [TestMethod]
+        public void Selection_WithinOneSource_TheQuality_Still_Decides()
+        {
+            var result = ReleaseSelectionEngine.Select(Profile(),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)", false, 1, "Anna"), Candidate("Héctor García - IKIGAI (EN) (epub)", false, 1, "Anna")]);
 
             Assert.IsNotNull(result.Winner);
             Assert.AreEqual("Héctor García - IKIGAI (EN) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
