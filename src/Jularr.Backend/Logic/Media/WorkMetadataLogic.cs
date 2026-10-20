@@ -480,7 +480,7 @@ namespace Jularr.Backend.Logic.Media
                         *
                     FROM
                         jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Track" integer, "Title" text, "ReleasedOn" date,
-                            "Overview" text, "ImageUrl" text, "RuntimeMinutes" integer)
+                            "Overview" text, "ImageUrl" text, "RuntimeMinutes" integer, "Disc" integer)
                 ), monitoring AS (
                     SELECT
                         COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE) AS "MonitorsNewUnits"
@@ -490,7 +490,7 @@ namespace Jularr.Backend.Logic.Media
                         wanted."WorkId" = @Id
                 ), leaves AS (
                     INSERT INTO
-                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored")
+                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored", "DiscNumber")
                     SELECT
                         @Id,
                         NULL,
@@ -498,7 +498,8 @@ namespace Jularr.Backend.Logic.Media
                         COALESCE(item."Volume", item."Track"),
                         NULLIF(btrim(item."Title"), ''),
                         item."ReleasedOn",
-                        monitoring."MonitorsNewUnits"
+                        monitoring."MonitorsNewUnits",
+                        item."Disc"
                     FROM
                         item
                         CROSS JOIN monitoring
@@ -508,7 +509,8 @@ namespace Jularr.Backend.Logic.Media
                     ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                     SET
                         "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
-                        "ReleasedOn" = COALESCE(EXCLUDED."ReleasedOn", "WorkUnits"."ReleasedOn")
+                        "ReleasedOn" = COALESCE(EXCLUDED."ReleasedOn", "WorkUnits"."ReleasedOn"),
+                        "DiscNumber" = COALESCE(EXCLUDED."DiscNumber", "WorkUnits"."DiscNumber")
                 ), seasons AS (
                     INSERT INTO
                         "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "ImageUrl")

@@ -11,8 +11,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     public sealed class WorkManagementUnitV1 : BaseResponse
     {
         public WorkManagementUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, WorkUnitStatus workUnitStatusId,
-            int? absoluteNumber = null, decimal? aniListNumber = null)
+            int? absoluteNumber = null, decimal? aniListNumber = null, int? discNumber = null)
         {
+            DiscNumber = discNumber;
             AbsoluteNumber = absoluteNumber;
             AniListNumber = aniListNumber;
             Id = id;
@@ -53,9 +54,45 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.AbsoluteNumber))]
         public int? AbsoluteNumber { get; }
 
+        // The disc of an album's track.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber), false)]
+        public int? DiscNumber { get; }
+
         // The number the episode has in its AniList entry, when its season is mapped to one.
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? AniListNumber { get; }
+    }
+
+    // One audio track of a file, to give it its own language.
+    public sealed class WorkManagementTrackV1 : BaseResponse
+    {
+        public WorkManagementTrackV1(long storedFileId, int streamIndex, string? codec, int? channels, string? language, string? title)
+        {
+            StoredFileId = storedFileId;
+            StreamIndex = streamIndex;
+            Codec = codec;
+            Channels = channels;
+            Language = language;
+            Title = title;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex))]
+        public int StreamIndex { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec), false)]
+        public string? Codec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Channels), false)]
+        public int? Channels { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language), false)]
+        public string? Language { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Title), false)]
+        public string? Title { get; }
     }
 
     // One video file of the title: what it is, how good it is and where it lies.
@@ -63,8 +100,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public WorkManagementFileV1(long id, long[] workUnitIds, string relativePath, long sizeBytes, string? qualityKey, FileQualityGrade fileQualityGradeId, int? formatScore, FileSizeGrade fileSizeGradeId,
             decimal? megabytesPerMinute, string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? releaseGroup, long? durationMs, bool isMissing,
-            long? groupId = null, bool? isRomVerified = null, string? gameRegion = null, string? gameVersion = null)
+            long? groupId = null, bool? isRomVerified = null, string? gameRegion = null, string? gameVersion = null, BaseDataList<WorkManagementTrackV1>? audioTracks = null, int? pageCount = null)
         {
+            PageCount = pageCount;
+            AudioTracks = audioTracks ?? new BaseDataList<WorkManagementTrackV1>([]);
             GameRegion = gameRegion;
             GameVersion = gameVersion;
             GroupId = groupId;
@@ -144,6 +183,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         // The edition or platform it belongs to.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
         public long? GroupId { get; }
+
+        public BaseDataList<WorkManagementTrackV1> AudioTracks { get; }
+
+        // The pages of a comic archive, once counted.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.PageCount), false)]
+        public int? PageCount { get; }
 
         // What a game file's name says: the region and the version of the dump.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GameRegion), false)]

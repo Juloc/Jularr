@@ -271,7 +271,12 @@ function initializeFileEdit(): void {
     if (!dialog || !holder) return;
     const open = (ids: string[]): void => {
         if (ids.length === 0) return;
-        holder.replaceChildren(...ids.map(id => Object.assign(document.createElement('input'), { type: 'hidden', name: 'storedFileIds', value: id })));
+        const inputs = ids.map(id => Object.assign(document.createElement('input'), { type: 'hidden', name: 'storedFileIds', value: id }));
+        // One file with several audio tracks: each track can get its own language.
+        const tracks = ids.length === 1 ? dialog.querySelector<HTMLTemplateElement>(`template[data-tracks-for="${CSS.escape(ids[0])}"]`) : null;
+        const extra = tracks ? [tracks.content.cloneNode(true) as DocumentFragment] : [];
+        holder.replaceChildren(...inputs, ...extra);
+        holder.querySelectorAll<HTMLSelectElement>('select[data-current]').forEach(select => { select.value = Array.from(select.options).some(option => option.value === select.dataset.current) ? select.dataset.current! : ''; });
         dialog.showModal();
     };
     document.querySelectorAll<HTMLElement>('[data-edit-file]').forEach(button => {

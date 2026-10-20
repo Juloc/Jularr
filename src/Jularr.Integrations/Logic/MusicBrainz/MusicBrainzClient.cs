@@ -61,8 +61,10 @@ namespace Jularr.Integrations.Logic.MusicBrainz
             using var edition = await GetAsync("release/" + editionId + "?fmt=json&inc=recordings+media+artist-credits", ct);
             if (edition.RootElement.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array)
             {
+                var disc = 0;
                 foreach (var medium in media.EnumerateArray().OrderBy(medium => medium.TryGetProperty("position", out var position) && position.TryGetInt32(out var value) ? value : 0))
                 {
+                    disc++;
                     if (!medium.TryGetProperty("tracks", out var entries) || entries.ValueKind != JsonValueKind.Array)
                     {
                         continue;
@@ -73,6 +75,7 @@ namespace Jularr.Integrations.Logic.MusicBrainz
                         var artists = Artists(track);
                         tracks.Add(new MusicBrainzTrack(tracks.Count + 1, Limit(Text(track, "title") ?? "Track " + (tracks.Count + 1).ToString(CultureInfo.InvariantCulture), 500))
                         {
+                            Disc = disc,
                             People = artists.Select(artist => artist.Id).SequenceEqual(album.People.Select(artist => artist.Id)) ? [] : artists
                         });
                     }

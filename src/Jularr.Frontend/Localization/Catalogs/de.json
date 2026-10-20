@@ -6528,6 +6528,14 @@
    "Audio language",
    "Sprache der Tonspur"
   ],
+  "work.files.tracks": [
+   "Audio tracks of this file",
+   "Tonspuren dieser Datei"
+  ],
+  "work.files.track": [
+   "Track {0}",
+   "Spur {0}"
+  ],
   "work.files.unchanged": [
    "Leave unchanged",
    "Unverändert lassen"
@@ -6664,6 +6672,10 @@
    "{0} track",
    "{0} Titel"
   ],
+  "work.disc": [
+   "Disc {0}",
+   "Disc {0}"
+  ],
   "work.figure.episodes": [
    "{0} episodes",
    "{0} Folgen"
@@ -6783,6 +6795,10 @@
   "work.col.format": [
    "Format",
    "Format"
+  ],
+  "work.col.pages": [
+   "Pages",
+   "Seiten"
   ],
   "work.col.rom": [
    "ROM check",

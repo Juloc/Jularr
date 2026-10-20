@@ -59,6 +59,12 @@ namespace Jularr.Backend.Logic.Library
                     "ProbedAt" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."ProbedAt"
                     END,
+                    "PageCount" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."PageCount"
+                    END,
+                    "PagesCheckedAt" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."PagesCheckedAt"
+                    END,
                     "Sha1" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."Sha1"
                     END,
@@ -196,6 +202,26 @@ namespace Jularr.Backend.Logic.Library
                 VALUES
                     (@LibraryRootId, @RelativePath, @SizeBytes, @ModifiedAt, now(), @MediaAssetId)
                 ON CONFLICT ("LibraryRootId", "RelativePath") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // The pages of a comic archive; a file changed meanwhile is counted again by the next scan.
+        public static async Task SaveStoredFilePagesAsync(this LogicContext ctx, StoredFilePagesData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "StoredFiles" AS file
+                SET
+                    "PageCount" = @PageCount,
+                    "PagesCheckedAt" = now()
+                WHERE
+                    file."Id" = @Id
+                    AND file."SizeBytes" = @SizeBytes
+                    AND file."ModifiedAt" = @ModifiedAt;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -14,7 +15,7 @@ namespace Jularr.Backend.Logic.Library
     {
         public static async Task<int> UpdateStoredFileFactsAsync(this LogicContext ctx, UpdateLibraryFileFactsDataV1 data, CancellationToken ct)
         {
-            if (data.QualityKey is null && data.AudioLanguage is null)
+            if (data.QualityKey is null && data.AudioLanguage is null && data.TrackLanguages is null)
             {
                 throw new DataValidationException(nameof(data.QualityKey), "required");
             }
@@ -22,6 +23,28 @@ namespace Jularr.Backend.Logic.Library
             if (data.AudioLanguage is { } language && !FileLanguages.Known.Any(known => known.Three == language))
             {
                 throw new DataValidationException(nameof(data.AudioLanguage), "invalid_value");
+            }
+
+            // A track is told apart from its fellows only in one file.
+            if (data.TrackLanguages is { } rows)
+            {
+                if (data.StoredFileIds.Length != 1)
+                {
+                    throw new DataValidationException(nameof(data.TrackLanguages), "invalid_value");
+                }
+
+                try
+                {
+                    var tracks = JsonSerializer.Deserialize<TrackLanguageRow[]>(rows) ?? throw new JsonException();
+                    if (tracks.Any(track => !string.IsNullOrEmpty(track.Language) && !FileLanguages.Known.Any(known => known.Three == track.Language)))
+                    {
+                        throw new DataValidationException(nameof(data.TrackLanguages), "invalid_value");
+                    }
+                }
+                catch (JsonException)
+                {
+                    throw new DataValidationException(nameof(data.TrackLanguages), "invalid_value");
+                }
             }
 
             // Only identified media files have a type whose qualities can be chosen.
@@ -86,8 +109,31 @@ namespace Jularr.Backend.Logic.Library
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            if (data.TrackLanguages is not null)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    UPDATE
+                        "MediaTracks" AS track
+                    SET
+                        "Language" = NULLIF(item."Language", '')
+                    FROM
+                        jsonb_to_recordset(@TrackLanguages::jsonb) AS item ("StreamIndex" integer, "Language" text)
+                    WHERE
+                        track."StoredFileId" = ANY (@StoredFileIds)
+                        AND track."StreamIndex" = item."StreamIndex"
+                        AND track."MediaTrackTypeId" = 2;
+                    """;
+                sql.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            }
+
             return targets.Count;
         }
+
+        private sealed record TrackLanguageRow(int StreamIndex, string? Language);
     }
 
     internal sealed class FileFactTargetData : BaseData
