@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "id",
  "name": "Bahasa Indonesia",
  "reviewed": false,
@@ -5529,7 +5529,7 @@
    "Buka sumber dan konfirmasi"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Tautan file dari sumber"
   ],
   "activity.continueDownload": [

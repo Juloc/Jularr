@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "ja",
  "name": "日本語",
  "reviewed": false,
@@ -5529,7 +5529,7 @@
    "ソースを開いて確認"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "ソースのファイルリンク"
   ],
   "activity.continueDownload": [
