@@ -245,6 +245,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public bool BlocksRelease { get; }
     }
 
+    public sealed class PauseActivityQueueParametersV1 : BaseParameters
+    {
+    }
+
     public sealed class PauseActivityDownloadDataV1 : BaseData
     {
         public PauseActivityDownloadDataV1(bool isPaused)

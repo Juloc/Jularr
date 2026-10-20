@@ -651,6 +651,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     release."QualityKey",
                     release."SourceUrl",
                     operation."SourceLinkUrl",
+                    coalesce(operation."DownloadStateTypeId" = 3, FALSE) AS "IsPaused",
                     (
                         SELECT
                             count(*)::integer
@@ -898,6 +899,26 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // A client's pause or resume shows at once; the next progress read confirms it.
+        // The downloads that run now and are not waiting for a person.
+        public static async Task<IReadOnlyList<long>> ReadRunningDownloadIdsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId"
+                FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" = 2
+                    AND operation."AttentionKey" IS NULL
+                ORDER BY
+                    operation."Id";
+                """;
+            return (await ctx.ReadSql.ReadListAsync<OperationIdData>(sql, ct)).Select(item => item.OperationId).ToArray();
+        }
+
         public static async Task SetDownloadPausedAsync(this LogicContext ctx, DownloadPauseData data, CancellationToken ct)
         {
             var sql = new SqlStatement();

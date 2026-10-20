@@ -34,7 +34,7 @@ namespace Jularr.E2E.Tests
 
                 // Still signed in; the running job, not a new one, is picked up again and imported once it finishes.
                 await page.GotoAsync("/Admin/Activity");
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Downloading");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Downloading");
                 fakes.FinishDownloads();
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 Assert.AreEqual(1, fakes.Grabbed.Count);
@@ -84,7 +84,7 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = Film.Title }).InnerTextAsync(), "Failed or blocked before");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = Film.Title })).ToContainTextAsync("Failed or blocked before");
 
                 // The retried search may take it in the background first; then the page says it is already downloading.
                 if (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))

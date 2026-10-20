@@ -297,7 +297,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await _import.FailAsync(Context, stuck.OperationId, DownloadLogic.InterruptedReasonKey, now + InterruptedRetry, CancellationToken);
                 }
 
-                jobs.AddRange(group.Where(download => download.ExternalId == UsenetJob.ExternalId));
+                jobs.AddRange(group.Where(download => download.ExternalId == UsenetJob.ExternalId && !download.IsPaused));
             }
 
             var progressed = 0;
@@ -336,7 +336,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var active = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadActiveDownloadsAsync(ct, Parameters.OperationId), CancellationToken);
-            if (active.SingleOrDefault() is not { } download || download.ExternalId != UsenetJob.ExternalId) return new UpdateResult(false);
+            if (active.SingleOrDefault() is not { } download || download.ExternalId != UsenetJob.ExternalId || download.IsPaused) return new UpdateResult(false);
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, ct), CancellationToken);
             if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Usenet) return new UpdateResult(false);
             DownloadStoragePaths paths;
@@ -730,7 +730,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var active = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadActiveDownloadsAsync(ct, Parameters.OperationId), CancellationToken);
-            if (active.SingleOrDefault() is not { } download) return new UpdateResult(false);
+            if (active.SingleOrDefault() is not { } download || download.IsPaused) return new UpdateResult(false);
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, ct), CancellationToken);
             if (!DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)) return new UpdateResult(false);
             DownloadStoragePaths paths;

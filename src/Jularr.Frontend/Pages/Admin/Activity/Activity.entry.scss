@@ -7,6 +7,16 @@
     overflow-wrap: anywhere;
 }
 
+// Taking a job out asks first: the summary opens the button that does it.
+.activity-confirm {
+    summary { display: inline-block; padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-weight: 600; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    &[open] { flex-basis: 100%; }
+    &[open] summary { margin-bottom: 8px; }
+}
+
+.activity-queue-actions { margin-bottom: 12px; }
+
 // A row's actions next to each other, below one another on a narrow screen.
 .activity-actions {
     display: flex;

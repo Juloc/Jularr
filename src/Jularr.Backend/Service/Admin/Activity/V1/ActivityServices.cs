@@ -44,7 +44,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."DownloadStateTypeId",
                     operation."AttentionUrl" AS "ManualUrl",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" = 2 AND operation."AttentionKey" IS NULL
-                        AND connection."AcquisitionConnectionTypeId" = 2 AS "CanPause",
+                        AND connection."AcquisitionConnectionTypeId" IN (2, 3, 4, 5, 6) AS "CanPause",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL
                         AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
                     operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",

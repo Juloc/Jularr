@@ -5772,6 +5772,22 @@
    "Remove and block",
    "Entfernen und sperren"
   ],
+  "activity.pauseAll": [
+   "Pause the whole queue",
+   "Ganze Warteschlange pausieren"
+  ],
+  "activity.resumeAll": [
+   "Resume the whole queue",
+   "Ganze Warteschlange fortsetzen"
+  ],
+  "activity.removeConfirm": [
+   "Remove the job and delete its partial files",
+   "Auftrag entfernen und Teildateien löschen"
+  ],
+  "activity.removeAndBlockConfirm": [
+   "Remove, delete its partial files and block this release",
+   "Entfernen, Teildateien löschen und dieses Release sperren"
+  ],
   "activity.pause": [
    "Pause",
    "Pausieren"
