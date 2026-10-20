@@ -182,6 +182,7 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'fullscreen'");
                 var immersive = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
+                await Assertions.Expect(page.Locator("[data-action=contents]")).ToBeHiddenAsync();
                 await page.Locator(".reader__reveal--bottom").ClickAsync();
                 await Assertions.Expect(page.Locator("[data-action=contents]")).ToBeVisibleAsync();
                 var revealed = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
@@ -588,7 +589,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'fullscreen'");
             var mobileFullscreenCanvas = await page.Locator(".reader__canvas").BoundingBoxAsync();
-            Assert.IsFalse(await page.Locator("[data-action=contents]").IsVisibleAsync());
+            await Assertions.Expect(page.Locator("[data-action=contents]")).ToBeHiddenAsync();
             await page.Locator(".reader__reveal--bottom").ClickAsync();
             await Assertions.Expect(page.Locator(".reader__identity")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator("[data-action=contents]")).ToBeVisibleAsync();

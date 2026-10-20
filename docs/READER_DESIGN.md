@@ -60,6 +60,8 @@ Typography and palette buttons expose focused groups of the existing settings
 form; All restores the user's disclosure state. Popovers overlay the unchanged
 canvas and Escape/Close restores focus to a visible opener. Mobile fullscreen
 reveal keeps the same page geometry and dock, rather than adding another toolbar.
+Immersive hiding targets the actual mobile grid controls, not only their
+`display: contents` wrappers; hidden controls stay inert without changing size.
 
 ## Shared controls and document ownership
 
@@ -178,6 +180,11 @@ startup and two browser groups. Its path group exposed an older PDF Download
 selector and a pending-layout/seek race after changing views. Both were corrected;
 the two failed cases plus the local EPUB view/seek regression passed together
 (three cases, 1m54s). The new commit must still pass the complete PR checks.
+The next CI run passed the previous failures and exposed a later mobile
+fullscreen visibility assertion on Linux. The actual grid controls are now hidden
+explicitly, and visibility assertions wait for the browser transition. The
+affected full Reader path and local control case passed together (1m23s);
+cross-platform CI confirmation is still required for this correction.
 
 The earlier combined renderer run is **not green**: EPUB passed, but the comic test's server
 became unreachable during Owner sign-in and the background-count test's server

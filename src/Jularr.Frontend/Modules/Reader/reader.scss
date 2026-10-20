@@ -198,7 +198,7 @@
             grid-template: auto minmax(0, 1fr) auto auto / repeat(var(--reader-dock-count), minmax(0, 1fr));
             .reader__canvas { grid-area: 1 / 1 / -1 / -1; }
             .reader__identity { padding-top: max(28px, env(safe-area-inset-top)); }
-            &[data-chrome=hidden] .reader__identity, &[data-chrome=hidden] .reader__tools, &[data-chrome=hidden] .reader__footer { visibility: hidden; pointer-events: none; }
+            &[data-chrome=hidden] :is(.reader__identity, .reader__tools > .button, .reader__contents-tool, .reader__bottom, .reader__page-controls > *, .reader__view-tools) { visibility: hidden; pointer-events: none; }
         }
     }
 }
