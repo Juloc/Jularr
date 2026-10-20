@@ -6332,6 +6332,94 @@
    "The storage is not reachable. Check that the NAS is on and the share is mounted.",
    "Der Speicher ist nicht erreichbar. Prüfe, ob das NAS an ist und die Freigabe eingebunden ist."
   ],
+  "errors.import_storage_full": [
+   "The library has too little free space or its space could not be checked.",
+   "In der Bibliothek ist zu wenig Platz frei oder er ließ sich nicht prüfen."
+  ],
+  "errors.import_storage_unavailable": [
+   "The storage became unavailable while importing.",
+   "Der Speicher war beim Import nicht mehr erreichbar."
+  ],
+  "errors.import_library_unavailable": [
+   "The library storage is not reachable.",
+   "Der Speicher der Bibliothek ist nicht erreichbar."
+  ],
+  "errors.import_source_unavailable": [
+   "The folder cannot be read.",
+   "Der Ordner lässt sich nicht lesen."
+  ],
+  "errors.import_assignment_failed": [
+   "The files could not be fully assigned to the library.",
+   "Die Dateien ließen sich nicht vollständig der Bibliothek zuordnen."
+  ],
+  "admin.manualImport.title": [
+   "Manual import",
+   "Manueller Import"
+  ],
+  "manualImport.search": [
+   "Film or series",
+   "Film oder Serie"
+  ],
+  "manualImport.find": [
+   "Search",
+   "Suchen"
+  ],
+  "manualImport.noMatch": [
+   "No film or series of the library matches.",
+   "Kein Film und keine Serie der Bibliothek passt."
+  ],
+  "manualImport.choose": [
+   "Import to this",
+   "Hierhin importieren"
+  ],
+  "manualImport.change": [
+   "Choose another",
+   "Anderen wählen"
+  ],
+  "manualImport.read": [
+   "Show files",
+   "Dateien anzeigen"
+  ],
+  "manualImport.noFiles": [
+   "The folder holds no video files.",
+   "Der Ordner enthält keine Videodateien."
+  ],
+  "manualImport.mode": [
+   "Transfer",
+   "Übertragung"
+  ],
+  "manualImport.mode.Link": [
+   "Hardlink",
+   "Hardlink"
+  ],
+  "manualImport.mode.Copy": [
+   "Copy",
+   "Kopieren"
+  ],
+  "manualImport.mode.Move": [
+   "Move",
+   "Verschieben"
+  ],
+  "manualImport.import": [
+   "Import",
+   "Importieren"
+  ],
+  "manualImport.season": [
+   "Season",
+   "Staffel"
+  ],
+  "manualImport.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "manualImport.run": [
+   "Import",
+   "Importieren"
+  ],
+  "manualImport.done": [
+   "Imported files: {0}",
+   "Importierte Dateien: {0}"
+  ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
    "Das Speichergerät wacht auf. Bitte versuche es gleich erneut."

@@ -5,18 +5,18 @@ using Jularr.Integrations.Data.Storage;
 
 namespace Jularr.Integrations.Logic.Storage
 {
-    // Places completed downloads into a library: hardlink on the same filesystem, otherwise a verified copy.
+    // Places completed downloads into a library: hardlink on the same filesystem unless a copy is asked for, otherwise a verified copy.
     internal static class StorageFileTransfer
     {
         // The placed file as the library shows it; a taken name fails.
         public static async Task<StorageEntry> PlaceAsync(StorageFiles sourceFiles, string sourcePath, StorageFiles target, string targetPath, CancellationToken ct,
-            Func<long, IDisposable>? reserveWrite = null)
+            Func<long, IDisposable>? reserveWrite = null, bool allowLink = true)
         {
             await target.CreateDirectoryAsync(StoragePath.Parent(targetPath), ct);
             if (reserveWrite is null && sourceFiles is LocalStorageFiles localSource && target is LocalStorageFiles local)
             {
                 var destination = Path.Combine(local.ResolveDirectory(StoragePath.Parent(targetPath)), StoragePath.Name(targetPath));
-                await Task.Run(() => HardlinkOrCopy(localSource.ResolveFile(sourcePath), destination), ct);
+                await Task.Run(() => HardlinkOrCopy(localSource.ResolveFile(sourcePath), destination, allowLink), ct);
             }
             else
             {
@@ -58,7 +58,7 @@ namespace Jularr.Integrations.Logic.Storage
             return await target.GetAsync(targetPath, ct) ?? throw new IOException("The placed file is missing.");
         }
 
-        public static void HardlinkOrCopy(string sourcePath, string destinationPath)
+        public static void HardlinkOrCopy(string sourcePath, string destinationPath, bool allowLink = true)
         {
             if (File.Exists(destinationPath))
             {
@@ -66,7 +66,7 @@ namespace Jularr.Integrations.Logic.Storage
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-            if (TryHardLink(sourcePath, destinationPath))
+            if (allowLink && TryHardLink(sourcePath, destinationPath))
             {
                 return;
             }

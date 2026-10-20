@@ -422,6 +422,81 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, usenet.Commands.Count);
         }
 
+        private const string ManualImport = "/api/v1/admin/activity/manual-import";
+
+        // A folder of any connected storage becomes the film by hand: found by title, read with its proposed name, placed as chosen.
+        [TestMethod]
+        [DataRow(ImportTransferMode.Link)]
+        [DataRow(ImportTransferMode.Copy)]
+        [DataRow(ImportTransferMode.Move)]
+        public async Task ManualImport_PlacesAFolderAsTheFilm_AndOnlyAMoveLeavesNothingBehind(ImportTransferMode mode)
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming", "Release");
+            Directory.CreateDirectory(Path.Combine(folder, "Sub"));
+            File.WriteAllBytes(Path.Combine(folder, "Sub", Feature + ".mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, "Sub", Feature + ".en.srt"), new byte[10]);
+
+            using var found = await host.SendAsync(HttpMethod.Get, ManualImport + "/works?query=exam");
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            Assert.AreEqual(wantedId, (await found.Content.ReadFromJsonAsync<BaseDataList<ManualImportWorkV1>>())!.Single().WantedItemId);
+
+            using var read = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/files", new ReadManualImportDataV1(1, "Incoming/Release"));
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var file = (await read.Content.ReadFromJsonAsync<ManualImportFolderV1>())!.Files.Single();
+            Assert.AreEqual("Sub/" + Feature + ".mkv", file.Path);
+            StringAssert.StartsWith(file.TargetName!, "Example Movie (2020)");
+
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming/Release", mode, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await imported.Content.ReadFromJsonAsync<ManualImportResultV1>())!.Imported);
+
+            var library = Path.Combine(storage.Path, "1", "Movies", file.TargetName!);
+            Assert.AreEqual(4096, new FileInfo(library).Length);
+            Assert.IsTrue(File.Exists(library[..^".mkv".Length] + ".en.srt"), "The subtitle named like the video follows it.");
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
+
+            // The source stays unless it was moved; a move also takes the folders it emptied, never the chosen folder.
+            Assert.AreEqual(mode != ImportTransferMode.Move, File.Exists(Path.Combine(folder, "Sub", Feature + ".mkv")));
+            Assert.AreEqual(mode != ImportTransferMode.Move, Directory.Exists(Path.Combine(folder, "Sub")));
+            Assert.IsTrue(Directory.Exists(folder));
+        }
+
+        [TestMethod]
+        public async Task ManualImport_RefusesWhatItCannotDo_AndTouchesNothing()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+
+            // A folder that is not there, and a file that is not in the folder.
+            using var missing = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/files", new ReadManualImportDataV1(1, "Nowhere"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, missing.StatusCode);
+            using var unknown = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1("other.mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+            using var nothing = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", false, null, null)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, nothing.StatusCode);
+
+            // A storage that may not be written to is not moved from.
+            await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = TRUE");
+            using var moved = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import",
+                new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Move, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, moved.StatusCode);
+            Assert.IsTrue(File.Exists(Path.Combine(folder, Feature + ".mkv")));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+        }
+
         [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
