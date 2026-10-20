@@ -93,7 +93,7 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen")));
-            using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo");
+            using var activity = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Queue");
             Assert.AreEqual(OperationType.Download, (await activity.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
             Assert.AreEqual(wantedId, (long)(await host.ScalarAsync("SELECT \"WantedItemId\" FROM \"AcquisitionReleases\""))!);
         }
