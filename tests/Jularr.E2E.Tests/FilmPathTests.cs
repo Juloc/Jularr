@@ -142,7 +142,7 @@ namespace Jularr.E2E.Tests
 
                 // An administrator deletes the film's file on its page and the episode's in Manage files; both are missing again and the files are gone.
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
-                await page.GetByRole(AriaRole.Button, new() { Name = "Edit file" }).ClickAsync();
+                await page.Locator("[data-work-table=files] [data-edit-file]").ClickAsync();
                 var editor = page.Locator("#work-files-edit");
                 await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
                 await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
