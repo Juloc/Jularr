@@ -853,6 +853,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("9780000000001, 9780000000002", bookPage.Groups[0].Isbn);
             Assert.AreEqual(EditionFormat.Ebook, bookPage.Groups[0].EditionFormatId);
             Assert.AreEqual(800L, bookPage.Files.Single().GroupId);
+            Assert.AreEqual(false, bookPage.Groups[1].IsPaused);
+
+            // An edition is switched off and on; the editions of another title are out of reach.
+            using var off = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + bookId + "/editions/801", new UpdateWorkEditionDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, off.StatusCode, await off.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsMonitored\" FROM \"WorkEditions\" WHERE \"Id\" = 801"));
+            using var stranger = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + (bookId + 1) + "/editions/801", new UpdateWorkEditionDataV1(true));
+            Assert.AreEqual(HttpStatusCode.NotFound, stranger.StatusCode);
+            using var reread = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + bookId + "/management");
+            Assert.AreEqual(true, (await reread.Content.ReadFromJsonAsync<WorkManagementV1>())!.Groups[1].IsPaused);
             Assert.IsNull(bookPage.Files.Single().IsRomVerified);
 
             // What readers had machine translated of the book: a language, its coverage and size; an administrator clears one language.

@@ -359,6 +359,8 @@ CREATE TABLE "WorkEditions" (
     "Title" varchar(500) NULL CHECK (length(btrim("Title")) > 0),
     "Publisher" varchar(300) NULL CHECK (length(btrim("Publisher")) > 0),
     "ReleaseYear" smallint NULL CHECK ("ReleaseYear" BETWEEN 1400 AND 2200),
+    -- An edition switched off is not wanted: releases in its language are left out unless another monitored edition has that language.
+    "IsMonitored" boolean NOT NULL DEFAULT TRUE,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("WorkId", "Id")
 );

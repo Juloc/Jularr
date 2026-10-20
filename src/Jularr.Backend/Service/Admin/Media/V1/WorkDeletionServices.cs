@@ -84,6 +84,38 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         }
     }
 
+    [ServiceEndpoint("PUT", "/api/v1/admin/works/{workId:long}/editions/{workEditionId:long}")]
+    public sealed class UpdateWorkEditionV1 : AdminService<WorkEditionParametersV1, UpdateWorkEditionDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(WorkEditionParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkEditionParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WorkEditions" AS edition
+                SET
+                    "IsMonitored" = @IsMonitored
+                WHERE
+                    edition."Id" = @WorkEditionId
+                    AND edition."WorkId" = @WorkId;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(Data);
+            if (await Context.ExecuteAsyncForAffectedRows(sql, CancellationToken) == 0)
+            {
+                throw new KeyNotFoundException("The edition was not found.");
+            }
+
+            return new UpdateResult(true);
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/works/exclusions")]
     public sealed class ReadWorkExclusionsV1 : AdminService<ReadWorkExclusionsParametersV1>
     {
