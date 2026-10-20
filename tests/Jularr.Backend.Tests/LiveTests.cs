@@ -219,7 +219,7 @@ namespace Jularr.Backend.Tests
                 if (changed.GetProperty("request:500").GetProperty("percent").GetInt32() == 70)
                 {
                     Assert.AreEqual("Downloading 70 %", changed.GetProperty("request-work:10").GetProperty("text").GetProperty("phase").GetString());
-                    Assert.AreEqual("< 1 min left", changed.GetProperty("request:500").GetProperty("text").GetProperty("facts").GetString());
+                    Assert.AreEqual("70 % · < 1 min left", changed.GetProperty("request:500").GetProperty("text").GetProperty("facts").GetString());
                     break;
                 }
             }
