@@ -36,7 +36,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // A manual search shows every candidate and keeps the automatic schedule.
             var scope = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSearchScopeAsync(target, Data.ParentUnitNumber, Data.UnitNumber, ct), CancellationToken);
-            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: false, CancellationToken, scope);
+            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: false, CancellationToken, scope, Data.Language);
             if (result.IndexersUnavailable)
             {
                 throw new ServiceUnavailableException("acquisition_unavailable");
@@ -87,7 +87,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             var scope = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSearchScopeAsync(target, Data.ParentUnitNumber, Data.UnitNumber, ct), CancellationToken);
-            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope);
+            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope, Data.Language);
             if (result.IndexersUnavailable)
             {
                 throw new ServiceUnavailableException("acquisition_unavailable");

@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Reading;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
 {
@@ -11,8 +12,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     public sealed class WorkManagementUnitV1 : BaseResponse
     {
         public WorkManagementUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, WorkUnitStatus workUnitStatusId,
-            int? absoluteNumber = null, decimal? aniListNumber = null)
+            int? absoluteNumber = null, decimal? aniListNumber = null, int? discNumber = null)
         {
+            DiscNumber = discNumber;
             AbsoluteNumber = absoluteNumber;
             AniListNumber = aniListNumber;
             Id = id;
@@ -53,9 +55,45 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.AbsoluteNumber))]
         public int? AbsoluteNumber { get; }
 
+        // The disc of an album's track.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber), false)]
+        public int? DiscNumber { get; }
+
         // The number the episode has in its AniList entry, when its season is mapped to one.
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? AniListNumber { get; }
+    }
+
+    // One audio track of a file, to give it its own language.
+    public sealed class WorkManagementTrackV1 : BaseResponse
+    {
+        public WorkManagementTrackV1(long storedFileId, int streamIndex, string? codec, int? channels, string? language, string? title)
+        {
+            StoredFileId = storedFileId;
+            StreamIndex = streamIndex;
+            Codec = codec;
+            Channels = channels;
+            Language = language;
+            Title = title;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex))]
+        public int StreamIndex { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec), false)]
+        public string? Codec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Channels), false)]
+        public int? Channels { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language), false)]
+        public string? Language { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Title), false)]
+        public string? Title { get; }
     }
 
     // One video file of the title: what it is, how good it is and where it lies.
@@ -63,8 +101,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public WorkManagementFileV1(long id, long[] workUnitIds, string relativePath, long sizeBytes, string? qualityKey, FileQualityGrade fileQualityGradeId, int? formatScore, FileSizeGrade fileSizeGradeId,
             decimal? megabytesPerMinute, string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? releaseGroup, long? durationMs, bool isMissing,
-            long? groupId = null, bool? isRomVerified = null)
+            long? groupId = null, bool? isRomVerified = null, string? gameRegion = null, string? gameVersion = null, BaseDataList<WorkManagementTrackV1>? audioTracks = null, int? pageCount = null)
         {
+            PageCount = pageCount;
+            AudioTracks = audioTracks ?? new BaseDataList<WorkManagementTrackV1>([]);
+            GameRegion = gameRegion;
+            GameVersion = gameVersion;
             GroupId = groupId;
             IsRomVerified = isRomVerified;
             Id = id;
@@ -143,9 +185,66 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
         public long? GroupId { get; }
 
+        public BaseDataList<WorkManagementTrackV1> AudioTracks { get; }
+
+        // The pages of a comic archive, once counted.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.PageCount), false)]
+        public int? PageCount { get; }
+
+        // What a game file's name says: the region and the version of the dump.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GameRegion), false)]
+        public string? GameRegion { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GameVersion), false)]
+        public string? GameVersion { get; }
+
         // A game file whose hash a ROM catalog of its platform names; none when no hash is known.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.IsRomVerified), false)]
         public bool? IsRomVerified { get; }
+    }
+
+    // A language a book's sections were machine translated into while it was read: one document, one language, how much of it, how big it is.
+    public sealed class WorkManagementTranslationV1 : BaseResponse
+    {
+        public WorkManagementTranslationV1(long documentId, string language, long? workEditionId, int coveragePercent, long bytes)
+        {
+            DocumentId = documentId;
+            Language = language;
+            WorkEditionId = workEditionId;
+            CoveragePercent = coveragePercent;
+            Bytes = bytes;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationLanguage))]
+        public string Language { get; }
+
+        // The edition the translated file belongs to.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
+        public long? WorkEditionId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.CoveragePercent))]
+        public int CoveragePercent { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationBytes))]
+        public long Bytes { get; }
+    }
+
+    public sealed class DeleteTranslationParametersV1 : BaseParameters
+    {
+        public DeleteTranslationParametersV1(long documentId, string language)
+        {
+            DocumentId = documentId;
+            Language = language;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.TranslationLanguage))]
+        public string Language { get; }
     }
 
     // An edition of a book or a platform of a game with what the page shows of it; a platform carries the target that is monitored and searched for it.
@@ -207,8 +306,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public WorkManagementV1(long id, long? wantedItemId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, int? runtimeMinutes, DateOnly? releasedOn,
             string? overview, string? genres, string? studio, string? posterUrl, string? backdropUrl, long onDiskBytes, long missingCount, long upgradeWantedCount, long unairedCount, long seasonCount,
-            long episodeCount, BaseDataList<WorkManagementUnitV1> units, BaseDataList<WorkManagementFileV1> files, BaseDataList<WorkManagementGroupV1>? groups = null)
+            long episodeCount, BaseDataList<WorkManagementUnitV1> units, BaseDataList<WorkManagementFileV1> files, BaseDataList<WorkManagementGroupV1>? groups = null, BaseDataList<WorkManagementTranslationV1>? translations = null)
         {
+            Translations = translations ?? new BaseDataList<WorkManagementTranslationV1>([]);
             Groups = groups ?? new BaseDataList<WorkManagementGroupV1>([]);
             Id = id;
             WantedItemId = wantedItemId;
@@ -295,5 +395,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public BaseDataList<WorkManagementFileV1> Files { get; }
 
         public BaseDataList<WorkManagementGroupV1> Groups { get; }
+
+        public BaseDataList<WorkManagementTranslationV1> Translations { get; }
     }
 }

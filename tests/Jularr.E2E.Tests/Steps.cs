@@ -44,11 +44,21 @@ namespace Jularr.E2E.Tests
         public static async Task FollowAsync(IPage page, ILocator element)
         {
             // A search asks every indexer rung in turn and may take its time.
-            await page.EvaluateAsync("() => { window.jularrFollowing = true; document.getElementById('app-content')?.setAttribute('data-followed', ''); }");
+            // The page counts as arrived when its content was swapped and stopped changing for a moment: scripts of the new page still rearrange it right after the swap.
+            await page.EvaluateAsync("""
+                () => {
+                    window.jularrFollowing = true;
+                    window.jularrChangedAt = window.jularrStartedAt = performance.now();
+                    window.jularrWatcher ??= new MutationObserver(() => { window.jularrChangedAt = performance.now(); });
+                    window.jularrWatcher.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+                    document.getElementById('app-content')?.setAttribute('data-followed', '');
+                }
+                """);
             await element.ClickAsync();
             await page.WaitForFunctionAsync("""
                 () => (!window.jularrFollowing || !!document.getElementById('app-content') && !document.querySelector('#app-content[data-followed]'))
                     && document.readyState !== 'loading' && !document.querySelector('.htmx-request, .htmx-swapping')
+                    && (!window.jularrWatcher || performance.now() - window.jularrChangedAt > 150 || performance.now() - window.jularrStartedAt > 5000)
                 """, null, new() { Timeout = 120_000 });
         }
 

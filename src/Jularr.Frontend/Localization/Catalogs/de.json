@@ -4236,6 +4236,10 @@
    "Other part or edition",
    "Anderer Teil oder andere Edition"
   ],
+  "acquisition.reason.EditionNotMonitored": [
+   "Edition is not monitored",
+   "Ausgabe wird nicht überwacht"
+  ],
   "acquisition.reason.ChaptersOnly": [
    "Chapters only",
    "Nur Kapitel"
@@ -6528,6 +6532,14 @@
    "Audio language",
    "Sprache der Tonspur"
   ],
+  "work.files.tracks": [
+   "Audio tracks of this file",
+   "Tonspuren dieser Datei"
+  ],
+  "work.files.track": [
+   "Track {0}",
+   "Spur {0}"
+  ],
   "work.files.unchanged": [
    "Leave unchanged",
    "Unverändert lassen"
@@ -6633,8 +6645,8 @@
    "Alle zuklappen"
   ],
   "work.toggleSeason": [
-   "Show or hide the episodes of this season",
-   "Folgen dieser Staffel zeigen oder verbergen"
+   "Show or hide this section",
+   "Bereich zeigen oder verbergen"
   ],
   "work.specials": [
    "Specials",
@@ -6663,6 +6675,10 @@
   "work.figure.trackOne": [
    "{0} track",
    "{0} Titel"
+  ],
+  "work.disc": [
+   "Disc {0}",
+   "Disc {0}"
   ],
   "work.figure.episodes": [
    "{0} episodes",
@@ -6707,6 +6723,38 @@
   "work.edition.plain": [
    "Edition",
    "Ausgabe"
+  ],
+  "work.translations": [
+   "Translations",
+   "Übersetzungen"
+  ],
+  "work.translations.source": [
+   "Translated from",
+   "Übersetzt aus"
+  ],
+  "work.translations.coverage": [
+   "Translated",
+   "Übersetzt"
+  ],
+  "work.translation.delete": [
+   "Delete translation",
+   "Übersetzung löschen"
+  ],
+  "work.edition.readsTranslated": [
+   "Reads translated",
+   "Liest sich übersetzt"
+  ],
+  "work.edition.monitor": [
+   "Monitor this edition",
+   "Diese Ausgabe überwachen"
+  ],
+  "work.edition.unmonitor": [
+   "Stop monitoring this edition",
+   "Überwachung dieser Ausgabe beenden"
+  ],
+  "work.edition.search": [
+   "Search this edition",
+   "Diese Ausgabe suchen"
   ],
   "work.edition.format.Print": [
    "Print",
@@ -6784,9 +6832,29 @@
    "Format",
    "Format"
   ],
+  "work.col.pages": [
+   "Pages",
+   "Seiten"
+  ],
   "work.col.rom": [
    "ROM check",
    "ROM-Prüfung"
+  ],
+  "work.col.perhour": [
+   "Size per hour",
+   "Größe pro Stunde"
+  ],
+  "work.col.language": [
+   "Language",
+   "Sprache"
+  ],
+  "work.col.region": [
+   "Region",
+   "Region"
+  ],
+  "work.col.version": [
+   "Version",
+   "Version"
   ],
   "work.rom.verified": [
    "In the ROM catalog",
@@ -6857,7 +6925,7 @@
    "Pfad"
   ],
   "work.col.codec": [
-   "Video codec",
+   "Codec",
    "Videocodec"
   ],
   "work.col.range": [

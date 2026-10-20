@@ -301,6 +301,8 @@ CREATE TABLE "WorkUnits" (
     "Number" numeric(9, 3) NOT NULL CHECK ("Number" >= 0),
     "Title" varchar(500) NULL CHECK (length(btrim("Title")) > 0),
     "ReleasedOn" date NULL,
+    -- The disc of an album's track; its number counts across all discs.
+    "DiscNumber" smallint NULL CHECK ("DiscNumber" >= 1),
     -- A season's poster or an episode's still, its summary in the instance language and its length.
     "Overview" varchar(4000) NULL CHECK (length(btrim("Overview")) > 0),
     "ImageUrl" varchar(500) NULL CHECK ("ImageUrl" ~ '^https://'),
@@ -357,6 +359,8 @@ CREATE TABLE "WorkEditions" (
     "Title" varchar(500) NULL CHECK (length(btrim("Title")) > 0),
     "Publisher" varchar(300) NULL CHECK (length(btrim("Publisher")) > 0),
     "ReleaseYear" smallint NULL CHECK ("ReleaseYear" BETWEEN 1400 AND 2200),
+    -- An edition switched off is not wanted: releases in its language are left out unless another monitored edition has that language.
+    "IsMonitored" boolean NOT NULL DEFAULT TRUE,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("WorkId", "Id")
 );

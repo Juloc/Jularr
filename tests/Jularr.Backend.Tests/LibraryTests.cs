@@ -948,6 +948,43 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("3D", LibraryRenameLogic.MediaDetails("""[{"MediaTrackTypeId":1,"Codec":"h264","Is3D":true}]""")["MediaInfo 3D"]);
         }
 
+        // A scan counts the pages of a comic archive once; only image entries are pages.
+        [TestMethod]
+        public async Task Scan_CountsThePagesOfAComicArchive_Once()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var manga = Path.Combine(storage.Path, mountId.ToString(), "Manga");
+            Directory.CreateDirectory(manga);
+            using (var archive = System.IO.Compression.ZipFile.Open(Path.Combine(manga, "Volume 1.cbz"), System.IO.Compression.ZipArchiveMode.Create))
+            {
+                foreach (var name in new[] { "001.jpg", "002.jpg", "003.png", "ComicInfo.xml", "notes.txt" })
+                {
+                    await using var entry = archive.CreateEntry(name).Open();
+                    await entry.WriteAsync(new byte[] { 1, 2, 3 });
+                }
+            }
+
+            File.WriteAllText(Path.Combine(manga, "Volume 2.epub"), "not a comic");
+            var rootId = await CreateRootAsync(host, mountId, "Manga", MediaType.Book, MediaSubtype.Manga);
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(3, await host.ScalarAsync("SELECT \"PageCount\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 1.cbz'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"PagesCheckedAt\" IS NOT NULL FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 1.cbz'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"PagesCheckedAt\" IS NULL AND \"PageCount\" IS NULL FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 2.epub'"));
+
+            // A changed archive is counted again.
+            using (var archive = System.IO.Compression.ZipFile.Open(Path.Combine(manga, "Volume 1.cbz"), System.IO.Compression.ZipArchiveMode.Update))
+            {
+                await using var entry = archive.CreateEntry("004.jpg").Open();
+                await entry.WriteAsync(new byte[] { 1, 2, 3, 4 });
+            }
+
+            File.SetLastWriteTimeUtc(Path.Combine(manga, "Volume 1.cbz"), DateTime.UtcNow.AddMinutes(5));
+            await ScanAsync(host, rootId);
+            Assert.AreEqual(4, await host.ScalarAsync("SELECT \"PageCount\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Volume 1.cbz'"));
+        }
+
         [TestMethod]
         public async Task Rename_MovesOnlyTheConfirmedPreviewAndKeepsIdentity()
         {

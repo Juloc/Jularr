@@ -129,11 +129,20 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(Math.Abs(sheetBox.Y + sheetBox.Height - 844) <= 2, "The sheet does not end at the bottom.");
                 await Evidence.SaveAsync(page, "work-strips-sheet");
                 await page.Keyboard.PressAsync("Escape");
+
+                // The film's file and the files of Manage files are strips there too.
+                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Assertions.Expect(page.Locator("[data-work-table=files]")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("[data-work-strips=files] .work-strip").First).ToBeVisibleAsync();
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Manage files", Exact = true }));
+                await Assertions.Expect(page.Locator("[data-work-strips=manage] .work-strip").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".work-table--manage")).ToBeHiddenAsync();
                 await page.SetViewportSizeAsync(1280, 900);
 
                 // An administrator deletes the film's file on its page and the episode's in Manage files; both are missing again and the files are gone.
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
-                await page.GetByRole(AriaRole.Button, new() { Name = "Edit file" }).ClickAsync();
+                await page.Locator("[data-work-table=files] [data-edit-file]").ClickAsync();
                 var editor = page.Locator("#work-files-edit");
                 await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
                 await editor.GetByLabel("Audio language").SelectOptionAsync("ger");

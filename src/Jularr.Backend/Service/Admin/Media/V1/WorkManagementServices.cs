@@ -150,7 +150,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         ORDER BY
                             entry."EpisodeOffset" DESC
                         LIMIT 1
-                    ) END AS "AniListNumber"
+                    ) END AS "AniListNumber",
+                    unit."DiscNumber"::integer AS "DiscNumber"
                 FROM
                     "WorkUnits" AS unit
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
@@ -185,6 +186,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     coalesce(audio."Languages", '{}') AS "AudioLanguages",
                     coalesce(subtitle."Languages", '{}') AS "SubtitleLanguages",
                     evidence."Evidence"::text AS "Evidence",
+                    file."PageCount",
                     coalesce(game."GamePlatformId", version."WorkEditionId") AS "GroupId",
                     CASE
                         WHEN game."GamePlatformId" IS NULL OR file."Sha1" IS NULL THEN NULL
@@ -250,6 +252,31 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             sql.Parameters.Add(Parameters);
             var rows = await Context.ReadSql.ReadListAsync<WorkManagementFileData>(sql, CancellationToken);
 
+            // The audio tracks of the files, for a language of their own
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    track."StoredFileId",
+                    track."StreamIndex",
+                    track."Codec",
+                    track."Channels",
+                    track."Language",
+                    track."Title"
+                FROM
+                    "MediaTracks" AS track
+                    JOIN "StoredFiles" AS file ON file."Id" = track."StoredFileId"
+                    JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                WHERE
+                    asset."WorkId" = @WorkId
+                    AND track."MediaTrackTypeId" = 2
+                ORDER BY
+                    track."StoredFileId",
+                    track."StreamIndex";
+                """;
+            sql.Parameters.Add(Parameters);
+            var audioTracks = (await Context.ReadSql.ReadListAsync<WorkManagementTrackV1>(sql, CancellationToken)).ToLookup(track => track.StoredFileId);
+
             // The editions of a book and the platforms of a game
             IReadOnlyList<WorkManagementGroupV1> groups = [];
             if (hero.MediaTypeId == MediaType.Book)
@@ -276,7 +303,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                                 AND identity."Namespace" = 'isbn'
                         ) AS "Isbn",
                         NULL::bigint AS "WantedItemId",
-                        NULL::boolean AS "IsPaused"
+                        NOT edition."IsMonitored" AS "IsPaused"
                     FROM
                         "WorkEditions" AS edition
                     WHERE
@@ -340,6 +367,47 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 groups = await Context.ReadSql.ReadListAsync<WorkManagementGroupV1>(sql, CancellationToken);
             }
 
+            // What readers had translated of the book's files
+            IReadOnlyList<WorkManagementTranslationV1> translations = [];
+            if (hero.MediaTypeId == MediaType.Book)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        document."Id" AS "DocumentId",
+                        split_part(translated."Path", '/', 2) AS "Language",
+                        version."WorkEditionId",
+                        least(100, round(100.0 * count(*) / greatest(1, (
+                            SELECT
+                                count(*)
+                            FROM
+                                "ReadingResources" AS section
+                            WHERE
+                                section."ReadingDocumentId" = document."Id"
+                                AND section."Path" LIKE ':section/%'
+                        ))))::integer AS "CoveragePercent",
+                        sum(length(translated."Bytes"))::bigint AS "Bytes"
+                    FROM
+                        "ReadingDocuments" AS document
+                        JOIN "StoredFiles" AS file ON file."Id" = document."StoredFileId"
+                        JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                        JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
+                        JOIN "ReadingResources" AS translated ON translated."ReadingDocumentId" = document."Id" AND translated."Path" LIKE ':translation/%'
+                    WHERE
+                        asset."WorkId" = @WorkId
+                    GROUP BY
+                        document."Id",
+                        split_part(translated."Path", '/', 2),
+                        version."WorkEditionId"
+                    ORDER BY
+                        "Language",
+                        document."Id";
+                    """;
+                sql.Parameters.Add(Parameters);
+                translations = await Context.ReadSql.ReadListAsync<WorkManagementTranslationV1>(sql, CancellationToken);
+            }
+
             // Further units of a file with several episodes
             sql = new SqlStatement();
             sql.Statement =
@@ -369,8 +437,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 int? score = profile is not null && row.Evidence is { } json && JsonSerializer.Deserialize<StoredReleaseEvidence>(json) is { } facts && StoredFileFormatLogic.Candidate(facts) is { } candidate
                     ? ReleaseScorer.Score(profile, candidate).FormatScore : null;
                 long[] unitIds = [.. row.WorkUnitId is { } own ? new[] { own } : [], .. additional[row.MediaAssetId]];
+                var (region, version) = hero.MediaTypeId == MediaType.Game ? GameFileName.Facts(row.RelativePath) : (null, null);
                 return new WorkManagementFileV1(row.Id, unitIds, row.RelativePath, row.SizeBytes, row.QualityKey, WorkGradeLogic.Quality(profile, row.QualityKey), score, sizeGrade, perMinute, row.VideoCodec,
-                    row.Height, row.DynamicRange, row.AudioLanguages, row.SubtitleLanguages, row.ReleaseGroup, row.DurationMs, row.IsMissing, row.GroupId, row.IsRomVerified);
+                    row.Height, row.DynamicRange, row.AudioLanguages, row.SubtitleLanguages, row.ReleaseGroup, row.DurationMs, row.IsMissing, row.GroupId, row.IsRomVerified, region, version, new BaseDataList<WorkManagementTrackV1>(audioTracks[row.Id].ToArray()), row.PageCount);
             }).ToArray();
 
             // Figures: an episode, or a film as a whole, wants an upgrade while none of its files meets the cutoff and one is below it
@@ -382,7 +451,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return new WorkManagementV1(hero.Id, hero.WantedItemId, hero.MediaTypeId, hero.MediaSubtypeId, hero.CanonicalTitle, hero.ReleaseYear, hero.RuntimeMinutes, hero.ReleasedOn, hero.Overview, hero.Genres,
                 hero.Studio, hero.PosterUrl, hero.BackdropUrl, present.Sum(file => file.SizeBytes), leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Missing), upgrades,
                 leaves.Count(unit => unit.WorkUnitStatusId == WorkUnitStatus.Unaired), units.Count(unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Number > 0), episodes.Length,
-                new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files), new BaseDataList<WorkManagementGroupV1>(groups));
+                new BaseDataList<WorkManagementUnitV1>(units), new BaseDataList<WorkManagementFileV1>(files), new BaseDataList<WorkManagementGroupV1>(groups), new BaseDataList<WorkManagementTranslationV1>(translations));
         }
     }
 }

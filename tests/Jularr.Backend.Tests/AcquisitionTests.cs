@@ -606,11 +606,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"MediaTrackTypeId\" = 2 AND \"Language\" = 'ger'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"MediaTrackTypeId\" = 3 AND \"Language\" = 'eng'"));
 
+            // The page offers each audio track of a file for a language of its own.
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\" WHERE \"Id\" = " + wantedId))!;
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + workId + "/management");
+            var page = (await read.Content.ReadFromJsonAsync<WorkManagementV1>())!;
+            CollectionAssert.AreEqual(new[] { 1, 2 }, page.Files.Single().AudioTracks.Select(track => track.StreamIndex).ToArray());
+
+            // One audio track of one file gets a language of its own; several files cannot be told apart by track.
+            using var track = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], null, null, "[{\"StreamIndex\":1,\"Language\":\"jpn\"}]"));
+            Assert.AreEqual(HttpStatusCode.OK, track.StatusCode, await track.Content.ReadAsStringAsync());
+            Assert.AreEqual("jpn", await host.ScalarAsync("SELECT \"Language\" FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"StreamIndex\" = 1"));
+            Assert.AreEqual("ger", await host.ScalarAsync("SELECT \"Language\" FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"StreamIndex\" = 2"));
+            using var many = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId, fileId + 1], null, null, "[{\"StreamIndex\":1,\"Language\":\"jpn\"}]"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, many.StatusCode);
+            using var wrong = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], null, null, "[{\"StreamIndex\":1,\"Language\":\"xxx\"}]"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, wrong.StatusCode);
+
             // Only the quality: the languages stay.
             using var quality = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/facts", new UpdateLibraryFileFactsDataV1([fileId], "Bluray-1080p"));
             Assert.AreEqual(HttpStatusCode.OK, quality.StatusCode, await quality.Content.ReadAsStringAsync());
             Assert.AreEqual("Bluray-1080p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"Language\" = 'ger'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTracks\" WHERE \"StoredFileId\" = " + fileId + " AND \"Language\" = 'ger'"));
         }
 
         // Deleting a title takes its requests, targets and files, the history keeps its texts, and an exclusion refuses a request until it is removed.
@@ -837,7 +853,38 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("9780000000001, 9780000000002", bookPage.Groups[0].Isbn);
             Assert.AreEqual(EditionFormat.Ebook, bookPage.Groups[0].EditionFormatId);
             Assert.AreEqual(800L, bookPage.Files.Single().GroupId);
+            Assert.AreEqual(false, bookPage.Groups[1].IsPaused);
+
+            // An edition is switched off and on; the editions of another title are out of reach.
+            using var off = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + bookId + "/editions/801", new UpdateWorkEditionDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, off.StatusCode, await off.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsMonitored\" FROM \"WorkEditions\" WHERE \"Id\" = 801"));
+            using var stranger = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + (bookId + 1) + "/editions/801", new UpdateWorkEditionDataV1(true));
+            Assert.AreEqual(HttpStatusCode.NotFound, stranger.StatusCode);
+            using var reread = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + bookId + "/management");
+            Assert.AreEqual(true, (await reread.Content.ReadFromJsonAsync<WorkManagementV1>())!.Groups[1].IsPaused);
             Assert.IsNull(bookPage.Files.Single().IsRomVerified);
+
+            // What readers had machine translated of the book: a language, its coverage and size; an administrator clears one language.
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Reading', 'Translation');
+                INSERT INTO "ReadingDocuments" ("Id", "StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
+                SELECT 500, file."Id", 100, now(), decode(repeat('ab', 32), 'hex'), 1, 1, '[]', 0 FROM "StoredFiles" AS file WHERE file."RelativePath" = 'Novel/Novel.epub';
+                INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                SELECT 500, item."Path", 'text/html', convert_to('0123456789', 'UTF8')
+                FROM (VALUES (':section/00000'), (':section/00001'), (':section/00002'), (':section/00003'), (':translation/de/00000'), (':translation/de/00001')) AS item ("Path");
+                """);
+            using var translated = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + bookId + "/management");
+            var translations = (await translated.Content.ReadFromJsonAsync<WorkManagementV1>())!.Translations.Single();
+            Assert.AreEqual("de", translations.Language);
+            Assert.AreEqual(50, translations.CoveragePercent);
+            Assert.AreEqual(20L, translations.Bytes);
+            Assert.AreEqual(800L, translations.WorkEditionId);
+            using var cleared = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
+            Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingResources\" WHERE \"ReadingDocumentId\" = 500"));
+            using var again = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/library/documents/500/translations/de");
+            Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
 
             using var games = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/works/" + gameId + "/management");
             var gamePage = (await games.Content.ReadFromJsonAsync<WorkManagementV1>())!;

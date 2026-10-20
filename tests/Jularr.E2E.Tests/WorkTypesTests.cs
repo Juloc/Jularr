@@ -63,16 +63,19 @@ namespace Jularr.E2E.Tests
                 StringAssert.Contains(await rows.First.InnerTextAsync(), "Volume 2");
                 StringAssert.Contains(await rows.First.InnerTextAsync(), "Missing");
                 await Assertions.Expect(page.Locator("th[data-col=released]").First).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("th[data-col=pages]").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "work-manga-volumes");
 
                 // An album lists its tracks in order, with no switch and no search of their own: the album is monitored and searched as a whole.
                 var album = await CreateAsync(page, "Music", "None", "Test Album");
-                await jularr.RunSqlAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") VALUES ({album}, 5, 1), ({album}, 5, 2), ({album}, 5, 3);");
+                await jularr.RunSqlAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\", \"DiscNumber\") VALUES ({album}, 5, 1, 1), ({album}, 5, 2, 1), ({album}, 5, 3, 2);");
                 await page.GotoAsync("/Admin/Works/" + album);
                 await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = "Tracks" })).ToBeVisibleAsync();
                 var tracks = page.Locator("[data-work-table=tracks] tr.work-row");
                 Assert.AreEqual(3, await tracks.CountAsync());
-                StringAssert.Contains(await tracks.First.InnerTextAsync(), "Track 1");
+                await Assertions.Expect(tracks.First).ToContainTextAsync("Track 1");
+                Assert.AreEqual(2, await page.Locator(".work-season").CountAsync(), "Two discs, two accordions.");
+                await Assertions.Expect(page.Locator(".work-season").Last).ToContainTextAsync("Disc 2");
                 Assert.AreEqual(0, await page.Locator("[data-work-table=tracks] th[data-col=monitored]").CountAsync());
                 await Assertions.Expect(page.Locator("th[data-col=length]").First).ToBeVisibleAsync();
 
@@ -89,6 +92,11 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".work-season").First).ToContainTextAsync("E-book");
                 Assert.AreEqual(0, await page.Locator(".navigation-tabs__link", new() { HasText = "Manage files" }).CountAsync(), "A book has no Manage files tab.");
 
+                // An edition is switched off from its header.
+                await Assertions.Expect(page.Locator(".work-season").First.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Stop monitoring this edition");
+                await Steps.SubmitAsync(page, page.Locator(".work-season").First.Locator("form").First);
+                await Assertions.Expect(page.Locator(".work-season").First.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Monitor this edition");
+
                 var game = await CreateAsync(page, "Game", "None", "Test Game");
                 await jularr.RunSqlAsync($"""
                     INSERT INTO "GamePlatforms" ("Id", "Name", "Abbreviation") VALUES (710, 'Switch', 'NSW'), (711, 'PC', NULL);
@@ -100,12 +108,63 @@ namespace Jularr.E2E.Tests
                 var platforms = page.Locator(".work-season");
                 Assert.AreEqual(2, await platforms.CountAsync());
                 await Assertions.Expect(platforms.Filter(new() { HasText = "PC" })).ToContainTextAsync("Not requested");
+
+                // Each platform has its own target with its own settings.
+                await platforms.Filter(new() { HasText = "Switch" }).GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator("dialog[open].work-dialog")).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
                 await Evidence.SaveAsync(page, "work-game-platforms");
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {
                 await Evidence.SaveAsync(page, "failure-work-types");
+                throw;
+            }
+        }
+
+        // The machine translations of a book's file are listed on its page with the language, the coverage and a delete.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task Book_ListsItsTranslations_AndClearsOneLanguage()
+        {
+            using var folders = new Folders("Books");
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                var book = await CreateAsync(page, "Book", "None", "Translated Novel");
+                await jularr.RunSqlAsync($"""
+                    UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('Reading', 'Translation');
+                    INSERT INTO "WorkEditions" ("Id", "WorkId", "LanguageCode", "EditionFormatId") VALUES (820, {book}, 'en', 2), (821, {book}, 'de', 2);
+                    INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (820, {book}, 820);
+                    INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (820, {book}, 820, 1);
+                    INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "MediaAssetId", "LastSeenAt")
+                    SELECT 820, (SELECT min("Id") FROM "LibraryRoots" WHERE "Name" = 'Books'), 'Translated Novel/Translated Novel.epub', 100, now(), 820, now();
+                    INSERT INTO "ReadingDocuments" ("Id", "StoredFileId", "SourceSizeBytes", "SourceModifiedAt", "ContentHash", "AnalyzerVersion", "ReadingFormatTypeId", "Structure", "TotalCharacters")
+                    VALUES (820, 820, 100, now(), decode(repeat('cd', 32), 'hex'), 1, 1, '[]', 0);
+                    INSERT INTO "ReadingResources" ("ReadingDocumentId", "Path", "MediaType", "Bytes")
+                    SELECT 820, item."Path", 'text/html', convert_to('0123456789', 'UTF8')
+                    FROM (VALUES (':section/00000'), (':section/00001'), (':translation/de/00000')) AS item ("Path");
+                    """);
+                await page.GotoAsync("/Admin/Works/" + book);
+                var translations = page.Locator(".work-season", new() { HasText = "Translations" });
+                await Assertions.Expect(translations).ToBeVisibleAsync();
+                await translations.GetByRole(AriaRole.Button, new() { Name = "Show or hide this section" }).ClickAsync();
+                await Assertions.Expect(translations.Locator("tr.work-row")).ToContainTextAsync("50 %");
+
+                // The edition in German has no file but reads translated.
+                await Assertions.Expect(page.Locator(".work-season", new() { HasText = "German" }).First).ToContainTextAsync("Reads translated");
+                await Steps.SubmitAsync(page, translations.Locator("tr.work-row form"));
+                await Assertions.Expect(page.Locator(".work-season", new() { HasText = "Translations" })).ToHaveCountAsync(0);
+                CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-work-translations");
                 throw;
             }
         }

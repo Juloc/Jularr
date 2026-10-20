@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
     public sealed partial class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, ReadWorkManagementV1 readManagement, ReadWantedItemV1 readWanted, UpdateWantedV1 updateWanted, UpdateWantedUnitV1 updateUnit,
         SearchWantedAutomaticallyV1 automatic, ReadWantedReleasesV1 readReleases, MarkWantedReleaseV1 markRelease, ReadActivityEventsV1 readEvents, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries,
-        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteWorkV1 deleteWork, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
+        ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, DeleteLibraryFilesV1 deleteFiles, DeleteDocumentTranslationV1 deleteTranslation, DeleteWorkV1 deleteWork, UpdateWorkEditionV1 updateEdition, UpdateLibraryFileFactsV1 updateFacts, ReadLibraryRenamesV1 readRenames, ApplyLibraryRenamesV1 applyRenames, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
@@ -51,6 +51,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IReadOnlyList<WantedLibraryV1> _libraries = [];
         private SelectOption[] _tagChoices = [];
         private UpdateWantedDataV1? _choice;
+        private long? _choiceWantedId;
+        private readonly Dictionary<long, WantedDetailsV1> _platformTargets = [];
         private LibraryRenamePlanV1? _renames;
         private DeleteWorkDataV1? _deleteInput;
 
@@ -163,17 +165,18 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(Tab));
         }
 
-        public async Task<IActionResult> OnPostChoiceAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long[]? tagIds)
+        public async Task<IActionResult> OnPostChoiceAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long[]? tagIds, long? wantedItemId)
         {
-            var wantedItemId = await WantedItemIdAsync();
+            var targetId = await WantedItemIdAsync(wantedItemId);
+            _choiceWantedId = targetId;
             _choice = new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId, monitorsNewUnits, tagIds: tagIds ?? []);
-            await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(wantedItemId), _choice, HttpContext.RequestAborted);
+            await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(targetId), _choice, HttpContext.RequestAborted);
             return LocalRedirect(Address(Tab));
         }
 
-        public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber, long? wantedItemId)
+        public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber, long? wantedItemId, string? language)
         {
-            var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), new SearchWantedDataV1(parentUnitNumber, unitNumber), HttpContext.RequestAborted);
+            var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), new SearchWantedDataV1(parentUnitNumber, unitNumber, language), HttpContext.RequestAborted);
             TempData["WantedSearched"] = result.OutcomeKey;
             if (result.Title is { } title) TempData["WantedTaken"] = title;
             return LocalRedirect(Address(Tab));
@@ -189,6 +192,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             await markRelease.ExecuteAsync<UpdateResult>(new WantedReleaseParametersV1(await WantedItemIdAsync(), acquisitionReleaseId), new MarkWantedReleaseDataV1(acquisitionReleaseStatusTypeId), HttpContext.RequestAborted);
             return LocalRedirect(Address(WorkTab.History));
+        }
+
+        // An edition of a book is wanted or not.
+        public async Task<IActionResult> OnPostEditionMonitorAsync([BindRequired] long workEditionId, [BindRequired] bool isMonitored)
+        {
+            await updateEdition.ExecuteAsync<UpdateResult>(new WorkEditionParametersV1(Id, workEditionId), new UpdateWorkEditionDataV1(isMonitored), HttpContext.RequestAborted);
+            return LocalRedirect(Address(Tab));
         }
 
         // The title leaves the library; the page it was on is gone, so the list follows.
@@ -212,10 +222,21 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         public async Task<IActionResult> OnPostEditFilesAsync(long[]? storedFileIds, string? qualityKey, string? audioLanguage)
         {
-            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage)) return LocalRedirect(Address(Tab));
+            // The audio tracks of one file may each get a language; a track left unchanged sends nothing.
+            var tracks = Request.Form.Where(field => field.Key.StartsWith("trackLanguage-", StringComparison.Ordinal) && !string.IsNullOrEmpty(field.Value.ToString()))
+                .Select(field => new { StreamIndex = int.Parse(field.Key["trackLanguage-".Length..], CultureInfo.InvariantCulture), Language = field.Value.ToString() }).ToArray();
+            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage) && tracks.Length == 0) return LocalRedirect(Address(Tab));
             var result = await updateFacts.ExecuteAsync<UpdateLibraryFileFactsResultV1>(new UpdateLibraryFileFactsParametersV1(),
-                new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage), HttpContext.RequestAborted);
+                new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage,
+                    tracks.Length == 0 ? null : global::System.Text.Json.JsonSerializer.Serialize(tracks)), HttpContext.RequestAborted);
             TempData["WorkFilesUpdated"] = result.UpdatedCount;
+            return LocalRedirect(Address(Tab));
+        }
+
+        // One language of a book's machine translation goes; the file stays.
+        public async Task<IActionResult> OnPostDeleteTranslationAsync([BindRequired] long documentId, [BindRequired] string language)
+        {
+            await deleteTranslation.ExecuteAsync<UpdateResult>(new DeleteTranslationParametersV1(documentId, language), default, HttpContext.RequestAborted);
             return LocalRedirect(Address(Tab));
         }
 
@@ -270,6 +291,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     }
 
                     _tagChoices = choices.Select(item => new SelectOption(item.Id.ToString(CultureInfo.InvariantCulture), item.Label)).ToArray();
+                }
+            }
+
+            // A game is wanted per platform; each target has its own settings to edit.
+            if (_management.MediaTypeId == MediaType.Game && CanAcquire && texts.CanManageWanted())
+            {
+                foreach (var group in _management.Groups.Where(group => group.WantedItemId is not null))
+                {
+                    _platformTargets[group.WantedItemId!.Value] = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(group.WantedItemId.Value), ct);
                 }
             }
 
