@@ -1,4 +1,5 @@
 import './reader.scss';
+import '../Speech/settings.entry.scss';
 import { progressReporter } from '../Tracking/Progress';
 import { findings, highlights } from './highlights';
 import { translator } from './Translation/translation';

@@ -1,0 +1,128 @@
+// The bar answers to its own width, not the window's: the sidebar changes how much room it has.
+// It never wraps: labels go first, then the single types, leaving the all capsule and one icon per area.
+.capsule-bar {
+    container: capsule-bar / inline-size;
+    margin-bottom: 17px;
+    // Capsules are filled with a faint accent tint, not grey.
+    --capsule-fill: color-mix(in srgb, var(--accent) 5%, var(--surface));
+
+    &__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 9px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        box-shadow: 0 3px 18px rgb(93 84 131 / 4%);
+    }
+
+    &__areas {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar { display: none; }
+    }
+
+    &__tools { display: flex; flex: none; align-items: center; gap: 5px; }
+
+    &__all {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 42px;
+        padding: 0 15px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        background: var(--capsule-fill);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        text-decoration: none;
+
+        &:hover { color: var(--text); }
+        &--on, &--on:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); box-shadow: 0 3px 12px rgb(129 62 255 / 15%); }
+    }
+}
+
+.capsule-group {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    min-height: 42px;
+    padding: 3px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--capsule-fill);
+    white-space: nowrap;
+
+    &__master {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        position: relative;
+        min-height: 34px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        color: var(--accent-text);
+        font-size: 11px;
+        font-weight: 820;
+        text-decoration: none;
+
+        &:hover, &--solo { background: var(--accent-soft); }
+        &--solo { box-shadow: inset 0 0 0 1px rgb(154 123 241 / 17%); }
+    }
+
+    &__divider { flex: none; width: 1px; height: 19px; margin: 0 5px 0 2px; background: var(--border); }
+
+    &__item {
+        display: inline-flex;
+        align-items: center;
+        min-height: 33px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: none;
+
+        &:hover { background: var(--surface); }
+        &--checked, &--checked:hover { background: var(--accent); color: var(--accent-contrast); }
+        // Left out while others are chosen: still reachable, but quieter.
+        &--dimmed { opacity: .51; }
+    }
+}
+
+// Icons only once the labels no longer fit.
+@container capsule-bar (max-width: 1180px) {
+    .capsule-group__master span { display: none; }
+}
+
+// Narrow: all and one icon per area; single types are chosen in the filter.
+@container capsule-bar (max-width: 929px) {
+    .capsule-bar__row { gap: 5px; padding: 6px 5px; }
+    .capsule-bar__areas { flex: 1 1 auto; justify-content: space-between; gap: 3px; overflow: visible; }
+    .capsule-bar__all { flex: 0 0 44px; min-width: 44px; min-height: 38px; padding: 0; svg { display: none; } }
+    .capsule-group { flex: 0 0 38px; justify-content: center; width: 38px; min-height: 38px; padding: 2px; }
+    .capsule-group__divider, .capsule-group__item { display: none; }
+    .capsule-group__master {
+        width: 32px;
+        min-height: 32px;
+        padding: 0;
+        border-radius: 50%;
+        svg { width: 19px; height: 19px; }
+        &--included { background: var(--accent-soft); }
+        &--partial::after { content: ""; position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--capsule-fill); }
+    }
+    .capsule-bar__tools { gap: 3px; }
+}

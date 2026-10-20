@@ -304,24 +304,25 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode, html);
             StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
             StringAssert.Contains(html, "The Matrix");
-            StringAssert.Contains(html, "media-hero");
+            StringAssert.Contains(html, "hero-carousel");
 
             // Native recommendation route stays usable, but no longer inserts Hero content.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
             html = await recommendations.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
-            StringAssert.Contains(html, "class=\"media-hero");
+            StringAssert.Contains(html, "class=\"hero-carousel");
             StringAssert.Contains(html, "/Discover/movies/603");
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
             var browseHtml = await browse.Content.ReadAsStringAsync();
             StringAssert.Contains(browseHtml, "The Matrix Show");
 
-            // A ranking names itself and leads back to its type; the page keeps one row of tabs.
+            // A ranking names itself and leads back to its type; the page keeps the one capsule bar and no row of tabs.
             StringAssert.Contains(browseHtml, "<h2>Top rated</h2>");
             StringAssert.Contains(browseHtml, "href=\"/?type=series\"");
-            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"capsule-bar__areas\"").Count);
+            Assert.AreEqual(0, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
 
             using var title = await host.SendAsync(HttpMethod.Get, "/Discover/movies/603");
             html = await title.Content.ReadAsStringAsync();

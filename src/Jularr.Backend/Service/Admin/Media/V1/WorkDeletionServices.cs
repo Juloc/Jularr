@@ -14,10 +14,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     public sealed class DeleteWorkV1 : AdminService<WorkParametersV1, DeleteWorkDataV1>
     {
         private readonly LibraryReplacements _replacements;
+        private readonly CoverStore _covers;
 
-        internal DeleteWorkV1(LibraryReplacements replacements)
+        internal DeleteWorkV1(LibraryReplacements replacements, CoverStore covers)
         {
             _replacements = replacements;
+            _covers = covers;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -50,6 +52,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 await ctx.DeleteWorkAsync(new Data.Logic.Media.WorkDeletionData(Parameters.WorkId, Data.AddsExclusion), ct);
                 return true;
             }, CancellationToken);
+
+            // The title's covers leave with it.
+            _covers.Delete(Parameters.WorkId);
             return new UpdateResult(true);
         }
     }

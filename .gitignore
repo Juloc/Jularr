@@ -2,6 +2,7 @@
 **/obj/
 TestResults/
 .scratch/
+src/Jularr.Frontend/Modules/Speech/Runtime/NOTICE.generated.txt
 .vs/
 .env
 *.user

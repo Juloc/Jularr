@@ -1,4 +1,6 @@
 using Microsoft.Playwright;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Jularr.E2E.Tests
 {
@@ -134,6 +136,108 @@ namespace Jularr.E2E.Tests
             }
         }
 
+
+        [TestMethod]
+        [Timeout(180_000)]
+        public async Task Neural_ReadAloudUsesExplicitDeviceInstallBoundProfileControlsAndVerifiedCache()
+        {
+            using var folders = new Folders("Books");
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "neural.epub"), "Neural book", "Local fixture");
+            var speechPath = Path.Combine(folders.Fixtures, "speech");
+            Directory.CreateDirectory(speechPath);
+            var package = await File.ReadAllBytesAsync(Path.Combine(JularrInstance.Repository, "tests", "Jularr.E2E.Tests", "Fixtures", "speech-model.tar.bz2"));
+            var hash = Convert.ToHexStringLower(SHA256.HashData(package));
+            await File.WriteAllBytesAsync(Path.Combine(speechPath, hash + ".tar.bz2"), package);
+            await File.WriteAllTextAsync(Path.Combine(speechPath, "catalog.json"), JsonSerializer.Serialize(new { models = new[] { new {
+                id = "fixture-neural", version = "fixture", name = "Fixture neural", language = "en-US", voice = "0", license = "MIT (synthetic fixture)",
+                licenseUrl = "https://github.com/cscott/seek-bzip/blob/v2.0.0/LICENSE", source = "https://not-requested.invalid/model.tar.bz2", sizeBytes = package.Length, sha256 = hash
+            } } }));
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library, ["Media:SpeechPath"] = speechPath });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            var modelRequests = 0;
+            var runtimeRequests = 0;
+            page.Request += (_, request) =>
+            {
+                if (request.Url.EndsWith("/speech/models/" + hash + "/file", StringComparison.Ordinal)) Interlocked.Increment(ref modelRequests);
+                if (request.Url.EndsWith(".wasm", StringComparison.Ordinal) || request.Url.EndsWith(".data", StringComparison.Ordinal)) Interlocked.Increment(ref runtimeRequests);
+            };
+            // Real archive worker, storage, profile API and Reader; inference is explicitly doubled, not an audible model test.
+            await page.AddInitScriptAsync("""
+                const NativeWorker = Worker;
+                window.__neuralLoads = 0;
+                window.Worker = class extends NativeWorker {
+                    postMessage(message, transfer) {
+                        if (message.type === 'load') { window.__neuralLoads++; queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', {data:{type:'ready'}}))); return; }
+                        if (message.type === 'generate') { queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', {data:{type:'audio',id:message.id,sampleRate:22050,samples:new Float32Array(220500)}}))); return; }
+                        super.postMessage(message, transfer);
+                    }
+                };
+                """);
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await page.GotoAsync("/Admin/Instance/Speech");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Download and activate"));
+                await Assertions.Expect(page.GetByText("Available to devices", new() { Exact = true })).ToBeVisibleAsync();
+                await page.GotoAsync("/Settings");
+                Assert.AreEqual(0, modelRequests);
+                Assert.AreEqual(0, runtimeRequests);
+                var fields = page.Locator("[data-speech-settings]");
+                await fields.EvaluateAsync("element => element.scrollIntoView({block:'center'})");
+                await fields.GetByRole(AriaRole.Radio, new() { Name = "Offline neural", Exact = true }).CheckAsync();
+                await fields.Locator("[name=ModelId]").SelectOptionAsync("fixture-neural");
+                await Assertions.Expect(fields.Locator("[name=VoiceId]")).ToHaveValueAsync("0");
+                Assert.IsTrue(await fields.Locator("[name=Pitch]").EvaluateAsync<bool>("input => input.inert"));
+                Assert.IsTrue(await fields.Locator("form").EvaluateAsync<bool>("form => new FormData(form).has('Pitch')"), "The unsupported pitch remains bound, not discarded.");
+                await Assertions.Expect(fields.Locator("[data-speech-model-license]")).ToContainTextAsync("MIT");
+                await fields.Locator("[data-speech-install]").ClickAsync();
+                await Assertions.Expect(fields.Locator("[data-speech-model-status]")).ToContainTextAsync("Installed on this device");
+                Assert.AreEqual(1, modelRequests);
+                Assert.AreEqual(0, runtimeRequests);
+                await Steps.SaveAsync(page);
+                await Assertions.Expect(fields.Locator("[name=ModelId]")).ToHaveValueAsync("fixture-neural");
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await page.GotoAsync("/Admin/Library");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (true)
+                {
+                    await page.GotoAsync("/Admin/Library/Unmatched");
+                    if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                    Assert.IsTrue(DateTime.UtcNow < deadline, "The neural speech EPUB was not scanned.");
+                    await Task.Delay(500);
+                }
+                await page.Locator("form [name=Title]").FillAsync("Neural book");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+                await page.GotoAsync("/Read/1");
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true'");
+                await page.Locator("[data-speech-toggle]").ClickAsync();
+                await Assertions.Expect(page.Locator(".reader")).ToHaveAttributeAsync("data-speech-state", "speaking");
+                Assert.AreEqual(1, await page.EvaluateAsync<int>("window.__neuralLoads"));
+                await page.WaitForFunctionAsync("() => [...CSS.highlights.get('reader-speech-word')].some(range => range.toString().length > 10)");
+                await page.Locator("[data-speech-pause]").ClickAsync();
+                await Assertions.Expect(page.Locator(".reader")).ToHaveAttributeAsync("data-speech-state", "paused");
+                await page.Locator("[data-speech-pause]").ClickAsync();
+                await Assertions.Expect(page.Locator(".reader")).ToHaveAttributeAsync("data-speech-state", "speaking");
+                await Evidence.SaveAsync(page, "reader-neural-section-highlight");
+                await page.Locator("[data-speech-transport] [data-reader-open-panel=speech]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-panel=speech] [name=Pitch]")).ToHaveAttributeAsync("aria-disabled", "true");
+                await Evidence.SaveAsync(page, "reader-neural-model-settings");
+                await page.Locator("[data-panel=speech] [data-speech-remove]").ClickAsync();
+                await Assertions.Expect(page.Locator(".reader")).ToHaveAttributeAsync("data-speech-state", "idle");
+                await page.Locator("[data-reader-close=speech]").ClickAsync();
+                await page.Locator("[data-speech-toggle]").ClickAsync();
+                await Assertions.Expect(page.Locator(".reader")).ToHaveAttributeAsync("data-speech-state", "failed");
+                await Assertions.Expect(page.Locator("[data-speech-status]")).ToContainTextAsync("not installed on this device");
+                Assert.AreEqual(1, modelRequests, "Missing or removed models are never silently downloaded.");
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "reader-neural-failed");
+                throw;
+            }
+        }
 
         [TestMethod]
         [Timeout(120_000)]

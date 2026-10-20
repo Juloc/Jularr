@@ -235,6 +235,7 @@ namespace Jularr.E2E.Tests
         private static Task<JularrInstance> StartAsync(FakeServices fakes, Folders folders) => JularrInstance.StartAsync(new Dictionary<string, string>
         {
             ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+            ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
             ["Storage:LocalPaths:0"] = folders.Library
         });
 

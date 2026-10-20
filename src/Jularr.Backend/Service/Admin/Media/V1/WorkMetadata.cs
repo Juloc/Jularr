@@ -25,11 +25,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private static readonly TimeSpan FeedLifetime = TimeSpan.FromMinutes(3);
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _cache;
+        private readonly CoverStore _covers;
 
-        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache)
+        public WorkMetadata(TmdbClient tmdb, IDataProtectionProvider protection, IMemoryCache cache, CoverStore covers)
         {
             _tmdb = tmdb;
             _cache = cache;
+            _covers = covers;
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
@@ -228,7 +230,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 Translations = JsonSerializer.Serialize(work.Translations.Select(translation => new { translation.Language, translation.Region, translation.Title, translation.Overview })),
                 OriginalLanguage = work.OriginalLanguage is { Length: 2 } original && original.All(char.IsAsciiLetterLower) ? original : null
             };
-            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId is null ? null : "tmdb", work.CollectionId?.ToString(CultureInfo.InvariantCulture),
@@ -237,6 +239,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tmdb", people), token);
                 return workId;
             }, ct);
+
+            // The poster and backdrop are kept locally.
+            await _covers.StoreAsync(context, saved, ct);
+            return saved;
         }
 
         // TMDB's daily id list in batches; false while TMDB has not published the day's list.
