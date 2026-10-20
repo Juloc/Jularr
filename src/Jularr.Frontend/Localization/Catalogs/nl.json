@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "nl",
  "name": "Nederlands",
  "reviewed": false,
@@ -61,8 +61,8 @@
    "Goedgekeurde statussen van omslagkaarten"
   ],
   "design.cards.notice": [
-   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
-   "Alleen designvoorbeelden; bladwijzers schakelen lokaal en acties openen een voorbeeld, zonder bibliotheekweergave, verzoeken of accountwijzigingen. Groen: compleet in de audiotaal van het profiel. Geel: compleet in andere audiotalen. Oranje: gedeeltelijk in de taal van het profiel. Geeloranje: gedeeltelijk in andere audiotalen. Ondertitels veranderen deze status niet. Houd langer de muisaanwijzer erop voor de officiële trailer zonder geluid."
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellowâ€“orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "Alleen designvoorbeelden; bladwijzers schakelen lokaal en acties openen een voorbeeld, zonder bibliotheekweergave, verzoeken of accountwijzigingen. Groen: compleet in de audiotaal van het profiel. Geel: compleet in andere audiotalen. Oranje: gedeeltelijk in de taal van het profiel. Geeloranje: gedeeltelijk in andere audiotalen. Ondertitels veranderen deze status niet. Houd langer de muisaanwijzer erop voor de officiÃ«le trailer zonder geluid."
   ],
   "design.introduction": [
    "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages.",
@@ -102,7 +102,7 @@
   ],
   "design.trailerCredit": [
    "Official Your Name trailer from TOHO. Playback connects to YouTube after Play or a sustained hover on cards with a trailer.",
-   "Officiële trailer van Your Name van TOHO. Het afspelen maakt verbinding met YouTube na Afspelen of langdurig aanwijzen van kaarten met een trailer."
+   "OfficiÃ«le trailer van Your Name van TOHO. Het afspelen maakt verbinding met YouTube na Afspelen of langdurig aanwijzen van kaarten met een trailer."
   ],
   "media.preview.title": [
    "Title preview",
@@ -478,7 +478,7 @@
   ],
   "session.revoke": [
    "End session",
-   "Sessie beëindigen"
+   "Sessie beÃ«indigen"
   ],
   "common.next": [
    "Next",
@@ -638,7 +638,7 @@
   ],
   "admin.accounts.sessionWarning": [
    "Role or status changes end this account's existing sessions. Enabling an account does not verify its email address.",
-   "Wijzigingen van rol of status beëindigen de bestaande sessies van dit account. Een account inschakelen controleert het e-mailadres niet."
+   "Wijzigingen van rol of status beÃ«indigen de bestaande sessies van dit account. Een account inschakelen controleert het e-mailadres niet."
   ],
   "admin.accounts.profileId": [
    "Existing profile ID",
@@ -654,7 +654,7 @@
   ],
   "admin.accounts.profileRemove": [
    "Remove profile access and end affected sessions",
-   "Profieltoegang verwijderen en betrokken sessies beëindigen"
+   "Profieltoegang verwijderen en betrokken sessies beÃ«indigen"
   ],
   "admin.accounts.profileOwned": [
    "Owned profile: its ownership link cannot be removed here.",
@@ -669,8 +669,8 @@
    "Plex-server: niet verbonden"
   ],
   "admin.plex.connected": [
-   "Plex server connected · {0} titles linked · last sync {1}",
-   "Plex-server verbonden · {0} titels gekoppeld · laatste synchronisatie {1}"
+   "Plex server connected Â· {0} titles linked Â· last sync {1}",
+   "Plex-server verbonden Â· {0} titels gekoppeld Â· laatste synchronisatie {1}"
   ],
   "admin.plex.notSynced": [
    "not synced yet",
@@ -741,8 +741,8 @@
    "Niet verbonden"
   ],
   "admin.mediaServer.connected": [
-   "Connected · last progress sync {0}",
-   "Verbonden · laatste voortgangssynchronisatie {0}"
+   "Connected Â· last progress sync {0}",
+   "Verbonden Â· laatste voortgangssynchronisatie {0}"
   ],
   "admin.mediaServer.baseUrl": [
    "Server address",
@@ -1038,7 +1038,7 @@
   ],
   "admin.library.description": [
    "Imported media and file availability",
-   "Geïmporteerde media en beschikbaarheid van bestanden"
+   "GeÃ¯mporteerde media en beschikbaarheid van bestanden"
   ],
   "admin.activity.title": [
    "Activity",
@@ -1306,7 +1306,7 @@
   ],
   "takeover.outcome.takeover_format_skipped": [
    "Not taken over: conditions Jularr does not support",
-   "Niet geïmporteerd: voorwaarden die Jularr niet ondersteunt"
+   "Niet geÃ¯mporteerd: voorwaarden die Jularr niet ondersteunt"
   ],
   "profile.monitoring": [
    "Monitoring",
@@ -2034,7 +2034,7 @@
   ],
   "hint.InstanceSettingsFields.KeepsReleases.info": [
    "Keeps the earlier file when a new release of the same film, episode or volume is imported, instead of replacing it.",
-   "Bewaart het eerdere bestand wanneer een nieuwe release van dezelfde film, aflevering of hetzelfde deel wordt geïmporteerd, in plaats van het te vervangen."
+   "Bewaart het eerdere bestand wanneer een nieuwe release van dezelfde film, aflevering of hetzelfde deel wordt geÃ¯mporteerd, in plaats van het te vervangen."
   ],
   "hint.InstanceSettingsFields.RecycleModeId.info": [
    "Delete removes files for good. A recycle folder keeps them for the days below.",
@@ -2090,7 +2090,7 @@
   ],
   "hint.StorageMountFields.SharePath.info": [
    "The share or exported path on the NAS.",
-   "De share of het geëxporteerde pad op de NAS."
+   "De share of het geÃ«xporteerde pad op de NAS."
   ],
   "hint.StorageMountFields.Username.info": [
    "An account of the NAS with access to the share.",
@@ -2270,7 +2270,7 @@
   ],
   "hint.TakeoverFields.TakeoverSourceTypeId.info": [
    "The program whose settings and missing titles are taken over once.",
-   "Het programma waarvan de instellingen en ontbrekende titels eenmalig worden geïmporteerd."
+   "Het programma waarvan de instellingen en ontbrekende titels eenmalig worden geÃ¯mporteerd."
   ],
   "hint.TakeoverFields.Apply.info": [
    "A preview shows what would happen and changes nothing.",
@@ -2350,7 +2350,7 @@
   ],
   "acquisition.connection.categories": [
    "Categories",
-   "Categorieën"
+   "CategorieÃ«n"
   ],
   "acquisition.connection.remotePath": [
    "Path reported by the client",
@@ -2505,8 +2505,8 @@
    "Lokale bestanden en versies"
   ],
   "admin.work.hierarchy": [
-   "Work → Structure → Edition → Version → Asset → File",
-   "Werk → Structuur → Editie → Versie → Asset → Bestand"
+   "Work â†’ Structure â†’ Edition â†’ Version â†’ Asset â†’ File",
+   "Werk â†’ Structuur â†’ Editie â†’ Versie â†’ Asset â†’ Bestand"
   ],
   "admin.work.structure": [
    "Structure and monitoring",
@@ -2993,8 +2993,8 @@
    "Andere audiotalen"
   ],
   "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · Andere audio"
+   "{0}/{1} Â· Other audio",
+   "{0}/{1} Â· Andere audio"
   ],
   "media.availability.badge.Partial": [
    "{0}/{1} available",
@@ -3066,7 +3066,7 @@
   ],
   "design.mediaNotice": [
    "Sample cards and previews only. Statuses and languages are illustrative; request and library playback actions are disabled. The official trailer is available on Play.",
-   "Alleen voorbeeldkaarten en -voorbeelden. Statussen en talen zijn ter illustratie; acties voor aanvragen en afspelen vanuit de bibliotheek zijn uitgeschakeld. De officiële trailer is beschikbaar via Afspelen."
+   "Alleen voorbeeldkaarten en -voorbeelden. Statussen en talen zijn ter illustratie; acties voor aanvragen en afspelen vanuit de bibliotheek zijn uitgeschakeld. De officiÃ«le trailer is beschikbaar via Afspelen."
   ],
   "design.mediaLibrary": [
    "Library cards",
@@ -3754,7 +3754,7 @@
   ],
   "acquisition.release.Imported": [
    "Imported",
-   "Geïmporteerd"
+   "GeÃ¯mporteerd"
   ],
   "acquisition.release.Failed": [
    "Failed",
@@ -3778,7 +3778,7 @@
   ],
   "acquisition.outcome.imported": [
    "Imported",
-   "Geïmporteerd"
+   "GeÃ¯mporteerd"
   ],
   "acquisition.outcome.manual_review": [
    "Needs review",
@@ -4102,7 +4102,7 @@
   ],
   "acquisition.reason.InstalledQualityUnknown": [
    "Installed quality unknown",
-   "Geïnstalleerde kwaliteit onbekend"
+   "GeÃ¯nstalleerde kwaliteit onbekend"
   ],
   "watchlist.title": [
    "Watchlist",
@@ -4113,8 +4113,8 @@
    "Opslag"
   ],
   "setup.storage.title": [
-   "Setup · Storage",
-   "Installatie · Opslag"
+   "Setup Â· Storage",
+   "Installatie Â· Opslag"
   ],
   "storage.name": [
    "Name",
@@ -4309,8 +4309,8 @@
    "{0} van {1} gebruikt"
   ],
   "storage.synology.temperature": [
-   "{0} °C",
-   "{0} °C"
+   "{0} Â°C",
+   "{0} Â°C"
   ],
   "statistics.title": [
    "Statistics",
@@ -4330,7 +4330,7 @@
   ],
   "statistics.period.365": [
    "One year",
-   "Eén jaar"
+   "EÃ©n jaar"
   ],
   "statistics.period.0": [
    "All time",
@@ -4502,7 +4502,7 @@
   ],
   "history.event.Imported": [
    "Imported",
-   "Geïmporteerd"
+   "GeÃ¯mporteerd"
   ],
   "history.event.Upgraded": [
    "Replaced by a better release",
@@ -4905,8 +4905,8 @@
    "Meldingspagina's"
   ],
   "notifications.times": [
-   "({0}×)",
-   "({0}×)"
+   "({0}Ã—)",
+   "({0}Ã—)"
   ],
   "notifications.settings": [
    "What to notify about",
@@ -5561,7 +5561,7 @@
    "De bron openen en bevestigen"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Bestandslink van de bron"
   ],
   "activity.continueDownload": [
@@ -6778,7 +6778,7 @@
   ],
   "arr.terms.info": [
    "One term per line. Patterns use /expression/i.",
-   "Eén term per regel. Patronen: /expressie/i."
+   "EÃ©n term per regel. Patronen: /expressie/i."
   ],
   "arr.condition.info": [
    "Use a pattern for titles, editions and groups; a two-letter language code or original, any, unknown for languages. Source and modifier values follow Sonarr or Radarr. Resolution uses its number; size and year use minimum and maximum.",

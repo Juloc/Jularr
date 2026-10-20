@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "id",
  "name": "Bahasa Indonesia",
  "reviewed": false,
@@ -61,7 +61,7 @@
    "Status kartu sampul yang disetujui"
   ],
   "design.cards.notice": [
-   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellow–orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
+   "Design samples only; bookmarks toggle locally and actions open a preview, without library playback, requests or account changes. Green: complete in the profile audio language. Yellow: complete in other audio languages. Orange: partial in the profile language. Yellowâ€“orange: partial in other audio languages. Subtitles do not change this status. Hover longer for the official muted trailer.",
    "Hanya contoh desain; penanda diubah secara lokal dan tindakan membuka pratinjau, tanpa pemutaran pustaka, permintaan, atau perubahan akun. Hijau: lengkap dalam bahasa audio profil. Kuning: lengkap dalam bahasa audio lain. Oranye: sebagian dalam bahasa profil. Kuning-oranye: sebagian dalam bahasa audio lain. Subtitle tidak memengaruhi status ini. Tahan lebih lama untuk melihat trailer resmi tanpa suara."
   ],
   "design.introduction": [
@@ -669,8 +669,8 @@
    "Server Plex: tidak terhubung"
   ],
   "admin.plex.connected": [
-   "Plex server connected · {0} titles linked · last sync {1}",
-   "Server Plex terhubung · {0} judul tertaut · sinkronisasi terakhir {1}"
+   "Plex server connected Â· {0} titles linked Â· last sync {1}",
+   "Server Plex terhubung Â· {0} judul tertaut Â· sinkronisasi terakhir {1}"
   ],
   "admin.plex.notSynced": [
    "not synced yet",
@@ -741,8 +741,8 @@
    "Tidak terhubung"
   ],
   "admin.mediaServer.connected": [
-   "Connected · last progress sync {0}",
-   "Terhubung · sinkronisasi progres terakhir {0}"
+   "Connected Â· last progress sync {0}",
+   "Terhubung Â· sinkronisasi progres terakhir {0}"
   ],
   "admin.mediaServer.baseUrl": [
    "Server address",
@@ -2505,8 +2505,8 @@
    "File lokal dan versi"
   ],
   "admin.work.hierarchy": [
-   "Work → Structure → Edition → Version → Asset → File",
-   "Karya → Struktur → Edisi → Versi → Aset → File"
+   "Work â†’ Structure â†’ Edition â†’ Version â†’ Asset â†’ File",
+   "Karya â†’ Struktur â†’ Edisi â†’ Versi â†’ Aset â†’ File"
   ],
   "admin.work.structure": [
    "Structure and monitoring",
@@ -2993,8 +2993,8 @@
    "Bahasa audio lain"
   ],
   "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · Audio lain"
+   "{0}/{1} Â· Other audio",
+   "{0}/{1} Â· Audio lain"
   ],
   "media.availability.badge.Partial": [
    "{0}/{1} available",
@@ -4113,8 +4113,8 @@
    "Penyimpanan"
   ],
   "setup.storage.title": [
-   "Setup · Storage",
-   "Penyiapan · Penyimpanan"
+   "Setup Â· Storage",
+   "Penyiapan Â· Penyimpanan"
   ],
   "storage.name": [
    "Name",
@@ -4309,8 +4309,8 @@
    "{0} dari {1} terpakai"
   ],
   "storage.synology.temperature": [
-   "{0} °C",
-   "{0} °C"
+   "{0} Â°C",
+   "{0} Â°C"
   ],
   "statistics.title": [
    "Statistics",
@@ -4905,8 +4905,8 @@
    "Halaman notifikasi"
   ],
   "notifications.times": [
-   "({0}×)",
-   "({0}×)"
+   "({0}Ã—)",
+   "({0}Ã—)"
   ],
   "notifications.settings": [
    "What to notify about",
@@ -5561,7 +5561,7 @@
    "Buka sumber dan konfirmasi"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Tautan file dari sumber"
   ],
   "activity.continueDownload": [
