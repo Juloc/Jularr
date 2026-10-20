@@ -2404,6 +2404,14 @@
    "Disabled",
    "Deaktiviert"
   ],
+  "acquisition.connection.removesCompleted": [
+   "Remove finished jobs from SABnzbd",
+   "Fertige Jobs aus SABnzbd entfernen"
+  ],
+  "hint.AcquisitionConnectionFields.RemovesCompleted.info": [
+   "After a download is imported, its job and its files are removed from SABnzbd. A hardlinked library file stays.",
+   "Nach dem Import eines Downloads werden sein Job und seine Dateien aus SABnzbd entfernt. Eine per Hardlink eingebundene Bibliotheksdatei bleibt erhalten."
+  ],
   "acquisition.connection.category": [
    "Download category",
    "Download-Kategorie"

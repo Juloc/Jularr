@@ -715,6 +715,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.enabled", "State"),
             new("acquisition.connection.on", "Enabled"),
             new("acquisition.connection.off", "Disabled"),
+            new("acquisition.connection.removesCompleted", "Remove finished jobs from SABnzbd"),
+            new("hint.AcquisitionConnectionFields.RemovesCompleted.info", "After a download is imported, its job and its files are removed from SABnzbd. A hardlinked library file stays."),
             new("acquisition.connection.category", "Download category"),
             new("acquisition.connection.type.Gutenberg", "Project Gutenberg (public-domain books)"),
             new("acquisition.connection.type.Opds", "OPDS catalog"),

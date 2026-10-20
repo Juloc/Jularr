@@ -61,6 +61,8 @@ CREATE TABLE "AcquisitionConnections" (
     "Priority" integer NOT NULL DEFAULT 25 CHECK ("Priority" BETWEEN 1 AND 100),
     "Categories" integer[] NOT NULL DEFAULT '{}',
     "DownloadCategory" varchar(64) NULL,
+    -- A download client removes the job once its files are imported (SABnzbd: its history entry and files).
+    "RemovesCompleted" boolean NOT NULL DEFAULT TRUE,
     "RemotePath" varchar(1024) NULL,
     "LocalPath" varchar(1024) NULL,
     "DownloadStorageMountId" bigint NULL,
@@ -84,7 +86,7 @@ CREATE TABLE "AcquisitionConnections" (
     CHECK (("RemotePath" IS NULL) = ("LocalPath" IS NULL AND "DownloadStorageMountId" IS NULL)),
     CHECK ("AcquisitionConnectionTypeId" IN (1, 2) OR "MediaTypeIds" = '{}'),
     CHECK ("AcquisitionConnectionTypeId" = 1 OR "SearchesAutomatically" AND "QueryLimit" IS NULL AND "GrabLimit" IS NULL),
-    CHECK ("AcquisitionConnectionTypeId" = 2 OR ("DownloadCategory" IS NULL AND "RemotePath" IS NULL AND "DownloadStorageMountId" IS NULL)),
+    CHECK ("AcquisitionConnectionTypeId" = 2 OR ("DownloadCategory" IS NULL AND "RemotePath" IS NULL AND "DownloadStorageMountId" IS NULL AND "RemovesCompleted")),
     CHECK ("AcquisitionConnectionTypeId" IN (1, 3, 4, 5, 6) OR "ProtectedApiKey" IS NOT NULL),
     CHECK ("AcquisitionConnectionTypeId" IN (4, 6, 7) OR "Username" IS NULL),
     CHECK ("AcquisitionConnectionTypeId" = 7 OR "ProtectedPassword" IS NULL),

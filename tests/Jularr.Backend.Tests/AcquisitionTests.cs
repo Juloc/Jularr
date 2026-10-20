@@ -365,6 +365,63 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
         }
 
+        private static async Task ImportClearFilmAsync(Host host, TemporaryDirectory downloads, FakeUsenet usenet)
+        {
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, Feature + ".mkv"), new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+        }
+
+        // After an import the job leaves SABnzbd with its files; the connection can keep it, and an unreachable client never fails an import that worked.
+        [TestMethod]
+        public async Task CompletedSabImport_RemovesItsJobFromTheClient_UnlessTheConnectionKeepsIt()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RemovesCompleted\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
+            await ImportClearFilmAsync(host, downloads, usenet);
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+        }
+
+        [TestMethod]
+        public async Task CompletedSabImport_KeepsItsJobWhenTheConnectionSaysSo_AndWhenTheClientIsDown()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+
+            // Saved through the contract; the setting stays with the SABnzbd connection.
+            using var read = await host.SendAsync(HttpMethod.Get, Connections + "/2");
+            var sab = (await read.Content.ReadFromJsonAsync<AcquisitionConnectionDetailsV1>())!;
+            Assert.IsTrue(sab.RemovesCompleted);
+            using var saved = await host.SendAsync(HttpMethod.Put, Connections + "/2", new
+            {
+                sab.Name, sab.AcquisitionConnectionTypeId, sab.BaseUrl, ApiKey = (string?)null, sab.IsEnabled, sab.Priority, sab.Categories, sab.DownloadCategory, sab.RemotePath, sab.LocalPath,
+                sab.DownloadStorageMountId, RemovesCompleted = false
+            });
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"RemovesCompleted\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
+            await ImportClearFilmAsync(host, downloads, usenet);
+            Assert.AreEqual(0, usenet.Commands.Count, "A connection that keeps its jobs removes nothing.");
+
+            // A client that cannot be told does not fail the import: a second film imports with it down.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RemovesCompleted\" = TRUE WHERE \"AcquisitionConnectionTypeId\" = 2");
+            usenet.FailCommands = true;
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"OperationStatusTypeId\" = 2, \"FinishedAt\" = NULL WHERE \"OperationTypeId\" = 2");
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(0, usenet.Commands.Count);
+        }
+
         [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
