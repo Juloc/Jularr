@@ -794,6 +794,31 @@ namespace Jularr.Backend.Logic.Acquisition
             return await ctx.ReadSql.ReadOptionalAsync<DownloadActionData>(sql, ct);
         }
 
+        // A download in the queue that kept where its finished files are, for a person to import them by hand.
+        public static Task<ManualImportDownloadData?> ReadManualImportDownloadAsync(this LogicContext ctx, long operationId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId",
+                    release."WantedItemId",
+                    operation."AcquisitionConnectionId",
+                    operation."ExternalId",
+                    operation."AttentionProposal"::text AS "AttentionProposal"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionProposal" IS NOT NULL;
+                """;
+            sql.Parameters.Add(new ActivityOperationData(operationId));
+            return ctx.ReadSql.ReadOptionalAsync<ManualImportDownloadData>(sql, ct);
+        }
+
         // Taken out of the queue: it finishes as removed, its release is blocked or may be taken again, and the target is searched from the given time.
         public static async Task RemoveDownloadAsync(this LogicContext ctx, DownloadRemovalData data, CancellationToken ct)
         {

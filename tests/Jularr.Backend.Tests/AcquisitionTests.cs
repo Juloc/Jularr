@@ -258,6 +258,46 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("import_ambiguous_title", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
         }
 
+        // A person imports the files of a waiting download by hand: it finishes as after an import by itself, and its job leaves the client.
+        [TestMethod]
+        public async Task WaitingDownload_ImportedByHand_FinishesAndLeavesTheClient()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv"), new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+
+            // The queue offers it; the files are read from where the download kept them.
+            using var queue = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=1");
+            Assert.IsTrue((await queue.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().CanImportManually);
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var file = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files.Single();
+            Assert.AreEqual("Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv", file.Path);
+
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(file.Path, true, null, null)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 3"));
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+
+            // Once finished it is no longer in the queue to be imported again.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
+            Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
+        }
+
         private static async Task<long> GrabbedOperationAsync(Host host, FakeUsenet usenet)
         {
             await CreateWantedMovieAsync(host);

@@ -162,6 +162,35 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public BaseDataList<ManualImportChoiceV1> Files { get; }
     }
 
+    // A waiting download's finished files with what their names say.
+    public sealed class ManualImportDownloadV1 : BaseResponse
+    {
+        public ManualImportDownloadV1(long wantedItemId, BaseDataList<ManualImportFileV1> files)
+        {
+            WantedItemId = wantedItemId;
+            Files = files;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        public BaseDataList<ManualImportFileV1> Files { get; }
+    }
+
+    public sealed class RunManualImportDownloadDataV1 : BaseData
+    {
+        public RunManualImportDownloadDataV1(ImportTransferMode importTransferModeId, BaseDataList<ManualImportChoiceV1> files)
+        {
+            ImportTransferModeId = importTransferModeId;
+            Files = files;
+        }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.ImportTransferModeId))]
+        public ImportTransferMode ImportTransferModeId { get; }
+
+        public BaseDataList<ManualImportChoiceV1> Files { get; }
+    }
+
     public sealed class ManualImportResultV1 : BaseResponse
     {
         public ManualImportResultV1(int imported)

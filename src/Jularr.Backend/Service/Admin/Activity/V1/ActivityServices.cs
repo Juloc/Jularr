@@ -47,7 +47,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                         AND connection."AcquisitionConnectionTypeId" = 2 AS "CanPause",
                     operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL
                         AND operation."AttentionUrl" IS NULL AS "CanRetryImport",
-                    operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting"
+                    operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL AS "IsWaiting",
+                    operation."OperationTypeId" = 2 AND operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionProposal" -> 'Source' IS NOT NULL AS "CanImportManually"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"

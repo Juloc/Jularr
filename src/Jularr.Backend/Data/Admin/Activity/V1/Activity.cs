@@ -39,11 +39,12 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false)
         {
             CanPause = canPause;
             CanRetryImport = canRetryImport;
             IsWaiting = isWaiting;
+            CanImportManually = canImportManually;
             ManualUrl = manualUrl;
             Id = id;
             OperationTypeId = operationTypeId;
@@ -122,6 +123,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // It waits for a person, not for the client.
         [DataField(typeof(OperationFields), nameof(OperationFields.IsWaiting))]
         public bool IsWaiting { get; }
+
+        // It kept where its files are, so a person can import them by hand.
+        [DataField(typeof(OperationFields), nameof(OperationFields.CanImportManually))]
+        public bool CanImportManually { get; }
     }
 
     public sealed class SaveActivitySourceLinkDataV1 : BaseData

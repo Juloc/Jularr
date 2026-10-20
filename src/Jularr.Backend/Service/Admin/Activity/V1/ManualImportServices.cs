@@ -42,6 +42,11 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         {
             var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(storageMountId, token), ct);
             var source = storage.Open(mount);
+            return (source, await ListFolderAsync(source, target, relativePath, ct), mount.IsReadOnly);
+        }
+
+        public static async Task<IReadOnlyList<StorageFile>> ListFolderAsync(StorageFiles source, WantedTargetData target, string relativePath, CancellationToken ct)
+        {
             if (await source.GetAsync(relativePath, ct) is not { IsDirectory: true })
             {
                 throw new DataValidationException(nameof(ReadManualImportDataV1.RelativePath), "unknown_reference");
@@ -53,7 +58,50 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 found.Add(file);
             }
 
-            return (source, found, mount.IsReadOnly);
+            return found;
+        }
+
+        // The waiting download and the folder its finished files lie in, on a storage connection or on the server itself.
+        public static async Task<(ManualImportDownloadData Download, ImportSourceRef Reference, StorageFiles Source, bool IsReadOnly)> OpenDownloadAsync(LogicContext context, StorageAccess storage,
+            long operationId, CancellationToken ct)
+        {
+            var download = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadManualImportDownloadAsync(operationId, token), ct)
+                ?? throw new KeyNotFoundException("The download does not wait for a person.");
+            var reference = ImportProposal.ReadSource(download.AttentionProposal) ?? throw new KeyNotFoundException("The download did not keep where its files are.");
+            if (reference.StorageMountId is { } mountId)
+            {
+                var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(mountId, token), ct);
+                return (download, reference, storage.Open(mount), mount.IsReadOnly);
+            }
+
+            return (download, reference, new LocalStorageFiles(reference.LocalRoot ?? throw new KeyNotFoundException("The download did not keep where its files are.")), false);
+        }
+
+        // Places the chosen files; what a person must settle comes back as an unavailable service, a mistake in the choice as invalid data.
+        public static async Task<ManualImportResultV1> RunAsync(LogicContext context, DownloadImport import, ManualImportTarget loaded, StorageFiles source, string directory,
+            IReadOnlyList<StorageFile> files, bool isReadOnly, ImportTransferMode mode, BaseDataList<ManualImportChoiceV1> choices, long? accountId, long? operationId, CancellationToken ct)
+        {
+            var target = loaded.Target;
+
+            // A move deletes from the source, which a read-only connection does not allow.
+            if (mode == ImportTransferMode.Move && isReadOnly)
+            {
+                throw new DataValidationException(nameof(RunManualImportDataV1.ImportTransferModeId), "invalid_transition");
+            }
+
+            var root = loaded.Root ?? throw new ServiceUnavailableException("import_no_library");
+            var chosen = choices.Where(choice => choice.Imports).ToArray();
+            var placements = ImportPlacementLogic.PlanChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files,
+                [.. chosen.Select(choice => (choice.Path, choice.Season, choice.Episode))], loaded.Patterns, loaded.Episodes);
+            if (chosen.Length == 0 || placements.Count(placement => placement.IsMedia) != chosen.Length)
+            {
+                throw new DataValidationException(nameof(RunManualImportDataV1.Files), "unknown_reference");
+            }
+
+            var isMovie = target.MediaTypeId == MediaType.Movie;
+            var commit = await import.CommitAsync(context, new ImportCommitRequest(root, target.WorkId, null, placements, source, directory, files, path => ReleaseFacts.OfPath(path, isMovie), mode,
+                operationId, accountId, target.MediaTypeId, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target)), ct);
+            return commit.FailureKey is { } failure ? throw new ServiceUnavailableException(failure) : new ManualImportResultV1(commit.Assets.Count);
         }
     }
 
@@ -178,30 +226,65 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var loaded = await ManualImport.ReadTargetAsync(Context, Parameters.WantedItemId, CancellationToken);
+            var (source, files, isReadOnly) = await ManualImport.ReadFolderAsync(Context, _storage, loaded.Target, Data.StorageMountId, Data.RelativePath, CancellationToken);
+            return await ManualImport.RunAsync(Context, _import, loaded, source, Data.RelativePath, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId, null, CancellationToken);
+        }
+    }
+    // The finished files of a download that waits for a person.
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/manual-import/files")]
+    public sealed class ReadManualImportDownloadV1 : AdminService<ActivityOperationParametersV1, NoData>
+    {
+        private readonly StorageAccess _storage;
+
+        internal ReadManualImportDownloadV1(StorageAccess storage)
+        {
+            _storage = storage;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ManualImportDownloadV1>()];
+        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ActivityOperationParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var (download, reference, source, _) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
+            var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
             var target = loaded.Target;
-            var (source, files, isReadOnly) = await ManualImport.ReadFolderAsync(Context, _storage, target, Data.StorageMountId, Data.RelativePath, CancellationToken);
+            var files = await ManualImport.ListFolderAsync(source, target, reference.Directory, CancellationToken);
+            return new ManualImportDownloadV1(download.WantedItemId, new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle,
+                target.ReleaseYear, files, loaded.Patterns, loaded.Episodes).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
+                    proposal.QualityKey, proposal.TargetName))));
+        }
+    }
 
-            // A move deletes from the source, which a read-only connection does not allow.
-            if (Data.ImportTransferModeId == ImportTransferMode.Move && isReadOnly)
-            {
-                throw new DataValidationException(nameof(Data.ImportTransferModeId), "invalid_transition");
-            }
+    // Places the chosen files of a waiting download; the download is finished and its job leaves the client as after an import by itself.
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/manual-import")]
+    public sealed class RunManualImportDownloadV1 : AdminService<ActivityOperationParametersV1, RunManualImportDownloadDataV1>
+    {
+        private readonly StorageAccess _storage;
+        private readonly DownloadImport _import;
 
-            var root = loaded.Root ?? throw new ServiceUnavailableException("import_no_library");
+        internal RunManualImportDownloadV1(StorageAccess storage, DownloadImport import)
+        {
+            _storage = storage;
+            _import = import;
+        }
 
-            var chosen = Data.Files.Where(choice => choice.Imports).ToArray();
-            var placements = ImportPlacementLogic.PlanChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, files,
-                [.. chosen.Select(choice => (choice.Path, choice.Season, choice.Episode))], loaded.Patterns, loaded.Episodes);
-            if (chosen.Length == 0 || placements.Count(placement => placement.IsMedia) != chosen.Length)
-            {
-                throw new DataValidationException(nameof(Data.Files), "unknown_reference");
-            }
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ManualImportResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ActivityOperationParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
-            var isMovie = target.MediaTypeId == MediaType.Movie;
-            var commit = await _import.CommitAsync(Context, new ImportCommitRequest(root, target.WorkId, null, placements, source, Data.RelativePath, files,
-                path => ReleaseFacts.OfPath(path, isMovie), Data.ImportTransferModeId, null, Auth.AccountId, target.MediaTypeId,
-                target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target)), CancellationToken);
-            return commit.FailureKey is { } failure ? throw new ServiceUnavailableException(failure) : new ManualImportResultV1(commit.Assets.Count);
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var (download, reference, source, isReadOnly) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
+            var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
+            var files = await ManualImport.ListFolderAsync(source, loaded.Target, reference.Directory, CancellationToken);
+            var result = await ManualImport.RunAsync(Context, _import, loaded, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId, download.OperationId,
+                CancellationToken);
+            await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
+            return result;
         }
     }
 }
