@@ -65,6 +65,10 @@ namespace Jularr.E2E.Tests
 
         public IReadOnlyCollection<string> Grabbed => _grabbed;
 
+        // What a person told SABnzbd: "queue:delete:id".
+        private readonly ConcurrentQueue<string> _commands = new();
+        public IReadOnlyCollection<string> Commands => _commands;
+
         private volatile bool _holdDownloads;
         private volatile bool _failDownloads;
 
@@ -274,6 +278,15 @@ namespace Jularr.E2E.Tests
                     }
 
                     return Json("{\"status\":true,\"nzo_ids\":[\"SABnzbd_nzo_" + release.Guid + "\"]}");
+                case "queue" or "history" when form["name"].ToString() is "delete" or "pause" or "resume":
+                    _commands.Enqueue(form["mode"] + ":" + form["name"] + ":" + form["value"]);
+                    if (form["name"] == "delete")
+                    {
+                        _held.TryRemove(form["value"].ToString().Replace("SABnzbd_nzo_", "", StringComparison.Ordinal), out _);
+                        _completed.TryRemove(form["value"].ToString().Replace("SABnzbd_nzo_", "", StringComparison.Ordinal), out _);
+                    }
+
+                    return Json("""{"status":true}""");
                 case "queue":
                     var queued = _held.Values.Select(waiting =>
                         "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
