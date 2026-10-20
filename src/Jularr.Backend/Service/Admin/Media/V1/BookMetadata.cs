@@ -20,7 +20,7 @@ using Microsoft.AspNetCore.DataProtection;
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Open Library lookups and imports for books and light novels; Hardcover, where it has a token, names their series.
-    internal sealed class BookMetadata(OpenLibraryClient openLibrary, HardcoverClient hardcover, IDataProtectionProvider protection)
+    internal sealed class BookMetadata(OpenLibraryClient openLibrary, HardcoverClient hardcover, IDataProtectionProvider protection, CoverStore covers)
     {
         public const string Namespace = "openlibrary";
 
@@ -99,7 +99,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var series = await ReadSeriesAsync(context, found, ct);
             var people = WorkPeopleLogic.Rows(work.People)
                 .Concat(editions.SelectMany(item => WorkPeopleLogic.Rows(item.Edition.People, editionLanguage: item.Language, editionFormat: item.Format))).ToArray();
-            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var savedId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkEditionsAsync(WorkEditionLogic.Data(savedId, editions), token);
@@ -107,6 +107,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(savedId, Namespace, people), token);
                 return savedId;
             }, ct);
+
+            // The cover is kept locally.
+            await covers.StoreAsync(context, saved, ct);
+            return saved;
         }
 
         private async Task<(string Namespace, string ExternalId, string Name, decimal? Position)?> ReadSeriesAsync(LogicContext context, IReadOnlyList<OpenLibraryEdition> editions,

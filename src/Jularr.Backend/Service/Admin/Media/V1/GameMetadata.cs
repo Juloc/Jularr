@@ -23,10 +23,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         public const string Namespace = "igdb";
         private readonly IgdbClient _igdb;
         private readonly IDataProtector _protector;
+        private readonly CoverStore _covers;
 
-        public GameMetadata(IgdbClient igdb, IDataProtectionProvider protection)
+        public GameMetadata(IgdbClient igdb, IDataProtectionProvider protection, CoverStore covers)
         {
             _igdb = igdb;
+            _covers = covers;
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
@@ -100,13 +102,17 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 game.Year is >= 1950 and <= 2200 ? game.Year : null, "[]", "[]", JsonSerializer.Serialize(facts), Namespace, null);
             var platforms = JsonSerializer.Serialize(game.Platforms.Select(platform => new { platform.Id, platform.Name, platform.Abbreviation }));
             var people = WorkPeopleLogic.Rows(game.People).ToArray();
-            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkPlatformsAsync(new WorkPlatformsData(workId, platforms), token);
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
                 return workId;
             }, ct);
+
+            // The cover is kept locally.
+            await _covers.StoreAsync(context, saved, ct);
+            return saved;
         }
 
         private static Exception Translate(IgdbException exception) => exception.Failure switch

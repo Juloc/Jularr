@@ -101,6 +101,55 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
+        // One image as a JPEG or WebP (by the output's extension) at most this wide, never enlarged; a single frame, so an animation becomes its first picture.
+        public async Task<bool> ScaleImageAsync(string inputPath, string outputPath, int width, CancellationToken ct)
+        {
+            if (!IsAvailable)
+            {
+                return false;
+            }
+
+            var start = new ProcessStartInfo(ExecutablePath!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file", "-i", inputPath, "-an", "-sn", "-dn", "-frames:v", "1",
+                "-vf", string.Create(CultureInfo.InvariantCulture, $"scale='min({width},iw)':-2:flags=lanczos"),
+                .. outputPath.EndsWith(".webp", StringComparison.Ordinal) ? (string[])["-c:v", "libwebp", "-quality", "80"] : ["-q:v", "3"], outputPath])
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(60));
+            try
+            {
+                using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token);
+                    await Task.WhenAll(output, errors);
+                }
+                catch (OperationCanceledException)
+                {
+                    process.Kill(true);
+                    ct.ThrowIfCancellationRequested();
+                    return false;
+                }
+
+                return process.ExitCode == 0 && File.Exists(outputPath);
+            }
+            catch (Win32Exception)
+            {
+                return false;
+            }
+        }
+
         // A text subtitle stream or file as WebVTT; bounded so a stuck read never holds a request.
         public async Task<bool> ConvertSubtitleAsync(string inputPath, string? inputFormat, int? streamIndex, string outputPath, CancellationToken ct)
         {

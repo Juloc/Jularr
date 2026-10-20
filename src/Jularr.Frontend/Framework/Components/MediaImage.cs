@@ -1,4 +1,5 @@
 using System.Text.Encodings.Web;
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Frontend.Framework
 {
@@ -16,9 +17,17 @@ namespace Jularr.Frontend.Framework
             if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
             ValidateUrl(url);
 
+            // A cover Jularr keeps comes in a few widths; the browser takes the one it needs.
+            var source = CoverPaths.Sized(url, width);
+            if (variants is null && source != url)
+            {
+                variants = [.. CoverPaths.Variants(url).Select(variant => new ImageVariant(variant.Url, variant.Width))];
+                sizes ??= width.ToString(System.Globalization.CultureInfo.InvariantCulture) + "px";
+            }
+
             var image = new Img()
                 .Class("media-image")
-                .Attribute("src", url)
+                .Attribute("src", source)
                 .Attribute("alt", alt)
                 .Attribute("width", width.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 .Attribute("height", height.ToString(System.Globalization.CultureInfo.InvariantCulture))

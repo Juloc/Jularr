@@ -126,6 +126,7 @@ namespace Jularr.Backend.Service.Core
                 options.TranslationPath = Folder(options.TranslationPath, "translation");
                 options.OcrPath = Folder(options.OcrPath, "ocr");
                 options.SpeechPath = Folder(options.SpeechPath, "speech");
+                options.CoversPath = Folder(options.CoversPath, "covers");
             });
 
             // Metadata mirrors.
@@ -313,6 +314,12 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
 
+            // Covers come from the providers' image hosts only, over public addresses.
+            var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));
+            services.AddSingleton(covers);
+            AddClient<CoverClient>(services, 30, null, agent: true, handler: () => CoverClient.CreateHandler(covers));
+            services.TryAddTransient<CoverStore>();
+
             // Throttle public requests.
             services.AddRateLimiter(options =>
             {
@@ -495,6 +502,15 @@ namespace Jularr.Backend.Service.Core
                 var result = await service.ExecuteAsync(parameters, default!, cancellationToken);
 
                 // Authorized files stream after the service committed.
+                if (result is ICacheableFileOutput stored)
+                {
+                    http.Response.Headers.CacheControl = stored.IsVersioned ? "private,max-age=31536000,immutable"
+                        : stored.MaxAge is { } age ? "private,max-age=" + ((long)age.TotalSeconds).ToString(global::System.Globalization.CultureInfo.InvariantCulture) : "private,no-cache";
+                    http.Response.Headers.XContentTypeOptions = "nosniff";
+                    http.Response.Headers.Vary = "Accept";
+                    return Results.Stream(stored.Content, stored.ContentType, null, stored.LastModified, new Microsoft.Net.Http.Headers.EntityTagHeaderValue(stored.ETag), true);
+                }
+
                 if (result is IFileOutput file)
                 {
                     http.Response.Headers.CacheControl = file is IImmutableFileOutput ? "private,max-age=31536000,immutable" : "private,no-store";

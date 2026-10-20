@@ -15,6 +15,17 @@ namespace Jularr.Backend.Data.Common
     // A file named by its content; browsers keep it for good.
     public interface IImmutableFileOutput : IFileOutput;
 
+    // A stored image: browsers revalidate it by its entity tag and keep a versioned address for good.
+    public interface ICacheableFileOutput : IFileOutput
+    {
+        string ETag { get; }
+        DateTimeOffset LastModified { get; }
+        bool IsVersioned { get; }
+
+        // How long a browser may use it without asking again when its address is not versioned.
+        TimeSpan? MaxAge { get; }
+    }
+
     public interface IBinaryOutput
     {
         byte[] Bytes { get; }

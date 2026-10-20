@@ -499,6 +499,9 @@ namespace Jularr.Backend.Tests
                 }
                 var plex = new PlexHandler();
                 builder.Services.AddHttpClient<PlexClient>().ConfigurePrimaryHttpMessageHandler(() => plex);
+
+                // Tests never reach a provider's image server; a test of covers names its own.
+                builder.Services.AddHttpClient<Jularr.Integrations.Logic.Media.CoverClient>().ConfigurePrimaryHttpMessageHandler(() => new NoImages());
                 services?.Invoke(builder.Services);
 
                 var app = builder.Build();
@@ -594,6 +597,11 @@ namespace Jularr.Backend.Tests
                     Directory.Delete(data, true);
                 }
             }
+        }
+
+        private sealed class NoImages : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
         internal sealed class PlexHandler : HttpMessageHandler
