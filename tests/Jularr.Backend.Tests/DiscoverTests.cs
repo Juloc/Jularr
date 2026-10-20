@@ -303,14 +303,15 @@ namespace Jularr.Backend.Tests
             var html = await home.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode, html);
             StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
-            Assert.IsFalse(html.Contains("The Matrix", StringComparison.Ordinal));
+            StringAssert.Contains(html, "The Matrix");
+            StringAssert.Contains(html, "media-hero");
 
-            // Native recommendation route stays usable.
+            // Native recommendation route stays usable, but no longer inserts Hero content.
             using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
             html = await recommendations.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
-            StringAssert.Contains(html, "media-hero");
+            StringAssert.Contains(html, "class=\"media-hero");
             StringAssert.Contains(html, "/Discover/movies/603");
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
