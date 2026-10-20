@@ -62,8 +62,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     public sealed class WorkManagementFileV1 : BaseResponse
     {
         public WorkManagementFileV1(long id, long[] workUnitIds, string relativePath, long sizeBytes, string? qualityKey, FileQualityGrade fileQualityGradeId, int? formatScore, FileSizeGrade fileSizeGradeId,
-            decimal? megabytesPerMinute, string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? releaseGroup, long? durationMs, bool isMissing)
+            decimal? megabytesPerMinute, string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? releaseGroup, long? durationMs, bool isMissing,
+            long? groupId = null, bool? isRomVerified = null)
         {
+            GroupId = groupId;
+            IsRomVerified = isRomVerified;
             Id = id;
             WorkUnitIds = workUnitIds;
             RelativePath = relativePath;
@@ -135,6 +138,68 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.IsMissing))]
         public bool IsMissing { get; }
+
+        // The edition or platform it belongs to.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
+        public long? GroupId { get; }
+
+        // A game file whose hash a ROM catalog of its platform names; none when no hash is known.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.IsRomVerified), false)]
+        public bool? IsRomVerified { get; }
+    }
+
+    // An edition of a book or a platform of a game with what the page shows of it; a platform carries the target that is monitored and searched for it.
+    public sealed class WorkManagementGroupV1 : BaseResponse
+    {
+        public WorkManagementGroupV1(long id, WorkGroupKind workGroupKindId, string? name, string? title, string? languageCode, EditionFormat? editionFormatId, string? publisher, int? releaseYear, string? isbn,
+            long? wantedItemId, bool? isPaused)
+        {
+            Id = id;
+            WorkGroupKindId = workGroupKindId;
+            Name = name;
+            Title = title;
+            LanguageCode = languageCode;
+            EditionFormatId = editionFormatId;
+            Publisher = publisher;
+            ReleaseYear = releaseYear;
+            Isbn = isbn;
+            WantedItemId = wantedItemId;
+            IsPaused = isPaused;
+        }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.WorkGroupKindId))]
+        public WorkGroupKind WorkGroupKindId { get; }
+
+        // The edition's name or the platform's.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupName), false)]
+        public string? Name { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupName), false)]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.LanguageCode), false)]
+        public string? LanguageCode { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionFormatId), false)]
+        public EditionFormat? EditionFormatId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Publisher), false)]
+        public string? Publisher { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Isbn), false)]
+        public string? Isbn { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused), false)]
+        public bool? IsPaused { get; }
     }
 
     // Everything the management page of one title shows.
@@ -142,8 +207,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
         public WorkManagementV1(long id, long? wantedItemId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, int? runtimeMinutes, DateOnly? releasedOn,
             string? overview, string? genres, string? studio, string? posterUrl, string? backdropUrl, long onDiskBytes, long missingCount, long upgradeWantedCount, long unairedCount, long seasonCount,
-            long episodeCount, BaseDataList<WorkManagementUnitV1> units, BaseDataList<WorkManagementFileV1> files)
+            long episodeCount, BaseDataList<WorkManagementUnitV1> units, BaseDataList<WorkManagementFileV1> files, BaseDataList<WorkManagementGroupV1>? groups = null)
         {
+            Groups = groups ?? new BaseDataList<WorkManagementGroupV1>([]);
             Id = id;
             WantedItemId = wantedItemId;
             MediaTypeId = mediaTypeId;
@@ -227,5 +293,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public BaseDataList<WorkManagementUnitV1> Units { get; }
 
         public BaseDataList<WorkManagementFileV1> Files { get; }
+
+        public BaseDataList<WorkManagementGroupV1> Groups { get; }
     }
 }

@@ -6460,6 +6460,18 @@
    "Volumes",
    "Bände"
   ],
+  "work.tab.editions": [
+   "Editions",
+   "Ausgaben"
+  ],
+  "work.tab.platforms": [
+   "Platforms",
+   "Plattformen"
+  ],
+  "work.tab.tracks": [
+   "Tracks",
+   "Titel"
+  ],
   "work.tab.files": [
    "Files",
    "Dateien"
@@ -6644,6 +6656,14 @@
    "{0} volume",
    "{0} Band"
   ],
+  "work.figure.tracks": [
+   "{0} tracks",
+   "{0} Titel"
+  ],
+  "work.figure.trackOne": [
+   "{0} track",
+   "{0} Titel"
+  ],
   "work.figure.episodes": [
    "{0} episodes",
    "{0} Folgen"
@@ -6671,6 +6691,42 @@
   "work.empty.volumes": [
    "This title has no volume yet.",
    "Dieser Titel hat noch keinen Band."
+  ],
+  "work.empty.groups": [
+   "Nothing is known about editions or platforms yet.",
+   "Zu Ausgaben oder Plattformen ist noch nichts bekannt."
+  ],
+  "work.empty.noFile": [
+   "No file yet.",
+   "Noch keine Datei."
+  ],
+  "work.group.other": [
+   "Other files",
+   "Weitere Dateien"
+  ],
+  "work.edition.plain": [
+   "Edition",
+   "Ausgabe"
+  ],
+  "work.edition.format.Print": [
+   "Print",
+   "Druck"
+  ],
+  "work.edition.format.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "work.edition.format.Audiobook": [
+   "Audiobook",
+   "Hörbuch"
+  ],
+  "work.edition.format.Comic": [
+   "Comic",
+   "Comic"
+  ],
+  "work.empty.tracks": [
+   "This album has no track yet.",
+   "Dieses Album hat noch keinen Titel."
   ],
   "work.empty.files": [
    "This film has no file yet.",
@@ -6727,6 +6783,26 @@
   "work.col.format": [
    "Format",
    "Format"
+  ],
+  "work.col.rom": [
+   "ROM check",
+   "ROM-Prüfung"
+  ],
+  "work.rom.verified": [
+   "In the ROM catalog",
+   "Im ROM-Katalog"
+  ],
+  "work.rom.unverified": [
+   "Not in the catalog",
+   "Nicht im Katalog"
+  ],
+  "work.platform.notWanted": [
+   "Not requested",
+   "Nicht angefragt"
+  ],
+  "work.col.length": [
+   "Length",
+   "Länge"
   ],
   "work.numbering.label": [
    "Episode numbering",

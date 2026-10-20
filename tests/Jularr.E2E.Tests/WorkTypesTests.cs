@@ -64,6 +64,43 @@ namespace Jularr.E2E.Tests
                 StringAssert.Contains(await rows.First.InnerTextAsync(), "Missing");
                 await Assertions.Expect(page.Locator("th[data-col=released]").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "work-manga-volumes");
+
+                // An album lists its tracks in order, with no switch and no search of their own: the album is monitored and searched as a whole.
+                var album = await CreateAsync(page, "Music", "None", "Test Album");
+                await jularr.RunSqlAsync($"INSERT INTO \"WorkUnits\" (\"WorkId\", \"WorkUnitTypeId\", \"Number\") VALUES ({album}, 5, 1), ({album}, 5, 2), ({album}, 5, 3);");
+                await page.GotoAsync("/Admin/Works/" + album);
+                await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = "Tracks" })).ToBeVisibleAsync();
+                var tracks = page.Locator("[data-work-table=tracks] tr.work-row");
+                Assert.AreEqual(3, await tracks.CountAsync());
+                StringAssert.Contains(await tracks.First.InnerTextAsync(), "Track 1");
+                Assert.AreEqual(0, await page.Locator("[data-work-table=tracks] th[data-col=monitored]").CountAsync());
+                await Assertions.Expect(page.Locator("th[data-col=length]").First).ToBeVisibleAsync();
+
+                // A book shows its editions with their facts, a game its platforms, each wanted on its own.
+                var novel = await CreateAsync(page, "Book", "None", "Test Novel");
+                await jularr.RunSqlAsync($"""
+                    INSERT INTO "WorkEditions" ("Id", "WorkId", "LanguageCode", "EditionFormatId", "Publisher", "ReleaseYear") VALUES (810, {novel}, 'en', 2, 'Test House', 2019), (811, {novel}, 'de', 1, NULL, NULL);
+                    INSERT INTO "WorkEditionExternalIdentities" ("WorkEditionId", "Namespace", "Value") VALUES (810, 'isbn', '9780000000001');
+                    """);
+                await page.GotoAsync("/Admin/Works/" + novel);
+                await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = "Editions" })).ToBeVisibleAsync();
+                Assert.AreEqual(2, await page.Locator(".work-season").CountAsync());
+                await Assertions.Expect(page.Locator(".work-season").First).ToContainTextAsync("ISBN 9780000000001");
+                await Assertions.Expect(page.Locator(".work-season").First).ToContainTextAsync("E-book");
+                Assert.AreEqual(0, await page.Locator(".navigation-tabs__link", new() { HasText = "Manage files" }).CountAsync(), "A book has no Manage files tab.");
+
+                var game = await CreateAsync(page, "Game", "None", "Test Game");
+                await jularr.RunSqlAsync($"""
+                    INSERT INTO "GamePlatforms" ("Id", "Name", "Abbreviation") VALUES (710, 'Switch', 'NSW'), (711, 'PC', NULL);
+                    INSERT INTO "WorkPlatforms" ("WorkId", "GamePlatformId") VALUES ({game}, 710), ({game}, 711);
+                    INSERT INTO "WantedItems" ("WorkId", "GamePlatformId") VALUES ({game}, 710);
+                    """);
+                await page.GotoAsync("/Admin/Works/" + game);
+                await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = "Platforms" })).ToBeVisibleAsync();
+                var platforms = page.Locator(".work-season");
+                Assert.AreEqual(2, await platforms.CountAsync());
+                await Assertions.Expect(platforms.Filter(new() { HasText = "PC" })).ToContainTextAsync("Not requested");
+                await Evidence.SaveAsync(page, "work-game-platforms");
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)

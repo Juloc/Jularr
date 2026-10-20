@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public int HistoryPage { get; set; } = 1;
 
         // Films and series have the management page; every other type keeps its metadata page until its own layout is built.
-        private bool Managed => _work is { MediaTypeId: MediaType.Movie or MediaType.Series } or { MediaTypeId: MediaType.Book, MediaSubtypeId: MediaSubtype.Manga or MediaSubtype.LightNovel };
+        private bool Managed => _work is { MediaTypeId: MediaType.Movie or MediaType.Series } or { MediaTypeId: MediaType.Book or MediaType.Music or MediaType.Game };
 
         // Searching needs Arr+; Requests alone stay manual.
         private bool CanAcquire => texts.CanAcquire();
@@ -155,9 +155,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
         // Acquisition
 
         // The title is monitored while it is not paused.
-        public async Task<IActionResult> OnPostMonitorAsync([BindRequired] bool isPaused)
+        public async Task<IActionResult> OnPostMonitorAsync([BindRequired] bool isPaused, long? wantedItemId)
         {
-            var current = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(await WantedItemIdAsync()), HttpContext.RequestAborted);
+            var current = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), HttpContext.RequestAborted);
             await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(current.Id),
                 new UpdateWantedDataV1(isPaused, current.Version, current.AcquisitionProfileId, current.LibraryRootId), HttpContext.RequestAborted);
             return LocalRedirect(Address(Tab));
@@ -171,9 +171,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return LocalRedirect(Address(Tab));
         }
 
-        public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber)
+        public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber, long? wantedItemId)
         {
-            var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(await WantedItemIdAsync()), new SearchWantedDataV1(parentUnitNumber, unitNumber), HttpContext.RequestAborted);
+            var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), new SearchWantedDataV1(parentUnitNumber, unitNumber), HttpContext.RequestAborted);
             TempData["WantedSearched"] = result.OutcomeKey;
             if (result.Title is { } title) TempData["WantedTaken"] = title;
             return LocalRedirect(Address(Tab));
@@ -229,8 +229,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
         }
 
         // The title's target is found by the title, never taken from the request.
-        private async Task<long> WantedItemIdAsync()
+        // A game is wanted per platform: the target asked for must be one of the title's own.
+        private async Task<long> WantedItemIdAsync(long? requested = null)
         {
+            if (requested is { } target)
+            {
+                var page = await readManagement.ExecuteAsync<WorkManagementV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+                return page.Groups.Any(group => group.WantedItemId == target) ? target : throw new KeyNotFoundException("The target does not belong to the title.");
+            }
+
             var work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             return work.WantedItemId ?? throw new KeyNotFoundException("The title is not wanted.");
         }

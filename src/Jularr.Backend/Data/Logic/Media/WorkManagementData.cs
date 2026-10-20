@@ -71,8 +71,10 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class WorkManagementFileData : BaseData
     {
         public WorkManagementFileData(long id, long mediaAssetId, long? workUnitId, string relativePath, long sizeBytes, string? qualityKey, string? releaseGroup, long? durationMs, bool isMissing,
-            string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? evidence)
+            string? videoCodec, int? height, string? dynamicRange, string[] audioLanguages, string[] subtitleLanguages, string? evidence, long? groupId = null, bool? isRomVerified = null)
         {
+            GroupId = groupId;
+            IsRomVerified = isRomVerified;
             Id = id;
             MediaAssetId = mediaAssetId;
             WorkUnitId = workUnitId;
@@ -135,6 +137,12 @@ namespace Jularr.Backend.Data.Logic.Media
         // What the format matching reads from the release name, as JSON.
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Overview))]
         public string? Evidence { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupId), false)]
+        public long? GroupId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.IsRomVerified), false)]
+        public bool? IsRomVerified { get; }
     }
 
     // A further unit of the same work that a stored asset covers.
