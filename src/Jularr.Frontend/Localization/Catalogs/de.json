@@ -5084,6 +5084,10 @@
    "A download of {0} failed.",
    "Ein Download von {0} ist fehlgeschlagen."
   ],
+  "notifications.message.DownloadWaiting": [
+   "A download of {0} waits for a decision: {1}.",
+   "Ein Download von {0} wartet auf eine Entscheidung: {1}."
+  ],
   "notifications.message.StorageOffline": [
    "The storage connection {0} stays offline.",
    "Die Speicherverbindung {0} bleibt offline."
@@ -5103,6 +5107,10 @@
   "notifications.type.DownloadFailed": [
    "Failed downloads",
    "Fehlgeschlagene Downloads"
+  ],
+  "notifications.type.DownloadWaiting": [
+   "Waiting downloads",
+   "Wartende Downloads"
   ],
   "notifications.type.StorageOffline": [
    "Offline storage",

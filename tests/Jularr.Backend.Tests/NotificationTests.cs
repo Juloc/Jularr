@@ -60,7 +60,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, await UnreadAsync(host));
 
             // Each role switches only the kinds it receives.
-            foreach (var (role, kinds) in new[] { (1, 5), (3, 4), (2, 3) })
+            foreach (var (role, kinds) in new[] { (1, 6), (3, 5), (2, 3) })
             {
                 await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
                 Assert.AreEqual(kinds, (await ReadAsync<BaseDataList<NotificationSettingV1>>(host, "/api/v1/notifications/settings")).Count, role.ToString());

@@ -519,6 +519,41 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(failed.Id, (await ReadActivityAsync(host, ActivityTabType.Activity)).Single().Id);
         }
 
+        // A download that waits for a person tells the staff once per title and reason; a repeat folds into the unread notice.
+        [TestMethod]
+        public async Task CompletedSabImport_AWaitingDownload_TellsTheStaffOnceAndFoldsRepeats()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv"), new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // Read again unchanged, the same doubt is no new notice.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
+            Assert.AreEqual("Example Movieimport_ambiguous_title", await host.ScalarAsync("SELECT \"Subject\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
+            Assert.AreEqual("/Admin/Activity?Tab=Queue", await host.ScalarAsync("SELECT \"Link\" FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"));
+
+            // The same doubt after another try folds into the unread notice.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"AttentionKey\" = NULL, \"AttentionProposal\" = NULL WHERE \"OperationTypeId\" = 2");
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((1L, 2), ((long)(await host.ScalarAsync("SELECT count(*) FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"))!, (int)(await host.ScalarAsync("SELECT max(\"Occurrences\") FROM \"Notifications\" WHERE \"NotificationTypeId\" = 6"))!));
+
+            // The inbox says which download waits and why.
+            using var inbox = await host.SendAsync(HttpMethod.Get, "/Notifications");
+            var html = await inbox.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, inbox.StatusCode, html);
+            StringAssert.Contains(html, "A download of Example Movie waits for a decision: The file&#x27;s title does not clearly match the film.");
+        }
+
         [TestMethod]
         public async Task Profiles_EditKeepsRulesSwitchesDefaultsAndApplyPerTarget()
         {
