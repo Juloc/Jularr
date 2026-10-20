@@ -766,6 +766,134 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        public const string RemovedReasonKey = "download_removed";
+
+        // A download still in the queue, whether it runs or waits; its client says what an action does.
+        public static async Task<DownloadActionData?> ReadDownloadActionAsync(this LogicContext ctx, long operationId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."Id" AS "OperationId",
+                    operation."AcquisitionConnectionId",
+                    operation."ExternalId",
+                    connection."AcquisitionConnectionTypeId",
+                    operation."AttentionKey",
+                    operation."AttentionProposal" IS NOT NULL AS "HasProposal",
+                    operation."DownloadStateTypeId"
+                FROM
+                    "Operations" AS operation
+                    JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2);
+                """;
+            sql.Parameters.Add(new ActivityOperationData(operationId));
+            return await ctx.ReadSql.ReadOptionalAsync<DownloadActionData>(sql, ct);
+        }
+
+        // Taken out of the queue: it finishes as removed, its release is blocked or may be taken again, and the target is searched from the given time.
+        public static async Task RemoveDownloadAsync(this LogicContext ctx, DownloadRemovalData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH removed AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "OperationStatusTypeId" = 4,
+                        "ErrorKey" = 'download_removed',
+                        "FinishedAt" = now(),
+                        "DismissedAt" = now(),
+                        "AttentionKey" = NULL,
+                        "AttentionUrl" = NULL,
+                        "AttentionProposal" = NULL,
+                        "SourceLinkUrl" = NULL
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationTypeId" = 2
+                        AND operation."OperationStatusTypeId" IN (1, 2)
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                ), released AS (
+                    UPDATE
+                        "AcquisitionReleases" AS release
+                    SET
+                        "AcquisitionReleaseStatusTypeId" = CASE WHEN @BlocksRelease THEN 4 ELSE 5 END,
+                        "ReasonKey" = 'download_removed',
+                        "UpdatedAt" = now()
+                    FROM
+                        removed
+                    WHERE
+                        release."Id" = removed."AcquisitionReleaseId"
+                    RETURNING
+                        release."WantedItemId"
+                )
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "NextSearchAt" = @NextSearchAt,
+                    "LastOutcomeKey" = 'download_removed'
+                FROM
+                    released
+                WHERE
+                    wanted."Id" = released."WantedItemId";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
+            {
+                throw new KeyNotFoundException("The download is not in the queue.");
+            }
+
+            await ctx.RecordActivityAsync(new ActivityEventData(data.BlocksRelease ? ActivityEventType.Blocked : ActivityEventType.DownloadFailed, operationId: data.OperationId,
+                reasonKey: RemovedReasonKey), ct);
+        }
+
+        // A client's pause or resume shows at once; the next progress read confirms it.
+        public static async Task SetDownloadPausedAsync(this LogicContext ctx, DownloadPauseData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "DownloadStateTypeId" = CASE WHEN @IsPaused THEN 3 ELSE 2 END
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" = 2
+                    AND operation."AttentionKey" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // A waiting download is read again: a library that was offline, a decision that changed.
+        public static async Task<bool> RetryDownloadImportAsync(this LogicContext ctx, ActivityOperationData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "AttentionKey" = NULL,
+                    "AttentionProposal" = NULL
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionKey" IS NOT NULL
+                    AND operation."AttentionUrl" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
+        }
+
         public static async Task SetDownloadAttentionAsync(this LogicContext ctx, DownloadAttentionData data, CancellationToken ct)
         {
             // A waiting import or source tells the Owner why; unchanged reasons are not rewritten.

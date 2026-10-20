@@ -258,6 +258,113 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("import_ambiguous_title", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
         }
 
+        private static async Task<long> GrabbedOperationAsync(Host host, FakeUsenet usenet)
+        {
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            return (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+        }
+
+        // A download taken out of the queue goes from SABnzbd first; blocked, its release is never taken again and another is searched at once.
+        [TestMethod]
+        public async Task QueueAction_RemoveAndBlock_TellsSabnzbdFirstExcludesTheReleaseAndSearchesAtOnce()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+
+            // SABnzbd that cannot be reached keeps the download in the queue.
+            usenet.FailCommands = true;
+            using var down = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/remove", new RemoveActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, down.StatusCode, await down.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+
+            usenet.FailCommands = false;
+            using var removed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/remove", new RemoveActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            Assert.AreEqual(((short)4, "download_removed"), ((short)(await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"))!,
+                (string)(await host.ScalarAsync($"SELECT \"ErrorKey\" FROM \"Operations\" WHERE \"Id\" = {operation}"))!));
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"DismissedAt\" IS NOT NULL FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" <= now() FROM \"WantedItems\" WHERE \"Id\" = 600"));
+
+            // Nothing is left to remove twice.
+            using var again = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/remove", new RemoveActivityDownloadDataV1(false));
+            Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task QueueAction_RemoveWithoutBlocking_LeavesTheReleaseAllowedAndSearchesLater()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+
+            using var removed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/remove", new RemoveActivityDownloadDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)5, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" > now() + interval '20 minutes' FROM \"WantedItems\" WHERE \"Id\" = 600"));
+        }
+
+        [TestMethod]
+        public async Task QueueAction_PauseAndResume_AreForSabnzbdAndShowAtOnce()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+
+            using var paused = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/pause", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, paused.StatusCode, await paused.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            using var resumed = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/pause", new PauseActivityDownloadDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, resumed.StatusCode, await resumed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await host.ScalarAsync($"SELECT \"DownloadStateTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            CollectionAssert.AreEqual(new[] { "queue:pause:SABnzbd_nzo_1:", "queue:resume:SABnzbd_nzo_1:" }, usenet.Commands);
+
+            // A download that waits for a person has nothing to pause.
+            await host.Fixture.RunSqlAsync($"UPDATE \"Operations\" SET \"AttentionKey\" = 'import_storage_full' WHERE \"Id\" = {operation}");
+            using var refused = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/pause", new PauseActivityDownloadDataV1(true));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+
+        // A waiting download is read again on request; one that is not waiting has nothing to retry.
+        [TestMethod]
+        public async Task QueueAction_RetryImport_ReadsAWaitingDownloadAgain()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var operation = await GrabbedOperationAsync(host, usenet);
+            using var nothing = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/retry-import");
+            Assert.AreEqual(HttpStatusCode.BadRequest, nothing.StatusCode);
+
+            var completed = Path.Combine(downloads.Path, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllBytes(Path.Combine(completed, "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv"), new byte[4096]);
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("import_ambiguous_title", await host.ScalarAsync($"SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+
+            // The person put the right file in place; the next read imports it.
+            File.Delete(Path.Combine(completed, "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv"));
+            File.WriteAllBytes(Path.Combine(completed, Feature + ".mkv"), new byte[4096]);
+            using var retried = await host.SendAsync(HttpMethod.Post, $"/api/v1/admin/activity/{operation}/retry-import");
+            Assert.AreEqual(HttpStatusCode.OK, retried.StatusCode, await retried.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync($"SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((short)3, await host.ScalarAsync($"SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = {operation}"));
+        }
+
         [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
@@ -302,14 +409,14 @@ namespace Jularr.Backend.Tests
             // Progress comes from the client queue.
             usenet.Queue = """{"queue":{"paused":false,"slots":[{"nzo_id":"SABnzbd_nzo_1","filename":"Example","percentage":"40","mb":"1024.0","mbleft":"614.4","timeleft":"0:12:30","status":"Downloading"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            var running = (await ReadActivityAsync(host, ActivityTabType.Activity)).Single();
+            var running = (await ReadActivityAsync(host, ActivityTabType.Queue)).Single();
             Assert.AreEqual("SAB", running.ConnectionName);
             Assert.AreEqual(DownloadStateType.Downloading, running.DownloadStateTypeId);
             Assert.AreEqual(1024L * 1024 * 1024, running.SizeBytes);
             Assert.AreEqual(750, running.EtaSeconds);
             usenet.Queue = """{"queue":{"paused":true,"slots":[{"nzo_id":"SABnzbd_nzo_1","filename":"Example","percentage":"40","timeleft":"0:00:00","status":"Downloading"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            running = (await ReadActivityAsync(host, ActivityTabType.Activity)).Single();
+            running = (await ReadActivityAsync(host, ActivityTabType.Queue)).Single();
             Assert.AreEqual(DownloadStateType.Paused, running.DownloadStateTypeId);
             Assert.IsNull(running.EtaSeconds);
             Assert.AreEqual(1024L * 1024 * 1024, running.SizeBytes);
@@ -330,16 +437,15 @@ namespace Jularr.Backend.Tests
             // Unpacking is shown until the client reports completion.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Extracting"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.AreEqual(DownloadStateType.PostProcessing, (await ReadActivityAsync(host, ActivityTabType.Activity)).Single().DownloadStateTypeId);
+            Assert.AreEqual(DownloadStateType.PostProcessing, (await ReadActivityAsync(host, ActivityTabType.Queue)).Single().DownloadStateTypeId);
 
             // A path outside the client mapping is never read.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/elsewhere/../downloads/x"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
-            var waiting = (await ReadActivityAsync(host, ActivityTabType.ToDo)).Single();
+            var waiting = (await ReadActivityAsync(host, ActivityTabType.Queue)).Single();
             Assert.AreEqual("import_path_unmapped", waiting.ReasonKey);
             Assert.AreEqual("Example Movie", waiting.WorkTitle);
-            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.Activity)).Count);
 
             // An existing library file is kept; the import takes a free name.
             var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
@@ -385,7 +491,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(AcquisitionReleaseStatusType.Imported, release.AcquisitionReleaseStatusTypeId);
             Assert.AreEqual(100, release.ProgressPercent);
             Assert.AreEqual(OperationType.Download, (await ReadActivityAsync(host, ActivityTabType.History)).Single().OperationTypeId);
-            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.ToDo)).Count);
+            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.Queue)).Count(item => item.OperationTypeId == OperationType.Download), "A finished download leaves the queue.");
 
             // The history keeps what happened with the texts of the moment: who grabbed which release where, the imported file and the worse one it replaced.
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""))!;
@@ -428,20 +534,20 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
 
-            // The failure waits in To-Do until it is retried.
-            using var todo = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Tab=ToDo");
+            // The failure waits in the queue until it is retried.
+            using var todo = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Tab=Queue");
             var html = await todo.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, todo.StatusCode, html);
             StringAssert.Contains(html, "Download failed");
-            var failedId = (await ReadActivityAsync(host, ActivityTabType.ToDo)).Single().Id;
-            using var retried = await host.SendAsync(HttpMethod.Post, "/Admin/Activity?Tab=ToDo&PageNumber=1&handler=Retry&operationId=" + failedId,
+            var failedId = (await ReadActivityAsync(host, ActivityTabType.Queue)).Single().Id;
+            using var retried = await host.SendAsync(HttpMethod.Post, "/Admin/Activity?Tab=Queue&PageNumber=1&handler=Retry&operationId=" + failedId,
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
             Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
-            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.ToDo)).Count);
+            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.Queue)).Count);
 
             // A failed backup waits there too, with the tool's reason.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\", \"ErrorKey\", \"FinishedAt\") VALUES (3, 4, 'backup_version_mismatch', now())");
-            using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Tab=ToDo");
+            using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Tab=Queue");
             var backupHtml = await backup.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, backup.StatusCode, backupHtml);
             StringAssert.Contains(backupHtml, "pg_dump or pg_restore is older than the PostgreSQL server.");
@@ -509,14 +615,14 @@ namespace Jularr.Backend.Tests
             // A client fault keeps the release; Retry searches now and reuses its operation.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Failed","fail_message":"Post-processing script failed"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            var failed = (await ReadActivityAsync(host, ActivityTabType.ToDo)).Single();
+            var failed = (await ReadActivityAsync(host, ActivityTabType.Queue)).Single();
             Assert.AreEqual("download_interrupted", failed.ReasonKey);
             using var retried = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failed.Id + "/retry");
             Assert.AreEqual(HttpStatusCode.OK, retried.StatusCode, await retried.Content.ReadAsStringAsync());
             usenet.History = """{"history":{"slots":[]}}""";
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/feature", "https://indexer.example.test/getnzb/feature" }, usenet.Grabbed);
-            Assert.AreEqual(failed.Id, (await ReadActivityAsync(host, ActivityTabType.Activity)).Single().Id);
+            Assert.AreEqual(failed.Id, (await ReadActivityAsync(host, ActivityTabType.Queue)).Single().Id);
         }
 
         [TestMethod]
@@ -1719,6 +1825,10 @@ namespace Jularr.Backend.Tests
 
             public List<string> Grabbed { get; } = [];
             public List<string?> GrabbedCategories { get; } = [];
+
+            // What a person told SABnzbd: "queue:delete:id:1".
+            public List<string> Commands { get; } = [];
+            public bool FailCommands { get; set; }
             public List<string> IndexerHosts { get; } = [];
             public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
@@ -1771,6 +1881,10 @@ namespace Jularr.Backend.Tests
                         Grabbed.Add(form["name"]!);
                         GrabbedCategories.Add(form["cat"]);
                         return Json($$"""{"status":true,"nzo_ids":["SABnzbd_nzo_{{Grabbed.Count}}"]}""");
+                    case "queue" or "history" when form["name"] is "delete" or "pause" or "resume":
+                        if (FailCommands) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+                        Commands.Add($"{form["mode"]}:{form["name"]}:{form["value"]}:{form["del_files"]}");
+                        return Json("""{"status":true}""");
                     case "queue":
                         return Json(Queue);
                     case "history":

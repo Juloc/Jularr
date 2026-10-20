@@ -5704,13 +5704,45 @@
    "Queued at",
    "Eingereiht um"
   ],
-  "activity.tab.Activity": [
-   "Activity",
-   "Aktivität"
+  "activity.tab.Queue": [
+   "Queue",
+   "Warteschlange"
   ],
-  "activity.tab.ToDo": [
-   "To-Do",
-   "Zu erledigen"
+  "activity.empty.Queue": [
+   "Nothing is running or waiting.",
+   "Nichts läuft oder wartet."
+  ],
+  "activity.waiting": [
+   "Waiting",
+   "Wartet"
+  ],
+  "activity.details": [
+   "Details",
+   "Details"
+  ],
+  "activity.remove": [
+   "Remove",
+   "Entfernen"
+  ],
+  "activity.removeAndBlock": [
+   "Remove and block",
+   "Entfernen und sperren"
+  ],
+  "activity.pause": [
+   "Pause",
+   "Pausieren"
+  ],
+  "activity.resume": [
+   "Resume",
+   "Fortsetzen"
+  ],
+  "activity.retryImport": [
+   "Retry import",
+   "Import erneut versuchen"
+  ],
+  "acquisition.outcome.download_removed": [
+   "Removed from the queue",
+   "Aus der Warteschlange entfernt"
   ],
   "activity.tab.History": [
    "History",
@@ -5775,14 +5807,6 @@
   "activity.continueDownload": [
    "Continue download",
    "Download fortsetzen"
-  ],
-  "activity.empty.Activity": [
-   "Nothing is running.",
-   "Es läuft nichts."
-  ],
-  "activity.empty.ToDo": [
-   "Nothing needs attention.",
-   "Nichts braucht Aufmerksamkeit."
   ],
   "activity.empty.History": [
    "Nothing has finished yet.",

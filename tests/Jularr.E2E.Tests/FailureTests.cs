@@ -73,7 +73,7 @@ namespace Jularr.E2E.Tests
             {
                 await PrepareAsync(page, fakes, folders);
 
-                // A broken download lands in To-Do; after Retry the broken release is blocked and the next good one is taken.
+                // A broken download lands in the queue; after Retry the broken release is blocked and the next good one is taken.
                 fakes.FailDownloads = true;
                 fakes.Offer(Film with { File = video }, LowerFilm with { File = video });
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
@@ -128,6 +128,91 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // A download whose files do not clearly name the film waits in the queue with its reason; removing and blocking it takes the next good release at once.
+        [TestMethod]
+        [Timeout(600_000)]
+        public async Task UnclearDownload_WaitsInTheQueue_AndRemoveAndBlockTakesTheNextRelease()
+        {
+            using var folders = new Folders("Movies");
+            var video = await Steps.WriteVideoAsync(null, Path.Combine(folders.Fixtures, "video.webm"));
+
+            // The first release holds a file of another year.
+            var wrong = Path.Combine(folders.Fixtures, "wrong-year");
+            Directory.CreateDirectory(wrong);
+            File.Copy(video, Path.Combine(wrong, "Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm"));
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await StartAsync(fakes, folders);
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.SetTmdbKeyAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"));
+                await Steps.AddUsenetAsync(page, fakes, "2000,2040", searchesAutomatically: true);
+
+                // Nobody searches by hand: the only release on offer is taken.
+                fakes.Offer(Film with { File = wrong });
+                await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
+                var waited = System.Diagnostics.Stopwatch.StartNew();
+                while (!fakes.Grabbed.Contains(fakes.NzbAddress(Film).ToString()))
+                {
+                    Assert.IsTrue(waited.Elapsed < TimeSpan.FromMinutes(6), "The release was not taken automatically within six minutes.");
+                    await Task.Delay(3000);
+                }
+
+                // The doubt shows with its reason and the actions that decide it; there is nothing to pause while it waits.
+                var waiting = await WaitForQueueRowAsync(page, "does not clearly match the film");
+                await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Retry import", Exact = true })).ToBeVisibleAsync();
+                await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true })).ToBeVisibleAsync();
+                await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "queue-waiting");
+
+                fakes.Offer(LowerFilm with { File = video });
+                await Steps.SubmitAsync(page, waiting.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove and block", Exact = true }) }));
+                CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_bunny", "history:delete:SABnzbd_nzo_bunny" }, fakes.Commands.ToArray());
+
+                // The blocked release is never taken again; the next one is searched at once and imports.
+                waited.Restart();
+                while (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))
+                {
+                    Assert.IsTrue(waited.Elapsed < TimeSpan.FromMinutes(6), "The next release was not taken within six minutes.");
+                    await Task.Delay(3000);
+                }
+
+                var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
+                CollectionAssert.AreEqual(new[] { fakes.NzbAddress(Film).ToString(), fakes.NzbAddress(LowerFilm).ToString() }, fakes.Grabbed.ToArray());
+                await page.GotoAsync("/Admin/Activity?Tab=History");
+                await Assertions.Expect(page.Locator("tr", new() { HasText = "Removed from the queue" })).ToHaveCountAsync(1);
+                Assert.IsTrue(details.Length > 0);
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-unclear-download");
+                throw;
+            }
+        }
+
+        // The queue row with this reason once the download monitor has read the finished download.
+        private static async Task<ILocator> WaitForQueueRowAsync(IPage page, string reason)
+        {
+            var deadline = DateTime.UtcNow.AddMinutes(2);
+            while (DateTime.UtcNow < deadline)
+            {
+                await page.GotoAsync("/Admin/Activity?Tab=Queue");
+                var row = page.Locator("tr", new() { HasText = reason });
+                if (await row.CountAsync() > 0)
+                {
+                    return row.First;
+                }
+
+                await page.WaitForTimeoutAsync(3000);
+            }
+
+            throw new AssertFailedException("No download waited with '" + reason + "' within two minutes.");
+        }
+
         private static Task<JularrInstance> StartAsync(FakeServices fakes, Folders folders) => JularrInstance.StartAsync(new Dictionary<string, string>
         {
             ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
@@ -160,13 +245,13 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        // The To-Do row once the download monitor reports the failure.
+        // The queue row once the download monitor reports the failure.
         private static async Task<ILocator> WaitForFailedDownloadAsync(IPage page)
         {
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
-                await page.GotoAsync("/Admin/Activity?Tab=ToDo");
+                await page.GotoAsync("/Admin/Activity?Tab=Queue");
                 var row = page.Locator("tr", new() { HasText = "Download failed" });
                 if (await row.CountAsync() > 0)
                 {
@@ -177,7 +262,7 @@ namespace Jularr.E2E.Tests
                 await page.WaitForTimeoutAsync(3000);
             }
 
-            throw new AssertFailedException("No failed download in To-Do within two minutes.");
+            throw new AssertFailedException("No failed download in the queue within two minutes.");
         }
 
         // Another process may hold a file inside for a moment.
