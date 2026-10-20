@@ -2980,38 +2980,6 @@
    "Requested",
    "リクエスト済み"
   ],
-  "media.availability.badge.Available": [
-   "Available locally",
-   "ローカルで利用可能"
-  ],
-  "media.availability.badge.ProfileAudio": [
-   "Profile audio available",
-   "プロフィールの音声あり"
-  ],
-  "media.availability.badge.OtherAudio": [
-   "Other audio languages",
-   "他の音声言語"
-  ],
-  "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · 他の音声"
-  ],
-  "media.availability.badge.Partial": [
-   "{0}/{1} available",
-   "{0}/{1} 利用可能"
-  ],
-  "media.availability.badge.Downloading": [
-   "Downloading",
-   "ダウンロード中"
-  ],
-  "media.availability.badge.Searching": [
-   "Searching",
-   "検索中"
-  ],
-  "media.availability.badge.Requested": [
-   "Requested",
-   "リクエスト済み"
-  ],
   "media.availability.Partial": [
    "{0} of {1} monitored episodes or units are available.",
    "監視中の {1} 件のエピソードまたはユニットのうち {0} 件が利用可能です。"

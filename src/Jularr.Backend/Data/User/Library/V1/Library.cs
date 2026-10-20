@@ -37,14 +37,16 @@ namespace Jularr.Backend.Data.User.Library.V1
 
     public sealed class LibraryItemV1 : BaseResponse
     {
-        public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted,
+        public LibraryItemV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string title, int? releaseYear, string? posterUrl, decimal? rating, MediaStateType mediaStateTypeId, bool isWatchlisted,
             MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, string[] audioLanguages, string[] subtitleLanguages, ProgressStateType progressStateId, int progressPercent)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Title = title;
             ReleaseYear = releaseYear;
             PosterUrl = posterUrl;
+            Rating = rating;
             MediaStateTypeId = mediaStateTypeId;
             IsWatchlisted = isWatchlisted;
             AvailabilityStateId = availabilityStateId;
@@ -62,6 +64,9 @@ namespace Jularr.Backend.Data.User.Library.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string Title { get; }
 
@@ -70,6 +75,10 @@ namespace Jularr.Backend.Data.User.Library.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
+
+        // The catalog's rating on a scale of ten; null while no catalog entry of the title has one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
         public MediaStateType MediaStateTypeId { get; }

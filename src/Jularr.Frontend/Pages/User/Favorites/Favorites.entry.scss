@@ -221,18 +221,14 @@ html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first
     flex-direction: column;
     gap: 6px;
     width: 100%;
-    max-width: 260px;
+    max-width: 150px;
     min-width: 0;
 
     .media-card { max-width: none; }
 
-    // Where the profile stands with the title, over the cover.
+    // Where the profile stands with the title, as the card's label over the cover.
     &__badge {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        z-index: 3;
-        padding: 5px 9px;
+        padding: 4px 8px;
         border-radius: 999px;
         background: var(--accent);
         color: var(--accent-contrast);
@@ -254,7 +250,7 @@ html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first
         aspect-ratio: 2 / 3;
         padding: 10px;
         border: 0;
-        border-radius: 24px;
+        border-radius: 12px;
         background: transparent;
         color: transparent;
         cursor: pointer;
@@ -313,10 +309,10 @@ html[data-favorites-layout="list"] .favorites-grid {
     }
 
     .media-card { flex: 1; flex-direction: row; align-items: center; gap: 13px; width: auto; }
-    .media-card__surface { flex: none; width: 74px; border-radius: 10px; }
-    .media-card__details { min-height: 0; padding: 0; }
+    .media-card__surface { flex: none; width: 74px; border-radius: 10px; --availability-max: 12px; }
+    .media-card__details { flex: 1; min-height: 0; padding: 0; }
     .media-card__bookmark { top: 3px; right: 3px; .button { width: 26px; min-height: 26px; .ui-icon { width: 13px; height: 13px; } } }
-    .favorites-entry__badge { top: 14px; left: 14px; padding: 3px 7px; font-size: 9px; }
+    .favorites-entry__badge { padding: 3px 7px; font-size: 9px; }
     .favorites-chip { flex: none; max-width: 40%; }
     .favorites-entry__select { bottom: 0; aspect-ratio: auto; border-radius: 17px; }
 }
