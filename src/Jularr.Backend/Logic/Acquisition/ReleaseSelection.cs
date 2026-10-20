@@ -11,9 +11,20 @@ namespace Jularr.Backend.Logic.Acquisition
             ArgumentNullException.ThrowIfNull(profile);
             ArgumentNullException.ThrowIfNull(candidates);
 
-            var ranked = candidates
-                .Select(candidate => Evaluate(profile, candidate))
-                .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
+            var evaluations = candidates.Select(candidate => Evaluate(profile, candidate)).ToArray();
+
+            // The source with the higher priority comes first, as in Readarr: its release is taken and the
+            // quality decides only among the releases of that source. A complete file comes before a file
+            // that is only a part of a work; among the complete ones the languages a request asks for come
+            // first, and when no candidate carries one of them the original language of the work does.
+            var asked = evaluations.Where(evaluation => UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)).ToArray();
+            var original = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsOriginal(profile, evaluation.Candidate.Languages)).ToArray();
+
+            var ranked = evaluations
+                .OrderBy(evaluation => evaluation.Candidate.IndexerPriority)
+                .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
+                .ThenBy(evaluation => asked.Contains(evaluation) ? 0 : original.Contains(evaluation) ? 1 : 2)
+                .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
                 .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)
                 .ThenBy(evaluation => UpgradePolicy.LanguageRank(profile, evaluation.Candidate.Languages))
@@ -21,7 +32,6 @@ namespace Jularr.Backend.Logic.Acquisition
                 .ThenBy(evaluation => evaluation.Candidate.Identity.Confidence)
                 .ThenByDescending(evaluation => evaluation.Candidate.Coverage.Utility)
                 .ThenByDescending(evaluation => evaluation.ReliabilityPoints)
-                .ThenBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenByDescending(evaluation => evaluation.Candidate.PublishedAt)
                 .ThenBy(evaluation => PreferredDistance(profile, evaluation))
                 .ThenBy(evaluation => evaluation.Candidate.Id, StringComparer.Ordinal)
@@ -117,6 +127,11 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseReason("OnlyCandidate");
             }
 
+            if (winner.Candidate.IndexerPriority != runnerUp.Candidate.IndexerPriority)
+            {
+                return new ReleaseReason("IndexerPriority");
+            }
+
             if (winner.QualityRank != runnerUp.QualityRank)
             {
                 return new ReleaseReason("HigherQuality", winner.Score!.QualityKey);
@@ -147,9 +162,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseReason("BetterReliability");
             }
 
-            return winner.Candidate.IndexerPriority != runnerUp.Candidate.IndexerPriority
-                ? new ReleaseReason("IndexerPriority")
-                : winner.Candidate.PublishedAt != runnerUp.Candidate.PublishedAt ? new ReleaseReason("PostedLater") : new ReleaseReason("StableOrder");
+            return winner.Candidate.PublishedAt != runnerUp.Candidate.PublishedAt ? new ReleaseReason("PostedLater") : new ReleaseReason("StableOrder");
         }
     }
 }

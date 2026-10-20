@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "de",
  "name": "Deutsch",
  "reviewed": true,
@@ -4940,13 +4940,21 @@
    "Critical",
    "Kritisch"
   ],
-  "calendar.view.month": [
+  "calendar.view.Month": [
    "Month",
    "Monat"
   ],
-  "calendar.view.agenda": [
-   "Agenda",
-   "Agenda"
+  "calendar.view.Week": [
+   "Week",
+   "Woche"
+  ],
+  "calendar.view.Day": [
+   "Day",
+   "Tag"
+  ],
+  "calendar.views": [
+   "Calendar view",
+   "Kalenderansicht"
   ],
   "calendar.more": [
    "+{0} more",
@@ -4957,24 +4965,108 @@
    "Kalender"
   ],
   "calendar.earlier": [
-   "Earlier",
-   "Früher"
-  ],
-  "calendar.today": [
-   "From today",
-   "Ab heute"
+   "Previous period",
+   "Voriger Zeitraum"
   ],
   "calendar.later": [
-   "Later",
-   "Später"
+   "Next period",
+   "Nächster Zeitraum"
+  ],
+  "calendar.today": [
+   "Today",
+   "Heute"
   ],
   "calendar.pages": [
-   "Calendar weeks",
-   "Kalenderwochen"
+   "Period",
+   "Zeitraum"
   ],
-  "calendar.empty": [
-   "Nothing is released in these two weeks for your watchlist, requests or library.",
-   "In diesen zwei Wochen erscheint nichts aus deiner Merkliste, deinen Anfragen oder deiner Bibliothek."
+  "calendar.search": [
+   "Search the calendar",
+   "Kalender durchsuchen"
+  ],
+  "calendar.status": [
+   "Status",
+   "Status"
+  ],
+  "calendar.status.all": [
+   "All statuses",
+   "Alle Status"
+  ],
+  "calendar.status.Available": [
+   "In library",
+   "In der Bibliothek"
+  ],
+  "calendar.status.Requested": [
+   "Requested",
+   "Angefragt"
+  ],
+  "calendar.status.Watchlisted": [
+   "On watchlist",
+   "Auf der Merkliste"
+  ],
+  "calendar.area.watch": [
+   "Watch",
+   "Schauen"
+  ],
+  "calendar.area.read": [
+   "Read",
+   "Lesen"
+  ],
+  "calendar.area.hear": [
+   "Hear",
+   "Hören"
+  ],
+  "calendar.area.play": [
+   "Play",
+   "Spielen"
+  ],
+  "calendar.areaState": [
+   "{0}: {1} of {2} selected",
+   "{0}: {1} von {2} gewählt"
+  ],
+  "calendar.customize": [
+   "Customize view",
+   "Ansicht gestalten"
+  ],
+  "calendar.filter": [
+   "Filter",
+   "Filter"
+  ],
+  "calendar.apply": [
+   "Apply",
+   "Übernehmen"
+  ],
+  "calendar.reset": [
+   "Reset",
+   "Zurücksetzen"
+  ],
+  "calendar.shown": [
+   "Releases per day",
+   "Veröffentlichungen pro Tag"
+  ],
+  "calendar.shownOption": [
+   "{0} releases",
+   "{0} Veröffentlichungen"
+  ],
+  "calendar.count.one": [
+   "1 release",
+   "1 Veröffentlichung"
+  ],
+  "calendar.count": [
+   "{0} releases",
+   "{0} Veröffentlichungen"
+  ],
+  "calendar.dayLabel": [
+   "{0}, releases: {1}",
+   "{0}, Veröffentlichungen: {1}"
+  ],
+  "calendar.dayEmpty": [
+   "No releases on this day.",
+   "Keine Veröffentlichungen an diesem Tag."
+  ],
+  "calendar.weekDays": [
+   "Days of the week",
+   "Wochentage"
   ],
   "instance.module.Calendar": [
    "Release calendar",
@@ -5873,7 +5965,7 @@
    "Quelle öffnen und bestätigen"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Dateilink von der Quelle"
   ],
   "activity.continueDownload": [
@@ -7767,6 +7859,110 @@
   "arr.applyCondition": [
    "Apply condition type",
    "Bedingungsart anwenden"
+  ],
+  "admin.browser.title": [
+   "Browser",
+   "Browser"
+  ],
+  "admin.browser.state": [
+   "What the browser did",
+   "Was der Browser getan hat"
+  ],
+  "admin.browser.kind": [
+   "Event",
+   "Ereignis"
+  ],
+  "admin.browser.message": [
+   "Details",
+   "Details"
+  ],
+  "admin.browser.at": [
+   "When",
+   "Wann"
+  ],
+  "admin.browser.actions": [
+   "What the browser may do",
+   "Was der Browser tun darf"
+  ],
+  "admin.browser.action": [
+   "Action",
+   "Aktion"
+  ],
+  "admin.browser.start": [
+   "Start the browser",
+   "Browser starten"
+  ],
+  "admin.browser.stop": [
+   "Stop the browser",
+   "Browser stoppen"
+  ],
+  "admin.browser.reset": [
+   "Begin again as a new client",
+   "Als neuer Client wieder beginnen"
+  ],
+  "admin.browser.read": [
+   "Read a page",
+   "Eine Seite lesen"
+  ],
+  "admin.browser.url": [
+   "Address",
+   "Adresse"
+  ],
+  "admin.browser.run": [
+   "Do it",
+   "Ausführen"
+  ],
+  "admin.browser.sources": [
+   "The sources of the instance",
+   "Die Quellen der Instanz"
+  ],
+  "admin.browser.source": [
+   "Source",
+   "Quelle"
+  ],
+  "admin.browser.address": [
+   "Address",
+   "Adresse"
+  ],
+  "admin.browser.test": [
+   "Check",
+   "Prüfen"
+  ],
+  "admin.browser.off": [
+   "The source off",
+   "Die Quelle aus"
+  ],
+  "admin.browser.sourceOff": [
+   "The source searches no longer; the requests stay with the people.",
+   "Die Quelle sucht nicht mehr; die Anfragen bleiben bei den Menschen."
+  ],
+  "admin.browser.wanted": [
+   "The requests of the instance",
+   "Die Anfragen der Instanz"
+  ],
+  "admin.browser.request": [
+   "Request",
+   "Anfrage"
+  ],
+  "admin.browser.search": [
+   "A person searches",
+   "Ein Mensch sucht"
+  ],
+  "admin.browser.searched": [
+   "The request was searched by hand:",
+   "Die Anfrage wurde von Hand gesucht:"
+  ],
+"admin.browser.ran": [
+   "The browser did what was asked.",
+   "Der Browser hat getan, was verlangt war."
+  ],
+  "admin.browser.sourceOk": [
+   "The source answers.",
+   "Die Quelle antwortet."
+  ],
+  "admin.browser.sourceFailed": [
+   "The source does not answer:",
+   "Die Quelle antwortet nicht:"
   ]
  }
 }

@@ -1,127 +1,460 @@
+@use "../../../Framework/Components/MediaImage";
+@use "../../../Framework/Components/ChipBar";
+@use "../../../Framework/Components/LinkMenu";
+@use "../../../Framework/Components/FilterDialog";
+
+// Media type tints (soft background, dot colour); a release carries its type's tint, not an edge stripe.
+$types: (
+    anime: (light-dark(#f0eaff, #35274e), #9761ec),
+    series: (light-dark(#e9efff, #243550), #6987e6),
+    movies: (light-dark(#f4ebf9, #403047), #b879c3),
+    books: (light-dark(#e7f4e9, #244038), #66ad86),
+    manga: (light-dark(#fff0e9, #4a302d), #f29b73),
+    lightnovels: (light-dark(#eaeaff, #333351), #8884dc),
+    music: (light-dark(#e8f2ff, #293950), #5299df),
+    games: (light-dark(#e8f3f0, #273e3d), #55aa99)
+);
+
+// The container, not the viewport, decides the density: the shell's sidebar takes a part of the screen.
 .calendar {
+    container: calendar / inline-size;
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+
+    @each $name, $colors in $types {
+        &__type--#{$name} {
+            --calendar-tint: #{nth($colors, 1)};
+            --calendar-dot: #{nth($colors, 2)};
+        }
+    }
+
+    &__toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+
+        .search-box { flex: 1 1 200px; max-width: 264px; }
+    }
+
     &__navigation {
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 24px;
-    }
-
-    &__day {
-        margin-bottom: 24px;
-
-        h2 {
-            margin: 0 0 8px;
-            font-size: 1rem;
-        }
-
-        ul {
-            display: grid;
-            gap: 6px;
-            margin: 0;
-            padding: 0;
-            list-style: none;
-        }
-    }
-
-    &__entry {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 4px 12px;
-        padding: 10px 14px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-panel);
-        background: var(--surface);
-
-        img {
-            flex: none;
-            align-self: center;
-            width: 32px;
-            height: 48px;
-            border-radius: 4px;
-            object-fit: cover;
-        }
-    }
-
-    &__unit,
-    &__state {
-        color: var(--muted);
-        font-size: 13px;
+        align-items: center;
+        gap: 7px;
+        margin-left: auto;
     }
 
     &__period {
-        align-self: center;
-        min-width: 10ch;
-        font-weight: 650;
+        min-width: 141px;
+        font-size: 13px;
+        font-weight: 780;
         text-align: center;
+        white-space: nowrap;
     }
 
-    // Seven columns of whole weeks; small screens list the days with releases.
+    // Month, week and day share one framed board.
+    &__board {
+        overflow: hidden;
+        border: 1px solid var(--accent-line);
+        border-radius: 22px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
+
+    &__weekdays,
     &__grid {
         display: grid;
         grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 4px;
+    }
+
+    &__weekdays {
+        border-bottom: 1px solid var(--accent-line);
+        background: var(--accent-soft);
     }
 
     &__weekday {
-        padding: 4px 6px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 650;
+        padding: 12px 0;
+        color: var(--accent-text);
+        font-size: 11px;
+        font-weight: 790;
+        text-align: center;
+        text-transform: uppercase;
     }
 
     &__cell {
-        display: grid;
-        align-content: start;
-        gap: 4px;
-        min-height: 96px;
-        padding: 6px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-panel);
+        position: relative;
+        min-width: 0;
+        min-height: 166px;
+        padding: 12px 9px;
+        border-right: 1px solid var(--accent-line);
+        border-bottom: 1px solid var(--accent-line);
         background: var(--surface);
 
-        ul {
-            display: grid;
-            gap: 4px;
-            margin: 0;
-            padding: 0;
-            list-style: none;
-        }
+        &:nth-child(7n) { border-right: 0; }
+        &--outside { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); .calendar__events, .calendar__date-top { opacity: 0.55; } }
+        &--today { background: var(--accent-soft); }
+        &--picked { outline: 2px solid var(--accent); outline-offset: -2px; }
+    }
 
-        .calendar__entry {
-            gap: 6px;
-            padding: 4px;
-            border: 0;
-            font-size: 13px;
-        }
-
-        &--outside {
-            opacity: 0.6;
-        }
-
-        &[aria-current="date"] {
-            border-color: var(--accent);
-        }
+    &__date-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 4px;
+        height: 30px;
     }
 
     &__date {
-        color: var(--muted);
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        color: var(--text);
         font-size: 12px;
-        font-weight: 650;
+        font-weight: 770;
+        text-decoration: none;
+
+        &:hover { background: var(--accent-soft); }
     }
+
+    &__cell--today &__date { background: var(--accent); color: var(--accent-contrast); }
+    &__cell--picked:not(&__cell--today) &__date { background: var(--accent-soft); color: var(--accent-text); }
+
+    &__count {
+        padding-top: 4px;
+        color: var(--muted);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+    }
+
+    &__events {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    &__event {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        min-height: 32px;
+        padding: 3px 5px;
+        border-radius: 8px;
+        background: var(--calendar-tint);
+        color: var(--text);
+        text-decoration: none;
+
+        &:hover { outline: 1px solid var(--accent-line); }
+    }
+
+    &__text {
+        display: grid;
+        flex: 1;
+        gap: 1px;
+        min-width: 0;
+    }
+
+    &__name {
+        font-size: 11px;
+        font-weight: 760;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    &__unit,
+    &__status {
+        font-size: 10px;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    &__unit { color: var(--muted); }
+    &__status { color: var(--accent-text); font-weight: 700; }
+
+    &__poster {
+        display: block;
+        flex: none;
+        overflow: hidden;
+        border-radius: 5px;
+        background: color-mix(in srgb, var(--calendar-dot, var(--accent)) 35%, var(--surface));
+
+        .media-image { width: 100%; height: 100%; }
+    }
+
+    &__event &__poster { width: 22px; height: 32px; }
+    &__card &__poster { width: 36px; height: 50px; border-radius: 7px; }
+    &__row &__poster { width: 44px; height: 62px; border-radius: 8px; }
 
     &__more {
+        display: inline-flex;
+        margin-top: 3px;
+        padding: 5px 6px;
+        border-radius: var(--radius-control);
+        color: var(--accent-text);
+        font-size: 11px;
+        font-weight: 770;
+        text-decoration: none;
+
+        &:hover { background: var(--accent-soft); }
+    }
+
+    // Coloured strips replace the events on phones; the chosen day lists them below.
+    &__strips { display: none; }
+
+    &__strip {
+        display: block;
+        height: 10px;
+        overflow: hidden;
+        padding: 0 2px;
+        border-radius: 2px;
+        background: var(--calendar-dot);
+        color: #fff;
+        font-size: 6px;
+        font-weight: 780;
+        line-height: 10px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    &__strips-more {
+        display: block;
+        color: var(--accent-text);
+        font-size: 8px;
+        font-weight: 830;
+        line-height: 11px;
+        text-align: center;
+        text-decoration: none;
+    }
+
+    &__panel {
+        margin-top: 12px;
+        overflow: hidden;
+        border: 1px solid var(--accent-line);
+        border-radius: 18px;
+        background: var(--surface);
+    }
+
+    // On a wide month the day opens below the grid only once chosen.
+    &__month > &__panel:not(&__panel--chosen) { display: none; }
+
+    &__panel-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 10px;
+        padding: 14px 16px;
+        background: var(--accent-soft);
+        font-size: 13px;
+        font-weight: 770;
+
+        strong { color: var(--accent-text); font-size: 11px; }
+    }
+
+    &__rows {
+        display: grid;
+        gap: 7px;
+        margin: 0;
+        padding: 8px;
+        list-style: none;
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+        padding: 8px 12px 8px 8px;
+        border-radius: 14px;
+        background: var(--calendar-tint);
+        color: var(--text);
+        text-decoration: none;
+
+        &:hover { outline: 1px solid var(--accent-line); }
+        .ui-icon { flex: none; color: var(--muted); }
+    }
+
+    &__row-text {
+        display: grid;
+        flex: 1;
+        gap: 2px;
+        min-width: 0;
+
+        strong { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+    }
+
+    &__empty {
+        margin: 0;
+        padding: 18px 16px;
+        color: var(--muted);
         font-size: 12px;
     }
 
-    @media (max-width: 780px) {
-        &__grid {
-            grid-template-columns: minmax(0, 1fr);
-        }
-
-        &__weekday,
-        &__cell--empty {
-            display: none;
-        }
+    &__week {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 10px;
+        padding: 17px;
+        border: 1px solid var(--accent-line);
+        border-radius: 22px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
     }
+
+    &__week-narrow { display: none; }
+
+    &__week-day {
+        min-width: 0;
+        min-height: 380px;
+        padding: 11px;
+        border: 1px solid var(--accent-line);
+        border-radius: 16px;
+        background: var(--surface);
+
+        &--today { border-color: var(--accent); background: var(--accent-soft); }
+    }
+
+    &__week-name {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 750;
+        text-transform: capitalize;
+    }
+
+    &__big-date {
+        display: block;
+        margin: 4px 0 13px;
+        color: var(--text);
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        text-decoration: none;
+
+        &:hover { color: var(--accent-text); }
+    }
+
+    &__cards {
+        display: grid;
+        gap: 9px;
+    }
+
+    &__card {
+        display: grid;
+        gap: 7px;
+        padding: 8px;
+        border-radius: 13px;
+        background: var(--calendar-tint);
+        color: var(--text);
+        text-decoration: none;
+
+        &:hover { outline: 1px solid var(--accent-line); }
+    }
+
+    &__card-art {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    &__card-text {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+
+        strong { font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+    }
+
+    &__strip-dates {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 5px;
+        padding: 12px 14px 6px;
+    }
+
+    &__strip-date {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        padding: 8px 2px;
+        border: 1px solid transparent;
+        border-radius: 16px;
+        color: var(--muted);
+        text-decoration: none;
+
+        span:first-child { font-size: 10px; font-weight: 760; }
+        strong { font-size: 18px; line-height: 1.3; }
+        &:hover { background: var(--surface-hover); }
+
+        &--selected { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+        &--today strong { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--accent-contrast); }
+    }
+
+    &__dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        &--filled { background: var(--accent); }
+    }
+
+    &__week-narrow &__panel,
+    &__dayview &__panel {
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+    }
+
+    &__dayview &__rows { padding: 8px 14px 16px; }
+
+    // Without room for text a day shows posters only.
+    @container calendar (max-width: 880px) {
+        &__week { display: none; }
+        &__week-narrow { display: block; }
+        &__week-narrow &__strip-dates { padding-top: 14px; }
+        &__cell { min-height: 105px; padding: 6px 4px; }
+        &__events { flex-direction: row; flex-wrap: wrap; gap: 3px; max-height: 45px; overflow: hidden; }
+        &__item:nth-child(n+4) { display: none; }
+        &__event { display: block; flex: 0 0 auto; width: 19px; min-height: 28px; padding: 0; background: transparent; }
+        &__event &__poster { width: 19px; height: 28px; border-radius: 4px; }
+        &__text,
+        &__more { display: none; }
+        &__count { color: var(--accent-text); font-size: 9px; font-weight: 740; }
+        &__date-top { align-items: center; height: 29px; }
+        &__toolbar .search-box { max-width: none; }
+    }
+
+    // Phones: the Google-style month with strips, the whole toolbar on three rows.
+    @container calendar (max-width: 640px) {
+        &__toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
+        &__toolbar .search-box { max-width: none; }
+        &__toolbar .navigation-tabs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-self: stretch; }
+        &__toolbar .navigation-tabs__link { min-height: 40px; padding: 6px 8px; }
+        &__navigation { grid-column: 1 / -1; justify-content: space-between; margin-left: 0; }
+        &__period { flex: 1; min-width: 0; }
+        &__board { border-radius: 17px; }
+        &__weekday { padding: 8px 0; font-size: 9px; letter-spacing: 0.3px; }
+        &__cell { height: 80px; min-height: 80px; padding: 4px 2px; overflow: hidden; cursor: pointer; }
+        &__cell--outside { opacity: 0.6; }
+        &__date-top { justify-content: center; height: 26px; }
+        &__date { width: 22px; height: 22px; font-size: 10px; &::after { content: ""; position: absolute; inset: 0; } }
+        &__count,
+        &__events,
+        &__more { display: none; }
+        &__strips { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        &__month > &__panel:not(&__panel--chosen) { display: block; }
+        &__strip-dates { gap: 2px; padding-inline: 8px; }
+        &__strip-date { padding: 7px 1px; strong { font-size: 15px; } }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .calendar * { transition: none; }
 }

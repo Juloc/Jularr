@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "pt-BR",
  "name": "Português (Brasil)",
  "reviewed": false,
@@ -5561,7 +5561,7 @@
    "Abrir a fonte e confirmar"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Link do arquivo na fonte"
   ],
   "activity.continueDownload": [

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -42,6 +43,18 @@ namespace Jularr.E2E.Tests
                     Assert.IsTrue(response.Status < 400, link + " answered " + response.Status);
                     Assert.AreEqual(1, await page.Locator("main").CountAsync(), link + " has no page content");
                 }
+
+                // The calendar shows its month, switches to the week and the day in place, and opens its filter as a dialog.
+                await page.GotoAsync("/Calendar");
+                await Assertions.Expect(page.Locator(".calendar__grid")).ToBeVisibleAsync();
+                await page.GetByRole(AriaRole.Link, new() { Name = "Week", Exact = true }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("view=week"));
+                await Assertions.Expect(page.Locator(".calendar__week")).ToBeVisibleAsync();
+                await page.GetByRole(AriaRole.Link, new() { Name = "Day", Exact = true }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("view=day"));
+                await Assertions.Expect(page.Locator(".calendar__strip-dates")).ToBeVisibleAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Filter", Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator("dialog.filter-dialog[open]")).ToBeVisibleAsync();
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
             }

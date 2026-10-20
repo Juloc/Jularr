@@ -14,8 +14,10 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
+using Jularr.Integrations.Logic.Browser;
 using Jularr.Integrations.Logic.Igdb;
 using Jularr.Integrations.Logic.Libretro;
 using Jularr.Integrations.Logic.MusicBrainz;
@@ -128,6 +130,11 @@ namespace Jularr.Backend.Service.Core
                 options.SpeechPath = Folder(options.SpeechPath, "speech");
                 options.CoversPath = Folder(options.CoversPath, "covers");
             });
+            services.Configure<BrowserOptions>(options =>
+            {
+                configuration.GetSection("Browser").Bind(options);
+                options.ProfilePath = Folder(options.ProfilePath, "browser");
+            });
 
             // Metadata mirrors.
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
@@ -215,6 +222,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
+            services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.TryAddTransient<ReadingContent>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<SpeechFiles>();

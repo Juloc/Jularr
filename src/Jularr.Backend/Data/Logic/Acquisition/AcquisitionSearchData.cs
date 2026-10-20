@@ -125,6 +125,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public IReadOnlyList<string> Stages { get; }
         public IReadOnlyList<string> IndexerFlags { get; init; } = [];
 
+        // The file is one part of a work; the rest of it is elsewhere.
+        public bool IsPart { get; init; }
+
         public string Identity => ConnectionId + ":" + (Guid ?? Title);
     }
 
