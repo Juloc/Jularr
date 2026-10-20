@@ -182,9 +182,17 @@ namespace Jularr.E2E.Tests
         {
             await OpenWantedAsync(page, title);
 
-            // Films and series open on their management page, the other types on their wanted page.
+            // Films open on their management page, the other types on their wanted page.
             var interactive = page.GetByRole(AriaRole.Link, new() { Name = "Interactive search", Exact = true });
             await FollowAsync(page, interactive.Or(page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true })));
+        }
+
+        // The releases of one episode, searched from its row on the series page.
+        public static async Task SearchEpisodeAsync(IPage page, string title, string episodeNumber)
+        {
+            await OpenWantedAsync(page, title);
+            var row = page.Locator("tr.work-row").Filter(new() { Has = page.Locator("td[data-col=number]").GetByText(episodeNumber, new() { Exact = true }) });
+            await SubmitAsync(page, row.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Interactive search for this episode" }) }));
         }
 
         public static async Task GrabAsync(IPage page, FakeRelease release)

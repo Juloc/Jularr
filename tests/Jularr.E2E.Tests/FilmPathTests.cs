@@ -49,11 +49,7 @@ namespace Jularr.E2E.Tests
 
                 // A single episode is searched by its season and number.
                 fakes.Offer(episode);
-                await Steps.OpenSearchAsync(page, FakeServices.SeriesTitle);
-                var search = Steps.FormWith(page, "Start search");
-                await search.Locator("[name=ParentUnitNumber]").FillAsync("1");
-                await search.Locator("[name=UnitNumber]").FillAsync("1");
-                await Steps.SubmitAsync(page, search);
+                await Steps.SearchEpisodeAsync(page, FakeServices.SeriesTitle, "1");
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = episode.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, episode);
                 CollectionAssert.AreEquivalent(new[] { fakes.NzbAddress(film).ToString(), fakes.NzbAddress(episode).ToString() }, fakes.Grabbed.ToArray());

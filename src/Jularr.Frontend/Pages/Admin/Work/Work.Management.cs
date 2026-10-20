@@ -91,7 +91,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     form.Hidden(data => data.UnitNumber);
                     form.Submit(Labeled("search", work.MediaTypeId == MediaType.Series ? "work.searchMonitored" : "work.search").Primary());
                 }, Address(Tab, "Automatic"), csrf, new SearchWantedDataV1()));
-                actions.Add(new A(Icon("user"), new Text("work.interactive")).Class("button").Attribute("href", WantedStatus.Home(wanted.Id) + "/Search"));
+                if (work.MediaTypeId != MediaType.Series) actions.Add(new A(Icon("user"), new Text("work.interactive")).Class("button").Attribute("href", WantedStatus.Home(wanted.Id) + "/Search"));
                 actions.Add(new Form<WorkParametersV1>(form => form.Submit(Labeled("sync", "work.refresh")), Address(Tab, "Refresh"), csrf, new WorkParametersV1(work.Id)));
                 actions.Add(new Button(Icon("pencil"), new Text("work.edit")).Attribute("data-dialog-open", "work-edit").Attribute("type", "button"));
             }
