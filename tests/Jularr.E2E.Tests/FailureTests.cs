@@ -165,12 +165,14 @@ namespace Jularr.E2E.Tests
                 // The doubt shows with its reason and the actions that decide it; there is nothing to pause while it waits.
                 var waiting = await WaitForQueueRowAsync(page, "does not clearly match the film");
                 await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Retry import", Exact = true })).ToBeVisibleAsync();
-                await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true })).ToBeVisibleAsync();
+                // Removing asks first: the summary opens the button that deletes the partial files.
+                await Assertions.Expect(waiting.Locator("details.activity-confirm summary", new() { HasText = "Remove" }).First).ToBeVisibleAsync();
                 await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToHaveCountAsync(0);
                 await Evidence.SaveAsync(page, "queue-waiting");
 
                 fakes.Offer(LowerFilm with { File = video });
-                await Steps.SubmitAsync(page, waiting.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove and block", Exact = true }) }));
+                await waiting.Locator("details.activity-confirm summary", new() { HasText = "Remove and block" }).ClickAsync();
+                await Steps.SubmitAsync(page, waiting.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove, delete its partial files and block this release" }) }));
                 CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_bunny", "history:delete:SABnzbd_nzo_bunny" }, fakes.Commands.ToArray());
 
                 // The blocked release is never taken again; the next one is searched at once and imports.
