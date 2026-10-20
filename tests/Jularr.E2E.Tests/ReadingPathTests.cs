@@ -169,7 +169,7 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(390, 844);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 var mobileCanvas = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
-                foreach (var selector in new[] { "[data-action=contents]", "[data-action=notes]", ".reader__tools [data-reader-open-settings=text]", "[data-action=more]" })
+                foreach (var selector in new[] { "[data-action=contents]", "[data-speech-toggle]", ".reader__tools [data-reader-open-settings=text]", "[data-action=more]" })
                 {
                     Assert.IsTrue((await page.Locator(selector).BoundingBoxAsync())!.Y >= mobileCanvas.Y + mobileCanvas.Height, "Mobile dock action must be below the book: " + selector);
                 }
@@ -178,6 +178,8 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
                 await Evidence.SaveAsync(page, "reader-mockup-mobile");
                 await page.Locator("[data-action=more]").ClickAsync();
+                await Assertions.Expect(page.Locator(".reader__more [data-reader-open-panel=notes]")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".reader__more [data-reader-open-panel=speech]")).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "reader-mockup-mobile-more");
                 await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'fullscreen'");

@@ -17,6 +17,9 @@ namespace Jularr.Backend.Service.Core
         // The OCR models, kept once a scanned book needs them; by default under the data folder.
         public string OcrPath { get; set; } = "";
 
+        // Explicitly activated speech packages and an optional catalog.json override.
+        public string SpeechPath { get; set; } = "";
+
         // Optional hardware encoding; software stays the fallback.
         public string[] HardwareAccelerationArguments { get; set; } = [];
         public string[] VideoEncoderArguments { get; set; } = [];

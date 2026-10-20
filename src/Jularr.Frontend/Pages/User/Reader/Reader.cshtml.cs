@@ -13,6 +13,13 @@ using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Reader;
+using Jularr.Frontend.Modules.Speech;
+using Jularr.Backend.Data.Enums.Speech;
+using Jularr.Backend.Data.User.Speech.V1;
+using Jularr.Backend.Service.User.Speech.V1;
+using Jularr.Backend.Data.User.Profile.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
+using Jularr.Backend.Data.Public.Authentication.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -20,7 +27,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadWorkV1 readWork, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
+        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadWorkV1 readWork,
+        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
         : JularrPage
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
@@ -37,6 +45,8 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IReadOnlyList<ReadingAnnotationV1> _marks = [];
         private PageResult<ReadingAnnotationV1>? _notes;
         private IReadOnlyList<ReadingSearchHitV1>? _hits;
+        private SpeechPreferencesV1? _speech;
+        private SaveSpeechPreferencesDataV1? _speechInput;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -89,7 +99,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 _languages.Length > 0 ? Tool("globe", "reader.language", "language") : new Span(),
                 AppearanceTool(false),
                 new Button(new Icon("palette", assets)).IconOnly(texts["reader.settings.paper"]).Attribute("data-reader-open-settings", "paper").Attribute("aria-expanded", "false").Class("button button--icon reader__desktop-tool"),
-                Tool("bookmark", "reader.notes", "notes"),
+                Tool("bookmark", "reader.notes", "notes").Class("button button--icon reader__desktop-tool"),
+                new Button(new Icon("headphones", assets)).IconOnly(texts["speech.title"]).Attribute("data-speech-toggle", "").Attribute("aria-pressed", "false").Attribute("disabled", "disabled"),
                 Tool("search", "reader.search", "search").Class("button button--icon reader__desktop-tool"),
                 new Button(new Icon("text-select", assets)).IconOnly(texts["reader.selectText"]).Attribute("data-reader-select", "").Attribute("aria-pressed", "false"),
                 Tool("player-more", "reader.more", "more")
@@ -131,6 +142,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 settings,
                 languages,
                 downloads,
+                SpeechPanel(document, index),
+                SpeechTransport(),
                 More(true, converted.Length > 0 || document.TranslatedLanguages.Length > 0),
                 Toolbar(),
                 Popover(),
@@ -153,6 +166,19 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-query", Query ?? "")
                 .Attribute("data-page-label", texts["reader.pagePosition"])
                 .Attribute("data-animation-failed", texts["reader.animationUnavailable"]);
+            if (_speech is not null)
+            {
+                view.Attribute("data-speech-preferences", JsonSerializer.Serialize(_speech, Json))
+                    .Attribute("data-speech-language", SpeechLanguage(document))
+                    .Attribute("data-speech-original-language", document.Language ?? document.OriginalLanguage ?? texts.Locale)
+                    .TextAttribute("data-speech-translation-label", "speech.translationPending")
+                    .TextAttribute("data-speech-unavailable-label", "speech.unavailable")
+                    .TextAttribute("data-speech-failed-label", "speech.failed")
+                    .TextAttribute("data-speech-speaking-label", "speech.speaking")
+                    .TextAttribute("data-speech-paused-label", "speech.paused")
+                    .TextAttribute("data-speech-pause-label", "speech.pause")
+                    .TextAttribute("data-speech-resume-label", "speech.resume");
+            }
             if (texts.CanTranslate())
             {
                 // The section's translations are shared; the files to translate it come with its route.
@@ -265,6 +291,8 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IUiComponent More(bool text, bool download) => new Div(
             new Div(new H2(new Text("reader.more")), new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-reader-close", "more")).Class("reader__panel-heading"),
             text ? new Button(new Icon("search", assets), new Text("reader.search")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-open-panel", "search").Attribute("aria-expanded", "false") : new Span(),
+            text ? new Button(new Icon("bookmark", assets), new Text("reader.notes")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-open-panel", "notes").Attribute("aria-expanded", "false") : new Span(),
+            text ? new Button(new Icon("headphones", assets), new Text("speech.settings")).Class("button reader__menu-item").Attribute("data-reader-open-panel", "speech").Attribute("aria-expanded", "false") : new Span(),
             new Button(new Icon("settings", assets), new Text("reader.settings")).Class("button reader__menu-item").Attribute("data-reader-open-settings", "all").Attribute("aria-expanded", "false"),
             new Button(new Icon("player-theater", assets), new Text("reader.theater")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-command", "theater").Attribute("aria-pressed", "false"),
             new Button(new Icon("player-fullscreen", assets), new Text("player.fullscreen")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-command", "fullscreen").Attribute("aria-pressed", "false"),
@@ -418,6 +446,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 return;
             }
 
+            var profile = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: ct)).ProfileId
+                ?? throw new UnauthorizedAccessException("An active profile is required.");
+            _speech = await readSpeech.ExecuteAsync<SpeechPreferencesV1>(new ReadProfileParametersV1(profile), ct);
+
             // Without a section in the address, continue where this profile stopped.
             var index = SectionIndex ?? (_document.Locator is { } locator && locator.StartsWith('s') && int.TryParse(locator[1..].Split('/')[0], NumberStyles.None, CultureInfo.InvariantCulture, out var saved)
                 ? saved
@@ -438,6 +470,33 @@ namespace Jularr.Frontend.Pages.User.Reader
         }
 
         private string ProfileLanguage => CultureInfo.GetCultureInfo(texts.Locale).TwoLetterISOLanguageName;
+
+        private string SpeechLanguage(ReadingDocumentV1 document) => Chosen(document) is { } chosen && chosen != "original" ? chosen
+            : document.Language ?? document.OriginalLanguage ?? texts.Locale;
+
+        private IUiComponent SpeechPanel(ReadingDocumentV1 document, int index) => new Div(
+            new Div(new H2(new Text("speech.settings")), new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-reader-close", "speech")).Class("reader__panel-heading"),
+            _speech is null ? new Span() : new SpeechSettings(_speech, SpeechLanguage(document), "/Read/" + Id.ToString(CultureInfo.InvariantCulture)
+                + "?handler=Speech&s=" + index.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", FormError, _speechInput)
+        ).Class("reader__panel").Attribute("data-panel", "speech").Attribute("hidden", "hidden");
+
+        private IUiComponent SpeechTransport() => new Div(
+            new Span().Attribute("data-speech-status", "").Attribute("role", "status"),
+            new Button(new Icon("player-pause", assets), new Icon("player-play", assets)).IconOnly(texts["speech.pause"])
+                .Attribute("data-speech-pause", "").Attribute("aria-pressed", "false"),
+            new Button(new Icon("close", assets)).IconOnly(texts["speech.stop"]).Attribute("data-speech-stop", ""),
+            new Button(new Icon("settings", assets)).IconOnly(texts["speech.settings"]).Attribute("data-reader-open-panel", "speech").Attribute("aria-expanded", "false")
+        ).Class("reader__speech").Attribute("data-speech-transport", "").Attribute("hidden", "hidden").Attribute("role", "toolbar").Attribute("aria-label", texts["speech.title"]);
+
+        public async Task<IActionResult> OnPostSpeechAsync([BindRequired] decimal rate, [BindRequired] decimal pitch, [BindRequired] decimal volume, long version,
+            string language, SpeechProviderType providerTypeId, string? modelId, string? voiceId)
+        {
+            var profile = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
+                ?? throw new UnauthorizedAccessException("An active profile is required.");
+            _speechInput = new SaveSpeechPreferencesDataV1(rate, pitch, volume, version, language, providerTypeId, modelId, voiceId);
+            await saveSpeech.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profile), _speechInput, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Reader/Reader", new { id = Id, s = SectionIndex });
+        }
 
         // The profile's choice for the book, else its language when Mozilla reaches it, else the original.
         private string Chosen(ReadingDocumentV1 document) => document.ReadingLanguage is { } chosen && (chosen == "original" || _languages.Contains(chosen)) ? chosen

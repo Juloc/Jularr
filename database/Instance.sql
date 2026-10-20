@@ -1,5 +1,12 @@
 BEGIN;
 
+-- Packages are only exposed after explicit Owner activation and a verified download.
+CREATE TABLE "SpeechModels" (
+    "Hash" varchar(64) PRIMARY KEY CHECK ("Hash" ~ '^[0-9a-f]{64}$'),
+    "IsEnabled" boolean NOT NULL,
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
+);
+
 CREATE TABLE "InstanceSettings" (
     "Id" bigint PRIMARY KEY CHECK ("Id" = 1),
     "Name" varchar(128) NOT NULL CHECK (length(btrim("Name")) > 0),

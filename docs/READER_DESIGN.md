@@ -43,15 +43,18 @@ buttons no longer float over the paper. The control strips are borderless; the
 shared Range owns its thin accent-coloured track, thumb and keyboard focus, with
 no surrounding seek-field outline. Clean uses the canonical purple accent.
 
-Read-aloud is required, not an optional feature dropped from the design. Its
-missing functional integration is tracked by [Speech #1299](https://github.com/Juloc/Jularr/issues/1299).
-The owner requested merging this Reader checkpoint first, then the complete
-speech foundation, not a temporary browser-only preference store. Auto-scroll
+Read-aloud is required. The [Speech integration](SPEECH.md) now connects browser
+device voices with canonical server profile preferences, selection/visible-text
+reading, word paint on the existing book, following and Pause/Resume/Stop.
+Neural-browser runtime/cache and cross-chapter continuation remain tracked by
+[Speech #1299](https://github.com/Juloc/Jularr/issues/1299); this is not a
+temporary browser-only preference store. Auto-scroll
 Start/Pause is also still missing ([Reader UX #286](https://github.com/Juloc/Jularr/issues/286));
 no inert Play button is presented as a finished implementation.
 
 On mobile the same buttons occupy CSS Grid slots below the book: Contents,
-annotations, Appearance, language when available, and More. Their circular icon
+Read aloud, Appearance, language when available, and More. Annotations and voice
+settings remain reachable in More. Their circular icon
 surfaces and short captions follow the reference. Selection remains in the header;
 search, settings and view commands remain reachable from More. There is no
 duplicate mobile form or JavaScript panel positioning.

@@ -36,6 +36,8 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 ## User and account pages
 
+- [Read-aloud session](Modules/Speech/DeviceSession.ts), [profile fields](Modules/Speech/SpeechSettings.cs), [device voice options](Modules/Speech/Preferences.ts), [Reader integration](Modules/Reader/Speech.ts): canonical server profile preferences, Web Speech default, bounded lazy utterances, cancellation, selection/word highlighting on existing page prints and pagination following. [Scope/gaps](../../docs/SPEECH.md); tests `Tools/speech.test.mjs`, `SpeechTests`, `SpeechPathTests`.
+
 - [Discover](Pages/User/Discover/Index.cshtml.cs), [client](Pages/User/Discover/Index.entry.ts): local-first landing with Continue Watching, Listening and Reading shelves, recommendation HTML fragments (whole catalogs in one read), debounced search with kept-title suggestions under the field and progressive result paging.
 - [Provider title](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs): TMDB title and authorized request before canonical Work creation; [catalog title](Pages/User/DiscoverCatalog/DiscoverCatalog.cshtml.cs) the same for a book, light novel, manga, album or game found in its catalog, and an anime season shown as AniList shows it (a known one opens its series). The scopes of the media-type bar come from `ReadDiscoverScopesV1`; the catalog page reads its title from the catalog.
 - [Library](Pages/User/Library/Library.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): real bounded catalogs; both narrow by [LibraryScopes](Framework/LibraryScopes.cs) type tabs and sort.
@@ -58,6 +60,8 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Setup](Pages/Setup/Start/Start.cshtml.cs), [Modules](Pages/Setup/Instance/Instance.cshtml.cs), [Libraries](Pages/Setup/Storage/Storage.cshtml.cs), [Sources](Pages/Setup/Sources/Sources.cshtml.cs): conditional flow with download storage after libraries; [SetupWizard.cs](Framework/SetupWizard.cs) owns navigation, source tabs and resume mapping. Source tabs reuse the canonical Admin connection/profile/takeover editors at setup addresses. [Setup contract](../../docs/INSTANCE_SETUP.md).
 
 ## Admin pages
+
+- [Speech models](Pages/Admin/Speech/Speech.cshtml.cs): `/Admin/Instance/Speech`, reached from the existing module administration; real catalog, license references and explicit verified-package activation using shared Table/Form. [Speech scope](../../docs/SPEECH.md); tests `SpeechTests`, `SpeechPathTests`.
 
 - [Download storage](Pages/Admin/DownloadStorage/DownloadStorage.cshtml.cs), also `/Setup/DownloadStorage` after library storage with Acquisition: per-area Incomplete/Complete folder dialogs, reserve, optional limits and parallel jobs. Uses the canonical Storage services; browser tests: `DownloadStorageTests`.
 

@@ -84,7 +84,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (settings.mode !== 'paged') { edge(delta)?.click(); return; }
         if (!book?.turn(delta)) commit(spread + delta);
     };
-    const reveal = (element: HTMLElement): void => {
+    const reveal = (element: HTMLElement | Range): void => {
         navigation++;
         if (settings.mode === 'scroll') {
             content.scrollTop += element.getBoundingClientRect().top - content.getBoundingClientRect().top - 24;

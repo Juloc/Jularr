@@ -9,6 +9,8 @@ namespace Jularr.Backend.Service.Core.Localization
         internal static IReadOnlyList<UiTextResource> English { get; } =
         [
             new("errors.invalid_data", "Please check the supplied values."),
+            new("errors.speech_catalog_unavailable", "The speech model catalog could not be read. Check its format and file permissions."),
+            new("errors.speech_download_failed", "The speech package could not be downloaded and verified. It was not activated."),
             new("errors.authentication_required", "Please sign in to continue."),
             new("errors.permission_denied", "You do not have permission to perform this action."),
             new("errors.not_found", "The requested resource was not found."),

@@ -88,6 +88,12 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                 if (!lines.length) continue;
                 const style = getComputedStyle(node.parentElement!);
                 if (!measurement && style.visibility !== 'visible' || style.display === 'none') continue;
+                const block = node.parentElement!.closest<HTMLElement>('[data-b]');
+                let blockOffset = 0;
+                if (block) {
+                    const before = document.createRange(); before.setStart(block, 0); before.setEnd(node, 0);
+                    blockOffset = before.toString().length;
+                }
                 const flow = (box: DOMRect) => Math.floor(((rtl ? bounds.right - source.scrollLeft - box.right
                     : box.left - bounds.left + source.scrollLeft) + .1) / pitch) * (height + 1) + box.top - bounds.top;
                 // Character flow is monotonic by column/line, including RTL text.
@@ -118,6 +124,12 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                     Object.assign(ink.style, { whiteSpace: 'pre', lineHeight: '1', margin: '0', padding: '0', border: '0' });
                     const preserved = ['pre', 'pre-wrap', 'break-spaces'].includes(style.whiteSpace);
                     ink.textContent = preserved ? range.toString() : range.toString().replace(/\s+/g, ' ');
+                    if (block) {
+                        ink.dataset.printBlock = block.dataset.b;
+                        ink.dataset.printStart = String(blockOffset + start);
+                        ink.dataset.printEnd = String(blockOffset + end);
+                        ink.dataset.printPreserved = String(preserved);
+                    }
                     const mark = node.parentElement!.closest('mark');
                     if (mark) ink.style.backgroundColor = getComputedStyle(mark).backgroundColor;
                     const signature = FontProperties.map(property => style.getPropertyValue(property)).join('|');
