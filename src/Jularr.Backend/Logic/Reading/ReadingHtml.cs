@@ -19,10 +19,61 @@ namespace Jularr.Backend.Logic.Reading
         // A page that only the original shows stands in the text as an empty figure naming its number.
         public const string OriginalFigure = "original";
 
+        // The page of the PDF a block of a converted PDF starts on: the anchor between its pages and the reading text.
+        public const string PdfPageAttribute = "data-pdf-page";
+        public const string PdfEndAttribute = "data-pdf-end";
+
         private static readonly string[] Blocks = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "figure", "table", "dt", "dd", "hr"];
         private static readonly HtmlParser Parser = new();
 
         public static string Text(string html) => string.Join(' ', (Parser.ParseDocument(html).Body?.TextContent ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        // The page of a converted PDF the first block holding the words starts on.
+        public static int? PageOfText(string html, string query)
+        {
+            foreach (var block in Parser.ParseDocument(html).QuerySelectorAll("[" + PdfPageAttribute + "]"))
+            {
+                if (block.TextContent.Contains(query, StringComparison.OrdinalIgnoreCase) && PageOf(block) is { } page)
+                {
+                    return page;
+                }
+            }
+
+            return null;
+        }
+
+        // The page a numbered block starts on, from its own anchor or the nearest before it; a stand-in for an original page names its page too.
+        public static int? PageOfBlock(string html, int block)
+        {
+            int? page = null;
+            foreach (var element in Parser.ParseDocument(html).QuerySelectorAll("[data-b]"))
+            {
+                page = PageOf(element) ?? page;
+                if (element.GetAttribute("data-b") == block.ToString(CultureInfo.InvariantCulture))
+                {
+                    return page;
+                }
+            }
+
+            return null;
+        }
+
+        // The first numbered block that ends on this page or later: the one the page starts in, or the first to start after it.
+        public static int? BlockOfPage(string html, int page)
+        {
+            foreach (var element in Parser.ParseDocument(html).QuerySelectorAll("[data-b]"))
+            {
+                var end = int.TryParse(element.GetAttribute(PdfEndAttribute), NumberStyles.None, CultureInfo.InvariantCulture, out var ended) ? ended : PageOf(element);
+                if (end is { } found && found >= page && int.TryParse(element.GetAttribute("data-b"), NumberStyles.None, CultureInfo.InvariantCulture, out var block))
+                {
+                    return block;
+                }
+            }
+
+            return null;
+        }
+
+        private static int? PageOf(IElement element) => int.TryParse(element.GetAttribute(PdfPageAttribute) ?? element.GetAttribute("data-page"), NumberStyles.None, CultureInfo.InvariantCulture, out var page) && page >= 1 ? page : null;
 
         public static string ResourceUrl(long documentId, string path) =>
             "/api/v1/reading/documents/" + documentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=" + Uri.EscapeDataString(path);
@@ -107,6 +158,18 @@ namespace Jularr.Backend.Logic.Reading
 
             Figures(clean, sources, imageSize);
 
+            // The page of a PDF a block starts on is a number or nothing.
+            foreach (var marked in clean.Body!.QuerySelectorAll("[" + PdfPageAttribute + "],[" + PdfEndAttribute + "]").ToArray())
+            {
+                foreach (var attribute in new[] { PdfPageAttribute, PdfEndAttribute })
+                {
+                    if (marked.HasAttribute(attribute) && (!int.TryParse(marked.GetAttribute(attribute), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number < 1))
+                    {
+                        marked.RemoveAttribute(attribute);
+                    }
+                }
+            }
+
             // Numbered blocks are the semantic locator.
             var count = 0;
             foreach (var block in clean.Body!.QuerySelectorAll(string.Join(',', Blocks)))
@@ -166,6 +229,11 @@ namespace Jularr.Backend.Logic.Reading
                 if (figure is null && alone)
                 {
                     figure = clean.CreateElement("figure");
+                    if (block.GetAttribute(PdfPageAttribute) is { } anchored)
+                    {
+                        figure.SetAttribute(PdfPageAttribute, anchored);
+                    }
+
                     block.ReplaceWith(figure);
                     figure.AppendChild(image);
                 }
@@ -183,6 +251,8 @@ namespace Jularr.Backend.Logic.Reading
             sanitizer.AllowedAttributes.Add("data-b");
             sanitizer.AllowedAttributes.Add("data-figure");
             sanitizer.AllowedAttributes.Add("data-page");
+            sanitizer.AllowedAttributes.Add(PdfPageAttribute);
+            sanitizer.AllowedAttributes.Add(PdfEndAttribute);
             sanitizer.AllowedCssProperties.Clear();
             sanitizer.AllowedSchemes.Clear();
             sanitizer.AllowedSchemes.UnionWith(["http", "https", "mailto"]);

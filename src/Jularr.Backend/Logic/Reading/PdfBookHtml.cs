@@ -33,34 +33,39 @@ namespace Jularr.Backend.Logic.Reading
 
                 var path = "pdf/" + index.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml";
                 var prepared = ReadingHtml.Prepare(html.Append("</body></html>").ToString(), path, documentId, noSections, pictures);
-                sections.Add(new PdfPreparedSection(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks), prepared.Html));
+
+                // The pages the chapter covers anchor the section between the original and the reading text.
+                var pages = chapter.Blocks.SelectMany(block => new[] { block.Page, block.EndPage }).Append(chapter.TitlePage).Where(page => page > 0).ToArray();
+                sections.Add(new PdfPreparedSection(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks, pages.DefaultIfEmpty(0).Min(), pages.DefaultIfEmpty(0).Max()), prepared.Html));
             }
 
-            return new PdfPreparedBook(sections, toc);
+            return new PdfPreparedBook(sections, toc, [.. book.Chapters.SelectMany(chapter => chapter.Blocks).Where(block => block.Figure == ReadingHtml.OriginalFigure).Select(block => block.Page).Distinct().Order()]);
         }
 
-        // A paragraph, a small picture in the line, a figure with its alternative text and caption, or the stand-in for a page only the original shows.
+        // A paragraph, a small picture in the line, a figure with its alternative text and caption, or the stand-in for a page only the original shows; each starts on a page.
         private static string Markup(PdfBlock block)
         {
+            var page = block.Page.ToString(CultureInfo.InvariantCulture);
             if (block.Figure == ReadingHtml.OriginalFigure)
             {
-                return "<figure data-figure=\"original\" data-page=\"" + block.Page.ToString(CultureInfo.InvariantCulture) + "\"></figure>";
+                return "<figure data-figure=\"original\" data-page=\"" + page + "\"></figure>";
             }
 
+            var anchor = block.Page > 0 ? " " + ReadingHtml.PdfPageAttribute + "=\"" + page + "\"" + (block.EndPage > block.Page ? " " + ReadingHtml.PdfEndAttribute + "=\"" + block.EndPage.ToString(CultureInfo.InvariantCulture) + "\"" : "") : "";
             if (block.Image is not { } picture)
             {
-                return "<p>" + WebUtility.HtmlEncode(block.Text) + "</p>";
+                return "<p" + anchor + ">" + WebUtility.HtmlEncode(block.Text) + "</p>";
             }
 
             var source = WebUtility.HtmlEncode(picture["pdf/".Length..]);
             return block.Figure is null
-                ? "<p><img alt=\"\" src=\"" + source + "\" /></p>"
-                : "<figure data-figure=\"" + block.Figure + "\"><img alt=\"" + WebUtility.HtmlEncode(block.Alt ?? "") + "\" src=\"" + source + "\" />"
+                ? "<p" + anchor + "><img alt=\"\" src=\"" + source + "\" /></p>"
+                : "<figure data-figure=\"" + block.Figure + "\"" + anchor + "><img alt=\"" + WebUtility.HtmlEncode(block.Alt ?? "") + "\" src=\"" + source + "\" />"
                     + (block.Caption is { } caption ? "<figcaption>" + WebUtility.HtmlEncode(caption) + "</figcaption>" : "") + "</figure>";
         }
     }
 
     internal sealed record PdfPreparedSection(ReadingStructureSection Structure, string Html);
 
-    internal sealed record PdfPreparedBook(IReadOnlyList<PdfPreparedSection> Sections, IReadOnlyList<ReadingStructureEntry> Toc);
+    internal sealed record PdfPreparedBook(IReadOnlyList<PdfPreparedSection> Sections, IReadOnlyList<ReadingStructureEntry> Toc, IReadOnlyList<int> OriginalPages);
 }

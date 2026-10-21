@@ -10,12 +10,25 @@ import { initializeComicPages } from './ComicPages';
 import { initializeReadAloud } from './Speech';
 import { initializeFigures } from './Figures';
 import { initializeBookmarks } from './bookmarks';
+import { initializeOriginalPages } from './OriginalPages';
+import { initializeViewChoice } from './ViewChoice';
 
 const reader = document.querySelector<HTMLElement>('.reader');
 if (reader) {
     if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
+    else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
     else if (reader.querySelector('[data-role=content]')) initializeText(reader);
+}
+
+// The page of the PDF a block stands on: its own anchor, the nearest one before it, or where its section begins; none for a book that is no PDF.
+function pdfPageOf(block: HTMLElement | undefined, reader: HTMLElement): number | null {
+    for (let element: Element | null = block ?? null; element; element = element.previousElementSibling) {
+        const page = Number((element as HTMLElement).dataset.pdfPage ?? (element as HTMLElement).dataset.page);
+        if (Number.isInteger(page) && page >= 1) return page;
+    }
+    const from = Number(reader.dataset.pdfFrom);
+    return Number.isInteger(from) && from >= 1 ? from : null;
 }
 
 function initializeText(reader: HTMLElement): void {
@@ -47,7 +60,8 @@ function initializeText(reader: HTMLElement): void {
     }));
     initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
-    const requested = new URLSearchParams(location.search).get('b');
+    initializeViewChoice(reader, () => pdfPageOf(paging!.current(), reader));
+    const requested = new URLSearchParams(location.search).get('b') ?? reader.dataset.startBlock ?? null;
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
     const block = requested && /^\d+$/.test(requested) ? requested : match && Number(match[1]) === section ? match[2] : null;
     requestAnimationFrame(() => {
