@@ -1704,6 +1704,7 @@ namespace Jularr.Frontend.Localization
             new("system.tool", "Tool"),
             new("system.tool.ffprobe", "ffprobe (stream analysis)"),
             new("system.tool.ffmpeg", "FFmpeg (conversion)"),
+            new("system.tool.cjxl", "cjxl (cover cache, JPEG XL)"),
             new("system.tool.par2", "par2 (download repair)"),
             new("system.tool.sevenZip", "7-Zip (unpacking, CBR/CB7)"),
             new("system.tool.pgDump", "pg_dump (backups)"),
