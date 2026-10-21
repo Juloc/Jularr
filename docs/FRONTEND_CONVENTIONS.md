@@ -423,9 +423,10 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   (`#813eff`, the mockups' accent; its palette is the mockups' reference palette, other seeds derive theirs). Derive light/dark surfaces, readable accent labels and artwork hue
   from one selected seed through the shared Appearance palette. Theme artwork
   and the mascot follow the accent; media artwork, provider logos
-  and semantic status colors do not. The Jularr mark is the owner's J in a broken ring, one
-  single-colour shape ([brand-mark.svg](../src/Jularr.Frontend/Pages/Shared/brand-mark.svg), the text colour in both skins and
-  brightnesses; the tab icon is [favicon.svg](../src/Jularr.Frontend/Assets/Shared/favicon.svg)). Current choices are device-local; do not
+  and semantic status colors do not. The Jularr mark of the Clean skin is the owner's cosmic parrot, one
+  single-colour path in the text colour ([brand-clean.svg](../src/Jularr.Frontend/Pages/Shared/brand-clean.svg), shown by [Brand.cs](../src/Jularr.Frontend/Pages/Shared/Brand.cs) in the shell, login and profile pages); Original keeps its
+  ring-and-ink mark ([brand-original.svg](../src/Jularr.Frontend/Pages/Shared/brand-original.svg)), shown only in that skin. The tab and home-screen icons are the Clean mark
+  ([favicon.svg](../src/Jularr.Frontend/Assets/Shared/favicon.svg) and the PNGs beside it). Current choices are device-local; do not
   imply implemented instance/profile policy or persistence.
 - Development-only design workshops may show explicitly labeled sample data and
   disabled component states. They must not start library playback or pretend to
