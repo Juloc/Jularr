@@ -11,7 +11,8 @@ namespace Jularr.Frontend.Framework
     // A button with data-drawer-open="id" (and data-drawer-pane="pane") opens it; those buttons show once the script has run, since the panel needs it.
     // The sheet modifier makes it a bottom sheet on a phone (the details of one list row) instead of a full screen.
     // A panel that belongs to an address (the row a `?operation=` names) is rendered open and closes by a link back to the list: it works without script, and with script it shows as the modal and leaves the address behind.
-    public sealed class Drawer(FrontendAssets assets, string id, IReadOnlyList<DrawerPane> panes, bool sheet = false, string? closeHref = null, bool open = false) : IUiComponent
+    // A drawer opens with the page when it carries the answer of its own failed form (openOnLoad).
+    public sealed class Drawer(FrontendAssets assets, string id, IReadOnlyList<DrawerPane> panes, bool sheet = false, string? closeHref = null, bool open = false, bool openOnLoad = false) : IUiComponent
     {
         public static HtmlElement Opener(HtmlElement button, string id, string? pane = null)
         {
@@ -66,7 +67,7 @@ namespace Jularr.Frontend.Framework
             var dialog = new Dialog([.. parts]).Class(sheet ? "drawer drawer--sheet" : "drawer").Attribute("id", id).Attribute("aria-labelledby", id + "-title");
             if (closeHref is not null) dialog.Attribute("data-drawer-return", closeHref);
             if (open) dialog.Attribute("open", "open");
-            dialog.WriteTo(writer, encoder, texts);
+            (openOnLoad ? dialog.Attribute("data-drawer-auto", "") : dialog).WriteTo(writer, encoder, texts);
         }
 
         private sealed class Dialog(params IUiComponent[] content) : HtmlElement("dialog", content);

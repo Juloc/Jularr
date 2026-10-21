@@ -70,3 +70,8 @@ document.addEventListener('click', event => {
         dialog.close();
     }
 }, true);
+
+// A drawer whose form the server answered with an error opens again, so the error is seen where it was made.
+onPage(import.meta.url, () => {
+    document.querySelectorAll<HTMLDialogElement>('dialog.drawer[data-drawer-auto]').forEach(dialog => { if (!dialog.open) dialog.showModal(); });
+});

@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Profile
 {
     public sealed class ProfileModel(ReadAcquisitionProfileV1 read, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
-        ReadCustomFormatsV1 formats, ReadCustomFormatV1 readFormat, IAntiforgery antiforgery) : JularrPage
+        ReadCustomFormatsV1 formats, ReadCustomFormatV1 readFormat, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string NewId = "New";
         private AcquisitionProfileDetailsV1? _profile;
@@ -35,6 +35,12 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         [BindProperty] public int? MaximumSizeMb { get; set; }
         [BindProperty] public long? Version { get; set; }
         [BindProperty] public string? QualityOrder { get; set; }
+
+        // The languages of the choice, in order, separated by commas.
+        [BindProperty] public string? LanguageOrder { get; set; }
+
+        // The fallback when no file carries an asked language.
+        [BindProperty] public LanguageFallbackType LanguageFallback { get; set; } = LanguageFallbackType.Original;
         [BindProperty] public List<GroupRow> QualityGroups { get; set; } = [];
         [BindProperty] public List<ScoreRow> FormatScores { get; set; } = [];
         [BindProperty] public int MinimumFormatScore { get; set; }
@@ -128,6 +134,13 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         if (imported.MinimumPages is { } pages) section.Content(new P(new Text("profile.monitoring.pages"), new ValueText(": " + pages.ToString(CultureInfo.InvariantCulture))));
                     });
                 }
+                fields.Section("profile.section.languages", section =>
+                {
+                    section.Text(item => item.LanguageOrder, "profile.languageOrder");
+                    section.Select(item => item.LanguageFallback, "profile.languageFallback",
+                        Enum.GetValues<LanguageFallbackType>().Select(fallback => new SelectOption(((byte)fallback).ToString(CultureInfo.InvariantCulture),
+                            texts["profile.languageFallback." + fallback])));
+                });
                 fields.Save();
             }, Address(), token, input, FormError);
             page.Content.Add(form);
@@ -146,14 +159,16 @@ namespace Jularr.Frontend.Pages.Admin.Profile
 
         private static SaveAcquisitionProfileDataV1 FromProfile(AcquisitionProfileDetailsV1 profile) => new(profile.Name, profile.MediaTypeId, profile.IsDefault, profile.AllowedQualities,
             profile.UpgradeAllowed, profile.UpgradeCutoffQuality, profile.MinimumSizeMb, profile.MaximumSizeMb, profile.Version, profile.MediaSubtypeId, profile.QualityOrder,
-            profile.QualityGroups, profile.FormatScores, profile.MinimumFormatScore, profile.CutoffFormatScore, profile.MinimumUpgradeFormatScore);
+            profile.QualityGroups, profile.FormatScores, profile.MinimumFormatScore, profile.CutoffFormatScore, profile.MinimumUpgradeFormatScore,
+            profile.LanguageOrder, profile.LanguageFallback);
 
         private static SaveAcquisitionProfileDataV1 NewProfile(MediaType type, MediaSubtype? subtype) => new("", type, false, ProfileQualities.StartingQualities(type, subtype),
             ProfileQualities.StartingCutoff(type) is not null, ProfileQualities.StartingCutoff(type), null, null, null, subtype);
 
         private SaveAcquisitionProfileDataV1 Posted() => new(Name ?? "", MediaTypeId, IsDefault, AllowedQualities ?? [], UpgradeAllowed, UpgradeCutoffQuality, MinimumSizeMb,
             MaximumSizeMb, Version, MediaSubtypeId, Terms(QualityOrder), new(QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name ?? "", Terms(group.Qualities)))),
-            new(FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore);
+            new(FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore,
+            Terms(LanguageOrder), LanguageFallback);
 
         public async Task<IActionResult> OnGetAsync()
         {

@@ -10,7 +10,7 @@ namespace Jularr.Frontend.Framework
         {
             conventions.AuthorizeFolder("/");
             conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
-            foreach (var view in new[] { "Unmatched", "Files", "Naming", "Rename", "Versions" })
+            foreach (var view in new[] { "Unmatched", "Files", "Rename", "Versions" })
             {
                 conventions.AddPageRoute("/Admin/Library/Library", "/Admin/Library/" + view);
             }
@@ -40,6 +40,9 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Users/Users", ServiceApi.RulesReadPolicyName);
             conventions.AuthorizePage("/Admin/Localization/Localization", ServiceApi.LocalizationReadPolicyName);
             conventions.AuthorizePage("/Admin/Languages/Languages", ServiceApi.LocalizationReadPolicyName);
+            conventions.AuthorizePage("/Admin/Modules/Modules", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/MediaTypes/MediaTypes", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Naming/Naming", ServiceApi.StorageReadPolicyName);
             conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
             conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
             conventions.AuthorizePage("/Admin/Instance/Instance", ServiceApi.InstanceSettingsReadPolicyName);

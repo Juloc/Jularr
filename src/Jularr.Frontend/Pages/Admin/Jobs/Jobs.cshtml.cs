@@ -79,9 +79,9 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var allPaused = _jobs.Count > 0 && _jobs.All(job => job.IsPaused);
 
             // One row of filter chips (the state's icon, its name and how many) with the list's own filter.
-            var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, _jobs.Count, Glyph("layers", 14)) };
+            var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, Count: _jobs.Count, Icon: Glyph("layers", 14)) };
             chips.AddRange(Groups.Where(group => group is "ready" or "waiting" or "paused" or "running" or "failed" || counts[group] > 0 || group == state)
-                .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, counts[group], Glyph(ChipIcon(group), 14))));
+                .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, Count: counts[group], Icon: Glyph(ChipIcon(group), 14))));
             var keep = state is null ? null : new Dictionary<string, string> { ["state"] = state };
             page.Content.Add(new ListToolbar(new NavigationTabs(chips, "jobs.filters", "filters"), new SearchBox(Address, "jobs.filter", QueryFilter, keep, ".jobs-list", Glyph("search", 15)),
                 ListToolbar.Count(string.Format(CultureInfo.CurrentCulture, texts["jobs.count"], shown.Count), texts["jobs.count"])));

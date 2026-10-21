@@ -79,7 +79,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 (ActivityFilterType.All, numbers.AllCount), (ActivityFilterType.Active, numbers.ActiveCount), (ActivityFilterType.Waiting, numbers.WaitingCount),
                 (ActivityFilterType.Import, numbers.UnpackingCount), (ActivityFilterType.Errors, numbers.ErrorCount), (ActivityFilterType.History, numbers.HistoryCount)
             };
-            return new NavigationTabs([.. filters.Select(entry => new NavigationTab("activity.filter." + entry.Filter, Address(filter: entry.Filter), entry.Filter == Filter, entry.Count, Glyph(FilterIcon(entry.Filter), 14)))], "activity.filters", "filters");
+            return new NavigationTabs([.. filters.Select(entry => new NavigationTab("activity.filter." + entry.Filter, Address(filter: entry.Filter), entry.Filter == Filter, Count: entry.Count, Icon: Glyph(FilterIcon(entry.Filter), 14)))], "activity.filters", "filters");
         }
 
         private static string FilterIcon(ActivityFilterType filter) => filter switch

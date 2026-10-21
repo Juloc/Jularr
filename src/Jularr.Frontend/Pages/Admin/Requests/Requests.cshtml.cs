@@ -35,7 +35,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
             page.Asset("Framework/Components/ActionDock.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            page.Content.Add(new ListToolbar(new NavigationTabs([.. Enum.GetValues<RequestTabType>().Select(tab => new NavigationTab("request.tab." + tab, Address(tab: tab), tab == Tab, CountOf(tab), Glyph(TabIcon(tab), 14)))], "request.tabs", "filters")));
+            page.Content.Add(new ListToolbar(new NavigationTabs([.. Enum.GetValues<RequestTabType>().Select(tab => new NavigationTab("request.tab." + tab, Address(tab: tab), tab == Tab, Count: CountOf(tab), Icon: Glyph(TabIcon(tab), 14)))], "request.tabs", "filters")));
             if (_requests is { } requests)
             {
                 var columns = new List<ListColumn> { new("table.work", ListRole.Main), new("table.status", ListRole.Status), new("table.requester", ListRole.Data, 1), new("request.language", ListRole.Data, 1), new("table.requestedAt", ListRole.Data, 2), new("common.actions", ListRole.Actions) };

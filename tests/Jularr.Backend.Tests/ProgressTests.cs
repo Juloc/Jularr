@@ -104,26 +104,26 @@ namespace Jularr.Backend.Tests
             var (show, unit) = await CreateSeriesAsync(host);
 
             // Nothing watched: every episode offers to mark it; the season and the series offer their buttons.
-            var html = await GetAsync(host, "/Details/" + show + "?season=1");
+            var html = await GetAsync(host, "/Details/" + show + "?tab=episodes&season=1");
             StringAssert.Contains(html, "handler=Progress");
             StringAssert.Contains(html, "Mark season watched");
             StringAssert.Contains(html, "Mark series watched");
             Assert.IsFalse(html.Contains("Start season over", StringComparison.Ordinal));
-            Assert.IsFalse(html.Contains("state-chip--watched", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("state-chip--success", StringComparison.Ordinal));
 
             // One episode: its row shows Watched and offers the opposite and starting over; the season counts it.
             using var marked = await PostAsync(host, html, show, ProgressAction.Watched, unit["1x1"]);
             Assert.AreEqual(HttpStatusCode.Redirect, marked.StatusCode, await marked.Content.ReadAsStringAsync());
-            html = await GetAsync(host, "/Details/" + show + "?season=1");
-            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "state-chip--watched").Count);
+            html = await GetAsync(host, "/Details/" + show + "?tab=episodes&season=1");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "state-chip--success").Count);
             StringAssert.Contains(html, "Mark unwatched");
             StringAssert.Contains(html, "1 watched");
 
             // Marking the season, then unmarking the series.
             using var season = await PostAsync(host, html, show, ProgressAction.Watched, unit["season1"]);
             Assert.AreEqual(HttpStatusCode.Redirect, season.StatusCode);
-            html = await GetAsync(host, "/Details/" + show + "?season=1");
-            Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(html, "state-chip--watched").Count);
+            html = await GetAsync(host, "/Details/" + show + "?tab=episodes&season=1");
+            Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(html, "state-chip--success").Count);
             StringAssert.Contains(html, "2 watched");
             using var cleared = await PostAsync(host, html, show, ProgressAction.Unwatched, null);
             Assert.AreEqual(HttpStatusCode.Redirect, cleared.StatusCode);

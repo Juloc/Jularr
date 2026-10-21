@@ -75,7 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.History
             _ => _summary?.TotalCount
         };
 
-        private NavigationTabs Chips() => new([.. Enum.GetValues<ActivityEventGroupType>().Select(group => new NavigationTab(group == ActivityEventGroupType.All ? "common.all" : "history.group." + group, Address(group), group == Group, CountOf(group), Glyph(GroupIcon(group), 14)))],
+        private NavigationTabs Chips() => new([.. Enum.GetValues<ActivityEventGroupType>().Select(group => new NavigationTab(group == ActivityEventGroupType.All ? "common.all" : "history.group." + group, Address(group), group == Group, Count: CountOf(group), Icon: Glyph(GroupIcon(group), 14)))],
             "history.filters", "filters");
 
         // The icon and tone of what happened.

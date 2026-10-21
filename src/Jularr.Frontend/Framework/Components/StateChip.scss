@@ -43,6 +43,9 @@
     &--failed { background: var(--danger-soft); color: var(--danger); }
     &--info { background: var(--info-soft); color: var(--info); }
 
+    // Nothing to report yet: the field tint with its own quiet outline.
+    &--neutral { background: var(--field); border: 1px solid var(--border); color: var(--muted); }
+
     // The icon takes the dot's place.
     &--icon::before { display: none; }
 

@@ -82,8 +82,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
         // The one row of filters: a chip per state with its count, the title field and the button of the other filters.
         private IUiComponent Toolbar()
         {
-            var chips = new List<NavigationTab> { new("common.all", Address(anyStatus: true), StatusFilter is null, _summary?.TotalCount, Glyph("layers", 14)) };
-            chips.AddRange(Statuses.Select(status => new NavigationTab("works.status." + status, Address(status: status), StatusFilter == status, CountOf(status), Glyph(StatusIcon(status), 14))));
+            var chips = new List<NavigationTab> { new("common.all", Address(anyStatus: true), StatusFilter is null, Count: _summary?.TotalCount, Icon: Glyph("layers", 14)) };
+            chips.AddRange(Statuses.Select(status => new NavigationTab("works.status." + status, Address(status: status), StatusFilter == status, Count: CountOf(status), Icon: Glyph(StatusIcon(status), 14))));
 
             var inv = CultureInfo.InvariantCulture;
             var keep = new Dictionary<string, string>();

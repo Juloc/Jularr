@@ -86,4 +86,12 @@
             border-color: var(--accent-edge);
         }
     }
+
+    // A count after the label, in the muted type of the mockups' tab counts.
+    &__count {
+        margin-inline-start: 6px;
+        font-size: var(--text-small);
+        font-weight: 700;
+        opacity: .75;
+    }
 }

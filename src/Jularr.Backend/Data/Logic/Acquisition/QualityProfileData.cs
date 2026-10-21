@@ -63,6 +63,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? RuntimeMinutes { get; init; }
         public QualityGroup[] QualityGroups { get; init; } = [];
         public string? OriginalLanguage { get; init; }
+
+        // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
+        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Original;
         public int? Year { get; init; }
         public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
 
@@ -173,6 +176,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int MinimumFormatScore { get; init; }
         public int CutoffFormatScore { get; init; }
         public int MinimumUpgradeFormatScore { get; init; } = 1;
+
+        // The languages of the choice, in order; empty takes the languages the request asks for.
+        public string[] LanguageOrder { get; init; } = [];
+
+        // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
+        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Original;
 
     }
 
