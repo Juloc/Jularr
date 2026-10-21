@@ -373,6 +373,30 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/admin/library/naming/preview")]
+    public sealed class ReadNamingPreviewV1 : AdminService<NamingPreviewParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<NamingPreviewV1>()];
+        protected override ModuleRequirement GetInstanceModules(NamingPreviewParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(NamingPreviewParametersV1 parameters, Type resultType) => new("storage.read");
+
+        // The same rules as the save, so a pattern that shows an example is one that saves.
+        protected override Task<IServiceOutput> OnRead()
+        {
+            var pattern = NamingPattern.Join(Parameters.Folder, Parameters.File);
+            try
+            {
+                NamingPattern.Validate(Parameters.MediaTypeId, pattern, nameof(Parameters.File));
+            }
+            catch (DataValidationException exception)
+            {
+                return Task.FromResult<IServiceOutput>(new NamingPreviewV1(null, exception.Code));
+            }
+
+            return Task.FromResult<IServiceOutput>(new NamingPreviewV1(NamingPattern.Example(Parameters.MediaTypeId, pattern), null));
+        }
+    }
+
     [ServiceEndpoint("PUT", "/api/v1/admin/library/naming/{mediaTypeId}")]
     public sealed class UpdateNamingPatternV1 : AdminService<NamingPatternParametersV1, UpdateNamingPatternDataV1>
     {

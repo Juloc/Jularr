@@ -3148,10 +3148,6 @@
    "Modules",
    "Module"
   ],
-  "admin.instance.module.retained": [
-   "Disabling Library blocks media services and hides their navigation. Existing media and favorites are retained.",
-   "Das Deaktivieren der Bibliothek sperrt die Mediendienste und blendet deren Navigation aus. Vorhandene Medien und Favoriten bleiben erhalten."
-  ],
   "common.all": [
    "All",
    "Alle"
@@ -6091,14 +6087,6 @@
   "library.naming.Series.Anime": [
    "Anime episode files",
    "Anime-Folgendateien"
-  ],
-  "library.naming.settings.Movie": [
-   "Film names",
-   "Filmnamen"
-  ],
-  "library.naming.settings.Series": [
-   "Episode names",
-   "Folgennamen"
   ],
   "library.naming.replacesIllegal": [
    "Replace illegal characters",
@@ -10331,6 +10319,78 @@
   "errors.validation.username_taken": [
    "This username is already taken.",
    "Dieser Benutzername ist schon vergeben."
+  ],
+  "settings.tabs": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "settings.tab.instance": [
+   "Instance",
+   "Instanz"
+  ],
+  "settings.tab.modules": [
+   "Modules",
+   "Module"
+  ],
+  "settings.tab.mediaTypes": [
+   "Media types",
+   "Medientypen"
+  ],
+  "settings.tab.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "settings.tab.naming": [
+   "Naming",
+   "Benennung"
+  ],
+  "settings.module.needs": [
+   "Needs",
+   "Benötigt"
+  ],
+  "settings.module.neededBy": [
+   "Needed by",
+   "Benötigt von"
+  ],
+  "settings.instance.general": [
+   "General",
+   "Allgemein"
+  ],
+  "settings.instance.schedules": [
+   "Schedules",
+   "Zeitpläne"
+  ],
+  "settings.instance.history": [
+   "History and caches",
+   "Verlauf und Zwischenspeicher"
+  ],
+  "settings.instance.access": [
+   "Access and security",
+   "Zugriff und Sicherheit"
+  ],
+  "admin.languages.list": [
+   "Interface languages",
+   "Oberflächensprachen"
+  ],
+  "admin.languages.edit": [
+   "Edit language",
+   "Sprache bearbeiten"
+  ],
+  "admin.languages.actions": [
+   "Language actions",
+   "Aktionen für Sprachen"
+  ],
+  "admin.modules.actions": [
+   "Module actions",
+   "Aktionen für Module"
+  ],
+  "library.naming.actions": [
+   "Naming actions",
+   "Aktionen für die Benennung"
+  ],
+  "dock.pageOnly": [
+   "Page {0}",
+   "Seite {0}"
   ]
  }
 }

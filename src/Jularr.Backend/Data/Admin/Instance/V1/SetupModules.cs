@@ -39,28 +39,9 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         public bool Requests { get; }
     }
 
-    public sealed class SetupModuleInputV1 : BaseData
-    {
-        public SetupModuleInputV1(long id, bool isEnabled, long version)
-        {
-            Id = id;
-            IsEnabled = isEnabled;
-            Version = version;
-        }
-
-        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.Id))]
-        public long Id { get; }
-
-        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.IsEnabled))]
-        public bool IsEnabled { get; }
-
-        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.Version))]
-        public long Version { get; }
-    }
-
     public sealed class SaveSetupModulesDataV1 : BaseData
     {
-        public SaveSetupModulesDataV1(string name, long version, long setupVersion, BaseDataList<SetupModuleInputV1> modules)
+        public SaveSetupModulesDataV1(string name, long version, long setupVersion, BaseDataList<InstanceModuleInputV1> modules)
         {
             Name = name;
             Version = version;
@@ -76,7 +57,7 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.Version))]
         public long SetupVersion { get; }
-        public BaseDataList<SetupModuleInputV1> Modules { get; }
+        public BaseDataList<InstanceModuleInputV1> Modules { get; }
 
         public override void Validate()
         {

@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
             page.Title("speech.models.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Speech/Speech.entry.scss");
-            page.Content.Add(new A(new Text("admin.instance.modules")).Attribute("href", "/Admin/Instance"));
+            page.Content.Add(new A(new Text("admin.instance.modules")).Attribute("href", "/Admin/Instance/Modules"));
             page.Content.Add(new P(new Text("speech.models.explanation")));
             if (_models.Count == 0)
             {

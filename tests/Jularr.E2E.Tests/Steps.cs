@@ -97,12 +97,16 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, tmdb);
         }
 
-        // Switches a module on the Instance page; its form is labelled with the module.s description.
+        // Switches a module on the Modules page; its card is named with the module's description. A module that is blocked by a dependency stays as it is.
         public static async Task SetModuleAsync(IPage page, string description, bool enabled)
         {
-            await page.GotoAsync("/Admin/Instance");
-            var form = page.Locator("main form[data-save]").Filter(new() { Has = page.Locator("legend", new() { HasText = description }) });
-            await form.Locator("[name=IsEnabled][value=" + (enabled ? "True" : "False") + "]").CheckAsync();
+            await page.GotoAsync("/Admin/Instance/Modules");
+            var card = page.Locator(".setting-card").Filter(new() { Has = page.Locator(".setting-card__name", new() { HasText = description }) });
+            if (await card.Locator("input[type=checkbox]").IsCheckedAsync() != enabled)
+            {
+                await card.Locator(".toggle").ClickAsync();
+            }
+
             await SaveAsync(page);
         }
 
