@@ -233,6 +233,14 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             try
             {
                 await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
+                // The site may answer with a page instead of the file; then the browser fetches it.
+                if (await IsDocumentAsync(destination, ct))
+                {
+                    return;
+                }
+
+                File.Delete(destination);
+                await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct);
             }
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
@@ -241,6 +249,24 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         }
 
         private static AnnasArchiveFailure Failure(DirectDownloadException exception) => exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable;
+
+        // A book is a ZIP, a PDF, a MOBI or an AZW3; a page in place of it means the site answered with its site.
+        private static async Task<bool> IsDocumentAsync(string path, CancellationToken ct)
+        {
+            try
+            {
+                await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 16, useAsync: true);
+                var head = new byte[4];
+                var read = await file.ReadAsync(head, ct);
+                return read >= 2 && (head[0] == 0x50 && head[1] == 0x4B && head[2] == 0x03 && head[3] == 0x04
+                    || head[0] == 0x25 && head[1] == 0x50 && head[2] == 0x44 && head[3] == 0x46
+                    || head[0] == 0x42 && head[1] == 0x4F && head[2] == 0x4F && head[3] == 0x4B);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
 
         private static bool IsSitePage(Uri site, Uri uri) => string.Equals(site.Host, uri.Host, StringComparison.OrdinalIgnoreCase)
             && (uri.AbsolutePath.StartsWith("/md5/", StringComparison.Ordinal) || uri.AbsolutePath.StartsWith("/slow_download/", StringComparison.Ordinal)

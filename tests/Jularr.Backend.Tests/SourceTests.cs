@@ -18,6 +18,7 @@ using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Browser;
@@ -391,6 +392,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_APageInsteadOfTheFile_IsFetchedByTheBrowser()
+        {
+            // The site may answer with a page in place of the file; the browser fetches the file then.
+            var sources = new FakeSources { RealRows = true };
+            var browser = new FakeBrowser();
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), browser);
+            var destination = Path.Combine(Path.GetTempPath(), "anna-browser-" + Guid.NewGuid().ToString("N")[..6] + ".epub");
+            try
+            {
+                await client.DownloadFileAsync(new Uri("https://annas.example.test/book.epub"), destination, CancellationToken.None, null, _ => new MemoryStream());
+                Assert.AreEqual(1, browser.Saved);
+                Assert.IsTrue(File.Exists(destination));
+            }
+            finally
+            {
+                File.Delete(destination);
+            }
+        }
+
+        // A browser that writes the file it is asked for.
+        private sealed class FakeBrowser : ISourceBrowser
+        {
+            public int Saved { get; private set; }
+
+            public bool IsAvailable => true;
+            public SourceBrowserStatus Status => new(null, null, "", false, null, null, null, null, null, 0);
+            public IReadOnlyList<SourceBrowserEvent> Events => [];
+
+            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) => Task.FromResult<string?>(null);
+
+            public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);
+
+            public Task StopAsync() => Task.CompletedTask;
+
+            public Task ResetAsync() => Task.CompletedTask;
+
+            public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct) => Task.FromResult<BrowserPage?>(null);
+
+            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+            {
+                Saved++;
+                File.WriteAllBytes(destination, [0x50, 0x4B, 0x03, 0x04, 0x00]);
+                return Task.CompletedTask;
+            }
+        }
+
+        [TestMethod]
         [DataRow("Please wait 2 minutes before downloading.", 120)]
         [DataRow("Please wait 01:30 before downloading.", 90)]
         [DataRow("Please wait 1:05:00 before downloading.", 3900)]
@@ -715,6 +763,7 @@ namespace Jularr.Backend.Tests
 
                 return uri.AbsolutePath switch
                 {
+                    "/book.epub" => Text("<html><body>the site's page in place of the file</body></html>", "text/html"),
                     "/search" => Text(SearchPages.Where(entry => uri.Query.Contains(entry.Key, StringComparison.OrdinalIgnoreCase))
                         .Select(entry => entry.Value).FirstOrDefault() ?? """
                         <html><body>
