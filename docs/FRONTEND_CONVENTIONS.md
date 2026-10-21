@@ -96,6 +96,15 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   the label's (i), shown on hover, focus and tap ([FieldInfo](../src/Jularr.Frontend/Framework/Components/FieldInfo.cs)).
   A page passes `FieldHelp` only where the field means something special there; an empty key shows
   none. Labels stay short: units belong in the label, explanations in the (i).
+- Actions (a switch, a search, a delete, a dialog's save) are forms that post through htmx and do not reload the page: the server answers with the same page and
+  the client swaps only the [Region](../src/Jularr.Frontend/Framework/Components/Region.cs) (a container with an id) around the form, else the page content, keeping scroll position,
+  opened `<details>` and sections, and focus ([ActionSwap](../src/Jularr.Frontend/Modules/Navigation/ActionSwap.ts)); an answer from another path (a redirect to the list, a new item) navigates like a link.
+  A page script that must run again over swapped elements opts in with `onPage(..., { partial: true })` and guards every element. Errors stay in place in the swapped region. Without script the form posts and redirects.
+  The result of an action is never content of the layout (the hero, a status line) but the quiet hint at the bottom centre
+  ([ActionToast](../src/Jularr.Frontend/Framework/Components/ActionToast.cs), about two seconds): a handler calls `Hint(key, values)`, every other successful POST that redirects says "Saved", `NoHint()` says nothing.
+  A script's request gets the hint in the `HX-Trigger` header of the answering page, a page without script shows it itself.
+- A dialog is the shared [Modal](../src/Jularr.Frontend/Framework/Components/Modal.cs): title row with the X at the right, the body, and the footer, which is the actions of its form
+  (`form.Cancel()` and the primary `form.Submit(...)`, never `form.Save()`); a dialog's form saves on its own and the page's save pill does not take part.
 - Owner's decision 19 Oct: settings forms end with `form.Save()` instead of their own save button. The page's one
   [save pill](../src/Jularr.Frontend/Framework/Components/SavePill.cs) appears centred in the content while a value
   differs from the loaded page, marks the changed fields and saves every changed form in turn; a failing form keeps its

@@ -111,7 +111,7 @@ namespace Jularr.E2E.Tests
 
                 // Each platform has its own target with its own settings.
                 await platforms.Filter(new() { HasText = "Switch" }).GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
-                await Assertions.Expect(page.Locator("dialog[open].work-dialog")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("dialog[open].modal")).ToBeVisibleAsync();
                 await page.Keyboard.PressAsync("Escape");
                 await Evidence.SaveAsync(page, "work-game-platforms");
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());

@@ -116,11 +116,6 @@ namespace Jularr.Frontend.Pages.User.Settings
                     if (locale is not null) content.Add(new P(new ValueText(locale.Name)));
                 }
 
-                if (TempData["ProfileSaved"] is true)
-                {
-                    content.Add(new P(new Text("profile.settings.saved")).Attribute("role", "status"));
-                }
-
                 page.Content.Add(new UiSection("profile.settings.title", content));
                 if (_speech is not null && texts.Can("profile.self.update"))
                 {
@@ -261,7 +256,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         {
             _savingPin = true;
             await updatePin.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), new UpdateProfilePinDataV1(pin ?? ""), HttpContext.RequestAborted);
-            TempData["ProfileSaved"] = true;
+            Hint("profile.settings.saved");
             return RedirectToPage("/User/Settings/Settings");
         }
 
@@ -269,13 +264,14 @@ namespace Jularr.Frontend.Pages.User.Settings
         {
             _savingPin = true;
             await removePin.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), default, HttpContext.RequestAborted);
-            TempData["ProfileSaved"] = true;
+            Hint("profile.settings.saved");
             return RedirectToPage("/User/Settings/Settings");
         }
 
         public async Task<IActionResult> OnPostDeleteAsync()
         {
             await deleteProfile.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), default, HttpContext.RequestAborted);
+            NoHint();
             return Redirect("/Account/Profiles");
         }
 

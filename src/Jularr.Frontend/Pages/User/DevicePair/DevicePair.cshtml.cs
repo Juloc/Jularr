@@ -68,7 +68,11 @@ namespace Jularr.Frontend.Pages.User.DevicePair
             return Page();
         }
 
-        public IActionResult OnPostShow() => LocalRedirect("/Devices/Pair?code=" + Uri.EscapeDataString(Code ?? ""));
+        public IActionResult OnPostShow()
+        {
+            NoHint();
+            return LocalRedirect("/Devices/Pair?code=" + Uri.EscapeDataString(Code ?? ""));
+        }
 
         public async Task<IActionResult> OnPostAsync()
         {

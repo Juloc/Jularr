@@ -1120,6 +1120,14 @@
    "Leave this page without saving your changes?",
    "Seite verlassen, ohne die Änderungen zu speichern?"
   ],
+  "actionToast.saved": [
+   "Saved",
+   "Gespeichert"
+  ],
+  "actionToast.failed": [
+   "That did not go through.",
+   "Das hat nicht geklappt."
+  ],
   "admin.providers.scope": [
    "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration.",
    "Registrierte Integrationen aktivieren oder deaktivieren. Verbindungs- und Anmeldefunktionen benötigen weiterhin ihre bestehende Host-Konfiguration."
@@ -6756,6 +6764,10 @@
    "Open",
    "Öffnen"
   ],
+  "common.cancel": [
+   "Cancel",
+   "Abbrechen"
+  ],
   "media.type": [
    "Media type",
    "Medientyp"
@@ -7195,6 +7207,34 @@
   "work.collapseAll": [
    "Collapse all",
    "Alle zuklappen"
+  ],
+  "work.expandAll": [
+   "Expand all",
+   "Alle aufklappen"
+  ],
+  "work.hint.monitorOn": [
+   "Monitoring on",
+   "Überwachung an"
+  ],
+  "work.hint.monitorOff": [
+   "Monitoring off",
+   "Überwachung aus"
+  ],
+  "work.hint.refreshed": [
+   "Metadata refreshed",
+   "Metadaten aktualisiert"
+  ],
+  "work.hint.titleDeleted": [
+   "Title deleted",
+   "Titel gelöscht"
+  ],
+  "work.hint.translationDeleted": [
+   "Translation deleted",
+   "Übersetzung gelöscht"
+  ],
+  "work.hint.nothingChosen": [
+   "Nothing chosen",
+   "Nichts ausgewählt"
   ],
   "work.toggleSeason": [
    "Show or hide this section",

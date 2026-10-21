@@ -59,7 +59,7 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "manual-import-files");
 
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import"));
-                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Imported files: 1" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("Imported files: 1");
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film was not placed once.");
                 Assert.IsTrue(File.Exists(source), "A hardlinked import leaves the original.");
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);

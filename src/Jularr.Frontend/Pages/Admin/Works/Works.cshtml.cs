@@ -43,8 +43,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }, "/Admin/Works?handler=Search", csrf, _search, _search is null ? null : FormError));
             if (_results is { } results && _search is { } searched)
             {
-                if (results.Count == 0) page.Content.Add(new P(new Text("admin.works.noMetadata")).Attribute("role", "status"));
-                else page.Content.Add(new Table<MetadataSearchResultV1>(results)
+                if (results.Count > 0) page.Content.Add(new Table<MetadataSearchResultV1>(results)
                     .Text(item => item.Title, "media.title")
                     .Resource(item => item.Namespace, "admin.works.source", source => "admin.works.source." + source)
                     .Text(item => item.OriginalTitle, "admin.works.originalTitle")
@@ -116,6 +115,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             _search = new SearchMetadataDataV1(mediaTypeId, query ?? "", releaseYear, mediaSubtypeId);
             await LoadDataAsync();
             _results = await search.ExecuteAsync<BaseDataList<MetadataSearchResultV1>>(_search, HttpContext.RequestAborted);
+            if (_results.Count == 0) Hint("admin.works.noMetadata");
             PreparePage();
             return Page();
         }
