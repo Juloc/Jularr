@@ -27,6 +27,7 @@ namespace Jularr.Frontend.Framework
         private string? _hoverPreview;
         private IUiComponent? _bookmark;
         private IUiComponent? _label;
+        private IUiComponent? _select;
 
         // A title of the profile's library, favorites or collections with everything the Backend knows of it.
         public static MediaCard For(FrontendAssets assets, LibraryItemV1 item)
@@ -98,6 +99,13 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // The box of a card that can be chosen (an admin list), top left.
+        public MediaCard Select(IUiComponent box)
+        {
+            _select = box;
+            return this;
+        }
+
         // A short label over the cover, bottom left.
         public MediaCard Label(IUiComponent label)
         {
@@ -150,6 +158,7 @@ namespace Jularr.Frontend.Framework
             // Local availability top left, bookmark top right.
             if (_availability is not null) cover.Add(_availability.Badge(href, _previewId));
             if (_bookmark is not null) cover.Add(new Div(_bookmark).Class("media-card__bookmark"));
+            if (_select is not null) cover.Add(new Div(_select).Class("media-card__select"));
             if (_label is not null) cover.Add(new Div(_label).Class("media-card__label"));
 
             // Only a supplied action, never an invented one.

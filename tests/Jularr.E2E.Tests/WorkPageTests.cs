@@ -142,57 +142,75 @@ namespace Jularr.E2E.Tests
 
                 // Both titles are rows with their cover.
                 await page.GotoAsync("/Admin/Works");
-                var movie = page.Locator("tr.works-row", new() { HasText = FakeServices.MovieTitle });
-                var series = page.Locator("tr.works-row", new() { HasText = FakeServices.SeriesTitle });
+                var rows = page.Locator(".list-body .list-row");
+                var movie = Steps.ListRow(page, FakeServices.MovieTitle);
+                var series = Steps.ListRow(page, FakeServices.SeriesTitle);
                 await Assertions.Expect(movie).ToBeVisibleAsync();
                 await Assertions.Expect(series).ToBeVisibleAsync();
-                await Assertions.Expect(series.Locator("td[data-col=cover] img")).ToHaveAttributeAsync("src", new System.Text.RegularExpressions.Regex("^/api/v1/covers/"));
+                await Assertions.Expect(series.Locator(".list-poster img")).ToHaveAttributeAsync("src", new System.Text.RegularExpressions.Regex("^/api/v1/covers/"));
                 await Evidence.SaveAsync(page, "works-list");
 
-                // A filter leads to the titles that fit and stays in the address; the header search is the only search.
-                await page.Locator("select[name=type]").SelectOptionAsync("2");
+                // The view switch shows the posters, the choice stays for the next visit, and the table comes back the same way.
+                await Steps.FollowAsync(page, page.Locator(".view-switch").GetByRole(AriaRole.Link, new() { Name = "Posters", Exact = true }));
+                await Assertions.Expect(page.Locator(".works-posters .media-card")).ToHaveCountAsync(2);
+                await Evidence.SaveAsync(page, "works-posters");
+                await page.GotoAsync("/Admin/Works");
+                await Assertions.Expect(page.Locator(".works-posters .media-card")).ToHaveCountAsync(2);
+                await Steps.FollowAsync(page, page.Locator(".view-switch").GetByRole(AriaRole.Link, new() { Name = "Overview", Exact = true }));
+                await Assertions.Expect(page.Locator(".works-overview .list-row")).ToHaveCountAsync(2);
+                await Steps.FollowAsync(page, page.Locator(".view-switch").GetByRole(AriaRole.Link, new() { Name = "Table", Exact = true }));
+                await Assertions.Expect(page.Locator(".works-list .list-row")).ToHaveCountAsync(2);
+
+                // A filter of the drawer leads to the titles that fit and stays in the address.
+                await page.GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true }).ClickAsync();
+                await page.Locator("#works-filter select[name=type]").SelectOptionAsync("2");
+                await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
                 await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("[?&]type=2"));
-                await Assertions.Expect(page.Locator("tr.works-row")).ToHaveCountAsync(1);
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
                 await Assertions.Expect(series).ToBeVisibleAsync();
-                Assert.AreEqual(0, await page.Locator("main input[type=search]").CountAsync());
-                await page.Locator("a.works-clear").ClickAsync();
-                await Assertions.Expect(page.Locator("tr.works-row")).ToHaveCountAsync(2);
+                await page.GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Link, new() { Name = "Clear", Exact = true }));
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
 
                 // The switch of one row is the title page's rule: the film stops being monitored and the filter finds it.
-                await movie.Locator("td[data-col=monitored] .work-switch").ClickAsync();
+                await Steps.FollowAsync(page, movie.GetByRole(AriaRole.Switch));
                 await Assertions.Expect(page.Locator(".works-report")).ToContainTextAsync("1 of 1");
-                await Assertions.Expect(movie.Locator("td[data-col=monitored] .work-switch")).ToHaveAttributeAsync("aria-label", "Start monitoring");
-                await page.Locator("select[name=monitored]").SelectOptionAsync("false");
-                await Assertions.Expect(page.Locator("tr.works-row")).ToHaveCountAsync(1);
+                await Assertions.Expect(movie.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Start monitoring");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true }).ClickAsync();
+                await page.Locator("#works-filter select[name=monitored]").SelectOptionAsync("false");
+                await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
+                await Assertions.Expect(rows).ToHaveCountAsync(1);
                 await Assertions.Expect(movie).ToBeVisibleAsync();
-                await page.Locator("a.works-clear").ClickAsync();
-                await Assertions.Expect(page.Locator("tr.works-row")).ToHaveCountAsync(2);
+                await page.GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, page.Locator("#works-filter").GetByRole(AriaRole.Link, new() { Name = "Clear", Exact = true }));
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
 
                 // The search of one row grabs the offered release at once, as on the title's page.
-                await movie.Locator("td[data-col=monitored] .work-switch").ClickAsync();
-                await Assertions.Expect(movie.Locator("td[data-col=monitored] .work-switch")).ToHaveAttributeAsync("aria-label", "Stop monitoring");
+                await Steps.FollowAsync(page, movie.GetByRole(AriaRole.Switch));
+                await Assertions.Expect(movie.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Stop monitoring");
                 fakes.Offer(film);
-                await movie.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }).ClickAsync();
+                await Steps.FollowAsync(page, movie.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }));
                 await Assertions.Expect(page.Locator(".works-report")).ToContainTextAsync("Search:");
                 for (var attempt = 0; attempt < 50 && fakes.Grabbed.Count == 0; attempt++) await Task.Delay(100);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(film).ToString() }, fakes.Grabbed.ToArray());
 
-                // Select all opens the mass editor in place of the filters; it sets monitoring for both and reports per title.
-                await page.Locator("[data-works-select-all]").CheckAsync();
-                await Assertions.Expect(page.Locator("[data-works-count]")).ToHaveTextAsync("2 selected");
-                await Assertions.Expect(page.Locator(".works-toolbar")).ToBeHiddenAsync();
+                // Select all shows the dock's bulk zone with the count; the mass editor sets monitoring for both and reports per title.
+                await page.Locator(".list-head").GetByRole(AriaRole.Checkbox, new() { Name = "Select all titles", Exact = true }).CheckAsync();
+                var dock = page.Locator(".action-dock");
+                await Assertions.Expect(dock).ToContainTextAsync("2 selected");
                 await Evidence.SaveAsync(page, "works-mass-editor");
-                await page.Locator("select[name=monitoring]").SelectOptionAsync("off");
-                await page.Locator("form[data-works-bar] button[value=apply]").ClickAsync();
+                await dock.GetByRole(AriaRole.Button, new() { Name = "Change", Exact = true }).ClickAsync();
+                await page.Locator("#works-change select[name=monitoring]").SelectOptionAsync("off");
+                await Steps.FollowAsync(page, page.Locator("#works-change button[value=apply]"));
                 await Assertions.Expect(page.Locator(".works-report")).ToContainTextAsync("Changes: 2 of 2");
-                await Assertions.Expect(series.Locator("td[data-col=monitored] .work-switch")).ToHaveAttributeAsync("aria-label", "Start monitoring");
+                await Assertions.Expect(series.GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-label", "Start monitoring");
 
                 // A column is hidden in the picker and stays hidden after a reload.
-                await page.Locator("th [data-columns-open]").First.ClickAsync();
+                await page.Locator(".action-dock").GetByRole(AriaRole.Button, new() { Name = "Columns", Exact = true }).ClickAsync();
                 await page.Locator("[data-column-picker]").GetByRole(AriaRole.Checkbox, new() { Name = "Profile", Exact = true }).UncheckAsync();
-                await Assertions.Expect(page.Locator("th[data-col=profile]").First).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator(".list-head [data-col=profile]")).ToBeHiddenAsync();
                 await page.ReloadAsync();
-                await Assertions.Expect(page.Locator("th[data-col=profile]").First).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator(".list-head [data-col=profile]")).ToBeHiddenAsync();
 
                 // A narrow screen keeps the page in its width.
                 await page.SetViewportSizeAsync(390, 844);
@@ -201,7 +219,7 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(1280, 900);
 
                 // The delete dialog of the chosen titles removes them.
-                await page.Locator("[data-works-select-all]").CheckAsync();
+                await page.Locator(".list-head").GetByRole(AriaRole.Checkbox, new() { Name = "Select all titles", Exact = true }).CheckAsync();
                 await page.Locator("[data-works-delete]").ClickAsync();
                 await Assertions.Expect(page.Locator("#works-delete")).ToBeVisibleAsync();
                 await Steps.SubmitAsync(page, page.Locator("#works-delete form"));

@@ -78,21 +78,13 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var shown = _jobs.Where(job => (state is null || GroupOf(job.WorkerJobStateTypeId) == state) && words.All(word => FilterText(job).Contains(word, StringComparison.CurrentCultureIgnoreCase))).ToList();
             var allPaused = _jobs.Count > 0 && _jobs.All(job => job.IsPaused);
 
-            // The figures, then one row of filter chips with the list's own filter.
-            page.Content.Add(new KpiTiles(
-                new KpiTile("jobs.kpi.total", Number(_jobs.Count), Glyph("layers"), UiTone.Accent),
-                new KpiTile("jobs.state.Idle", Number(counts["ready"]), Glyph("check"), UiTone.Success),
-                new KpiTile("jobs.state.Pending", Number(counts["waiting"]), Glyph("clock"), UiTone.Info),
-                new KpiTile("jobs.state.Paused", Number(counts["paused"]), Glyph("pause"), UiTone.Warning),
-                new KpiTile("jobs.state.Failed", Number(counts["failed"]), Glyph("alert"), UiTone.Danger)).Strip());
-
-            var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, _jobs.Count) };
+            // One row of filter chips (the state's icon, its name and how many) with the list's own filter.
+            var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, _jobs.Count, Glyph("layers", 14)) };
             chips.AddRange(Groups.Where(group => group is "ready" or "waiting" or "paused" or "running" or "failed" || counts[group] > 0 || group == state)
-                .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, counts[group])));
+                .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, counts[group], Glyph(ChipIcon(group), 14))));
             var keep = state is null ? null : new Dictionary<string, string> { ["state"] = state };
-            page.Content.Add(new Div(new NavigationTabs(chips, "jobs.filters", "filters"),
-                new Div(new SearchBox(Address, "jobs.filter", QueryFilter, keep, ".jobs-list", Glyph("search", 15)),
-                    new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["jobs.count"], shown.Count))).Class("jobs-toolbar__count").Attribute("data-list-count", "").Attribute("data-format", texts["jobs.count"])).Class("jobs-toolbar__filter")).Class("jobs-toolbar"));
+            page.Content.Add(new ListToolbar(new NavigationTabs(chips, "jobs.filters", "filters"), new SearchBox(Address, "jobs.filter", QueryFilter, keep, ".jobs-list", Glyph("search", 15)),
+                ListToolbar.Count(string.Format(CultureInfo.CurrentCulture, texts["jobs.count"], shown.Count), texts["jobs.count"])));
 
             // The jobs, a drawer of details for each of them.
             var columns = new List<ListColumn> { new("jobs.job", ListRole.Main), new("table.status", ListRole.Status), new("jobs.last"), new("jobs.next", ListRole.Data, 2), new("jobs.use", ListRole.Data, 1), new("common.actions", ListRole.Actions) };
@@ -141,6 +133,16 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             _ => "off"
         };
 
+        private static string ChipIcon(string group) => group switch
+        {
+            "ready" => "check",
+            "waiting" => "clock",
+            "paused" => "pause",
+            "running" => "sync",
+            "failed" => "alert",
+            _ => "power"
+        };
+
         private static string ChipKey(string group) => group switch
         {
             "ready" => "jobs.state.Idle",
@@ -178,7 +180,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var identity = new ListIdentity(new IconTile(Glyph(icon, child ? 15 : 18), tone, child), ListIdentity.TitleButton(name, drawer), subline, note);
 
             var waits = job.CanPauseWhileUsed && job.PausesWhileUsed;
-            var row = new ListRow([identity, StateChipOf(job), Time(job.LastFinishedAt), Time(job.NextRunAt), waits ? new Tag(new Text("jobs.use.waits")).Warning() : new Span(new ValueText("–")).Class("list-value list-value--dim"), RowActions(job, csrf, canControl)],
+            var row = new ListRow([identity, StateChipOf(job), Time(job.LastFinishedAt), Time(job.NextRunAt), waits ? new Tag(new Text("jobs.use.waits")).Warning() : new Span(), RowActions(job, csrf, canControl)],
                 Caption(job, waits), FilterText(job));
             if (child) row.Child();
             if (job.WorkerJobStateTypeId == WorkerJobStateType.Paused) row.Tinted(UiTone.Warning);
@@ -269,8 +271,6 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         private static IUiComponent Post(string handler, string? csrf, (string Name, string Value)[] hidden, IUiComponent button) => new PostForm(Address + "?handler=" + handler, csrf, hidden, button);
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
-
-        private static IUiComponent Number(int value) => new ValueText(value.ToString("N0", CultureInfo.CurrentCulture));
 
         private static IUiComponent Time(DateTime? value) => value is { } time
             ? new Span(new ValueText(time.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("list-value")

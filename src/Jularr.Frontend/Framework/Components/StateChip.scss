@@ -13,7 +13,9 @@
     font-size: var(--text-small);
     font-weight: 780;
     line-height: 1.2;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+
+    &__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
     &::before {
         content: "";

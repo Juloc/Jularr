@@ -1,32 +1,4 @@
-// The Jobs page's part of the list kit: the grid of its columns at three widths, and the row above the list.
-
-.action-dock form { display: inline-flex; margin: 0; }
-
-// The state chips on the left, the filter on the right; one row at every width.
-.jobs-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    min-width: 0;
-    margin-bottom: -6px;
-
-    .navigation-tabs { flex: 0 1 auto; }
-
-    &__filter { display: flex; flex: none; align-items: center; gap: 10px; }
-    &__count { color: var(--muted); font-size: var(--text-small); white-space: nowrap; }
-    .search-box { width: 235px; }
-}
-
-// A phone: tighter chips, so the state row stays one line.
-@media (max-width: 640px) {
-    .jobs-toolbar .navigation-tabs { gap: 3px; }
-    .jobs-toolbar .navigation-tabs__link { padding: 8px 9px; }
-    .jobs-toolbar { flex-wrap: wrap; row-gap: 12px; }
-    .jobs-toolbar .navigation-tabs { flex: 1 1 100%; }
-    .jobs-toolbar__filter { flex: 1 1 100%; }
-    .jobs-toolbar .search-box { flex: 1; width: auto; max-width: none; }
-}
+// The Jobs page's part of the list kit: the grid of its columns at three widths, and the history block.
 
 .jobs-list {
     --list-columns: minmax(200px, 2.4fr) minmax(112px, 1.05fr) minmax(115px, 1.2fr) minmax(115px, 1.2fr) minmax(100px, 1.1fr) minmax(250px, 1.6fr);

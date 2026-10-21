@@ -576,7 +576,7 @@ namespace Jularr.Backend.Tests
                 {
                     var html = await page.Content.ReadAsStringAsync();
                     StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
-                    StringAssert.Contains(html, "class=\"page-table works-table\"");
+                    StringAssert.Contains(html, "data-work-table=\"works\"");
                     StringAssert.Contains(html, "/build/assets/Assets/Shared/shell.entry-");
                 }
                 if (path == "/Admin/Requests" && mediaAllowed)

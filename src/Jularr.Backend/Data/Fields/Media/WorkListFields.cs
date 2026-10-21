@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField FileCount = new() { Minimum = 0 };
         public static readonly LongField SizeBytes = new() { Minimum = 0 };
         public static readonly IntField TargetCount = new() { Minimum = 0 };
+        public static readonly IntField TitleCount = new() { Minimum = 0 };
         public static readonly BoolField Fits = new();
         public static readonly StringField ProfileName = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };
         public static readonly StringField LibraryName = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };

@@ -4,12 +4,14 @@ namespace Jularr.Frontend.Framework
 {
     // One page of a drawer: its tab (with an icon), its heading, a scrolling body and a footer.
     // With a form address the body and footer are one GET form, whose submit button reloads the page with the choices.
-    public sealed record DrawerPane(string Id, string TabKey, string TitleKey, string Icon, IReadOnlyList<IUiComponent> Body, IReadOnlyList<IUiComponent> Footer, string? FormAddress = null);
+    // A heading that is data (a title's name, a release) is given as TitleValue instead of a key.
+    public sealed record DrawerPane(string Id, string TabKey, string TitleKey, string Icon, IReadOnlyList<IUiComponent> Body, IReadOnlyList<IUiComponent> Footer, string? FormAddress = null, string? TitleValue = null);
 
     // A modal panel from the right edge (full screen on phones). Several panes show a tab row that switches between them.
     // A button with data-drawer-open="id" (and data-drawer-pane="pane") opens it; those buttons show once the script has run, since the panel needs it.
     // The sheet modifier makes it a bottom sheet on a phone (the details of one list row) instead of a full screen.
-    public sealed class Drawer(FrontendAssets assets, string id, IReadOnlyList<DrawerPane> panes, bool sheet = false) : IUiComponent
+    // A panel that belongs to an address (the row a `?operation=` names) is rendered open and closes by a link back to the list: it works without script, and with script it shows as the modal and leaves the address behind.
+    public sealed class Drawer(FrontendAssets assets, string id, IReadOnlyList<DrawerPane> panes, bool sheet = false, string? closeHref = null, bool open = false) : IUiComponent
     {
         public static HtmlElement Opener(HtmlElement button, string id, string? pane = null)
         {
@@ -29,8 +31,11 @@ namespace Jularr.Frontend.Framework
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var heading = new Div(new H2(new Text(panes[0].TitleKey)).Attribute("id", id + "-title"),
-                new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Class("button button--icon drawer__close").Attribute("data-drawer-close", "")).Class("drawer__heading");
+            IUiComponent close = closeHref is null
+                ? new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Class("button button--icon drawer__close").Attribute("data-drawer-close", "")
+                : new A(new Icon("close", assets)).Class("button button--icon drawer__close").Attribute("href", closeHref).Attribute("aria-label", texts["common.close"]).Attribute("data-drawer-close", "");
+            IUiComponent title = panes[0].TitleValue is { } literal ? new ValueText(literal) : new Text(panes[0].TitleKey);
+            var heading = new Div(new H2(title).Attribute("id", id + "-title"), close).Class("drawer__heading");
             var parts = new List<IUiComponent> { heading };
 
             if (panes.Count > 1)
@@ -58,7 +63,10 @@ namespace Jularr.Frontend.Framework
                 parts.Add(element);
             }
 
-            new Dialog([.. parts]).Class(sheet ? "drawer drawer--sheet" : "drawer").Attribute("id", id).Attribute("aria-labelledby", id + "-title").WriteTo(writer, encoder, texts);
+            var dialog = new Dialog([.. parts]).Class(sheet ? "drawer drawer--sheet" : "drawer").Attribute("id", id).Attribute("aria-labelledby", id + "-title");
+            if (closeHref is not null) dialog.Attribute("data-drawer-return", closeHref);
+            if (open) dialog.Attribute("open", "open");
+            dialog.WriteTo(writer, encoder, texts);
         }
 
         private sealed class Dialog(params IUiComponent[] content) : HtmlElement("dialog", content);

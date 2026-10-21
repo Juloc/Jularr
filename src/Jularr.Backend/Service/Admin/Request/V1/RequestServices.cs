@@ -65,6 +65,33 @@ namespace Jularr.Backend.Service.Admin.Request.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/admin/requests/summary")]
+    public sealed class ReadRequestsSummaryV1 : AdminService<ReadRequestsSummaryParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<RequestsSummaryV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadRequestsSummaryParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(ReadRequestsSummaryParametersV1 parameters, Type resultType) => new("requests.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The tabs of the list: open, approved, done and rejected are one status each, what is on its way is every other.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    count(*)::integer AS "TotalCount",
+                    count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" = 1)::integer AS "OpenCount",
+                    count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" = 2)::integer AS "ApprovedCount",
+                    count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" NOT IN (1, 2, 6, 7, 9))::integer AS "InProgressCount",
+                    count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" = 6)::integer AS "DoneCount",
+                    count(*) FILTER (WHERE request."AcquisitionRequestStatusTypeId" IN (7, 9))::integer AS "RejectedCount"
+                FROM
+                    "AcquisitionRequests" AS request;
+                """;
+            return await Context.ReadSql.ReadRequiredAsync<RequestsSummaryV1>(sql, CancellationToken);
+        }
+    }
+
     [ServiceEndpoint("PUT", "/api/v1/admin/requests/{acquisitionRequestId:long}")]
     public sealed class UpdateRequestV1 : AdminService<UpdateRequestParametersV1, UpdateRequestDataV1>
     {

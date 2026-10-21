@@ -147,8 +147,12 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // The queue in four numbers: what runs, the pace of the downloads, what is downloaded but not yet imported (waiting for a person or importing) and what failed unseen.
     public sealed class ActivitySummaryV1 : BaseResponse
     {
-        public ActivitySummaryV1(int activeCount, long bytesPerSecond, int importCount, int errorCount)
+        public ActivitySummaryV1(int activeCount, long bytesPerSecond, int importCount, int errorCount, int allCount = 0, int waitingCount = 0, int unpackingCount = 0, int historyCount = 0)
         {
+            AllCount = allCount;
+            WaitingCount = waitingCount;
+            UnpackingCount = unpackingCount;
+            HistoryCount = historyCount;
             ActiveCount = activeCount;
             BytesPerSecond = bytesPerSecond;
             ImportCount = importCount;
@@ -166,6 +170,19 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
         public int ErrorCount { get; }
+
+        // The filter chips of the queue: everything in it, what waits for a person, what the client unpacks and what has finished.
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int AllCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int WaitingCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int UnpackingCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int HistoryCount { get; }
     }
 
     public sealed class SaveActivitySourceLinkDataV1 : BaseData
@@ -181,12 +198,17 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
     public sealed class ReadActivityEventsParametersV1 : BaseParameters
     {
-        public ReadActivityEventsParametersV1(long? workId = null, int page = 1, int pageSize = 50)
+        public ReadActivityEventsParametersV1(long? workId = null, int page = 1, int pageSize = 50, ActivityEventGroupType activityEventGroupTypeId = ActivityEventGroupType.All)
         {
             WorkId = workId;
             Page = page;
             PageSize = pageSize;
+            ActivityEventGroupTypeId = activityEventGroupTypeId;
         }
+
+        // One group of events (the history's chips), else all.
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ActivityEventGroupTypeId))]
+        public ActivityEventGroupType ActivityEventGroupTypeId { get; }
 
         // One Work's history, else everything.
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
@@ -194,6 +216,34 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         public int Page { get; }
         public int PageSize { get; }
+    }
+
+    // How many events each chip of the history holds, for one Work or all.
+    public sealed class ActivityEventsSummaryV1 : BaseResponse
+    {
+        public ActivityEventsSummaryV1(int totalCount, int grabbedCount, int arrivedCount, int failedCount, int filesCount)
+        {
+            TotalCount = totalCount;
+            GrabbedCount = grabbedCount;
+            ArrivedCount = arrivedCount;
+            FailedCount = failedCount;
+            FilesCount = filesCount;
+        }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.EventCount))]
+        public int TotalCount { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.EventCount))]
+        public int GrabbedCount { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.EventCount))]
+        public int ArrivedCount { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.EventCount))]
+        public int FailedCount { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.EventCount))]
+        public int FilesCount { get; }
     }
 
     // What happened, with the texts it kept: the release and its quality, the indexer and client, the file's place and who did it.

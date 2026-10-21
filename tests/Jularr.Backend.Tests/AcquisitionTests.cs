@@ -1093,6 +1093,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(("WEBDL-720p", "Example Movie"), (happened[2].QualityKey, happened[2].WorkTitle));
             StringAssert.EndsWith(happened[2].Path, "Example Movie (2020) [DVD].mkv");
 
+            // The history page's chips: a group narrows the list to what arrived, and the summary counts every group of the Work.
+            using var arrived = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/events?workId=" + workId + "&activityEventGroupTypeId=Arrived");
+            CollectionAssert.AreEqual(new[] { ActivityEventType.Upgraded, ActivityEventType.Imported }, (await arrived.Content.ReadFromJsonAsync<PageResult<ActivityEventV1>>())!.Items.Select(item => item.ActivityEventTypeId).ToArray());
+            using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/events/summary?workId=" + workId);
+            var counts = (await counted.Content.ReadFromJsonAsync<ActivityEventsSummaryV1>())!;
+            Assert.AreEqual((3, 1, 2, 0, 0), (counts.TotalCount, counts.GrabbedCount, counts.ArrivedCount, counts.FailedCount, counts.FilesCount));
+
             // The requester sees the steps of their request, without releases, indexers or paths.
             var profileId = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/auth")).Content.ReadFromJsonAsync<Jularr.Backend.Data.Public.Authentication.V1.AuthenticationResultV1>())!.ProfileId;
             await host.Fixture.RunSqlAsync($"UPDATE \"AcquisitionRequests\" SET \"RequestedByProfileId\" = {profileId}, \"CreatedAt\" = now() - interval '1 hour'");
@@ -1972,10 +1979,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "handler=Retry&amp;operationId=5");
             StringAssert.Contains(html, "href=\"/Admin/Activity?Filter=Errors&amp;operation=5\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "navigation-tabs\"|navigation-tabs ").Count, "One row of filters only.");
-            Assert.IsFalse(html.Contains("activity-drawer__body", StringComparison.Ordinal));
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(html, "<dialog[^>]* open=\"open\""), "Only the entry the address names is open.");
             using var panel = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Filter=Errors&operation=5");
             var panelHtml = await panel.Content.ReadAsStringAsync();
-            StringAssert.Contains(panelHtml, "activity-drawer__body");
+            StringAssert.Matches(panelHtml, new System.Text.RegularExpressions.Regex("<dialog[^>]* open=\"open\""));
             StringAssert.Contains(panelHtml, "handler=Dismiss&amp;operationId=5");
         }
 
