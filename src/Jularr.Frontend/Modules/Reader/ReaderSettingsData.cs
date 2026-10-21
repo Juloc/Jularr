@@ -26,6 +26,8 @@ namespace Jularr.Frontend.Modules.Reader
         public int Spacing { get; } = 165;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
         public string FontFamily { get; } = "serif";
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Paragraph))]
+        public int Paragraph { get; } = 100;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.TextWidth))]
         public int TextWidth { get; } = 68;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
@@ -38,12 +40,20 @@ namespace Jularr.Frontend.Modules.Reader
         public string Fit { get; } = "page";
     }
 
+    // The sleep timer of read-aloud: minutes until it stops, 0 for none. Transient, never saved.
+    public sealed class ReaderTimerData : BaseData
+    {
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Minutes { get; } = "0";
+    }
+
     public static class ReaderSettingsFields
     {
         public static readonly StringField Choice = new() { MaximumLength = 16 };
         public static readonly StringField Colour = new() { MinimumLength = 7, MaximumLength = 7 };
         public static readonly IntField Size = new() { Minimum = 14, Maximum = 40 };
         public static readonly IntField Spacing = new() { Minimum = 120, Maximum = 220 };
+        public static readonly IntField Paragraph = new() { Minimum = 0, Maximum = 200 };
         public static readonly IntField TextWidth = new() { Minimum = 40, Maximum = 90 };
         public static readonly BoolField Enabled = new();
     }

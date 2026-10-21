@@ -25,7 +25,8 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
   is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
 - The two pages of a spread are mirror images: both use the cross-section of half the
   block, so reading position never changes a page's height, vertical position,
-  outline, text box or page number (the number follows the paper's lower contour).
+  outline, text box or page number (the number follows the paper's lower contour). Each page's text box and number sit on its own paper:
+  the columns of the two-page view have no gap, so the right column starts where the right paper does.
   `LocalEpub_BookSpread_PagesAreMirrorImages` and `Tools/book-geometry.test.mjs` check it.
 
 This package starts from clean-start and carries forward the approved frame work.
@@ -39,31 +40,27 @@ The supplied mockup remains the reference for composition and buttons, not just
 the book surface. Its incorrect book-specific sidebar and excluded landscape
 decoration are not imported. The normal Jularr sidebar remains unchanged.
 
-The compact header contains cover/title/chapter, native chapter navigation and
-available language, typography, paper, annotations, search, selection and More
-actions. The lower transport contains Contents, a chapter-captioned shared seek
-control, page navigation/count and theater/fullscreen/settings actions. Page
-buttons no longer float over the paper. The control strips are borderless; the
-shared Range owns its thin accent-coloured track, thumb and keyboard focus, with
-no surrounding seek-field outline. Clean uses the canonical purple accent.
+The header is one line: back, cover, title and chapter (each one line with an ellipsis and a tip), the chapter switch and the tools
+(language, appearance, paper, bookmark, notes, read aloud, search, text selection, More). The bottom bar is one line, too, with the progress
+slider on its upper edge: contents, the chapter and share read, the page controls with "Pages a-b of n" (the book's pages once they are
+counted, else the chapter's), theater, fullscreen and settings. Both bars separate with the app's own 1px rule. Which tools stay is
+decided by width, not by breakpoints: `Overflow.ts` measures the bar and moves what does not fit, the highest rank first, into the More
+menu, where an entry of the same name takes its place; a menu entry does what its tool does. The settings button of the bottom bar never
+leaves, so the settings open with one press at every width. The language button is there whenever the Translation module is on; with no
+reading language set up its panel says so and leads to the profile settings. The shared Range owns the slider: a thin track across the
+bar with a notch at each chapter, the thumb showing while the bar is in use. It runs over the whole book (0 to 1000); dragging shows the
+chapter and share under the thumb, releasing turns to that page inside the chapter or opens another chapter there.
 
 A header button marks or clears a bookmark at the current place (per profile and book file, at most 200); the list with chapter title and position is in the notes panel, in the page panel of an image book. A prose page print draws a hyphenated line break with its hyphen and the remainder at the line start.
 
-Read-aloud is required. The [Speech integration](SPEECH.md) now connects browser
-device voices with canonical server profile preferences, selection/visible-text
-reading, word paint on the existing book, following and Pause/Resume/Stop.
-Neural-browser runtime/cache and cross-chapter continuation remain tracked by
-[Speech #1299](https://github.com/Juloc/Jularr/issues/1299); this is not a
-temporary browser-only preference store. Auto-scroll
-Start/Pause is also still missing ([Reader UX #286](https://github.com/Juloc/Jularr/issues/286));
-no inert Play button is presented as a finished implementation.
+Read-aloud is required. The [Speech integration](SPEECH.md) connects browser device voices and the neural runtime with the canonical
+server profile preferences, selection/visible-text reading and Pause/Resume/Stop. The spoken word is marked strongly and its sentence
+softly, on the book's printed pages as on the canonical text; a scrolled text follows the voice (a page turn follows it in the paged
+view) unless the reader scrolls by hand. A floating bar over the lower edge of the pages has pause, stop, the sleep timer (it stops
+reading aloud after 10 to 60 minutes and shows the minutes left) and the voice settings. Neural-browser runtime/cache and cross-chapter
+continuation remain tracked by [Speech #1299](https://github.com/Juloc/Jularr/issues/1299).
 
-On mobile the same buttons occupy CSS Grid slots below the book: Contents,
-Read aloud, Appearance, language when available, and More. Annotations and voice
-settings remain reachable in More. Their circular icon
-surfaces and short captions follow the reference. Selection remains in the header;
-search, settings and view commands remain reachable from More. There is no
-duplicate mobile form or JavaScript panel positioning.
+On a phone the same two bars hold what fits their width; the rest is in More. There is no second toolbar, grid dock or duplicate form.
 
 Typography and palette buttons expose focused groups of the existing settings
 form; All restores the user's disclosure state. Popovers overlay the unchanged
@@ -81,8 +78,9 @@ fractional output is localized without rounding away canonical precision.
 
 Reader settings retain the approved local Form mode and device preference key.
 Typography includes serif/sans, size 14–40px (20 default), line height 120–220%
-(165 default), width 40–90ch (68 default), indentation, hyphenation and original
-illustrations. Image adapters omit prose-only fields. Appearance currently exposes
+(165 default), paragraph spacing 0–200% (100 default), width 40–90ch (68 default), indentation, hyphenation and original
+illustrations. Typeface, size, both spacings, width and hyphenation belong to the profile (`ProfileReaderSettings`, shown on every
+device; a profile that has chosen nothing keeps what each device remembers), the rest stays with the device. Image adapters omit prose-only fields. Appearance currently exposes
 clean/paper and colour; the full accepted material workshop is still pending below.
 
 The same typed Range supplies transient navigation, not another progress store:

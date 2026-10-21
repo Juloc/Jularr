@@ -30,8 +30,8 @@ namespace Jularr.E2E.Tests
                 Assert.AreNotEqual(prints[0], prints[1], "The spread must not duplicate the first column.");
                 Assert.AreEqual(0, await page.Locator(".reader__page-print [data-b]").CountAsync(), "Decorative faces must not retain whole chapter blocks.");
                 Assert.IsTrue(await page.Locator(".reader__page-print").EvaluateAllAsync<bool>("prints => prints.every(p => Number(p.dataset.printRuns) <= 512 && p.querySelectorAll('*').length <= 1024)"));
-                Assert.IsTrue(await page.Locator(".reader__footer").EvaluateAsync<bool>("el => getComputedStyle(el).borderTopWidth === '0px' && getComputedStyle(el).boxShadow === 'none'"));
-                Assert.IsTrue(await page.Locator(".reader__top").EvaluateAsync<bool>("el => getComputedStyle(el).borderBottomWidth === '0px'"));
+                Assert.IsTrue(await page.Locator(".reader__footer").EvaluateAsync<bool>("el => getComputedStyle(el).borderTopWidth === '1px' && getComputedStyle(el).boxShadow === 'none'"));
+                Assert.IsTrue(await page.Locator(".reader__top").EvaluateAsync<bool>("el => getComputedStyle(el).borderBottomWidth === '1px'"));
                 var transport = page.Locator("[data-role=seek] input[type=range]");
                 Assert.AreEqual("none", await transport.EvaluateAsync<string>("el => getComputedStyle(el).appearance"));
                 Assert.IsTrue(await transport.EvaluateAsync<bool>("el => getComputedStyle(el).accentColor !== 'auto' && el.style.getPropertyValue('--range-progress').endsWith('%')"));
@@ -45,24 +45,21 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(1280, 720);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '2'");
                 await AssertReaderViewsAsync(page);
-                var viewSeek = page.GetByRole(AriaRole.Slider, new() { Name = "Position in this chapter", Exact = true });
-                await viewSeek.FocusAsync();
-                await page.Keyboard.PressAsync("End");
+                await SeekAsync(page, 499);
                 await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
-                await page.Keyboard.PressAsync("Home");
+                await SeekAsync(page, 0);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
                 // Keep a real layout callback pending while committing a newer seek.
                 await page.EvaluateAsync("""
                     () => {
                         document.fonts.dispatchEvent(new Event('loadingdone'));
                         const seek = document.querySelector('[data-role=seek] input');
-                        seek.value = seek.max;
+                        seek.value = '499';
                         seek.dispatchEvent(new Event('change', {bubbles:true}));
                     }
                     """);
                 await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
-                await viewSeek.FocusAsync();
-                await page.Keyboard.PressAsync("Home");
+                await SeekAsync(page, 0);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
                 // A bookmark marks the first block of this page, shows in the notes with its chapter, leads back to it and goes again.
                 var bookmark = page.Locator(".reader__tools [data-reader-bookmark]");
@@ -74,8 +71,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(bookmarked.Locator("a")).ToHaveTextAsync("Chapter One");
                 await Evidence.SaveAsync(page, "reader-bookmark-list");
                 await page.Keyboard.PressAsync("Escape");
-                await viewSeek.FocusAsync();
-                await page.Keyboard.PressAsync("End");
+                await SeekAsync(page, 499);
                 await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
                 await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "false");
                 await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
@@ -132,13 +128,12 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual((initialPage + 2).ToString(), await page.Locator(".reader").GetAttributeAsync("data-page"), "Reversal must finish on the requested spread without an extra commit.");
                 Assert.AreEqual("0", await page.Locator(".reader").GetAttributeAsync("data-book-active-leaves"));
                 Assert.AreEqual("false", await page.Locator(".reader").GetAttributeAsync("data-book-pending-frame"));
-                var seek = page.GetByRole(AriaRole.Slider, new() { Name = "Position in this chapter", Exact = true });
-                await page.Locator("[data-action=settings]").ClickAsync();
+                                await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("[data-reader-group=text] > summary").ClickAsync();
                 var fontSize = page.GetByRole(AriaRole.Slider, new() { Name = "Text size (px)", Exact = true });
                 await fontSize.FocusAsync(); await page.Keyboard.PressAsync("End");
                 await page.Locator("[data-reader-close=settings]").ClickAsync();
-                await seek.FocusAsync(); await page.Keyboard.PressAsync("Home");
+                await SeekAsync(page, 0);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
                 var pageColumns = int.Parse((await page.Locator(".reader").GetAttributeAsync("data-columns"))!);
                 Assert.IsTrue(int.Parse((await page.Locator(".reader").GetAttributeAsync("data-page-count"))!) > 12 * pageColumns);
@@ -148,11 +143,10 @@ namespace Jularr.E2E.Tests
                     """), "Long skips must compress into a bounded paper packet.");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
                 Assert.AreEqual((1 + 12 * pageColumns).ToString(), await page.Locator(".reader").GetAttributeAsync("data-page"));
-                await seek.FocusAsync();
-                await page.Keyboard.PressAsync("End");
+                await SeekAsync(page, 499);
                 await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookState === 'idle' && Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
                 prints = await VisiblePagePrintsAsync(page);
-                Assert.IsTrue(prints.Any(text => text.Contains("Paragraph 60", StringComparison.Ordinal)), "The last printed page must show the chapter's final paragraph.");
+                Assert.IsTrue(prints.Any(text => text.Contains("read on.", StringComparison.Ordinal)), "The last printed page must show the end of the chapter's final paragraph.");
                 await Evidence.SaveAsync(page, "reader-last-page-print");
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await fontSize.FocusAsync(); await page.Keyboard.PressAsync("Home");
@@ -179,19 +173,23 @@ namespace Jularr.E2E.Tests
                 await page.SetViewportSizeAsync(390, 844);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 var mobileCanvas = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
-                foreach (var selector in new[] { "[data-action=contents]", "[data-speech-toggle]", ".reader__tools [data-reader-open-settings=text]", "[data-action=more]" })
+                Assert.IsTrue((await page.Locator("[data-action=contents]").BoundingBoxAsync())!.Y >= mobileCanvas.Y + mobileCanvas.Height, "Contents belongs in the bottom bar.");
+                foreach (var selector in new[] { "[data-speech-toggle]", ".reader__tools [data-reader-open-settings=text]", "[data-action=more]" })
                 {
-                    Assert.IsTrue((await page.Locator(selector).BoundingBoxAsync())!.Y >= mobileCanvas.Y + mobileCanvas.Height, "Mobile dock action must be below the book: " + selector);
+                    var box = (await page.Locator(selector).BoundingBoxAsync())!;
+                    Assert.IsTrue(box.Y + box.Height <= mobileCanvas.Y + 1, "A tool that fits stays in the header: " + selector);
                 }
-                Assert.IsTrue((await page.Locator("[data-reader-select]").BoundingBoxAsync())!.Y < mobileCanvas.Y);
+
+                await Assertions.Expect(page.Locator("[data-reader-select]")).ToBeHiddenAsync();
                 Assert.AreEqual(1, await page.Locator("[data-action=settings]").CountAsync());
                 Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
                 await Evidence.SaveAsync(page, "reader-mockup-mobile");
                 await page.Locator("[data-action=more]").ClickAsync();
-                await Assertions.Expect(page.Locator(".reader__more [data-reader-open-panel=notes]")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".reader__more [data-overflow-for=notes]")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator(".reader__more [data-reader-open-panel=speech]")).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "reader-mockup-mobile-more");
-                await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
+                await page.Keyboard.PressAsync("Escape");
+                await ToggleFullscreenAsync(page);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'fullscreen'");
                 var immersive = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
                 await Assertions.Expect(page.Locator("[data-action=contents]")).ToBeHiddenAsync();
@@ -201,8 +199,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(immersive.Width, revealed.Width);
                 Assert.AreEqual(immersive.Height, revealed.Height);
                 await Evidence.SaveAsync(page, "reader-mockup-mobile-fullscreen");
-                await page.Locator("[data-action=more]").ClickAsync();
-                await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
+                await ToggleFullscreenAsync(page);
                 await page.WaitForFunctionAsync("() => !document.fullscreenElement");
                 await page.SetViewportSizeAsync(320, 740);
                 Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
@@ -230,8 +227,7 @@ namespace Jularr.E2E.Tests
                 await AddBookAsync(page, folders, "Spread mirror");
                 await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true' && document.querySelectorAll('.reader__page-print').length >= 2");
-                var seek = page.GetByRole(AriaRole.Slider, new() { Name = "Position in this chapter", Exact = true });
-                // Long running text in both columns: the two pages of a spread are mirrors of one another.
+                                // Long running text in both columns: the two pages of a spread are mirrors of one another.
                 await page.Locator("[data-role=content]").EvaluateAsync("""
                     source => {
                         source.replaceChildren();
@@ -243,7 +239,7 @@ namespace Jularr.E2E.Tests
                     }
                     """);
                 await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookThickness && Number(r.dataset.pageCount) > 6 && r.dataset.bookState === 'idle'; }");
-                await seek.FocusAsync(); await page.Keyboard.PressAsync("Home");
+                await SeekAsync(page, 0);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
                 // A thick book (1500 printed pages) makes the unread and read stacks differ clearly; keep that count after every re-measure.
                 await page.EvaluateAsync("""
@@ -269,7 +265,7 @@ namespace Jularr.E2E.Tests
                     await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '2'");
                     await AssertSpreadMirrorsAsync(page, $"{width}x{height} theater first spread");
                 }
-                await seek.FocusAsync(); await page.Keyboard.PressAsync("End");
+                await SeekAsync(page, 499);
                 await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookState === 'idle' && Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
                 await AssertSpreadMirrorsAsync(page, "1920x1080 theater last spread", textFills: false);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
@@ -283,7 +279,25 @@ namespace Jularr.E2E.Tests
         }
 
         // Signs in, adds the library, scans it and makes the one scanned book a work.
-        private static async Task AddBookAsync(IPage page, Folders folders, string title)
+        // The progress slider's value is a thousandth of the book: 0 is its start and 499 the end of the first of two equal chapters.
+        internal static Task SeekAsync(IPage page, int value) => page.Locator("[data-role=seek] input[type=range]").EvaluateAsync(
+            "(input, value) => { input.value = String(value); input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); }", value);
+
+        // The bar's own button while it fits, else the More menu's.
+        internal static async Task ToggleFullscreenAsync(IPage page)
+        {
+            var tool = page.Locator("[data-reader-fullscreen]");
+            if (await tool.IsVisibleAsync())
+            {
+                await tool.ClickAsync();
+                return;
+            }
+
+            await page.Locator("[data-action=more]").ClickAsync();
+            await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
+        }
+
+        internal static async Task AddBookAsync(IPage page, Folders folders, string title)
         {
             await Owner.SetUpAndSignInAsync(page);
             await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
@@ -519,8 +533,7 @@ namespace Jularr.E2E.Tests
                 Assert.IsNull(await root.GetAttributeAsync("data-book-page-count"));
                 Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"), "The hidden measurement must not enlarge a resized viewport.");
                 await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("Chapter One");
-                await page.Locator("[data-action=more]").ClickAsync();
-                await page.Locator("[data-reader-open-settings=all]").ClickAsync();
+                await page.Locator("[data-action=settings]").ClickAsync();
                 await page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Book page count is unavailable" }).ScrollIntoViewIfNeededAsync();
                 await Evidence.SaveAsync(page, "reader-book-pages-unavailable");
                 Assert.AreEqual(0, await page.Locator(".reader__measurement [data-b]").CountAsync());
@@ -631,9 +644,7 @@ namespace Jularr.E2E.Tests
             var root = page.Locator(".reader");
             await page.WaitForFunctionAsync("() => Number(document.querySelector('.reader').dataset.pageCount) > 2");
             await AssertReaderViewsAsync(page);
-            var seek = page.GetByRole(AriaRole.Slider, new() { Name = "Position in this chapter", Exact = true });
-            await seek.FocusAsync();
-            await page.Keyboard.PressAsync("End");
+            await SeekAsync(page, 499);
             await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
             Assert.IsTrue(await page.Locator("[data-role=content]").EvaluateAsync<bool>("""
                 el => {
@@ -661,11 +672,12 @@ namespace Jularr.E2E.Tests
                 })
                 """);
             await Evidence.SaveAsync(page, "reader-chapter-seek");
-            await page.Keyboard.PressAsync("Home");
+            await SeekAsync(page, 0);
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
+            await page.Locator(".reader__canvas").FocusAsync();
             await page.Keyboard.PressAsync("ArrowRight");
             await page.WaitForFunctionAsync("() => Number(document.querySelector('.reader').dataset.page) > 1");
-            await page.Keyboard.PressAsync("Home");
+            await SeekAsync(page, 0);
             await page.Locator("[data-action=settings]").ClickAsync();
             await page.Locator("[data-reader-group=text] > summary").ClickAsync();
             var size = page.GetByRole(AriaRole.Slider, new() { Name = "Text size (px)", Exact = true });
@@ -742,8 +754,7 @@ namespace Jularr.E2E.Tests
             var mobileCanvas = await page.Locator(".reader__canvas").BoundingBoxAsync();
             Assert.IsTrue(mobileTools!.Y >= mobileCanvas!.Y + mobileCanvas.Height, "Mobile tools belong below the reading surface.");
             await Evidence.SaveAsync(page, "reader-mobile-tools");
-            await page.Locator("[data-action=more]").ClickAsync();
-            await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
+            await ToggleFullscreenAsync(page);
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'fullscreen'");
             var mobileFullscreenCanvas = await page.Locator(".reader__canvas").BoundingBoxAsync();
             await Assertions.Expect(page.Locator("[data-action=contents]")).ToBeHiddenAsync();
@@ -753,12 +764,11 @@ namespace Jularr.E2E.Tests
             var revealedMobileCanvas = await page.Locator(".reader__canvas").BoundingBoxAsync();
             Assert.AreEqual(mobileFullscreenCanvas!.Width, revealedMobileCanvas!.Width);
             Assert.AreEqual(mobileFullscreenCanvas.Height, revealedMobileCanvas.Height);
+            var revealedHeader = await page.Locator(".reader__top").BoundingBoxAsync();
             mobileTools = await page.Locator("[data-action=contents]").BoundingBoxAsync();
-            var mobileProgress = await page.Locator(".reader__bottom").BoundingBoxAsync();
-            Assert.IsTrue(mobileTools!.Y >= mobileProgress!.Y + mobileProgress.Height - 1, "Revealed mobile strips must not overlap.");
+            Assert.IsTrue(mobileTools!.Y >= revealedHeader!.Y + revealedHeader.Height - 1, "Revealed mobile strips must not overlap.");
             await Evidence.SaveAsync(page, "reader-mobile-fullscreen-controls");
-            await page.Locator("[data-action=more]").ClickAsync();
-            await page.Locator("[data-reader-command=fullscreen]").ClickAsync();
+            await ToggleFullscreenAsync(page);
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'normal'");
             await page.Locator("[data-action=contents]").ClickAsync();
             Assert.IsTrue(await page.Locator(".reader__sidebar").IsVisibleAsync());
@@ -766,8 +776,7 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual(mobileCanvas!.Width, mobileContentsCanvas!.Width);
             Assert.AreEqual(mobileCanvas.Height, mobileContentsCanvas.Height);
             await page.Keyboard.PressAsync("Escape");
-            await page.Locator("[data-action=more]").ClickAsync();
-            await page.Locator("[data-reader-open-settings=all]").ClickAsync();
+            await page.Locator("[data-action=settings]").ClickAsync();
             await Evidence.SaveAsync(page, "reader-mobile-settings");
             Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
             await page.GetByLabel("Layout", new() { Exact = true }).SelectOptionAsync("scroll");
@@ -777,10 +786,9 @@ namespace Jularr.E2E.Tests
             Assert.AreEqual("scroll", await root.GetAttributeAsync("data-mode"));
             Assert.AreEqual("rgb(250, 250, 250)", await root.EvaluateAsync<string>("el => getComputedStyle(el.querySelector('[data-role=content]')).color"));
             Assert.IsTrue(await page.Locator("[data-role=content]").EvaluateAsync<bool>("el => el.scrollHeight > el.clientHeight"));
-            await seek.FocusAsync();
-            await page.Keyboard.PressAsync("End");
+            await SeekAsync(page, 499);
             Assert.IsTrue(await page.Locator("[data-role=content]").EvaluateAsync<bool>("el => el.scrollTop + el.clientHeight >= el.scrollHeight - 2"));
-            await page.Keyboard.PressAsync("Home");
+            await SeekAsync(page, 0);
             await page.SetViewportSizeAsync(1280, 720);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.NoPreference });
         }

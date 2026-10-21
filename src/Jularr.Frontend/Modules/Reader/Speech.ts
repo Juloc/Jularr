@@ -2,6 +2,7 @@ import { DeviceSession, type SpeechItem, type SpeechState } from '../Speech/Devi
 import { deviceVoice, initializeSpeechSettings, preferenceFor, type SpeechPreferences } from '../Speech/Preferences';
 import { installedModels } from '../Speech/ModelStore';
 import type { NeuralSession } from '../Speech/NeuralSession';
+import { followDelta, minutesLeft, sentenceAround, timerMinutes } from './SpeechFollow';
 
 // Text coordinates stay on canonical content. Highlights never wrap or mutate its nodes.
 export function speechRange(source: Range, start: number, length: number): Range | undefined {
@@ -41,10 +42,24 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     let neuralModel: string | undefined;
     const highlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
     const HighlightConstructor = (globalThis as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
-    let activeWord: Range | undefined;
+    let activeWord: Range | undefined, activeSentence: Range | undefined;
 
-    const clear = () => { activeWord = undefined; highlights?.delete('reader-speech-word'); };
+    const clear = () => { activeWord = activeSentence = undefined; highlights?.delete('reader-speech-word'); highlights?.delete('reader-speech-sentence'); };
+    // The sleep timer: a chosen number of minutes after which reading aloud stops by itself.
+    const timerLeft = reader.querySelector<HTMLElement>('[data-speech-timer-left]');
+    const timerChoice = reader.querySelector<HTMLSelectElement>('[data-panel=timer] select');
+    let timerEnds = 0, timerStop = 0, timerTick = 0;
+    const showTimer = () => { if (timerLeft) timerLeft.textContent = timerEnds ? reader.dataset.timerLeftLabel!.replace('{0}', String(minutesLeft(timerEnds, Date.now()))) : ''; };
+    const setTimer = (minutes: number) => {
+        window.clearTimeout(timerStop); window.clearInterval(timerTick);
+        timerEnds = minutes ? Date.now() + minutes * 60_000 : 0;
+        timerStop = minutes ? window.setTimeout(() => { setTimer(0); if (timerChoice) timerChoice.value = '0'; stop(); }, minutes * 60_000) : 0;
+        timerTick = minutes ? window.setInterval(showTimer, 10_000) : 0;
+        showTimer();
+    };
+    timerChoice?.addEventListener('change', () => setTimer(timerMinutes(timerChoice.value)));
     const changed = (state: SpeechState) => {
+        if (state === 'idle' || state === 'failed') { setTimer(0); if (timerChoice) timerChoice.value = '0'; }
         reader.dataset.speechState = state;
         transport.hidden = state === 'idle';
         toggle.setAttribute('aria-pressed', String(state === 'speaking' || state === 'paused' || state === 'loading'));
@@ -54,16 +69,16 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
             : state === 'speaking' ? reader.dataset.speechSpeakingLabel! : '';
         if (state === 'idle' || state === 'failed') clear();
     };
-    const paintWord = () => {
-        if (!activeWord || !highlights || !HighlightConstructor || reader.dataset.bookState && reader.dataset.bookState !== 'idle') return;
-        const ranges = [activeWord];
-        const firstBlock = activeWord.startContainer.parentElement?.closest<HTMLElement>('[data-b]');
-        const blocks = firstBlock && firstBlock.contains(activeWord.endContainer) ? [firstBlock]
-            : Array.from(content.querySelectorAll<HTMLElement>('[data-b]')).filter(block => !block.querySelector('[data-b]') && activeWord!.intersectsNode(block));
+    // The range itself and, on the printed pages of the book, the runs that carry its text.
+    const inked = (active: Range): Range[] => {
+        const ranges = [active];
+        const firstBlock = active.startContainer.parentElement?.closest<HTMLElement>('[data-b]');
+        const blocks = firstBlock && firstBlock.contains(active.endContainer) ? [firstBlock]
+            : Array.from(content.querySelectorAll<HTMLElement>('[data-b]')).filter(block => !block.querySelector('[data-b]') && active.intersectsNode(block));
         for (const block of blocks) {
             const local = document.createRange(); local.selectNodeContents(block);
-            if (block.contains(activeWord.startContainer)) local.setStart(activeWord.startContainer, activeWord.startOffset);
-            if (block.contains(activeWord.endContainer)) local.setEnd(activeWord.endContainer, activeWord.endOffset);
+            if (block.contains(active.startContainer)) local.setStart(active.startContainer, active.startOffset);
+            if (block.contains(active.endContainer)) local.setEnd(active.endContainer, active.endOffset);
             const before = document.createRange(); before.selectNodeContents(block); before.setEnd(local.startContainer, local.startOffset);
             const from = before.toString().length, to = from + local.toString().length;
             const text = block.textContent ?? '';
@@ -77,14 +92,30 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
                 ranges.push(range);
             }
         }
-        highlights.set('reader-speech-word', new HighlightConstructor(...ranges));
+        return ranges;
     };
+    // The spoken word is marked strongly, its sentence softly around it.
+    const paintWord = () => {
+        if (!activeWord || !highlights || !HighlightConstructor || reader.dataset.bookState && reader.dataset.bookState !== 'idle') return;
+        if (activeSentence) highlights.set('reader-speech-sentence', new HighlightConstructor(...inked(activeSentence)));
+        else highlights.delete('reader-speech-sentence');
+        highlights.set('reader-speech-word', new HighlightConstructor(...inked(activeWord)));
+    };
+    const segmenter = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(document.documentElement.lang || undefined, { granularity: 'sentence' }) : undefined;
     const highlight = (item: import('../Speech/DeviceSession').SpeechItem, offset: number, length: number) => {
         const range = speechRange(item.range, offset, length);
         if (!range) return;
         activeWord = range;
+        const around = segmenter ? sentenceAround(item.text, offset, text => segmenter.segment(text)) : undefined;
+        activeSentence = around ? speechRange(item.range, around.start, around.length) : undefined;
         const box = range.getClientRects()[0], bounds = content.getBoundingClientRect();
-        if (box && Date.now() >= manualUntil && (box.left < bounds.left - 1 || box.right > bounds.right + 1 || box.top < bounds.top || box.bottom > bounds.bottom)) reveal(range);
+        if (box && Date.now() >= manualUntil) {
+            if (reader.dataset.mode === 'scroll') {
+                // A scrolled text follows the voice, keeping its line a little above the middle.
+                const delta = followDelta(box.top, bounds);
+                if (delta) content.scrollBy({ top: delta, behavior: reader.dataset.animation === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches && reader.dataset.animation !== 'on' ? 'instant' : 'smooth' });
+            } else if (box.left < bounds.left - 1 || box.right > bounds.right + 1 || box.top < bounds.top || box.bottom > bounds.bottom) reveal(range);
+        }
         paintWord();
     };
     const device = synth && typeof SpeechSynthesisUtterance !== 'undefined'
