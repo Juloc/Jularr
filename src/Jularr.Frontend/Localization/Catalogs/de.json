@@ -8947,6 +8947,14 @@
   "jobs.job.covers": [
    "Provider covers",
    "Titelbilder der Anbieter"
+  ],
+  "jobs.worker.Derivation": [
+   "Reading copies",
+   "Lesekopien"
+  ],
+  "jobs.job.readingCopies": [
+   "Reading copies",
+   "Lesekopien"
   ]
  }
 }
