@@ -4,7 +4,7 @@
 
 // Controls that need script show once it has run.
 html:not(.favorites-ready) {
-    [data-favorites-bulk-toggle], [data-favorites-layout], .favorites-chip, .favorites-heart__manage, .favorites-entry__select { display: none; }
+    [data-favorites-bulk-toggle], .favorites-chip, .favorites-heart__manage, .favorites-entry__select { display: none; }
 }
 
 // The collections as cards with the covers of their first titles.
@@ -43,13 +43,13 @@ html:not(.favorites-ready) {
 
         &:hover { border-color: var(--accent); }
         &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-        &--current, &--current:hover { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-    }
 
-    &--all &__card {
-        border-color: transparent;
-        background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, white));
-        color: var(--accent-contrast);
+        // Only the list that is shown is purple: all favorites and every collection alike.
+        &--current, &--current:hover {
+            border-color: transparent;
+            background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, white));
+            color: var(--accent-contrast);
+        }
     }
 
     &__info {
@@ -68,7 +68,7 @@ html:not(.favorites-ready) {
         small { color: var(--muted); font-size: 11px; }
     }
 
-    &--all &__info small { color: inherit; }
+    &__card--current &__info small { color: inherit; }
 
     &__posters {
         position: absolute;
@@ -167,12 +167,7 @@ html.favorites-ready .favorites-heart__toggle { display: none; }
     &__settings { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 
     &__select[aria-pressed="true"] &__label--off, &__select[aria-pressed="false"] &__label--on { display: none; }
-
-    // The icon shows the layout a click leads to.
-    &__layout.button { width: 36px; min-height: 36px; .ui-icon:last-child { display: none; } }
 }
-
-html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
 
 // Actions on the selected titles.
 .favorites-bulk {
@@ -292,7 +287,7 @@ html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first
 }
 
 // The same titles as rows.
-html[data-favorites-layout="list"] .favorites-grid {
+html[data-list-layout="list"] .favorites-grid {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
     gap: 10px;
     justify-items: stretch;

@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Framework
 
         // An address is typed with the address keyboard, without spelling or capitals.
         public bool IsAddress { get; init; }
+        public bool IsUsername { get; init; }
 
         // The example shown in the empty field and the explanation behind the label's (i): the field's own unless a form names others.
         public string PlaceholderKey { get; init; } = "";
@@ -99,6 +100,7 @@ namespace Jularr.Frontend.Framework
                 Accept = field.Field is FileField file ? string.Join(',', file.Extensions) : null,
                 MaximumBytes = field.Field is FileField sized ? sized.MaximumBytes : null,
                 IsAddress = field.Field is StringField { Format: StringFormat.HttpUrl or StringFormat.ServiceUrl },
+                IsUsername = field.Field is StringField { Format: StringFormat.Username },
                 PlaceholderKey = "hint." + field.Key + ".placeholder",
                 InfoKey = "hint." + field.Key + ".info"
             };

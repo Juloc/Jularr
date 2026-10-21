@@ -7,23 +7,31 @@ namespace Jularr.Backend.Data.User.Library.V1
 {
     public sealed class ReadLibraryParametersV1 : BaseParameters
     {
-        public ReadLibraryParametersV1(MediaType? mediaTypeId = null, string? query = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded, int page = 1, int pageSize = 48,
-            MediaSubtype? mediaSubtypeId = null)
+        public ReadLibraryParametersV1(MediaType[]? mediaTypeIds = null, string? query = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded, int page = 1, int pageSize = 48,
+            MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null, int? releaseYearTo = null)
         {
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
+            ReleaseYearFrom = releaseYearFrom;
+            ReleaseYearTo = releaseYearTo;
             Query = query;
             LibrarySortTypeId = librarySortTypeId;
             Page = page;
             PageSize = pageSize;
         }
 
-        // A type alone lists its Works without subtype; a subtype lists that subtype across types.
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
-        public MediaSubtype? MediaSubtypeId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearFrom { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearTo { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
         public string? Query { get; }

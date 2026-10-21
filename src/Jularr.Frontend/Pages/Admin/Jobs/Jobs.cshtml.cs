@@ -29,8 +29,9 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var canControl = texts.Can("instance.settings.update");
             var table = new Table<WorkerJobV1>(_jobs)
-                .Content("jobs.job", item => new Div(new Text("jobs.job." + item.Key),
-                    new Span(new Text("jobs.worker." + item.WorkerGroupTypeId), new ValueText(" · "), item.IntervalSeconds is { } seconds ? new ValueText(Interval(seconds)) : new Text("jobs.continuous"))).Class("jobs-job"))
+                .Content("jobs.job", item => item.ParentKey is not null
+                    ? new Div(new Text("jobs.job." + item.Key)).Class("jobs-job jobs-job--part")
+                    : new Div(new Text("jobs.job." + item.Key), new Span(new Text("jobs.worker." + item.WorkerGroupTypeId), new ValueText(" · "), Cadence(item.IntervalSeconds))).Class("jobs-job"))
                 .Content("table.status", item => new Div(
                     new Span(new Text("jobs.state." + item.WorkerJobStateTypeId)).Class("state-chip jobs-state state-chip--" + item.WorkerJobStateTypeId.ToString().ToLowerInvariant()),
                     item.LastErrorKey is { } key ? new Span(new Text("errors." + key)) : new Span()).Class("jobs-status"))
@@ -89,6 +90,14 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         private static IUiComponent Post(string handler, string? csrf, (string Name, string Value)[] hidden, IUiComponent button) => new PostForm(Address + "?handler=" + handler, csrf, hidden, button);
 
         private static IUiComponent Time(DateTime? value) => new ValueText(value is { } time ? time.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) : "–");
+
+        // How often the job looks: the Owner's interval, off, or when work arrives.
+        private static IUiComponent Cadence(int? seconds) => seconds switch
+        {
+            null => new Text("jobs.continuous"),
+            0 => new Text("jobs.off"),
+            { } value => new ValueText(Interval(value))
+        };
 
         private static string Interval(int seconds) => seconds switch
         {

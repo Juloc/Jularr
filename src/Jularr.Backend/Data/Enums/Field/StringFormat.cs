@@ -17,6 +17,9 @@ namespace Jularr.Backend.Data.Enums.Field
         ServiceUrl = 10,
 
         // Two-letter ISO 639-1 language, lower case.
-        Language = 11
+        Language = 11,
+
+        // Letters, digits, dots, underscores and hyphens.
+        Username = 12
     }
 }

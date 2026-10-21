@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.Logic.Profile;
@@ -360,18 +361,25 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // One profile-scoped page.
+            // One profile-scoped page: the order is decided over the favorites, the card projection runs for the page alone.
+            var orderBy = Parameters.LibrarySortTypeId switch
+            {
+                LibrarySortType.Year => "work.\"ReleaseYear\" DESC NULLS LAST, visible.\"Title\", work.\"Id\"",
+                LibrarySortType.Progress => "workProgress.\"ProgressPercent\" DESC NULLS LAST, visible.\"Title\", work.\"Id\"",
+                LibrarySortType.Title => "visible.\"Title\", work.\"Id\"",
+                _ => "entry.\"CreatedAt\" DESC NULLS LAST, visible.\"Title\", work.\"Id\""
+            };
+            var needsProgress = Parameters.LibrarySortTypeId == LibrarySortType.Progress || Parameters.ProgressStateId is not null;
             var sql = new SqlStatement();
-            sql.Statement =
+            sql.Statement = WorkCardProjection.Page(
                 $$"""
                 SELECT
-                    {{WorkCardProjection.Columns}},
-                    TRUE AS "IsWatchlisted"
+                    work."Id"
                 FROM
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                     JOIN "Works" AS work ON work."Id" = entry."WorkId"
-                    {{WorkCardProjection.Joins}}
+                    {{(needsProgress ? WorkCardProjection.ProgressJoin : "")}}
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
@@ -382,16 +390,13 @@ namespace Jularr.Backend.Service.User.Media.V1
                     )
                     AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
                     AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
-                    AND (@ProgressStateId::smallint IS NULL OR workProgress."ProgressStateId" = @ProgressStateId)
+                    {{(Parameters.ProgressStateId is null ? "" : "AND workProgress.\"ProgressStateId\" = @ProgressStateId")}}
                 ORDER BY
-                    CASE WHEN @LibrarySortTypeId = 1 THEN entry."CreatedAt" END DESC NULLS LAST,
-                    CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
-                    CASE WHEN @LibrarySortTypeId = 4 THEN workProgress."ProgressPercent" END DESC NULLS LAST,
-                    visible."Title",
-                    work."Id"
+                    {{orderBy}}
                 LIMIT @PageSize
-                OFFSET @Offset;
-                """;
+                OFFSET @Offset
+                """,
+                "TRUE");
             sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;

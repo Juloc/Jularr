@@ -19,6 +19,264 @@
 
 .auth-card .ui-form__actions { margin-top: 6px; }
 .auth-card .ui-form__actions > .button { width: 100%; }
+
+// Sign in, request access and approval pending: the owner's login mockup (v2), one 423px card on the soft page glow.
+.auth-main:has(.login-card) {
+    padding: 44px 18px 72px;
+
+    & > .page-screen { width: min(100%, 423px); }
+}
+html:not([data-skin="original"]) body:has(.login-card) {
+    background: radial-gradient(ellipse 76% 75% at 49% 45%, color-mix(in srgb, var(--accent) 4%, var(--background)) 0%, var(--background) 76%);
+}
+
+.login-card {
+    width: 100%;
+    padding: 29px 30px 26px;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    font-size: 16px;
+    line-height: normal;
+
+    // The mark and the name, centred above the form.
+    .auth-brand { flex-wrap: nowrap; gap: 10px; min-height: 52px; margin: 0 0 28px; }
+    .auth-symbol { width: 57px; height: 57px; }
+    .auth-brand-name { font-size: 27px; font-weight: 850; letter-spacing: -1.5px; }
+
+    // One column of fields, the label above its field, the eye and the forgot link inside the field's row.
+    .ui-form { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+    .ui-field { gap: 0; }
+    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px; font-size: 12px; font-weight: 750; line-height: normal; }
+    .ui-field__control {
+        display: flex;
+        align-items: center;
+        height: 46px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--field);
+        transition: border-color .2s, box-shadow .2s;
+
+        &:focus-within { border-color: var(--accent-outline); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+        &:has([aria-invalid="true"]) { border-color: var(--danger); }
+        & > input { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; padding: 0 15px; border: 0; background: transparent; color: var(--text); font-size: 13px; }
+        & > input::placeholder { color: color-mix(in srgb, var(--muted) 78%, transparent); }
+    }
+    .field-error { margin: 7px 0 0; line-height: 1.5; }
+    .ui-form > .field-error { margin: 0; }
+    .ui-form__actions { display: block; margin-top: 2px; }
+}
+
+.auth-forgot { color: var(--muted); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; &:hover { color: var(--accent); } }
+.password-reveal {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 35px;
+    height: 34px;
+    margin-right: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+
+    &:hover { background: var(--accent-soft); color: var(--accent); }
+    .ui-icon { width: 18px; height: 18px; }
+}
+
+// The one filled action: the accent in a soft gradient. The same look serves a link (back to sign in).
+.auth-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    height: 45px;
+    padding: 0;
+    border: 0;
+    border-radius: 13px;
+    background: linear-gradient(95deg, var(--accent), color-mix(in srgb, var(--accent) 92%, #fff));
+    box-shadow: 0 6px 15px color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent-contrast);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 750;
+    text-decoration: none;
+    transition: filter var(--transition), transform var(--transition);
+
+    &:hover { filter: brightness(1.055); transform: translateY(-1px); }
+}
+
+// The "forgot password" note opens from its link; the Plex messages are always there.
+.auth-hint {
+    display: none;
+    margin: 14px 0 0;
+    padding: 12px 13px;
+    border-radius: 14px;
+    background: var(--accent-soft);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.55;
+
+    &:target, &--open { display: block; }
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin: 26px 0 17px;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+
+    &::before, &::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+}
+.auth-providers {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 9px;
+
+    .ui-form { display: block; }
+    .ui-form__actions { margin: 0; }
+}
+.auth-provider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover { border-color: var(--accent-outline); background: var(--accent-soft); }
+    .ui-icon { flex: none; width: 20px; height: 20px; }
+}
+.login-card > .auth-provider, .login-card > .ui-form { margin-top: 9px; }
+
+.auth-request {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: 21px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+
+    a { color: var(--accent); font-weight: 780; text-decoration: none; &:hover { text-decoration: underline; } }
+}
+
+// Request access: a condensed brand, the title and the form.
+.login-card--register {
+    padding-top: 25px;
+
+    .auth-brand { margin-bottom: 20px; }
+    .auth-symbol { width: 46px; height: 46px; }
+    .auth-brand-name { font-size: 24px; }
+    h1 { margin: 0 0 22px; font-size: 20px; line-height: 1.2; letter-spacing: -.65px; }
+    .ui-form { gap: 16px; }
+    .ui-form__actions { margin-top: 3px; }
+}
+.auth-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 12px 13px;
+    border: 1px solid color-mix(in srgb, var(--accent) 13%, var(--border));
+    border-radius: 14px;
+    background: var(--accent-soft);
+
+    &__icon { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--surface); color: var(--accent); }
+    & > span:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    strong { font-size: 12px; line-height: 1.2; }
+    small { color: var(--muted); font-size: 10px; line-height: 1.55; }
+}
+// The rule for a field's value, under the field.
+.auth-field-note { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.auth-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: 17px auto 0;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.5;
+    text-decoration: none;
+
+    &:hover { text-decoration: underline; }
+}
+
+// Approval pending.
+.login-card--pending {
+    text-align: center;
+
+    h1 { margin: 0 0 10px; font-size: 24px; font-weight: 700; line-height: normal; letter-spacing: -.8px; }
+    .auth-submit { margin-top: 0; }
+}
+.auth-emblem { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 17px; border-radius: 22px; background: var(--accent-soft); color: var(--accent); }
+.auth-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 820;
+
+    & > span { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+}
+.auth-waiting { margin: 0 0 18px; color: var(--muted); font-size: 12px; line-height: 1.7; strong { color: var(--text); } }
+.auth-explain {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 21px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--field);
+    text-align: left;
+
+    strong { font-size: 12px; }
+    span { color: var(--muted); font-size: 11px; line-height: 1.6; }
+    small { color: var(--accent); font-size: 10px; font-weight: 760; }
+}
+
+@media (max-width: 500px) {
+    .auth-main:has(.login-card) { padding: 24px 13px 82px; }
+    .login-card { padding: 27px 22px 24px; border-radius: 22px; .auth-brand { margin-bottom: 24px; } .auth-brand-name { font-size: 25px; } }
+    .login-card--register { padding-top: 25px; .auth-brand { margin-bottom: 20px; } .auth-brand-name { font-size: 24px; } }
+    .auth-providers { gap: 7px; }
+    .auth-provider { gap: 5px; font-size: 11px; }
+    // The tall request form leaves the two round buttons the page's own bottom.
+    body:has(.login-card--register) { position: relative; }
+    .auth-main:has(.login-card--register) { padding-bottom: 115px; }
+    body:has(.login-card--register) .appearance-dock { position: absolute; bottom: 18px; }
+}
+@media (max-width: 360px) {
+    .login-card { padding: 23px 16px 22px; }
+    .login-card--register { padding-top: 21px; }
+    .auth-provider { font-size: 10px; .ui-icon { width: 17px; height: 17px; } }
+}
 .profile-picker { display: grid; gap: 18px; }
 .profile-picker h1 { margin: 0; font-size: 22px; }
 .profile-locked { display: flex; align-items: center; justify-content: center; gap: 8px; }

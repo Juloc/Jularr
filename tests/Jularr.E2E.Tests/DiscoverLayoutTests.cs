@@ -74,5 +74,51 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task Filter_ListsTypeThenAvailability_AndOnlyTheFiltersTheChosenTypesHave()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+
+            try
+            {
+                // The media types come first, then the local availability, then the release year and the rankings the chosen types have.
+                await page.GotoAsync("/?type=movies");
+                await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
+                var drawer = page.Locator("#discover-panel");
+                await Assertions.Expect(drawer).ToBeVisibleAsync();
+                async Task<float> TopAsync(ILocator element) => (await element.BoundingBoxAsync())!.Y;
+                var types = await TopAsync(drawer.Locator(".drawer__section").First);
+                var availability = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=availability]") }));
+                var year = await TopAsync(drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=year]") }));
+                var rankings = drawer.Locator(".choice-group").Filter(new() { Has = page.Locator("input[name=feed]") });
+                Assert.IsTrue(types < availability && availability < year && year < await TopAsync(rankings), $"{types} {availability} {year}");
+                await Assertions.Expect(rankings.GetByText("Upcoming", new() { Exact = true })).ToBeVisibleAsync();
+
+                // Choosing music instead takes the rankings away at once, since music has none; movies bring them back.
+                await drawer.Locator(".choice-group__check", new() { HasText = "Movies" }).ClickAsync();
+                await drawer.Locator(".choice-group__check", new() { HasText = "Music" }).ClickAsync();
+                await Assertions.Expect(rankings).ToBeHiddenAsync();
+                await Assertions.Expect(drawer.GetByText("Can be requested", new() { Exact = true })).ToBeVisibleAsync();
+                await drawer.Locator(".choice-group__check", new() { HasText = "Movies" }).ClickAsync();
+                await Assertions.Expect(rankings).ToBeVisibleAsync();
+                await Assertions.Expect(rankings.GetByText("Upcoming", new() { Exact = true })).ToBeVisibleAsync();
+
+                // A page for a type without rankings does not offer them at all.
+                await page.GotoAsync("/?type=music");
+                await page.Locator("button[data-drawer-pane=filter]").ClickAsync();
+                await Assertions.Expect(page.Locator("#discover-panel input[name=feed]")).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "discover-filter-music");
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "discover-filter-adapts-failed");
+                throw;
+            }
+        }
     }
 }

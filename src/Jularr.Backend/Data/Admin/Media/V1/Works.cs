@@ -8,16 +8,124 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
     }
 
+    // The library list: every filter that is left out lets all titles through.
     public sealed class ReadWorksParametersV1 : BaseParameters
     {
-        public ReadWorksParametersV1(int page = 1, int pageSize = 25)
+        public ReadWorksParametersV1(int page = 1, int pageSize = 25, MediaType? mediaTypeId = null, bool? isMonitored = null, WorkListStatus? workListStatusId = null, long? libraryRootId = null,
+            long? acquisitionProfileId = null, string? query = null, WorkSortType workSortTypeId = WorkSortType.Title, bool isDescending = false)
         {
             Page = page;
             PageSize = pageSize;
+            MediaTypeId = mediaTypeId;
+            IsMonitored = isMonitored;
+            WorkListStatusId = workListStatusId;
+            LibraryRootId = libraryRootId;
+            AcquisitionProfileId = acquisitionProfileId;
+            Query = query;
+            WorkSortTypeId = workSortTypeId;
+            IsDescending = isDescending;
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        // Monitored titles have a target that is not paused; the others have none or a paused one.
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitoredFilter))]
+        public bool? IsMonitored { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.WorkListStatusFilterId))]
+        public WorkListStatus? WorkListStatusId { get; }
+
+        // The library its target imports into, or one that holds a file of the title.
+        [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; }
+
+        [DataField(typeof(Fields.Acquisition.AcquisitionProfileFields), nameof(Fields.Acquisition.AcquisitionProfileFields.Id), false)]
+        public long? AcquisitionProfileId { get; }
+
+        // Part of the title; the header search leads here.
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.Query))]
+        public string? Query { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.WorkSortTypeId))]
+        public WorkSortType WorkSortTypeId { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.IsDescending))]
+        public bool IsDescending { get; }
+    }
+
+    // One row of the library list: the title with its cover, whether it is monitored, what it holds on disk and the profile and library its target uses.
+    public sealed class WorkListItemV1 : BaseResponse
+    {
+        public WorkListItemV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, DateTime createdAt, string? posterUrl, long? wantedItemId,
+            int targetCount, bool isMonitored, string? profileName, string? libraryName, int fileCount, long sizeBytes, WorkListStatus workListStatusId)
+        {
+            Id = id;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            CanonicalTitle = canonicalTitle;
+            ReleaseYear = releaseYear;
+            CreatedAt = createdAt;
+            PosterUrl = posterUrl;
+            WantedItemId = wantedItemId;
+            TargetCount = targetCount;
+            IsMonitored = isMonitored;
+            ProfileName = profileName;
+            LibraryName = libraryName;
+            FileCount = fileCount;
+            SizeBytes = sizeBytes;
+            WorkListStatusId = workListStatusId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CreatedAt))]
+        public DateTime CreatedAt { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        // Its first acquisition target; none until the title is wanted.
+        [DataField(typeof(Fields.Acquisition.WantedItemFields), nameof(Fields.Acquisition.WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
+
+        // A game has one target per platform and is monitored there; every other title has at most one.
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TargetCount))]
+        public int TargetCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.IsMonitored))]
+        public bool IsMonitored { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.ProfileName))]
+        public string? ProfileName { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.LibraryName))]
+        public string? LibraryName { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.FileCount))]
+        public int FileCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.WorkListStatusId))]
+        public WorkListStatus WorkListStatusId { get; }
     }
 
     public sealed class WorkParametersV1 : BaseParameters

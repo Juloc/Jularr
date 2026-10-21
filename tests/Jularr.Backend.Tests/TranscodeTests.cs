@@ -326,7 +326,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync();
             await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
             using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
-            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner@example.test", "Owner", "owner-password-123", "owner-password-123", 1));
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner_one", "Owner", "owner-password-123", "owner-password-123", 1));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var accountId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Accounts\" WHERE \"AccountRoleTypeId\" = 1"))!;
 
@@ -367,7 +367,7 @@ namespace Jularr.Backend.Tests
 
             // The worker claims it like a scan.
             await using var scope = host.Services.CreateAsyncScope();
-            var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new OperationQueueParametersV1(), default, CancellationToken.None);
+            var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.TranscodeBenchmark), default, CancellationToken.None);
             Assert.AreEqual(OperationType.TranscodeBenchmark, claimed.OperationTypeId);
             await scope.ServiceProvider.GetRequiredService<ExecuteTranscodeBenchmarkV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), default, CancellationToken.None);
 
@@ -384,7 +384,7 @@ namespace Jularr.Backend.Tests
             // A second run replaces the first one's rows.
             using var next = await host.SendAsync(HttpMethod.Post, route);
             Assert.IsTrue((await next.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
-            claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new OperationQueueParametersV1(), default, CancellationToken.None);
+            claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.TranscodeBenchmark), default, CancellationToken.None);
             await scope.ServiceProvider.GetRequiredService<ExecuteTranscodeBenchmarkV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), default, CancellationToken.None);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"TranscodeBenchmarks\""));
             Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"TranscodeBenchmarkResults\""));
@@ -404,7 +404,7 @@ namespace Jularr.Backend.Tests
             using var queued = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/transcoding/benchmark");
             Assert.IsTrue((await queued.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
             await using var scope = host.Services.CreateAsyncScope();
-            var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new OperationQueueParametersV1(), default, CancellationToken.None);
+            var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.TranscodeBenchmark), default, CancellationToken.None);
             var failure = await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() =>
                 scope.ServiceProvider.GetRequiredService<ExecuteTranscodeBenchmarkV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), default, CancellationToken.None));
             Assert.AreEqual("benchmark_failed", failure.Code);

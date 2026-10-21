@@ -24,6 +24,10 @@ namespace Jularr.Backend.Service.Core
     // Provider search and import of every media type, for the Works page and for Discover.
     internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, TimeProvider time)
     {
+        // Ranked lists of one provider are read one after the other.
+        private static readonly SemaphoreSlim BooksGate = new(1, 1);
+        private static readonly SemaphoreSlim AniListGate = new(1, 1);
+
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string query, int? year, CancellationToken ct)
         {
             // Books come from Open Library, Manga and Light Novels also from AniList, albums from MusicBrainz, games from IGDB, video from TMDB.
@@ -227,15 +231,35 @@ namespace Jularr.Backend.Service.Core
             var key = $"metadata.catalog.{mediaType}.{subtype}.{feed}.{DateTime.UtcNow:yyyy-MM-dd}";
             if (isTrending || !cache.TryGetValue(key, out List<MetadataSearchResultV1>? results))
             {
+                // A provider answers one list at a time, and one that just failed is not asked again for a minute: the lists queued behind
+                // a failure give up at once instead of each waiting for the provider, and so does the next visit.
+                var gate = ranking is null ? BooksGate : AniListGate;
+                var failedKey = ranking is null ? "metadata.catalog.failed.books" : "metadata.catalog.failed.anilist";
+                await gate.WaitAsync(ct);
                 try
                 {
-                    results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
-                        : mediaType == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
-                        : [.. (await aniList.ReadBookRankingAsync(subtype!.Value, order, ct)).Select(AniListBook)];
+                    if (cache.TryGetValue(failedKey, out _))
+                    {
+                        if (known.Count > 0) return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
+                        throw new ServiceUnavailableException("metadata_unavailable");
+                    }
+
+                    try
+                    {
+                        results = ranking is not { } order ? [.. (await books.ReadTrendingAsync(ct)).Select(Book)]
+                            : mediaType == MediaType.Series ? [.. (await aniList.ReadAnimeRankingAsync(order, ct)).Select(AniListAnime)]
+                            : [.. (await aniList.ReadBookRankingAsync(subtype!.Value, order, ct)).Select(AniListBook)];
+                    }
+                    catch (ServiceUnavailableException)
+                    {
+                        cache.Set(failedKey, true, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60), Size = 1 });
+                        if (known.Count == 0) throw;
+                        return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
+                    }
                 }
-                catch (ServiceUnavailableException) when (known.Count > 0)
+                finally
                 {
-                    return await MarkKnownAsync(context, [.. known.Select(Catalog)], ct);
+                    gate.Release();
                 }
 
                 if (keeps) await context.ExecuteBatchAsync((ctx, token) => ctx.SaveExternalWorksAsync(new ExternalWorkBatchData(list, [.. results.Select(ExternalWork)], isTrending), token), ct);

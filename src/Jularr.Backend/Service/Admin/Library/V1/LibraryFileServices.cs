@@ -160,6 +160,13 @@ namespace Jularr.Backend.Service.Admin.Library.V1
     [ServiceEndpoint("POST", "/api/v1/admin/library/roots/{libraryRootId:long}/scans")]
     public sealed class QueueLibraryScanV1 : AdminService<LibraryRootParametersV1, NoData>
     {
+        private readonly WorkSignals _signals;
+
+        internal QueueLibraryScanV1(WorkSignals signals)
+        {
+            _signals = signals;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<QueueLibraryScanResultV1>()];
         protected override ModuleRequirement GetInstanceModules(LibraryRootParametersV1 parameters) => ModuleRequirement.All("Library");
@@ -171,6 +178,8 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             var data = new OperationCreationData(OperationKind.LibraryScan, Parameters.LibraryRootId, Auth.AccountId);
             return new QueueLibraryScanResultV1(await Context.QueueLibraryScanAsync(data, CancellationToken));
         }
+
+        protected override void OnCommitted() => _signals.Scans.Notify();
     }
 
     [ServiceEndpoint("GET", "/api/v1/admin/library/renames")]

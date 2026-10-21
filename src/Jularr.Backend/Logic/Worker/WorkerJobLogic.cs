@@ -28,6 +28,25 @@ namespace Jularr.Backend.Logic.Worker
             return await ctx.ReadSql.ReadListAsync<WorkerJobRowData>(sql, ct);
         }
 
+        // The intervals the Owner chose; every worker reads them through the registry.
+        public static Task<WorkerSettingsData> ReadWorkerSettingsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    settings."BackupIntervalHours",
+                    settings."BackupKeep",
+                    settings."ProviderSyncIntervalMinutes",
+                    settings."WantedSearchIntervalMinutes"
+                FROM
+                    "InstanceSettings" AS settings
+                WHERE
+                    settings."Id" = 1;
+                """;
+            return ctx.ReadSql.ReadRequiredAsync<WorkerSettingsData>(sql, ct);
+        }
+
         // A pass of a job: its outcome is kept, a failure leaves one notice until the job runs well again or a person dismisses it.
         public static async Task SaveWorkerJobRunAsync(this LogicContext ctx, WorkerJobRunData data, CancellationToken ct)
         {

@@ -197,6 +197,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "value=\"2\" checked=\"checked\"");
+
+            // The list names each account by its username and still shows the email where one is stored.
+            StringAssert.Contains(html, ">account_b<");
+            StringAssert.Contains(html, ">b@example.test<");
             var csrf = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
             Assert.IsFalse(html.Contains("name=\"UpdatedAt\"", StringComparison.Ordinal));
             using var update = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=42", new Dictionary<string, string>

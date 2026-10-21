@@ -1,16 +1,39 @@
 @use "../../../Framework/Components/MediaCard";
+@use "../../../Framework/Components/CapsuleBar";
+@use "../../../Framework/Components/ChoiceGroup";
 
+// Search on the left, the order and the layout at the end.
 .library-toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
     align-items: center;
-    margin: 12px 0 20px;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 0 4px;
 
-    &__sort {
-        display: flex;
-        gap: 8px;
-    }
+    &__settings { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 }
 
+// The same titles as rows.
+html[data-list-layout="list"] .library-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
+    gap: 10px;
+    justify-items: stretch;
 
+    .media-card {
+        flex-direction: row;
+        align-items: center;
+        gap: 13px;
+        width: auto;
+        max-width: none;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+    }
+
+    .media-card__surface { flex: none; width: 74px; border-radius: 10px; --availability-max: 12px; }
+    .media-card__details { flex: 1; min-height: 0; padding: 0; }
+    .media-card__bookmark { top: 3px; right: 3px; .button { width: 26px; min-height: 26px; .ui-icon { width: 13px; height: 13px; } } }
+}
