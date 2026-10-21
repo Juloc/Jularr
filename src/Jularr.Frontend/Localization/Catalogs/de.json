@@ -9245,8 +9245,8 @@
    "JSON-Datei"
   ],
   "import.json": [
-   "Or paste the list",
-   "Oder Liste einfügen"
+   "JSON content",
+   "JSON-Inhalt"
   ],
   "import.action": [
    "Add as",
@@ -9265,8 +9265,8 @@
    "Überwachen + suchen"
   ],
   "import.preview": [
-   "Preview",
-   "Vorschau"
+   "Preview import",
+   "Vorschau anzeigen"
   ],
   "import.refresh": [
    "Update preview",
@@ -9282,7 +9282,91 @@
   ],
   "import.example": [
    "Example file",
-   "Beispieldatei"
+   "Beispiel-Datei"
+  ],
+  "import.source": [
+   "Import source",
+   "Importquelle"
+  ],
+  "import.behavior": [
+   "Import behavior",
+   "Importverhalten"
+  ],
+  "import.or": [
+   "or paste JSON",
+   "oder JSON einfügen"
+  ],
+  "import.list.empty": [
+   "Waiting for a list",
+   "Warte auf eine Liste"
+  ],
+  "import.list.valid": [
+   "Valid list · {0} entries",
+   "Gültige Liste · {0} Einträge"
+  ],
+  "import.list.invalid": [
+   "Not a valid list",
+   "Keine gültige Liste"
+  ],
+  "import.sample": [
+   "Example JSON",
+   "JSON-Beispiel"
+  ],
+  "import.previewTitle": [
+   "Import preview",
+   "Importvorschau"
+  ],
+  "import.resultTitle": [
+   "Import result",
+   "Importergebnis"
+  ],
+  "import.selectAll": [
+   "Select all",
+   "Alle auswählen"
+  ],
+  "import.selected": [
+   "{0} of {1} selected",
+   "{0} von {1} ausgewählt"
+  ],
+  "codeSample.copy": [
+   "Copy",
+   "Kopieren"
+  ],
+  "codeSample.copied": [
+   "Copied",
+   "Kopiert"
+  ],
+  "fileInput.drop": [
+   "Drop a file here",
+   "Datei hierher ziehen"
+  ],
+  "fileInput.choose": [
+   "Choose file",
+   "Datei wählen"
+  ],
+  "fileInput.remove": [
+   "Remove file",
+   "Datei entfernen"
+  ],
+  "fileInput.limit": [
+   "{0} · up to {1}",
+   "{0} · bis {1}"
+  ],
+  "fileInput.maximum": [
+   "Up to {0}",
+   "Bis {0}"
+  ],
+  "fileInput.empty": [
+   "The file is empty.",
+   "Die Datei ist leer."
+  ],
+  "fileInput.tooLarge": [
+   "The file is larger than {0}.",
+   "Die Datei ist größer als {0}."
+  ],
+  "fileInput.wrongType": [
+   "Only {0} files are accepted.",
+   "Nur {0}-Dateien werden angenommen."
   ],
   "import.restart": [
    "Start over",
