@@ -37,7 +37,7 @@ namespace Jularr.E2E.Tests
 
                 // Without the Registration module the sign-in page offers no account and the page does not exist.
                 await visitor.GotoAsync("/Account/Login");
-                Assert.AreEqual(0, await visitor.GetByRole(AriaRole.Link, new() { Name = "Create an account" }).CountAsync());
+                Assert.AreEqual(0, await visitor.GetByRole(AriaRole.Link, new() { Name = "Request access" }).CountAsync());
                 Assert.AreEqual(404, (await visitor.GotoAsync("/Account/Register"))!.Status);
                 CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.Where(problem => !problem.Contains("404", StringComparison.Ordinal)).ToArray());
                 viewer.Problems.Clear();
@@ -45,10 +45,9 @@ namespace Jularr.E2E.Tests
 
                 // The visitor asks for an account; it cannot sign in before the Owner enables it.
                 await visitor.GotoAsync("/Account/Login");
-                await visitor.GetByRole(AriaRole.Link, new() { Name = "Create an account" }).ClickAsync();
-                var form = Steps.FormWith(visitor, "Ask for an account");
+                await visitor.GetByRole(AriaRole.Link, new() { Name = "Request access" }).ClickAsync();
+                var form = Steps.FormWith(visitor, "Create account & request access");
                 await form.Locator("[name=Email]").FillAsync(Email);
-                await form.Locator("[name=DisplayName]").FillAsync("Viewer");
                 await form.Locator("[name=Password]").FillAsync(Password);
                 await form.Locator("[name=PasswordConfirmation]").FillAsync(Password + "-typo");
                 await form.Locator("button[type=submit]").ClickAsync();
@@ -58,7 +57,8 @@ namespace Jularr.E2E.Tests
                 await form.Locator("[name=Password]").FillAsync(Password);
                 await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
                 await Steps.SubmitAsync(visitor, form);
-                await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync("waits until an administrator enables it");
+                await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync("waiting for an administrator to approve it");
+                await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync(Email);
                 await SignInAsync(visitor);
                 Assert.IsTrue(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "A pending account signed in.");
 
