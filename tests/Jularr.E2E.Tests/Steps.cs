@@ -158,7 +158,7 @@ namespace Jularr.E2E.Tests
             await page.FillAsync("form [name=ApiKey]", FakeServices.IndexerKey);
             await page.FillAsync("form [name=Categories]", categories);
             // Two short choices are a segmented control of radios.
-            await page.Locator("form [name=SearchesAutomatically][value=" + (searchesAutomatically ? "True" : "False") + "]").CheckAsync(new() { Force = true });
+            await page.Locator("form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
             await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }));
