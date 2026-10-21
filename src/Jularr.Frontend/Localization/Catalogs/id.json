@@ -377,8 +377,8 @@
    "Batas permintaan"
   ],
   "request.rule.period": [
-   "Rolling period (days)",
-   "Periode bergulir (hari)"
+   "Rolling period",
+   "Periode bergulir"
   ],
   "request.rule.approval": [
    "Approval",
@@ -969,23 +969,23 @@
    "Nama instans"
   ],
   "admin.instance.readingCacheMegabytes": [
-   "Reading cache for offline storage (MB)",
-   "Cache bacaan untuk penyimpanan offline (MB)"
+   "Reading cache for offline storage",
+   "Cache bacaan untuk penyimpanan offline"
   ],
   "admin.instance.readingCacheWorks": [
    "Reading cache: most recently read books",
    "Cache bacaan: buku yang terakhir dibaca"
   ],
   "admin.instance.libraryScanIntervalHours": [
-   "Library scan interval (hours)",
-   "Interval pemindaian pustaka (jam)"
+   "Library scan interval",
+   "Interval pemindaian pustaka"
   ],
   "admin.instance.historyRetentionDays": [
-   "Keep finished activity for days",
-   "Simpan aktivitas selesai selama (hari)"
+   "Keep finished activity for",
+   "Simpan aktivitas selesai selama"
   ],
   "admin.instance.historyMegabytes": [
-   "Activity history size in MB",
+   "Activity history size",
    "Ukuran riwayat aktivitas dalam MB"
   ],
   "admin.instance.collectionLimit": [
@@ -4568,22 +4568,6 @@
    "Recommendations",
    "Rekomendasi"
   ],
-  "home.moveUp": [
-   "Up",
-   "Naik"
-  ],
-  "home.moveDown": [
-   "Down",
-   "Turun"
-  ],
-  "home.hide": [
-   "Hide",
-   "Sembunyikan"
-  ],
-  "home.show": [
-   "Show",
-   "Tampilkan"
-  ],
   "instance.module.HomeLayout": [
    "Personal home page order",
    "Urutan beranda pribadi"
@@ -5233,7 +5217,7 @@
    "Tempat sampah sendiri: folder"
   ],
   "library.replacement.days": [
-   "Days in the recycle bin",
+   "Keep in the recycle bin",
    "Hari di tempat sampah"
   ],
   "library.keepOnly": [

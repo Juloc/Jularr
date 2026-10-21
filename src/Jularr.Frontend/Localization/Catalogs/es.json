@@ -377,8 +377,8 @@
    "Límite de solicitudes"
   ],
   "request.rule.period": [
-   "Rolling period (days)",
-   "Periodo móvil (días)"
+   "Rolling period",
+   "Periodo móvil"
   ],
   "request.rule.approval": [
    "Approval",
@@ -969,23 +969,23 @@
    "Nombre de la instancia"
   ],
   "admin.instance.readingCacheMegabytes": [
-   "Reading cache for offline storage (MB)",
-   "Caché de lectura para uso sin conexión (MB)"
+   "Reading cache for offline storage",
+   "Caché de lectura para uso sin conexión"
   ],
   "admin.instance.readingCacheWorks": [
    "Reading cache: most recently read books",
    "Caché de lectura: libros leídos más recientemente"
   ],
   "admin.instance.libraryScanIntervalHours": [
-   "Library scan interval (hours)",
-   "Intervalo de análisis de la biblioteca (horas)"
+   "Library scan interval",
+   "Intervalo de análisis de la biblioteca"
   ],
   "admin.instance.historyRetentionDays": [
-   "Keep finished activity for days",
-   "Conservar la actividad finalizada durante (días)"
+   "Keep finished activity for",
+   "Conservar la actividad finalizada durante"
   ],
   "admin.instance.historyMegabytes": [
-   "Activity history size in MB",
+   "Activity history size",
    "Tamaño del historial de actividad en MB"
   ],
   "admin.instance.collectionLimit": [
@@ -4568,22 +4568,6 @@
    "Recommendations",
    "Recomendaciones"
   ],
-  "home.moveUp": [
-   "Up",
-   "Subir"
-  ],
-  "home.moveDown": [
-   "Down",
-   "Bajar"
-  ],
-  "home.hide": [
-   "Hide",
-   "Ocultar"
-  ],
-  "home.show": [
-   "Show",
-   "Mostrar"
-  ],
   "instance.module.HomeLayout": [
    "Personal home page order",
    "Orden personal de la página de inicio"
@@ -5233,7 +5217,7 @@
    "Papelera propia: carpeta"
   ],
   "library.replacement.days": [
-   "Days in the recycle bin",
+   "Keep in the recycle bin",
    "Días en la papelera"
   ],
   "library.keepOnly": [

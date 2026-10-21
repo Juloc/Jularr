@@ -57,7 +57,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("button[data-drawer-pane=filter] .capsule-bar__badge")).ToHaveTextAsync("1");
 
                 // The sort reorders every list; the layout toggle wraps the shelves and is remembered on the device.
-                await page.Locator(".choice-select__control").SelectOptionAsync("az");
+                await page.Locator("select.choice-select__control").SelectOptionAsync("az");
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("sort=az"));
                 await page.Locator("[data-discover-layout]").ClickAsync();
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-discover-layout", "grid");

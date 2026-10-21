@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Pages.Admin.Users
                 form.Select(item => item.RequestRuleId, "request.rule.profile", options);
                 form.Toggle(item => item.IsOverridden, "request.rule.override");
                 form.Number(item => item.RequestLimit, "request.rule.limit");
-                form.Number(item => item.PeriodDays, "request.rule.period");
+                form.Number(item => item.PeriodDays, "request.rule.period", affix: FieldAffix.Unit("unit.days"));
                 form.Select(item => item.IsAutomaticApproval, "request.rule.approval", RulesModel.Approvals(texts));
                 form.Choices(item => item.AllowedMediaKeys, "request.rule.media", _media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
                 form.Choices(item => item.AcquisitionProfileIds, "request.rule.profiles",

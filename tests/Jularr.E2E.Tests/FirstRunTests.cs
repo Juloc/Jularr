@@ -44,6 +44,17 @@ namespace Jularr.E2E.Tests
                     Assert.AreEqual(1, await page.Locator("main").CountAsync(), link + " has no page content");
                 }
 
+                // Menu entries are pills; the wordmark follows the theme switch with the same colour transition as the other elements.
+                await page.GotoAsync("/");
+                Assert.AreEqual("999px", await page.Locator(".nav-link").First.EvaluateAsync<string>("link => getComputedStyle(link).borderRadius"));
+                StringAssert.Contains(await page.Locator(".sidebar-brand .shell-brand__name").EvaluateAsync<string>("name => getComputedStyle(name).transitionProperty"), "color");
+
+                // An administration area opens its first page at once, in the user menu as in the administration.
+                await page.Locator(".sidebar-secondary .nav-link", new() { HasText = "System" }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/System$"));
+                await page.Locator(".app-sidebar--admin .nav-group > .nav-link", new() { HasText = "Media" }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Works$"));
+
                 // The calendar shows its month, switches to the week and the day in place, and opens its filter as a dialog.
                 await page.GotoAsync("/Calendar");
                 await Assertions.Expect(page.Locator(".calendar__grid")).ToBeVisibleAsync();

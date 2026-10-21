@@ -1,0 +1,66 @@
+// Checkboxes and radios in the one look: a 18px rounded box (round for a radio) on the stronger line; checked, it fills with the accent and
+// shows a white tick (or dot). Contexts that hide their input and draw their own state (segments, pills, switches) keep doing so.
+:where(input[type="checkbox"]:not([role="switch"]), input[type="radio"]) {
+    appearance: none;
+    flex: none;
+    display: inline-grid;
+    place-content: center;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--field);
+    cursor: pointer;
+    transition: background-color var(--transition), border-color var(--transition);
+
+    &:hover:not(:disabled) { border-color: var(--accent-outline); }
+    &:checked { border-color: var(--accent); background: var(--accent); }
+    &:disabled { opacity: .4; cursor: default; }
+    &[aria-invalid="true"] { border-color: var(--danger); }
+}
+
+:where(input[type="checkbox"]:not([role="switch"]))::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background: var(--accent-contrast);
+    clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
+    transform: scale(0);
+    transition: transform var(--transition);
+}
+
+:where(input[type="checkbox"]:not([role="switch"])):checked::before { transform: scale(1); }
+:where(input[type="checkbox"]:not([role="switch"])):indeterminate { border-color: var(--accent); background: var(--accent); }
+:where(input[type="checkbox"]:not([role="switch"])):indeterminate::before { clip-path: inset(40% 10%); transform: scale(1); }
+
+:where(input[type="radio"]) { border-radius: 50%; }
+
+:where(input[type="radio"])::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-contrast);
+    transform: scale(0);
+    transition: transform var(--transition);
+}
+
+:where(input[type="radio"]):checked::before { transform: scale(1); }
+
+.ui-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 24px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: var(--text-body);
+    overflow-wrap: anywhere;
+
+    &:has(input:disabled) { cursor: default; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :where(input[type="checkbox"], input[type="radio"]), :where(input[type="checkbox"], input[type="radio"])::before { transition: none; }
+}

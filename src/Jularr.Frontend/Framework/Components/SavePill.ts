@@ -19,6 +19,10 @@ function valuesOf(form: HTMLFormElement): Values {
     new FormData(form).forEach((value, name) => {
         if (name !== "__RequestVerificationToken") values.set(name, [...values.get(name) ?? [], typeof value === "string" ? value : value.name]);
     });
+    // Boxes and switches that share a name are a set: the order they stand in is not a change.
+    for (const [name, list] of values) {
+        if (form.querySelector(`input[type=checkbox][name="${CSS.escape(name)}"]`)) values.set(name, [...list].sort());
+    }
     return values;
 }
 

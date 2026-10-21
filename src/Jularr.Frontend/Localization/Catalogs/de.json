@@ -377,8 +377,8 @@
    "Anfragelimit"
   ],
   "request.rule.period": [
-   "Rolling period (days)",
-   "Gleitender Zeitraum (Tage)"
+   "Rolling period",
+   "Gleitender Zeitraum"
   ],
   "request.rule.approval": [
    "Approval",
@@ -969,40 +969,40 @@
    "Instanzname"
   ],
   "admin.instance.readingCacheMegabytes": [
-   "Reading cache for offline storage (MB)",
-   "Lese-Cache für Offline-Speicher (MB)"
+   "Reading cache for offline storage",
+   "Lese-Cache für Offline-Speicher"
   ],
   "admin.instance.readingCacheWorks": [
    "Reading cache: most recently read books",
    "Lese-Cache: zuletzt gelesene Bücher"
   ],
   "admin.instance.libraryScanIntervalHours": [
-   "Library scan interval (hours)",
-   "Intervall der Bibliotheksscans (Stunden)"
+   "Library scan interval",
+   "Intervall der Bibliotheksscans"
   ],
   "admin.instance.backupIntervalHours": [
-   "Automatic backup interval (hours)",
-   "Intervall der automatischen Backups (Stunden)"
+   "Automatic backup interval",
+   "Intervall der automatischen Backups"
   ],
   "admin.instance.backupKeep": [
    "Backups to keep",
    "Backups behalten"
   ],
   "admin.instance.providerSyncIntervalMinutes": [
-   "Plex, Jellyfin and Emby sync interval (minutes)",
-   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
+   "Plex, Jellyfin and Emby sync interval",
+   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs"
   ],
   "admin.instance.wantedSearchIntervalMinutes": [
-   "Wanted search period (minutes)",
-   "Suchintervall für Gesuchtes (Minuten)"
+   "Wanted search period",
+   "Suchintervall für Gesuchtes"
   ],
   "admin.instance.historyRetentionDays": [
-   "Keep finished activity for days",
-   "Abgeschlossene Aktivitäten behalten (Tage)"
+   "Keep finished activity for",
+   "Abgeschlossene Aktivitäten behalten"
   ],
   "admin.instance.historyMegabytes": [
-   "Activity history size in MB",
-   "Größe des Aktivitätsverlaufs in MB"
+   "Activity history size",
+   "Größe des Aktivitätsverlaufs"
   ],
   "admin.instance.collectionLimit": [
    "Collections per profile",
@@ -1061,8 +1061,8 @@
    "Ganz lokal halten"
   ],
   "admin.catalog.requestsPerMinute": [
-   "Requests per minute",
-   "Anfragen pro Minute"
+   "Requests",
+   "Anfragen"
   ],
   "admin.catalog.pausesWhileUsed": [
    "Pause while Jularr is used",
@@ -1089,12 +1089,12 @@
    "Bilder anderer Titel"
   ],
   "admin.catalog.coversKeepDays": [
-   "Keep unused images for days",
-   "Ungenutzte Bilder aufbewahren (Tage)"
+   "Keep unused images for",
+   "Ungenutzte Bilder aufbewahren"
   ],
   "admin.catalog.coversMaximumMegabytes": [
-   "Largest size in MB, 0 keeps none",
-   "Größte Menge in MB, 0 speichert nichts"
+   "Largest size, 0 keeps none",
+   "Größte Menge, 0 speichert nichts"
   ],
   "form.time.hour": [
    "Hour",
@@ -5148,22 +5148,6 @@
    "Recommendations",
    "Empfehlungen"
   ],
-  "home.moveUp": [
-   "Up",
-   "Nach oben"
-  ],
-  "home.moveDown": [
-   "Down",
-   "Nach unten"
-  ],
-  "home.hide": [
-   "Hide",
-   "Ausblenden"
-  ],
-  "home.show": [
-   "Show",
-   "Einblenden"
-  ],
   "instance.module.HomeLayout": [
    "Personal home page order",
    "Persönliche Reihenfolge der Startseite"
@@ -6093,8 +6077,8 @@
    "Eigener Papierkorb: Ordner"
   ],
   "library.replacement.days": [
-   "Days in the recycle bin",
-   "Tage im Papierkorb"
+   "Keep in the recycle bin",
+   "Im Papierkorb behalten"
   ],
   "library.keepOnly": [
    "Keep only this version",
@@ -9071,6 +9055,66 @@
   "jobs.runAgain": [
    "Run again",
    "Erneut ausführen"
+  ],
+  "sortable.handle": [
+   "Reorder",
+   "Verschieben"
+  ],
+  "sortable.menu": [
+   "Row actions",
+   "Zeilenaktionen"
+  ],
+  "sortable.top": [
+   "Move to top",
+   "Ganz nach oben"
+  ],
+  "sortable.up": [
+   "Move up",
+   "Nach oben"
+  ],
+  "sortable.down": [
+   "Move down",
+   "Nach unten"
+  ],
+  "sortable.bottom": [
+   "Move to bottom",
+   "Ganz nach unten"
+  ],
+  "sortable.position": [
+   "Position {0} of {1}",
+   "Position {0} von {1}"
+  ],
+  "form.number.decrease": [
+   "Decrease value",
+   "Wert verringern"
+  ],
+  "form.number.increase": [
+   "Increase value",
+   "Wert erhöhen"
+  ],
+  "unit.megabytes": [
+   "MB",
+   "MB"
+  ],
+  "unit.hours": [
+   "hours",
+   "Stunden"
+  ],
+  "unit.minutes": [
+   "min",
+   "min"
+  ],
+  "unit.days": [
+   "days",
+   "Tage"
+  ],
+  "unit.perMinute": [
+   "per min",
+   "pro Min."
+  ],
+  "unit.times": [
+   "×",
+   "×"
   ]
  }
 }
