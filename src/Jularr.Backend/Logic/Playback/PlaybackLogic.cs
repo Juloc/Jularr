@@ -9,12 +9,29 @@ namespace Jularr.Backend.Logic.Playback
 {
     internal static class PlaybackLogic
     {
+        // What a device's quality allows at most; a limit of the instance can only lower it.
+        public static PlaybackQualityTarget QualityTarget(PlaybackQuality quality, PlaybackQualityTarget? limit = null)
+        {
+            var target = quality switch
+            {
+                PlaybackQuality.High => new PlaybackQualityTarget(1080, 8000, 256),
+                PlaybackQuality.Saver => new PlaybackQualityTarget(480, 1500, 128),
+                _ => PlaybackQualityTarget.Uncapped
+            };
+            return limit is null ? target : target.LoweredBy(limit);
+        }
+
+        // A picture taller or a file faster than the target allows has to be converted.
+        public static bool ExceedsTarget(IReadOnlyList<PlaybackTrackData> tracks, long? bitRate, PlaybackQualityTarget? target) =>
+            target is not null && Select(tracks, MediaTrackType.Video) is { } video
+                && (target.MaxHeight is { } height && video.Height > height || target.VideoKilobits is { } kilobits && bitRate > kilobits * 1000L);
+
         public static bool CanPlayDirectly(string container, IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
-            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null)
+            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null, PlaybackQualityTarget? target = null, long? bitRate = null)
         {
             // Unanalysed files are tried directly when the container plays; browsers play the file's default audio only.
             var audio = Select(tracks, MediaTrackType.Audio);
-            if (!containers.Contains(container) || audioStreamIndex is { } chosen && audio?.StreamIndex != chosen)
+            if (!containers.Contains(container) || audioStreamIndex is { } chosen && audio?.StreamIndex != chosen || ExceedsTarget(tracks, bitRate, target))
             {
                 return false;
             }
@@ -25,21 +42,13 @@ namespace Jularr.Backend.Logic.Playback
         }
 
         // Music is converted for a device that asks for a smaller size when the file is clearly larger; video and unknown sizes play as they are.
-        public static int? AudioKilobits(AudioQuality quality, IReadOnlyList<PlaybackTrackData> tracks, long? bitRate)
-        {
-            var kilobits = quality switch
-            {
-                AudioQuality.High => 256,
-                AudioQuality.Small => 128,
-                _ => (int?)null
-            };
-            return kilobits is { } target && Select(tracks, MediaTrackType.Video) is null && bitRate > target * 1200L ? target : null;
-        }
+        public static int? AudioKilobits(PlaybackQualityTarget target, IReadOnlyList<PlaybackTrackData> tracks, long? bitRate) =>
+            target.AudioKilobits is { } kilobits && Select(tracks, MediaTrackType.Video) is null && bitRate > kilobits * 1200L ? kilobits : null;
 
         public static PlaybackConversion? PlanConversion(IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
-            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null, int? audioKilobits = null)
+            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null, int? audioKilobits = null, PlaybackQualityTarget? target = null, long? bitRate = null)
         {
-            // HLS delivers H.264 and AAC; matching streams are copied, a chosen audio track replaces the default.
+            // HLS delivers H.264 and AAC; matching streams within the target are copied, a chosen audio track replaces the default.
             var video = Select(tracks, MediaTrackType.Video);
             var audio = audioStreamIndex is { } chosen ? tracks.FirstOrDefault(track => track.StreamIndex == chosen) : Select(tracks, MediaTrackType.Audio);
             if (tracks.Count == 0 || !containers.Contains("hls") || video is not null && !videoCodecs.Contains("h264") || audio is not null && !audioCodecs.Contains("aac"))
@@ -47,10 +56,15 @@ namespace Jularr.Backend.Logic.Playback
                 return null;
             }
 
-            var copyVideo = video is null || video.Codec == "h264";
+            var copyVideo = video is null || video.Codec == "h264" && !ExceedsTarget(tracks, bitRate, target);
             var copyAudio = audio is null || audioKilobits is null && audio.Codec is "aac" or "mp3" && audioCodecs.Contains(audio.Codec);
             var mode = copyVideo && copyAudio ? PlaybackModeType.Remux : PlaybackModeType.Transcode;
-            return new PlaybackConversion(mode, video?.StreamIndex, audio?.StreamIndex, copyVideo, copyAudio) { AudioKilobits = copyAudio ? null : audioKilobits ?? 192 };
+            return new PlaybackConversion(mode, video?.StreamIndex, audio?.StreamIndex, copyVideo, copyAudio)
+            {
+                AudioKilobits = copyAudio ? null : audioKilobits ?? 192,
+                MaxHeight = copyVideo ? null : target?.MaxHeight,
+                VideoKilobits = copyVideo ? null : target?.VideoKilobits
+            };
         }
 
         public static async Task<Guid> CreatePlaybackSessionAsync(this LogicContext ctx, PlaybackSessionCreationData data, CancellationToken ct)

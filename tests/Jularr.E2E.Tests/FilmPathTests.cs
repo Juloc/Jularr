@@ -104,6 +104,22 @@ namespace Jularr.E2E.Tests
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The episode started at " + resumed + " s instead of continuing.");
 
+                // The profile marks what it watched on the details page, for the film and for an episode, and starts the film over from its beginning.
+                await page.GotoAsync(filmDetails);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark watched", Exact = true }));
+                await Assertions.Expect(page.Locator(".details-progress .state-chip--watched")).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "details-film-watched");
+                var restarted = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Start over", Exact = true }));
+                Assert.IsTrue(restarted < 1, "The film started at " + restarted + " s instead of at its beginning.");
+                await page.GotoAsync(filmDetails);
+                await Assertions.Expect(page.Locator(".state-chip--watched")).ToHaveCountAsync(0);
+                await page.GotoAsync(seriesDetails);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark watched", Exact = true }).First);
+                await Assertions.Expect(page.Locator(".episode-card .state-chip--watched")).ToHaveCountAsync(1);
+                await Evidence.SaveAsync(page, "details-series-watched");
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark unwatched", Exact = true }).First);
+                await Assertions.Expect(page.Locator(".state-chip--watched")).ToHaveCountAsync(0);
+
                 // On a narrow screen every unit is two lines: the facts of all units of the season slide together while the first line stays, and the columns are a sheet from the bottom.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
                 await page.SetViewportSizeAsync(390, 844);
@@ -197,6 +213,14 @@ namespace Jularr.E2E.Tests
             await settings.Locator("[data-speed='1.25']").ClickAsync();
             Assert.AreEqual(1.25, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
             await settings.Locator("[data-speed='1']").ClickAsync();
+
+            // The quality of this playback: the device's choice is current, and another one plans the same video again at the same place.
+            Assert.AreEqual(4, await settings.Locator("[data-quality]").CountAsync());
+            await Assertions.Expect(settings.Locator("[data-quality='1']")).ToHaveAttributeAsync("aria-pressed", "true");
+            await page.RunAndWaitForResponseAsync(() => settings.Locator("[data-quality='2']").ClickAsync(),
+                response => response.Request.Method == "POST" && response.Url.EndsWith("/sessions", StringComparison.Ordinal) && response.Ok);
+            await Assertions.Expect(settings.Locator("[data-quality='2']")).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(settings.Locator("[data-current=quality]")).ToHaveTextAsync("Original");
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(settings).ToBeHiddenAsync();
 
