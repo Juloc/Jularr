@@ -12,6 +12,19 @@ namespace Jularr.E2E.Tests
             "Storage check", "Scan scheduling", "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling"
         ];
 
+        // The row of a job: the one whose title button carries its name.
+        private static ILocator Row(IPage page, string job) =>
+            page.Locator(".list-body .list-row").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true }) });
+
+        // Opens the details of a job and returns one of its switches (none for a null name).
+        private static async Task<ILocator> OpenDetailsAsync(IPage page, string job, string? switchName)
+        {
+            await page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true }).ClickAsync();
+            var drawer = page.GetByRole(AriaRole.Dialog, new() { Name = job });
+            await Assertions.Expect(drawer).ToBeVisibleAsync();
+            return drawer.GetByRole(AriaRole.Switch, new() { Name = switchName ?? "Enabled" });
+        }
+
         [TestMethod]
         [Timeout(300_000)]
         public async Task OwnerSeesEveryJob_PausesResumesAndRunsOne_AndChangesWhetherItWaits()
@@ -25,25 +38,39 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Jobs");
                 foreach (var job in Jobs)
                 {
-                    await Assertions.Expect(page.Locator("tbody tr", new() { HasText = job })).ToHaveCountAsync(1);
+                    await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = job, Exact = true })).ToHaveCountAsync(1);
                 }
 
                 // Pausing shows at once and keeps the job from running; resuming undoes it.
-                var trickplay = page.Locator("tbody tr", new() { HasText = "Seek thumbnails" });
+                var trickplay = Row(page, "Seek thumbnails");
                 await Steps.FollowAsync(page, trickplay.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true }));
                 await Assertions.Expect(trickplay).ToContainTextAsync("Paused");
+                await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Paused" }).Locator(".kpi-tile__value")).ToHaveTextAsync("1");
                 await Assertions.Expect(trickplay.GetByRole(AriaRole.Button, new() { Name = "Run now", Exact = true })).ToBeDisabledAsync();
                 await Steps.FollowAsync(page, trickplay.GetByRole(AriaRole.Button, new() { Name = "Resume", Exact = true }));
                 await Assertions.Expect(trickplay).Not.ToContainTextAsync("Paused");
 
-                // A heavy job waits while Jularr is used until the Owner says otherwise.
-                await Assertions.Expect(trickplay.GetByRole(AriaRole.Button, new() { Name = "Waits", Exact = true })).ToBeVisibleAsync();
-                await Steps.FollowAsync(page, trickplay.GetByRole(AriaRole.Button, new() { Name = "Waits", Exact = true }));
-                await Assertions.Expect(trickplay.GetByRole(AriaRole.Button, new() { Name = "Runs", Exact = true })).ToBeVisibleAsync();
-                Assert.AreEqual(0, await page.Locator("tbody tr", new() { HasText = "Download tracking" }).GetByRole(AriaRole.Button, new() { Name = "Waits", Exact = true }).CountAsync());
+                // A heavy job waits while Jularr is used until the Owner says otherwise; the switch sits in the job's details.
+                var waits = await OpenDetailsAsync(page, "Seek thumbnails", "Waits while Jularr is used");
+                await Assertions.Expect(waits).ToHaveAttributeAsync("aria-checked", "true");
+                await Steps.FollowAsync(page, waits);
+                waits = await OpenDetailsAsync(page, "Seek thumbnails", "Waits while Jularr is used");
+                await Assertions.Expect(waits).ToHaveAttributeAsync("aria-checked", "false");
+                await page.Keyboard.PressAsync("Escape");
+                await OpenDetailsAsync(page, "Download tracking", null);
+                Assert.AreEqual(0, await page.GetByRole(AriaRole.Dialog, new() { Name = "Download tracking" }).GetByRole(AriaRole.Switch, new() { Name = "Waits while Jularr is used" }).CountAsync());
+                await page.Keyboard.PressAsync("Escape");
+
+                // The chips count the states and narrow the list; the filter field narrows it by words.
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "Paused" }));
+                await Assertions.Expect(page.Locator(".list-body .list-row")).ToHaveCountAsync(0);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "All" }));
+                await page.GetByRole(AriaRole.Searchbox, new() { Name = "Filter jobs" }).FillAsync("plex");
+                await Assertions.Expect(page.Locator(".list-body .list-row:not([hidden])")).ToHaveCountAsync(1);
+                await page.GetByRole(AriaRole.Searchbox, new() { Name = "Filter jobs" }).FillAsync("");
 
                 // Run now wakes the worker; the catalog's module is off, so its pass ends as Off.
-                var catalog = page.Locator("tbody tr", new() { HasText = "Catalog sync" });
+                var catalog = Row(page, "Catalog sync");
                 await Steps.FollowAsync(page, catalog.GetByRole(AriaRole.Button, new() { Name = "Run now", Exact = true }));
                 for (var attempt = 0; attempt < 30 && !(await catalog.InnerTextAsync()).Contains("Off", StringComparison.Ordinal); attempt++)
                 {
