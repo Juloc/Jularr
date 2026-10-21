@@ -32,7 +32,8 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                     account."IsEnabled",
                     account."EmailVerifiedAt",
                     account."UpdatedAt",
-                    account."MayConfirmSources"
+                    account."MayConfirmSources",
+                    account."TranscodingPriority"
                 FROM
                     "Accounts" AS account
                 ORDER BY
@@ -67,7 +68,8 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                     account."IsEnabled",
                     account."EmailVerifiedAt",
                     account."UpdatedAt",
-                    account."MayConfirmSources"
+                    account."MayConfirmSources",
+                    account."TranscodingPriority"
                 FROM
                     "Accounts" AS account
                 WHERE
@@ -90,7 +92,7 @@ namespace Jularr.Backend.Service.Admin.Account.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Complete account replacement.
-            var data = new AccountUpdateData(Parameters.AccountId, Data.DisplayName, Data.AccountRoleTypeId, Data.IsEnabled, Data.MayConfirmSources);
+            var data = new AccountUpdateData(Parameters.AccountId, Data.DisplayName, Data.AccountRoleTypeId, Data.IsEnabled, Data.MayConfirmSources, Data.TranscodingPriority);
             await Context.UpdateAccountAsync(data, CancellationToken);
             return new UpdateResult(true);
         }

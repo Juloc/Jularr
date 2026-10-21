@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
+using Jularr.Backend.Data.Fields.Live;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
 
@@ -11,15 +12,15 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 {
     public sealed class ReadActivityParametersV1 : BaseParameters
     {
-        public ReadActivityParametersV1(ActivityTabType activityTabTypeId = ActivityTabType.Queue, int page = 1, int pageSize = 25)
+        public ReadActivityParametersV1(ActivityFilterType activityFilterTypeId = ActivityFilterType.All, int page = 1, int pageSize = 25)
         {
-            ActivityTabTypeId = activityTabTypeId;
+            ActivityFilterTypeId = activityFilterTypeId;
             Page = page;
             PageSize = pageSize;
         }
 
-        [DataField(typeof(OperationFields), nameof(OperationFields.ActivityTabTypeId))]
-        public ActivityTabType ActivityTabTypeId { get; }
+        [DataField(typeof(OperationFields), nameof(OperationFields.ActivityFilterTypeId))]
+        public ActivityFilterType ActivityFilterTypeId { get; }
 
         public int Page { get; }
         public int PageSize { get; }
@@ -39,8 +40,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null, bool canPause = false, bool canRetryImport = false, bool isWaiting = false, bool canImportManually = false, string? indexerName = null, long? bytesPerSecond = null)
         {
+            IndexerName = indexerName;
+            BytesPerSecond = bytesPerSecond;
             CanPause = canPause;
             CanRetryImport = canRetryImport;
             IsWaiting = isWaiting;
@@ -108,6 +111,14 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadStateTypeId), false)]
         public DownloadStateType? DownloadStateTypeId { get; }
 
+        // The indexer the release came from.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name), false)]
+        public string? IndexerName { get; }
+
+        // The client's own pace: what is left over the time it still needs.
+        [DataField(typeof(LiveFields), nameof(LiveFields.BytesPerSecond), false)]
+        public long? BytesPerSecond { get; }
+
         // The source page where a person passes the check and copies the file link.
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl), false)]
         public string? ManualUrl { get; }
@@ -127,6 +138,34 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // It kept where its files are, so a person can import them by hand.
         [DataField(typeof(OperationFields), nameof(OperationFields.CanImportManually))]
         public bool CanImportManually { get; }
+    }
+
+    public sealed class ReadActivitySummaryParametersV1 : BaseParameters
+    {
+    }
+
+    // The queue in four numbers: what runs, the pace of the downloads, what is downloaded but not yet imported (waiting for a person or importing) and what failed unseen.
+    public sealed class ActivitySummaryV1 : BaseResponse
+    {
+        public ActivitySummaryV1(int activeCount, long bytesPerSecond, int importCount, int errorCount)
+        {
+            ActiveCount = activeCount;
+            BytesPerSecond = bytesPerSecond;
+            ImportCount = importCount;
+            ErrorCount = errorCount;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int ActiveCount { get; }
+
+        [DataField(typeof(LiveFields), nameof(LiveFields.BytesPerSecond))]
+        public long BytesPerSecond { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int ImportCount { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.QueueCount))]
+        public int ErrorCount { get; }
     }
 
     public sealed class SaveActivitySourceLinkDataV1 : BaseData

@@ -48,6 +48,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Backup/Backup", ServiceApi.BackupReadPolicyName);
             conventions.AuthorizePage("/Admin/System/System", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Jobs/Jobs", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Transcoding/Transcoding", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AllowAnonymousToPage("/Account/Login/Login");
             conventions.AllowAnonymousToPage("/Setup/Start/Start");
             conventions.AllowAnonymousToPage("/Account/DeviceLink/DeviceLink");

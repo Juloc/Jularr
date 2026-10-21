@@ -10,6 +10,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly EnumField OperationTypeId = new(typeof(OperationType));
         public static readonly EnumField OperationStatusTypeId = new(typeof(OperationStatusType));
         public static readonly LongField ProcessedCount = new() { Minimum = 0 };
+        public static readonly IntField QueueCount = new() { Minimum = 0 };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
@@ -24,7 +25,7 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly BoolField CanRetryImport = new();
         public static readonly BoolField IsWaiting = new();
         public static readonly BoolField CanImportManually = new();
-        public static readonly EnumField ActivityTabTypeId = new(typeof(ActivityTabType));
+        public static readonly EnumField ActivityFilterTypeId = new(typeof(ActivityFilterType));
         public static readonly StringField Title = new() { MaximumLength = 1000 };
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };
         public static readonly LongField SizeBytes = new() { Minimum = 0, Required = false };

@@ -9,6 +9,7 @@ interface PlaybackPlan {
     playbackModeTypeId: number;
     streamUrl: string;
     resumePositionMs: number;
+    isReduced?: boolean;
 }
 
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
@@ -252,7 +253,9 @@ async function start(player: HTMLElement): Promise<void> {
             });
             if (response.ok) {
                 status.hidden = true;
-                return await response.json() as PlaybackPlan;
+                const planned = await response.json() as PlaybackPlan;
+                if (planned.isReduced) notice("playback_reduced");
+                return planned;
             }
 
             const code = await errorCode(response);
@@ -292,7 +295,11 @@ async function start(player: HTMLElement): Promise<void> {
                     }
                 }
             });
-            instance.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
+            instance.on(Hls.Events.ERROR, (_, data) => {
+                // A conversion stopped for room answers Gone; the server says which.
+                if (data.response?.code === 410) instance.destroy();
+                if (data.fatal || data.response?.code === 410) void failure();
+            });
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
@@ -360,7 +367,7 @@ async function start(player: HTMLElement): Promise<void> {
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => { stopLoading(); show("failed"); });
+    video.addEventListener("error", () => void failure());
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
     video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
@@ -675,6 +682,29 @@ async function start(player: HTMLElement): Promise<void> {
         stopLoading();
         status.textContent = text("data-status", code) || text("data-status", "failed");
         status.hidden = false;
+    }
+
+    // A message that goes away by itself.
+    function notice(code: string): void {
+        show(code);
+        const shown = status.textContent;
+        window.setTimeout(() => { if (status.textContent === shown) status.hidden = true; }, 8_000);
+    }
+
+    // A conversion the server stopped to make room says so; anything else is a plain failure.
+    async function failure(): Promise<void> {
+        stopLoading();
+        if (!plan || plan.playbackModeTypeId === 1) {
+            show("failed");
+            return;
+        }
+
+        try {
+            const response = await fetch(plan.streamUrl, { credentials: "same-origin" });
+            show(response.ok ? "failed" : await errorCode(response));
+        } catch {
+            show("failed");
+        }
     }
 
     function text(attribute: string, key: string): string {

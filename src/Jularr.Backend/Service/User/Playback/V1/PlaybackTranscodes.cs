@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
@@ -11,11 +13,23 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Playback.V1
 {
-    // The input stays readable for FFmpeg until the session's job stops.
+    // The input stays readable for FFmpeg until the session's job stops. The weight is what the conversion takes of the server's budget (copied video takes none) and
+    // the priority is the planning account's; a source without an encoding converts the way the configuration names.
     internal sealed record PlaybackTranscodeSource(Guid SessionId, long ProfileId, StorageInput Input, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio,
         long DurationMs, int? AudioKilobits = null, int? MaxHeight = null, int? VideoKilobits = null)
     {
+        private readonly int? _weight;
+
         public int SegmentCount => (int)Math.Ceiling(DurationMs / (PlaybackTranscodes.SegmentSeconds * 1000d));
+
+        public int Weight
+        {
+            get => _weight ?? (CopyVideo ? 0 : TranscodeAdmissionLogic.Weight(MaxHeight));
+            init => _weight = value;
+        }
+
+        public bool HasPriority { get; init; }
+        public TranscodeEncoding? Encoding { get; init; }
     }
 
     // One demand-driven FFmpeg job per playback session.
@@ -35,11 +49,14 @@ namespace Jularr.Backend.Service.User.Playback.V1
         private readonly MediaOptions _options;
         private readonly Timer _sweep;
         private readonly Lock _capacity = new();
+        private long _order;
+        private volatile int _maxTranscodes;
 
         public PlaybackTranscodes(MediaTranscoder transcoder, IOptions<MediaOptions> options)
         {
             _transcoder = transcoder;
             _options = options.Value;
+            _maxTranscodes = _options.MaxTranscodes;
 
             // Abandoned segments of earlier processes are removed.
             if (Directory.Exists(_options.TranscodeCachePath))
@@ -55,11 +72,44 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         public bool IsAvailable => _transcoder.IsAvailable;
 
-        public void Register(PlaybackTranscodeSource source) =>
-            _jobs[source.SessionId] = new Job(source, Path.Combine(_options.TranscodeCachePath, source.SessionId.ToString("N")));
+        // The configured number of conversions at once; the Owner's setting replaces it with every plan.
+        public int MaxTranscodes
+        {
+            get => _maxTranscodes;
+            set => _maxTranscodes = value;
+        }
 
-        public PlaybackTranscodeSource? Find(Guid sessionId, long profileId) =>
-            _jobs.TryGetValue(sessionId, out var job) && job.Source.ProfileId == profileId ? job.Source : null;
+        public void Register(PlaybackTranscodeSource source) =>
+            _jobs[source.SessionId] = new Job(source, Path.Combine(_options.TranscodeCachePath, source.SessionId.ToString("N")), Interlocked.Increment(ref _order));
+
+        // The first candidate whose weight fits the budget is registered; an account with priority makes room by stopping the newest conversions of accounts without it.
+        // Without room for any candidate the server is busy.
+        public int Admit(IReadOnlyList<int> weights, bool hasPriority, int maxTranscodes, Func<int, PlaybackTranscodeSource> create)
+        {
+            lock (_capacity)
+            {
+                _maxTranscodes = maxTranscodes;
+                var admission = TranscodeAdmissionLogic.Decide(Loads(null), TranscodeAdmissionLogic.Capacity(maxTranscodes), hasPriority, weights);
+                if (admission.CandidateIndex is not { } index)
+                {
+                    throw new ServiceUnavailableException("playback_capacity_exhausted");
+                }
+
+                Evict(admission.Evicted);
+                Register(create(index));
+                return index;
+            }
+        }
+
+        public PlaybackTranscodeSource? Find(Guid sessionId, long profileId)
+        {
+            if (!_jobs.TryGetValue(sessionId, out var job) || job.Source.ProfileId != profileId)
+            {
+                return null;
+            }
+
+            return job.Evicted ? throw new ServiceGoneException("playback_evicted") : job.Source;
+        }
 
         public async Task<string> GetSegmentAsync(Guid sessionId, long profileId, int index, CancellationToken ct)
         {
@@ -72,6 +122,11 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var path = job.SegmentPath(index);
             lock (job)
             {
+                if (job.Evicted)
+                {
+                    throw new ServiceGoneException("playback_evicted");
+                }
+
                 job.LastRequested = index;
                 job.LastAccess = Stopwatch.GetTimestamp();
                 if (!File.Exists(path) && !job.Covers(index))
@@ -85,10 +140,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
             {
                 lock (job)
                 {
+                    // A conversion stopped for room is no failure to retry in software.
+                    if (job.Evicted)
+                    {
+                        throw new ServiceGoneException("playback_evicted");
+                    }
+
                     if (job.Process is { HasExited: true } process && !File.Exists(path))
                     {
                         // A failing hardware encoder falls back to software once.
-                        if (process.ExitCode != 0 && !job.SoftwareFallback && !job.Source.CopyVideo && _options.VideoEncoderArguments.Length > 0)
+                        if (process.ExitCode != 0 && !job.SoftwareFallback && !job.Source.CopyVideo && !ReferenceEquals(EncodingOf(job), TranscodePipelines.Software))
                         {
                             job.SoftwareFallback = true;
                             Restart(job, index);
@@ -144,26 +205,35 @@ namespace Jularr.Backend.Service.User.Playback.V1
             return playlist.Append("#EXT-X-ENDLIST\n").ToString();
         }
 
+        private TranscodeEncoding EncodingOf(Job job) => job.Source.Encoding
+            ?? (_options.VideoEncoderArguments.Length > 0 ? new TranscodeEncoding(_options.HardwareAccelerationArguments, _options.VideoEncoderArguments, null) : TranscodePipelines.Software);
+
         private void Restart(Job job, int index)
         {
             Kill(job);
 
-            var software = job.SoftwareFallback || _options.VideoEncoderArguments.Length == 0;
+            var encoding = job.SoftwareFallback ? TranscodePipelines.Software : EncodingOf(job);
             var request = new TranscodeRequest(job.Source.Input.Location, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
-                job.Source.CopyVideo, job.Source.CopyAudio, software ? MediaOptions.SoftwareEncoderArguments : _options.VideoEncoderArguments,
-                software ? [] : _options.HardwareAccelerationArguments)
+                job.Source.CopyVideo, job.Source.CopyAudio, encoding.VideoArguments, encoding.HardwareArguments)
             {
                 AudioKilobits = job.Source.AudioKilobits ?? 192,
                 MaxHeight = job.Source.MaxHeight,
-                VideoKilobits = job.Source.VideoKilobits
+                VideoKilobits = job.Source.VideoKilobits,
+                ScaleFilter = encoding.ScaleFilter
             };
 
-            // Counting and starting share one reservation, so parallel starts respect the budget.
+            // Counting and starting share one reservation, so parallel starts respect the budget; copying never waits for room.
             lock (_capacity)
             {
-                if (_jobs.Values.Count(other => other != job && other.IsRunning) >= _options.MaxTranscodes)
+                if (job.Source.Weight > 0)
                 {
-                    throw new ServiceUnavailableException("playback_capacity_exhausted");
+                    var admission = TranscodeAdmissionLogic.Decide(Loads(job), TranscodeAdmissionLogic.Capacity(_maxTranscodes), job.Source.HasPriority, [job.Source.Weight]);
+                    if (admission.CandidateIndex is null)
+                    {
+                        throw new ServiceUnavailableException("playback_capacity_exhausted");
+                    }
+
+                    Evict(admission.Evicted);
                 }
 
                 job.Process = _transcoder.Start(request);
@@ -172,10 +242,43 @@ namespace Jularr.Backend.Service.User.Playback.V1
             job.StartSegment = index;
         }
 
+        private List<TranscodeLoad> Loads(Job? except) => [.. _jobs.Values.Where(job => job != except && job.CountsAgainstLimit)
+            .Select(job => new TranscodeLoad(job.Source.SessionId, job.Source.Weight, job.Source.HasPriority, job.Order))];
+
+        // The player of an evicted conversion is told on its next request; its process stops at once and the sweep clears the rest.
+        private void Evict(IReadOnlyList<Guid> sessionIds)
+        {
+            foreach (var sessionId in sessionIds)
+            {
+                if (_jobs.TryGetValue(sessionId, out var job))
+                {
+                    job.Evicted = true;
+                    try
+                    {
+                        job.Process?.Kill(true);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
+                    {
+                    }
+                }
+            }
+        }
+
         private void Sweep()
         {
             foreach (var (sessionId, job) in _jobs)
             {
+                // A conversion stopped for room releases what it holds.
+                if (job.Evicted)
+                {
+                    lock (job)
+                    {
+                        Kill(job);
+                    }
+
+                    TryDelete(job.Directory);
+                }
+
                 // Paused sessions keep their cache until they expire.
                 var idle = Stopwatch.GetElapsedTime(job.LastAccess);
                 if (idle > ExpiryTimeout)
@@ -234,16 +337,35 @@ namespace Jularr.Backend.Service.User.Playback.V1
             }
         }
 
-        private sealed class Job(PlaybackTranscodeSource source, string directory)
+        private sealed class Job(PlaybackTranscodeSource source, string directory, long order)
         {
             public PlaybackTranscodeSource Source { get; } = source;
             public string Directory { get; } = directory;
+            public long Order { get; } = order;
             public Process? Process { get; set; }
             public int StartSegment { get; set; }
             public int LastRequested { get; set; }
             public long LastAccess { get; set; } = Stopwatch.GetTimestamp();
             public bool SoftwareFallback { get; set; }
-            public bool IsRunning => Process is { HasExited: false };
+            public volatile bool Evicted;
+
+            public bool IsRunning
+            {
+                get
+                {
+                    try
+                    {
+                        return Process is { HasExited: false };
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            // A conversion holds budget while it runs and for the moment before its first segment or the next seek; an idle one is stopped by the sweep.
+            public bool CountsAgainstLimit => Source.Weight > 0 && !Evicted && (IsRunning || Stopwatch.GetElapsedTime(LastAccess) <= IdleTimeout);
 
             public string SegmentPath(int index) => Path.Combine(Directory, "segment" + index.ToString(CultureInfo.InvariantCulture) + ".ts");
 

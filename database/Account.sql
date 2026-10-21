@@ -82,6 +82,8 @@ CREATE TABLE "Accounts" (
     "AccountRoleTypeId" smallint NOT NULL,
     "IsEnabled" boolean NOT NULL DEFAULT TRUE,
     "MayConfirmSources" boolean NOT NULL DEFAULT FALSE,
+    -- When the server cannot convert more streams, a conversion of this account may stop the newest one of an account without priority; an Owner starts with it.
+    "TranscodingPriority" boolean NOT NULL DEFAULT FALSE,
     "EmailVerifiedAt" timestamptz,
     "CredentialRevision" bigint NOT NULL DEFAULT 1,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),

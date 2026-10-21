@@ -78,6 +78,30 @@ namespace Jularr.E2E.Tests
                 await viewSeek.FocusAsync();
                 await page.Keyboard.PressAsync("Home");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
+                // A bookmark marks the first block of this page, shows in the notes with its chapter, leads back to it and goes again.
+                var bookmark = page.Locator(".reader__tools [data-reader-bookmark]");
+                var bookmarked = page.Locator("[data-role=bookmark-list] li[data-bookmark-id]");
+                await bookmark.ClickAsync();
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
+                await Assertions.Expect(bookmarked).ToHaveCountAsync(1);
+                await Assertions.Expect(bookmarked.Locator("a")).ToHaveTextAsync("Chapter One");
+                await Evidence.SaveAsync(page, "reader-bookmark-list");
+                await page.Keyboard.PressAsync("Escape");
+                await viewSeek.FocusAsync();
+                await page.Keyboard.PressAsync("End");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
+                await bookmarked.Locator("a").ClickAsync();
+                await page.WaitForURLAsync("**/Read/1?s=0&b=*");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookReady === 'true' && r.dataset.page === '1'; }");
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
+                await bookmarked.Locator("[data-bookmark-delete]").ClickAsync();
+                await Assertions.Expect(bookmarked).ToHaveCountAsync(0);
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.Keyboard.PressAsync("Escape");
                 var canvasBeforePopover = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
                 var appearance = page.Locator(".reader__tools [data-reader-open-settings=text]");
                 await appearance.ClickAsync();
@@ -258,6 +282,17 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(2, sources.Length);
                 Assert.AreNotEqual(sources[0], sources[1]);
                 await Evidence.SaveAsync(page, "reader-image-spread");
+                // The same button marks the spread's page; the list sits in the page panel.
+                var imageMark = page.Locator(".reader__tools [data-reader-bookmark]");
+                await imageMark.ClickAsync();
+                await Assertions.Expect(imageMark).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator("[data-action=contents]").ClickAsync();
+                var imageEntry = page.Locator("[data-role=bookmark-list] li[data-bookmark-id]");
+                await Assertions.Expect(imageEntry.Locator("a")).ToHaveTextAsync("Page 2");
+                await imageEntry.Locator("[data-bookmark-delete]").ClickAsync();
+                await Assertions.Expect(imageEntry).ToHaveCountAsync(0);
+                await Assertions.Expect(imageMark).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.Locator("[data-reader-close=contents]").ClickAsync();
                 await page.SetViewportSizeAsync(390, 844);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 Assert.AreEqual(1, await page.Locator(".reader-book__print img").CountAsync());

@@ -184,7 +184,7 @@ namespace Jularr.E2E.Tests
         public static async Task OpenWantedAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Wanted");
-            await FollowAsync(page, page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Open" }));
+            await FollowAsync(page, page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Edit target" }));
         }
 
         // The manual search page of a target.
