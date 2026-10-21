@@ -58,9 +58,6 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
             if (!_loaded) return;
 
-            // What happened to the collections when a favorite went.
-            if (TempData["FavoritesNotice"] is string notice && notice == "favorites.removedFromCollections") page.Content.Add(new P(new Text("favorites.removedFromCollections")).Class("favorites-notice").Attribute("role", "status"));
-
             page.Asset("Pages/User/Favorites/Favorites.entry.scss");
 
             page.Asset("Framework/Components/MediaCard.entry.ts");

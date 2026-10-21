@@ -508,6 +508,7 @@ namespace Jularr.Backend.Tests
 
                 if (library)
                 {
+                    await fixture.RunSqlAsync("DROP TABLE IF EXISTS \"ProfilePlaybackPreferences\"");
                     foreach (var name in new[] { "Library", "Playback" })
                     {
                         using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!;
