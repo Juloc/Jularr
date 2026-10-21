@@ -137,11 +137,16 @@ namespace Jularr.Backend.Data.Logic.Session
     // The device a session belongs to; browser sign-ins have none.
     internal sealed class SessionDeviceData : BaseData
     {
-        public SessionDeviceData(string? deviceName, string? devicePlatform)
+        public SessionDeviceData(string? deviceName, string? devicePlatform, Guid? deviceId = null)
         {
             DeviceName = deviceName;
             DevicePlatform = devicePlatform;
+            DeviceId = deviceId;
         }
+
+        // The browser's own identifier; it outlives the session.
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceId))]
+        public Guid? DeviceId { get; }
 
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName))]
         public string? DeviceName { get; }

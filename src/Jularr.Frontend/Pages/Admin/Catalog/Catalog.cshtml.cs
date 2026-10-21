@@ -11,10 +11,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Catalog
 {
     // The kept provider catalogs of full local discovery: how far each has come and the Owner's choices for it.
-    public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadCoverCacheV1 readCovers, UpdateCoverCacheV1 updateCovers, ReadInstanceModulesV1 readModules, IAntiforgery antiforgery,
+    public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadCoverCacheV1 readCovers, UpdateCoverCacheV1 updateCovers, ReadInstanceModulesV1 readModules, FrontendAssets assets, IAntiforgery antiforgery,
         UiText texts) : JularrPage
     {
         private const int MaxWindows = 8;
+
+        // What each catalog holds, by the icon of its media area; every catalog has its display name in the resources.
+        private static readonly Dictionary<string, string> IconNames = new()
+        {
+            ["tmdb_movie"] = "play", ["tmdb_tv"] = "play", ["tvdb"] = "play", ["anilist"] = "play", ["openlibrary"] = "book", ["musicbrainz"] = "music", ["igdb"] = "gamepad"
+        };
+
         private IReadOnlyList<ExternalWorkSyncV1> _syncs = [];
         private bool _isOn;
         private bool _keeps;
@@ -58,7 +65,7 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                         if (data.Windows.Count < MaxWindows) form.Content(WindowButton("admin.catalog.addWindow", address, true));
                         if (data.Windows.Count > 0) form.Content(WindowButton("admin.catalog.removeWindow", address, false));
                         form.Save();
-                    }, address, token, data, _draftNamespace == sync.Namespace ? FormError : null)]));
+                    }, address, token, data, _draftNamespace == sync.Namespace ? FormError : null)], new Icon(IconNames.GetValueOrDefault(sync.Namespace, "play"), assets, 15)));
             }
 
             // The images of titles that are not Works are kept for a while and up to a size.
