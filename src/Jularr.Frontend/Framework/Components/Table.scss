@@ -1,6 +1,7 @@
+// The mockups' table: a 20px card on the quiet line, a soft head in muted 11px bold, 1px row lines, a light hover.
 .page-table-wrap {
     overflow-x: auto;
-    border: 1px solid var(--accent-line);
+    border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--surface);
     box-shadow: var(--shadow);
@@ -10,39 +11,41 @@
     width: 100%;
     border-collapse: collapse;
     text-align: start;
+    font-size: var(--text-control);
 
     th {
         text-align: start;
-        background: var(--accent-soft);
-        border-bottom: 1px solid var(--accent-line);
+        background: var(--field);
+        border-bottom: 1px solid var(--border);
         padding: 12px 15px;
-        font-size: 12px;
+        font-size: var(--text-small);
         font-weight: 700;
         white-space: nowrap;
-        color: var(--accent-text);
+        color: var(--muted);
     }
 
     td {
-        padding: 12px 15px;
+        padding: 13px 15px;
         border-top: 1px solid var(--border);
     }
 
+    tbody tr:first-child td { border-top: 0; }
     tbody tr:hover { background: var(--surface-hover); }
 
     // Row actions stay compact and light, side by side.
     td .button {
-        min-height: 32px;
-        padding: 5px 12px;
-        font-size: 13px;
+        min-height: var(--control-height-compact);
+        padding: 4px 12px;
+        font-size: var(--text-small);
         white-space: nowrap;
     }
 
     td .button--primary {
-        border-color: var(--accent-line);
+        border-color: var(--accent-soft);
         background-color: var(--accent-soft);
         color: var(--accent-text);
 
-        &:hover:not(:disabled) { background-color: var(--accent-soft); border-color: var(--accent); }
+        &:hover:not(:disabled) { background-color: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
     }
 
     td .ui-form__actions,

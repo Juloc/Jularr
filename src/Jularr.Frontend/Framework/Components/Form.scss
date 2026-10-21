@@ -36,14 +36,16 @@
         padding: 0 14px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
-        background: var(--field);
+        // White on the page, the soft lavender inside a card.
+        background: var(--surface);
     }
+    :is(.ui-section, .ui-form__section, .ui-panel) &__control { background: var(--field); }
     &__control > legend {
         max-width: 100%;
         padding: 0 6px;
         color: var(--text);
-        font-weight: 650;
-        font-size: 12px;
+        font-weight: var(--weight-control);
+        font-size: var(--text-control);
         line-height: 1.3;
         overflow-wrap: anywhere;
     }
@@ -52,8 +54,8 @@
     &__control > .ui-range > input,
     &__control > .ui-form__size > :is(input, select) {
         width: 100%;
-        min-height: 44px;
-        padding: 8px 6px;
+        min-height: var(--control-height);
+        padding: 6px 6px;
         border: 0;
         border-radius: var(--radius-control);
         background: transparent;
@@ -63,7 +65,7 @@
         &:focus-visible { outline: none; }
     }
 
-    &__control > textarea { border-radius: 24px; resize: vertical; }
+    &__control > textarea { border-radius: var(--radius-inner); resize: vertical; }
     &__control > .ui-range > input {
         appearance: none;
         padding: 0;
@@ -76,13 +78,13 @@
         &::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--accent); }
         &::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: var(--accent); }
         &::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--accent); }
-        &:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
-        &:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+        &:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--focus); outline-offset: 3px; }
+        &:focus-visible::-moz-range-thumb { outline: 3px solid var(--focus); outline-offset: 3px; }
         &:dir(rtl)::-webkit-slider-runnable-track { background: linear-gradient(to left, var(--accent) var(--range-progress, 0%), color-mix(in srgb, var(--accent) 14%, var(--surface)) var(--range-progress, 0%)); }
     }
     &__control > .ui-range > input:disabled { cursor: not-allowed; }
-    &__control:has(textarea) { border-radius: 24px; }
-    &__control:focus-within { border-color: var(--accent); }
+    &__control:has(textarea) { border-radius: var(--radius-inner); }
+    &__control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
     &__control:focus-within > legend { color: var(--accent-text); }
     &__control:has([aria-invalid="true"]) { border-color: var(--danger); }
     &__control:has([aria-invalid="true"]) > legend { color: var(--danger); }
@@ -106,7 +108,7 @@
 
         // A larger touch target than the visible circle.
         &::before { content: ""; position: absolute; inset: -13px; }
-        &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        &:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
     }
     &__tip {
         display: none;
@@ -118,14 +120,14 @@
         max-width: min(320px, 80vw);
         padding: 8px 10px;
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: var(--radius-small);
         background: var(--surface);
         color: var(--text);
         font-weight: 400;
-        font-size: 12px;
+        font-size: var(--text-control);
         line-height: 1.5;
         white-space: normal;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-overlay);
     }
     &__help:hover > &__tip,
     &__help:focus-within > &__tip { display: block; }
@@ -135,7 +137,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    output { min-width: 4ch; color: var(--muted); text-align: end; font-size: 12px; font-variant-numeric: tabular-nums; }
+    output { min-width: 4ch; color: var(--muted); text-align: end; font-size: var(--text-control); font-variant-numeric: tabular-nums; }
 }
 .ui-field__control--segmented { padding: 2px 4px 4px; }
 .ui-field__control--segmented > legend { margin-left: 10px; }
@@ -159,17 +161,19 @@
         flex: 1;
         align-items: center;
         justify-content: center;
-        min-height: 38px;
+        min-height: calc(var(--control-height) - 4px);
         padding: 0 12px;
+        border: 1px solid transparent;
         border-radius: var(--radius-control);
         color: var(--text);
-        font-weight: 650;
+        font-size: var(--text-control);
+        font-weight: var(--weight-control);
         text-align: center;
     }
 
-    & > input:checked + span { background: var(--accent-soft); color: var(--accent-text); }
+    & > input:checked + span { background: var(--accent-soft); border-color: var(--accent-outline); color: var(--accent-text); }
     & > input:hover:not(:checked, :disabled) + span { background: var(--surface-hover); }
-    & > input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+    & > input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -2px; }
     & > input:disabled { cursor: not-allowed; }
     & > input:disabled + span { opacity: .75; }
 }
@@ -181,19 +185,18 @@
     align-items: start;
     gap: 16px 24px;
     margin: 0;
-    padding: 18px 22px;
-    border: 1px solid var(--accent-line);
+    padding: 18px 22px 20px;
+    border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--surface);
     box-shadow: var(--shadow);
 
     & > legend {
-        padding: 4px 14px;
-        border-radius: var(--radius-control);
-        background: var(--accent-soft);
-        color: var(--accent-text);
-        font-size: 15px;
-        font-weight: 700;
+        padding: 0 8px;
+        color: var(--text);
+        font-size: var(--text-heading);
+        font-weight: var(--weight-heading);
+        letter-spacing: -.3px;
     }
     & > .field-error,
     & > .ui-field--wide { grid-column: 1 / -1; }
@@ -205,9 +208,9 @@
 
     table { border-collapse: collapse; }
     th, td { padding: 6px 14px; text-align: center; }
-    thead th { color: var(--accent-text); font-size: 12px; font-weight: 700; }
+    thead th { color: var(--muted); font-size: var(--text-small); font-weight: 700; }
     tbody th { text-align: left; font-weight: 600; }
-    tbody tr + tr { border-top: 1px solid var(--accent-line); }
+    tbody tr + tr { border-top: 1px solid var(--border); }
     input { width: 18px; height: 18px; accent-color: var(--accent); }
 }
 fieldset.ui-field {
@@ -215,10 +218,10 @@ fieldset.ui-field {
     padding: 0;
     border: 0;
 
-    & > legend { padding: 0; margin-bottom: 6px; font-weight: 650; font-size: 13px; }
+    & > legend { padding: 0; margin-bottom: 6px; font-weight: var(--weight-control); font-size: var(--text-control); }
 }
 .ui-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; }
-.field-error { margin: 0; color: var(--danger); font-size: 12px; }
+.field-error { margin: 0; color: var(--danger); font-size: var(--text-control); }
 .ui-checkbox {
     display: flex;
     align-items: center;

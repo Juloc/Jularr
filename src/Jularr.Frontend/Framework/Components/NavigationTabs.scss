@@ -1,3 +1,4 @@
+// The mockups' capsule: a soft pill on the quiet line holding pill segments; the selection is the soft accent with its outline.
 .navigation-tabs {
     display: inline-flex;
     justify-self: start;
@@ -11,7 +12,7 @@
     scroll-padding-inline: 4px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
-    background: var(--surface);
+    background: var(--field);
 
     // Keep native horizontal navigation.
     &::-webkit-scrollbar { display: none; }
@@ -42,20 +43,23 @@
         flex: none;
         align-items: center;
         justify-content: center;
-        padding: 8px 16px;
-        min-height: 44px;
+        padding: 5px 14px;
+        min-height: calc(var(--control-height) - 2px);
+        border: 1px solid transparent;
         border-radius: var(--radius-control);
         color: var(--muted);
         text-decoration: none;
-        font-size: 13px;
-        font-weight: 650;
+        font-size: var(--text-control);
+        font-weight: var(--weight-control);
         white-space: nowrap;
+        transition: background-color var(--transition), color var(--transition);
 
-        &:hover { background: var(--surface-hover); color: var(--text); }
+        &:hover { background: var(--surface); color: var(--accent-text); }
 
         &--active {
             background: var(--accent-soft);
             color: var(--accent-text);
+            border-color: var(--accent-outline);
 
             &:hover { background: var(--accent-soft); color: var(--accent-text); }
         }

@@ -25,7 +25,7 @@ function appearance(saved = {}, unavailable = false) {
     const buttons = ["original", "clean"].map(setSkin => new Element({ setSkin }))
         .concat(["system", "light", "dark"].map(setMode => new Element({ setMode })));
     const events = {};
-    const accentButtons = ["#c8102e", "#7c3aed"].map(setAccent => new Element({ setAccent }));
+    const accentButtons = ["#c8102e", "#813eff"].map(setAccent => new Element({ setAccent }));
     const reset = new Element({ resetAccent: "true" });
     const picker = new Element({ accentInput: "true" });
     const value = {};
@@ -90,7 +90,7 @@ test("free accents update tokens and artwork without changing semantic colors", 
     ui.click(ui.buttons[1]);
     assert.equal(ui.root.dataset.accent, "#1b8aa0");
     ui.click(ui.reset);
-    assert.equal(ui.root.dataset.accent, "#7c3aed");
+    assert.equal(ui.root.dataset.accent, "#813eff");
     assert.equal(ui.storage.has("jularr-ui-accent"), false);
     ui.input("#808080");
     assert.equal(ui.styles.get("--art-saturate"), "0");
@@ -104,7 +104,7 @@ test("arbitrary saturated and monochrome accents remain readable in both modes",
             .map(c => parseInt(c, 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
         return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
     };
-    for (const seed of ["#c8102e", "#7c3aed", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#d9577a", "#000000", "#ffffff", "#808080"]) {
+    for (const seed of ["#c8102e", "#813eff", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#d9577a", "#000000", "#ffffff", "#808080"]) {
         const result = palette.buildPalette(seed);
         for (const mode of [result.light, result.dark]) {
             for (const [foreground, background] of [["text", "surface"], ["muted", "surface-hover"], ["accent-contrast", "accent"], ["accent-contrast", "accent-hover"], ["accent-text", "accent-soft"]]) {
@@ -115,4 +115,17 @@ test("arbitrary saturated and monochrome accents remain readable in both modes",
     }
     assert.equal(palette.buildPalette("#c8102e").light.accent, "#c8102e");
     assert.throws(() => palette.buildPalette("not a color"));
+});
+
+test("the default accent is the mockups' reference palette", () => {
+    const result = palette.buildPalette("#813EFF");
+    assert.deepEqual([result.light.accent, result.dark.accent], ["#813eff", "#a980ff"]);
+    assert.deepEqual([result.light.background, result.light.surface, result.light.border], ["#faf9ff", "#ffffff", "#ebe8f5"]);
+    assert.deepEqual([result.dark.background, result.dark.surface, result.dark.border], ["#11111a", "#1c1b29", "#363247"]);
+    for (const mode of [result.light, result.dark]) {
+        for (const ground of ["background", "surface", "field", "surface-hover", "accent-soft"]) {
+            assert.ok(palette.contrast(mode.muted, mode[ground]) >= 4.5, "muted on " + ground);
+            assert.ok(palette.contrast(mode["accent-text"], mode[ground]) >= 4.5, "accent text on " + ground);
+        }
+    }
 });

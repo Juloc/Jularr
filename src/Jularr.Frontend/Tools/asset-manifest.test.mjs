@@ -130,7 +130,10 @@ test("appearance choices wrap at their natural width and search retains an acces
     assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
 
     const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
-    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:44px/);
+    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:var\(--control-height\)/);
+    // Controls are 38px for a mouse and 44px where a finger is the pointer.
+    assert.match(shell, /--control-height:\s*38px/);
+    assert.match(shell, /@media\s*\(pointer:\s*coarse\)\{:root\{--control-height:\s*44px/);
     assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent\)/);
 });
 
