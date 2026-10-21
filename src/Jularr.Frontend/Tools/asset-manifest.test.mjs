@@ -102,25 +102,26 @@ test("media preview bounds its hero width and uses full-width mobile context", (
 
 test("shared base styles cover forms, tables and capsule navigation on every page", () => {
     const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
-    for (const selector of [".ui-form", ".ui-field__control>legend", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
+    for (const selector of [".ui-form", ".ui-field__top", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
         assert.ok(css.includes(selector), selector);
     }
-    assert.doesNotMatch(css, /backdrop-filter|--glass|box-shadow:inset/);
+    assert.doesNotMatch(css, /--glass|box-shadow:inset/);
     assert.match(css, /\.page-screen\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
     assert.match(css, /\.app-main \[id\]\{scroll-margin-top:var\(--shell-header-offset,\s*80px\)/);
     assert.match(css, /\.split\{grid-template-columns:minmax\(0,1fr\)/);
     assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
 });
 
-test("shared navigation stays single-row and the mobile bar floats above its safe area", () => {
+test("shared navigation stays single-row and the phone's sidebar is an off-canvas drawer", () => {
     const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
     assert.match(css, /\.navigation-tabs\{[^}]*overflow-x:auto/);
     assert.match(css, /\.navigation-tabs\{[^}]*scrollbar-width:none/);
     assert.match(css, /\.navigation-tabs::-webkit-scrollbar\{display:none/);
     assert.doesNotMatch(css, /\.navigation-tabs\{[^}]*flex-wrap:wrap/);
     assert.match(css, /\.navigation-tabs__link--active[^{}]*\{background:var\(--accent-soft\);color:var\(--accent-text\)/);
-    assert.match(css, /\.mobile-navigation\{[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)[^}]*border-radius:var\(--radius-control\)/);
-    assert.match(css, /\.mobile-link\{[^}]*min-height:54px/);
+    assert.match(css, /@media\s*\(max-width:\s*640px\)\{[^@]*\.app-sidebar\{[^}]*transform:translate\(-105%\);visibility:hidden/);
+    assert.match(css, /@media\s*\(min-width:\s*641px\)\s*and \(max-width:\s*1120px\)\{\.app-layout\{--side:\s*67px/);
+    assert.doesNotMatch(css, /\.mobile-navigation|\.mobile-link/);
     assert.match(css, /body\{min-width:0/);
 });
 
@@ -130,11 +131,11 @@ test("appearance choices wrap at their natural width and search retains an acces
     assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
 
     const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
-    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:var\(--control-height\)/);
-    // Controls are 38px for a mouse and 44px where a finger is the pointer.
-    assert.match(shell, /--control-height:\s*38px/);
+    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:39px/);
+    // Controls are 37px for a mouse and 44px where a finger is the pointer.
+    assert.match(shell, /--control-height:\s*37px/);
     assert.match(shell, /@media\s*\(pointer:\s*coarse\)\{:root\{--control-height:\s*44px/);
-    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent\)/);
+    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent-outline\)/);
 });
 
 test("media shelf snap alignment includes its focus padding without visible scrollbars", () => {

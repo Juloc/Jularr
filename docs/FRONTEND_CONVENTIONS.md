@@ -117,9 +117,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Backend-owned. Hidden-field errors must be visible at form level; failed reads
   receive the shared Page error presentation, including empty-result pages; unknown errors render in the page too
   (`ErrorText`), not as a bare JSON answer.
-- Buttons and single-line fields use the shared pill radius. Form labels sit
-  in the fieldset's native legend cutout, without a painted label background,
-  remain associated through `for`/id and wrap without
+- Buttons and search use the pill radius, fields the 11px field radius. Form labels sit
+  above the field (11px/770, with the (i) after them), remain associated through `for`/id (a group of choices through its legend) and wrap without
   truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
   through `Form.Toggle` so Backend field metadata and POST values stay central.
 - `Form<T>` owns the layout: short fields share two columns where there is room and one
@@ -130,9 +129,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   groups fields in a titled panel under one save; `Form.ChoiceTable` shows options as rows
   and several fields as checkbox or radio columns (a quality ladder). Pages do not
   restyle form grids.
-- Owner's decision 15 Oct (look overridden 20 Oct by the mockups): no grey surfaces. Panels, tables and fields are white
-  (dark surface in dark mode) or the soft lavender `--field`, outlined by the one quiet 1px `--border`; section titles are bold in the
-  text colour, table heads are muted bold on `--field`; accent tints (`--accent-soft`, `--accent-outline`) mark hover and selection only.
+- Owner's decision 15 Oct (look overridden 20/21 Oct by the mockups): no grey surfaces. Panels and tables are white
+  (dark surface in dark mode), fields the soft lavender `--field`, outlined by the one quiet 1px `--border`; section titles are bold in the
+  text colour, table heads are muted uppercase on `--field`; accent tints (`--accent-soft`, `--accent-outline`, `--accent-edge`) mark hover and selection only.
   The shell (sidebar, header, search, floating bar) separates with the same 1px line instead of shadows or filled panels; the current place
   uses `--accent-soft` with `--accent-text`.
 - Controls and navigation are flat and opaque: no glass blur, transparency
@@ -142,38 +141,39 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   (Media, Library, Requests, Arr+) are collapsible groups in the sidebar whose pages are their own
   addresses; the area of the current page is open. Spread content over pages rather than
   stacking tab rows or crowding one page.
-- Tabs and subsection navigation reuse `NavigationTabs`: button-like segments
-  inside one shared capsule. `Tabs` adds only the server-selected content pane.
-  Keep the capsule single-row and horizontally scrollable when necessary, with
-  complete labels and a soft accent selection. Mobile shell navigation is an
-  opaque floating pill above the safe area, not an edge-to-edge footer. Its active
-  destination uses the accent; the compact Topbar keeps the brand mark and page context.
+- Tabs and subsection navigation reuse `NavigationTabs`: the mockups' filter row of
+  plain pills, the selection the lavender tint with its `--accent-edge` outline. `Tabs` adds only the server-selected content pane.
+  Keep the row single-line and horizontally scrollable when necessary, with complete labels. The shell follows the mockups: a 252px sidebar (230px, then
+  67px with icons only up to 1120px, the selected area tinted), on a phone (up to 640px) an off-canvas drawer over a dimmed page opened from the header's menu
+  button. The admin sidebar has an ADMINISTRATION eyebrow; the header has the trail, the one search with its `/` key hint and shortcut, a light/dark switch,
+  the inbox and the avatar (profile initials, linking to the settings). The bottom pill is gone.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.
 
 
-## Design tokens (owner's mockups, 20 Oct)
+## Design tokens (owner's mockups, jobs redesign 21 Oct)
 
 One visual language for every page, owned by [Theme.scss](../src/Jularr.Frontend/Modules/Appearance/Theme.scss) (defaults, shape, type,
-status) and [Palette.ts](../src/Jularr.Frontend/Modules/Appearance/Palette.ts) (colours from the accent, applied at runtime). Components use the
-tokens, never literals; a page adds none of its own colours, radii, shadows or font sizes.
+status, shadows) and [Palette.ts](../src/Jularr.Frontend/Modules/Appearance/Palette.ts) (colours from the accent, applied at runtime). The
+default accent `#8040f7` reproduces the mockup palette **verbatim**; any other accent turns the same palette to its hue and chroma
+(tinted neutrals, lavender, lines), so the Owner's accent setting still drives everything. Components use the tokens, never literals; a page
+adds none of its own colours, radii, shadows or font sizes. The mockup values are the rule: contrast ratios are not a design constraint.
 
 | Group | Tokens (light / dark) |
 | --- | --- |
-| Surfaces | `--background` #faf9ff / #11111a, `--surface` #fff / #1c1b29, `--field` (= `--surface-soft`) #f8f7ff / #252233, `--surface-hover` #f5f2ff / #2b2640 |
-| Line | `--border` (= `--line`, = legacy `--accent-line`) #ebe8f5 / #363247: 1px, the only outline; `--accent-outline` = accent 32% for hover and selection |
-| Text | `--text` #242039 / #f4f1fd, `--muted` #6c6882 / #aaa3bf (4.5:1 on every surface) |
-| Accent | `--accent` #813eff / #a980ff, `--accent-text` #6e34d2 / #baa0ff, `--accent-soft` #f0eaff / #33284e, `--accent-contrast` white / #11101a, `--accent-hover`, `--focus` = `--accent-text` |
-| Status | `--success`, `--warning`, `--danger`, `--info` and their `-soft` tints: text on its own tint is at least 4.5:1 |
-| Shape | `--radius-control` 999px (buttons, fields, tabs, badges), `--radius-panel` 20px (cards, tables, sections), `--radius-dialog` 22px, `--radius-inner` 14px (notices, textareas), `--radius-small` 10px (tooltips) |
-| Depth | `--shadow` faint card shadow, `--shadow-overlay` for popovers, dialogs and the save pill, `--scrim` behind dialogs; no bevels, glass or coloured stripes |
-| Type | Inter, then Segoe UI/system; body `--text-body` 13px, controls `--text-control` 12px/700, captions and table heads `--text-small` 11px; h1 27px/780 -0.9px, h2 `--text-heading` 16px/800 -0.3px |
-| Controls | `--control-height` 38px (44px for a coarse pointer), compact 30px, `--icon-size` 18px, 1px borders, 3px focus ring offset 2px, `--transition` .13s, press scales to .985 |
+| Surfaces | `--background` #faf9ff / #12121d, `--surface` #fff / #1d1b2b, `--field` (= `--surface-soft`, `--surface-hover`) #f8f7ff / #262339 |
+| Line | `--border` (= `--line`) #eae6f4 / #38334e: 1px, the only outline; `--border-strong` #e1dcee / #4b4260 for inputs and switches |
+| Text | `--text` #26223d / #f4f1ff, `--muted` #938fa9 / #aba5bf (secondary text, labels, captions) |
+| Accent | `--accent` #8040f7 / #9a70ff, `--accent-text` #7136d9 / #c3a8ff, `--accent-soft` (lavender) #f2edff / #35294e, `--accent-outline` (hover edge) and `--focus` #b59aff / #8060bf, `--accent-edge` (active chip outline) #dcd0ff, `--accent-contrast` white, `--accent-hover` |
+| Status | `--success` #159775 / #75dcb6, `--warning` #ad7618 / #ffcd82, `--danger` #c6536b / #ff9cb0, `--info` #487bd6 / #9dbdf7 and their `-soft` tints |
+| Shape | `--radius-control` 999px (buttons, chips, search, pills), `--radius-panel` 19px, `--radius-dialog` 22px, `--radius-inner` 13px (detail tiles, textareas), `--radius-tile` 12px (icon tiles), `--radius-field` 11px, `--radius-small` 10px |
+| Depth | `--shadow` 0 9px 30px (panels, tables, sections), `--shadow-drawer` -10px 0 40px #0002, `--shadow-overlay` 0 11px 30px #0004 (popovers, save pill, toast), `--scrim` #16122570 with a 4px blur; no other shadows, bevels or coloured stripes |
+| Type | Inter, then Segoe UI/system; body `--text-body` 12px, controls `--text-control` 11px/740, captions, labels, pills and table heads `--text-small` 10px (heads 810, uppercase, .65px); h1 27px/850 -1.05px, h2 `--text-heading` 14px/805 -.3px, drawer title 22px |
+| Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; all 44px for a coarse pointer; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity |
 
 Changing a look means changing a token or the one base component (Button, Form, Table, Tag, StateChip, Section, NavigationTabs, Toggle, SearchBox,
-SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
-
+SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Shell); all pages inherit it. Button variants: default, `Primary()`, `Soft()`, `Warn()`, `Compact()`, `IconOnly()`.
 ## Page identity and approved UX (MANDATORY)
 
 - **The shared Topbar breadcrumb/current-page label is the sole page title.**
@@ -368,7 +368,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   keep controls functional when browser storage is unavailable. Focused playback
   controls stay visible; honor reduced motion and prefer wrapping over truncation.
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
-  Disabled buttons remain opaque, with muted surface/text rather than reduced opacity.
+  Disabled buttons use the mockups' .4 opacity.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations

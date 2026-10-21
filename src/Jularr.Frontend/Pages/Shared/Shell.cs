@@ -4,7 +4,8 @@ using Jularr.Frontend.Framework;
 
 namespace Jularr.Frontend.Pages.Shared
 {
-    // Shared application shell: header with the page's breadcrumb, and a sidebar in user or admin mode.
+    // Shared application shell: header with the page's breadcrumb, and a sidebar in user or admin mode (icon-only on a tablet,
+    // off-canvas on a phone, as in the mockups).
     public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets, string? searchQuery = null, string? searchType = null,
         IReadOnlyList<Crumb>? parents = null, string? currentLabel = null) : IUiComponent
     {
@@ -15,13 +16,11 @@ namespace Jularr.Frontend.Pages.Shared
             // Add available destinations.
             var primary = navigation.Primary.ToList();
             var secondary = navigation.Secondary.ToList();
-            var mobile = navigation.Mobile.ToList();
 
             if (texts.CanReadMedia())
             {
                 var library = new ShellLink("nav.library", "/Library", "library");
                 primary.Add(library);
-                mobile.Insert(1, library);
                 if (texts.CanSeeCalendar())
                 {
                     primary.Add(new ShellLink("calendar.title", "/Calendar", "calendar"));
@@ -34,7 +33,6 @@ namespace Jularr.Frontend.Pages.Shared
 
                 var favorites = new ShellLink("favorites.title", "/Favorites", "heart");
                 primary.Add(favorites);
-                mobile.Add(favorites);
             }
 
             if (texts.CanRequest())
@@ -49,12 +47,19 @@ namespace Jularr.Frontend.Pages.Shared
             secondary.AddRange(administration);
             var adminMode = administration.Count > 0 && adminPath;
 
-            // The one global search sits in the header.
-            var header = new List<IUiComponent> { new Brand(assets, compact: true), Breadcrumb(administration, texts) };
+            // The menu button of the phone, then the trail, the one global search, the theme switch, the inbox and the avatar.
+            var header = new List<IUiComponent>
+            {
+                new Button(new Icon("menu", assets)).IconOnly(texts["nav.menu"]).Attribute("class", "button button--icon app-menu-toggle")
+                    .Attribute("data-sidebar-toggle", "true").Attribute("aria-controls", "app-sidebar").Attribute("aria-expanded", "false"),
+                new Brand(assets, compact: true),
+                Breadcrumb(administration, texts)
+            };
             if (texts.CanReadMedia())
             {
                 var search = new SearchBox("/", "search.global", searchQuery, searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType });
-                header.Add(new Div(new Label(new Icon("search", assets)).Class("app-search__icon").Attribute("for", SearchBox.InputId("search.global")).Attribute("aria-hidden", "true"), search).Class("app-search"));
+                header.Add(new Div(new Label(new Icon("search", assets)).Class("app-search__icon").Attribute("for", SearchBox.InputId("search.global")).Attribute("aria-hidden", "true"), search,
+                    new Kbd(new ValueText("/")).Class("app-search__hint").Attribute("aria-hidden", "true")).Class("app-search"));
             }
 
             // Inbox with its unread count.
@@ -67,25 +72,36 @@ namespace Jularr.Frontend.Pages.Shared
                     .Attribute("aria-label", unread > 0 ? string.Format(CultureInfo.CurrentCulture, texts["notifications.unread"], unread) : texts["notifications.title"]));
             }
 
+            // Light or dark with one click (Modules/Appearance/theme.entry.ts); the icon shows what a click switches to.
+            header.Add(new Button(new Span(new Icon("theme-dark", assets)).Class("theme-toggle__moon"), new Span(new Icon("theme-light", assets)).Class("theme-toggle__sun"))
+                .IconOnly(texts["nav.theme"]).Attribute("class", "button button--icon theme-toggle").Attribute("data-toggle-mode", "true"));
+            if (texts.IsAuthenticated)
+            {
+                header.Add(new A(texts.ProfileName is { Length: > 0 } name ? new Span(new ValueText(Initials(name))) : new Icon("user", assets, 16))
+                    .Class("app-avatar").Attribute("href", "/Settings").Attribute("aria-label", texts["nav.profile"]));
+            }
+
             new Header([.. header]).Class("app-header").WriteTo(writer, encoder, texts);
+            // The phone's menu is a drawer over a dimmed page; a tap on the dimmed part closes it.
+            new Div().Class("app-sidebar-overlay").Attribute("data-sidebar-overlay", "true").WriteTo(writer, encoder, texts);
 
             if (adminMode)
             {
-                new Aside(new Brand(assets), Links(administration, "nav.admin", "sidebar-navigation", false, texts, expand: true))
-                    .Class("app-sidebar app-sidebar--admin").WriteTo(writer, encoder, texts);
-                Links(administration, "nav.mobile", "mobile-navigation", true, texts).WriteTo(writer, encoder, texts);
+                new Aside(new Brand(assets), new Div(new Text("nav.administration")).Class("nav-eyebrow"), Links(administration, "nav.admin", "sidebar-navigation", texts, expand: true))
+                    .Class("app-sidebar app-sidebar--admin").Attribute("id", "app-sidebar").WriteTo(writer, encoder, texts);
                 return;
             }
 
             new Aside(
                 new Brand(assets),
-                Links(primary, "nav.primary", "sidebar-navigation", false, texts),
-                Links(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", false, texts)
-            ).Class("app-sidebar").WriteTo(writer, encoder, texts);
-
-            Links(mobile, "nav.mobile", "mobile-navigation", true, texts)
-                .WriteTo(writer, encoder, texts);
+                Links(primary, "nav.primary", "sidebar-navigation", texts),
+                Links(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", texts)
+            ).Class("app-sidebar").Attribute("id", "app-sidebar").WriteTo(writer, encoder, texts);
         }
+
+        // The avatar shows the first letters of the first two names.
+        private static string Initials(string name) => string.Concat(name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Take(2)
+            .Select(part => new System.Globalization.StringInfo(part).SubstringByTextElements(0, 1))).ToUpperInvariant();
 
         // Administration areas open into their pages; an area with one page is a plain link.
         private static List<ShellLink> AdministrationLinks(UiText texts, bool withInstance)
@@ -178,12 +194,12 @@ namespace Jularr.Frontend.Pages.Shared
             return new Nav(new Ol([.. trail]).Class("breadcrumb")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"]);
         }
 
-        private IUiComponent Links(IReadOnlyList<ShellLink> links, string titleKey, string cssClass, bool mobile, UiText texts, bool expand = false)
+        private IUiComponent Links(IReadOnlyList<ShellLink> links, string titleKey, string cssClass, UiText texts, bool expand = false)
         {
             var children = links.Select(link =>
             {
-                var className = mobile ? "mobile-link" : "nav-link";
-                if (link.Children is { } pages && !mobile)
+                const string className = "nav-link";
+                if (link.Children is { } pages)
                 {
                     // The area of the current page stays open and marks it; administration opens every area.
                     var current = Current(pages);
@@ -196,7 +212,6 @@ namespace Jularr.Frontend.Pages.Shared
                     return current is null && !expand ? group : group.Attribute("open", "open");
                 }
 
-                // On the phone an area is one button to its first page.
                 var active = IsActive(link);
                 var anchor = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key)))
                     .Class(active ? className + " is-active" : className)
@@ -229,6 +244,8 @@ namespace Jularr.Frontend.Pages.Shared
         private sealed class Ol(params IUiComponent[] children) : HtmlElement("ol", children);
 
         private sealed class Label(params IUiComponent[] children) : HtmlElement("label", children);
+
+        private sealed class Kbd(params IUiComponent[] children) : HtmlElement("kbd", children);
     }
 
     public sealed record ShellLink(string Key, string Href, string Icon, IReadOnlyList<ShellLink>? Children = null);
@@ -246,10 +263,5 @@ namespace Jularr.Frontend.Pages.Shared
             new("nav.settings", "/Settings", "settings")
         ];
 
-        public IReadOnlyList<ShellLink> Mobile { get; } =
-        [
-            new("nav.home", "/", "home"),
-            new("nav.settings", "/Settings", "settings")
-        ];
     }
 }

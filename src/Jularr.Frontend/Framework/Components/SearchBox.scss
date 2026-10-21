@@ -7,14 +7,17 @@
     &__input {
         width: 100%;
         min-width: 0;
-        min-height: var(--control-height);
-        padding: 6px 15px;
+        min-height: 39px;
+        padding: 0 13px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
         background: var(--field);
         color: var(--text);
+        font-size: var(--text-control);
 
-        // Match outlined fields.
-        &:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+        &::placeholder { color: var(--muted); opacity: 1; }
+
+        // The mockups' fields mark focus with the soft purple edge.
+        &:focus-visible { outline: none; border-color: var(--accent-outline); }
     }
 }

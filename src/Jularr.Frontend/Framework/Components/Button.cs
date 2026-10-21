@@ -18,6 +18,21 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // The lavender tint (secondary action) and the amber one (a pause or a caution).
+        public Button Soft()
+        {
+            _tone = " button--soft";
+            ApplyStyle();
+            return this;
+        }
+
+        public Button Warn()
+        {
+            _tone = " button--warn";
+            ApplyStyle();
+            return this;
+        }
+
         public Button Compact()
         {
             _shape = " button--compact";
