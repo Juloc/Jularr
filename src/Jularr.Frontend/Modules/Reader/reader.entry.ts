@@ -8,6 +8,7 @@ import { initializeReaderChrome, initializeReaderSettings } from './Settings';
 import { initializePaperPages } from './PaperPages';
 import { initializeComicPages } from './ComicPages';
 import { initializeReadAloud } from './Speech';
+import { initializeBookmarks } from './bookmarks';
 
 const reader = document.querySelector<HTMLElement>('.reader');
 if (reader) {
@@ -27,6 +28,8 @@ function initializeText(reader: HTMLElement): void {
     const sections = Number(reader.dataset.sections);
     let timer = 0;
     let paging: ReturnType<typeof initializePaperPages> | undefined;
+    let progress = before / total;
+    let marks: ReturnType<typeof initializeBookmarks> | undefined;
     const settings = initializeReaderSettings(reader, () => paging?.layout());
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         const feedback = reader.querySelector<HTMLElement>('[data-role=save-error]');
@@ -36,6 +39,10 @@ function initializeText(reader: HTMLElement): void {
     if (reader.dataset.query) findings(content, reader.dataset.query);
     paging = initializePaperPages(reader, content, settings, () => report(false));
     paging.layout();
+    marks = initializeBookmarks(reader, () => ({
+        section, block: Number(paging!.current()?.dataset.b ?? 0), progression: progress,
+        title: reader.querySelector('.reader__chapter')?.textContent?.trim() || null
+    }));
     initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
     const requested = new URLSearchParams(location.search).get('b');
@@ -85,6 +92,8 @@ function initializeText(reader: HTMLElement): void {
         const atEnd = settings.mode === 'paged' ? paging?.end() : content.scrollTop + content.clientHeight >= content.scrollHeight - 4;
         const completed = section === sections - 1 && Boolean(atEnd);
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
+        progress = progression;
+        marks?.refresh();
         if (position) position.textContent = `${Math.round(progression * 100)} %`;
         save({ locator: `s${section}/b${block}`, progression: Number(progression.toFixed(4)), isCompleted: completed }, leaving);
     }

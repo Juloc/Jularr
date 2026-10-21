@@ -812,6 +812,18 @@
    "Notes",
    "Notizen"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Lesezeichen"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Lesezeichen"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Lesezeichen löschen"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "In neuem Tab öffnen"
@@ -7859,6 +7871,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Ein Profil behält höchstens 1000 Markierungen pro Buch."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Ein Profil behält höchstens 200 Lesezeichen pro Buch."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

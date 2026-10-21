@@ -812,6 +812,18 @@
    "Notes",
    "メモ"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "しおり"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "しおり"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "しおりを削除"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "新しいタブで開く"
@@ -6379,6 +6391,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "プロフィールが1冊の本に保持できるハイライトは最大1000件です。"
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "プロフィールごとに、1冊につきしおりは最大200件まで保存できます。"
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

@@ -812,6 +812,18 @@
    "Notes",
    "Notas"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Marcador"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Marcadores"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Excluir marcador"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Abrir em uma nova aba"
@@ -6379,6 +6391,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Um perfil mantém no máximo 1000 destaques por livro."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Um perfil guarda no máximo 200 marcadores por livro."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

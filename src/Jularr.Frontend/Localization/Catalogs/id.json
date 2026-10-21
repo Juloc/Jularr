@@ -812,6 +812,18 @@
    "Notes",
    "Catatan"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Penanda"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Penanda"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Hapus penanda"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Buka di tab baru"
@@ -6379,6 +6391,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Satu profil menyimpan paling banyak 1000 sorotan per buku."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Satu profil menyimpan paling banyak 200 penanda per buku."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",
