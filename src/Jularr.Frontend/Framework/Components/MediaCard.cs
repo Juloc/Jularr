@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Framework
         private decimal? _progression;
         private int? _percent;
         private string? _previewId;
+        private string? _hoverPreview;
         private IUiComponent? _bookmark;
         private IUiComponent? _label;
 
@@ -32,13 +33,14 @@ namespace Jularr.Frontend.Framework
         {
             var card = new MediaCard(assets, item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl)
                 .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), item.Rating)
-                .Availability(new MediaAvailability(assets, item.AvailabilityStateId, item.AvailableUnits, item.MonitoredUnits));
+                .Availability(new MediaAvailability(assets, item.AvailabilityStateId, item.AvailableUnits, item.MonitoredUnits)).HoverPreview(MediaPreviewAddress.Work(item.Id));
             return item.ProgressStateId == ProgressStateType.InProgress ? card.Progress(item.ProgressPercent) : card;
         }
 
         // A title a catalog or TMDB found; one the profile already holds shows what its state says.
         public static MediaCard For(FrontendAssets assets, DiscoverItemV1 item, string href) =>
-            new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, null), item.Rating).State(item.MediaStateTypeId);
+            new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, null), item.Rating).State(item.MediaStateTypeId)
+                .HoverPreview(item.WorkId is { } workId ? MediaPreviewAddress.Work(workId) : item.TmdbId is { } tmdbId ? MediaPreviewAddress.Tmdb(item.MediaTypeId, tmdbId) : null);
 
         // The year, the type and the rating; whatever is unknown is left out.
         public MediaCard Facts(int? year, string? typeKey, decimal? rating)
@@ -100,6 +102,13 @@ namespace Jularr.Frontend.Framework
         public MediaCard Label(IUiComponent label)
         {
             _label = label;
+            return this;
+        }
+
+        // Where the delayed hover over the cover fetches its description or trailer; none means the card has no hover preview.
+        public MediaCard HoverPreview(string? address)
+        {
+            _hoverPreview = address;
             return this;
         }
 
@@ -171,7 +180,9 @@ namespace Jularr.Frontend.Framework
             if (info is not null) details.Add(info);
             details.Add(new Span().Class("media-card__tip").Attribute("role", "presentation").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"));
 
-            new Div(surface, new Div([.. details]).Class("media-card__details")).Class(_isResume ? "media-card media-card--resume" : "media-card").WriteTo(writer, encoder, texts);
+            var card = new Div(surface, new Div([.. details]).Class("media-card__details")).Class(_isResume ? "media-card media-card--resume" : "media-card");
+            if (_hoverPreview is not null) card.Attribute("data-preview-src", _hoverPreview);
+            card.WriteTo(writer, encoder, texts);
         }
 
         private HtmlElement? ProgressBar(UiText texts)

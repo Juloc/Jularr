@@ -38,9 +38,10 @@ export function initializeBookRenderer(reader: HTMLElement) {
     const number = (name: string, fallback: number) => Number(reader.dataset[name] ?? fallback);
     const dimensions = (at: number) => bookDimensions(number('bookPageCount', 0), number('paperMicrons', 100),
         number('bookPageBefore', 0) + adapter.number(at), number('paperBoard', 22));
-    const profile = (at: number, side: string) => {
-        const body = dimensions(at);
-        return paperProfile(side === 'left' ? body.leftMm : body.rightMm, body.centreMm, number('paperCurve', 24), number('paperAngle', 14));
+    // One section for every page: left and right pages are identical mirrors, whatever is read.
+    const profile = () => {
+        const body = dimensions(page);
+        return paperProfile(body.blockMm, body.spineMm, number('paperCurve', 24), number('paperAngle', 14));
     };
     const state = () => {
         for (const [key, value] of Object.entries({ bookState: drag ? 'holding' : flights.length ? 'settling' : 'idle',
@@ -82,7 +83,7 @@ export function initializeBookRenderer(reader: HTMLElement) {
         const print = printing(at, columns === 1 || side === 'left' ? 0 : 1);
         if (!print) return;
         print.style.left = columns === 2 && side === 'right' ? `${(parseFloat(getComputedStyle(adapter.group(at)!.source).columnGap) || 0) / 2}px` : '0';
-        print.style.top = `${profile(at, side).lift * width / 148}px`;
+        print.style.top = `${profile().lift * width / 148}px`;
         return print;
     };
     const exposure = () => {
@@ -120,14 +121,14 @@ export function initializeBookRenderer(reader: HTMLElement) {
         exposure(); state();
     };
     const landing = (to: number, forward: boolean) => {
-        const side = forward ? 'left' : 'right', section = profile(to, side);
+        const side = forward ? 'left' : 'right', section = profile();
         return { outline: paperOutline(section), height: width * (section.height + section.lift) / 148,
             lift: section.lift / section.height * 100, footerRise: section.footerLift * width / 148,
             lighting: paperLighting(section, side, number('paperLight', 75) / 100, number('paperAngle', 14), true) };
     };
     const create = (from: number, to: number, grip: number, middle: boolean, automatic: boolean): Flight => {
         const delta = Math.sign(to - from), side = delta > 0 || columns === 1 ? 'right' : 'left';
-        const section = profile(from, side), leafHeight = width * (section.height + section.lift) / 148;
+        const section = profile(), leafHeight = width * (section.height + section.lift) / 148;
         const leaf = new BookLeaf(host, template, { width, height: leafHeight, gripY: grip * leafHeight, middle, automatic,
             outline: paperOutline(section).map(point => ({ x: point.x * width, y: point.y * leafHeight })),
             angle: number('paperAngle', 14), illumination: number('paperLight', 75) / 100, forward: delta > 0,

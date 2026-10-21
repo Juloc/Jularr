@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
+using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
@@ -158,6 +160,39 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
             _offers.TryGetValue(CacheKey(wantedItemId), out Dictionary<string, ReleaseOffer>? offers) && offers!.TryGetValue(candidateId, out var offer) ? offer : null;
+
+        // Now instead of on schedule: the profile chooses as the automatic search does and the best release is taken at once.
+        public async Task<AutomaticSearchResultV1> SearchAutomaticallyAsync(LogicContext context, long wantedItemId, int? parentUnitNumber, int? unitNumber, string? language, long? accountId, CancellationToken ct)
+        {
+            var (target, indexers, clients) = await context.ExecuteBatchAsync(async (ctx, token) => (await ctx.ReadWantedTargetAsync(wantedItemId, token),
+                await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, token), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, token)), ct);
+            if (target.Definition is null)
+            {
+                return new AutomaticSearchResultV1("profile_missing", null);
+            }
+
+            if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
+            {
+                throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
+            }
+
+            var scope = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadSearchScopeAsync(target, parentUnitNumber, unitNumber, token), ct);
+            var result = await SearchAsync(context, target, indexers, SearchDepth.Normal, automatic: true, ct, scope, language);
+            if (result.IndexersUnavailable)
+            {
+                throw new ServiceUnavailableException("acquisition_unavailable");
+            }
+
+            if (result.Selection.Winner is not { } winner)
+            {
+                return new AutomaticSearchResultV1(result.OutcomeKey, null);
+            }
+
+            var offer = result.Offers[winner.Candidate.Id];
+            await GrabAsync(context, target, offer, winner.Score?.QualityKey, clients, ct, accountId);
+            return new AutomaticSearchResultV1("grabbed", TextLimit.Cut(offer.Title, 1000));
+        }
+
         public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
             long? accountId = null)
         {

@@ -77,6 +77,24 @@ test("the header switch toggles the brightness in effect and keeps the style", (
     assert.equal(ui.root.dataset.skin, "original");
 });
 
+test("the sign-in page's round buttons go to the next design and the next brightness, round again, and remember it", () => {
+    const ui = appearance();
+    const design = new ui.Element({ cycleSkin: "" });
+    const theme = new ui.Element({ cycleMode: "" });
+    ui.click(design);
+    assert.equal(ui.root.dataset.skin, "original");
+    assert.equal(ui.storage.get("jularr-ui-skin"), "original");
+    ui.click(design);
+    assert.equal(ui.root.dataset.skin, "clean");
+    assert.equal(ui.root.dataset.mode, "system");
+    for (const expected of ["light", "dark", "system", "light"]) {
+        ui.click(theme);
+        assert.equal(ui.root.dataset.mode, expected);
+        assert.equal(ui.storage.get("jularr-ui-mode"), expected);
+    }
+    assert.equal(ui.root.dataset.skin, "clean");
+});
+
 test("invalid or blocked storage retains usable independent controls", () => {
     for (const blocked of [false, true]) {
         const ui = appearance({ "jularr-ui-skin": "unknown", "jularr-ui-mode": "unknown" }, blocked);

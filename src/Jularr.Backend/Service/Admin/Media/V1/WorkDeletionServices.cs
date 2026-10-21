@@ -29,33 +29,39 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
+            await DeleteAsync(Context, _replacements, _covers, Parameters.WorkId, Data.DeletesFiles, Data.AddsExclusion, Auth.AccountId!.Value, CancellationToken);
+            return new UpdateResult(true);
+        }
+
+        // One title as Sonarr's dialog deletes it; the mass editor does the same for each chosen title.
+        internal static async Task DeleteAsync(LogicContext context, LibraryReplacements replacements, CoverStore covers, long workId, bool deletesFiles, bool addsExclusion, long accountId, CancellationToken ct)
+        {
             // A running download would be left in its client; it is cancelled first.
-            var facts = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWorkDeletionFactsAsync(Parameters, ct), CancellationToken);
+            var facts = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadWorkDeletionFactsAsync(new WorkParametersV1(workId), token), ct);
             if (facts.HasActiveDownload)
             {
                 throw new DataValidationException(nameof(DeleteWorkDataV1.DeletesFiles), "download_active");
             }
 
             // A file that cannot be removed, on a library that is not reachable, keeps the title: it never counts as deleted.
-            if (Data.DeletesFiles && facts.StoredFileIds.Length > 0)
+            if (deletesFiles && facts.StoredFileIds.Length > 0)
             {
-                var (_, kept) = await _replacements.DeleteAsync(Context, facts.StoredFileIds, Auth.AccountId!.Value, CancellationToken);
+                var (_, kept) = await replacements.DeleteAsync(context, facts.StoredFileIds, accountId, ct);
                 if (kept > 0)
                 {
                     throw new DataValidationException(nameof(DeleteWorkDataV1.DeletesFiles), "files_stay");
                 }
             }
 
-            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.RecordActivityAsync(new Data.Logic.Library.ActivityEventData(ActivityEventType.WorkDeleted, workId: Parameters.WorkId, accountId: Auth.AccountId), ct);
-                await ctx.DeleteWorkAsync(new Data.Logic.Media.WorkDeletionData(Parameters.WorkId, Data.AddsExclusion), ct);
+                await ctx.RecordActivityAsync(new Data.Logic.Library.ActivityEventData(ActivityEventType.WorkDeleted, workId: workId, accountId: accountId), token);
+                await ctx.DeleteWorkAsync(new Data.Logic.Media.WorkDeletionData(workId, addsExclusion), token);
                 return true;
-            }, CancellationToken);
+            }, ct);
 
             // The title's covers leave with it.
-            _covers.Delete(Parameters.WorkId);
-            return new UpdateResult(true);
+            covers.Delete(workId);
         }
     }
 

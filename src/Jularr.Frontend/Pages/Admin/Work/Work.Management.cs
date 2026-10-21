@@ -698,8 +698,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return new Div([.. content]).Class("work-manage");
         }
 
-        // The columns a person may show, in the order of the table; filled in from the table's headers by the client.
-        private IUiComponent ColumnPicker() => new Div(new H3(new Text("work.columns")), new Ul().Class("work-columns__list")).Class("work-columns").Attribute("data-column-picker", "").Attribute("data-move-label", texts["work.columns.move"]).Attribute("hidden", "hidden");
+        private static IUiComponent ColumnPicker() => new Framework.ColumnPicker();
 
         // Releases of the title and what happened to it.
         private List<IUiComponent> History(WorkManagementV1 work, string? csrf)
@@ -815,34 +814,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         private HtmlElement IconSubmit(string icon, string labelKey) => new IconButton(Icon(icon, 22)).Attribute("type", "submit").Class("work-icon").TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
 
-        private sealed class Label(params IUiComponent[] children) : HtmlElement("label", children);
-
         private sealed class Template(params IUiComponent[] children) : HtmlElement("template", children);
 
         private sealed class Fieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
 
         private sealed class Legend(params IUiComponent[] children) : HtmlElement("legend", children);
 
-        private sealed class Select(params IUiComponent[] children) : HtmlElement("select", children);
-
-        private sealed class Option(params IUiComponent[] children) : HtmlElement("option", children);
-
-        private sealed class Td(params IUiComponent[] children) : HtmlElement("td", children);
-
-
         private sealed class IconButton(params IUiComponent[] children) : HtmlElement("button", children);
-
-        // A switch that submits its form: it shows the state and the click is the change.
-        private sealed class SwitchButton : HtmlElement
-        {
-            public SwitchButton(bool isOn, string actionKey, string? labelKey = null) : base("button", [new Span().Class("work-switch__track"), labelKey is null ? new Span() : new Span(new Text(labelKey)).Class("work-switch__label")])
-            {
-                Attribute("type", "submit");
-                Attribute("role", "switch");
-                Attribute("aria-checked", isOn ? "true" : "false");
-                TextAttribute("aria-label", actionKey);
-                Class("work-switch" + (isOn ? " work-switch--on" : ""));
-            }
-        }
     }
 }

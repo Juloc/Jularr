@@ -1,3 +1,5 @@
+import { attachCardPreview } from './CardPreview';
+
 let initialized = false;
 let shownTip: HTMLElement | undefined;
 
@@ -30,6 +32,16 @@ function holderOf(target: EventTarget | null): HTMLElement | null {
 export function initializeCards(): void {
     if (initialized) return;
     initialized = true;
+
+    // The delayed hover over a cover: description or trailer, on every page with cards.
+    attachCardPreview({
+        document, window, origin: window.location.origin,
+        fetch: (address, init) => fetch(address, { ...init, credentials: 'same-origin' }),
+        setTimeout: (action, milliseconds) => window.setTimeout(action, milliseconds),
+        clearTimeout: handle => window.clearTimeout(handle as number),
+        canHover: () => matchMedia('(hover: hover) and (pointer: fine)').matches,
+        parse: html => new DOMParser().parseFromString(html, 'text/html').body.firstElementChild as HTMLElement | null
+    });
 
     // Native links and forms remain clickable. Tapping a noninteractive poster
     // area toggles the existing status capsule without navigation.

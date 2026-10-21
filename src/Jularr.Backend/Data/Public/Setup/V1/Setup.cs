@@ -21,17 +21,17 @@ namespace Jularr.Backend.Data.Public.Setup.V1
 
     public sealed class CreateOwnerDataV1 : BaseData
     {
-        public CreateOwnerDataV1(string email, string displayName, string password, string passwordConfirmation, long uiLocaleId)
+        public CreateOwnerDataV1(string username, string displayName, string password, string passwordConfirmation, long uiLocaleId)
         {
-            Email = email;
+            Username = username;
             DisplayName = displayName;
             Password = password;
             PasswordConfirmation = passwordConfirmation;
             UiLocaleId = uiLocaleId;
         }
 
-        [DataField(typeof(AccountFields), nameof(AccountFields.Email))]
-        public string Email { get; }
+        [DataField(typeof(AccountFields), nameof(AccountFields.Username))]
+        public string Username { get; }
 
         [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName), true, 100)]
         public string DisplayName { get; }

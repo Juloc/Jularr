@@ -311,6 +311,34 @@ namespace Jularr.Backend.Data.Logic.Media
         public LibrarySortType LibrarySortTypeId { get; }
     }
 
+    // What the library's page is narrowed to; the order is part of the statement.
+    internal sealed class LibraryPageFilterData : BaseData
+    {
+        public LibraryPageFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, string? query)
+        {
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
+            ReleaseYearFrom = releaseYearFrom;
+            ReleaseYearTo = releaseYearTo;
+            Query = query;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearFrom { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearTo { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
+        public string? Query { get; }
+    }
+
     // What a profile's personal list is narrowed to and how it is ordered; no scope lists every type.
     internal sealed class WorkListFilterData : BaseData
     {

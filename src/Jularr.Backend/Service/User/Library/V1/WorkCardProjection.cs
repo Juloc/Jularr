@@ -98,6 +98,22 @@ namespace Jularr.Backend.Service.User.Library.V1
             ) AS workProgress
             """;
 
+        // One page of cards. The candidates are only the ordered, bounded Work ids of a list (its filters, order, LIMIT @PageSize OFFSET @Offset);
+        // the projection below, which is the expensive part, runs for the shown page alone and not for every Work the list could hold.
+        public static string Page(string candidates, string isWatchlisted) =>
+            $$"""
+            SELECT
+                {{Columns}},
+                {{isWatchlisted}} AS "IsWatchlisted"
+            FROM
+                unnest(ARRAY({{candidates}})) WITH ORDINALITY AS picked ("Id", "Place")
+                JOIN "Works" AS work ON work."Id" = picked."Id"
+                JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id"
+                {{Joins}}
+            ORDER BY
+                picked."Place";
+            """;
+
         // The joins every card needs; the profile is the one the query reads for.
         public const string Joins =
             """

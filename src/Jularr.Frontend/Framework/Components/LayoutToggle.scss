@@ -1,0 +1,5 @@
+// The icon shows the layout a click leads to; the button needs script.
+.layout-toggle.button { width: 36px; min-height: 36px; .ui-icon:last-child { display: none; } }
+
+html:not(.layout-ready) [data-layout-toggle] { display: none; }
+html[data-list-layout="list"] .layout-toggle .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }

@@ -29,12 +29,13 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
     public sealed class AccountDetailsV1 : BaseResponse
     {
-        public AccountDetailsV1(long id, string email, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime? emailVerifiedAt, DateTime updatedAt,
+        public AccountDetailsV1(long id, string username, string? email, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime? emailVerifiedAt, DateTime updatedAt,
             bool mayConfirmSources = false, bool transcodingPriority = false)
         {
             MayConfirmSources = mayConfirmSources;
             TranscodingPriority = transcodingPriority;
             Id = id;
+            Username = username;
             Email = email;
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
@@ -46,8 +47,11 @@ namespace Jularr.Backend.Data.Admin.Account.V1
         [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
         public long Id { get; }
 
-        [DataField(typeof(AccountFields), nameof(AccountFields.Email))]
-        public string Email { get; }
+        [DataField(typeof(AccountFields), nameof(AccountFields.Username))]
+        public string Username { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.Email), false)]
+        public string? Email { get; }
 
         [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName))]
         public string DisplayName { get; }

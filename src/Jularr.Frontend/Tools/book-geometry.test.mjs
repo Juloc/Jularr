@@ -108,6 +108,32 @@ test('printed sides produce half as many leaves; reading position redistributes 
     assert.equal(bookDimensions(321, 40, 100, 4).leaves, 161);
     assert.ok(bookDimensions(640, 100, 1, 22).totalMm > start.totalMm);
 });
+// The renderer's sheet box for one side: top and height of the page contour in CSS pixels, from the shared
+// section, exactly as BookSolid/BookRenderer lay them out (sheet top = -lift of the half's height).
+function pageBox(dimensions, curve, angle, half) {
+    const profile = paperProfile(dimensions.blockMm, dimensions.spineMm, curve, angle);
+    const body = half * 204 / 148, scale = half / 148;
+    const sheetTop = -profile.lift / profile.height * body, sheetHeight = body - sheetTop;
+    const outline = paperOutline(profile).map(p => ({ x: p.x * half, y: sheetTop + p.y * sheetHeight }));
+    const ys = outline.map(p => p.y), xs = outline.map(p => p.x);
+    return { top: Math.min(...ys), bottom: Math.max(...ys), width: Math.max(...xs) - Math.min(...xs), footer: profile.footerLift * scale, text: profile.lift * scale };
+}
+test('left and right page of a spread have identical height, position, outline and margins at every viewport and read position', () => {
+    for (const [width, height] of [[909, 561], [1024, 768], [1280, 720], [1920, 1080], [390, 844], [2560, 1440]]) {
+        // The book is as wide as two pages of 148:204 that fit the box, like the stylesheet.
+        const half = Math.min(width / 2, height * 148 / 204) * .9;
+        for (const pages of [8, 320, 1500]) for (const angle of [4, 14, 24]) for (const curve of [0, 24, 100]) {
+            const boxes = [1, pages / 4, pages / 2, pages * .9, pages].map(read => pageBox(bookDimensions(pages, 100, read, 22), curve, angle, half));
+            for (const box of boxes) assert.deepEqual(box, boxes[0], 'Reading position moves leaves between the pages, never the pages themselves.');
+            const left = pageBox(bookDimensions(pages, 100, 1, 22), curve, angle, half), right = pageBox(bookDimensions(pages, 100, pages, 22), curve, angle, half);
+            assert.ok(Math.abs(left.top - right.top) < .001 && Math.abs(left.bottom - right.bottom) < .001);
+            assert.ok(Math.abs(left.footer - right.footer) < .001 && Math.abs(left.text - right.text) < .001, 'Printed text and page number sit identically on both pages.');
+        }
+    }
+    const first = bookDimensions(1500, 100, 1, 22), last = bookDimensions(1500, 100, 1500, 22);
+    assert.equal(first.blockMm, last.blockMm); assert.equal(first.spineMm, last.spineMm);
+    assert.ok(Math.abs(first.blockMm * 2 - (first.totalMm - 2 * first.boardMm)) < 1e-9, 'The shared section is half of the one stable block.');
+});
 test('paper tint is deterministic; brightness changes the material, not the app theme', () => {
     assert.equal(paperColour('#ffffff', 0, 100), '#ffffff');
     assert.equal(paperColour('#ffffff', 100, 100), '#fff1d8');

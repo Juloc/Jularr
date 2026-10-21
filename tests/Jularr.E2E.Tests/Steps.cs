@@ -20,7 +20,11 @@ namespace Jularr.E2E.Tests
             var problems = new ConcurrentQueue<string>();
             page.Console += (_, message) =>
             {
-                if (message.Type == "error") problems.Enqueue(page.Url + ": " + message.Text);
+                // A cover that its provider does not deliver (these tests have no real catalogs) is no fault of the page.
+                if (message.Type == "error" && !(message.Text.StartsWith("Failed to load resource", StringComparison.Ordinal) && message.Location.Contains("/api/v1/covers/", StringComparison.Ordinal)))
+                {
+                    problems.Enqueue(page.Url + ": " + message.Text);
+                }
             };
             page.PageError += (_, error) => problems.Enqueue(page.Url + ": " + error);
             page.Response += (_, response) =>
@@ -265,6 +269,7 @@ namespace Jularr.E2E.Tests
         public static async Task<string> ImportAndRequestAsync(IPage page, string type, string? subtype, string title, string? provider = null)
         {
             await page.GotoAsync("/Admin/Works");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add title", Exact = true }).ClickAsync();
             var search = page.Locator("main form", new() { Has = page.Locator("[name=Query]") });
             await search.Locator("[name=MediaTypeId]").SelectOptionAsync(new SelectOptionValue { Label = type });
             if (subtype is not null)
@@ -457,7 +462,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Account/Logout");
             await SubmitAsync(page, FormWith(page, "Sign out"));
             await page.GotoAsync("/Account/Login");
-            await page.FillAsync("[name=Email]", Owner.Email);
+            await page.FillAsync("[name=Username]", Owner.Username);
             await page.FillAsync("[name=Password]", Owner.Password);
             await page.Locator("form button[type=submit]").First.ClickAsync();
             await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));

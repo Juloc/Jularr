@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
@@ -14,21 +15,19 @@ using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
     public sealed class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverShelvesV1 readShelves, SuggestDiscoverV1 suggest, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
-        IAntiforgery antiforgery) : JularrPage
+        IAntiforgery antiforgery, ILogger<IndexModel> log) : JularrPage
     {
-        // The media-type bar groups the scopes by what a person does with them, in this order.
-        private static readonly (string LabelKey, string Icon, string[] Slugs)[] Areas =
-        [
-            ("discover.area.watch", "play", ["movies", "series", "anime"]),
-            ("discover.area.read", "book", ["books", "manga", "lightnovels"]),
-            ("discover.area.hear", "music", ["music"]),
-            ("discover.area.play", "gamepad", ["games"])
-        ];
+        // Shelves of providers are asked together, a few at a time, and none holds the page longer than this; slower ones are logged.
+        private const int ShelfConcurrency = 6;
+        private static readonly TimeSpan ShelfLimit = TimeSpan.FromSeconds(8);
+        private static readonly TimeSpan HeroLimit = TimeSpan.FromSeconds(2.5);
+        private static readonly TimeSpan SlowShelf = TimeSpan.FromMilliseconds(700);
 
         private const string HeroPreferences = "discover-hero";
 
@@ -134,7 +133,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             var searching = !string.IsNullOrWhiteSpace(Query);
 
             // One row of media types; a ranking opened from its shelf names itself and leads back.
-            page.Content.Add(MediaTypeBar());
+            page.Content.Add(TypeBar());
             if (selected is not null && View is { } view && !searching)
             {
                 page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", Address(Current with { View = null, Page = 1 })),
@@ -213,32 +212,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
         }
 
-        // All, then a capsule per area whose types are chosen one by one; the tools open the filter and the highlight settings.
-        private IUiComponent MediaTypeBar()
+        // The shared media-type bar; the tools open the filter and the highlight settings.
+        private IUiComponent TypeBar()
         {
-            var listed = Listed.Select(scope => scope.Slug).ToList();
-            var chosen = Chosen.Select(scope => scope.Slug).ToHashSet();
-
-            // Chosen entries, or none for all of them.
-            string Types(IEnumerable<string> slugs)
-            {
-                var wanted = listed.Where(slug => slugs.Contains(slug)).ToList();
-                return Address(Current with { Types = wanted.Count == listed.Count ? [] : wanted, View = null, Page = 1 });
-            }
-
-            var groups = new List<CapsuleGroup>();
-            foreach (var (labelKey, icon, slugs) in Areas)
-            {
-                var members = slugs.Where(listed.Contains).ToList();
-                if (members.Count == 0) continue;
-
-                var shown = members.Count(chosen.Contains);
-                var solo = !IsAll && chosen.Count == members.Count && shown == members.Count;
-                var state = IsAll || shown == 0 ? CapsuleGroupState.Idle : solo ? CapsuleGroupState.Solo : shown < members.Count ? CapsuleGroupState.Partial : CapsuleGroupState.Included;
-                groups.Add(new CapsuleGroup(labelKey, icon, Types(solo ? listed : members), state, [.. members.Select(slug =>
-                    new CapsuleItem("discover.type." + slug, Types(IsAll ? [slug] : chosen.Contains(slug) ? chosen.Except([slug]) : chosen.Append(slug)), !IsAll && chosen.Contains(slug), !IsAll && !chosen.Contains(slug)))]));
-            }
-
             var narrowed = (Availability is not null ? 1 : 0) + (Year is not null ? 1 : 0);
             var filter = new List<IUiComponent> { new Icon("filter", assets, 16) };
             if (narrowed > 0) filter.Add(new Span(new ValueText(narrowed.ToString(CultureInfo.CurrentCulture))).Class("capsule-bar__badge"));
@@ -248,13 +224,13 @@ namespace Jularr.Frontend.Pages.User.Discover
                 Drawer.Opener(new Button([.. filter]).IconOnly(texts["discover.filter.open"]).Class("button button--icon capsule-bar__tool"), "discover-panel", "filter"),
                 new Drawer(assets, "discover-panel", [FilterPane(), ViewPane()])
             };
-            return new CapsuleBar(assets, "discover.mediaTypes", "discover.all", Types([]), IsAll, groups, tools);
+            return new MediaTypeBar(assets, [.. Listed.Select(scope => scope.Slug)], [.. Chosen.Select(scope => scope.Slug)], "discover.type.", types => Address(Current with { Types = types, View = null, Page = 1 }), tools);
         }
 
         // Feed lists, how they are ordered and whether the shelves wrap into a grid.
         private IUiComponent Toolbar()
         {
-            var feedTabs = FeedOptions().Select(option => new NavigationTab(option.LabelKey, Address(Current with { Feed = option.Slug, Page = 1 }), Feed == option.Slug)).ToList();
+            var feedTabs = FeedOptions(Chosen).Select(option => new NavigationTab(option.LabelKey, Address(Current with { Feed = option.Slug, Page = 1 }), Feed == option.Slug)).ToList();
 
             // The sort keeps every other choice of the address as hidden fields.
             var keep = new Dictionary<string, string>();
@@ -270,10 +246,10 @@ namespace Jularr.Frontend.Pages.User.Discover
         }
 
         // The lists of the feed chips and of the filter: all, then each one a chosen type has, then Continue when something continues.
-        private List<(string? Slug, string LabelKey)> FeedOptions()
+        private List<(string? Slug, string LabelKey)> FeedOptions(IEnumerable<DiscoverScopeV1> scopes)
         {
             var options = new List<(string? Slug, string LabelKey)> { (null, "discover.all") };
-            var supported = Chosen.SelectMany(scope => scope.Feeds).ToHashSet();
+            var supported = scopes.SelectMany(scope => scope.Feeds).ToHashSet();
             foreach (var (feed, slug) in new[] { (DiscoverFeedType.Trending, "trending"), (DiscoverFeedType.New, "new"), (DiscoverFeedType.Top, "top"), (DiscoverFeedType.Upcoming, "upcoming") })
             {
                 if (supported.Contains(feed)) options.Add((slug, "discover.feed." + feed));
@@ -282,6 +258,18 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (_continue.Count > 0) options.Add(("continue", "discover.feed.Continue"));
             return options;
         }
+
+        // The types a ranking exists for, as the script of the filter needs them; none for all and Continue, which every type has.
+        private string? FeedScopes(string? feedSlug) => feedSlug is null or "continue" ? null
+            : string.Join(',', Listed.Where(scope => scope.Feeds.Any(feed => FeedSlug(feed) == feedSlug)).Select(scope => scope.Slug));
+
+        private static string FeedSlug(DiscoverFeedType feed) => feed switch
+        {
+            DiscoverFeedType.Trending => "trending",
+            DiscoverFeedType.Top => "top",
+            DiscoverFeedType.New => "new",
+            _ => "upcoming"
+        };
 
         // Types per area, availability, release year and feed; one GET form, so the address holds the choice.
         private DrawerPane FilterPane()
@@ -292,27 +280,35 @@ namespace Jularr.Frontend.Pages.User.Discover
                 new Span(new Text("discover.chooseMedia")).Class("drawer__field-title"),
                 new Button(new Icon("grid", assets, 16), new Text("discover.allTypes")).Class("button discover-all").Attribute("data-discover-all", "").Attribute("aria-pressed", IsAll ? "true" : "false")
             };
-            foreach (var (labelKey, icon, slugs) in Areas)
+            foreach (var area in MediaAreas.All)
             {
-                var members = slugs.Where(slug => Listed.Any(scope => scope.Slug == slug)).ToList();
+                var members = area.Slugs.Where(slug => Listed.Any(scope => scope.Slug == slug)).ToList();
                 if (members.Count == 0) continue;
 
                 var all = members.All(chosen.Contains);
-                chooser.Add(new ChoiceGroup(assets, labelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "discover.type." + slug))],
-                    new ChoiceOptions(true, ChoiceLayout.Section, icon, "discover.selected",
+                chooser.Add(new ChoiceGroup(assets, area.LabelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "discover.type." + slug))],
+                    new ChoiceOptions(true, ChoiceLayout.Section, area.Icon, "discover.selected",
                         Aside: [new Button(new Text(all ? "discover.clearAll" : "discover.pickAll")).Class("button button--compact discover-pick").Attribute("data-discover-pick", "")
                             .Attribute("data-pick-label", texts["discover.pickAll"]).Attribute("data-clear-label", texts["discover.clearAll"])])));
             }
 
+            // The media types come first, then the local availability, then only the filters the chosen types have data for:
+            // the release year, and the rankings of the types (those a chosen type lacks leave the list as the types change).
             var body = new List<IUiComponent>
             {
                 new Div([.. chooser]).Class("drawer__section"),
                 new ChoiceGroup(assets, "discover.filter.availability", "availability", [new("", Availability is null, "discover.all"), new("local", Availability == "local", "discover.known"),
                     new("request", Availability == "request", "discover.availability.request")]),
                 new ChoiceGroup(assets, "discover.filter.year", "year", [new("", Year is null, "discover.all"), new("2020", Year == "2020", "discover.year.since2020"),
-                    new("old", Year == "old", "discover.year.before2020")]),
-                new ChoiceGroup(assets, "discover.filter.feed", "feed", [.. FeedOptions().Select(option => new ChoicePick(option.Slug ?? "", Feed == option.Slug, option.LabelKey))])
+                    new("old", Year == "old", "discover.year.before2020")])
             };
+            var feedOptions = FeedOptions(Chosen);
+            if (feedOptions.Count > 1)
+            {
+                body.Add(new ChoiceGroup(assets, "discover.filter.feed", "feed", [.. feedOptions.Select(option => new ChoicePick(option.Slug ?? "", Feed == option.Slug, option.LabelKey,
+                    FeedScopes(option.Slug)))]));
+            }
+
             if (Sort is not null) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", Sort));
             if (!string.IsNullOrWhiteSpace(Query)) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "q").Attribute("value", Query.Trim()));
 
@@ -367,7 +363,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl)
                 .Facts(item.ReleaseYear, MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId), null).Resume(ContinueDetail.Format(key => texts[key], item))
                 .Action("media.continue", (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
-                .Bookmark(new MediaBookmark(assets, item.WorkId));
+                .Bookmark(new MediaBookmark(assets, item.WorkId)).HoverPreview(MediaPreviewAddress.Work(item.WorkId));
             return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
         })]);
 
@@ -502,29 +498,33 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Local shelves never wait for the provider.
+            // Local shelves never wait for the provider; what does not depend on another read is read together.
             if (texts.CanArrangeHome())
             {
                 _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
             }
 
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
-            if ((texts.CanPlay() || texts.CanRead())
-                && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading]))
-            {
-                _continue = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
-            }
+            var continueTask = (texts.CanPlay() || texts.CanRead()) && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading])
+                ? continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted)
+                : Task.FromResult<BaseDataList<ContinueItemV1>?>(null);
 
-            if (shown.Contains(HomeShelfType.RecentlyAdded))
-            {
-                // One chosen type narrows the read; several are filtered when shown.
-                var recentType = Chosen.Select(scope => scope.MediaTypeId).Distinct().ToList() is [var only] ? only : (MediaType?)null;
-                _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentType, pageSize: 20), HttpContext.RequestAborted)).Items;
-            }
+            // One chosen type narrows the read; several are filtered when shown.
+            var recentType = Chosen.Select(scope => scope.MediaTypeId).Distinct().ToList() is [var single] ? single : (MediaType?)null;
+            var recentTask = shown.Contains(HomeShelfType.RecentlyAdded)
+                ? library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(recentType is { } only ? [only] : null, pageSize: 20), HttpContext.RequestAborted)
+                : Task.FromResult<PageResult<LibraryItemV1>?>(null);
+            var heroFeed = Feed is null ? DiscoverFeedType.Trending : FeedType;
+            var keptTask = View is null && string.IsNullOrWhiteSpace(Query) && heroFeed is not null
+                ? readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted)
+                : Task.FromResult<BaseDataList<DiscoverShelfV1>?>(null);
+            await Task.WhenAll(continueTask, recentTask, keptTask);
 
+            _continue = (await continueTask) ?? _continue;
+            _recent = (await recentTask)?.Items ?? _recent;
             if (View is null && string.IsNullOrWhiteSpace(Query))
             {
-                await LoadHeroAsync(selected);
+                await LoadHeroAsync(selected, await keptTask);
             }
         }
 
@@ -565,7 +565,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         // Continued titles first, then each chosen type's best titles of the feed, one rank after the other across the types.
         // Read from the whole catalogs; one source of the first type answers when none was kept.
-        private async Task LoadHeroAsync(DiscoverScopeV1? selected)
+        private async Task LoadHeroAsync(DiscoverScopeV1? selected, BaseDataList<DiscoverShelfV1>? kept)
         {
             var slides = new List<HeroSlide>();
             if (Feed is null or "continue")
@@ -583,9 +583,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             var feed = Feed is null ? DiscoverFeedType.Trending : FeedType;
-            if (feed is { } heroFeed)
+            if (feed is { } heroFeed && kept is not null)
             {
-                var kept = await readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted);
                 var perScope = new List<List<HeroSlide>>();
                 foreach (var scope in Chosen.Where(scope => scope.Feeds.Contains(heroFeed)))
                 {
@@ -623,22 +622,25 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
+            // A provider that answers late never holds the page's HTML.
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+            limit.CancelAfter(HeroLimit);
             try
             {
                 if (scope.IsCatalog)
                 {
                     var items = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(
-                        new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), HttpContext.RequestAborted);
+                        new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending, scope.MediaSubtypeId), limit.Token);
                     var item = Filtered(items.Select(value => (scope, value))).Select(entry => entry.Item).OrderBy(value => value.PosterUrl is null).FirstOrDefault();
                     if (item is not null) slides.Add(CatalogSlide(scope, item, DiscoverFeedType.Trending, 0));
                     return;
                 }
 
-                var results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), HttpContext.RequestAborted);
+                var results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, DiscoverFeedType.Trending), limit.Token);
                 var featured = Filtered(results).OrderBy(value => value.BackdropUrl is null && value.PosterUrl is null).FirstOrDefault();
                 if (featured is not null) slides.Add(ItemSlide(scope, featured, DiscoverFeedType.Trending, 0));
             }
-            catch (ServiceUnavailableException)
+            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !HttpContext.RequestAborted.IsCancellationRequested)
             {
                 // Optional highlights must never prevent local shelves from rendering.
             }
@@ -664,42 +666,71 @@ namespace Jularr.Frontend.Pages.User.Discover
                 actionKey switch { "request.create" => "plus", "media.watch" => "play", _ => null }, actionKey is null ? null : DetailsHref(item), scope.Slug, rank);
         }
 
+        // One shelf of a provider: what it answered, or that it did not answer in time.
+        private sealed record ShelfAnswer(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1>? Items, IReadOnlyList<DiscoverCatalogItemV1>? Catalog, bool Failed);
+
         private async Task LoadRecommendationsAsync()
         {
             await LoadListedAsync();
             var selected = Selected;
+            var started = Stopwatch.GetTimestamp();
 
-            // Catalogs read whole answer all their shelves at once; the others ask their providers shelf by shelf.
+            // Catalogs read whole answer all their shelves at once; the others ask their providers shelf by shelf, together.
             var whole = await readShelves.ExecuteAsync<BaseDataList<DiscoverShelfV1>>(new ReadDiscoverShelvesDataV1(selected?.Slug), HttpContext.RequestAborted);
+            var wholeMilliseconds = (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            using var gate = new SemaphoreSlim(ShelfConcurrency);
+            var answers = new List<Task<ShelfAnswer>>();
             foreach (var scope in Chosen)
             {
                 foreach (var feed in scope.Feeds.Where(feed => FeedType is null || feed == FeedType))
                 {
-                    if (whole.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == feed) is { } kept)
-                    {
-                        if (scope.IsCatalog) _catalogShelves.Add((scope, feed, kept.CatalogItems));
-                        else _shelves.Add((scope.MediaTypeId, feed, kept.Items));
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (scope.IsCatalog)
-                        {
-                            _catalogShelves.Add((scope, feed, await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, feed, scope.MediaSubtypeId),
-                                HttpContext.RequestAborted)));
-                        }
-                        else
-                        {
-                            _shelves.Add((scope.MediaTypeId, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, feed), HttpContext.RequestAborted)));
-                        }
-                    }
-                    catch (ServiceUnavailableException)
-                    {
-                        _providerUnavailable = true;
-                        // Other shelves remain useful.
-                    }
+                    answers.Add(whole.FirstOrDefault(shelf => shelf.ScopeSlug == scope.Slug && shelf.DiscoverFeedTypeId == feed) is { } kept
+                        ? Task.FromResult(new ShelfAnswer(scope, feed, scope.IsCatalog ? null : kept.Items, scope.IsCatalog ? kept.CatalogItems : null, false))
+                        : ReadProviderShelfAsync(scope, feed, gate));
                 }
+            }
+
+            // In the order of the media-type bar.
+            foreach (var answer in await Task.WhenAll(answers))
+            {
+                if (answer.Failed) _providerUnavailable = true;
+                else if (answer.Catalog is not null) _catalogShelves.Add((answer.Scope, answer.Feed, answer.Catalog));
+                else if (answer.Items is not null) _shelves.Add((answer.Scope.MediaTypeId, answer.Feed, answer.Items));
+            }
+
+            var total = Stopwatch.GetElapsedTime(started);
+            HttpContext.Response.Headers["Server-Timing"] = $"local;dur={wholeMilliseconds}, shelves;dur={(long)total.TotalMilliseconds}";
+            if (total > SlowShelf) log.LogInformation("Discover shelves: {Shelves} shelves in {Milliseconds} ms ({Local} ms for the local ones)", answers.Count, (long)total.TotalMilliseconds, wholeMilliseconds);
+        }
+
+        private async Task<ShelfAnswer> ReadProviderShelfAsync(DiscoverScopeV1 scope, DiscoverFeedType feed, SemaphoreSlim gate)
+        {
+            var requestAborted = HttpContext.RequestAborted;
+            await gate.WaitAsync(requestAborted);
+            var started = Stopwatch.GetTimestamp();
+            var outcome = "answered";
+            try
+            {
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+                limit.CancelAfter(ShelfLimit);
+                if (scope.IsCatalog)
+                {
+                    return new ShelfAnswer(scope, feed, null, await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, feed, scope.MediaSubtypeId), limit.Token), false);
+                }
+
+                return new ShelfAnswer(scope, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, feed), limit.Token), null, false);
+            }
+            catch (Exception exception) when (exception is ServiceUnavailableException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested)
+            {
+                // Other shelves remain useful.
+                outcome = exception is ServiceUnavailableException ? "unavailable" : "timed out";
+                return new ShelfAnswer(scope, feed, null, null, true);
+            }
+            finally
+            {
+                gate.Release();
+                var elapsed = Stopwatch.GetElapsedTime(started);
+                if (elapsed > SlowShelf) log.LogWarning("Slow Discover shelf {Scope}/{Feed}: {Outcome} after {Milliseconds} ms", scope.Slug, feed, outcome, (long)elapsed.TotalMilliseconds);
             }
         }
 
@@ -746,7 +777,8 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var href = item.WorkId is { } workId ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
                 : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
-            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating);
+            var card = new MediaCard(assets, item.Title, href, item.PosterUrl).Facts(item.ReleaseYear, MediaTypeLabel.Key(scope.MediaTypeId, scope.MediaSubtypeId), item.Rating)
+                .HoverPreview(item.WorkId is { } held ? MediaPreviewAddress.Work(held) : MediaPreviewAddress.Catalog(scope.Slug, item.Namespace, item.ExternalId));
             if (item.MediaStateTypeId is { } state) card.State(state);
             if (item.WorkId is { } known) return card.Bookmark(new MediaBookmark(assets, known));
             return texts.CanRequest() ? card.Action("discover.action.request", href) : card;

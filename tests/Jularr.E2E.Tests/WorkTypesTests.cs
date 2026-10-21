@@ -173,6 +173,7 @@ namespace Jularr.E2E.Tests
         private static async Task<string> CreateAsync(IPage page, string type, string subtype, string title)
         {
             await page.GotoAsync("/Admin/Works");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add title", Exact = true }).ClickAsync();
             var form = page.Locator("main form", new() { Has = page.Locator("[name=CanonicalTitle]") });
             await form.Locator("[name=MediaTypeId]").SelectOptionAsync(new SelectOptionValue { Label = type });
             await form.Locator("[name=MediaSubtypeId]").SelectOptionAsync(new SelectOptionValue { Label = subtype });

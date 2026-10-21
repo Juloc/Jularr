@@ -1,0 +1,44 @@
+// Figures that sum a page up. White tiles with the accent outline; a narrow screen slides the row sideways, it never wraps.
+.kpi-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+
+    @media (max-width: 900px) {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(150px, 1fr);
+        grid-template-columns: none;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar { display: none; }
+    }
+}
+
+.kpi-tile {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.kpi-tile__label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.kpi-tile__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.kpi-tile__icon { display: inline-flex; flex: none; color: var(--accent-text); }
+
+.kpi-tile__value { overflow: hidden; font-size: 26px; font-weight: 750; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }

@@ -62,7 +62,8 @@ function tablesOfKind(kind: string): HTMLTableElement[] {
 }
 
 function readState(kind: string, table: HTMLTableElement): ColumnState {
-    const heads = Array.from(table.querySelectorAll<HTMLElement>('thead th[data-col]')).filter(head => head.dataset.col !== 'actions');
+    // The actions and the columns a table marks fixed (a selection box, the title) stay where they are and are not offered.
+    const heads = Array.from(table.querySelectorAll<HTMLElement>('thead th[data-col]')).filter(head => head.dataset.col !== 'actions' && head.dataset.fixed !== 'true');
     const available = heads.map(head => head.dataset.col!);
     const hiddenByDefault = heads.filter(head => head.dataset.hidden === 'true').map(head => head.dataset.col!);
     let stored: unknown = null;
