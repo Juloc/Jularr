@@ -31,8 +31,8 @@ namespace Jularr.Backend.Service.User.Media.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             var settings = await Context.ReadCoverCacheSettingsAsync(CancellationToken);
-            var acceptsWebP = _http.HttpContext?.Request.Headers.Accept.ToString().Contains("image/webp", StringComparison.OrdinalIgnoreCase) == true;
-            var found = await _covers.ReadExternalAsync(Parameters.U, Parameters.W, acceptsWebP, settings.MaximumMegabytes > 0, CancellationToken);
+            var accepts = CoverPaths.Accepts(_http.HttpContext?.Request.Headers.Accept.ToString());
+            var found = await _covers.ReadExternalAsync(Parameters.U, Parameters.W, accepts, settings.MaximumMegabytes > 0, CancellationToken);
             Stream content = found.Path is { } path ? File.OpenRead(path) : new MemoryStream(found.Bytes!);
             return new WorkCoverFileV1(content, found.ContentType, found.ETag, found.LastModified, false, TimeSpan.FromHours(1));
         }
@@ -80,10 +80,10 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new WorkCoverRefData(Parameters.WorkId, kind, unitId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             var info = await Context.ReadSql.ReadOptionalAsync<WorkCoverFileInfoData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The cover was not found.");
-            var acceptsWebP = _http.HttpContext?.Request.Headers.Accept.ToString().Contains("image/webp", StringComparison.OrdinalIgnoreCase) == true;
-            var found = _covers.Find(Parameters.WorkId, kind, unitId, width, info.ContentType, acceptsWebP) ?? throw new KeyNotFoundException("The cover was not found.");
+            var accepts = CoverPaths.Accepts(_http.HttpContext?.Request.Headers.Accept.ToString());
+            var found = _covers.Find(Parameters.WorkId, kind, unitId, width, info.ContentType, accepts) ?? throw new KeyNotFoundException("The cover was not found.");
             var written = new DateTimeOffset(File.GetLastWriteTimeUtc(found.Path), TimeSpan.Zero);
-            var tag = "\"" + info.Version + (width?.ToString(CultureInfo.InvariantCulture) ?? "o") + (found.ContentType == "image/webp" ? "w" : "") + "\"";
+            var tag = "\"" + info.Version + (width?.ToString(CultureInfo.InvariantCulture) ?? "o") + CoverPaths.ETagSuffix(found.ContentType) + "\"";
             return new WorkCoverFileV1(File.OpenRead(found.Path), found.ContentType, tag, written, Parameters.V == info.Version);
         }
     }

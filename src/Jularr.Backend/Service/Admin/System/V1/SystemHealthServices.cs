@@ -17,14 +17,16 @@ namespace Jularr.Backend.Service.Admin.System.V1
     {
         private readonly MediaProbeClient _probe;
         private readonly MediaTranscoder _transcoder;
+        private readonly JxlEncoder _jxl;
         private readonly ArchiveTools _archives;
         private readonly PostgresBackupTools _backups;
         private readonly BackupOptions _backupOptions;
 
-        internal ReadSystemHealthV1(MediaProbeClient probe, MediaTranscoder transcoder, ArchiveTools archives, PostgresBackupTools backups, IOptions<BackupOptions> backupOptions)
+        internal ReadSystemHealthV1(MediaProbeClient probe, MediaTranscoder transcoder, JxlEncoder jxl, ArchiveTools archives, PostgresBackupTools backups, IOptions<BackupOptions> backupOptions)
         {
             _probe = probe;
             _transcoder = transcoder;
+            _jxl = jxl;
             _archives = archives;
             _backups = backups;
             _backupOptions = backupOptions.Value;
@@ -72,6 +74,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
             [
                 new("ffprobe", _probe.IsAvailable),
                 new("ffmpeg", _transcoder.IsAvailable),
+                new("cjxl", _jxl.IsAvailable),
                 new("par2", _archives.CanRepair),
                 new("sevenZip", _archives.CanExtract),
                 new("pgDump", _backups.CanBackUp)
