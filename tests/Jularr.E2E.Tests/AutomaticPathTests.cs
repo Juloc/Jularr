@@ -7,8 +7,8 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class AutomaticPathTests
     {
-        private const string Email = "viewer@example.test";
-        private const string Password = "e2e-viewer-password-123";
+        private const string Username = "viewer_e2e";
+        private const string Password = "E2e-Viewer-Password-123!";
 
         [TestMethod]
         [Timeout(900_000)]
@@ -257,17 +257,17 @@ namespace Jularr.E2E.Tests
             await Steps.SetModuleAsync(page, "Let visitors ask for an account", true);
             await user.GotoAsync("/Account/Register");
             var form = Steps.FormWith(user, "Create account & request access");
-            await form.Locator("[name=Email]").FillAsync(Email);
+            await form.Locator("[name=Username]").FillAsync(Username);
             await form.Locator("[name=Password]").FillAsync(Password);
             await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
             await Steps.SubmitAsync(user, form);
             await page.GotoAsync("/Admin/Accounts");
-            await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
+            await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Username }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
             var account = page.Locator("main form", new() { Has = page.Locator("[name=IsEnabled]") });
             await account.Locator("[name=IsEnabled]").SelectOptionAsync("True");
             await Steps.SubmitAsync(page, account);
             await user.GotoAsync("/Account/Login");
-            await user.FillAsync("[name=Email]", Email);
+            await user.FillAsync("[name=Username]", Username);
             await user.FillAsync("[name=Password]", Password);
             await user.Locator("form button[type=submit]").First.ClickAsync();
             await user.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));

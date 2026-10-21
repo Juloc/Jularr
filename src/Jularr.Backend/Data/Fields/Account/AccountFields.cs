@@ -8,12 +8,24 @@ namespace Jularr.Backend.Data.Fields.Account
     {
         public static readonly LongField Id = new() { Minimum = 1 };
 
+        // The name to sign in with: unique without regard to case.
+        public static readonly StringField Username = new(NpgsqlDbType.Citext)
+        {
+            AllowBlank = false,
+            MinimumLength = 3,
+            MaximumLength = 32,
+            Format = StringFormat.Username
+        };
+
+        // Optional, unique when set.
         public static readonly StringField Email = new(NpgsqlDbType.Citext)
         {
             AllowBlank = false,
             MaximumLength = 254,
-            Format = StringFormat.Email
+            Format = StringFormat.Email,
+            Required = false
         };
+
         public static readonly StringField DisplayName = new() { AllowBlank = false, Trim = true };
         public static readonly EnumField AccountRoleTypeId = new(typeof(AccountRoleType));
         public static readonly BoolField IsEnabled = new();

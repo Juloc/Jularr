@@ -478,6 +478,7 @@ namespace Jularr.Frontend.Framework
             if (field.MaximumLength is { } length && !field.ValueType.IsArray) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
             if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));
+            if (field.IsUsername) input.Attribute("pattern", @"[A-Za-z0-9._\-]{3,32}").Attribute("spellcheck", "false").Attribute("autocapitalize", "off");
             if (field.IsAddress) input.Attribute("inputmode", "url").Attribute("spellcheck", "false").Attribute("autocapitalize", "off");
 
             // Typed fields show an example of their form, an optional one what happens when it stays empty; a password shows only the hint a page names for it.
@@ -512,6 +513,7 @@ namespace Jularr.Frontend.Framework
                 content.Add(help?.Trailing is { } trailing
                     ? new Div(input, trailing).Class("ui-field__control ui-field__control--trailing")
                     : new Div(input).Class("ui-field__control"));
+                if (help?.Note is { } note) content.Add(note);
             }
             if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
             if (_error?.Field == field.Name)

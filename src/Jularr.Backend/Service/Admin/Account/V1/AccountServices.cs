@@ -26,6 +26,7 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                 """
                 SELECT
                     account."Id",
+                    account."Username",
                     account."Email",
                     account."DisplayName",
                     account."AccountRoleTypeId",
@@ -61,6 +62,7 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                 """
                 SELECT
                     account."Id",
+                    account."Username",
                     account."Email",
                     account."DisplayName",
                     account."AccountRoleTypeId",

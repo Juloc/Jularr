@@ -14,6 +14,9 @@ namespace Jularr.Backend.Data.Enums.Field
         HttpUrl = 9,
 
         // HTTP or NNTP service address.
-        ServiceUrl = 10
+        ServiceUrl = 10,
+
+        // Letters, digits, dots, underscores and hyphens.
+        Username = 11
     }
 }

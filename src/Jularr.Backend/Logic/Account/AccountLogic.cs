@@ -66,7 +66,7 @@ namespace Jularr.Backend.Logic.Account
             await ctx.RevokeOutdatedAccountSessionsAsync(new AccountParameters(data.Id), ct);
         }
 
-        public static async Task<AccountAuthenticationData> AuthenticatePasswordAsync(this LogicContext ctx, AccountEmailParameters parameters, string password, CancellationToken ct)
+        public static async Task<AccountAuthenticationData> AuthenticatePasswordAsync(this LogicContext ctx, AccountLoginParameters parameters, string password, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -88,7 +88,8 @@ namespace Jularr.Backend.Logic.Account
                 INNER JOIN
                     "AccountPasswords" AS password ON password."AccountId" = account."Id"
                 WHERE
-                    account."Email" = @Email
+                    account."Username" = @Login
+                    OR account."Email" = @Login
                 FOR UPDATE OF
                     account, password;
                 """;
@@ -146,10 +147,10 @@ namespace Jularr.Backend.Logic.Account
             sql.Statement =
                 """
                 INSERT INTO
-                    "Accounts" ("Email", "DisplayName", "AccountRoleTypeId", "IsEnabled", "EmailVerifiedAt")
+                    "Accounts" ("Username", "Email", "DisplayName", "AccountRoleTypeId", "IsEnabled", "EmailVerifiedAt")
                 VALUES
-                    (@Email, @DisplayName, @AccountRoleTypeId, @IsEnabled, @EmailVerifiedAt)
-                ON CONFLICT ("Email") DO NOTHING
+                    (@Username, @Email, @DisplayName, @AccountRoleTypeId, @IsEnabled, @EmailVerifiedAt)
+                ON CONFLICT DO NOTHING
                 RETURNING
                     "Id";
                 """;
@@ -165,8 +166,10 @@ namespace Jularr.Backend.Logic.Account
             return account.Id;
         }
 
-        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext ctx, string email, string displayName, string password, long uiLocaleId, CancellationToken ct)
+        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext ctx, string username, string displayName, string password, long uiLocaleId, CancellationToken ct)
         {
+            AccountPasswordPolicy.Require(password, "Password");
+
             // Serialize first-run account creation.
             var sql = new SqlStatement();
             sql.Statement =
@@ -199,7 +202,7 @@ namespace Jularr.Backend.Logic.Account
             // Reuse canonical account/profile writes.
             await ctx.EnableInitialUiLocaleAsync(uiLocaleId, ct);
             await ctx.SetInitialInstanceLocaleAsync(uiLocaleId, ct);
-            var data = new AccountCreationData(email, displayName, true, null, AccountRoleType.Owner);
+            var data = new AccountCreationData(username, null, displayName, true, null, AccountRoleType.Owner);
             var id = await ctx.CreateAccountAsync(data, uiLocaleId, ct)
                 ?? throw new SecurityException("Initial Owner creation is unavailable.");
             var account = new AccountAuthenticationData(id, 1, null, true, false);
@@ -227,13 +230,32 @@ namespace Jularr.Backend.Logic.Account
 
         public static async Task CreateRegistrationRequestAsync(this LogicContext ctx, AccountCreationData data, string password, long uiLocaleId, CancellationToken ct)
         {
+            AccountPasswordPolicy.Require(password, "Password");
+
             // Hash before account creation.
             var hash = PasswordHasher.HashPassword(MissingAccount, password);
-            var accountId = await ctx.CreateAccountAsync(data, uiLocaleId, ct);
+            var accountId = await ctx.CreateAccountAsync(data, uiLocaleId, ct)
+                ?? throw new DataValidationException("Username", "username_taken");
 
-            if (accountId is { } id)
+            await ctx.WritePasswordAsync(new AccountPasswordData(accountId, hash), ct);
+        }
+
+        // A free username from a name that may hold other characters (a Plex name): usable characters only, 3 to 32 of them, a number added when taken.
+        public static async Task<string> UniqueUsernameAsync(this LogicContext ctx, string seed, CancellationToken ct)
+        {
+            var cleaned = new string([.. seed.Select(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' ? character : '_')]).Trim('_');
+            if (cleaned.Length < 3) cleaned = (cleaned + "user").PadRight(3, '_');
+            cleaned = cleaned[..Math.Min(cleaned.Length, 28)];
+            for (var number = 1; ; number++)
             {
-                await ctx.WritePasswordAsync(new AccountPasswordData(id, hash), ct);
+                var candidate = number == 1 ? cleaned : cleaned + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var sql = new SqlStatement();
+                sql.Statement = """SELECT EXISTS (SELECT 1 FROM "Accounts" WHERE "Username" = @Username);""";
+                sql.Parameters.Add(new AccountUsernameParameters(candidate));
+                if (!(bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!)
+                {
+                    return candidate;
+                }
             }
         }
 

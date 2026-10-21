@@ -120,7 +120,7 @@ namespace Jularr.Backend.Tests
             using var folder = new LibraryTests.TemporaryDirectory();
             var cs = TestPostgres.ResolveConnectionString(nameof(Upgrade_ExistingAccountsAndMissingKeyRing_AbortsBeforeSchemaChanges));
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
-            await ExecuteAsync(cs, "INSERT INTO \"Accounts\" (\"Id\", \"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES (41, 'keys@example.test', 'Keys Owner', 1);");
+            await ExecuteAsync(cs, "INSERT INTO \"Accounts\" (\"Id\", \"Username\", \"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES (41, 'keys_owner', 'keys@example.test', 'Keys Owner', 1);");
             var options = new BackupOptions { Path = folder.Path, KeyDirectory = Path.Combine(folder.Path, "missing-keys") };
             var next = new DatabaseBaseline(cs, options, migrations: [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
             var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => next.StartAsync(CancellationToken.None));
@@ -160,7 +160,7 @@ namespace Jularr.Backend.Tests
                 """
                 BEGIN;
                 UPDATE "InstanceSettings" SET "Name" = 'Release N';
-                INSERT INTO "Accounts" ("Id", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'upgrade@example.test', 'Upgrade Owner', 1);
+                INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId") VALUES (41, 'upgrade_owner', 'upgrade@example.test', 'Upgrade Owner', 1);
                 INSERT INTO "AccountPasswords" ("AccountId", "PasswordHash") VALUES (41, 'isolated-opaque-password-hash');
                 INSERT INTO "Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId") VALUES (101, 41, 'Upgrade Profile', 1);
                 INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 101);

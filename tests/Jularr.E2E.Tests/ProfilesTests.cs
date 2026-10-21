@@ -6,8 +6,8 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class ProfilesTests
     {
-        private const string Email = "viewer@example.test";
-        private const string Password = "e2e-viewer-password-123";
+        private const string Username = "viewer_e2e";
+        private const string Password = "E2e-Viewer-Password-123!";
 
         [TestMethod]
         [Timeout(600_000)]
@@ -47,23 +47,23 @@ namespace Jularr.E2E.Tests
                 await visitor.GotoAsync("/Account/Login");
                 await visitor.GetByRole(AriaRole.Link, new() { Name = "Request access" }).ClickAsync();
                 var form = Steps.FormWith(visitor, "Create account & request access");
-                await form.Locator("[name=Email]").FillAsync(Email);
+                await form.Locator("[name=Username]").FillAsync(Username);
                 await form.Locator("[name=Password]").FillAsync(Password);
                 await form.Locator("[name=PasswordConfirmation]").FillAsync(Password + "-typo");
                 await form.Locator("button[type=submit]").ClickAsync();
                 await Assertions.Expect(visitor.Locator("main [role=alert]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
                 Assert.AreEqual("", await form.Locator("[name=Password]").InputValueAsync());
-                Assert.AreEqual(Email, await form.Locator("[name=Email]").InputValueAsync());
+                Assert.AreEqual(Username, await form.Locator("[name=Username]").InputValueAsync());
                 await form.Locator("[name=Password]").FillAsync(Password);
                 await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
                 await Steps.SubmitAsync(visitor, form);
                 await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync("waiting for an administrator to approve it");
-                await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync(Email);
+                await Assertions.Expect(visitor.Locator("main [role=status]")).ToContainTextAsync(Username);
                 await SignInAsync(visitor);
                 Assert.IsTrue(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "A pending account signed in.");
 
                 await page.GotoAsync("/Admin/Accounts");
-                await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
+                await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = Username }).GetByRole(AriaRole.Link, new() { Name = "Edit" }));
                 var account = page.Locator("main form", new() { Has = page.Locator("[name=IsEnabled]") });
                 await account.Locator("[name=IsEnabled]").SelectOptionAsync("True");
                 await Steps.SubmitAsync(page, account);
@@ -110,7 +110,7 @@ namespace Jularr.E2E.Tests
         private static async Task SignInAsync(IPage page)
         {
             await page.GotoAsync("/Account/Login");
-            await page.FillAsync("[name=Email]", Email);
+            await page.FillAsync("[name=Username]", Username);
             await page.FillAsync("[name=Password]", Password);
             await page.Locator("form button[type=submit]").First.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);

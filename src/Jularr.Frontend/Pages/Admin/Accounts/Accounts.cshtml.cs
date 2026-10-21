@@ -52,6 +52,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                 if (_accounts is not null)
                 {
                     split.Primary.Add(new Table<AccountDetailsV1>(_accounts.Items)
+                        .Text(item => item.Username, "account.field.username")
                         .Text(item => item.DisplayName, "admin.accounts.name")
                         .Text(item => item.Email, "account.field.email")
                         .Resource(item => item.AccountRoleTypeId, "admin.accounts.role", RoleKey)
@@ -63,7 +64,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
 
                 if (_selected is not null)
                 {
-                    split.Secondary.Add(new P(new ValueText(_selected.Email)));
+                    split.Secondary.Add(new P(new ValueText(_selected.Email is { Length: > 0 } email ? _selected.Username + " · " + email : _selected.Username)));
                     var roles = Enum.GetValues<AccountRoleType>().Select(role => new SelectOption(((byte)role).ToString(CultureInfo.InvariantCulture), texts[RoleKey(role)]));
                     var states = new[] { new SelectOption("True", texts["admin.accounts.enabled"]), new SelectOption("False", texts["admin.accounts.disabled"]) };
                     split.Secondary.Add(new Form<UpdateAccountDataV1>(form =>

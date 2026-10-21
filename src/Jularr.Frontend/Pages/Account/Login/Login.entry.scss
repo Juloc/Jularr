@@ -205,6 +205,8 @@ html:not([data-skin="original"]) body:has(.login-card) {
     strong { font-size: 12px; line-height: 1.2; }
     small { color: var(--muted); font-size: 10px; line-height: 1.55; }
 }
+// The rule for a field's value, under the field.
+.auth-field-note { margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
 .auth-back {
     display: flex;
     align-items: center;

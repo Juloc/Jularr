@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
                 locale.IsMachineTranslated ? string.Format(CultureInfo.CurrentCulture, texts["setup.locale.machine"], locale.Name) : locale.Name));
             page.Content.Add(new UiSection("setup.owner.title", [new Form<CreateOwnerDataV1>(form =>
             {
-                form.Text(item => item.Email, "account.field.email", "username");
+                form.Text(item => item.Username, "account.field.username", "username");
                 form.Text(item => item.DisplayName, "admin.accounts.name", "nickname");
                 form.Password(item => item.Password, "account.field.password", "new-password");
                 form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password", new FieldHelp(Info: ""));
@@ -62,10 +62,10 @@ namespace Jularr.Frontend.Pages.Setup.Start
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? email, string? displayName, string? password, string? passwordConfirmation, long uiLocaleId)
+        public async Task<IActionResult> OnPostAsync(string? username, string? displayName, string? password, string? passwordConfirmation, long uiLocaleId)
         {
             // Invoke the canonical bootstrap service.
-            _input = new CreateOwnerDataV1(email ?? "", displayName ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId);
+            _input = new CreateOwnerDataV1(username ?? "", displayName ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId);
             var result = await createOwner.ExecuteAsync<LoginResultV1>(_input, HttpContext.RequestAborted);
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
 

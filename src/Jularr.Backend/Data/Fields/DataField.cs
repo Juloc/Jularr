@@ -159,6 +159,7 @@ namespace Jularr.Backend.Data.Fields
 
     public sealed class StringField : DataField
     {
+        private static readonly Regex UsernamePattern = new("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant);
         private static readonly Regex MacAddressPattern = new("^([0-9A-F]{2}:){5}[0-9A-F]{2}$", RegexOptions.CultureInvariant);
         private static readonly FrozenDictionary<string, string> LocaleNames = CultureInfo.GetCultures(CultureTypes.AllCultures)
             .Where(culture => culture.Name.Length > 0).GroupBy(culture => culture.Name, StringComparer.OrdinalIgnoreCase)
@@ -277,6 +278,11 @@ namespace Jularr.Backend.Data.Fields
             if (maximumLength is { } limit && length > limit)
             {
                 throw new DataValidationException(name, "too_long");
+            }
+
+            if (Format == StringFormat.Username && !UsernamePattern.IsMatch(text))
+            {
+                throw new DataValidationException(name, "invalid_username");
             }
 
             if (Format == StringFormat.Email
