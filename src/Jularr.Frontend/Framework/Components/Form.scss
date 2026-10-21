@@ -33,39 +33,56 @@
     &__control {
         min-width: 0;
         margin: 0;
-        padding: 0 14px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-control);
-        // White on the page, the soft lavender inside a card.
-        background: var(--surface);
+        padding: 0 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-field);
+        // The mockups' fields are the soft lavender on any ground.
+        background: var(--field);
     }
-    :is(.ui-section, .ui-form__section, .ui-panel) &__control { background: var(--field); }
-    &__control > legend {
+    // The label sits above the field, like the mockups' `.field label`: 11px/770; its (i) follows it.
+    &__top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
         max-width: 100%;
-        padding: 0 6px;
+        margin: 0;
+        padding: 0;
         color: var(--text);
-        font-weight: var(--weight-control);
+        font-weight: 770;
         font-size: var(--text-control);
         line-height: 1.3;
         overflow-wrap: anywhere;
     }
+    // A group of choices is named by its legend, which stays the first thing of the group.
+    &__group {
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+
+        & > legend { float: left; width: 100%; margin: 0 0 6px; padding: 0; }
+        & > legend + * { clear: both; }
+    }
+    &:has([aria-invalid="true"]) &__top { color: var(--danger); }
 
     &__control > :is(input, select, textarea),
     &__control > .ui-range > input,
     &__control > .ui-form__size > :is(input, select) {
         width: 100%;
-        min-height: var(--control-height);
-        padding: 6px 6px;
+        min-height: calc(var(--field-height) - 2px);
+        padding: 0 6px;
         border: 0;
-        border-radius: var(--radius-control);
+        border-radius: var(--radius-field);
         background: transparent;
         color: var(--text);
+        font-size: var(--text-body);
 
-        &:disabled { opacity: .75; }
+        &:disabled { opacity: .4; }
         &:focus-visible { outline: none; }
     }
 
-    &__control > textarea { border-radius: var(--radius-inner); resize: vertical; }
+    &__control > textarea { padding-block: 10px; border-radius: var(--radius-inner); resize: vertical; }
     &__control > .ui-range > input {
         appearance: none;
         padding: 0;
@@ -84,10 +101,8 @@
     }
     &__control > .ui-range > input:disabled { cursor: not-allowed; }
     &__control:has(textarea) { border-radius: var(--radius-inner); }
-    &__control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
-    &__control:focus-within > legend { color: var(--accent-text); }
+    &__control:focus-within { border-color: var(--accent-outline); }
     &__control:has([aria-invalid="true"]) { border-color: var(--danger); }
-    &__control:has([aria-invalid="true"]) > legend { color: var(--danger); }
 
     &__control > :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
 
@@ -139,8 +154,7 @@
     gap: 10px;
     output { min-width: 4ch; color: var(--muted); text-align: end; font-size: var(--text-control); font-variant-numeric: tabular-nums; }
 }
-.ui-field__control--segmented { padding: 2px 4px 4px; }
-.ui-field__control--segmented > legend { margin-left: 10px; }
+.ui-field__control--segmented { padding: 4px; }
 .ui-segments { display: flex; gap: 4px; }
 .ui-segment {
     position: relative;
@@ -161,21 +175,21 @@
         flex: 1;
         align-items: center;
         justify-content: center;
-        min-height: calc(var(--control-height) - 4px);
+        min-height: calc(var(--field-height) - 10px);
         padding: 0 12px;
         border: 1px solid transparent;
         border-radius: var(--radius-control);
-        color: var(--text);
+        color: var(--muted);
         font-size: var(--text-control);
-        font-weight: var(--weight-control);
+        font-weight: 760;
         text-align: center;
     }
 
-    & > input:checked + span { background: var(--accent-soft); border-color: var(--accent-outline); color: var(--accent-text); }
-    & > input:hover:not(:checked, :disabled) + span { background: var(--surface-hover); }
+    & > input:checked + span { background: var(--accent-soft); border-color: var(--accent-edge); color: var(--accent-text); }
+    & > input:hover:not(:checked, :disabled) + span { background: var(--surface); color: var(--accent-text); }
     & > input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -2px; }
-    & > input:disabled { cursor: not-allowed; }
-    & > input:disabled + span { opacity: .75; }
+    & > input:disabled { cursor: default; }
+    & > input:disabled + span { opacity: .4; }
 }
 // A titled panel of fields inside one form.
 .ui-form__section {
@@ -208,7 +222,7 @@
 
     table { border-collapse: collapse; }
     th, td { padding: 6px 14px; text-align: center; }
-    thead th { color: var(--muted); font-size: var(--text-small); font-weight: 700; }
+    thead th { color: var(--muted); font-size: var(--text-small); font-weight: 810; letter-spacing: .65px; text-transform: uppercase; }
     tbody th { text-align: left; font-weight: 600; }
     tbody tr + tr { border-top: 1px solid var(--border); }
     input { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -218,7 +232,7 @@ fieldset.ui-field {
     padding: 0;
     border: 0;
 
-    & > legend { padding: 0; margin-bottom: 6px; font-weight: var(--weight-control); font-size: var(--text-control); }
+    & > legend { padding: 0; margin-bottom: 6px; font-weight: 770; font-size: var(--text-control); }
 }
 .ui-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; }
 .field-error { margin: 0; color: var(--danger); font-size: var(--text-control); }
@@ -227,6 +241,7 @@ fieldset.ui-field {
     align-items: center;
     gap: 10px;
     color: var(--text);
+    font-size: var(--text-body);
 
     & input { accent-color: var(--accent); width: 17px; height: 17px; }
 }

@@ -22,15 +22,15 @@
             padding: 9px 13px;
             border: 1px solid var(--border);
             border-radius: var(--radius-control);
-            background: var(--tint, var(--surface));
+            background: var(--surface);
             color: var(--muted);
-            font-size: 11px;
-            font-weight: 710;
-            line-height: 1.35;
+            font-size: var(--text-control);
+            font-weight: 760;
+            line-height: 1.2;
         }
 
-        &:hover span { border-color: var(--accent-line); color: var(--text); }
-        input:checked + span { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+        &:hover span { border-color: var(--accent-outline); color: var(--accent-text); }
+        input:checked + span { border-color: var(--accent-edge); background: var(--accent-soft); color: var(--accent-text); }
         input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
     }
 
@@ -44,7 +44,7 @@
         min-height: 34px;
         padding: 3px 0;
         cursor: pointer;
-        font-size: 12px;
+        font-size: var(--text-body);
 
         input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
     }
@@ -54,7 +54,7 @@
         margin: 12px 0;
         padding: 14px 14px 12px;
         border: 1px solid var(--border);
-        border-radius: 20px;
+        border-radius: var(--radius-panel);
         background: var(--surface);
 
         .choice-group__heading { margin-bottom: 9px; }

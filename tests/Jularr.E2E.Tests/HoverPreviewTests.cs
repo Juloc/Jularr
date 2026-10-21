@@ -81,8 +81,10 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(mute).ToHaveAttributeAsync("aria-label", "Mute trailer");
                 await toggle.ClickAsync();
                 await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-label", "Play trailer");
-                var commands = await page.Frames.Single(item => item.Url.Contains("youtube-nocookie", StringComparison.Ordinal)).EvaluateAsync<string[]>("() => window.commands");
-                CollectionAssert.AreEqual(new[] { "unMute", "pauseVideo" }, commands);
+                var provider = page.Frames.Single(item => item.Url.Contains("youtube-nocookie", StringComparison.Ordinal));
+                await provider.WaitForFunctionAsync("() => window.commands.length >= 2");
+                var commands = await provider.EvaluateAsync<string[]>("() => window.commands");
+                Assert.AreEqual("unMute,pauseVideo", string.Join(",", commands));
                 await Assertions.Expect(panel.Locator(".media-card__preview-details")).ToHaveAttributeAsync("href", new System.Text.RegularExpressions.Regex("/Details/9101$"));
                 await Assertions.Expect(panel.Locator(".media-card__preview-extra form, .media-card__preview-extra a, .media-card__preview-extra button").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "hover-preview-trailer");

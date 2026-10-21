@@ -22,7 +22,9 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#17161e" />
     <title>@title · @T.InstanceName</title>
-    <link rel="icon" type="image/svg+xml" href="@Assets.ImageUrl("Assets/Shared/favicon.svg")" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="@Assets.ImageUrl("Assets/Shared/favicon.svg")" />
+    <link rel="icon" type="image/png" sizes="32x32" href="@Assets.ImageUrl("Assets/Shared/icon-32.png")" />
+    <link rel="apple-touch-icon" href="@Assets.ImageUrl("Assets/Shared/apple-touch-icon.png")" />
     @Assets.Styles("Assets/Shared/shell.entry.scss")
     @if (!showShell)
     {
@@ -41,6 +43,7 @@
     {
         @Assets.Scripts("Framework/Components/SavePill.entry.ts")
         @Assets.Scripts("Pages/Shared/Breadcrumb.entry.ts")
+        @Assets.Scripts("Pages/Shared/Shell.entry.ts")
         @Assets.Scripts("Framework/Components/LinkMenu.entry.ts")
     }
     @if (!showShell)

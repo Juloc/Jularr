@@ -1364,21 +1364,157 @@
    "Root folder",
    "Stammordner"
   ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Musik auf diesem Gerät"
+  "playback.quality": [
+   "Quality",
+   "Qualität"
   ],
-  "session.audioQuality.Original": [
+  "playback.quality.Automatic": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "playback.quality.Original": [
    "Original",
    "Original"
   ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Hoch (256 kbit/s)"
+  "playback.quality.High": [
+   "High (1080p)",
+   "Hoch (1080p)"
   ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Klein (128 kbit/s)"
+  "playback.quality.Saver": [
+   "Data saver (480p)",
+   "Datensparmodus (480p)"
+  ],
+  "playback.settings.title": [
+   "Playback",
+   "Wiedergabe"
+  ],
+  "playback.audioLanguage": [
+   "Audio language",
+   "Tonsprache"
+  ],
+  "playback.subtitleMode": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "playback.subtitleMode.Off": [
+   "Off",
+   "Aus"
+  ],
+  "playback.subtitleMode.ForcedOnly": [
+   "Forced only",
+   "Nur erzwungene"
+  ],
+  "playback.subtitleMode.Always": [
+   "Always",
+   "Immer"
+  ],
+  "playback.subtitleMode.WhenForeign": [
+   "Only when the audio is foreign",
+   "Nur bei fremder Sprache"
+  ],
+  "playback.subtitleLanguage": [
+   "Subtitle language",
+   "Untertitelsprache"
+  ],
+  "playback.language.file": [
+   "As in the file",
+   "Wie in der Datei"
+  ],
+  "playback.language.profile": [
+   "Profile language",
+   "Sprache des Profils"
+  ],
+  "playback.speed": [
+   "Speed",
+   "Geschwindigkeit"
+  ],
+  "playback.autoplayNext": [
+   "Play the next episode automatically",
+   "Nächste Folge automatisch abspielen"
+  ],
+  "player.next.countdown": [
+   "Next episode in {0}",
+   "Nächste Folge in {0}"
+  ],
+  "player.next.play": [
+   "Play now",
+   "Jetzt abspielen"
+  ],
+  "player.next.cancel": [
+   "Cancel",
+   "Abbrechen"
+  ],
+  "progress.watched": [
+   "Watched",
+   "Gesehen"
+  ],
+  "progress.read": [
+   "Read",
+   "Gelesen"
+  ],
+  "progress.started": [
+   "In progress",
+   "Begonnen"
+  ],
+  "progress.markWatched": [
+   "Mark watched",
+   "Als gesehen markieren"
+  ],
+  "progress.markUnwatched": [
+   "Mark unwatched",
+   "Als ungesehen markieren"
+  ],
+  "progress.markRead": [
+   "Mark read",
+   "Als gelesen markieren"
+  ],
+  "progress.markUnread": [
+   "Mark unread",
+   "Als ungelesen markieren"
+  ],
+  "progress.startOver": [
+   "Start over",
+   "Von vorn beginnen"
+  ],
+  "progress.series.markWatched": [
+   "Mark series watched",
+   "Serie als gesehen markieren"
+  ],
+  "progress.series.markUnwatched": [
+   "Mark series unwatched",
+   "Serie als ungesehen markieren"
+  ],
+  "progress.series.startOver": [
+   "Start series over",
+   "Serie von vorn beginnen"
+  ],
+  "progress.season.markWatched": [
+   "Mark season watched",
+   "Staffel als gesehen markieren"
+  ],
+  "progress.season.markUnwatched": [
+   "Mark season unwatched",
+   "Staffel als ungesehen markieren"
+  ],
+  "progress.season.startOver": [
+   "Start season over",
+   "Staffel von vorn beginnen"
+  ],
+  "details.watchedCount": [
+   "{0} watched",
+   "{0} gesehen"
+  ],
+  "details.progress": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "hint.AccountSessionFields.PlaybackQuality.info": [
+   "Automatic lets the server choose. Original plays the file as it is when the device can. High and Data saver convert large videos and music on the fly, which saves data on the go.",
+   "Automatisch lässt den Server wählen. Original spielt die Datei unverändert, wenn das Gerät es kann. Hoch und Datensparmodus wandeln große Videos und Musik unterwegs um und sparen so Daten."
+  ],
+  "hint.PlaybackPreferenceFields.SubtitleModeTypeId.info": [
+   "Forced subtitles translate foreign speech within a film. Only when the audio is foreign adds full subtitles while the audio is not in the subtitle language.",
+   "Erzwungene Untertitel übersetzen fremde Sprache mitten im Film. Nur bei fremder Sprache zeigt vollständige Untertitel, wenn der Ton nicht in der Untertitelsprache ist."
   ],
   "takeover.rootFolders": [
    "Root folders",
@@ -1807,10 +1943,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Leer lassen zeigt die Plattform des Geräts als Namen."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Original spielt die Datei unverändert ab. Hoch und Klein wandeln größere Musikdateien unterwegs um und sparen so Daten."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",

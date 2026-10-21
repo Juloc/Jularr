@@ -9,18 +9,20 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-panel);
         background: var(--surface);
+        box-shadow: var(--shadow);
 
         dt {
             color: var(--muted);
             font-size: var(--text-small);
-            font-weight: 700;
+            font-weight: 680;
         }
 
         dd {
             margin: 4px 0 0;
-            font-size: 1.25rem;
-            font-weight: var(--weight-heading);
-            letter-spacing: -.5px;
+            font-size: 20px;
+            font-weight: 840;
+            letter-spacing: -.8px;
+            line-height: 1.15;
         }
     }
 }

@@ -64,7 +64,7 @@ document.addEventListener("htmx:after:swap", refreshControls);
 // Update shared controls.
 document.addEventListener("click", event => {
     if (!(event.target instanceof Element)) return;
-    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode], [data-set-accent], [data-reset-accent]");
+    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode], [data-set-accent], [data-reset-accent], [data-toggle-mode]");
     if (!button) return;
 
     if (button.dataset.setAccent || button.dataset.resetAccent) {
@@ -72,8 +72,11 @@ document.addEventListener("click", event => {
         return;
     }
 
-    const kind = button.dataset.setSkin ? "skin" : "mode";
-    const value = button.dataset.setSkin || button.dataset.setMode;
+    // The header's switch: the other brightness than the one in effect (the device's own when the choice is System).
+    const toggle = button.dataset.toggleMode !== undefined;
+    const dark = root.dataset.mode === "dark" || root.dataset.mode === "system" && systemMode.matches;
+    const kind = !toggle && button.dataset.setSkin ? "skin" : "mode";
+    const value = toggle ? (dark ? "light" : "dark") : button.dataset.setSkin || button.dataset.setMode;
     const allowed = kind === "skin" ? skins : modes;
     if (!value || !allowed.has(value)) return;
 
