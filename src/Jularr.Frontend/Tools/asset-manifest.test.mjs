@@ -105,7 +105,7 @@ test("shared base styles cover forms, tables and capsule navigation on every pag
     for (const selector of [".ui-form", ".ui-field__control>legend", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
         assert.ok(css.includes(selector), selector);
     }
-    assert.doesNotMatch(css, /backdrop-filter|--glass|box-shadow:inset/);
+    assert.doesNotMatch(css, /--glass|box-shadow:inset/);
     assert.match(css, /\.page-screen\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
     assert.match(css, /\.app-main \[id\]\{scroll-margin-top:var\(--shell-header-offset,\s*80px\)/);
     assert.match(css, /\.split\{grid-template-columns:minmax\(0,1fr\)/);
@@ -130,11 +130,11 @@ test("appearance choices wrap at their natural width and search retains an acces
     assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
 
     const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
-    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:var\(--control-height\)/);
-    // Controls are 38px for a mouse and 44px where a finger is the pointer.
-    assert.match(shell, /--control-height:\s*38px/);
+    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:39px/);
+    // Controls are 37px for a mouse and 44px where a finger is the pointer.
+    assert.match(shell, /--control-height:\s*37px/);
     assert.match(shell, /@media\s*\(pointer:\s*coarse\)\{:root\{--control-height:\s*44px/);
-    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent\)/);
+    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent-outline\)/);
 });
 
 test("media shelf snap alignment includes its focus padding without visible scrollbars", () => {

@@ -1,39 +1,32 @@
-// State as a badge with a dot: available in the success tint, requested or in progress in the accent, anything else on the quiet line.
+// The mockups' status pill: a 6px pip and a short word, 10px/780, on a tint of its own colour. The default is the lavender tint
+// (waiting, requested, in progress); available is green; warning, danger and info take the amber, red and blue tints.
 .state-chip {
     display: inline-flex;
     align-items: center;
     align-self: flex-start;
-    gap: 6px;
+    gap: 7px;
     max-width: 100%;
-    padding: 4px 11px;
-    border: 1px solid var(--border);
+    padding: 7px 9px;
     border-radius: var(--radius-control);
-    background: var(--surface);
-    color: var(--text);
+    background: var(--accent-soft);
+    color: var(--accent-text);
     font-size: var(--text-small);
-    font-weight: 700;
+    font-weight: 780;
+    line-height: 1.2;
     overflow-wrap: anywhere;
 
     &::before {
         content: "";
         flex: none;
-        width: 7px;
-        height: 7px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background: currentColor;
     }
 
     &--available,
-    &--known {
-        border-color: var(--success-soft);
-        background: var(--success-soft);
-        color: var(--success);
-    }
-
-    &--requested,
-    &--inprogress {
-        border-color: var(--accent-soft);
-        background: var(--accent-soft);
-        color: var(--accent-text);
-    }
+    &--known { background: var(--success-soft); color: var(--success); }
+    &--warning { background: var(--warning-soft); color: var(--warning); }
+    &--danger { background: var(--danger-soft); color: var(--danger); }
+    &--info { background: var(--info-soft); color: var(--info); }
 }

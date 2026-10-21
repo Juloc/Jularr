@@ -2,19 +2,18 @@
 .filter-dialog {
     position: fixed;
     inset: 0 0 0 auto;
-    width: min(470px, 100vw);
+    width: min(440px, 100vw);
     max-width: 100vw;
     height: 100dvh;
     max-height: 100dvh;
     margin: 0;
     padding: 0;
     border: 0;
-    border-left: 1px solid var(--accent-line);
     background: var(--surface);
     color: var(--text);
-    box-shadow: -15px 0 40px light-dark(rgb(32 19 58 / 14%), rgb(0 0 0 / 45%));
+    box-shadow: var(--shadow-drawer);
 
-    &::backdrop { background: rgb(13 11 26 / 60%); }
+    &::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
 
     form {
         display: flex;
@@ -32,9 +31,9 @@
         padding: 20px 24px;
     }
 
-    &__head { border-bottom: 1px solid var(--accent-line); }
-    &__head h2 { margin: 0; font-size: 20px; }
-    &__foot { border-top: 1px solid var(--accent-line); }
+    &__head { border-bottom: 1px solid var(--border); }
+    &__head h2 { margin: 0; font-size: 22px; letter-spacing: -.6px; }
+    &__foot { border-top: 1px solid var(--border); }
     &__foot .button { flex: 1; }
 
     &__body {
@@ -48,10 +47,10 @@
         margin: 0;
         padding: 14px 0;
         border: 0;
-        border-bottom: 1px solid var(--accent-line);
+        border-bottom: 1px solid var(--border);
 
         &:last-child { border-bottom: 0; }
-        legend { padding: 0; font-size: 12px; font-weight: 750; color: var(--accent-text); }
+        legend { padding: 0; font-size: 13px; font-weight: 800; color: var(--text); }
     }
 
     &__choices {
@@ -67,8 +66,8 @@
         gap: 10px;
         min-height: 40px;
         padding: 6px 8px;
-        border-radius: 10px;
-        font-size: 13px;
+        border-radius: var(--radius-small);
+        font-size: var(--text-body);
         cursor: pointer;
 
         &:hover { background: var(--surface-hover); }
@@ -78,7 +77,6 @@
 
     @media (max-width: 760px) {
         width: 100vw;
-        border-left: 0;
         &__head { padding: 14px 18px; }
         &__body { padding: 8px 18px 18px; }
         &__foot { padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 12px); }
