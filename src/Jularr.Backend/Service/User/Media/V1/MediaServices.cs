@@ -303,7 +303,7 @@ namespace Jularr.Backend.Service.User.Media.V1
     [ServiceEndpoint("GET", "/api/v1/people/{personId:long}/works")]
     public sealed class ReadPersonWorksV1 : UserService<ReadPersonWorksParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<LibraryItemV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadPersonWorksParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadPersonWorksParametersV1 parameters, Type resultType) => new("profile.media.read");
         protected override PageRequest GetPageRequest(ReadPersonWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
@@ -313,29 +313,14 @@ namespace Jularr.Backend.Service.User.Media.V1
             // Everything the profile may see that credits the person, for the Work or one of its units, oldest first.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
-                    work."Id",
-                    work."MediaTypeId",
-                    visible."MediaSubtypeId",
-                    visible."Title" AS "CanonicalTitle",
-                    entry."WorkId" IS NOT NULL AS "IsWatchlisted",
-                    work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl"
+                    {{WorkCardProjection.Columns}},
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    {{WorkCardProjection.Joins}}
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = visible."ProfileId"
                 WHERE
                     visible."ProfileId" = @ProfileId
@@ -359,7 +344,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new PersonParametersV1(Parameters.PersonId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
+            return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
     }
 

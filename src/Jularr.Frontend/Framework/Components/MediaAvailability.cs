@@ -63,7 +63,7 @@ namespace Jularr.Frontend.Framework
             {
                 if (symbol.State == MediaAvailabilityState.Missing) return;
                 var label = symbol.GetLabel(texts);
-                var badgeLabel = texts["media.availability.badge." + symbol.State];
+                var badgeLabel = texts["media.availability.tag." + symbol.State];
                 if (symbol.IsPartial) badgeLabel = string.Format(CultureInfo.CurrentCulture, badgeLabel, symbol.AvailableUnits, symbol.MonitoredUnits);
                 var link = new A(new Span(new CompactSymbol(symbol), new Span(new ValueText(badgeLabel)).Class("media-availability-badge__label"))
                     .Class("media-availability-badge__body"), new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))

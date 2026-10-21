@@ -132,16 +132,16 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new P(new Text("design.mediaNotice")),
                 new MediaShelf(assets, "discover.continueWatching", null, [
-                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress", "media.continue")
-                        .Continue(3000000, 6360000),
-                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.InProgress", "media.continue")
-                        .Continue(900000, 7320000)
+                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg")).Facts(2016, "media.type.Movie", null)
+                        .Resume(ContinueDetail.Left(key => texts[key], 3360000)).Action("media.continue", "/Design#media").Continue(3000000, 6360000),
+                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg")).Facts(2022, "media.type.Movie", null)
+                        .Resume(ContinueDetail.Left(key => texts[key], 6420000)).Action("media.continue", "/Design#media").Continue(900000, 7320000)
                 ]),
                 new MediaShelf(assets, "design.mediaLibrary", null, [
-                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.Available")
+                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg")).Facts(2016, "media.type.Movie", 8.4m)
                         .Preview("preview-your-name-library")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available)),
-                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Available")
+                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg")).Facts(2022, "media.type.Movie", 7.6m)
                         .Preview("preview-suzume-library")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available)),
                     SeriesExample("Continuing", MediaAvailabilityState.Partial, 18, 24),
@@ -151,10 +151,10 @@ namespace Jularr.Frontend.Pages.Development.Design
                     SeriesExample("Announced", MediaAvailabilityState.Downloading)
                 ]),
                 new MediaShelf(assets, "design.mediaDiscover", null, [
-                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create")
+                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg")).Facts(2016, "media.type.Movie", 8.4m).Action("media.request", "/Design#media")
                         .Preview("preview-your-name-discover")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Missing)),
-                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
+                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg")).Facts(2022, "media.type.Movie", 7.6m)
                         .Preview("preview-suzume-discover")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Downloading))
                 ]),
@@ -180,7 +180,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                 var id = "preview-series-" + status;
                 var requestStatus = availability == MediaAvailabilityState.Missing ? "media.state.NotRequested" : "request.status.Approved";
                 AddPreview(id, texts["design.exampleTitle"], "suzume-poster.jpg", texts["design.exampleContext"], requestStatus, availability, "media.series." + status);
-                return new MediaCard(assets, texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), null, "design.exampleStatus")
+                return new MediaCard(assets, texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"))
                     .Preview(id).Availability(new MediaAvailability(assets, availability, available, monitored));
             }
 
@@ -232,9 +232,9 @@ namespace Jularr.Frontend.Pages.Development.Design
             page.Content.Add(new MediaShelf(assets, "design.cards.title", null, [.. examples.Select(example =>
             {
                 var previewId = "card-preview-" + example.State;
-                var card = new MediaCard(assets, "Your Name.", "/Design?pane=cards", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested")
+                var card = new MediaCard(assets, "Your Name.", "/Design?pane=cards", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg")).Facts(2016, "media.type.Movie", 8.4m)
                     .Availability(new MediaAvailability(assets, example.State, example.Available, 24)).Preview(previewId)
-                    .Actions(new Button(new Icon(example.Available > 0 ? "player-play" : "requests", assets),
+                    .Action(new Button(new Icon(example.Available > 0 ? "player-play" : "requests", assets),
                             new Text(example.Watched > 0 ? "media.continue" : example.Available > 0 ? "player.play" : "media.request")).Primary().Compact()
                             .Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full"))
                     .Bookmark(new Button(new Icon("heart", assets)).IconOnly(texts["nav.favorites"]).Attribute("data-design-bookmark", "").Attribute("aria-pressed", "false"));

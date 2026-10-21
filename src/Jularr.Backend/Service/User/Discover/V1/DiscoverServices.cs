@@ -136,7 +136,20 @@ namespace Jularr.Backend.Service.User.Discover.V1
                             WHERE
                                 plex."WorkId" = work."Id"
                                 AND plex."Namespace" = 'plex'
-                        ) AS "PlexUrl"
+                        ) AS "PlexUrl",
+                        (
+                            SELECT
+                                catalogEntry."Rating"
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                                JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
+                            WHERE
+                                identity."WorkId" = work."Id"
+                                AND catalogEntry."Rating" IS NOT NULL
+                            ORDER BY
+                                catalogEntry."Votes" DESC NULLS LAST
+                            LIMIT 1
+                        ) AS "Rating"
                     FROM
                         "ProfileWorks" AS visible
                         JOIN "Works" AS work ON work."Id" = visible."WorkId"
@@ -589,12 +602,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
 
         public static DiscoverItemV1 ToItem(MediaType mediaType, ExternalWorkShelfItemData work) => new(mediaType, int.Parse(work.Value, CultureInfo.InvariantCulture), work.WorkId, work.Title,
-            work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl, work.MediaStateTypeId ?? MediaStateType.NotRequested, work.PlexUrl);
+            work.ReleaseYear, work.Overview, work.ImageUrl, work.BackdropUrl, work.MediaStateTypeId ?? MediaStateType.NotRequested, work.PlexUrl, work.Rating);
 
-        public static DiscoverCatalogItemV1 CatalogItem(ExternalWorkShelfItemData work) => new(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, work.WorkId, work.ImageUrl);
+        public static DiscoverCatalogItemV1 CatalogItem(ExternalWorkShelfItemData work) => new(work.Namespace, work.Value, work.Title, work.ReleaseYear, work.Creator, work.WorkId, work.ImageUrl, work.Rating, work.MediaStateTypeId);
 
         public static DiscoverCatalogItemV1 CatalogItem(MetadataSearchResultV1 result) =>
-            new(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear, result.Author, result.WorkId, result.PosterUrl);
+            new(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear, result.Author, result.WorkId, result.PosterUrl, null, null);
 
         // Films and series are discovered through TMDB; anime series and the other types through their catalogs.
         public static async Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct)
@@ -734,14 +747,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
             var id = int.Parse(work.Value, CultureInfo.InvariantCulture);
             var known = overlay.GetValueOrDefault(id);
             return new DiscoverItemV1(mediaType, id, known?.WorkId, work.Title, work.ReleaseYear, work.Overview, known?.PosterUrl ?? work.ImageUrl, known?.BackdropUrl ?? work.BackdropUrl,
-                known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
+                known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl, work.Rating);
         }
+
+        // TMDB's average vote; nothing while nobody voted.
+        private static decimal? Rating(double? voteAverage) => voteAverage is > 0 and <= 10 ? Math.Round((decimal)voteAverage.Value, 2) : null;
 
         public static DiscoverItemV1 ToItem(MediaType mediaType, TmdbSearchResult result, IReadOnlyDictionary<int, DiscoverOverlayData> overlay)
         {
             var known = overlay.GetValueOrDefault(result.Id);
             return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, TextLimit.Cut(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000),
-                known?.PosterUrl ?? TmdbClient.PosterUrl(result.PosterPath), known?.BackdropUrl ?? TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
+                known?.PosterUrl ?? TmdbClient.PosterUrl(result.PosterPath), known?.BackdropUrl ?? TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl, Rating(result.VoteAverage));
         }
     }
 }

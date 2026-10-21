@@ -25,9 +25,10 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbSearchResult
     {
-        public TmdbSearchResult(int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath)
+        public TmdbSearchResult(int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, double? voteAverage = null)
         {
             BackdropPath = backdropPath;
+            VoteAverage = voteAverage;
             Id = id;
             Title = title;
             OriginalTitle = originalTitle;
@@ -43,6 +44,8 @@ namespace Jularr.Integrations.Data.Tmdb
         public string? Overview { get; }
         public string? PosterPath { get; }
         public string? BackdropPath { get; }
+        // TMDB's average vote on a scale of ten; absent while nobody voted.
+        public double? VoteAverage { get; }
     }
 
     internal sealed class TmdbSeason

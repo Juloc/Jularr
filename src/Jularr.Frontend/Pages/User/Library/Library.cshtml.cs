@@ -36,6 +36,7 @@ namespace Jularr.Frontend.Pages.User.Library
             page.Title("nav.library");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Library/Library.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_items is not { } items)
             {
                 if (!texts.CanReadMedia()) page.Content.Add(new P(new Text("media.notForProfile")).Attribute("role", "status"));
@@ -58,8 +59,7 @@ namespace Jularr.Frontend.Pages.User.Library
             else
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-                page.Content.Add(new Div([.. items.Items.Select(item => new MediaCard(assets, item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
+                page.Content.Add(new Div([.. items.Items.Select(item => MediaCard.For(assets, item)
                     .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid"));
             }
 

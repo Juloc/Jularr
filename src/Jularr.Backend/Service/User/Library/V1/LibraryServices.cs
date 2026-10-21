@@ -104,7 +104,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                     progress."WorkId",
                     asset."Id" AS "MediaAssetId",
                     work."MediaTypeId",
+                    visible."MediaSubtypeId",
                     visible."Title" AS "Title",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
                             fact."Value"

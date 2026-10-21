@@ -123,42 +123,6 @@ namespace Jularr.Backend.Data.User.Media.V1
         public string? Abbreviation { get; }
     }
 
-    // What a poster card in a list shows.
-    public sealed class WorkCardV1 : BaseResponse
-    {
-        public WorkCardV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? posterUrl)
-        {
-            Id = id;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
-            CanonicalTitle = canonicalTitle;
-            IsWatchlisted = isWatchlisted;
-            ReleaseYear = releaseYear;
-            PosterUrl = posterUrl;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
-        public long Id { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
-        public string CanonicalTitle { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
-        public bool IsWatchlisted { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
-        public int? ReleaseYear { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
-        public string? PosterUrl { get; }
-    }
-
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
