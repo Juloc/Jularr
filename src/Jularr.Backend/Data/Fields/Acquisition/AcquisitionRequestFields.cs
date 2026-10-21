@@ -6,6 +6,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
     public static class AcquisitionRequestFields
     {
         public static readonly EnumField RequestTabTypeId = new(typeof(RequestTabType));
+        public static readonly EnumField RequestListFilterTypeId = new(typeof(RequestListFilterType));
+        public static readonly EnumField RequestSortTypeId = new(typeof(RequestSortType));
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly EnumField AcquisitionRequestStatusTypeId = new(typeof(AcquisitionRequestStatusType));
         public static readonly LongField Version = new() { Minimum = 1 };

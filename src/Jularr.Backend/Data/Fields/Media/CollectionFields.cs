@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly BoolField OnlyUnfinished = new();
         public static readonly IntField WorkCount = new() { Minimum = 0, Required = false };
         public static readonly BoolField ContainsWork = new();
+        public static readonly StringArrayField PosterUrls = new() { ItemMaximumLength = 500, MaximumLength = 4 };
         public static readonly LongField Version = new() { Minimum = 1 };
     }
 }

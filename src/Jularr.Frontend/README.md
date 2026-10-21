@@ -30,7 +30,7 @@ referenced inside CSS. Do not add a parallel `/assets/` endpoint.
 
 ## Current frontend
 
-- User: Discover, Library, Details, Watchlist, Requests, Player, Reader and Settings.
+- User: Discover, Library, Details, Favorites, Requests, Player, Reader and Settings.
 - Discover displays local data first, then loads authorized recommendation HTML;
   the native recommendation link and normal browse routes work without JavaScript.
 - MediaCard shares Continue, Library and Discover presentations. Continue uses
@@ -58,9 +58,9 @@ referenced inside CSS. Do not add a parallel `/assets/` endpoint.
   accent controls stored optionally on the device.
   Appearance choices wrap as whole controls on narrow screens; search and color
   inputs use the same 44px minimum control height.
-- Shared tabs remain one scrollable capsule with soft accent selection. Mobile
-  navigation floats above the safe area; the compact rounded Topbar keeps the
-  brand mark and context, with global Search on its own mobile row when authorized.
+- Shared tabs are the mockups' filter row with a soft accent selection. On a phone the
+  sidebar is an off-canvas drawer opened from the header's menu button; the header keeps
+  context, the one global Search, the theme switch, the inbox and the avatar.
 - Original restores Washi paper, blossom framing, ink landscapes and the mascot;
   the shared Hero uses Fuji/mascot artwork only when a real media backdrop is absent.
   Clean remains undecorated. The [original assets](Modules/Appearance/Original/README.md)

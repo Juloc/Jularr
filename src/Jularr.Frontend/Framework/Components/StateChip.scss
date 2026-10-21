@@ -1,47 +1,34 @@
-// State as a chip: available in the success colour, requested or in progress in the accent, a failure in the danger colour, anything else light.
+// The mockups' status pill: a 6px pip and a short word, 10px/780, on a tint of its own colour. The default is the lavender tint
+// (waiting, requested, in progress); available is green; warning, danger and info take the amber, red and blue tints.
 .state-chip {
     display: inline-flex;
     align-items: center;
     align-self: flex-start;
-    gap: 6px;
+    gap: 7px;
     max-width: 100%;
-    padding: 3px 10px;
-    border: 1px solid var(--accent-line);
+    padding: 7px 9px;
     border-radius: var(--radius-control);
-    background: var(--surface);
-    color: var(--text);
-    font-size: 12px;
-    font-weight: 650;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-small);
+    font-weight: 780;
+    line-height: 1.2;
     overflow-wrap: anywhere;
 
     &::before {
         content: "";
         flex: none;
-        width: 7px;
-        height: 7px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background: currentColor;
     }
 
     &--available,
     &--known,
-    &--idle {
-        border-color: color-mix(in srgb, var(--success) 30%, var(--surface));
-        background: color-mix(in srgb, var(--success) 12%, var(--surface));
-        color: var(--success);
-    }
-
-    &--requested,
-    &--inprogress,
-    &--running {
-        border-color: var(--accent-line);
-        background: var(--accent-soft);
-        color: var(--accent-text);
-    }
-
-    &--failed {
-        border-color: color-mix(in srgb, var(--danger) 30%, var(--surface));
-        background: color-mix(in srgb, var(--danger) 10%, var(--surface));
-        color: var(--danger);
-    }
+    &--idle { background: var(--success-soft); color: var(--success); }
+    &--warning { background: var(--warning-soft); color: var(--warning); }
+    &--danger,
+    &--failed { background: var(--danger-soft); color: var(--danger); }
+    &--info { background: var(--info-soft); color: var(--info); }
 }

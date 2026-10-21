@@ -3,8 +3,8 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    min-height: 44px;
-    padding: 8px 6px;
+    min-height: calc(var(--field-height) - 2px);
+    padding: 0 6px;
 
     &__part {
         width: 2.4ch;
@@ -34,10 +34,10 @@
         width: min(100%, 420px);
         margin: 0 auto;
         padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-        border: 1px solid var(--accent-line);
-        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
         background: var(--surface);
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-overlay);
 
         &:popover-open {
             display: grid;

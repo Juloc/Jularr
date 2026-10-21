@@ -4,7 +4,7 @@ using Jularr.Backend.Data.User.Media.V1;
 
 namespace Jularr.Frontend.Framework
 {
-    // Same watchlist form as Details.
+    // Same favorites form as Details.
     public sealed class MediaBookmark(FrontendAssets assets, long workId, bool? isWatchlisted = null, string? returnUrl = null, string? antiforgeryToken = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
@@ -12,12 +12,12 @@ namespace Jularr.Frontend.Framework
             var action = "/Details/" + workId.ToString(CultureInfo.InvariantCulture);
             if (isWatchlisted is not { } watched)
             {
-                new A(new Icon("bookmark", assets)).Class("button button--icon").Attribute("href", action)
-                    .Attribute("aria-label", texts["media.watchlist.manage"]).WriteTo(writer, encoder, texts);
+                new A(new Icon("heart", assets)).Class("button button--icon").Attribute("href", action)
+                    .Attribute("aria-label", texts["media.favorites.manage"]).WriteTo(writer, encoder, texts);
                 return;
             }
 
-            var button = new Button(new Icon("bookmark", assets)).IconOnly(texts[watched ? "media.watchlist.remove" : "media.watchlist.add"]);
+            var button = new Button(new Icon("heart", assets)).IconOnly(texts[watched ? "media.favorites.remove" : "media.favorites.add"]);
             button.Attribute("aria-pressed", watched ? "true" : "false");
             if (returnUrl is not null) action += "?returnUrl=" + Uri.EscapeDataString(returnUrl);
             new Form<UpdateWatchlistDataV1>(form =>

@@ -74,6 +74,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 ORDER BY
                     CASE WHEN @LibrarySortTypeId = 1 THEN available."AddedAt" END DESC NULLS LAST,
                     CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 4 THEN workProgress."ProgressPercent" END DESC NULLS LAST,
                     visible."Title",
                     work."Id"
                 LIMIT @PageSize
@@ -103,7 +104,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                     progress."WorkId",
                     asset."Id" AS "MediaAssetId",
                     work."MediaTypeId",
+                    visible."MediaSubtypeId",
                     visible."Title" AS "Title",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
                             fact."Value"
