@@ -225,7 +225,21 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(settings).ToBeHiddenAsync();
 
             // The native range moves while the current playback continues; only release seeks.
-            await video.EvaluateAsync("video => { video.currentTime = 1; return video.play(); }");
+            // The new source of the quality change pauses a player that does not autoplay when its metadata arrives; play again until that is over.
+            for (var attempt = 0; attempt < 6; attempt++)
+            {
+                try
+                {
+                    await video.EvaluateAsync("video => { video.currentTime = 1; return video.play(); }");
+                    await Task.Delay(600);
+                    if (!await video.EvaluateAsync<bool>("video => video.paused")) break;
+                }
+                catch (PlaywrightException exception) when (exception.Message.Contains("AbortError", StringComparison.Ordinal))
+                {
+                    await Task.Delay(400);
+                }
+            }
+
             var timeline = page.Locator("[data-role=timeline]");
             var track = (await timeline.BoundingBoxAsync())!;
             await page.Mouse.MoveAsync(track.X + track.Width * .1f, track.Y + track.Height / 2);
