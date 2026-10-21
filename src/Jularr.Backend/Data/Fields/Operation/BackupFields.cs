@@ -14,5 +14,6 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly BoolField IsRunning = new();
         public static readonly BoolField CanRestore = new();
         public static readonly BoolField HasRecentAttempt = new();
+        public static readonly BoolField IsForced = new();
     }
 }
