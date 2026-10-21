@@ -167,6 +167,9 @@ class TvController(context: Context) {
     /** The order of the focus inside the content: the rows from top to bottom. */
     val focusOrder = TvFocusOrder()
 
+    /** The entries of the rail, so the content can hand the focus back to the rail. */
+    private val railEntries = mutableMapOf<TvRoute, FocusRequester>()
+
     /** The entry of the content the focus is in. */
     var focusedEntry by mutableStateOf<FocusRequester?>(null)
         private set
@@ -464,31 +467,58 @@ class TvController(context: Context) {
         focusArea = area
     }
 
-    /** The focus moved onto an entry of the content. */
+    /** The focus moved onto an entry of the screen. */
     fun focusMovedTo(entry: FocusRequester?) {
         focusedEntry = entry
     }
 
+    /** The entry of the rail that shows a surface; the content hands the focus back to it. */
+    fun registerRailEntry(target: TvRoute, requester: FocusRequester) {
+        railEntries[target] = requester
+    }
+
     /**
-     * The D-pad moves the focus inside the content: left and right inside the row, up and down
-     * to the row above or below.
+     * The shell stands open. The first surface keeps the focus on the rail, every surface that
+     * is opened afterwards takes the focus into the content.
+     */
+    var shellOpened = false
+
+    /** The entry of the rail the focus returns to. */
+    private fun railEntry(): FocusRequester? =
+        railEntries[route] ?: railEntries[TvRoute.Home]
+
+    /**
+     * The D-pad moves the focus. Left and right walk the reading order of the area, up and down
+     * move between the rows of the area. The edges of an area hand the focus over to the
+     * neighbouring area: the content gives it back to the rail of the current surface.
      */
     fun moveFocus(direction: TvFocusDirection): Boolean {
         val entry = focusedEntry ?: return false
         val next = when (direction) {
-            TvFocusDirection.Left -> focusOrder.moveInside(entry, forward = false)
-            TvFocusDirection.Right -> focusOrder.moveInside(entry, forward = true)
-            TvFocusDirection.Up -> focusOrder.moveToRow(entry, up = true)
-            TvFocusDirection.Down -> focusOrder.moveToRow(entry, up = false)
+            TvFocusDirection.Left -> when (focusArea) {
+                TvFocusArea.Rail -> null
+                TvFocusArea.TopRow -> railEntry()
+                TvFocusArea.Content ->
+                    focusOrder.previousOf(TvFocusArea.Content, entry) ?: railEntry()
+            }
+
+            TvFocusDirection.Right -> when (focusArea) {
+                TvFocusArea.Rail -> focusOrder.firstOf(TvFocusArea.Content)
+                TvFocusArea.TopRow -> null
+                TvFocusArea.Content -> focusOrder.nextOf(TvFocusArea.Content, entry)
+            }
+
+            TvFocusDirection.Up -> when (focusArea) {
+                TvFocusArea.Rail -> focusOrder.previousOf(TvFocusArea.Rail, entry)
+                else -> null
+            }
+
+            TvFocusDirection.Down -> when (focusArea) {
+                TvFocusArea.Rail -> focusOrder.nextOf(TvFocusArea.Rail, entry)
+                else -> null
+            }
         } ?: return false
         next.requestFocus()
-        return true
-    }
-
-    /** The first entry of the content; the D-pad returns here from the top row. */
-    fun focusFirstEntry(): Boolean {
-        val first = focusOrder.firstEntry() ?: return false
-        first.requestFocus()
         return true
     }
 

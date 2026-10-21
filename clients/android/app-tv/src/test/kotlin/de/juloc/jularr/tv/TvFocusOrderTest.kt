@@ -7,67 +7,77 @@ import org.junit.Test
 
 class TvFocusOrderTest {
     @Test
-    fun theEntriesOfARowAreMovedLeftAndRight() {
+    fun theEntriesOfAnAreaAreWalkedInTheOrderOfTheScreen() {
         val order = TvFocusOrder()
         val first = FocusRequester()
         val second = FocusRequester()
-        order.register("row", first)
-        order.register("row", second)
+        val third = FocusRequester()
+        order.register(TvFocusArea.Content, first)
+        order.register(TvFocusArea.Content, second)
+        order.register(TvFocusArea.Content, third)
 
-        assertEquals(second, order.moveInside(first, forward = true))
-        assertEquals(first, order.moveInside(second, forward = false))
+        assertEquals(second, order.nextOf(TvFocusArea.Content, first))
+        assertEquals(third, order.nextOf(TvFocusArea.Content, second))
+        assertEquals(second, order.previousOf(TvFocusArea.Content, third))
+        assertEquals(first, order.previousOf(TvFocusArea.Content, second))
     }
 
     @Test
-    fun theEdgeOfARowHasNoNeighbour() {
+    fun theEdgeOfAnAreaHasNoNeighbour() {
         val order = TvFocusOrder()
         val first = FocusRequester()
-        order.register("row", first)
+        order.register(TvFocusArea.Content, first)
 
-        assertNull(order.moveInside(first, forward = true))
-        assertNull(order.moveInside(first, forward = false))
+        assertNull(order.nextOf(TvFocusArea.Content, first))
+        assertNull(order.previousOf(TvFocusArea.Content, first))
     }
 
     @Test
-    fun theFocusGoesToTheRowAboveAndBelow() {
+    fun everyAreaKeepsItsOwnChain() {
         val order = TvFocusOrder()
-        val upper = FocusRequester()
-        val lower = FocusRequester()
-        order.register("upper", upper)
-        order.register("lower", lower)
+        val rail = FocusRequester()
+        val content = FocusRequester()
+        order.register(TvFocusArea.Rail, rail)
+        order.register(TvFocusArea.Content, content)
 
-        assertEquals(lower, order.moveToRow(upper, up = false))
-        assertEquals(upper, order.moveToRow(lower, up = true))
-    }
-
-    @Test
-    fun theFirstRowHasNoRowAbove() {
-        val order = TvFocusOrder()
-        val upper = FocusRequester()
-        order.register("upper", upper)
-
-        assertNull(order.moveToRow(upper, up = true))
+        assertNull(order.nextOf(TvFocusArea.Rail, rail))
+        assertNull(order.previousOf(TvFocusArea.Content, content))
+        assertEquals(content, order.firstOf(TvFocusArea.Content))
+        assertEquals(rail, order.firstOf(TvFocusArea.Rail))
     }
 
     @Test
     fun anEntryThatLeftTheScreenIsForgotten() {
         val order = TvFocusOrder()
-        val entry = FocusRequester()
-        order.register("row", entry)
-        order.unregister("row", entry)
+        val first = FocusRequester()
+        val second = FocusRequester()
+        order.register(TvFocusArea.Content, first)
+        order.register(TvFocusArea.Content, second)
 
-        assertNull(order.moveInside(entry, forward = true))
-        assertNull(order.where(entry))
+        order.unregister(TvFocusArea.Content, first)
+
+        assertNull(order.nextOf(TvFocusArea.Content, first))
+        assertNull(order.previousOf(TvFocusArea.Content, second))
+        assertEquals(1, order.size)
     }
 
     @Test
-    fun theOrderForgetsEveryRowWhenTheScreenChanges() {
+    fun theOrderForgetsEveryEntryWhenTheScreenChanges() {
         val order = TvFocusOrder()
-        val entry = FocusRequester()
-        order.register("row", entry)
+        val first = FocusRequester()
+        order.register(TvFocusArea.Content, first)
 
         order.clear()
 
-        assertNull(order.where(entry))
+        assertNull(order.nextOf(TvFocusArea.Content, first))
+        assertEquals(0, order.size)
+    }
+
+    @Test
+    fun anEntryWithoutAFocusHasNoNeighbour() {
+        val order = TvFocusOrder()
+
+        assertNull(order.nextOf(TvFocusArea.Content, null))
+        assertNull(order.previousOf(TvFocusArea.Content, null))
     }
 }

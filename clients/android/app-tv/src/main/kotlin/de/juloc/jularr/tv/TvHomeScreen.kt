@@ -131,16 +131,8 @@ private fun TvAreaCapsule(
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     var focused by remember { mutableStateOf(false) }
-    val requester = remember { FocusRequester() }
+    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "capsule-$title")
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
-
-    // The capsules are the first row of the content.
-    LaunchedEffect(requester) {
-        controller.focusOrder.register("capsule", requester)
-    }
-    DisposableEffect(requester) {
-        onDispose { controller.focusOrder.unregister("capsule", requester) }
-    }
 
     Row(
         modifier = Modifier
@@ -153,6 +145,8 @@ private fun TvAreaCapsule(
                 if (it) {
                     controller.focusMovedTo(TvFocusArea.Content)
                     controller.focusMovedTo(requester)
+                } else if (controller.focusedEntry == requester) {
+                    controller.focusMovedTo(null)
                 }
             }
             .clickable(
@@ -239,6 +233,13 @@ private fun TvFilterButton(controller: TvController) {
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) { controller.openFilter() }
+            .then(
+                if (focused) {
+                    Modifier.tvFocusRing(true, colors.focus, shape)
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }
@@ -388,17 +389,9 @@ fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
     val type = LocalTvType.current
     var focused by remember { mutableStateOf(false) }
     var actionFocused by remember { mutableStateOf(false) }
-    val requester = remember { FocusRequester() }
+    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "card-$rowKey-${card.id}")
     val shape = RoundedCornerShape(TvLayout.CardRadius)
     val showActions = focused || actionFocused
-
-    // The card belongs to a row of the reading order.
-    LaunchedEffect(rowKey, requester) {
-        controller.focusOrder.register(rowKey, requester)
-    }
-    DisposableEffect(rowKey, requester) {
-        onDispose { controller.focusOrder.unregister(rowKey, requester) }
-    }
 
     Column(
         modifier = Modifier
@@ -411,6 +404,9 @@ fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
                     controller.focusMovedTo(requester)
                 } else {
                     actionFocused = false
+                    if (controller.focusedEntry == requester) {
+                        controller.focusMovedTo(null)
+                    }
                 }
             }
             .clickable(
@@ -526,15 +522,9 @@ private fun BoxScope.TvCardAction(
     type: TvType,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val requester = remember { FocusRequester() }
+    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "action-$rowKey-${card.id}")
     val shape = RoundedCornerShape(999.dp)
     val playable = card.mediaAssetId != null
-    LaunchedEffect(requester) {
-        controller.focusOrder.register(rowKey, requester)
-    }
-    DisposableEffect(requester) {
-        onDispose { controller.focusOrder.unregister(rowKey, requester) }
-    }
     Box(
         modifier = Modifier
             .align(Alignment.Center)
@@ -543,7 +533,15 @@ private fun BoxScope.TvCardAction(
             .background(if (focused) colors.accent else colors.background.copy(alpha = 0.72f))
             .border(1.dp, colors.border, shape)
             .focusRequester(requester)
-            .reportFocus { focused = it }
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.Content)
+                    controller.focusMovedTo(requester)
+                } else if (controller.focusedEntry == requester) {
+                    controller.focusMovedTo(null)
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -602,14 +600,8 @@ private fun TvCardAction(
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val requester = remember { FocusRequester() }
+    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "label-$rowKey-$title")
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
-    LaunchedEffect(requester) {
-        controller.focusOrder.register(rowKey, requester)
-    }
-    DisposableEffect(requester) {
-        onDispose { controller.focusOrder.unregister(rowKey, requester) }
-    }
     Text(
         text = title,
         fontSize = type.cardMeta,
@@ -618,7 +610,15 @@ private fun TvCardAction(
         maxLines = 1,
         modifier = Modifier
             .focusRequester(requester)
-            .reportFocus { focused = it }
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.Content)
+                    controller.focusMovedTo(requester)
+                } else if (controller.focusedEntry == requester) {
+                    controller.focusMovedTo(null)
+                }
+            }
             .clip(shape)
             .background(if (focused) colors.field else colors.surface, shape)
             .clickable(

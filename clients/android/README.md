@@ -32,7 +32,15 @@ television is fixed in [`docs/mockups/tv/SPEC.md`](../../docs/mockups/tv/SPEC.md
   settings of the app, the top row and the home page with the type capsule and the shelves of
   the profile.
 
-The player, the offline downloads and the speech runtime follow in later pull requests.
+The focus of the television follows the reading order: the rail first, then the top row, then
+the content with its rows from top to bottom and the entries of a row from left to right. Every
+area of the screen keeps its own chain of entries, so left and right walk the order of the area
+instead of searching for the nearest control; up and down move between the rows. The edges of an
+area hand the focus over to the neighbouring area: the content gives it back to the rail of the
+current surface, and the rail hands it to the content.
+
+The speech runtime follows in a later pull request. The phone client with its offline downloads is
+a package of its own: the television plays from the instance and downloads nothing.
 
 ## Baseline
 
