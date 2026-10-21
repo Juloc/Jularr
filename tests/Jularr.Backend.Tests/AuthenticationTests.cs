@@ -195,7 +195,7 @@ namespace Jularr.Backend.Tests
             using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
             Assert.AreEqual(HttpStatusCode.OK, other.StatusCode);
             Assert.AreNotEqual(deviceCookie, host.Cookies[BrowserDevice.CookieName]);
-            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"PlaybackQuality\" FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NULL"));
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"PlaybackQuality\" FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NULL ORDER BY \"CreatedAt\" DESC LIMIT 1"));
         }
 
         [TestMethod]
