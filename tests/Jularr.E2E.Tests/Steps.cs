@@ -230,7 +230,8 @@ namespace Jularr.E2E.Tests
                 if (await card.CountAsync() > 0)
                 {
                     await FollowAsync(page, card.First);
-                    if (await page.GetByRole(AriaRole.Link, new() { Name = action, Exact = true }).CountAsync() > 0)
+                    // The primary action may name the unit it opens ("Read · Volume 1").
+                    if (await page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(action) + "( · .*)?$") }).CountAsync() > 0)
                     {
                         return new Uri(page.Url).PathAndQuery;
                     }
@@ -289,6 +290,7 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, result.First.Locator("form"));
             var details = "/Details/" + new Uri(page.Url).Segments.Last();
             await page.GotoAsync(details);
+            await page.Locator("summary.action-menu__button", new() { HasText = "Request" }).ClickAsync();
             await SubmitAsync(page, FormWith(page, "Request this work"));
             return details;
         }
@@ -296,7 +298,7 @@ namespace Jularr.E2E.Tests
         public static async Task OpenReaderAsync(IPage page, string details)
         {
             await page.GotoAsync(details);
-            await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+            await page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^Read( · .*)?$") }).First.ClickAsync();
         }
 
         // Opens the next section and reads a little in it; the reader saves the position shortly after scrolling.

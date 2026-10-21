@@ -59,6 +59,13 @@
     td .ui-form--inline { gap: 8px; }
 }
 
+// A table inside a page's tab (tracks, versions): rows as high as their content, the mockup's 10px/16px cells.
+.page-table-wrap--compact .page-table {
+    th { padding: 10px 16px; }
+    td { height: auto; padding: 10px 16px; vertical-align: middle; font-size: 12px; }
+    td .state-chip { white-space: nowrap; overflow-wrap: normal; }
+}
+
 @media (max-width: 650px) {
     .page-table th { white-space: normal; }
     .page-table :is(th, td) { padding-inline: 14px; }

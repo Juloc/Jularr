@@ -97,7 +97,7 @@ namespace Jularr.E2E.Tests
                 // Signed out and in again, both continue where they stopped.
                 await Steps.SignOutAndInAsync(page);
                 await page.GotoAsync(filmDetails);
-                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue", Exact = true }));
+                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^Continue") }).First);
                 Assert.IsTrue(resumed >= 4.5, "The film started at " + resumed + " s instead of continuing.");
                 await page.GotoAsync(seriesDetails);
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
@@ -105,19 +105,21 @@ namespace Jularr.E2E.Tests
 
                 // The profile marks what it watched on the details page, for the film and for an episode, and starts the film over from its beginning.
                 await page.GotoAsync(filmDetails);
+                await page.Locator("summary[aria-label='More']").ClickAsync();
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark watched", Exact = true }));
-                await Assertions.Expect(page.Locator(".details-progress .state-chip--watched")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".media-hero__chips .state-chip--success")).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "details-film-watched");
+                await page.Locator("summary[aria-label='More']").ClickAsync();
                 var restarted = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Start over", Exact = true }));
                 Assert.IsTrue(restarted < 1, "The film started at " + restarted + " s instead of at its beginning.");
                 await page.GotoAsync(filmDetails);
-                await Assertions.Expect(page.Locator(".state-chip--watched")).ToHaveCountAsync(0);
-                await page.GotoAsync(seriesDetails);
+                await Assertions.Expect(page.Locator(".media-hero__chips .state-chip--success")).ToHaveCountAsync(0);
+                await page.GotoAsync(seriesDetails + "?tab=episodes");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark watched", Exact = true }).First);
-                await Assertions.Expect(page.Locator(".episode-card .state-chip--watched")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".episode-card .state-chip--success")).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "details-series-watched");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark unwatched", Exact = true }).First);
-                await Assertions.Expect(page.Locator(".state-chip--watched")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".episode-card .state-chip--success")).ToHaveCountAsync(0);
 
                 // On a narrow screen every unit is two lines: the facts of all units of the season slide together while the first line stays, and the columns are a sheet from the bottom.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);

@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             // Persisted metadata of a Work the profile may open.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
                     work."Id",
                     work."MediaTypeId",
@@ -138,10 +138,37 @@ namespace Jularr.Backend.Service.User.Media.V1
                     facts."Genres",
                     facts."TrailerKey",
                     facts."Studio",
+                    acquisition."AvailabilityStateId",
+                    availability."AvailableUnits",
+                    availability."MonitoredUnits",
+                    workProgress."ProgressStateId",
+                    workProgress."ProgressPercent",
+                    catalog."Rating",
+                    catalog."Namespace" AS "RatingSource",
+                    catalog."OriginalTitle",
+                    work."ReleasedOn",
+                    work."OriginalLanguage",
                     CASE WHEN franchise."Id" IS NOT NULL THEN work."FranchisePosition" END AS "FranchisePosition"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    {{WorkCardProjection.Joins}}
+                    LEFT JOIN LATERAL (
+                        -- The catalog entry the title came from: the one with a rating, the best known one first.
+                        SELECT
+                            catalogEntry."Rating",
+                            catalogEntry."Namespace",
+                            catalogEntry."OriginalTitle"
+                        FROM
+                            "WorkExternalIdentities" AS identity
+                            JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
+                        WHERE
+                            identity."WorkId" = work."Id"
+                        ORDER BY
+                            catalogEntry."Rating" IS NOT NULL DESC,
+                            catalogEntry."Votes" DESC NULLS LAST
+                        LIMIT 1
+                    ) AS catalog ON TRUE
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                     LEFT JOIN LATERAL (
                         SELECT
@@ -222,9 +249,25 @@ namespace Jularr.Backend.Service.User.Media.V1
                     ) AS "GroupName",
                     unit."Title" AS "UnitTitle",
                     unit."Id" AS "WorkUnitId",
-                    coalesce(progress."ProgressPositionTypeId" IN (1, 2), FALSE) AS "HasProgress"
+                    coalesce(progress."ProgressPositionTypeId" IN (1, 2), FALSE) AS "HasProgress",
+                    version."WorkEditionId",
+                    gamePlatform."Name" AS "PlatformName",
+                    unit."ImageUrl" AS "UnitImageUrl",
+                    unit."DiscNumber"::integer AS "DiscNumber"
                 FROM
                     "MediaAssets" AS asset
+                    JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            platform."Name"
+                        FROM
+                            "GameReleases" AS release
+                            JOIN "GamePlatforms" AS platform ON platform."Id" = release."GamePlatformId"
+                        WHERE
+                            release."WorkVersionId" = asset."WorkVersionId"
+                            AND asset."MediaAssetTypeId" = 5
+                        LIMIT 1
+                    ) AS gamePlatform ON TRUE
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                     CROSS JOIN LATERAL (
@@ -274,6 +317,53 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new EmulatedPlatformsData(GameRomMatching.EmulatedPlatforms));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkAvailabilityV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/editions")]
+    public sealed class ReadWorkEditionsV1 : UserService<WorkParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WorkEditionV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The editions of the Work with the files of each that are really there.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    edition."Id",
+                    edition."Name",
+                    edition."Title",
+                    edition."LanguageCode",
+                    edition."EditionFormatId",
+                    edition."Publisher",
+                    edition."ReleaseYear"::integer AS "ReleaseYear",
+                    files."FileCount",
+                    files."FileCount" > 0 AS "IsAvailable"
+                FROM
+                    "WorkEditions" AS edition
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            count(file."Id") AS "FileCount"
+                        FROM
+                            "WorkVersions" AS version
+                            JOIN "MediaAssets" AS asset ON asset."WorkVersionId" = version."Id"
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        WHERE
+                            version."WorkEditionId" = edition."Id"
+                    ) AS files
+                WHERE
+                    edition."WorkId" = @WorkId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = edition."WorkId")
+                ORDER BY
+                    edition."Id";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<WorkEditionV1>(await Context.ReadSql.ReadListAsync<WorkEditionV1>(sql, CancellationToken));
         }
     }
 

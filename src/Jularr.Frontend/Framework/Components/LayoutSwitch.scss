@@ -1,0 +1,24 @@
+// The mockups' view switch: a pill of icon links, the chosen one on the lavender tint.
+.layout-switch {
+    display: inline-flex;
+    flex: none;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+
+    &__link {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: var(--control-height-compact);
+        color: var(--muted);
+        text-decoration: none;
+        transition: background-color var(--transition), color var(--transition);
+
+        &:hover { color: var(--accent-text); }
+
+        &--selected,
+        &--selected:hover { background: var(--accent-soft); color: var(--accent-text); }
+    }
+}
