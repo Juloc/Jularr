@@ -33,7 +33,8 @@ namespace Jularr.Backend.Logic.Acquisition
             var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, definition.AllowedQualities,
                 definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes)
             {
-                LanguageOrder = target.RequestedLocales,
+                LanguageOrder = definition.LanguageOrder.Length > 0 ? definition.LanguageOrder : target.RequestedLocales,
+                LanguageFallback = definition.LanguageFallback,
                 IsMovie = target.MediaTypeId == MediaType.Movie,
                 IsBook = target.MediaTypeId == MediaType.Book && target.MediaSubtypeId != MediaSubtype.Manga,
                 Formats = Formats(target.Formats, definition.FormatScores),

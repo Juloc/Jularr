@@ -10635,6 +10635,442 @@
   "jobs.about.health": [
    "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
    "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
+  ],
+  "error.homePage": [
+   "Go to home page",
+   "Zur Startseite"
+  ],
+  "error.page": [
+   "Error",
+   "Fehler"
+  ],
+  "error.reference": [
+   "Reference {0}",
+   "Referenz {0}"
+  ],
+  "error.retry": [
+   "Try again",
+   "Erneut versuchen"
+  ],
+  "error.signIn": [
+   "Sign in",
+   "Anmelden"
+  ],
+  "error.400.title": [
+   "400 Bad Request",
+   "400 Ungültige Anfrage"
+  ],
+  "error.400.text": [
+   "Jularr could not understand this request. Go back and try again.",
+   "Jularr konnte diese Anfrage nicht verstehen. Gehe zurück und versuche es erneut."
+  ],
+  "error.401.title": [
+   "401 Unauthorized",
+   "401 Nicht angemeldet"
+  ],
+  "error.401.text": [
+   "Sign in to open this page.",
+   "Melde dich an, um diese Seite zu öffnen."
+  ],
+  "error.403.title": [
+   "403 Forbidden",
+   "403 Kein Zugriff"
+  ],
+  "error.403.text": [
+   "You do not have permission to open this area.",
+   "Du hast keine Berechtigung, diesen Bereich zu öffnen."
+  ],
+  "error.404.title": [
+   "404 Not Found",
+   "404 Nicht gefunden"
+  ],
+  "error.404.text": [
+   "This page was not found or is not available for this profile.",
+   "Diese Seite wurde nicht gefunden oder ist für dieses Profil nicht verfügbar."
+  ],
+  "error.408.title": [
+   "408 Request Timeout",
+   "408 Zeitüberschreitung"
+  ],
+  "error.408.text": [
+   "The request took too long. Please try again.",
+   "Die Anfrage hat zu lange gedauert. Bitte versuche es erneut."
+  ],
+  "error.410.title": [
+   "410 Gone",
+   "410 Nicht mehr vorhanden"
+  ],
+  "error.410.text": [
+   "The requested content no longer exists or was removed.",
+   "Der angeforderte Inhalt existiert nicht mehr oder wurde entfernt."
+  ],
+  "error.429.title": [
+   "429 Too Many Requests",
+   "429 Zu viele Anfragen"
+  ],
+  "error.429.text": [
+   "Please wait a moment before trying again.",
+   "Bitte warte einen Moment, bevor du es erneut versuchst."
+  ],
+  "error.500.title": [
+   "500 Internal Server Error",
+   "500 Interner Serverfehler"
+  ],
+  "error.500.text": [
+   "Something went wrong while loading. Please try again.",
+   "Beim Laden ist ein interner Fehler aufgetreten. Bitte versuche es erneut."
+  ],
+  "error.502.title": [
+   "502 Bad Gateway",
+   "502 Fehlerhaftes Gateway"
+  ],
+  "error.502.text": [
+   "Jularr could not reach a service it needs. Please try again shortly.",
+   "Jularr konnte einen benötigten Dienst nicht erreichen. Bitte versuche es gleich erneut."
+  ],
+  "error.503.title": [
+   "503 Service Unavailable",
+   "503 Dienst nicht verfügbar"
+  ],
+  "error.503.text": [
+   "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly.",
+   "Jularr ist gerade nicht verfügbar, etwa bei Wartung oder wenn der Speicher offline ist. Bitte versuche es gleich erneut."
+  ],
+  "profile.section.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "profile.languageOrder": [
+   "Languages of the choice, in order (comma separated)",
+   "Sprachen der Auswahl, in Reihenfolge (mit Komma getrennt)"
+  ],
+  "profile.languageFallback": [
+   "Fallback when no file carries an asked language",
+   "Rückfall, wenn keine Datei eine gewünschte Sprache hat"
+  ],
+  "profile.languageFallback.Original": [
+   "Original",
+   "Originalsprache"
+  ],
+  "profile.languageFallback.English": [
+   "English",
+   "Englisch"
+  ],
+  "profile.languageFallback.None": [
+   "No fallback",
+   "Kein Rückfall"
+  ],
+  "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
+   "de, en, ja",
+   "de, en, ja"
+  ],
+  "hint.AcquisitionProfileFields.LanguageOrder.info": [
+   "The languages of the choice, in order. Empty takes the languages the request asks for.",
+   "Die Sprachen der Auswahl, in Reihenfolge. Leer übernimmt die Sprachen der Anfrage."
+  ],
+  "details.tabs": [
+   "Parts of the page",
+   "Bereiche"
+  ],
+  "details.tab.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "details.tab.volumes.manga": [
+   "Volumes & chapters",
+   "Bände & Kapitel"
+  ],
+  "details.tab.volumes.lightNovel": [
+   "Volumes",
+   "Bände"
+  ],
+  "details.tab.volumes.book": [
+   "Parts",
+   "Teile"
+  ],
+  "details.tab.tracks": [
+   "Tracks",
+   "Tracks"
+  ],
+  "details.tab.people": [
+   "People",
+   "Personen"
+  ],
+  "details.tab.similar": [
+   "Similar",
+   "Ähnliches"
+  ],
+  "details.tab.facts": [
+   "Details",
+   "Details"
+  ],
+  "details.tab.versions": [
+   "Versions",
+   "Versionen"
+  ],
+  "details.tab.editions": [
+   "Editions",
+   "Ausgaben"
+  ],
+  "details.tab.files": [
+   "Files",
+   "Dateien"
+  ],
+  "details.people.creators": [
+   "Made by",
+   "Von"
+  ],
+  "details.people.cast": [
+   "Cast",
+   "Besetzung"
+  ],
+  "details.people.crew": [
+   "Crew",
+   "Stab"
+  ],
+  "details.fact.creators": [
+   "Made by",
+   "Von"
+  ],
+  "details.fact.series": [
+   "Series",
+   "Reihe"
+  ],
+  "details.fact.rating": [
+   "Rating",
+   "Bewertung"
+  ],
+  "details.fact.originalTitle": [
+   "Original title",
+   "Originaltitel"
+  ],
+  "details.fact.released": [
+   "Released",
+   "Erscheinung"
+  ],
+  "details.fact.runtime": [
+   "Length",
+   "Laufzeit"
+  ],
+  "details.fact.studio": [
+   "Studio",
+   "Studio"
+  ],
+  "details.fact.structure": [
+   "Structure",
+   "Aufbau"
+  ],
+  "details.fact.platforms": [
+   "Platforms",
+   "Plattformen"
+  ],
+  "details.fact.language": [
+   "Original language",
+   "Originalsprache"
+  ],
+  "details.seasonCount": [
+   "{0} seasons",
+   "{0} Staffeln"
+  ],
+  "details.chapterCount": [
+   "{0} chapters",
+   "{0} Kapitel"
+  ],
+  "details.disc": [
+   "Disc {0}",
+   "Disc {0}"
+  ],
+  "details.track.number": [
+   "No.",
+   "Nr."
+  ],
+  "details.track.title": [
+   "Title",
+   "Titel"
+  ],
+  "details.trailer": [
+   "Trailer",
+   "Trailer"
+  ],
+  "details.request": [
+   "Request",
+   "Anfragen"
+  ],
+  "details.more": [
+   "More",
+   "Mehr"
+  ],
+  "details.manage": [
+   "Manage title",
+   "Titel verwalten"
+  ],
+  "details.version": [
+   "Version",
+   "Version"
+  ],
+  "details.edition": [
+   "Edition",
+   "Ausgabe"
+  ],
+  "details.platform": [
+   "Platform",
+   "Plattform"
+  ],
+  "details.sort": [
+   "Order",
+   "Reihenfolge"
+  ],
+  "details.sort.asc": [
+   "Episode ascending",
+   "Folge aufsteigend"
+  ],
+  "details.sort.desc": [
+   "Episode descending",
+   "Folge absteigend"
+  ],
+  "details.sort.unwatched": [
+   "Unwatched first",
+   "Ungesehene zuerst"
+  ],
+  "details.layout": [
+   "Layout",
+   "Ansicht"
+  ],
+  "details.layout.list": [
+   "List",
+   "Liste"
+  ],
+  "details.layout.cards": [
+   "Cards",
+   "Karten"
+  ],
+  "details.percent": [
+   "{0} %",
+   "{0} %"
+  ],
+  "details.progressEpisodes": [
+   "{0} / {1} episodes",
+   "{0} / {1} Folgen"
+  ],
+  "details.state.unwatched": [
+   "Unwatched",
+   "Ungesehen"
+  ],
+  "details.state.unread": [
+   "Unread",
+   "Ungelesen"
+  ],
+  "details.state.unheard": [
+   "Unheard",
+   "Ungehört"
+  ],
+  "details.state.local": [
+   "Local",
+   "Lokal"
+  ],
+  "details.state.notLocal": [
+   "Not local",
+   "Nicht lokal"
+  ],
+  "details.editionFormat.Print": [
+   "Print",
+   "Print"
+  ],
+  "details.editionFormat.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "details.editionFormat.Audiobook": [
+   "Audiobook",
+   "Hörbuch"
+  ],
+  "details.editionFormat.Comic": [
+   "Comic",
+   "Comic"
+  ],
+  "progress.heard": [
+   "Heard",
+   "Gehört"
+  ],
+  "progress.markHeard": [
+   "Mark heard",
+   "Als gehört markieren"
+  ],
+  "progress.markUnheard": [
+   "Mark unheard",
+   "Als ungehört markieren"
+  ],
+  "settings.tabs": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "settings.tab.instance": [
+   "Instance",
+   "Instanz"
+  ],
+  "settings.tab.modules": [
+   "Modules",
+   "Module"
+  ],
+  "settings.tab.mediaTypes": [
+   "Media types",
+   "Medientypen"
+  ],
+  "settings.tab.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "settings.tab.naming": [
+   "Naming",
+   "Benennung"
+  ],
+  "settings.module.needs": [
+   "Needs",
+   "Benötigt"
+  ],
+  "settings.module.neededBy": [
+   "Needed by",
+   "Benötigt von"
+  ],
+  "settings.instance.general": [
+   "General",
+   "Allgemein"
+  ],
+  "settings.instance.schedules": [
+   "Schedules",
+   "Zeitpläne"
+  ],
+  "settings.instance.history": [
+   "History and caches",
+   "Verlauf und Zwischenspeicher"
+  ],
+  "settings.instance.access": [
+   "Access and security",
+   "Zugriff und Sicherheit"
+  ],
+  "admin.languages.list": [
+   "Interface languages",
+   "Oberflächensprachen"
+  ],
+  "admin.languages.edit": [
+   "Edit language",
+   "Sprache bearbeiten"
+  ],
+  "admin.languages.actions": [
+   "Language actions",
+   "Aktionen für Sprachen"
+  ],
+  "admin.modules.actions": [
+   "Module actions",
+   "Aktionen für Module"
+  ],
+  "library.naming.actions": [
+   "Naming actions",
+   "Aktionen für die Benennung"
+  ],
+  "dock.pageOnly": [
+   "Page {0}",
+   "Seite {0}"
   ]
  }
 }

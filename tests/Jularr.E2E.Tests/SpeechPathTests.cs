@@ -249,7 +249,7 @@ namespace Jularr.E2E.Tests
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
-                await page.GotoAsync("/Admin/Instance");
+                await page.GotoAsync("/Admin/Instance/Modules");
                 await page.GetByRole(AriaRole.Link, new() { Name = "Speech models", Exact = true }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/Admin/Instance/Speech$"));
                 var rows = page.Locator(".page-table tbody tr");

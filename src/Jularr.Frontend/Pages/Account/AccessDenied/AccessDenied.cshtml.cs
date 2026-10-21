@@ -1,19 +1,19 @@
-using Jularr.Backend.Service.Core.Localization;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Account.AccessDenied
 {
+    // Where the cookie scheme sends a signed-in account that lacks a permission: the shared 403 page.
     [AllowAnonymous]
-    public sealed class AccessDeniedModel : JularrPage
+    public sealed class AccessDeniedModel(FrontendAssets assets, UiText texts) : JularrPage
     {
         protected override void Define(Page page)
         {
-            var resourceKey = ServiceErrorResources.GetKey("permission_denied");
-            page.Title(resourceKey);
-            page.Content.Add(new P(new Text(resourceKey)).Attribute("role", "alert"));
-            page.Content.Add(new A(new Text("nav.home")).Attribute("href", "/"));
+            page.Title("error.page", texts["error.403.title"]);
+            page.Asset("Pages/Shared/ErrorState.entry.ts");
+            page.Content.Add(new ErrorState(assets, 403, null, null, null, false));
         }
 
         public IActionResult OnGet()

@@ -1,0 +1,9 @@
+﻿# WireGuard
+[Interface]
+PrivateKey = <geheim>
+Address = 10.14.0.2/32
+DNS = 10.14.0.1
+[Peer]
+PublicKey = <vom Anbieter>
+AllowedIPs = 0.0.0.0/0
+Endpoint = <vom Anbieter>:51820

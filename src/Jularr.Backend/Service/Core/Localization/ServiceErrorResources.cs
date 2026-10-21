@@ -128,6 +128,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.unknown_reference", "The referenced resource is unavailable."),
             new("errors.validation.outdated_version", "The data has changed. Please reload and try again."),
             new("errors.validation.invalid_transition", "This change is not available."),
+            new("errors.validation.module_dependency", "A module needs the modules it builds on, so it cannot be on while one is off, and they stay on while it is."),
             new("errors.validation.invalid_file_type", "This kind of file is not accepted here."),
             new("errors.validation.invalid_value", "This value cannot be used here."),
             new("errors.validation.unknown_language", "Use two-letter language codes such as de or en."),
