@@ -1,31 +1,72 @@
-// Shared skin tokens.
+// Shared skin tokens: the design language of the owner's mockups (20 Oct). The colours below are the defaults before the palette
+// script derives the same names from the accent (Palette.ts); radii, type, controls, status and shadows are fixed here.
 :root {
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
     color-scheme: light;
-    --background: light-dark(#fff, #141319);
-    --surface: light-dark(#fff, #1d1b24);
-    --surface-hover: color-mix(in srgb, var(--accent) 7%, var(--surface));
-    --field: light-dark(#faf9fc, #19171f);
-    --border: light-dark(#dedbe7, #393441);
-    --text: light-dark(#25202f, #f4f0f8);
-    --muted: light-dark(#696174, #b2aaba);
-    --accent: #7c3aed;
-    --accent-contrast: #fff;
-    --accent-text: light-dark(#7041c9, #bea2ff);
-    --accent-hover: #692aca;
-    --danger: light-dark(#b12b3c, #ff9aa7);
-    --success: light-dark(#1d7a4c, #7fe0a9);
-    --shadow: 0 2px 8px light-dark(rgb(32 19 58 / 4%), rgb(0 0 0 / 14%));
-    --radius-control: 999px;
-    --radius-panel: 12px;
+
+    // Surfaces: a white page with a lavender breath, white panels, soft lavender fields and hover.
+    --background: light-dark(#faf9ff, #11111a);
+    --surface: light-dark(#fff, #1c1b29);
+    --surface-hover: light-dark(#f5f2ff, #2b2640);
+    --field: light-dark(#f8f7ff, #252233);
+    --surface-soft: var(--field);
+    // The one quiet 1px line of every border, divider and outline.
+    --border: light-dark(#ebe8f5, #363247);
+    --line: var(--border);
+    // Legacy name of the panel outline: the same quiet line (the mockups have no accent-tinted outlines).
+    --accent-line: var(--border);
+    // Hover and selected outlines: the accent at a third.
+    --accent-outline: color-mix(in srgb, var(--accent) 32%, var(--surface));
+    --text: light-dark(#242039, #f4f1fd);
+    --muted: light-dark(#6c6882, #aaa3bf);
+
+    // One accent: #813eff in light, #a980ff in dark.
+    --accent: light-dark(#813eff, #a980ff);
+    --accent-contrast: light-dark(#fff, #11101a);
+    --accent-text: light-dark(#6e34d2, #baa0ff);
+    --accent-hover: light-dark(#7427ed, #b794ff);
+    --accent-soft: light-dark(#f0eaff, #33284e);
     --focus: var(--accent-text);
-    --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
-    // Outlines of panels and table heads: the border with a touch of the accent.
-    --accent-line: color-mix(in srgb, var(--accent) 24%, var(--border));
-    // The quiet 1px line of the shell: sidebar, header, search and floating bars (owner's decision 20 Oct: no shadows, no grey fills).
-    --line: color-mix(in srgb, var(--border) 62%, var(--surface));
+
+    // Status: text on its own soft tint, each pair at least 4.5:1.
+    --success: light-dark(#007f5d, #70d8b3);
+    --success-soft: light-dark(#e8f8f1, #1d4439);
+    --warning: light-dark(#9e6100, #efc782);
+    --warning-soft: light-dark(#fff5e4, #483724);
+    --danger: light-dark(#b8485e, #f3a1b1);
+    --danger-soft: light-dark(#fff0f2, #522b38);
+    --info: light-dark(#3a6dba, #a9c6fb);
+    --info-soft: light-dark(#ebf2ff, #293952);
+
+    // Shapes: pills for controls and capsules, 20px cards, 22px dialogs; shadows stay faint.
+    --radius-control: 999px;
+    --radius-panel: 20px;
+    --radius-dialog: 22px;
+    --radius-inner: 14px;
+    --radius-small: 10px;
+    --shadow: 0 8px 30px light-dark(rgb(62 43 115 / 3%), rgb(0 0 0 / 20%));
+    --shadow-overlay: 0 20px 60px light-dark(rgb(28 13 64 / 22%), rgb(0 0 0 / 55%));
+    --scrim: rgb(24 18 34 / 55%);
+
+    // Type: 13px text, 12px controls, 11px captions and table heads; headings tighten with their size.
+    --text-body: 13px;
+    --text-control: 12px;
+    --text-small: 11px;
+    --text-heading: 16px;
+    --weight-control: 700;
+    --weight-heading: 800;
+
+    // Controls: 38px pills (30px compact), 44px where a finger is the pointer; 18px icons.
+    --control-height: 38px;
+    --control-height-compact: 30px;
+    --icon-size: 18px;
+    --transition: .13s;
     --art-hue-rotate: 0deg;
     --art-saturate: 1;
+}
+
+@media (pointer: coarse) {
+    :root { --control-height: 44px; --control-height-compact: 44px; }
 }
 
 // Brightness stays independent.

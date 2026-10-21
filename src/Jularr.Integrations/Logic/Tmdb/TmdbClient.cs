@@ -342,7 +342,7 @@ namespace Jularr.Integrations.Logic.Tmdb
             }
 
             return new TmdbSearchResult(id, title, Text(item, movie ? "original_title" : "original_name"), Date(item, movie ? "release_date" : "first_air_date")?.Year,
-                Text(item, "overview"), ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")));
+                Text(item, "overview"), ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")), Number(item, "vote_average"));
         }
 
         // Posters and backdrops are served by TMDB's image host in fixed sizes.

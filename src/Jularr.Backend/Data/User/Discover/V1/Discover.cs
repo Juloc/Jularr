@@ -183,9 +183,11 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class DiscoverCatalogItemV1 : BaseResponse
     {
-        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long? workId, string? posterUrl)
+        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long? workId, string? posterUrl, decimal? rating, MediaStateType? mediaStateTypeId)
         {
             PosterUrl = posterUrl;
+            Rating = rating;
+            MediaStateTypeId = mediaStateTypeId;
             Namespace = @namespace;
             ExternalId = externalId;
             Title = title;
@@ -215,6 +217,14 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
+
+        // The catalog's rating on a scale of ten; null while it has none.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
+
+        // What the profile can do with the title once it is a Work; null for a title that is none.
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId), false)]
+        public MediaStateType? MediaStateTypeId { get; }
     }
 
     public sealed class ReadDiscoverCatalogEntryDataV1 : BaseData
@@ -345,8 +355,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class DiscoverItemV1 : BaseResponse
     {
         public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            MediaStateType mediaStateTypeId, string? plexUrl)
+            MediaStateType mediaStateTypeId, string? plexUrl, decimal? rating)
         {
+            Rating = rating;
             MediaTypeId = mediaTypeId;
             TmdbId = tmdbId;
             PlexUrl = plexUrl;
@@ -389,6 +400,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // Opens the title on the connected Plex server.
         [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
         public string? PlexUrl { get; }
+
+        // The catalog's rating on a scale of ten; null while it has none.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
     }
 
     public sealed class ReadContinueParametersV1 : BaseParameters
@@ -397,9 +412,11 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class ContinueItemV1 : BaseResponse
     {
-        public ContinueItemV1(long workId, long mediaAssetId, MediaType mediaTypeId, string title, string? posterUrl, WorkUnitType? workUnitTypeId, decimal? unitNumber,
-            decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId)
+        public ContinueItemV1(long workId, long mediaAssetId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string title, int? releaseYear, string? posterUrl, WorkUnitType? workUnitTypeId,
+            decimal? unitNumber, decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId)
         {
+            MediaSubtypeId = mediaSubtypeId;
+            ReleaseYear = releaseYear;
             Progression = progression;
             MediaAssetTypeId = mediaAssetTypeId;
             WorkId = workId;
@@ -423,8 +440,14 @@ namespace Jularr.Backend.Data.User.Discover.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }

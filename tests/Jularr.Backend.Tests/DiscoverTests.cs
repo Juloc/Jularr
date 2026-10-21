@@ -152,6 +152,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("702", Shelf("movies", DiscoverFeedType.Upcoming));
             Assert.AreEqual("21", Shelf("anime", DiscoverFeedType.Trending));
             Assert.IsFalse(shelves.Any(shelf => shelf.ScopeSlug == "series"));
+
+            // The rating of the catalog travels with its title; a title without one carries none.
+            Assert.AreEqual(8.7m, shelves.Single(shelf => shelf.ScopeSlug == "movies" && shelf.DiscoverFeedTypeId == DiscoverFeedType.Trending).Items.Single().Rating);
+            Assert.IsNull(shelves.Single(shelf => shelf.ScopeSlug == "movies" && shelf.DiscoverFeedTypeId == DiscoverFeedType.New).Items.Single().Rating);
+            Assert.AreEqual(8.0m, shelves.Single(shelf => shelf.ScopeSlug == "anime" && shelf.DiscoverFeedTypeId == DiscoverFeedType.Trending).CatalogItems.Single().Rating);
             Assert.IsFalse(tmdb.Requests.Any(request => request.AbsolutePath.StartsWith("/3/trending/movie", StringComparison.Ordinal)));
 
             // A browse page goes on in the catalog; a requested title carries its state.
@@ -160,6 +165,8 @@ namespace Jularr.Backend.Tests
             using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top));
             var topItems = (await top.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.ToArray();
             Assert.AreEqual(MediaStateType.Requested, topItems[0].MediaStateTypeId);
+            Assert.AreEqual(8.7m, topItems[0].Rating);
+            Assert.AreEqual(7.0m, topItems[1].Rating);
             Assert.IsNotNull(topItems[0].WorkId);
             using var nextPage = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top, 2));
             Assert.AreEqual(0, (await nextPage.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Count);
@@ -197,7 +204,7 @@ namespace Jularr.Backend.Tests
             // The series lists its titles and the details link to it.
             using var series = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId + "/works");
             Assert.AreEqual(HttpStatusCode.OK, series.StatusCode, await series.Content.ReadAsStringAsync());
-            Assert.AreEqual(workId, (await series.Content.ReadFromJsonAsync<PageResult<WorkCardV1>>())!.Items.Single().Id);
+            Assert.AreEqual(workId, (await series.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single().Id);
             using var page = await host.SendAsync(HttpMethod.Get, "/Franchise/" + franchiseId);
             StringAssert.Contains(await page.Content.ReadAsStringAsync(), "The Matrix Collection");
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);

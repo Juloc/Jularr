@@ -11,8 +11,9 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class ExternalWorkData : BaseData
     {
         public ExternalWorkData(string @namespace, string value, string title, string? originalTitle, int? releaseYear, string? overview, string? creator, string? imageUrl,
-            string? backdropUrl, DateTime fetchedAt)
+            string? backdropUrl, DateTime fetchedAt, decimal? rating = null)
         {
+            Rating = rating;
             Namespace = @namespace;
             Value = value;
             Title = title;
@@ -54,6 +55,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.FetchedAt))]
         public DateTime FetchedAt { get; }
+
+        // On a scale of ten; null while the catalog has none.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
     }
 
     // A catalog's list of one type: Namespace, type and subtype name it, trending ones are ranked in their order.
@@ -181,8 +186,9 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class ExternalWorkShelfItemData : BaseData
     {
         public ExternalWorkShelfItemData(int shelf, string @namespace, string value, string title, int? releaseYear, string? overview, string? creator, string? imageUrl,
-            string? backdropUrl, long? workId, MediaStateType? mediaStateTypeId, string? plexUrl)
+            string? backdropUrl, decimal? rating, long? workId, MediaStateType? mediaStateTypeId, string? plexUrl)
         {
+            Rating = rating;
             Shelf = shelf;
             Namespace = @namespace;
             Value = value;
@@ -223,6 +229,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.BackdropUrl))]
         public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }
