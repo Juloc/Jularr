@@ -812,6 +812,18 @@
    "Notes",
    "Notes"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Signet"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Signets"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Supprimer le signet"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Ouvrir dans un nouvel onglet"
@@ -6359,6 +6371,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Un profil conserve au plus 1000 surlignages par livre."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Un profil conserve au plus 200 signets par livre."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

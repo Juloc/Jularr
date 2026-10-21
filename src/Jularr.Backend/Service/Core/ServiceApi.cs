@@ -199,11 +199,14 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<StorageAccess>();
             services.TryAddSingleton<DownloadStorage>();
             services.TryAddSingleton<MediaTranscoder>();
+            services.TryAddSingleton<TranscodeBenchmarkClient>();
+            services.TryAddSingleton<TranscodeHardware>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<PlaybackSubtitles>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
+            services.TryAddTransient<MediaImportPlanner>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
             services.TryAddTransient<PlexServer>();

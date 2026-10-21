@@ -5,7 +5,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // An episode with two audio tracks and a subtitle file plays in either language with subtitles; a broken episode stops with a visible failure.
+    // An episode with two audio tracks and a subtitle file plays in either language with subtitles; once the server's conversion limit is reached the player says it is busy; a broken episode stops with a visible failure.
     [TestClass]
     public sealed class TracksTests
     {
@@ -34,7 +34,8 @@ namespace Jularr.E2E.Tests
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg,
-                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg)!
+                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg)!,
+                ["Media:MaxTranscodes"] = "1"
             });
             await using var session = await BrowserSession.StartAsync(jularr);
             var page = session.Page;
@@ -185,6 +186,40 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-action=skip-undo]").ClickAsync();
                 await page.WaitForTimeoutAsync(5500);
                 Assert.AreEqual(playerUrl, page.Url, "The next episode opened although the skip was undone.");
+                // The first track plays directly and needs no room, which also gives back the conversion of the second one.
+                if (!await page.Locator("#player-settings").IsVisibleAsync()) await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                var direct = await page.RunAndWaitForResponseAsync(() => audio.Nth(0).ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, direct.Status);
+
+                // The server allows one 1080p conversion, so only four of these small ones fit; the one after finds no room.
+                var started = new List<string>();
+                var refusal = "";
+                for (var attempt = 0; attempt < 8 && refusal == ""; attempt++)
+                {
+                    var (code, body) = await StartConversionAsync(page);
+                    if (code == 200) started.Add(JsonDocument.Parse(body).RootElement.GetProperty("playbackSessionId").GetString()!);
+                    else refusal = body;
+                }
+
+                StringAssert.Contains(refusal, "playback_capacity_exhausted");
+                Assert.AreEqual(4, started.Count, started.Count + " conversions started before the limit.");
+
+                // The second track needs a conversion, which the server refuses, and the player says so.
+                var refused = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(503, refused.Status);
+                var busy = page.Locator("[data-role=status]");
+                await Assertions.Expect(busy).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(await page.Locator("[data-status=playback_capacity_exhausted]").TextContentAsync(), await busy.TextContentAsync());
+                Assert.AreEqual("Server busy: transcoding is unavailable right now.", await busy.TextContentAsync());
+                await Evidence.SaveAsync(page, "player-server-busy");
+
+                // The refusals are the only server errors; ending the other sessions gives the room back.
+                Assert.IsTrue(session.Problems.All(problem => problem.Contains("503", StringComparison.Ordinal)), string.Join("\n", session.Problems));
+                session.Problems.Clear();
+                foreach (var id in started) await EndSessionAsync(page, id);
 
                 // The broken file stops with the player's general failure, not silently.
                 await page.GotoAsync(details);
@@ -279,6 +314,35 @@ namespace Jularr.E2E.Tests
             await page.Locator("[data-action=fullscreen]").ClickAsync();
             await page.WaitForFunctionAsync("() => !document.fullscreenElement");
             await page.Locator("[data-action=theater]").ClickAsync();
+        }
+
+        // Asks for a conversion the way the player does, for a browser that plays H.264 and AAC from HLS only.
+        private static async Task<(int Status, string Body)> StartConversionAsync(IPage page)
+        {
+            var answer = await page.EvaluateAsync<JsonElement>("""
+                async () => {
+                    const player = document.querySelector('.player');
+                    const response = await fetch(player.dataset.startUrl, { method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', RequestVerificationToken: player.dataset.antiforgery },
+                        body: JSON.stringify({ containers: ['hls'], videoCodecs: ['h264'], audioCodecs: ['aac'], audioStreamIndex: null, quality: null }) });
+                    return { status: response.status, body: await response.text() };
+                }
+                """);
+            return (answer.GetProperty("status").GetInt32(), answer.GetProperty("body").GetString()!);
+        }
+
+        private static async Task EndSessionAsync(IPage page, string sessionId)
+        {
+            var status = await page.EvaluateAsync<int>("""
+                async id => {
+                    const player = document.querySelector('.player');
+                    const response = await fetch(player.dataset.sessionUrl + id, { method: 'PUT', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', RequestVerificationToken: player.dataset.antiforgery },
+                        body: JSON.stringify({ positionMs: 0, durationMs: null, isEnded: true, isCompleted: false }) });
+                    return response.status;
+                }
+                """, sessionId);
+            Assert.AreEqual(200, status);
         }
 
         // The download monitor imports one episode after the other.

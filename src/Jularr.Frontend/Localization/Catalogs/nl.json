@@ -812,6 +812,18 @@
    "Notes",
    "Notities"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Bladwijzer"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Bladwijzers"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Bladwijzer verwijderen"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Openen in een nieuw tabblad"
@@ -6359,6 +6371,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Een profiel bewaart maximaal 1000 markeringen per boek."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Een profiel bewaart maximaal 200 bladwijzers per boek."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

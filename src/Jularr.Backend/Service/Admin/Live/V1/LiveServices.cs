@@ -104,7 +104,7 @@ namespace Jularr.Backend.Service.Admin.Live.V1
 
             return new LiveAdminV1(new BaseDataList<LiveAdminRequestV1>(requestItems),
                 new BaseDataList<LiveOperationV1>(operations.Select(row => new LiveOperationV1(row.Id, row.OperationTypeId, row.OperationStatusTypeId, row.DownloadStateTypeId, row.IsWaiting, row.ProgressPercent,
-                    row.SizeBytes, row.RemainingBytes, row.EtaSeconds, LivePhases.Pace(row.RemainingBytes, row.EtaSeconds), row.ReasonKey))),
+                    row.SizeBytes, row.RemainingBytes, row.EtaSeconds, row.DownloadStateTypeId == DownloadStateType.Downloading ? LivePhases.Pace(row.RemainingBytes, row.EtaSeconds) : null, row.ReasonKey))),
                 new BaseDataList<LiveWantedV1>(wantedItems));
         }
 

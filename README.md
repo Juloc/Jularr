@@ -379,7 +379,14 @@ setzt pro Profil exakt fort und markiert nur ein echtes Ende als gesehen. Andere
 Dateien laufen als HLS: FFmpeg kopiert passende Spuren (Remux) oder wandelt nach
 H.264/AAC (Transcode), erzeugt Segmente erst bei Bedarf und begrenzt Vorlauf und
 parallele Jobs. Konfiguration: `Media:TranscodeCachePath`, `Media:MaxTranscodes`, optional
-`Media:VideoEncoderArguments` und `Media:HardwareAccelerationArguments` mit Software-Fallback.
+`Media:VideoEncoderArguments` und `Media:HardwareAccelerationArguments` mit Software-Fallback; sie gelten als
+Vorgaben, solange der Owner auf Admin → System → Transcoding nichts anderes speichert (Beschleunigung
+Automatisch/Software/VAAPI/QSV/NVENC, gleichzeitige Umwandlungen in 1080p-Einheiten, Leiter niedrigerer Qualitäten).
+Ein Benchmark auf Abruf (nie beim Start) misst echte Test-Encodes aller vorhandenen Encoder und schlägt die beste
+Beschleunigung und eine vorsichtige Höchstzahl vor. Ist die Grenze erreicht, spielt der Server eine leichtere Stufe
+der Leiter, sonst meldet der Player „Server ausgelastet“; Direct Play und Remux zählen nie. Ein Konto mit
+Transcoding-Vorrang (Owner standardmäßig) beendet dann die neueste Umwandlung eines Kontos ohne Vorrang.
+Die Hardware-Pipelines (VAAPI, QSV, NVENC, VideoToolbox) sind hier nur gegen FFmpegs Ausgabe geprüft, nicht auf echter Hardware.
 Vorschaubilder beim Spulen (Modul „Trickplay“, standardmäßig aus) rendert ein Hintergrund-Worker
 mit FFmpeg nach `DataPath/trickplay`.
 Metadaten-Spiegel ersetzen die Adressen von TMDB, MusicBrainz, AniList und Open Library über

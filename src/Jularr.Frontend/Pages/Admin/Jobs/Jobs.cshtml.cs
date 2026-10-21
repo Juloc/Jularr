@@ -54,7 +54,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                             ? new Div(new Text("operation.type.Job"), new Span(new Text("jobs.job." + item.Title))).Class("jobs-job")
                             : new Div(new Text("operation.type." + item.OperationTypeId), new Span(new ValueText(item.Title))).Class("jobs-job"))
                         .Content("table.status", item => new Text("operation.status." + item.OperationStatusTypeId)),
-                        new A(new Text("jobs.allActivity")).Attribute("href", "/Admin/Activity?Tab=History")]
+                        new A(new Text("jobs.allActivity")).Attribute("href", "/Admin/Activity?Filter=History")]
                     : [new P(new Text("jobs.history.empty"))]));
             }
 
@@ -128,7 +128,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             _jobs = await read.ExecuteAsync<BaseDataList<WorkerJobV1>>(new ReadWorkerJobsParametersV1(), ct);
             if (texts.Can("media.read"))
             {
-                _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityTabType.History, 1, 10), ct);
+                _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, 1, 10), ct);
             }
         }
     }

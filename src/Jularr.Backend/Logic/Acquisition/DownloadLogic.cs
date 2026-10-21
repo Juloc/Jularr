@@ -381,6 +381,8 @@ namespace Jularr.Backend.Logic.Acquisition
                         )
                     )
                 ORDER BY
+                    -- High priority first, then the oldest schedule; priority never delays anything.
+                    wanted."WantedPriorityTypeId" DESC,
                     wanted."NextSearchAt" NULLS FIRST,
                     wanted."Id"
                 LIMIT @Limit;
@@ -1015,7 +1017,7 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } waiting)
             {
-                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Activity?Tab=Queue"), ct);
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadWaiting, waiting.WorkId, NotificationSubject.Join(waiting.Title, data.AttentionKey), "/Admin/Activity?Filter=Waiting"), ct);
             }
         }
 

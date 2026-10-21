@@ -55,7 +55,8 @@ test('scroll Reader completes only at the loaded final image bottom, including w
         exports: adapter,
         require: name => name.includes('Progress')
             ? { progressReporter: () => (value, leaving) => saves.push({ ...value, leaving }) }
-            : name.includes('Range') ? { updateRangeValue() {} } : { initializeReaderSettings: () => settings },
+            : name.includes('Range') ? { updateRangeValue() {} }
+            : name.includes('bookmarks') ? { initializeBookmarks: () => ({ refresh() {} }) } : { initializeReaderSettings: () => settings },
         Image: TestImage, URL,
         location: { href: 'https://reader.test/read' }, history: { replaceState() {} },
         matchMedia: () => ({ matches: false, addEventListener() {} }),

@@ -50,9 +50,9 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        public static async Task EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
+        // A target for a title that has none; one that exists stays as it is. Without the data asking for monitoring, a new target starts paused and the Owner unpauses it later.
+        public static async Task<bool> EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
         {
-            // Inventory and monitoring do not transfer automatic acquisition. The Owner explicitly unpauses a new takeover target later.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -66,7 +66,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     work."Id",
                     profile."Id",
                     root."Id",
-                    TRUE
+                    @IsPaused
                 FROM
                     "Works" AS work
                     LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = @AcquisitionProfileId
@@ -79,7 +79,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 ON CONFLICT ("WorkId", "GamePlatformId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
 
         public static async Task<bool> UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
@@ -165,6 +165,51 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             return resumed;
+        }
+
+        // Priority is search state, not an editorial change: the targets keep their version and their schedule.
+        public static async Task SetWantedPriorityAsync(this LogicContext ctx, WantedPriorityData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "WantedPriorityTypeId" = @WantedPriorityTypeId
+                WHERE
+                    wanted."Id" = ANY(@WantedItemIds);
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != data.WantedItemIds.Length)
+            {
+                throw new KeyNotFoundException("A wanted target does not exist.");
+            }
+        }
+
+        // The chosen targets that are not paused are due now, the highest priority first when the search runs; no choice leaves the due ones as they are.
+        public static async Task StartWantedSearchAsync(this LogicContext ctx, WantedSearchStartData data, CancellationToken ct)
+        {
+            if (data.WantedItemIds.Length == 0)
+            {
+                return;
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "NextSearchAt" = CASE WHEN wanted."IsPaused" THEN wanted."NextSearchAt" ELSE NULL END
+                WHERE
+                    wanted."Id" = ANY(@WantedItemIds);
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != data.WantedItemIds.Length)
+            {
+                throw new KeyNotFoundException("A wanted target does not exist.");
+            }
         }
 
         // A season sets all its episodes; units of other Works and other unit types are not touched.

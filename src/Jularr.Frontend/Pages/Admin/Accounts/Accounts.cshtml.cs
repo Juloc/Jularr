@@ -73,9 +73,12 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         form.Select(item => item.IsEnabled, "admin.accounts.status", states);
                         form.Select(item => item.MayConfirmSources, "admin.accounts.mayConfirmSources",
                             [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
+                        form.Select(item => item.TranscodingPriority, "admin.accounts.transcodingPriority",
+                            [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                         form.Save();
                     }, Address(_selected.Id), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources), _input is null ? null : FormError));
+                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources, _selected.TranscodingPriority),
+                        _input is null ? null : FormError));
                     split.Secondary.Add(new P(new Text("admin.accounts.sessionWarning")));
 
                     // Assign existing profile access.
@@ -163,9 +166,9 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? displayName, AccountRoleType accountRoleTypeId, [BindRequired] bool isEnabled, bool? mayConfirmSources)
+        public async Task<IActionResult> OnPostAsync(string? displayName, AccountRoleType accountRoleTypeId, [BindRequired] bool isEnabled, bool? mayConfirmSources, bool? transcodingPriority)
         {
-            _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled, mayConfirmSources);
+            _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled, mayConfirmSources, transcodingPriority);
             await update.ExecuteAsync<UpdateResult>(SelectedParameters(), _input, HttpContext.RequestAborted);
             return LocalRedirect(Address(AccountId));
         }
