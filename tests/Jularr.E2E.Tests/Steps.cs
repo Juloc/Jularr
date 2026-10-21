@@ -20,7 +20,11 @@ namespace Jularr.E2E.Tests
             var problems = new ConcurrentQueue<string>();
             page.Console += (_, message) =>
             {
-                if (message.Type == "error") problems.Enqueue(page.Url + ": " + message.Text);
+                // A cover that its provider does not deliver (these tests have no real catalogs) is no fault of the page.
+                if (message.Type == "error" && !(message.Text.StartsWith("Failed to load resource", StringComparison.Ordinal) && message.Location.Contains("/api/v1/covers/", StringComparison.Ordinal)))
+                {
+                    problems.Enqueue(page.Url + ": " + message.Text);
+                }
             };
             page.PageError += (_, error) => problems.Enqueue(page.Url + ": " + error);
             page.Response += (_, response) =>
