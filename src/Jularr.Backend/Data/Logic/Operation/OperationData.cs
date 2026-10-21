@@ -25,6 +25,18 @@ namespace Jularr.Backend.Data.Logic.Operation
         public long? RequestedByAccountId { get; }
     }
 
+    // The kind of operation one queue lane claims.
+    internal sealed class OperationClaimData : BaseData
+    {
+        public OperationClaimData(OperationType operationTypeId)
+        {
+            OperationTypeId = operationTypeId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.OperationTypeId))]
+        public OperationType OperationTypeId { get; }
+    }
+
     internal sealed class OperationData : BaseData
     {
         public OperationData(long id, OperationType operationTypeId, long? libraryRootId)

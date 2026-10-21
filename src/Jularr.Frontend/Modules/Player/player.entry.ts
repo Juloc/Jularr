@@ -1,4 +1,5 @@
 import "./player.scss";
+import { updateRangeValue } from "../../Framework/Components/Range";
 import { progressReporter } from "../Tracking/Progress";
 import { keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
 import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, type Marker } from "./Skip";
@@ -79,23 +80,24 @@ async function start(player: HTMLElement): Promise<void> {
     let seeking = false;
     let sourceReady = false;
     let sourcePosition = 0;
-    let lastSubtitle: HTMLButtonElement | undefined;
-    // The profile's choices come with the page; the quality is this playback's own once the viewer picks one (the device's applies until then).
+    let lastSubtitle: { key: string; language: string | undefined } | undefined;
+    // The profile's choices come with the page; the settings change them for this playback only, the quality is this playback's own (the device's applies until then).
     const preferredSpeed = Number(player.dataset.preferredSpeed) || 1;
     const countdownSeconds = Number(player.dataset.countdown) || 0;
-    const autoplay = player.dataset.autoplay === "true";
+    let autoplay = player.dataset.autoplay === "true";
     let audioIndex: number | null = selectedAudio();
     let quality: number | null = null;
+    const initialQuality = player.querySelector<HTMLSelectElement>('select[data-setting=quality]')?.value ?? "";
     let countdown = 0;
     const next = player.querySelector<HTMLElement>("[data-role=next]")!;
 
     // Skippable stretches come with the page, so a new plan (another quality or audio track) keeps them.
     const markers = parseMarkers(player.dataset.markers);
-    const introMode = parseMode(player.dataset.skipIntro);
-    const outroMode = parseMode(player.dataset.skipOutro);
+    let introMode = parseMode(player.dataset.skipIntro);
+    let outroMode = parseMode(player.dataset.skipOutro);
     const skip = player.querySelector<HTMLButtonElement>("[data-action=skip]")!;
     const skipped = player.querySelector<HTMLElement>("[data-role=skipped]")!;
-    const chapters = Array.from(player.querySelectorAll<HTMLButtonElement>("[data-chapter]"));
+    const chapters = Array.from(player.querySelectorAll<HTMLButtonElement>(".player__chapter[data-chapter]"));
     const handled = new Set<string>();
     let offered: Marker | null = null;
     let currentChapter = -1;
@@ -124,6 +126,8 @@ async function start(player: HTMLElement): Promise<void> {
         });
     });
     settings.addEventListener('toggle', wake);
+    player.querySelector('#player-chapters')?.addEventListener('toggle', wake);
+    player.querySelectorAll<HTMLInputElement>('[data-setting=speed-range]').forEach(updateRangeValue);
     sidebar?.addEventListener('toggle', wake);
     narrow.addEventListener('change', layout);
     document.addEventListener('fullscreenchange', layout);
@@ -137,10 +141,10 @@ async function start(player: HTMLElement): Promise<void> {
     await attach(plan, plan.resumePositionMs / 1000);
 
     // The subtitle the profile's preferences picked shows from the start.
-    const preferredSubtitle = player.querySelector<HTMLButtonElement>('[data-subtitle][aria-pressed=true]:not([data-subtitle=""]):not(:disabled)');
+    const preferredSubtitle = player.querySelector<HTMLOptionElement>('select[data-setting=subtitle] option[data-chosen]:not([value=""]):not(:disabled)');
     if (preferredSubtitle) {
-        lastSubtitle = preferredSubtitle;
-        showSubtitle(preferredSubtitle.dataset.subtitle ?? "", preferredSubtitle.dataset.language);
+        lastSubtitle = { key: preferredSubtitle.value, language: preferredSubtitle.dataset.language };
+        showSubtitle(preferredSubtitle.value, preferredSubtitle.dataset.language);
     }
     document.body.classList.add("player-active");
     const minimizeButton = player.querySelector<HTMLButtonElement>("[data-action=minimize]");
@@ -238,8 +242,8 @@ async function start(player: HTMLElement): Promise<void> {
 
     // The audio track the profile's preferences picked, where the server marked one.
     function selectedAudio(): number | null {
-        const chosen = player.querySelector<HTMLButtonElement>("[data-audio][aria-pressed=true]:not(:disabled)")?.dataset.audio;
-        return chosen === undefined ? null : Number(chosen);
+        const chosen = player.querySelector<HTMLOptionElement>("select[data-setting=audio] option[data-chosen]:not(:disabled)")?.value;
+        return chosen === undefined || chosen === "" ? null : Number(chosen);
     }
 
     // Planning needs the real browser capabilities; another audio track or quality asks for a new plan.
@@ -317,6 +321,7 @@ async function start(player: HTMLElement): Promise<void> {
             video.playbackRate = rate;
             sourceReady = true;
             player.querySelector('[data-role=resolution]')!.textContent = video.videoWidth > 0 ? `${video.videoWidth} × ${video.videoHeight}` : '';
+            placeMarks();
             if (autoplay) void video.play().catch(() => stopLoading());
             else video.pause();
         }, { once: true });
@@ -359,8 +364,7 @@ async function start(player: HTMLElement): Promise<void> {
         track.addEventListener("error", () => {
             show("failed");
             track.remove();
-            const off = player.querySelector<HTMLElement>('[data-subtitle=""]');
-            if (off) choose("data-subtitle", off);
+            setChoice("subtitle", "");
             player.querySelector('[data-action=subtitle-toggle]')!.setAttribute('aria-pressed', 'false');
         });
         video.append(track);
@@ -386,7 +390,26 @@ async function start(player: HTMLElement): Promise<void> {
         if (currentProgress && Number.isFinite(video.duration)) { currentProgress.max = video.duration; currentProgress.value = video.currentTime; }
         offerSkip();
         markChapter();
+        showBuffered();
     });
+    video.addEventListener("progress", showBuffered);
+
+    // The timeline shows how far the picture is loaded beyond the position.
+    function showBuffered(): void {
+        let end = 0;
+        for (let index = 0; index < video.buffered.length; index++) {
+            if (video.buffered.start(index) <= video.currentTime + 0.5) end = Math.max(end, video.buffered.end(index));
+        }
+        timeline.style.setProperty("--buffered", `${Math.min(100, end / Math.max(1, Number(timeline.max)) * 100)}%`);
+    }
+
+    // Chapter ticks stand at their share of the duration once it is known.
+    function placeMarks(): void {
+        const marks = player.querySelector<HTMLElement>(".player__marks");
+        if (!marks || !Number.isFinite(video.duration) || video.duration <= 0) return;
+        marks.querySelectorAll<HTMLElement>("[data-chapter]").forEach(mark => mark.style.setProperty("--at", String(Number(mark.dataset.chapter) / video.duration * 100)));
+        marks.dataset.ready = "";
+    }
 
     // A Skip button while playback is inside a stretch the profile wants offered; Automatic skips once on arrival and says so with a way back.
     function offerSkip(): void {
@@ -457,6 +480,7 @@ async function start(player: HTMLElement): Promise<void> {
         volume.style.setProperty('--played', `${Number(volume.value) * 100}%`);
         mute.setAttribute("aria-pressed", String(video.muted));
         player.classList.toggle("player--muted", video.muted);
+        player.dataset.volumeLevel = video.muted || video.volume === 0 ? "0" : video.volume > 0.66 ? "3" : video.volume > 0.33 ? "2" : "1";
     });
     timeline.addEventListener('input', () => {
         seeking = true;
@@ -495,9 +519,8 @@ async function start(player: HTMLElement): Promise<void> {
         },
         'subtitle-toggle': () => {
             const on = player.querySelector('[data-action=subtitle-toggle]')!.getAttribute('aria-pressed') === 'true';
-            const choice = on ? player.querySelector<HTMLButtonElement>('[data-subtitle=""]')
-                : lastSubtitle ?? player.querySelector<HTMLButtonElement>('[data-subtitle]:not([data-subtitle=""]):not(:disabled)');
-            if (choice) { choose('data-subtitle', choice); showSubtitle(choice.dataset.subtitle ?? '', choice.dataset.language); }
+            const choice = on ? { key: "", language: undefined } : lastSubtitle ?? firstSubtitle();
+            if (choice) { setChoice('subtitle', choice.key); showSubtitle(choice.key, choice.language); }
         },
         close: () => void minimize(),
         'next-now': () => { const href = next.dataset.href; stopCountdown(); if (href) location.assign(href); },
@@ -512,67 +535,90 @@ async function start(player: HTMLElement): Promise<void> {
     };
     player.addEventListener("click", event => {
         const target = event.target as Element;
-        const pane = target.closest<HTMLElement>('[data-setting-pane]')?.dataset.settingPane;
-        if (pane) {
-            selectTab(settings.querySelector('[data-player-tabs]')!, '#player-' + pane);
-            settings.querySelector<HTMLElement>('[role=tab][aria-selected=true]')!.focus();
-            return;
-        }
         const chapter = target.closest<HTMLButtonElement>("[data-chapter]");
         if (chapter) {
             video.currentTime = Number(chapter.dataset.chapter);
-            settings.hidePopover();
+            chapter.closest<HTMLElement>("[popover]")?.hidePopover();
             return;
         }
 
-        const audio = target.closest<HTMLButtonElement>("[data-audio]");
-        if (audio && !audio.disabled && !switching) {
-            void replan(Number(audio.dataset.audio), quality).then(success => { if (success) choose('data-audio', audio); });
-            return;
-        }
-
-        // This playback's quality; the device keeps its own choice.
-        const level = target.closest<HTMLButtonElement>("[data-quality]");
-        if (level && !level.disabled && !switching) {
-            void replan(audioIndex, Number(level.dataset.quality)).then(success => {
-                if (!success) return;
-                player.querySelectorAll("[data-quality]").forEach(item => item.setAttribute("aria-pressed", String(item === level)));
-                player.querySelector("[data-current=quality]")!.textContent = level.textContent;
-            });
-            return;
-        }
-
-        const subtitle = target.closest<HTMLButtonElement>("[data-subtitle]");
-        if (subtitle && !subtitle.disabled) {
-            choose("data-subtitle", subtitle);
-            if (subtitle.dataset.subtitle) lastSubtitle = subtitle;
-            showSubtitle(subtitle.dataset.subtitle ?? "", subtitle.dataset.language);
-            return;
-        }
-
-        const speed = target.closest<HTMLElement>("[data-speed]");
-        if (speed) {
-            video.playbackRate = Number(speed.dataset.speed);
-            player.querySelector('[data-current=speed]')!.textContent = speed.dataset.speed + '×';
-            player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-pressed", String(item === speed)));
-
-            // The profile remembers the speed; a failed save leaves this playback as it is.
-            if (player.dataset.speedUrl) {
-                void fetch(player.dataset.speedUrl, {
-                    method: "PUT",
-                    credentials: "same-origin",
-                    headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-                    body: JSON.stringify({ speed: Number(speed.dataset.speed) })
-                }).catch(() => undefined);
-            }
-            return;
-        }
+        // The usual speeds are one tap away.
+        const point = target.closest<HTMLElement>(".player__speed-point");
+        if (point) { setSpeed(Number(point.dataset.speed), true); return; }
 
         const action = target.closest<HTMLElement>("[data-action]")?.dataset.action;
         if (action && actions[action]) { if (action === 'close') event.preventDefault(); actions[action](); }
         else if (target === video) actions.toggle();
     });
     video.addEventListener("dblclick", actions.fullscreen);
+
+    // The settings are native fields; the same choice shown in two panes stays one choice.
+    settings.addEventListener("change", event => {
+        const field = event.target as HTMLInputElement | HTMLSelectElement;
+        switch (field.dataset.setting) {
+            case "audio": {
+                const previous = audioIndex === null ? field.value : String(audioIndex);
+                if (switching || field.value === "") { setChoice("audio", previous); break; }
+                void replan(Number(field.value), quality).then(success => setChoice("audio", success ? field.value : previous));
+                break;
+            }
+            case "quality": {
+                const previous = quality === null ? initialQuality : String(quality);
+                if (switching) { setChoice("quality", previous); break; }
+                void replan(audioIndex, Number(field.value)).then(success => setChoice("quality", success ? field.value : previous));
+                break;
+            }
+            case "subtitle": {
+                const option = (field as HTMLSelectElement).selectedOptions[0];
+                if (field.value) lastSubtitle = { key: field.value, language: option?.dataset.language };
+                setChoice("subtitle", field.value);
+                showSubtitle(field.value, option?.dataset.language);
+                break;
+            }
+            case "speed-range": case "speed-number": setSpeed(Number(field.value), true); break;
+            case "fit": for (const mode of ["cover", "original"]) player.classList.toggle(`player--fit-${mode}`, field.value === mode); break;
+            case "autoplay": autoplay = (field as HTMLInputElement).checked; break;
+            case "skip-intro": introMode = parseMode(field.value); handled.clear(); break;
+            case "skip-outro": outroMode = parseMode(field.value); handled.clear(); break;
+        }
+    });
+    settings.addEventListener("input", event => {
+        const field = event.target as HTMLInputElement;
+        if (field.dataset.setting === "speed-range") setSpeed(Number(field.value), false);
+    });
+
+    // One speed for every control that shows it; the profile remembers it once the viewer has chosen.
+    function setSpeed(value: number, remember: boolean): void {
+        if (!Number.isFinite(value)) return;
+        const speed = Math.min(4, Math.max(0.25, Math.round(value * 100) / 100));
+        video.playbackRate = speed;
+        player.querySelectorAll<HTMLInputElement>("[data-setting^=speed-]").forEach(input => {
+            if (input !== document.activeElement || input.type === "range") input.value = String(speed);
+            if (input.type === "range") updateRangeValue(input);
+        });
+        player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-pressed", String(Number((item as HTMLElement).dataset.speed) === speed)));
+        // The profile keeps speeds from 0.5 to 2; others apply to this playback only.
+        if (remember && speed >= 0.5 && speed <= 2 && player.dataset.speedUrl) {
+            void fetch(player.dataset.speedUrl, {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
+                body: JSON.stringify({ speed })
+            }).catch(() => undefined);
+        }
+    }
+
+    // Every field of one setting shows the same value; the facts of the Info pane follow.
+    function setChoice(name: string, value: string): void {
+        player.querySelectorAll<HTMLSelectElement>(`select[data-setting=${name}]`).forEach(select => { select.value = value; });
+        const fact = name === "audio" || name === "quality" ? player.querySelector(`[data-role=fact-${name}]`) : null;
+        if (fact) fact.textContent = player.querySelector<HTMLSelectElement>(`select[data-setting=${name}]`)?.selectedOptions[0]?.textContent ?? "";
+    }
+
+    function firstSubtitle(): { key: string; language: string | undefined } | undefined {
+        const option = player.querySelector<HTMLOptionElement>('select[data-setting=subtitle] option:not([value=""]):not(:disabled)');
+        return option ? { key: option.value, language: option.dataset.language } : undefined;
+    }
 
     // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
@@ -603,7 +649,8 @@ async function start(player: HTMLElement): Promise<void> {
     }
 
     function shrink(): void {
-        settings.hidePopover(); sidebar?.hasAttribute('popover') && sidebar.hidePopover();
+        player.querySelectorAll<HTMLElement>('.player__settings, .player__chapters').forEach(panel => panel.hidePopover());
+        sidebar?.hasAttribute('popover') && sidebar.hidePopover();
         player.classList.add("player--mini");
         document.body.classList.add("player-mini");
         document.body.classList.remove("player-page");
@@ -670,12 +717,6 @@ async function start(player: HTMLElement): Promise<void> {
             const pane = wrapper.parentElement!.querySelector<HTMLElement>(link.hash)!;
             pane.hidden = !active; pane.setAttribute('role', 'tabpanel'); pane.setAttribute('aria-labelledby', link.id);
         });
-    }
-
-    function choose(attribute: string, chosen: HTMLElement): void {
-        player.querySelectorAll(`[${attribute}]`).forEach(item => item.setAttribute("aria-pressed", String(item === chosen)));
-        const label = player.querySelector(`[data-current=${attribute === 'data-audio' ? 'audio' : 'subtitles'}]`);
-        if (label) label.textContent = chosen.textContent;
     }
 
     function show(code: string): void {

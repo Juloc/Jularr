@@ -8,8 +8,11 @@ namespace Jularr.Backend.Service.Core
     // A background job: what it is called, which worker runs it and when it is due. Every periodic or hosted piece of work is declared here once.
     public sealed class WorkerJobDefinition
     {
-        internal WorkerJobDefinition(string key, WorkerGroupType group, TimeSpan? interval, TimeSpan startDelay, bool canRunNow = true, bool canPauseWhileUsed = false, bool pausesWhileUsedByDefault = false)
+        internal WorkerJobDefinition(string key, WorkerGroupType group, TimeSpan? interval, TimeSpan startDelay, bool canRunNow = true, bool canPauseWhileUsed = false, bool pausesWhileUsedByDefault = false,
+            WorkerIntervalSettingType intervalSetting = WorkerIntervalSettingType.None, string? parentKey = null)
         {
+            IntervalSetting = intervalSetting;
+            ParentKey = parentKey;
             Key = key;
             Group = group;
             Interval = interval;
@@ -28,6 +31,12 @@ namespace Jularr.Backend.Service.Core
         // A small fixed offset after the start, so the workers do not all begin at once.
         public TimeSpan StartDelay { get; }
         public bool CanRunNow { get; }
+
+        // The Owner setting that replaces the interval, when there is one.
+        public WorkerIntervalSettingType IntervalSetting { get; }
+
+        // A part of another job (one provider of the provider sync): it shares that job's schedule and has its own switch and result.
+        public string? ParentKey { get; }
         public bool CanPauseWhileUsed { get; }
         public bool PausesWhileUsedByDefault { get; }
     }
@@ -52,18 +61,29 @@ namespace Jularr.Backend.Service.Core
 
         public static IReadOnlyList<WorkerJobDefinition> Definitions { get; } =
         [
+            // The scan, backup and benchmark queues run beside each other, each when work arrives.
             new("operations", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
+            new("backupQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
+            new("benchmarkQueue", WorkerGroupType.Operation, null, TimeSpan.Zero, canRunNow: false),
+
             // What a restart interrupts, the queue and the running downloads, is picked up at once; the rest follows one by one.
-            new("downloads", WorkerGroupType.Acquisition, TimeSpan.FromSeconds(15), TimeSpan.Zero),
-            new("wantedSearch", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(10)),
-            new("plexSync", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(40), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // Tracking looks every minute and every 15 seconds while a download runs.
+            new("downloads", WorkerGroupType.Download, TimeSpan.FromMinutes(1), TimeSpan.Zero),
+            new("wantedSearch", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(10), intervalSetting: WorkerIntervalSettingType.WantedSearchMinutes),
+
+            // One read of the connected media servers; each provider has its own switch and result.
+            new("providerSync", WorkerGroupType.Provider, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(40), canPauseWhileUsed: true, pausesWhileUsedByDefault: true,
+                intervalSetting: WorkerIntervalSettingType.ProviderSyncMinutes),
+            new("providerSyncPlex", WorkerGroupType.Provider, null, TimeSpan.Zero, canRunNow: false, parentKey: "providerSync"),
+            new("providerSyncJellyfin", WorkerGroupType.Provider, null, TimeSpan.Zero, canRunNow: false, parentKey: "providerSync"),
+            new("providerSyncEmby", WorkerGroupType.Provider, null, TimeSpan.Zero, canRunNow: false, parentKey: "providerSync"),
             new("usenet", WorkerGroupType.Usenet, null, TimeSpan.FromSeconds(6), canRunNow: false),
             new("aniListMatching", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(30), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("covers", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(35), canPauseWhileUsed: true),
-            new("mediaServerSync", WorkerGroupType.Media, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(50), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("storage", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)),
             new("scanScheduling", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(15), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
-            new("backup", WorkerGroupType.Backup, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(90)),
+            // Looks every half hour whether a backup is due; the Owner's interval says how old the newest may get.
+            new("backup", WorkerGroupType.Backup, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(90), intervalSetting: WorkerIntervalSettingType.BackupHours),
             new("maintenance", WorkerGroupType.Maintenance, TimeSpan.FromHours(1), TimeSpan.FromSeconds(120)),
             new("trickplay", WorkerGroupType.Trickplay, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(75), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("subtitles", WorkerGroupType.Subtitle, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(100), canPauseWhileUsed: true),
@@ -83,6 +103,7 @@ namespace Jularr.Backend.Service.Core
         private readonly object _gate = new();
         private readonly Dictionary<string, JobState> _states;
         private readonly Dictionary<WorkerGroupType, Channel<bool>> _requests;
+        private WorkerSettingsData _settings = new(24, 7, 30, 2);
 
         public WorkerJobs(TimeProvider time, UserActivity activity)
         {
@@ -115,10 +136,15 @@ namespace Jularr.Backend.Service.Core
 
         private bool _loaded;
 
-        internal void Load(IEnumerable<WorkerJobRowData> rows)
+        internal void Load(IEnumerable<WorkerJobRowData> rows, WorkerSettingsData? settings = null)
         {
             lock (_gate)
             {
+                if (settings is not null)
+                {
+                    UseSettings(settings);
+                }
+
                 foreach (var row in rows)
                 {
                     if (!_states.TryGetValue(row.Key, out var state)) continue;
@@ -202,16 +228,66 @@ namespace Jularr.Backend.Service.Core
                 state.LastFinishedAt = now;
                 state.LastResult = result;
                 state.LastErrorKey = errorKey;
-                state.NextRunAt = now + (definition.Interval ?? TimeSpan.Zero);
+                state.NextRunAt = now + (Cadence(definition) ?? TimeSpan.Zero);
                 var isChange = state.PersistedResult != result || state.PersistedErrorKey != errorKey || state.PersistedAt is null || now - state.PersistedAt >= PersistEvery;
                 if (!isChange) return null;
 
                 state.PersistedResult = result;
                 state.PersistedErrorKey = errorKey;
                 state.PersistedAt = now;
-                return new RecordWorkerJobDataV1(state.LastStartedAt, now, result, errorKey, definition.Interval is null ? null : state.NextRunAt);
+                return new RecordWorkerJobDataV1(state.LastStartedAt, now, result, errorKey, Cadence(definition) is null ? null : state.NextRunAt);
             }
         }
+
+        // A job that has to look again sooner than its interval, such as tracking while downloads run.
+        public void RunAgainWithin(string key, TimeSpan delay)
+        {
+            lock (_gate)
+            {
+                var state = _states[key];
+                if (state.LastFinishedAt is { } finished && finished + delay < state.NextRunAt)
+                {
+                    state.NextRunAt = finished + delay;
+                }
+            }
+        }
+
+        // The intervals the Owner chose: a job already waiting for its next pass counts from its last one.
+        internal void UseSettings(WorkerSettingsData settings)
+        {
+            lock (_gate)
+            {
+                _settings = settings;
+                foreach (var definition in Definitions.Where(definition => definition.IntervalSetting != WorkerIntervalSettingType.None && Cadence(definition) is not null))
+                {
+                    var state = _states[definition.Key];
+                    if (state.LastFinishedAt is { } finished)
+                    {
+                        state.NextRunAt = finished + Cadence(definition)!.Value;
+                    }
+                }
+            }
+        }
+
+        // The interval the Owner sees: their setting, else the fixed one; zero is off.
+        public TimeSpan? Interval(string key) => IntervalOf(Definition(key));
+
+        private TimeSpan? IntervalOf(WorkerJobDefinition definition)
+        {
+            lock (_gate)
+            {
+                return definition.IntervalSetting switch
+                {
+                    WorkerIntervalSettingType.BackupHours => TimeSpan.FromHours(_settings.BackupIntervalHours),
+                    WorkerIntervalSettingType.ProviderSyncMinutes => TimeSpan.FromMinutes(_settings.ProviderSyncIntervalMinutes),
+                    WorkerIntervalSettingType.WantedSearchMinutes => TimeSpan.FromMinutes(_settings.WantedSearchIntervalMinutes),
+                    _ => definition.Interval
+                };
+            }
+        }
+
+        // How soon a pass looks again; the backup job keeps looking every half hour whatever its interval is.
+        private TimeSpan? Cadence(WorkerJobDefinition definition) => definition.IntervalSetting == WorkerIntervalSettingType.BackupHours ? definition.Interval : IntervalOf(definition);
 
         // Run now: the job's next pass starts at once and its worker is woken. A paused job or one that runs on its own is not.
         public bool RequestRun(string key)
@@ -275,8 +351,8 @@ namespace Jularr.Backend.Service.Core
                         WorkerJobResultType.Succeeded => WorkerJobStateType.Idle,
                         _ => WorkerJobStateType.Pending
                     };
-                return new WorkerJobStatus(stateType, isPaused, pausesWhileUsed, hasRun ? state.LastStartedAt : row?.LastStartedAt, hasRun ? state.LastFinishedAt : row?.LastFinishedAt, error,
-                    isPaused || definition.Interval is null ? null : state.NextRunAt);
+                return new WorkerJobStatus(stateType, isPaused, pausesWhileUsed, IntervalOf(definition), hasRun ? state.LastStartedAt : row?.LastStartedAt, hasRun ? state.LastFinishedAt : row?.LastFinishedAt, error,
+                    isPaused || Cadence(definition) is null ? null : state.NextRunAt);
             }
         }
 
@@ -302,11 +378,12 @@ namespace Jularr.Backend.Service.Core
         }
     }
 
-    internal sealed class WorkerJobStatus(WorkerJobStateType state, bool isPaused, bool pausesWhileUsed, DateTime? lastStartedAt, DateTime? lastFinishedAt, string? lastErrorKey, DateTime? nextRunAt)
+    internal sealed class WorkerJobStatus(WorkerJobStateType state, bool isPaused, bool pausesWhileUsed, TimeSpan? interval, DateTime? lastStartedAt, DateTime? lastFinishedAt, string? lastErrorKey, DateTime? nextRunAt)
     {
         public WorkerJobStateType State { get; } = state;
         public bool IsPaused { get; } = isPaused;
         public bool PausesWhileUsed { get; } = pausesWhileUsed;
+        public TimeSpan? Interval { get; } = interval;
         public DateTime? LastStartedAt { get; } = lastStartedAt;
         public DateTime? LastFinishedAt { get; } = lastFinishedAt;
         public string? LastErrorKey { get; } = lastErrorKey;

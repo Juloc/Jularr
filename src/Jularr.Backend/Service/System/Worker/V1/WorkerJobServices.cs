@@ -7,7 +7,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.System.Worker.V1
 {
-    // A worker reads the Owner's choices once, before its first pass, so a paused job does not run after a restart.
+    // A worker reads the Owner's choices and intervals once, before its first pass, so a paused job does not run after a restart.
     public sealed class LoadWorkerJobsV1 : SystemService<LoadWorkerJobsParametersV1, NoData>
     {
         private readonly WorkerJobs _jobs;
@@ -24,8 +24,8 @@ namespace Jularr.Backend.Service.System.Worker.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var rows = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWorkerJobsAsync(ct), CancellationToken);
-            _jobs.Load(rows);
+            var (rows, settings) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadWorkerJobsAsync(ct), await ctx.ReadWorkerSettingsAsync(ct)), CancellationToken);
+            _jobs.Load(rows, settings);
             return new UpdateResult(true);
         }
     }

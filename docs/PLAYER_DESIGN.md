@@ -17,10 +17,14 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 - Volume left, existing transport in the middle, subtitle toggle/settings/view
   controls right. The filled rounded Play icon and accent timeline use the shared
   theme. Dragging previews the range position; only release commits seeking.
-- A native settings popover has a stable size, fixed header/bottom tabs and one
-  scrolling body. Basic links to Audio, Subtitles and Playback; Info uses actual
-  delivery and decoded picture size. Current playback is the only settings scope.
-  Existing speed presets and one WebVTT subtitle track remain supported. The Playback tab also lists this playback's Quality (Automatic, Original, High, Data saver). A Chapters tab appears for a file with chapters: each chapter with its time, the one playing marked, a tap seeks and closes the panel. A Skip button (Skip intro, Skip credits and so on) sits above the controls while playback is inside a marked stretch; where the profile chose Automatic the player jumps on arrival and shows a short note with Undo, and credits that run to the end of the file open the next episode after that note when autoplay is on. The seek bar has no chapter ticks.
+- A native settings popover is 400px wide and at most 460px high, lightly translucent, CSS-anchored to the timeline's right edge 8px above it (a full screen on small viewports) and
+  never scrolls: fixed header, one pane of compact form fields, bottom tabs. Basic holds Audio, Subtitles, Speed and Quality; Audio and Subtitles repeat their field; Playback has
+  Quality, Speed (slider 0.25 to 4 with the usual speeds as dots and a number), Fit/Fill/Original, autoplay and the intro/credits skip choice; Info lists delivery, picture size, audio and quality.
+  Everything except the speed applies to the current playback only; the profile keeps speeds from 0.5 to 2. Existing WebVTT subtitles remain supported.
+- Episodes (where the list is not beside the picture: Wide, Fullscreen, narrow) is the first button of the bottom bar's right group; a file with chapters adds a Chapters button beside it
+  that opens the chapter list, and ticks on the timeline seek to them. A Skip button (Skip intro, Skip credits and so on) sits above the timeline's right edge while playback is inside a marked stretch;
+  where the profile chose Automatic the player jumps on arrival and shows a short note with Undo, and credits that run to the end of the file open the next episode after that note when autoplay is on.
+- The speaker shows three, two, one or no wave; the timeline is white-thumbed, played in the accent, buffered more opaque.
 - The page composes a sidebar using authorized Work details and the current
   season's existing episode service. Compact rows reuse `EpisodeCard`; the current
   episode stays accent-colored. Wide/fullscreen/narrow views use the same sidebar
@@ -43,4 +47,4 @@ buttons imply those features exist.
 TypeScript/assets, UI resources and focused progress/navigation tests; browser
 `FilmPathTests` covers settings, seek release, views, responsive bounds and the
 same video through mini/expand. `TracksTests` covers real audio switching,
-WebVTT on/off and a broken file with isolated databases and local FFmpeg fixtures.
+WebVTT on/off, chapters and skip, the fit of every settings pane (no scrolling, 1280x720 and 390x844, light and dark, Wide and Fullscreen), Episodes first and a broken file with isolated databases and local FFmpeg fixtures.

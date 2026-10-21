@@ -130,9 +130,9 @@ namespace Jularr.Backend.Logic.Operation
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
 
-        public static Task<OperationData?> ClaimOperationAsync(this LogicContext ctx, CancellationToken ct)
+        public static Task<OperationData?> ClaimOperationAsync(this LogicContext ctx, OperationClaimData data, CancellationToken ct)
         {
-            // Oldest queued scan, backup or benchmark first; downloads are tracked by their client.
+            // Oldest queued operation of the lane's kind first (scans and backups are claimed apart); downloads are tracked by their client.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -148,7 +148,7 @@ namespace Jularr.Backend.Logic.Operation
                         FROM
                             "Operations" AS queued
                         WHERE
-                            queued."OperationTypeId" IN (1, 3, 5)
+                            queued."OperationTypeId" = @OperationTypeId
                             AND queued."OperationStatusTypeId" = 1
                         ORDER BY
                             queued."CreatedAt",
@@ -161,6 +161,7 @@ namespace Jularr.Backend.Logic.Operation
                     operation."OperationTypeId",
                     operation."LibraryRootId";
                 """;
+            sql.Parameters.Add(data);
             return ctx.ReadOptionalAsync<OperationData>(sql, ct);
         }
 

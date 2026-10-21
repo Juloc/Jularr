@@ -62,7 +62,7 @@ test('player planning network failure displays the localized status', async () =
             : selector === '#player-sidebar' ? null : { dataset: {}, addEventListener() {}, setAttribute() {} }
     };
     runInNewContext(code, {
-        exports: {}, require: name => name === './Skip' ? skip : {},
+        exports: {}, require: name => name === './Skip' ? skip : name.endsWith('/Range') ? { updateRangeValue() {} } : {},
         document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }), addEventListener() {} },
         matchMedia: () => ({ matches: false, addEventListener() {} }),
         // The player starts a deferred loading indicator before requesting its plan.
