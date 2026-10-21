@@ -61,11 +61,12 @@ namespace Jularr.E2E.Tests
                 // Both audio tracks are offered in their languages; choosing the second asks for a new plan with that stream, and the new source plays.
                 await OpenWithTracksAsync(page, details, pilot);
                 await page.Locator("[data-action=settings]").ClickAsync();
-                await page.Locator("[data-setting-pane=audio]").ClickAsync();
-                var audio = page.Locator("[data-panel=audio] [data-audio]");
-                Assert.AreEqual(2, await audio.CountAsync());
-                Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-pressed"));
-                var languages = new[] { await audio.Nth(0).GetAttributeAsync("data-language"), await audio.Nth(1).GetAttributeAsync("data-language") };
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                var audio = page.Locator("[data-panel=audio] select[data-setting=audio]");
+                var tracks = audio.Locator("option");
+                Assert.AreEqual(2, await tracks.CountAsync());
+                await Assertions.Expect(audio).ToHaveValueAsync(await tracks.Nth(0).GetAttributeAsync("value") ?? "");
+                var languages = new[] { await tracks.Nth(0).GetAttributeAsync("data-language"), await tracks.Nth(1).GetAttributeAsync("data-language") };
                 Assert.IsTrue(languages.All(language => !string.IsNullOrEmpty(language)) && languages[0] != languages[1], string.Join(", ", languages));
                 // A source swap must not save the new session at zero when the old video pauses.
                 await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 2", null, new() { Timeout = Steps.MediaTimeout });
@@ -75,9 +76,9 @@ namespace Jularr.E2E.Tests
                     if (request.Method == "PUT" && request.Url.Contains("/api/v1/playback/sessions/", StringComparison.Ordinal))
                         progressRequests.Enqueue((request.Url, request.PostData ?? ""));
                 };
-                var stream = await audio.Nth(1).GetAttributeAsync("data-audio");
+                var stream = await tracks.Nth(1).GetAttributeAsync("value");
                 var source = await page.Locator("video").EvaluateAsync<string>("video => video.currentSrc");
-                var plan = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
+                var plan = await page.RunAndWaitForResponseAsync(() => audio.SelectOptionAsync(stream!),
                     response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioStreamIndex\":" + stream, StringComparison.Ordinal) == true,
                     new() { Timeout = Steps.MediaTimeout });
                 Assert.IsTrue(plan.Ok, "The plan for the second track answered " + plan.Status);
@@ -94,10 +95,11 @@ namespace Jularr.E2E.Tests
 
                 // The subtitle file beside it is the only subtitle, in English, with its own text.
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Subtitles", Exact = true }).ClickAsync();
-                var subtitles = page.Locator("[data-panel=subtitles] [data-subtitle]:not([data-subtitle=''])");
+                var subtitleField = page.Locator("[data-panel=subtitles] select[data-setting=subtitle]");
+                var subtitles = subtitleField.Locator("option:not([value=''])");
                 Assert.AreEqual(1, await subtitles.CountAsync());
                 StringAssert.StartsWith(await subtitles.GetAttributeAsync("data-language") ?? "", "en");
-                await subtitles.ClickAsync();
+                await subtitleField.SelectOptionAsync(await subtitles.GetAttributeAsync("value") ?? "");
                 await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues && track.cues.length > 0)",
                     null, new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual("Hello from the subtitle file.", await page.Locator("video").EvaluateAsync<string>(
@@ -115,19 +117,49 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(skip).ToBeVisibleAsync();
                 await Assertions.Expect(skip).ToHaveTextAsync("Skip intro");
                 await Evidence.SaveAsync(page, "player-skip-button");
+                await AssertSkipInEveryModeAsync(page, skip);
                 await skip.ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime >= 5");
                 await Assertions.Expect(skip).ToBeHiddenAsync();
-                await page.Locator("[data-action=settings]").ClickAsync();
-                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Chapters", Exact = true }).ClickAsync();
-                var chapters = page.Locator("[data-panel=chapters] [data-chapter]");
+                await page.Locator("[data-action=chapters]").ClickAsync();
+                var chapters = page.Locator("#player-chapters [data-chapter]");
                 Assert.AreEqual(4, await chapters.CountAsync());
                 CollectionAssert.AreEqual(new[] { "Cold open", "Opening", "Part A", "End Credits" }, (await chapters.Locator("span:first-child").AllTextContentsAsync()).ToArray());
                 await Assertions.Expect(chapters.Nth(2)).ToHaveAttributeAsync("aria-pressed", "true");
                 await Evidence.SaveAsync(page, "player-chapters-menu");
                 await chapters.Nth(1).ClickAsync();
                 await page.WaitForFunctionAsync("() => { const time = document.querySelector('video').currentTime; return time >= 2 && time < 3; }");
-                await Assertions.Expect(page.Locator("#player-settings")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("#player-chapters")).ToBeHiddenAsync();
+
+                // The ticks on the timeline stand at the chapters' starts (not at 0) and seek there.
+                var ticks = page.Locator(".player__mark");
+                Assert.AreEqual(3, await ticks.CountAsync());
+                await page.WaitForFunctionAsync("() => document.querySelector('.player__marks')?.hasAttribute('data-ready')");
+                await ticks.Nth(1).ClickAsync();
+                await page.WaitForFunctionAsync("() => { const time = document.querySelector('video').currentTime; return time >= 5 && time < 6; }");
+
+                // Every pane of the settings fits without a scrollbar: normal, wide and full screen, light and dark, on a desktop and a phone.
+                foreach (var mode in new[] { "light", "dark" })
+                {
+                    await page.EvaluateAsync("mode => { document.documentElement.dataset.mode = mode; }", mode);
+                    await AssertSettingsFitAsync(page, "normal " + mode);
+                }
+                await page.Locator("[data-action=theater]").ClickAsync();
+                await AssertEpisodesFirstAsync(page);
+                await AssertSettingsFitAsync(page, "wide");
+                await page.Locator("[data-action=fullscreen]").ClickAsync();
+                await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+                await AssertEpisodesFirstAsync(page);
+                await AssertSettingsFitAsync(page, "fullscreen");
+                await page.Locator("[data-action=fullscreen]").ClickAsync();
+                await page.WaitForFunctionAsync("() => !document.fullscreenElement");
+                await page.Locator("[data-action=theater]").ClickAsync();
+                await page.SetViewportSizeAsync(390, 844);
+                await AssertSettingsFitAsync(page, "phone");
+                await page.SetViewportSizeAsync(844, 390);
+                await AssertSettingsFitAsync(page, "phone landscape");
+                await page.SetViewportSizeAsync(1280, 720);
+                await page.EvaluateAsync("() => { document.documentElement.dataset.mode = 'light'; }");
 
                 // Automatic skipping jumps by itself and says so; credits that run to the end open the next episode after a pause that Undo cancels.
                 var antiforgery = await page.Locator(".player").GetAttributeAsync("data-antiforgery");
@@ -170,6 +202,85 @@ namespace Jularr.E2E.Tests
             }
         }
 
+
+        // Every pane of the settings fits its fixed size: nothing scrolls inside it, and it stays inside the screen, above the timeline's right edge where there is room.
+        private static async Task AssertSettingsFitAsync(IPage page, string label)
+        {
+            await page.Locator("[data-action=settings]").ClickAsync();
+            var settings = page.Locator("#player-settings");
+            await Assertions.Expect(settings).ToBeVisibleAsync();
+            var viewport = page.ViewportSize!;
+            var box = (await settings.BoundingBoxAsync())!;
+            Assert.IsTrue(box.X >= 0 && box.Y >= 0 && box.X + box.Width <= viewport.Width + 1 && box.Y + box.Height <= viewport.Height + 1, $"{label}: the settings leave the screen.");
+            var floating = viewport.Width > 620 && viewport.Height > 600;
+            Assert.IsTrue(!floating || box.Width <= 400.5 && box.Height <= 460.5, $"{label}: the settings are larger than 400x460.");
+            foreach (var name in new[] { "Basic", "Audio", "Subtitles", "Playback", "Info" })
+            {
+                await settings.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true }).ClickAsync();
+                var overflowing = await settings.EvaluateAsync<string[]>("""
+                    popover => [popover, popover.querySelector('.player__settings-body'), popover.querySelector('.player__settings-pane:not([hidden])'), popover.querySelector('.navigation-tabs')]
+                        .filter(element => element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth)
+                        .map(element => element.className + ' ' + element.scrollWidth + 'x' + element.scrollHeight + ' in ' + element.clientWidth + 'x' + element.clientHeight)
+                    """);
+                CollectionAssert.AreEqual(Array.Empty<string>(), overflowing, $"{label}, {name}: something scrolls inside the settings.");
+            }
+
+            await settings.GetByRole(AriaRole.Tab, new() { Name = "Basic", Exact = true }).ClickAsync();
+            if (floating)
+            {
+                var timeline = (await page.Locator("[data-role=timeline]").BoundingBoxAsync())!;
+                Assert.AreEqual(timeline.X + timeline.Width, box.X + box.Width, 1.5, $"{label}: the settings end at the timeline's right edge.");
+                Assert.AreEqual(timeline.Y - 8, box.Y + box.Height, 1.5, $"{label}: the settings sit 8px above the timeline.");
+            }
+
+            await Evidence.SaveAsync(page, "player-settings-" + label.Replace(' ', '-'));
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(settings).ToBeHiddenAsync();
+        }
+
+        // Where the list is not beside the picture, Episodes is the first button of the bottom bar's right group.
+        private static async Task AssertEpisodesFirstAsync(IPage page)
+        {
+            var episodes = page.Locator("[data-action=episodes]");
+            await Assertions.Expect(episodes).ToBeVisibleAsync();
+            var first = (await episodes.BoundingBoxAsync())!;
+            var timeline = (await page.Locator("[data-role=timeline]").BoundingBoxAsync())!;
+            Assert.IsTrue(first.Y > timeline.Y, "Episodes belongs to the bottom bar, below the timeline.");
+            foreach (var other in await page.Locator(".player__options > .player__button:visible").AllAsync())
+            {
+                if (await other.GetAttributeAsync("data-action") == "episodes") continue;
+                Assert.IsTrue((await other.BoundingBoxAsync())!.X > first.X, "Episodes comes before the other buttons.");
+            }
+            Assert.AreEqual("episodes", await page.Locator(".player__options > .player__button:visible").First.GetAttributeAsync("data-action"));
+        }
+
+        // The skip button stays visible, inside the picture and above the timeline, whichever view is open.
+        private static async Task AssertSkipInEveryModeAsync(IPage page, ILocator skip)
+        {
+            await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.pause(); video.currentTime = 2.5; }");
+            foreach (var mode in new[] { "normal", "wide", "fullscreen" })
+            {
+                if (mode == "wide") await page.Locator("[data-action=theater]").ClickAsync();
+                if (mode == "fullscreen")
+                {
+                    await page.Locator("[data-action=fullscreen]").ClickAsync();
+                    await page.WaitForFunctionAsync("() => document.fullscreenElement === document.querySelector('.player')");
+                }
+
+                await Assertions.Expect(skip).ToBeVisibleAsync();
+                var button = (await skip.BoundingBoxAsync())!;
+                var timeline = (await page.Locator("[data-role=timeline]").BoundingBoxAsync())!;
+                var viewport = page.ViewportSize!;
+                Assert.IsTrue(button.X >= 0 && button.X + button.Width <= viewport.Width && button.Y >= 0, $"{mode}: the skip button leaves the screen.");
+                Assert.IsTrue(button.Y + button.Height <= timeline.Y, $"{mode}: the skip button covers the timeline.");
+                await Evidence.SaveAsync(page, "player-skip-" + mode);
+            }
+
+            await page.Locator("[data-action=fullscreen]").ClickAsync();
+            await page.WaitForFunctionAsync("() => !document.fullscreenElement");
+            await page.Locator("[data-action=theater]").ClickAsync();
+        }
+
         // The download monitor imports one episode after the other.
         // The library scan after the import reads the tracks; until then the player offers no choice of them. Once played, the episode offers to resume, so the player itself is reloaded.
         private static async Task OpenWithTracksAsync(IPage page, string details, ILocator play)
@@ -181,7 +292,7 @@ namespace Jularr.E2E.Tests
             while (true)
             {
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
-                if (await page.Locator("[data-audio]").CountAsync() > 1)
+                if (await page.Locator("select[data-setting=audio] option").CountAsync() > 2)
                 {
                     return;
                 }

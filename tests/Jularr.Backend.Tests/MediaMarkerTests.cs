@@ -156,7 +156,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
             StringAssert.Contains(html, "data-markers=");
             StringAssert.Contains(html, "&quot;kind&quot;:&quot;Intro&quot;,&quot;start&quot;:28");
-            Assert.AreEqual(4, System.Text.RegularExpressions.Regex.Matches(html, "data-chapter=\"").Count);
+            Assert.AreEqual(4, System.Text.RegularExpressions.Regex.Matches(html, "player__chapter\"[^>]*data-chapter=\"").Count);
+            Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(html, "player__mark\" data-chapter=\"").Count, "A tick for every chapter after the first.");
             StringAssert.Contains(html, "data-skip-intro=\"Button\"");
 
             // A manual marker beats the sidecar on every file of the episode.
