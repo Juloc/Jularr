@@ -1,0 +1,48 @@
+// A closed sample behind a soft button; opened, a read-only code box on the field tone with its copy button at the top right.
+.code-sample {
+    min-width: 0;
+
+    &__toggle {
+        width: fit-content;
+        list-style: none;
+
+        &::-webkit-details-marker { display: none; }
+        .ui-icon { transition: transform var(--transition); }
+    }
+
+    &[open] &__toggle .ui-icon { transform: rotate(180deg); }
+    &__toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+    &__box {
+        position: relative;
+        margin-top: 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-inner);
+        background: var(--field);
+
+        pre {
+            max-height: 320px;
+            margin: 0;
+            padding: 14px 52px 14px 16px;
+            overflow: auto;
+            color: var(--text);
+            font: 12px/1.7 ui-monospace, Consolas, monospace;
+            white-space: pre;
+            outline: none;
+        }
+
+        pre:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; border-radius: var(--radius-inner); }
+    }
+
+    &__copy {
+        position: absolute;
+        z-index: 1;
+        top: 8px;
+        inset-inline-end: 8px;
+    }
+
+    &__copy[hidden] { display: none; }
+    &__done-icon { display: none; }
+    &__copy[data-state="copied"] &__copy-icon { display: none; }
+    &__copy[data-state="copied"] &__done-icon { display: inline-flex; color: var(--success); }
+}
