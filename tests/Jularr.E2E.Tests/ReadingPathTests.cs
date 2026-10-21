@@ -17,21 +17,7 @@ namespace Jularr.E2E.Tests
             var page = session.Page;
             try
             {
-                await Owner.SetUpAndSignInAsync(page);
-                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
-                await page.GotoAsync("/Admin/Library");
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
-                var deadline = DateTime.UtcNow.AddSeconds(30);
-                while (true)
-                {
-                    await page.GotoAsync("/Admin/Library/Unmatched");
-                    if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
-                    Assert.IsTrue(DateTime.UtcNow < deadline, "The local test EPUB was not scanned.");
-                    await Task.Delay(500);
-                }
-
-                await page.Locator("form [name=Title]").FillAsync("Reader opening");
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+                await AddBookAsync(page, folders, "Reader opening");
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var response = await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
                 Assert.AreEqual(200, response!.Status);
@@ -204,6 +190,139 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "reader-opening-only");
                 throw;
             }
+        }
+
+        [TestMethod]
+        [Timeout(180_000)]
+        public async Task LocalEpub_BookSpread_PagesAreMirrorImages()
+        {
+            using var folders = new Folders("Books");
+            Steps.WriteEpub(Path.Combine(folders.Library, "Books", "spread.epub"), "Spread mirror", "Local fixture");
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await AddBookAsync(page, folders, "Spread mirror");
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true' && document.querySelectorAll('.reader__page-print').length >= 2");
+                var seek = page.GetByRole(AriaRole.Slider, new() { Name = "Position in this chapter", Exact = true });
+                // Long running text in both columns: the two pages of a spread are mirrors of one another.
+                await page.Locator("[data-role=content]").EvaluateAsync("""
+                    source => {
+                        source.replaceChildren();
+                        const words = ['the', 'lantern', 'burned', 'quietly', 'while', 'we', 'walked', 'along', 'a', 'river', 'beneath', 'old', 'copper', 'beeches', 'and', 'spoke', 'of', 'harbours', 'windows', 'stories'];
+                        const paragraph = document.createElement('p');
+                        paragraph.style.marginBlock = '0';
+                        paragraph.textContent = Array.from({ length: 2400 }, (_, index) => words[index * 7 % words.length]).join(' ') + '.';
+                        source.append(paragraph);
+                    }
+                    """);
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookThickness && Number(r.dataset.pageCount) > 6 && r.dataset.bookState === 'idle'; }");
+                await seek.FocusAsync(); await page.Keyboard.PressAsync("Home");
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
+                // A thick book (1500 printed pages) makes the unread and read stacks differ clearly; keep that count after every re-measure.
+                await page.EvaluateAsync("""
+                    () => {
+                        const reader = document.querySelector('.reader');
+                        const thick = () => { if (reader.dataset.bookPageCount !== '1500') reader.dataset.bookPageCount = '1500'; };
+                        new MutationObserver(thick).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count'] });
+                        thick();
+                    }
+                    """);
+                foreach (var (width, height) in new[] { (1280, 720), (1024, 768) })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '2'");
+                    await AssertSpreadMirrorsAsync(page, $"{width}x{height} first spread");
+                }
+                // The theater view hides the sidebar, so even the small window shows two pages.
+                await page.Locator("[data-reader-theater]").ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.view === 'theater'");
+                foreach (var (width, height) in new[] { (909, 561), (1024, 768), (1920, 1080) })
+                {
+                    await page.SetViewportSizeAsync(width, height);
+                    await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '2'");
+                    await AssertSpreadMirrorsAsync(page, $"{width}x{height} theater first spread");
+                }
+                await seek.FocusAsync(); await page.Keyboard.PressAsync("End");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookState === 'idle' && Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
+                await AssertSpreadMirrorsAsync(page, "1920x1080 theater last spread", textFills: false);
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                Evidence.Log("[reader-spread] " + exception);
+                await Evidence.SaveAsync(page, "reader-spread-failed");
+                throw;
+            }
+        }
+
+        // Signs in, adds the library, scans it and makes the one scanned book a work.
+        private static async Task AddBookAsync(IPage page, Folders folders, string title)
+        {
+            await Owner.SetUpAndSignInAsync(page);
+            await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+            await page.GotoAsync("/Admin/Library");
+            await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (true)
+            {
+                await page.GotoAsync("/Admin/Library/Unmatched");
+                if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                Assert.IsTrue(DateTime.UtcNow < deadline, "The local test EPUB was not scanned.");
+                await Task.Delay(500);
+            }
+
+            await page.Locator("form [name=Title]").FillAsync(title);
+            await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+        }
+
+        // Left and right page of the spread share height, vertical position, outline, text box and page number
+        // (mirrored); pagination fills both text boxes alike.
+        private static async Task AssertSpreadMirrorsAsync(IPage page, string view, bool textFills = true)
+        {
+            await page.EvaluateAsync("() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))");
+            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle' && document.querySelectorAll('.reader-book__print > .reader__page-print').length === 2");
+            await Evidence.SaveAsync(page, "reader-spread-" + view.Replace(' ', '-'));
+            var sides = await page.EvaluateAsync<System.Text.Json.JsonElement>("""
+                () => {
+                    const line = parseFloat(getComputedStyle(document.querySelector('[data-role=content]')).lineHeight);
+                    const measure = side => {
+                        const sheet = document.querySelector(`[data-book-sheet=${side}]`), box = sheet.getBoundingClientRect();
+                        const points = sheet.style.clipPath.slice(8, -1).split(',').map(point => point.trim().split(' ').map(value => parseFloat(value) / 100));
+                        const ys = points.map(point => box.top + point[1] * box.height), xs = points.map(point => box.left + point[0] * box.width);
+                        const print = sheet.querySelector('.reader__page-print'), printBox = print.getBoundingClientRect();
+                        const text = [...print.querySelectorAll('span')].filter(span => span.textContent.trim()).map(span => span.getBoundingClientRect());
+                        const firstText = text.length ? Math.min(...text.map(rect => rect.top)) : 0, lastText = text.length ? Math.max(...text.map(rect => rect.bottom)) : 0;
+                        const number = print.querySelector('[data-book-number]').getBoundingClientRect();
+                        const top = Math.min(...ys), bottom = Math.max(...ys);
+                        return { sheetTop: box.top, sheetHeight: box.height, top, bottom, height: bottom - top, width: Math.max(...xs) - Math.min(...xs),
+                            printTop: printBox.top, printHeight: printBox.height,
+                            topPadding: firstText - top, textEndGap: bottom - lastText, numberGap: bottom - number.bottom,
+                            numberOuter: side === 'left' ? (number.left + number.right) / 2 - Math.min(...xs) : Math.max(...xs) - (number.left + number.right) / 2,
+                            columns: Number(document.querySelector('.reader').dataset.columns) };
+                    };
+                    return { line, left: measure('left'), right: measure('right') };
+                }
+                """);
+            var left = sides.GetProperty("left"); var right = sides.GetProperty("right");
+            var line = sides.GetProperty("line").GetDouble();
+            double Value(System.Text.Json.JsonElement side, string name) => side.GetProperty(name).GetDouble();
+            var differences = new List<string>();
+            foreach (var name in new[] { "sheetTop", "sheetHeight", "top", "bottom", "height", "width", "printTop", "printHeight", "numberGap", "numberOuter" })
+            {
+                if (Math.Abs(Value(left, name) - Value(right, name)) > 1) differences.Add($"{name} {Value(left, name):F1} vs {Value(right, name):F1}");
+            }
+
+            if (textFills)
+            {
+                if (Math.Abs(Value(left, "topPadding") - Value(right, "topPadding")) > 1) differences.Add($"topPadding {Value(left, "topPadding"):F1} vs {Value(right, "topPadding"):F1}");
+                if (Math.Abs(Value(left, "textEndGap") - Value(right, "textEndGap")) >= line) differences.Add($"textEndGap {Value(left, "textEndGap"):F1} vs {Value(right, "textEndGap"):F1} (line {line:F1})");
+            }
+
+            Evidence.Log($"[reader-spread] {view}: left {left} right {right}");
+            Assert.AreEqual(0, differences.Count, $"{view}: left and right page differ: " + string.Join("; ", differences));
         }
 
         private static Task<string[]> VisiblePagePrintsAsync(IPage page) => page.EvaluateAsync<string[]>("""
