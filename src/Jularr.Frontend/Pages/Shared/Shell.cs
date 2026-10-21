@@ -109,7 +109,7 @@ namespace Jularr.Frontend.Pages.Shared
             var links = new List<ShellLink>();
             if (texts.CanAdminister())
             {
-                links.Add(new ShellLink("system.title", "/Admin/System", "server"));
+                links.Add(Group("nav.group.system", "server", new("nav.system.overview", "/Admin/System", ""), new("admin.jobs.title", "/Admin/Jobs", "")));
             }
 
             if (texts.CanManageMedia())
