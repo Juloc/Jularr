@@ -14,11 +14,12 @@ namespace Jularr.E2E.Tests
             await using var browser = await BrowserSession.StartAsync(jularr);
             var page = browser.Page;
             await Owner.SetUpAndSignInAsync(page);
-            await page.GotoAsync("/Admin/Library/Naming");
+            await page.GotoAsync("/Admin/Instance/Naming");
 
             // Anime episodes have a format of their own beside the series' one.
             await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Anime episode files", Exact = true })).ToBeVisibleAsync();
-            var settings = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Episode names", Exact = true }) }).Locator("form[data-save]");
+            var settings = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Episode files", Exact = true }) })
+                .Locator("form[data-form-kind$=UpdateNamingSettingsDataV1]");
             await settings.Locator("[name=ColonReplacementId]").SelectOptionAsync(new SelectOptionValue { Label = "Own" });
             await settings.Locator("[name=CustomColonReplacement]").FillAsync("~");
             await settings.Locator("[name=SpecialsFolder]").FillAsync("Extras");

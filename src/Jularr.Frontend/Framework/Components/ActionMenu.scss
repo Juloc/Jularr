@@ -1,0 +1,57 @@
+// The panel of the more menu and of a short form beside a title's actions: opens under its button, the mockups' popover.
+.action-menu {
+    position: relative;
+
+    &__button {
+        list-style: none;
+        cursor: pointer;
+
+        &::-webkit-details-marker { display: none; }
+
+        > span { display: inline-flex; align-items: center; gap: 7px; }
+    }
+
+    &__panel {
+        position: absolute;
+        z-index: 20;
+        top: calc(100% + 6px);
+        left: 0;
+        display: grid;
+        gap: 2px;
+        min-width: 230px;
+        max-width: min(340px, calc(100vw - 32px));
+        padding: 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: var(--shadow-overlay);
+
+        form { margin: 0; }
+        .ui-form { padding: 8px; }
+    }
+
+    &__item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 11px;
+        border: 0;
+        border-radius: var(--radius-small);
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+        font-size: var(--text-body);
+        font-weight: 700;
+        text-align: start;
+        text-decoration: none;
+
+        .ui-icon { flex: none; width: 16px; height: 16px; color: var(--muted); }
+
+        &:hover,
+        &:focus-visible { background: var(--accent-soft); color: var(--accent-text); .ui-icon { color: inherit; } }
+    }
+
+    &__divider { margin: 4px; border: 0; border-top: 1px solid var(--border); }
+}

@@ -127,8 +127,19 @@ namespace Jularr.Backend.Data.User.Media.V1
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
-            int? runtimeMinutes, string? genres, string? trailerKey, string? studio, decimal? franchisePosition = null)
+            int? runtimeMinutes, string? genres, string? trailerKey, string? studio, MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, ProgressStateType progressStateId,
+            int progressPercent, decimal? rating, string? ratingSource, string? originalTitle, DateOnly? releasedOn, string? originalLanguage, decimal? franchisePosition = null)
         {
+            AvailabilityStateId = availabilityStateId;
+            AvailableUnits = availableUnits;
+            MonitoredUnits = monitoredUnits;
+            ProgressStateId = progressStateId;
+            ProgressPercent = progressPercent;
+            Rating = rating;
+            RatingSource = ratingSource;
+            OriginalTitle = originalTitle;
+            ReleasedOn = releasedOn;
+            OriginalLanguage = originalLanguage;
             FranchisePosition = franchisePosition;
             RuntimeMinutes = runtimeMinutes;
             Genres = genres;
@@ -220,6 +231,39 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Fact))]
         public string? Studio { get; }
+
+        // What the title offers the profile and how far the profile is, as on its card.
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailabilityStateId))]
+        public MediaAvailabilityState AvailabilityStateId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailableUnits))]
+        public int AvailableUnits { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MonitoredUnits))]
+        public int MonitoredUnits { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId))]
+        public ProgressStateType ProgressStateId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressPercent))]
+        public int ProgressPercent { get; }
+
+        // The catalog's rating on a scale of ten and the catalog it comes from (the namespace of its entry); none while no entry has one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
+        public decimal? Rating { get; }
+
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.Namespace), false)]
+        public string? RatingSource { get; }
+
+        // The title in its own language, where the catalog names one.
+        [DataField(typeof(ExternalWorkFields), nameof(ExternalWorkFields.OriginalTitle))]
+        public string? OriginalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
+        public string? OriginalLanguage { get; }
     }
 
     // A person the provider names for a Work: who wrote or made it, the cast with their character, the crew with their job.
@@ -300,8 +344,12 @@ namespace Jularr.Backend.Data.User.Media.V1
     {
         public WorkAvailabilityV1(long id, long workVersionId, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
             long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted, bool isEmulated,
-            string? groupName, string? unitTitle, long? workUnitId, bool hasProgress)
+            string? groupName, string? unitTitle, long? workUnitId, bool hasProgress, long workEditionId, string? platformName, string? unitImageUrl, int? discNumber)
         {
+            UnitImageUrl = unitImageUrl;
+            DiscNumber = discNumber;
+            WorkEditionId = workEditionId;
+            PlatformName = platformName;
             WorkUnitId = workUnitId;
             HasProgress = hasProgress;
             UnitTitle = unitTitle;
@@ -387,6 +435,64 @@ namespace Jularr.Backend.Data.User.Media.V1
         // The profile has a position or a completion here; a book's progress can only be changed where it exists.
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
         public bool HasProgress { get; }
+
+        // The edition the version belongs to, and for a game the platform of its release.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkEditionId))]
+        public long WorkEditionId { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
+        public string? PlatformName { get; }
+
+        // A volume's cover and the disc of a track, where they are known.
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
+        public string? UnitImageUrl { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.DiscNumber))]
+        public int? DiscNumber { get; }
+    }
+
+    // An edition of a title: a cut or release name, or a book's language and format, with how much of it is here.
+    public sealed class WorkEditionV1 : BaseResponse
+    {
+        public WorkEditionV1(long id, string? name, string? title, string? languageCode, EditionFormat? editionFormatId, string? publisher, int? releaseYear, long fileCount, bool isAvailable)
+        {
+            Id = id;
+            Name = name;
+            Title = title;
+            LanguageCode = languageCode;
+            EditionFormatId = editionFormatId;
+            Publisher = publisher;
+            ReleaseYear = releaseYear;
+            FileCount = fileCount;
+            IsAvailable = isAvailable;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkEditionId))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupName), false)]
+        public string? Name { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.GroupName), false)]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.LanguageCode), false)]
+        public string? LanguageCode { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.EditionFormatId), false)]
+        public EditionFormat? EditionFormatId { get; }
+
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Publisher), false)]
+        public string? Publisher { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
+        public long FileCount { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.IsAvailable))]
+        public bool IsAvailable { get; }
     }
 
     public sealed class ReadWorkEpisodesParametersV1 : BaseParameters

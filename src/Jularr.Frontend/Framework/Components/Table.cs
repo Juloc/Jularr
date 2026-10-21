@@ -13,6 +13,14 @@ namespace Jularr.Frontend.Framework
     {
         private static readonly ConcurrentDictionary<(PropertyInfo Property, Type Value), Delegate> Getters = new();
         private readonly List<Column> _columns = [];
+        private bool _compact;
+
+        // Rows as high as their content, for a list inside a page (tracks, versions) rather than the page's own table.
+        public Table<TData> Compact()
+        {
+            _compact = true;
+            return this;
+        }
 
         public Table<TData> Content(string labelKey, Func<TData, IUiComponent> render)
         {
@@ -69,7 +77,7 @@ namespace Jularr.Frontend.Framework
             )).ToArray();
 
             new Div(new TableElement(new Thead(new Tr(headings)), new Tbody(body))
-                .Class("page-table")).Class("page-table-wrap page-table-wrap--stack").WriteTo(writer, encoder, texts);
+                .Class("page-table")).Class(_compact ? "page-table-wrap page-table-wrap--stack page-table-wrap--compact" : "page-table-wrap page-table-wrap--stack").WriteTo(writer, encoder, texts);
         }
 
         private sealed class Column(string labelKey, Func<TData, IUiComponent> value)

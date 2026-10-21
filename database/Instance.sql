@@ -98,6 +98,18 @@ INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Devices', FALSE);
 -- Registration lets visitors ask for an account that stays disabled until an administrator enables it.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Registration', FALSE);
 
+-- A module that builds on another one: it can be on only while what it needs is on, and what it needs stays on while it is.
+CREATE TABLE "InstanceModuleDependencies" (
+    "ModuleKey" varchar(32) NOT NULL REFERENCES "InstanceModules" ("Key") ON DELETE CASCADE,
+    "RequiredKey" varchar(32) NOT NULL REFERENCES "InstanceModules" ("Key") ON DELETE CASCADE,
+    PRIMARY KEY ("ModuleKey", "RequiredKey"),
+    CHECK ("ModuleKey" <> "RequiredKey")
+);
+INSERT INTO "InstanceModuleDependencies" ("ModuleKey", "RequiredKey") VALUES
+    ('Playback', 'Library'), ('Reading', 'Library'), ('Emulation', 'Library'), ('Subtitles', 'Library'), ('Uploads', 'Library'), ('Collections', 'Library'),
+    ('UnitGroups', 'Library'), ('HomeLayout', 'Library'), ('Franchises', 'Library'), ('Statistics', 'Library'), ('Calendar', 'Library'), ('ProgressSync', 'Library'),
+    ('Trickplay', 'Playback'), ('Translation', 'Reading'), ('Ocr', 'Reading'), ('SmartPdf', 'Reading'), ('LocalDiscovery', 'DiscoverCache');
+
 -- Profiles an account may use: with the Profiles module every linked one, otherwise its main profile (its own first, then the oldest).
 -- PINs guard selection only with the module.
 CREATE VIEW "SelectableProfiles" AS
