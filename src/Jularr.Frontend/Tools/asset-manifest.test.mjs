@@ -102,7 +102,7 @@ test("media preview bounds its hero width and uses full-width mobile context", (
 
 test("shared base styles cover forms, tables and capsule navigation on every page", () => {
     const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
-    for (const selector of [".ui-form", ".ui-field__control>legend", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
+    for (const selector of [".ui-form", ".ui-field__top", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
         assert.ok(css.includes(selector), selector);
     }
     assert.doesNotMatch(css, /--glass|box-shadow:inset/);
@@ -112,15 +112,16 @@ test("shared base styles cover forms, tables and capsule navigation on every pag
     assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
 });
 
-test("shared navigation stays single-row and the mobile bar floats above its safe area", () => {
+test("shared navigation stays single-row and the phone's sidebar is an off-canvas drawer", () => {
     const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
     assert.match(css, /\.navigation-tabs\{[^}]*overflow-x:auto/);
     assert.match(css, /\.navigation-tabs\{[^}]*scrollbar-width:none/);
     assert.match(css, /\.navigation-tabs::-webkit-scrollbar\{display:none/);
     assert.doesNotMatch(css, /\.navigation-tabs\{[^}]*flex-wrap:wrap/);
     assert.match(css, /\.navigation-tabs__link--active[^{}]*\{background:var\(--accent-soft\);color:var\(--accent-text\)/);
-    assert.match(css, /\.mobile-navigation\{[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)[^}]*border-radius:var\(--radius-control\)/);
-    assert.match(css, /\.mobile-link\{[^}]*min-height:54px/);
+    assert.match(css, /@media\s*\(max-width:\s*640px\)\{[^@]*\.app-sidebar\{[^}]*transform:translate\(-105%\);visibility:hidden/);
+    assert.match(css, /@media\s*\(min-width:\s*641px\)\s*and \(max-width:\s*1120px\)\{\.app-layout\{--side:\s*67px/);
+    assert.doesNotMatch(css, /\.mobile-navigation|\.mobile-link/);
     assert.match(css, /body\{min-width:0/);
 });
 

@@ -75,10 +75,21 @@
 
     &__input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
 
-    @media (max-width: 760px) {
-        width: 100vw;
-        &__head { padding: 14px 18px; }
-        &__body { padding: 8px 18px 18px; }
-        &__foot { padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 12px); }
+    // On a phone a bottom sheet, as in the mockups.
+    @media (max-width: 640px) {
+        inset: auto 0 0 0;
+        width: 100%;
+        max-width: 100%;
+        height: min(82dvh, 740px);
+        max-height: min(82dvh, 740px);
+        border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+        &__head { padding: 19px 19px 16px; }
+        &__body { padding: 8px 19px 18px; }
+        &__foot { padding: 13px 19px max(18px, env(safe-area-inset-bottom)); }
     }
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 640px) {
+    .filter-dialog[open] { animation: filter-sheet-in .23s ease; }
+    @keyframes filter-sheet-in { from { transform: translateY(40px); opacity: 0; } }
 }

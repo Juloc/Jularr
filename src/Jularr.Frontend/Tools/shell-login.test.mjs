@@ -64,7 +64,7 @@ test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", (
     assert.match(styles, /\.app-header\s*\{[^}]*height: 78px/);
     assert.match(styles, /container: crumbs/);
     assert.match(styles, /nth-last-child\(n \+ 3\)/);
-    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow/);
+    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow: (?!var\()/);
     assert.ok(!existsSync(resolve(root, "Pages/Shared/brand-clean.svg")) && !existsSync(resolve(root, "Pages/Shared/brand-original.svg")));
     assert.match(load("Pages/Shared/brand-mark.svg"), /fill="currentColor"/);
 });

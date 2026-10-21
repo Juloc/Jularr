@@ -45,7 +45,7 @@ function appearance(saved = {}, unavailable = false) {
     };
     const systemMode = { matches: false, addEventListener() {} };
     runInNewContext(script, { document, localStorage, Element, HTMLInputElement: Element, Set, exports: {}, require: () => palette, window: { matchMedia: () => systemMode } });
-    return { root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
+    return { Element, root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
         click: button => events.click({ target: button }), input: color => { picker.value = color; events.input({ target: picker }); } };
 }
 
@@ -62,6 +62,19 @@ test("appearance restores valid preferences and exposes selected controls", () =
     assert.equal(ui.storage.get("jularr-ui-skin"), "clean");
     assert.equal(ui.buttons[0].attributes["aria-pressed"], "false");
     assert.equal(ui.buttons[1].attributes["aria-pressed"], "true");
+});
+
+test("the header switch toggles the brightness in effect and keeps the style", () => {
+    const ui = appearance({ "jularr-ui-skin": "original" });
+    const toggle = new ui.Element({ toggleMode: "true" });
+    assert.equal(ui.root.dataset.mode, "system");
+    ui.click(toggle);
+    assert.equal(ui.root.dataset.mode, "dark");
+    assert.equal(ui.storage.get("jularr-ui-mode"), "dark");
+    assert.equal(ui.buttons[4].attributes["aria-pressed"], "true");
+    ui.click(toggle);
+    assert.equal(ui.root.dataset.mode, "light");
+    assert.equal(ui.root.dataset.skin, "original");
 });
 
 test("invalid or blocked storage retains usable independent controls", () => {
