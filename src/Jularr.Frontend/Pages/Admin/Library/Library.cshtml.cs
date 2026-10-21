@@ -28,7 +28,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, UpdateNamingSubtypePatternV1 updateSubtypePattern,
         ReadNamingSettingsV1 readNamingSettings, UpdateNamingSettingsV1 updateNamingSettings, ReadReplacementSettingsV1 readReplacement,
         UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
-        QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts) : JularrPage
+        QueueLibraryScanV1 queueScan, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<LibraryOverviewV1>? _overview;
         private ReplacementSettingsV1? _replacement;
@@ -66,6 +66,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
             // Every library with what it holds; new ones are added with their storage.
             if (_overview is { } libraries)
             {
+                if (libraries.Count > 0) page.Content.Add(Totals(libraries));
                 var table = new Table<LibraryOverviewV1>(libraries)
                     .Text(item => item.Name, "library.root")
                     .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
@@ -199,6 +200,17 @@ namespace Jularr.Frontend.Pages.Admin.Library
             }
 
             if (FormError is not null && _failedFileId is null && _failedPattern is null && _failedSettings is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+        }
+
+        // What the libraries hold altogether: how many, the files in them, those not identified and when one was scanned last.
+        private IUiComponent Totals(IReadOnlyList<LibraryOverviewV1> libraries)
+        {
+            var scanned = libraries.Max(item => item.LastScanAt);
+            return new KpiTiles(
+                new KpiTile("library.tab.Overview", new ValueText(libraries.Count.ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("library", assets, 20)),
+                new KpiTile("storage.paths.files", new ValueText(libraries.Sum(item => item.FileCount).ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("document", assets, 20)),
+                new KpiTile("library.unmatched", new ValueText(libraries.Sum(item => item.UnmatchedCount).ToString("N0", CultureInfo.CurrentCulture)), new Framework.Icon("status", assets, 20)),
+                new KpiTile("library.overview.scanned", scanned is { } at ? new ValueText(at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("library.overview.never"), new Framework.Icon("sync", assets, 20)));
         }
 
         private Form<AssignLibraryFileDataV1> Assignment(LibraryFileDetailsV1 file, string? csrf)

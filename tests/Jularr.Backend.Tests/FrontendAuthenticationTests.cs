@@ -528,7 +528,7 @@ namespace Jularr.Backend.Tests
                 {
                     var html = await page.Content.ReadAsStringAsync();
                     StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
-                    StringAssert.Contains(html, "class=\"page-table\"");
+                    StringAssert.Contains(html, "class=\"page-table works-table\"");
                     StringAssert.Contains(html, "/build/assets/Assets/Shared/shell.entry-");
                 }
                 if (path == "/Admin/Requests" && mediaAllowed)
