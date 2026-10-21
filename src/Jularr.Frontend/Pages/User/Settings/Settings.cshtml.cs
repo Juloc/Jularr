@@ -4,11 +4,13 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Localization.V1;
+using Jularr.Backend.Data.User.AniList.V1;
 using Jularr.Backend.Data.User.Home.V1;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
+using Jularr.Backend.Service.User.AniList.V1;
 using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Backend.Service.User.Profile.V1;
@@ -35,6 +37,7 @@ namespace Jularr.Frontend.Pages.User.Settings
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadPlaybackPreferencesV1 readPlayback, SavePlaybackPreferencesV1 savePlayback,
+        ReadAniListConnectionV1 readAniList, ConnectAniListV1 connectAniList, DisconnectAniListV1 disconnectAniList, UpdateAniListPushV1 updateAniListPush, FrontendAssets assets,
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // Speeds the player offers; languages a person is likely to choose, each by its own name.
@@ -54,6 +57,8 @@ namespace Jularr.Frontend.Pages.User.Settings
         private SpeechPreferencesV1? _speech;
         private SaveSpeechPreferencesDataV1? _speechInput;
         private IReadOnlyList<SpeechModelV1> _speechModels = [];
+        private AniListConnectionV1? _aniList;
+        private bool _savingAniList;
 
         protected override void Define(Page page)
         {
@@ -77,7 +82,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Save();
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _speechInput is not null || _playbackInput is not null ? null : FormError));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _savingAniList || _speechInput is not null || _playbackInput is not null ? null : FormError));
 
                     // Hidden types leave the profile's lists; they stay reachable.
                     if (_media.Count > 0)
@@ -128,6 +133,15 @@ namespace Jularr.Frontend.Pages.User.Settings
 
                 page.Content.Add(new UiSection("profile.settings.title", content));
                 if (_playback is not null && texts.CanPlay()) page.Content.Add(new UiSection("playback.settings.title", [PlaybackForm(_playback)]));
+
+                // Each profile connects its own AniList account; a profile can connect it once the Owner has set the application up.
+                if (_aniList is { } aniList && (aniList.IsConnected || aniList.IsConfigured))
+                {
+                    page.Asset("Pages/User/Settings/AniList.entry.scss");
+                    page.Asset("Framework/Components/Truncated.entry.ts");
+                    page.Content.Add(new UiSection("settings.anilist.title", [AniListCard(aniList)]));
+                }
+
                 if (_speech is not null && texts.Can("profile.self.update"))
                 {
                     page.Content.Add(new UiSection("speech.title", [new SpeechSettings(_speech, texts.Locale, "/Settings?handler=Speech",
@@ -257,6 +271,65 @@ namespace Jularr.Frontend.Pages.User.Settings
             }, Url.Page("/User/Settings/Settings", "Playback"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, input, _playbackInput is not null ? FormError : null);
         }
 
+        // Not connected: sign in at AniList, paste the code its PIN page shows. Connected: who it is, whether progress goes out, disconnect.
+        private IUiComponent AniListCard(AniListConnectionV1 account)
+        {
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            var error = _savingAniList ? FormError : null;
+            if (!account.IsConnected)
+            {
+                return new Div(
+                    new A(new Icon("anilist", assets, 20), new Text("settings.anilist.open")).Class("button").Attribute("href", account.AuthorizationUrl ?? "#").Attribute("target", "_blank")
+                        .Attribute("rel", "noopener noreferrer"),
+                    new Form<ConnectAniListDataV1>(form =>
+                    {
+                        form.Password(item => item.Code, "settings.anilist.code", "off");
+                        form.Submit("settings.anilist.connect");
+                    }, Url.Page("/User/Settings/Settings", "AniList"), csrf, null, error)).Class("anilist-card");
+            }
+
+            // A sign-in that ran out or failed in the last pass says what to do.
+            var problem = (account.IsExpired ? "anilist_token_expired" : account.FailureCode) is { } code ? "errors." + code : null;
+            var items = new List<IUiComponent>
+            {
+                new Div(new Icon("anilist", assets, 20), new Truncated(string.Format(CultureInfo.CurrentCulture, texts["settings.anilist.connected"], account.ViewerName))).Class("anilist-card__account")
+            };
+            if (problem is not null)
+            {
+                items.Add(new Div(new Truncated(texts[problem])).Class("anilist-card__problem").Attribute("role", "status"));
+            }
+
+            items.Add(new Form<UpdateAniListPushDataV1>(form =>
+            {
+                form.Toggle(item => item.IsPushEnabled, "settings.anilist.push");
+                form.Save();
+            }, Url.Page("/User/Settings/Settings", "AniListPush"), csrf, new UpdateAniListPushDataV1(account.IsPushEnabled), error));
+            items.Add(new Form<AniListParametersV1>(form => form.Submit("settings.anilist.disconnect"), Url.Page("/User/Settings/Settings", "AniListDisconnect"), csrf, new AniListParametersV1()));
+            return new Div([.. items]).Class("anilist-card");
+        }
+
+        public async Task<IActionResult> OnPostAniListAsync(string? code)
+        {
+            _savingAniList = true;
+            await connectAniList.ExecuteAsync<UpdateResult>(new AniListParametersV1(), new ConnectAniListDataV1(code ?? ""), HttpContext.RequestAborted);
+            Hint("profile.settings.saved");
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostAniListPushAsync(bool isPushEnabled)
+        {
+            _savingAniList = true;
+            await updateAniListPush.ExecuteAsync<UpdateResult>(new AniListParametersV1(), new UpdateAniListPushDataV1(isPushEnabled), HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostAniListDisconnectAsync()
+        {
+            _savingAniList = true;
+            await disconnectAniList.ExecuteAsync<UpdateResult>(new AniListParametersV1(), default, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
         public async Task<IActionResult> OnPostPlaybackAsync(string? audioLanguage, string? subtitleLanguage, [BindRequired] SubtitleMode subtitleModeTypeId, [BindRequired] decimal speed, bool autoplayNext, [BindRequired] SkipMode introSkipModeTypeId, [BindRequired] SkipMode outroSkipModeTypeId, bool autoplayPreviews)
         {
             _playbackInput = new SavePlaybackPreferencesDataV1(audioLanguage, subtitleLanguage, subtitleModeTypeId, speed, autoplayNext, introSkipModeTypeId, outroSkipModeTypeId, autoplayPreviews);
@@ -337,6 +410,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 }
                 _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
                 if (texts.CanPlay()) _playback = await readPlayback.ExecuteAsync<PlaybackPreferencesV1>(new PlaybackPreferencesParametersV1(), token);
+                if (texts.CanSyncAniList()) _aniList = await readAniList.ExecuteAsync<AniListConnectionV1>(new AniListParametersV1(), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
                 if (texts.CanArrangeHome())
                 {

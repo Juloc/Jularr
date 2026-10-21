@@ -67,6 +67,22 @@ namespace Jularr.E2E.Tests
 
         public Uri AniList => new(Address, "anilist/");
 
+        // A person's own AniList: the sign-in (authorization code to token), their lists and the progress they receive.
+        public Uri AniListAccount => new(Address, "anilist-account/");
+
+        public const string AniListClientId = "9876";
+        public const string AniListSecret = "e2e-anilist-secret";
+        public const string AniListCode = "e2e-anilist-code";
+        public const string AniListToken = "e2e-anilist-access-token-0123456789";
+
+        // The progress of each list entry (id, progress) as AniList has it; "writes" are the ones Jularr sent.
+        private readonly ConcurrentDictionary<int, int> _aniListProgress = new() { [8801] = 1, [8802] = 3 };
+        private readonly ConcurrentQueue<string> _aniListWrites = new();
+        private long _aniListStamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600;
+
+        public IReadOnlyDictionary<int, int> AniListProgress => _aniListProgress;
+        public IReadOnlyCollection<string> AniListWrites => _aniListWrites;
+
         // A Sonarr with one quality profile, its custom format, a root folder and the test series missing.
         public Uri Sonarr => new(Address, "sonarr/");
 
@@ -133,7 +149,8 @@ namespace Jularr.E2E.Tests
             });
             app.MapGet("/musicbrainz/ws/2/{**path}", MusicBrainzAnswer);
             app.MapGet("/openlibrary/{**path}", OpenLibraryAnswer);
-            app.MapPost("/anilist/", AniListAnswer);
+            app.MapPost("/anilist/", services.AniListGraphQl);
+            app.MapPost("/anilist-account/api/v2/oauth/token", services.AniListSignIn);
             app.MapGet("/sonarr/api/v3/{**path}", SonarrAnswer);
             app.MapGet("/newznab/api", services.Newznab);
             app.MapGet("/newznab/getnzb/{id}", (string id) => Results.Text("<nzb xmlns=\"http://www.newzbin.com/DTD/2003/nzb\"></nzb>", "application/x-nzb"));
@@ -201,11 +218,60 @@ namespace Jularr.E2E.Tests
             _ => Results.NotFound()
         };
 
-        // Takes the request, not the context, so its result is written.
-        private static async Task<IResult> AniListAnswer(HttpRequest request)
+        // The code of AniList's PIN page becomes the person's token.
+        private async Task<IResult> AniListSignIn(HttpRequest request)
         {
-            using var reader = new StreamReader(request.Body);
-            var query = await reader.ReadToEndAsync();
+            using var body = System.Text.Json.JsonDocument.Parse(await new StreamReader(request.Body).ReadToEndAsync());
+            var root = body.RootElement;
+            var valid = root.GetProperty("client_id").GetString() == AniListClientId && root.GetProperty("client_secret").GetString() == AniListSecret
+                && root.GetProperty("code").GetString() == AniListCode && root.GetProperty("grant_type").GetString() == "authorization_code";
+            return valid ? Json("{\"token_type\":\"Bearer\",\"expires_in\":31536000,\"access_token\":\"" + AniListToken + "\"}") : Results.StatusCode(StatusCodes.Status400BadRequest);
+        }
+
+        // A person's calls carry their token and see their own lists; everything else is the public catalog.
+        private async Task<IResult> AniListGraphQl(HttpRequest request)
+        {
+            var text = await new StreamReader(request.Body).ReadToEndAsync();
+            if (request.Headers.Authorization.ToString() != "Bearer " + AniListToken)
+            {
+                return request.Headers.Authorization.Count > 0 ? Results.StatusCode(StatusCodes.Status401Unauthorized) : AniListAnswer(text);
+            }
+
+            using var body = System.Text.Json.JsonDocument.Parse(text);
+            var query = body.RootElement.GetProperty("query").GetString()!;
+            var variables = body.RootElement.GetProperty("variables");
+            if (query.Contains("Viewer", StringComparison.Ordinal))
+            {
+                return Json("""{"data":{"Viewer":{"id":4711,"name":"E2E Fan"}}}""");
+            }
+
+            if (query.Contains("MediaListCollection", StringComparison.Ordinal))
+            {
+                if (variables.GetProperty("type").GetString() != "ANIME")
+                {
+                    return Json("""{"data":{"MediaListCollection":{"hasNextChunk":false,"lists":[]}}}""");
+                }
+
+                string Entry(int id, int mediaId, string status, int episodes) => "{\"id\":" + id + ",\"mediaId\":" + mediaId + ",\"status\":\"" + status + "\",\"progress\":" + _aniListProgress[id]
+                    + ",\"progressVolumes\":0,\"score\":85,\"updatedAt\":" + Interlocked.Read(ref _aniListStamp) + ",\"media\":{\"episodes\":" + episodes + ",\"chapters\":null,\"volumes\":null,\"title\":{\"romaji\":\"Entry " + mediaId + "\",\"english\":null}}}";
+                return Json("{\"data\":{\"MediaListCollection\":{\"hasNextChunk\":false,\"lists\":[{\"entries\":[" + Entry(8801, 7001, "CURRENT", 12) + "," + Entry(8802, 7999, "CURRENT", 24) + "]}]}}}");
+            }
+
+            if (query.Contains("SaveMediaListEntry", StringComparison.Ordinal))
+            {
+                var id = variables.GetProperty("id").GetInt32();
+                var progress = variables.GetProperty("progress").GetInt32();
+                _aniListProgress[id] = progress;
+                _aniListWrites.Enqueue(id + ":" + progress);
+                var stamp = Interlocked.Increment(ref _aniListStamp);
+                return Json("{\"data\":{\"SaveMediaListEntry\":{\"id\":" + id + ",\"progress\":" + progress + ",\"progressVolumes\":0,\"updatedAt\":" + stamp + "}}}");
+            }
+
+            return Results.NotFound();
+        }
+
+        private static IResult AniListAnswer(string query)
+        {
             var media = query.Contains("ANIME", StringComparison.Ordinal) || query.Contains("103", StringComparison.Ordinal) ? AniListAnime
                 : query.Contains("Novel", StringComparison.Ordinal) || query.Contains("102", StringComparison.Ordinal) ? AniListNovel : AniListManga;
             return Json(query.Contains("Page(", StringComparison.Ordinal) ? "{\"data\":{\"Page\":{\"media\":[" + media + "]}}}" : "{\"data\":{\"Media\":" + media + "}}");

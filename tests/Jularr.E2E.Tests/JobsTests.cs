@@ -8,7 +8,7 @@ namespace Jularr.E2E.Tests
     {
         private static readonly string[] Jobs =
         [
-            "Library scans", "Backups", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "Provider covers",
+            "Library scans", "Backups", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "AniList sync", "Provider covers",
             "Storage check", "Scan scheduling", "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling"
         ];
 
