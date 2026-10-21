@@ -213,7 +213,7 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Naming");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Naming");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Episode files");
@@ -236,6 +236,35 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task NamingPreview_TypedPattern_ShowsTheExampleOrWhyItCannotBeSaved()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            static string Address(string type, string? folder, string file) =>
+                "/api/v1/admin/library/naming/preview?mediaTypeId=" + type + (folder is null ? "" : "&folder=" + Uri.EscapeDataString(folder)) + "&file=" + Uri.EscapeDataString(file);
+
+            // What is typed, before it is saved, with the same rules as the save.
+            using var good = await host.SendAsync(HttpMethod.Get, Address("Series", "{Title}/S{Season:00}", "{Series.Title} S{Season:00}E{Episode:00}"));
+            Assert.AreEqual(HttpStatusCode.OK, good.StatusCode, await good.Content.ReadAsStringAsync());
+            var preview = (await good.Content.ReadFromJsonAsync<NamingPreviewV1>())!;
+            Assert.AreEqual("Example Show/S01/Example.Show S01E02.mkv", preview.Example);
+            Assert.IsNull(preview.Problem);
+
+            using var unknown = await host.SendAsync(HttpMethod.Get, Address("Movie", null, "{Title} {Nothing}"));
+            Assert.AreEqual("naming_unknown_token", (await unknown.Content.ReadFromJsonAsync<NamingPreviewV1>())!.Problem);
+            using var incomplete = await host.SendAsync(HttpMethod.Get, Address("Series", null, "{Title} {Season:00}"));
+            var answer = (await incomplete.Content.ReadFromJsonAsync<NamingPreviewV1>())!;
+            Assert.IsNull(answer.Example);
+            Assert.AreEqual("naming_incomplete", answer.Problem);
+
+            // The page names its tokens in a drawer and carries the preview's problems as texts for the script.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Naming");
+            var html = await page.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "data-naming-token=\"{Title}\"");
+            StringAssert.Contains(html, "data-problem-naming_unknown_token=");
+        }
+
+        [TestMethod]
         public void NamingSet_SubtypePattern_NamesItsFilesAndTheTypeKeepsTheRest()
         {
             var set = new NamingSet(new Dictionary<(MediaType, MediaSubtype?), string>
@@ -255,7 +284,7 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Naming");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Naming");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Anime episode files");

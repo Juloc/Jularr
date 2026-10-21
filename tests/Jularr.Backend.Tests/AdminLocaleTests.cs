@@ -66,10 +66,10 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await Host.CreateAsync(razor: true);
             await SignInAsync(host);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Languages");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Languages");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var csrf = Regex.Match(await page.Content.ReadAsStringAsync(), "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
-            using var created = await host.SendAsync(HttpMethod.Post, "/Admin/Languages?handler=Create", new Dictionary<string, string>
+            using var created = await host.SendAsync(HttpMethod.Post, "/Admin/Instance/Languages?handler=Create", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf), ["Locale"] = "FR-ca", ["Name"] = "French (CA)", ["IsRightToLeft"] = "False"
             });

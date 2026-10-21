@@ -11,8 +11,13 @@ namespace Jularr.Frontend.Framework
     public sealed class MediaImage(
         string url, string alt, int width, int height,
         IReadOnlyList<ImageVariant>? variants = null, string? sizes = null,
-        bool priority = false) : IUiComponent
+        bool priority = false, NoCoverKind kind = NoCoverKind.Poster) : IUiComponent
     {
+        // The image where there is an address, otherwise the stand-in (NoCover): the one place a missing cover is decided.
+        public static IUiComponent Or(FrontendAssets assets, string? url, string alt, int width, int height, NoCoverKind kind = NoCoverKind.Poster,
+            bool priority = false, string? placeholderClass = null) =>
+            string.IsNullOrWhiteSpace(url) ? new NoCover(assets, kind, placeholderClass) : new MediaImage(url, alt, width, height, priority: priority, kind: kind);
+
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
             if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
@@ -36,6 +41,8 @@ namespace Jularr.Frontend.Framework
                 .Attribute("loading", priority ? "eager" : "lazy");
 
             if (priority) image.Attribute("fetchpriority", "high");
+            // A failed load is swapped for the matching stand-in by MediaImage.entry.ts.
+            if (kind == NoCoverKind.Person) image.Attribute("data-no-cover", "person");
 
             if (variants is { Count: > 0 })
             {

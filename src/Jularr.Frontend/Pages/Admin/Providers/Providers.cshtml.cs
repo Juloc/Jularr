@@ -72,9 +72,9 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }
             else
             {
-                var tabs = new List<NavigationTab> { new("admin.providers.title", Home, !IsServers, visible.Count(provider => !ServerKeys.Contains(provider.Key))) };
+                var tabs = new List<NavigationTab> { new("admin.providers.title", Home, !IsServers, Count: visible.Count(provider => !ServerKeys.Contains(provider.Key))) };
                 var serverCount = visible.Count(provider => ServerKeys.Contains(provider.Key));
-                if (serverCount > 0) tabs.Add(new("admin.mediaServers.title", Home + "?view=servers", IsServers, serverCount));
+                if (serverCount > 0) tabs.Add(new("admin.mediaServers.title", Home + "?view=servers", IsServers, Count: serverCount));
                 if (texts.CanAdminister()) tabs.Add(new("admin.catalog.title", "/Admin/Catalog", false));
                 page.Content.Add(new NavigationTabs(tabs, "admin.integrations"));
             }

@@ -133,6 +133,7 @@ namespace Jularr.Frontend.Framework
     public sealed class Input() : HtmlElement("input");
     public sealed class TextArea() : HtmlElement("textarea");
     public sealed class Img() : HtmlElement("img");
+    public sealed class Template(params IUiComponent[] children) : HtmlElement("template", children);
     public sealed class TableElement(params IUiComponent[] children) : HtmlElement("table", children);
     public sealed class Thead(params IUiComponent[] children) : HtmlElement("thead", children);
     public sealed class Tbody(params IUiComponent[] children) : HtmlElement("tbody", children);

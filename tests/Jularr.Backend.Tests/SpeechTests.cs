@@ -92,7 +92,7 @@ namespace Jularr.Backend.Tests
                 settings: new Dictionary<string, string> { ["Media:SpeechPath"] = models.Path },
                 services: services => services.AddHttpClient<SpeechModelClient>().ConfigurePrimaryHttpMessageHandler(() => source));
 
-            using var administration = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
+            using var administration = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Modules");
             StringAssert.Contains(await administration.Content.ReadAsStringAsync(), "href=\"/Admin/Instance/Speech\"");
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Speech");
             var markup = await page.Content.ReadAsStringAsync();
