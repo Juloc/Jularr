@@ -41,6 +41,10 @@ namespace Jularr.Backend.Logic.Library
             return Score(folder) > Score(file) ? folder : file;
         }
 
+        // The quality a person gave instead of the one the name says.
+        public static ReleaseFact? WithQuality(ReleaseFact? facts, string relativePath, string? quality) => quality is null ? facts
+            : facts is null ? new ReleaseFact(TextLimit.Cut(Path.GetFileNameWithoutExtension(relativePath), 500)!, null, quality, null, 1) : facts with { QualityKey = quality };
+
         private static int Score(ReleaseFact? fact) => fact is null ? -1 : (fact.ReleaseGroup is null ? 0 : 2) + (fact.QualityKey is null ? 0 : 1) + (fact.Edition is null ? 0 : 1);
 
         [GeneratedRegex(@"\[([A-Za-z]+-\d{3,4}p)\]")]
