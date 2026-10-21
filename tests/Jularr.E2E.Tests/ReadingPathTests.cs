@@ -583,7 +583,6 @@ namespace Jularr.E2E.Tests
             await page.SetViewportSizeAsync(390, 844);
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
             Assert.IsFalse(await page.Locator(".app-sidebar").IsVisibleAsync());
-            Assert.IsFalse(await page.Locator(".mobile-navigation").IsVisibleAsync());
             Assert.AreEqual(1, await page.Locator("[data-action=settings]").CountAsync(), "Mobile must reuse the same controls, not another toolbar copy.");
             var mobileTools = await page.Locator("[data-action=contents]").BoundingBoxAsync();
             var mobileCanvas = await page.Locator(".reader__canvas").BoundingBoxAsync();

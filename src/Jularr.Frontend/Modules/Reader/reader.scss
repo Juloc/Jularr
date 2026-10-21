@@ -5,7 +5,7 @@
 .reader-page {
     overflow: hidden;
     .app-layout { grid-template-rows: minmax(0, 1fr); height: 100dvh; }
-    .app-header, .mobile-navigation { display: none; }
+    .app-header { display: none; }
     .app-main { grid-row: 1; padding: 0; min-height: 0; }
     &:has(.reader[data-view=theater]) {
         .app-layout { grid-template-columns: minmax(0, 1fr); }
@@ -71,7 +71,7 @@
     // Transport presentation of the canonical typed Range, not a second slider.
     &__seek .ui-form { display: block; }
     &__seek .ui-field__control { padding: 0; border: 0; background: transparent; }
-    &__seek legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    &__seek .ui-field__top { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     &__seek .ui-range { gap: 0; }
     &__seek output { display: none; }
     &__bottom > :is(a,span:first-child:empty) { flex: 0 0 44px; }

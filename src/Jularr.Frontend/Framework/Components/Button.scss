@@ -1,11 +1,12 @@
-// The mockups' button: a pill on the quiet line; hover moves the line and the text to the accent, press shrinks it a hair.
+// The mockups' button: a 37px pill on the quiet line, 11px/740; hover moves the line to the soft purple and the text to the accent text,
+// press shrinks it a hair. Primary is the solid accent, soft the lavender tint, warn the amber one.
 .button {
     background: var(--surface);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: var(--control-height);
-    padding: 8px 17px;
+    padding: 0 14px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     color: var(--text);
@@ -13,11 +14,14 @@
     font-size: var(--text-control);
     font-weight: var(--weight-control);
     text-decoration: none;
-    gap: 8px;
-    transition: background-color var(--transition), border-color var(--transition), color var(--transition), transform var(--transition);
+    white-space: nowrap;
+    gap: 7px;
+    transition: border-color var(--transition), background-color var(--transition), color var(--transition), transform var(--transition);
+
+    .ui-icon { width: 14px; height: 14px; }
 
     &:hover:not(:disabled) { border-color: var(--accent-outline); color: var(--accent-text); }
-    &:active:not(:disabled) { transform: scale(.985); }
+    &:active:not(:disabled) { transform: scale(.98); }
     &[aria-pressed="true"] {
         border-color: var(--accent);
         background-color: var(--accent);
@@ -26,8 +30,9 @@
         &:hover:not(:disabled) { border-color: var(--accent-hover); background-color: var(--accent-hover); color: var(--accent-contrast); }
     }
 
-    &--compact { min-height: var(--control-height-compact); padding: 4px 12px; font-size: var(--text-small); }
-    &--icon { width: var(--control-height); min-height: var(--control-height); padding: 0; border-radius: 50%; .ui-icon { width: var(--icon-size); height: var(--icon-size); } }
+    // A button in a table row or a list: 32px, 10px text.
+    &--compact { min-height: var(--control-height-compact); padding: 0 11px; font-size: var(--text-small); }
+    &--icon { width: var(--icon-button); min-height: var(--icon-button); padding: 0; border-radius: 50%; .ui-icon { width: var(--icon-size); height: var(--icon-size); } }
 
     &--primary {
         border-color: var(--accent);
@@ -37,6 +42,21 @@
         &:hover:not(:disabled) { border-color: var(--accent-hover); background-color: var(--accent-hover); color: var(--accent-contrast); }
     }
 
-    // Opaque, quietly muted state.
-    &:disabled { opacity: 1; background: var(--field); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+    &--soft {
+        border-color: transparent;
+        background-color: var(--accent-soft);
+        color: var(--accent-text);
+
+        &:hover:not(:disabled) { border-color: var(--accent-outline); }
+    }
+
+    &--warn {
+        border-color: transparent;
+        background-color: var(--warning-soft);
+        color: var(--warning);
+
+        &:hover:not(:disabled) { border-color: var(--warning); color: var(--warning); }
+    }
+
+    &:disabled { opacity: .4; cursor: default; }
 }
