@@ -434,8 +434,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                 : "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.ExternalId);
             var meta = texts["discover.type." + scope.Slug] + (item.ReleaseYear is { } year ? " · " + year.ToString(CultureInfo.InvariantCulture) : "");
             IUiComponent poster = item.PosterUrl is { } url
-                ? new Img().Class("discover-suggestion__poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
-                : new Span().Class("discover-suggestion__poster");
+                ? new Img().Class("discover-suggestion__poster").Attribute("data-no-cover", "poster").Attribute("src", CoverPaths.Sized(url, 96)).Attribute("alt", "").Attribute("loading", "lazy")
+                : new NoCover(assets, NoCoverKind.Poster, "discover-suggestion__poster");
             return new A(poster, new Span(new Strong(new ValueText(item.Title)), new Span(new ValueText(meta))).Class("discover-suggestion__text"),
                 new Span(new Icon("chevron-left", assets, 16)).Class("discover-suggestion__arrow"))
                 .Class("discover-suggestion").Attribute("href", href);

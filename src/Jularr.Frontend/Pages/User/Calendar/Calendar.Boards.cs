@@ -23,8 +23,8 @@ namespace Jularr.Frontend.Pages.User.Calendar
 
         private string LongDate(DateOnly day) => day.ToString("D", CultureInfo.CurrentCulture);
 
-        private static IUiComponent Poster(CalendarEntryV1 entry, int width, int height) =>
-            new Span(entry.PosterUrl is { } url ? new MediaImage(url, "", width, height) : new Span()).Class("calendar__poster");
+        private IUiComponent Poster(CalendarEntryV1 entry, int width, int height) =>
+            new Span(MediaImage.Or(assets, entry.PosterUrl, "", width, height)).Class("calendar__poster");
 
         private IUiComponent StatusText(CalendarEntryV1 entry) =>
             Status(entry) is { } status ? new Span(new Text("calendar.status." + status)).Class("calendar__status") : new Span();

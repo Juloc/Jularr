@@ -147,9 +147,7 @@ namespace Jularr.Frontend.Framework
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            IUiComponent art = posterUrl is null
-                ? new Div(new Span(new ValueText(title))).Class("media-card__placeholder")
-                : new MediaImage(posterUrl, title, 342, 513);
+            var art = MediaImage.Or(assets, posterUrl, title, 342, 513);
             var cover = new List<IUiComponent>
             {
                 new A(art).Class("media-card__art").Attribute("href", href).Attribute("aria-label", title)

@@ -37,7 +37,7 @@
 .work-cover {
     flex: none;
 
-    img, .work-cover__placeholder {
+    img, .no-cover {
         display: block;
         width: 210px;
         height: 315px;
@@ -45,8 +45,6 @@
         object-fit: cover;
         box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
     }
-
-    .work-cover__placeholder { background: linear-gradient(160deg, #c9b8f5, #7c3aed); }
 }
 
 .work-hero__body {
@@ -467,7 +465,7 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
 @media (max-width: 720px) {
     .work-hero__content { flex-direction: column; padding: 18px; }
     .work-actions .work-delete { flex: 1 1 100%; justify-content: center; }
-    .work-cover img, .work-cover .work-cover__placeholder { width: 120px; height: 180px; }
+    .work-cover img, .work-cover .no-cover { width: 120px; height: 180px; }
     .work-hero__body { min-height: 0; }
     .work-title h1 { font-size: 26px; }
     .work-season__head { grid-template-columns: 1fr auto; }

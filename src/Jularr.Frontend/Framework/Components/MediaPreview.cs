@@ -58,7 +58,7 @@ namespace Jularr.Frontend.Framework
             new Template(new Section(
                 new Div([.. hero]).Class("media-preview__hero"),
                 new Div(
-                    posterUrl is null ? new Span() : new Div(new MediaImage(posterUrl, title, 342, 513)).Class("media-preview__poster"),
+                    new Div(MediaImage.Or(assets, posterUrl, title, 342, 513)).Class("media-preview__poster"),
                     new Div([.. body]).Class("media-preview__body")
                 ).Class("media-preview__identity")
             ).Class("media-preview__content")).Attribute("id", id).WriteTo(writer, encoder, texts);
@@ -71,7 +71,6 @@ namespace Jularr.Frontend.Framework
             new Div().Attribute("data-preview-content", "")
         ).Class("media-preview").Attribute("data-media-preview", "").Attribute("aria-label", texts["media.preview.title"]);
 
-        private sealed class Template(params IUiComponent[] content) : HtmlElement("template", content);
         private sealed class Dialog(params IUiComponent[] content) : HtmlElement("dialog", content);
     }
 }

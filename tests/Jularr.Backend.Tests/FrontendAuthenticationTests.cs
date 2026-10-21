@@ -261,7 +261,8 @@ namespace Jularr.Backend.Tests
             foreach (var state in new[] { MediaAvailabilityState.Available, MediaAvailabilityState.Partial, MediaAvailabilityState.Missing, MediaAvailabilityState.Downloading, MediaAvailabilityState.Searching })
                 StringAssert.Contains(html, "media-availability--" + state.ToString().ToLowerInvariant());
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
-            Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
+            // The layout's own template of the missing-cover stand-ins is not a design example.
+            Assert.AreEqual(9, Regex.Matches(html, "<template\\b(?![^>]*data-no-cover)").Count);
             StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
             // MediaPreview still supports trailers independently of the simplified MediaCard.
             StringAssert.Contains(html, "data-trailer-id=\"k4xGqY5IDBE\"");

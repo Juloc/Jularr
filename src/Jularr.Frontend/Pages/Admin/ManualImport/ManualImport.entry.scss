@@ -1,13 +1,77 @@
-// The file first, what its name says and where it would go below.
-.manual-import-file {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    overflow-wrap: anywhere;
+// The manual import's part of the list kit: the grids of its lists, the switch beside a file's name and the dialog's file line.
+
+.manual-import-target {
+    --list-columns: minmax(0, 1fr) auto;
+    --list-columns-medium: minmax(0, 1fr) auto;
+    --list-columns-narrow: minmax(0, 1fr) auto;
+
+    .list-row { min-height: 64px; }
+
+    // A title that cannot be changed has no action column.
+    &--fixed {
+        --list-columns: minmax(0, 1fr);
+        --list-columns-medium: minmax(0, 1fr);
+        --list-columns-narrow: minmax(0, 1fr);
+    }
 }
 
-.manual-import-file span {
-    color: var(--muted);
-    font-size: 0.85em;
+// On a phone the card of a title that cannot be changed is only its name.
+@container list (max-width: 690px) {
+    .manual-import-target--fixed .list-row {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "name";
+    }
+}
+
+.manual-import-works {
+    --list-columns: minmax(0, 1fr) auto;
+    --list-columns-medium: minmax(0, 1fr) auto;
+    --list-columns-narrow: minmax(0, 1fr) auto;
+}
+
+.manual-import-files {
+    --list-columns: minmax(260px, 3fr) minmax(125px, 1fr) minmax(130px, 1.2fr) minmax(76px, .6fr) minmax(110px, .9fr) minmax(70px, .5fr) minmax(76px, .6fr) minmax(100px, .8fr);
+    --list-columns-medium: minmax(220px, 2.6fr) minmax(125px, 1fr) minmax(120px, 1.1fr) minmax(76px, .6fr) minmax(70px, .5fr) minmax(100px, .8fr);
+    --list-columns-narrow: minmax(200px, 2.4fr) minmax(125px, 1fr) minmax(76px, .6fr) minmax(100px, .8fr);
+}
+
+.manual-import-report {
+    --list-columns: minmax(0, 2.6fr) minmax(125px, 1fr) minmax(130px, 1.2fr) minmax(160px, 1.6fr);
+    --list-columns-medium: minmax(0, 2.4fr) minmax(125px, 1fr);
+    --list-columns-narrow: minmax(0, 2.4fr) minmax(125px, 1fr);
+}
+
+// The page's own rows: the transfer choice on the left, the switch for every file on the right.
+.manual-import {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+
+    &__tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 14px;
+
+        .ui-form { flex: 0 1 auto; }
+    }
+
+    &__all { display: flex; align-items: center; }
+
+    // The switch that chooses a file sits before its icon; its label is for assistive technology only.
+    &__main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    &__select { flex: none; }
+    &__select .toggle { min-height: 0; }
+    &__select .toggle__label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    &__file { min-width: 0; font-size: var(--text-control); }
 }

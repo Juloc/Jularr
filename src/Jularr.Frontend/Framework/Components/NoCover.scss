@@ -1,0 +1,15 @@
+// The stand-in for a missing poster, backdrop, cover or photo (NoCover.cs): soft accent tile, the mark or silhouette in the outline tone.
+.no-cover {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--accent-soft);
+    color: var(--accent-outline);
+
+    &__icon { width: min(64%, 120px); height: auto; aspect-ratio: 1; }
+    &--person &__icon { width: min(58%, 96px); }
+}

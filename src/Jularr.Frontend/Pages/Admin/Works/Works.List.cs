@@ -264,7 +264,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var home = "/Admin/Works/" + id;
             var type = new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId));
             var subline = item.ReleaseYear is { } year ? (IUiComponent)new Span(type, new ValueText(" · " + year.ToString(CultureInfo.InvariantCulture))) : type;
-            var identity = new ListIdentity(new ListPoster(item.PosterUrl is { } poster ? new MediaImage(poster, "", 38, 56) : null),
+            var identity = new ListIdentity(new ListPoster(MediaImage.Or(assets, item.PosterUrl, "", 38, 56)),
                 new A(new Truncated(item.CanonicalTitle)).Class("list-identity__title").Attribute("href", home), subline,
                 select: Selectable ? ListIdentity.Select("workIds", id, BulkForm, "works.select") : null);
             var cells = new List<IUiComponent> { identity, StatusChip(item) };
