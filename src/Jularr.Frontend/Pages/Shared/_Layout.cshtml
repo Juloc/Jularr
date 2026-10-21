@@ -58,7 +58,7 @@
     <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
     @if (showShell)
     {
-        <div id="app-content" class="app-content" data-shell="app" hx-history-elt>
+        <div id="app-content" class="app-content" data-shell="app" data-autoplay-previews="@(T.AutoplayPreviews && !string.Equals(Context.Request.Headers["Save-Data"], "on", StringComparison.OrdinalIgnoreCase) ? "true" : "false")" hx-history-elt>
             @Assets.Styles(pageAssets)
             <div class="app-layout">
                 <partial name="_AppShell" />

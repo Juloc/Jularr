@@ -19,6 +19,8 @@ namespace Jularr.Backend.Tests
         public async Task Read_UsesLongIdAndOnlyTheActiveProfile()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
+            // The profile read also reports the playback choice that belongs to the shell; the rest of the playback schema is not needed here.
+            await fixture.RunSqlAsync("CREATE TABLE \"ProfileReference\".\"ProfilePlaybackPreferences\" (\"ProfileId\" bigint PRIMARY KEY, \"AutoplayPreviews\" boolean NOT NULL DEFAULT TRUE);");
             var gate = fixture.NewGate();
             var service = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<ReadProfileV1>();
 
@@ -39,6 +41,8 @@ namespace Jularr.Backend.Tests
         public async Task Update_LoadSetDataWrite_CommitsAndReturnsSuccess()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
+            // The profile read also reports the playback choice that belongs to the shell; the rest of the playback schema is not needed here.
+            await fixture.RunSqlAsync("CREATE TABLE \"ProfileReference\".\"ProfilePlaybackPreferences\" (\"ProfileId\" bigint PRIMARY KEY, \"AutoplayPreviews\" boolean NOT NULL DEFAULT TRUE);");
             var gate = fixture.NewGate();
             var runtime = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System));
             var rename = runtime.Create<UpdateProfileV1>();

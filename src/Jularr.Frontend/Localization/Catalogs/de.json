@@ -112,6 +112,10 @@
    "Close preview",
    "Vorschau schließen"
   ],
+  "media.preview.runtime": [
+   "{0}h {1}m",
+   "{0}h {1}m"
+  ],
   "media.preview.playTrailer": [
    "Play trailer",
    "Trailer abspielen"
@@ -1551,6 +1555,10 @@
   "playback.autoplayNext": [
    "Play the next episode automatically",
    "Nächste Folge automatisch abspielen"
+  ],
+  "playback.autoplayPreviews": [
+   "Play previews automatically",
+   "Vorschau automatisch abspielen"
   ],
   "player.next.countdown": [
    "Next episode in {0}",
