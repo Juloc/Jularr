@@ -116,6 +116,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.duplicate_value", "This value is already in use."),
             new("errors.validation.collection_limit", "This profile has as many collections as the Admin allows."),
             new("errors.validation.annotation_limit", "A profile keeps at most 1000 highlights per book."),
+            new("errors.validation.bookmark_limit", "A profile keeps at most 200 bookmarks per book."),
             new("errors.validation.overlapping_group", "These units already belong to another section."),
             new("errors.validation.group_limit", "This title has as many sections as the Admin allows."),
             new("errors.validation.utc_required", "The timestamp must use UTC."),

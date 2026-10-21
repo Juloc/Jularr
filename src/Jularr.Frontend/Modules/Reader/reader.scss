@@ -76,7 +76,7 @@
     &__bottom > :is(a,span:first-child:empty) { flex: 0 0 44px; }
     &__bottom > a[hidden] { display: inline-flex; visibility: hidden; pointer-events: none; }
     &__view-tools { display: flex; gap: 2px; flex-shrink: 0; margin-left: auto; }
-    &__view-tools [aria-pressed=true], [data-speech-toggle][aria-pressed=true], [data-speech-pause][aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    &__view-tools [aria-pressed=true], [data-reader-bookmark][aria-pressed=true], [data-speech-toggle][aria-pressed=true], [data-speech-pause][aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
     &__heading { flex: 1; min-width: 0; }
     &__identity { display: flex; align-items: center; flex: 1; min-width: 0; gap: 12px; }
     &__cover { flex: none; display: grid; place-items: center; width: 28px; height: 40px; border-radius: 3px; overflow: hidden; background: var(--surface-hover); color: var(--muted); }
@@ -140,8 +140,9 @@
     &__panel p { margin: 0; font-size: 12px; }
     &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
     &__choices [aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    &__bookmarks { display: grid; gap: 10px; &[hidden] { display: none; } h3 { margin: 0; font-size: 13px; } }
     &__notes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-    &__note { display: grid; gap: 4px; }
+    &__note { display: grid; gap: 4px; > .button { justify-self: start; } }
     &__note-text { margin: 0; color: var(--muted); font-size: 14px; white-space: pre-wrap; }
     &__note-quote { color: inherit; }
     &__toolbar, &__popover { position: fixed; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; max-width: min(22rem, calc(100vw - 16px)); padding: 8px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); &[hidden] { display: none; } }
