@@ -13,6 +13,8 @@
     var pageAssets = currentPage?.Definition.AssetEntries.ToArray() ?? [];
     // The Reader keeps document-lifetime rendering resources; leaving it is a full navigation.
     var inPlace = (showShell || isPlayer) && !isReader;
+    // The hint of an action a page without script answered; a script's request got it in the HX-Trigger header instead.
+    var hint = TempData[JularrPage.HintKey] as string;
 }
 <!DOCTYPE html>
 <html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system">
@@ -42,6 +44,8 @@
     @if (showShell && !isReader)
     {
         @Assets.Scripts("Framework/Components/SavePill.entry.ts")
+        @Assets.Scripts("Framework/Components/ActionToast.entry.ts")
+        @Assets.Scripts("Framework/Components/Modal.entry.ts")
         @Assets.Scripts("Pages/Shared/Breadcrumb.entry.ts")
         @Assets.Scripts("Pages/Shared/Shell.entry.ts")
         @Assets.Scripts("Framework/Components/LinkMenu.entry.ts")
@@ -66,6 +70,10 @@
             </div>
             @Assets.Scripts(pageAssets)
         </div>
+        @if (!isReader)
+        {
+            @(new UiHtml(new ActionToast(string.IsNullOrEmpty(hint) ? null : hint), T))
+        }
     }
     else if (isPlayer)
     {

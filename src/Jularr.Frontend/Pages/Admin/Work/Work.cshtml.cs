@@ -111,6 +111,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             _matchQuery = new SearchMetadataDataV1(mediaTypeId, query ?? "", null, mediaSubtypeId);
             await LoadDataAsync();
             _matches = await search.ExecuteAsync<BaseDataList<MetadataSearchResultV1>>(new SearchMetadataParametersV1(), _matchQuery, HttpContext.RequestAborted);
+            if (_matches.Count == 0) Hint("discover.noResults");
             PreparePage();
             return Page();
         }
@@ -151,6 +152,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public async Task<IActionResult> OnPostRefreshAsync()
         {
             await refresh.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), default, HttpContext.RequestAborted);
+            Hint("work.hint.refreshed");
             return LocalRedirect(Address());
         }
 
@@ -162,6 +164,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var current = await readWanted.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), HttpContext.RequestAborted);
             await updateWanted.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(current.Id),
                 new UpdateWantedDataV1(isPaused, current.Version, current.AcquisitionProfileId, current.LibraryRootId), HttpContext.RequestAborted);
+            Hint(isPaused ? "work.hint.monitorOff" : "work.hint.monitorOn");
             return LocalRedirect(Address(Tab));
         }
 
@@ -177,14 +180,14 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber, long? wantedItemId, string? language)
         {
             var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(await WantedItemIdAsync(wantedItemId)), new SearchWantedDataV1(parentUnitNumber, unitNumber, language), HttpContext.RequestAborted);
-            TempData["WantedSearched"] = result.OutcomeKey;
-            if (result.Title is { } title) TempData["WantedTaken"] = title;
+            HintText(texts["acquisition.outcome." + result.OutcomeKey] + (result.Title is { } title ? ": " + title : ""));
             return LocalRedirect(Address(Tab));
         }
 
         public async Task<IActionResult> OnPostUnitAsync([BindRequired] long workUnitId, [BindRequired] bool isMonitored)
         {
             await updateUnit.ExecuteAsync<UpdateResult>(new WantedUnitParametersV1(await WantedItemIdAsync(), workUnitId), new UpdateWantedUnitDataV1(isMonitored), HttpContext.RequestAborted);
+            Hint(isMonitored ? "work.hint.monitorOn" : "work.hint.monitorOff");
             return LocalRedirect(Address(Tab));
         }
 
@@ -198,6 +201,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public async Task<IActionResult> OnPostEditionMonitorAsync([BindRequired] long workEditionId, [BindRequired] bool isMonitored)
         {
             await updateEdition.ExecuteAsync<UpdateResult>(new WorkEditionParametersV1(Id, workEditionId), new UpdateWorkEditionDataV1(isMonitored), HttpContext.RequestAborted);
+            Hint(isMonitored ? "work.hint.monitorOn" : "work.hint.monitorOff");
             return LocalRedirect(Address(Tab));
         }
 
@@ -206,6 +210,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             _deleteInput = new DeleteWorkDataV1(deletesFiles, addsExclusion);
             await deleteWork.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), _deleteInput, HttpContext.RequestAborted);
+            Hint("work.hint.titleDeleted");
             return LocalRedirect("/Admin/Works");
         }
 
@@ -213,10 +218,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         public async Task<IActionResult> OnPostDeleteFilesAsync(long[]? storedFileIds)
         {
-            if (storedFileIds is not { Length: > 0 }) return LocalRedirect(Address(Tab));
+            if (storedFileIds is not { Length: > 0 })
+            {
+                Hint("work.hint.nothingChosen");
+                return LocalRedirect(Address(Tab));
+            }
+
             var result = await deleteFiles.ExecuteAsync<DeleteLibraryFilesResultV1>(new DeleteLibraryFilesParametersV1(), new DeleteLibraryFilesDataV1(storedFileIds), HttpContext.RequestAborted);
-            TempData["WorkFilesDeleted"] = result.DeletedCount;
-            TempData["WorkFilesKept"] = result.KeptCount;
+            HintText(string.Format(CultureInfo.CurrentCulture, texts["work.files.deleted"], result.DeletedCount)
+                + (result.KeptCount > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["work.files.kept"], result.KeptCount) : ""));
             return LocalRedirect(Address(Tab));
         }
 
@@ -225,11 +235,16 @@ namespace Jularr.Frontend.Pages.Admin.Work
             // The audio tracks of one file may each get a language; a track left unchanged sends nothing.
             var tracks = Request.Form.Where(field => field.Key.StartsWith("trackLanguage-", StringComparison.Ordinal) && !string.IsNullOrEmpty(field.Value.ToString()))
                 .Select(field => new { StreamIndex = int.Parse(field.Key["trackLanguage-".Length..], CultureInfo.InvariantCulture), Language = field.Value.ToString() }).ToArray();
-            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage) && tracks.Length == 0) return LocalRedirect(Address(Tab));
+            if (storedFileIds is not { Length: > 0 } || string.IsNullOrEmpty(qualityKey) && string.IsNullOrEmpty(audioLanguage) && tracks.Length == 0)
+            {
+                Hint("work.hint.nothingChosen");
+                return LocalRedirect(Address(Tab));
+            }
+
             var result = await updateFacts.ExecuteAsync<UpdateLibraryFileFactsResultV1>(new UpdateLibraryFileFactsParametersV1(),
                 new UpdateLibraryFileFactsDataV1(storedFileIds, string.IsNullOrEmpty(qualityKey) ? null : qualityKey, string.IsNullOrEmpty(audioLanguage) ? null : audioLanguage,
                     tracks.Length == 0 ? null : global::System.Text.Json.JsonSerializer.Serialize(tracks)), HttpContext.RequestAborted);
-            TempData["WorkFilesUpdated"] = result.UpdatedCount;
+            Hint("work.files.updated", result.UpdatedCount);
             return LocalRedirect(Address(Tab));
         }
 
@@ -237,6 +252,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public async Task<IActionResult> OnPostDeleteTranslationAsync([BindRequired] long documentId, [BindRequired] string language)
         {
             await deleteTranslation.ExecuteAsync<UpdateResult>(new DeleteTranslationParametersV1(documentId, language), default, HttpContext.RequestAborted);
+            Hint("work.hint.translationDeleted");
             return LocalRedirect(Address(Tab));
         }
 
@@ -244,8 +260,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         public async Task<IActionResult> OnPostRenameFilesAsync([BindRequired] string fingerprint)
         {
             var result = await applyRenames.ExecuteAsync<ApplyLibraryRenamesResultV1>(new LibraryRenamesParametersV1(), new ApplyLibraryRenamesDataV1(fingerprint, Id), HttpContext.RequestAborted);
-            TempData["WorkRenamed"] = result.RenamedCount;
-            TempData["WorkRenameSkipped"] = result.SkippedCount;
+            Hint("work.files.renamed", result.RenamedCount, result.SkippedCount);
             return LocalRedirect(Address(Tab));
         }
 
