@@ -588,7 +588,7 @@ namespace Jularr.Backend.Tests
 
                 // Each host keeps its state apart; native tools stay off unless a test names them.
                 builder.Configuration["DataPath"] = Path.Combine(Path.GetTempPath(), "jularr-tests", Guid.NewGuid().ToString("N"));
-                foreach (var tool in new[] { "Media:FfprobePath", "Media:FfmpegPath", "Media:FpcalcPath", "Usenet:Par2Path", "Usenet:SevenZipPath", "Backup:PgDumpPath", "Backup:PgRestorePath", "Browser:Path" })
+                foreach (var tool in new[] { "Media:FfprobePath", "Media:FfmpegPath", "Media:FpcalcPath", "Media:CjxlPath", "Usenet:Par2Path", "Usenet:SevenZipPath", "Backup:PgDumpPath", "Backup:PgRestorePath", "Browser:Path" })
                 {
                     builder.Configuration[tool] = "";
                 }

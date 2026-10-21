@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
@@ -110,6 +111,154 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("image/webp", modern.Content.Headers.ContentType!.MediaType);
             Assert.AreEqual("Accept", modern.Headers.Vary.Single());
         }
+
+        [TestMethod]
+        public async Task Cover_JxlWidth_IsServedOnlyToBrowsersThatNameIt()
+        {
+            // No cjxl needed: the file is put in place, the answer is chosen by the Accept header alone.
+            var images = new FakeImages();
+            await using var host = await CreateHostAsync(images);
+            var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
+            var narrow = poster.Replace("poster?", "poster-250?", StringComparison.Ordinal);
+            var jxl = new byte[] { 0xFF, 0x0A, 1, 2, 3 };
+            await File.WriteAllBytesAsync(Path.Combine(root, workId.ToString(), "poster-250.jxl"), jxl);
+
+            async Task<HttpResponseMessage> GetAsync(string? accept)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, narrow);
+                if (accept is not null)
+                {
+                    request.Headers.Accept.ParseAdd(accept);
+                }
+
+                request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+                return await host.Client.SendAsync(request);
+            }
+
+            using var modern = await GetAsync("image/jxl,image/avif,image/webp,*/*");
+            Assert.AreEqual("image/jxl", modern.Content.Headers.ContentType!.MediaType);
+            CollectionAssert.AreEqual(jxl, await modern.Content.ReadAsByteArrayAsync());
+            Assert.AreEqual("Accept", modern.Headers.Vary.Single());
+            using var wildcard = await GetAsync("*/*");
+            Assert.AreEqual("image/png", wildcard.Content.Headers.ContentType!.MediaType);
+            using var refused = await GetAsync("image/jxl;q=0,image/webp");
+            Assert.AreEqual("image/png", refused.Content.Headers.ContentType!.MediaType);
+            Assert.AreNotEqual(modern.Headers.ETag, wildcard.Headers.ETag);
+        }
+
+        [TestMethod]
+        public async Task Cover_WithFfmpegAndCjxl_KeepsJxlWidthsBesideWebPAndJpeg()
+        {
+            // Opt-in: JULARR_TEST_FFMPEG and JULARR_TEST_CJXL name the executables; CI and the image have them.
+            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
+            var cjxl = Environment.GetEnvironmentVariable("JULARR_TEST_CJXL");
+            if (string.IsNullOrEmpty(ffmpeg) || string.IsNullOrEmpty(cjxl))
+            {
+                Assert.Inconclusive("JULARR_TEST_FFMPEG and JULARR_TEST_CJXL are not both configured.");
+                return;
+            }
+
+            var images = new FakeImages { Payload = Convert.FromBase64String(OnePixelPng) };
+            await using var host = await CreateHostAsync(images, new Dictionary<string, string> { ["Media:FfmpegPath"] = ffmpeg, ["Media:CjxlPath"] = cjxl });
+            var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            foreach (var name in new[] { "poster-250.jxl", "poster-250.webp", "poster-250.jpg", "poster-500.jxl", "backdrop-500.jxl", "backdrop-1280.jxl" })
+            {
+                Assert.IsTrue(File.Exists(Path.Combine(root, workId.ToString(), name)), name);
+            }
+
+            Assert.IsFalse(Directory.EnumerateFiles(Path.Combine(root, workId.ToString()), "*.partial*").Any());
+            var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
+            using var request = new HttpRequestMessage(HttpMethod.Get, poster.Replace("poster?", "poster-250?", StringComparison.Ordinal));
+            request.Headers.Accept.ParseAdd("image/jxl,image/webp,*/*");
+            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            using var served = await host.Client.SendAsync(request);
+            Assert.AreEqual("image/jxl", served.Content.Headers.ContentType!.MediaType);
+            Assert.IsTrue(IsJxl(await served.Content.ReadAsByteArrayAsync()));
+        }
+
+        [TestMethod]
+        public void CoverPaths_Accepts_NamesOnlyTheFormatsTheBrowserAsksFor()
+        {
+            Assert.AreEqual(CoverFormats.None, CoverPaths.Accepts(null));
+            Assert.AreEqual(CoverFormats.None, CoverPaths.Accepts("*/*"));
+            Assert.AreEqual(CoverFormats.None, CoverPaths.Accepts("image/*,text/html"));
+            Assert.AreEqual(CoverFormats.WebP, CoverPaths.Accepts("image/avif,image/webp,image/apng,*/*;q=0.8"));
+            Assert.AreEqual(CoverFormats.Jxl, CoverPaths.Accepts("image/jxl"));
+            Assert.AreEqual(CoverFormats.Jxl | CoverFormats.WebP, CoverPaths.Accepts("IMAGE/JXL, image/webp;q=0.5"));
+            Assert.AreEqual(CoverFormats.WebP, CoverPaths.Accepts("image/jxl;q=0,image/webp"));
+            Assert.AreEqual(CoverFormats.None, CoverPaths.Accepts("image/jxlx,image/webp2"));
+        }
+
+        [TestMethod]
+        public async Task JxlEncoder_Arguments_AreOneListWithDistanceEffortAndProgressive_AndAMissingToolSwitchesItOff()
+        {
+            CollectionAssert.AreEqual(new[] { "in.png", "out.jxl", "-d", "1.0", "-e", "7", "--progressive", "--num_threads=1", "--quiet" }, JxlEncoder.BuildArguments("in.png", "out.jxl", true).ToArray());
+            CollectionAssert.AreEqual(new[] { "in.png", "out.jxl", "-d", "1.0", "-e", "7", "--num_threads=1", "--quiet" }, JxlEncoder.BuildArguments("in.png", "out.jxl", false).ToArray());
+
+            var folder = Directory.CreateTempSubdirectory("jularr-jxl").FullName;
+            try
+            {
+                Assert.IsFalse(new JxlEncoder().IsAvailable);
+                var missing = new JxlEncoder { ExecutablePath = Path.Combine(folder, "no-such-cjxl") };
+                Assert.IsTrue(missing.IsAvailable);
+                Assert.IsFalse(await missing.DetectAsync(default));
+                Assert.IsFalse(missing.IsAvailable);
+                Assert.IsFalse(await missing.EncodeAsync(Path.Combine(folder, "in.png"), Path.Combine(folder, "out.jxl"), default));
+                Assert.IsFalse(File.Exists(Path.Combine(folder, "out.jxl")));
+            }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task JxlEncoder_WithCjxl_WritesAJxlFile()
+        {
+            // Opt-in: JULARR_TEST_CJXL names a cjxl executable.
+            var cjxl = Environment.GetEnvironmentVariable("JULARR_TEST_CJXL");
+            if (string.IsNullOrEmpty(cjxl))
+            {
+                Assert.Inconclusive("JULARR_TEST_CJXL is not configured.");
+                return;
+            }
+
+            var folder = Directory.CreateTempSubdirectory("jularr-jxl").FullName;
+            try
+            {
+                var encoder = new JxlEncoder { ExecutablePath = cjxl };
+                Assert.IsTrue(await encoder.DetectAsync(default));
+                StringAssert.Contains(encoder.Version!, "cjxl");
+                var input = Path.Combine(folder, "in.png");
+                var output = Path.Combine(folder, "out.jxl");
+                await File.WriteAllBytesAsync(input, Convert.FromBase64String(OnePixelPng));
+                Assert.IsTrue(await encoder.EncodeAsync(input, output, default));
+                Assert.IsTrue(IsJxl(await File.ReadAllBytesAsync(output)));
+
+                // A file that is no picture leaves nothing behind.
+                var broken = Path.Combine(folder, "broken.png");
+                await File.WriteAllTextAsync(broken, "not a picture");
+                Assert.IsFalse(await encoder.EncodeAsync(broken, Path.Combine(folder, "broken.jxl"), default));
+                Assert.IsFalse(File.Exists(Path.Combine(folder, "broken.jxl")));
+            }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+
+        private const string OnePixelPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+        // The bare codestream starts FF 0A; the ISO container with 00 00 00 0C 'JXL '.
+        private static bool IsJxl(byte[] bytes) =>
+            bytes is [0xFF, 0x0A, ..] || bytes.Length > 12 && bytes[4..8].SequenceEqual("JXL "u8.ToArray());
 
         [TestMethod]
         public async Task Cover_ChangedAddress_IsFetchedAgain_AndAFailureKeepsTheProviderAddress()
