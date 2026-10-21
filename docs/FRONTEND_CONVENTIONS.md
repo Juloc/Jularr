@@ -451,8 +451,8 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   from one selected seed through the shared Appearance palette. Theme artwork
   and the mascot follow the accent; media artwork, provider logos
   and semantic status colors do not. The Jularr mark of the Clean skin is the owner's cosmic parrot, one
-  single-colour path in the text colour ([brand-clean.svg](../src/Jularr.Frontend/Pages/Shared/brand-clean.svg), shown by [Brand.cs](../src/Jularr.Frontend/Pages/Shared/Brand.cs) in the shell, login and profile pages); Original keeps its
-  ring-and-ink mark ([brand-original.svg](../src/Jularr.Frontend/Pages/Shared/brand-original.svg)), shown only in that skin. The tab and home-screen icons are the Clean mark
+  single-colour path (Clean shows the parrot in the accent colour, so it follows the chosen accent in light and dark; [brand-clean.svg](../src/Jularr.Frontend/Pages/Shared/brand-clean.svg), shown by [Brand.cs](../src/Jularr.Frontend/Pages/Shared/Brand.cs) in the shell, login and profile pages); Original keeps its
+  ring-and-ink mark ([brand-original.svg](../src/Jularr.Frontend/Pages/Shared/brand-original.svg)), shown only in that skin. The tab and home-screen icons are the Clean mark in the default accent (`#8040f7`, `#9a70ff` in a dark tab; the PNGs sit on a white tile)
   ([favicon.svg](../src/Jularr.Frontend/Assets/Shared/favicon.svg) and the PNGs beside it). Current choices are device-local; do not
   imply implemented instance/profile policy or persistence.
 - Development-only design workshops may show explicitly labeled sample data and
