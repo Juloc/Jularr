@@ -2,14 +2,13 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The Instance page saves its settings and module switches through one pill: discarding shows the saved page in place,
-    // a failing form keeps its error while the other changed forms are saved.
+    // The page's one save pill: it counts what differs from the loaded page, discards in place and saves every changed form, keeping a failing form's error.
     [TestClass]
     public sealed class SavePillTests
     {
         [TestMethod]
         [Timeout(300_000)]
-        public async Task InstancePage_SavesChangedFormsTogether_DiscardsInPlace_AndKeepsAFailingFormsError()
+        public async Task NamingPage_SavesChangedFormsTogether_DiscardsInPlace_AndKeepsAFailingFormsError()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -17,18 +16,19 @@ namespace Jularr.E2E.Tests
             var asked = false;
             page.Dialog += (_, dialog) => { asked = true; _ = dialog.DismissAsync(); };
             await Owner.SetUpAndSignInAsync(page);
-            await page.GotoAsync("/Admin/Instance");
+            await page.GotoAsync("/Admin/Instance/Naming");
             var pill = page.Locator("[data-save-pill]");
             var save = pill.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true });
-            var name = page.Locator("form[data-save] [name=Name]");
-            var module = page.Locator("main form[data-save]").Filter(new() { Has = page.Locator("legend", new() { HasText = "Let visitors ask for an account" }) });
+            var file = page.Locator("form[data-form-kind$=UpdateNamingPatternDataV1] [name=File]").First;
+            var replaces = page.Locator("form[data-form-kind$=UpdateNamingSettingsDataV1] [name=ReplacesIllegalCharacters]").First;
+            var toggle = page.Locator("form[data-form-kind$=UpdateNamingSettingsDataV1] .toggle").First;
             await Assertions.Expect(pill).ToBeHiddenAsync();
             await Assertions.Expect(page.Locator("[data-form-save]").First).ToBeHiddenAsync();
 
             // Two changes show in the pill; discarding restores the saved page without asking.
-            var original = await name.InputValueAsync();
-            await name.FillAsync("Pill test");
-            await module.Locator("[name=IsEnabled][value=True]").CheckAsync();
+            var original = await file.InputValueAsync();
+            await file.FillAsync("{Title} ({Year}) pill");
+            await toggle.ClickAsync();
             await Assertions.Expect(pill).ToContainTextAsync("2 changes");
             await Evidence.SaveAsync(page, "save-pill-desktop");
             await page.SetViewportSizeAsync(390, 844);
@@ -36,24 +36,24 @@ namespace Jularr.E2E.Tests
             await page.SetViewportSizeAsync(1280, 720);
             await Steps.FollowAsync(page, pill.GetByRole(AriaRole.Button, new() { Name = "Discard", Exact = true }));
             await Assertions.Expect(pill).ToBeHiddenAsync();
-            await Assertions.Expect(name).ToHaveValueAsync(original);
-            await Assertions.Expect(module.Locator("[name=IsEnabled][value=False]")).ToBeCheckedAsync();
+            await Assertions.Expect(file).ToHaveValueAsync(original);
+            await Assertions.Expect(replaces).ToBeCheckedAsync();
 
-            // An empty name fails on its own form; the module switch is saved all the same.
-            await name.FillAsync("");
-            await module.Locator("[name=IsEnabled][value=True]").CheckAsync();
+            // An empty file name fails on its own form; the other form is saved all the same.
+            await file.FillAsync("");
+            await toggle.ClickAsync();
             await Steps.FollowAsync(page, save);
             await Assertions.Expect(pill).ToContainTextAsync("1 not saved");
             await Assertions.Expect(page.Locator("form[data-save] [role=alert]")).ToHaveCountAsync(1);
-            await Assertions.Expect(module.Locator("[name=IsEnabled][value=True]")).ToBeCheckedAsync();
+            await Assertions.Expect(replaces).Not.ToBeCheckedAsync();
 
             // The corrected name is saved; a fresh load shows both values.
-            await name.FillAsync("Pill test");
+            await file.FillAsync("{Title} ({Year}) pill");
             await Steps.FollowAsync(page, save);
             await Assertions.Expect(pill.GetByRole(AriaRole.Button, new() { Name = "Saved", Exact = true })).ToBeVisibleAsync();
             await page.ReloadAsync();
-            await Assertions.Expect(name).ToHaveValueAsync("Pill test");
-            await Assertions.Expect(module.Locator("[name=IsEnabled][value=True]")).ToBeCheckedAsync();
+            await Assertions.Expect(file).ToHaveValueAsync("{Title} ({Year}) pill");
+            await Assertions.Expect(replaces).Not.ToBeCheckedAsync();
 
             // The profile settings save the same way.
             await page.GotoAsync("/Settings");
