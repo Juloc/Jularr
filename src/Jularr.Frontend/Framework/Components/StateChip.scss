@@ -29,10 +29,13 @@
     &--watched,
     &--idle,
     &--success { background: var(--success-soft); color: var(--success); }
+    &--accent,
+    &--running,
+    &--requested,
+    &--inprogress { background: var(--accent-soft); color: var(--accent-text); }
     &--warning { background: var(--warning-soft); color: var(--warning); }
     &--danger,
     &--failed { background: var(--danger-soft); color: var(--danger); }
-    &--accent { background: var(--accent-soft); color: var(--accent-text); }
     &--info { background: var(--info-soft); color: var(--info); }
 
     // Nothing to report yet: the field tint with its own quiet outline.

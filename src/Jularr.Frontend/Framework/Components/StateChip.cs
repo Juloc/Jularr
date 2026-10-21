@@ -1,16 +1,5 @@
 namespace Jularr.Frontend.Framework
 {
-    // The tone a state, an icon tile or a figure takes.
-    public enum UiTone
-    {
-        Neutral,
-        Accent,
-        Info,
-        Success,
-        Warning,
-        Danger
-    }
-
     // A state as a pill in the tone of its meaning. With an icon the icon replaces the dot, so the state never rests on colour alone; the spinning variant shows work in progress.
     public sealed class StateChip : HtmlElement
     {
