@@ -508,18 +508,13 @@ namespace Jularr.Backend.Tests
 
                 if (library)
                 {
+                    await fixture.RunSqlAsync("DROP TABLE IF EXISTS \"ProfilePlaybackPreferences\"");
                     foreach (var name in new[] { "Library", "Playback" })
                     {
                         using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!;
                         using var reader = new StreamReader(schema);
                         await fixture.RunSqlAsync(await reader.ReadToEndAsync());
                     }
-                }
-
-                if (!library)
-                {
-                    // The profile read also reports the playback choice that belongs to the shell; the rest of the playback schema is not needed here.
-                    await fixture.RunSqlAsync("CREATE TABLE \"ProfilePlaybackPreferences\" (\"ProfileId\" bigint PRIMARY KEY, \"AutoplayPreviews\" boolean NOT NULL DEFAULT TRUE)");
                 }
 
                 // Release migrations follow the baselines, as in a fresh installation.

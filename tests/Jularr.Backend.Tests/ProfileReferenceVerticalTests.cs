@@ -19,8 +19,6 @@ namespace Jularr.Backend.Tests
         public async Task Read_UsesLongIdAndOnlyTheActiveProfile()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
-            // The profile read also reports the playback choice that belongs to the shell; the rest of the playback schema is not needed here.
-            await fixture.RunSqlAsync("CREATE TABLE \"ProfileReference\".\"ProfilePlaybackPreferences\" (\"ProfileId\" bigint PRIMARY KEY, \"AutoplayPreviews\" boolean NOT NULL DEFAULT TRUE);");
             var gate = fixture.NewGate();
             var service = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<ReadProfileV1>();
 
@@ -41,8 +39,6 @@ namespace Jularr.Backend.Tests
         public async Task Update_LoadSetDataWrite_CommitsAndReturnsSuccess()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
-            // The profile read also reports the playback choice that belongs to the shell; the rest of the playback schema is not needed here.
-            await fixture.RunSqlAsync("CREATE TABLE \"ProfileReference\".\"ProfilePlaybackPreferences\" (\"ProfileId\" bigint PRIMARY KEY, \"AutoplayPreviews\" boolean NOT NULL DEFAULT TRUE);");
             var gate = fixture.NewGate();
             var runtime = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System));
             var rename = runtime.Create<UpdateProfileV1>();
@@ -245,6 +241,8 @@ namespace Jularr.Backend.Tests
                     await fixture.RunBootstrapAsync(
                         """
                         BEGIN;
+                        -- The profile read also reports the playback choice that belongs to the shell; a host that installs the playback schema drops this stand-in first.
+                        CREATE TABLE "ProfileReference"."ProfilePlaybackPreferences" ("ProfileId" bigint PRIMARY KEY, "AutoplayPreviews" boolean NOT NULL DEFAULT TRUE);
                         INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch'), (2, 'en-GB', 'English');
                         SELECT setval(pg_get_serial_sequence('"UiLocales"', 'Id'), 2);
                         INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId")
