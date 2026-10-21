@@ -61,6 +61,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public FormatScore[] FormatScores { get; init; } = [];
         public int MinimumFormatScore { get; init; }
         public int CutoffFormatScore { get; init; }
+
+        // The languages of the choice, in order; empty takes the languages the request asks for.
+        public string[] LanguageOrder { get; init; } = [];
+
+        // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
+        public LanguageFallbackType LanguageFallback { get; init; } = LanguageFallbackType.Original;
         public int MinimumUpgradeFormatScore { get; init; } = 1;
         public ReleaseMonitoring? Monitoring { get; init; }
 

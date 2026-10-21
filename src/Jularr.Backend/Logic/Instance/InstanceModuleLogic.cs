@@ -36,6 +36,29 @@ namespace Jularr.Backend.Logic.Instance
             {
                 throw new DataValidationException("Modules", "outdated_version");
             }
+
+            await ctx.RequireModuleDependenciesAsync("Modules", ct);
+        }
+
+        // An enabled module needs every module it builds on to be enabled; checked after the write, so the whole step rolls back.
+        private static async Task RequireModuleDependenciesAsync(this LogicContext ctx, string field, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    dependency."ModuleKey" AS "Key",
+                    required."IsEnabled"
+                FROM
+                    "InstanceModuleDependencies" AS dependency
+                    JOIN "InstanceModules" AS module ON module."Key" = dependency."ModuleKey" AND module."IsEnabled"
+                    JOIN "InstanceModules" AS required ON required."Key" = dependency."RequiredKey" AND NOT required."IsEnabled"
+                LIMIT 1;
+                """;
+            if ((await ctx.Sql.ReadListAsync<InstanceModuleData>(sql, ct)).Count > 0)
+            {
+                throw new DataValidationException(field, "module_dependency");
+            }
         }
 
         public static async Task<IReadOnlyList<InstanceModuleData>> ReadInstanceModulesAsync(this LogicContext ctx, InstanceModuleParameters parameters, CancellationToken ct)
@@ -98,6 +121,8 @@ namespace Jularr.Backend.Logic.Instance
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
+
+            await ctx.RequireModuleDependenciesAsync(nameof(data.IsEnabled), ct);
         }
     }
 }

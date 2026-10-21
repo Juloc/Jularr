@@ -310,8 +310,14 @@
     background: var(--surface);
     box-shadow: var(--shadow);
 
+    min-width: 0;
+
+    // The mockups' section heading sits inside the panel (a floated legend is no longer drawn on the border).
     & > legend {
-        padding: 0 8px;
+        float: left;
+        grid-column: 1 / -1;
+        width: 100%;
+        padding: 0;
         color: var(--text);
         font-size: var(--text-heading);
         font-weight: var(--weight-heading);

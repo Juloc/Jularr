@@ -121,8 +121,7 @@ namespace Jularr.Frontend.Pages.Shared
                     new("admin.history.title", "/Admin/History", "")]));
                 links.Add(Group("nav.group.library", "library", [new("library.tab.Overview", "/Admin/Library", ""), new("library.tab.Unmatched", "/Admin/Library/Unmatched", ""),
                     new("library.tab.Files", "/Admin/Library/Files", ""),
-                    .. texts.CanManageStorage() ? new ShellLink[] { new("library.tab.Naming", "/Admin/Library/Naming", ""), new("library.tab.Rename", "/Admin/Library/Rename", ""),
-                        new("library.tab.Versions", "/Admin/Library/Versions", "") } : []]));
+                    .. texts.CanManageStorage() ? new ShellLink[] { new("library.tab.Rename", "/Admin/Library/Rename", ""), new("library.tab.Versions", "/Admin/Library/Versions", "") } : []]));
             }
 
             if (texts.CanManageRequests())

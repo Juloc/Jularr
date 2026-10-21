@@ -19,15 +19,12 @@ namespace Jularr.Frontend.Pages.Admin.Library
         Unmatched = 1,
         Files = 2,
         Rename = 3,
-        Naming = 4,
         Versions = 5,
         Overview = 6
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
-        ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, UpdateNamingSubtypePatternV1 updateSubtypePattern,
-        ReadNamingSettingsV1 readNamingSettings, UpdateNamingSettingsV1 updateNamingSettings, ReadReplacementSettingsV1 readReplacement,
-        UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
+        ApplyLibraryRenamesV1 applyRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
         QueueLibraryScanV1 queueScan, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<LibraryOverviewV1>? _overview;
@@ -37,12 +34,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
         private const int RenamePageSize = 100;
         private PageResult<LibraryFileDetailsV1>? _files;
         private LibraryRenamePlanV1? _renames;
-        private IReadOnlyList<NamingPatternV1>? _patterns;
-        private UpdateNamingPatternDataV1? _patternInput;
-        private (MediaType Type, MediaSubtype? Subtype)? _failedPattern;
-        private IReadOnlyList<NamingSettingsV1>? _namingSettings;
-        private UpdateNamingSettingsDataV1? _namingSettingsInput;
-        private MediaType? _failedSettings;
         private long? _failedFileId;
 
         [BindProperty(SupportsGet = true)]
@@ -131,49 +122,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 Paging(page, PageNumber, renames.Items.Count == RenamePageSize);
             }
 
-            // Folders and names of movie and episode files for imports and renames, each with a sample.
-            if (_patterns is { } patterns)
-            {
-                foreach (var pattern in patterns)
-                {
-                    var failed = _failedPattern == (pattern.MediaTypeId, pattern.MediaSubtypeId);
-                    page.Content.Add(new UiSection("library.naming." + pattern.MediaTypeId + (pattern.MediaSubtypeId is { } subtype ? "." + subtype : ""), [
-                        new Form<UpdateNamingPatternDataV1>(form =>
-                        {
-                            form.Hidden(item => item.Version);
-                            form.Text(item => item.Folder, "library.naming.folder");
-                            form.Text(item => item.File, "library.naming.file");
-                            form.Save();
-                        }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId + (pattern.MediaSubtypeId is { } kind ? "&mediaSubtypeId=" + kind : ""), csrf,
-                            failed && _patternInput is { } input ? input : new UpdateNamingPatternDataV1(pattern.Folder, pattern.File, pattern.Version), failed ? FormError : null),
-                        new P(new Text("library.naming.example"), new ValueText(" "), new Span(new ValueText(pattern.Example)).Class("library-example"))]));
-                }
-
-                // How values become names: illegal characters, colons and the folder of season 0.
-                var colons = Enum.GetValues<ColonReplacement>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.naming.colon." + mode]));
-                foreach (var settings in _namingSettings ?? [])
-                {
-                    var failed = _failedSettings == settings.MediaTypeId;
-                    page.Content.Add(new UiSection("library.naming.settings." + settings.MediaTypeId, [new Form<UpdateNamingSettingsDataV1>(form =>
-                    {
-                        form.Hidden(item => item.Version);
-                        form.Toggle(item => item.ReplacesIllegalCharacters, "library.naming.replacesIllegal");
-                        form.Select(item => item.ColonReplacementId, "library.naming.colon", colons);
-                        form.Text(item => item.CustomColonReplacement, "library.naming.colonCustom");
-                        if (settings.MediaTypeId == MediaType.Series) form.Text(item => item.SpecialsFolder, "library.naming.specials");
-                        form.Save();
-                    }, Address(handler: "NamingSettings") + "&mediaTypeId=" + settings.MediaTypeId, csrf, failed && _namingSettingsInput is { } entered ? entered
-                        : new UpdateNamingSettingsDataV1(settings.ReplacesIllegalCharacters, settings.ColonReplacementId, settings.CustomColonReplacement, settings.SpecialsFolder, settings.Version),
-                        failed ? FormError : null)]));
-                }
-
-                page.Content.Add(new UiSection("library.naming.placeholders", [new Dl([.. NamingTokens.All.SelectMany(token => new IUiComponent[]
-                    {
-                        new Dt(new ValueText(NamingTokens.Display(token))).Class("library-example"),
-                        new Dd(new Text("library.naming.token." + token.Replace(" ", "", StringComparison.Ordinal)))
-                    })]).Class("library-placeholders"), new P(new Text("library.naming.rules"))]));
-            }
-
             // What an import does with the earlier file of the same film or episode.
             if (_replacement is { } replacement)
             {
@@ -194,7 +142,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version, replacement.UnmonitorsDeletedUnits), _replacementInput is null ? null : FormError));
             }
 
-            if (FormError is not null && _failedFileId is null && _failedPattern is null && _failedSettings is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null && _failedFileId is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         // What the libraries hold altogether: how many, the files in them, those not identified and when one was scanned last.
@@ -272,7 +220,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (Tab is LibraryTab.Naming or LibraryTab.Rename or LibraryTab.Versions && !CanRename) return LocalRedirect("/Admin/Library");
+            if (Tab is LibraryTab.Rename or LibraryTab.Versions && !CanRename) return LocalRedirect("/Admin/Library");
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -308,31 +256,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostNamingAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? folder, string? file, long version)
-        {
-            _failedPattern = (mediaTypeId, mediaSubtypeId);
-            _patternInput = new UpdateNamingPatternDataV1(folder, file ?? "", version);
-            if (mediaSubtypeId is { } subtype)
-            {
-                await updateSubtypePattern.ExecuteAsync<UpdateResult>(new NamingSubtypePatternParametersV1(mediaTypeId, subtype), _patternInput, HttpContext.RequestAborted);
-            }
-            else
-            {
-                await updatePattern.ExecuteAsync<UpdateResult>(new NamingPatternParametersV1(mediaTypeId), _patternInput, HttpContext.RequestAborted);
-            }
-
-            return LocalRedirect(Address());
-        }
-
-        public async Task<IActionResult> OnPostNamingSettingsAsync([BindRequired] MediaType mediaTypeId, bool replacesIllegalCharacters, ColonReplacement colonReplacementId, string? customColonReplacement,
-            string? specialsFolder, long version)
-        {
-            _failedSettings = mediaTypeId;
-            _namingSettingsInput = new UpdateNamingSettingsDataV1(replacesIllegalCharacters, colonReplacementId, customColonReplacement, specialsFolder, version);
-            await updateNamingSettings.ExecuteAsync<UpdateResult>(new NamingSettingsParametersV1(mediaTypeId), _namingSettingsInput, HttpContext.RequestAborted);
-            return LocalRedirect(Address());
-        }
-
         public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits)
         {
             _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recycleModeId, recycleStorageMountId, recyclePath, recycleDays, version, unmonitorsDeletedUnits);
@@ -353,13 +276,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
             if (Tab == LibraryTab.Overview)
             {
                 _overview = await readOverview.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
-                return;
-            }
-
-            if (Tab == LibraryTab.Naming)
-            {
-                _patterns = await readPatterns.ExecuteAsync<BaseDataList<NamingPatternV1>>(new ReadNamingPatternsParametersV1(), ct);
-                _namingSettings = await readNamingSettings.ExecuteAsync<BaseDataList<NamingSettingsV1>>(new ReadNamingSettingsParametersV1(), ct);
                 return;
             }
 

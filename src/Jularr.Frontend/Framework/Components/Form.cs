@@ -94,10 +94,11 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Range<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null, FieldAffix? affix = null)
         {
             var field = Declare(selector, FieldControl.Range, labelKey, help);
-            if (!field.Required || field.ValueType != typeof(int) && field.ValueType != typeof(long) && field.ValueType != typeof(decimal)
+            var valueType = Nullable.GetUnderlyingType(field.ValueType) ?? field.ValueType;
+            if (valueType != typeof(int) && valueType != typeof(long) && valueType != typeof(decimal)
                 || field.Minimum is not { } minimum || field.Maximum is not { } maximum || minimum >= maximum)
             {
-                throw new InvalidOperationException("Range controls require a required numeric field with increasing minimum and maximum bounds.");
+                throw new InvalidOperationException("Range controls require a numeric field with increasing minimum and maximum bounds.");
             }
 
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "range").Attribute("step", "1")
@@ -377,6 +378,19 @@ namespace Jularr.Frontend.Framework
             IUiComponent control = _action is null ? toggle : new Div(toggle,
                 new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", "false"));
             AddField(field, control);
+            return this;
+        }
+
+        // A switch the page places itself, such as the one in a setting card; its field, name and metadata stay the form's.
+        public Form<TData> Switch(Expression<Func<TData, bool>> selector, string labelKey, Func<IUiComponent, IUiComponent> place)
+        {
+            var field = Declare(selector, FieldControl.Checkbox, labelKey);
+            var toggle = new Toggle(labelKey, _data is not null && field.ReadValue(_data) is true, hidesLabel: true);
+            toggle.Control.Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
+            Configure(field, toggle.Control);
+            _target.Add(place(_action is null ? toggle : new Div(toggle, new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", "false"))));
+            _visibleFields++;
+            _hasWideField = true;
             return this;
         }
 

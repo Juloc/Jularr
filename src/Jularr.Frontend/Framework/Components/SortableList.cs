@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Framework
                     new Span(new Span(item.Title).Class("sortable__title").Attribute("id", id + "-title"),
                         new Span(new Text(stateOnKey)).Class("sortable__line sortable__line--on"),
                         new Span(new Text(stateOffKey)).Class("sortable__line sortable__line--off")).Class("sortable__text"),
-                    new Toggle(item.Title, item.Shown, disabled, labelHidden: true).Named(shownName, item.Key),
+                    new Toggle(item.Title, item.Shown, disabled, hidesLabel: true).Named(shownName, item.Key),
                     new Button(new Icon("dots", assets, 18)).Class("sortable__dots").Attribute("popovertarget", menu).Attribute("aria-haspopup", "menu").Attribute("data-sortable-menu", "")
                         .TextAttribute("aria-label", "sortable.menu"),
                     new Div(moves).Class("sortable__menu").Attribute("id", menu).Attribute("popover", "auto").Attribute("role", "menu").TextAttribute("aria-label", "sortable.menu")

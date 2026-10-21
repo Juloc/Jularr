@@ -142,7 +142,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 FormatScores = [.. data.FormatScores.Select(score => new FormatScore(score.FormatId, score.Score))],
                 MinimumFormatScore = data.MinimumFormatScore,
                 CutoffFormatScore = data.CutoffFormatScore,
-                MinimumUpgradeFormatScore = data.MinimumUpgradeFormatScore
+                MinimumUpgradeFormatScore = data.MinimumUpgradeFormatScore,
+                LanguageOrder = data.LanguageOrder,
+                LanguageFallback = data.LanguageFallback
             };
 
         public static AcquisitionProfileDetailsV1 Read(AcquisitionProfileReadData row)
@@ -155,7 +157,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 new BaseDataList<CustomFormatScoreV1>(definition.FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))),
                 definition.MinimumFormatScore, definition.CutoffFormatScore, definition.MinimumUpgradeFormatScore, row.WantedCount, row.Version,
                 [.. (definition.Monitoring?.PrimaryTypes ?? []).Concat(definition.Monitoring?.SecondaryTypes ?? []).Concat(definition.Monitoring?.ReleaseStatuses ?? [])],
-                definition.Monitoring?.Languages ?? [], definition.Monitoring?.MinimumPages);
+                definition.Monitoring?.Languages ?? [], definition.Monitoring?.MinimumPages, definition.LanguageOrder, definition.LanguageFallback);
         }
     }
 }

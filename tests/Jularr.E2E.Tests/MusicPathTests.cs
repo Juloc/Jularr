@@ -61,7 +61,7 @@ namespace Jularr.E2E.Tests
                 await Steps.PlayAndPauseAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First);
                 await Steps.SignOutAndInAsync(page);
                 await page.GotoAsync(details);
-                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
+                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { NameRegex = new System.Text.RegularExpressions.Regex("^Continue") }).First);
                 Assert.IsTrue(resumed >= 4.5, "The track started at " + resumed + " s instead of continuing.");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());

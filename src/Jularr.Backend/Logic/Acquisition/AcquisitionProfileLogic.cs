@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
@@ -48,6 +49,12 @@ namespace Jularr.Backend.Logic.Acquisition
             if (input.MinimumUpgradeFormatScore is < 1 or > 1000000 || input.MinimumFormatScore is < -1000000 or > 1000000 || input.CutoffFormatScore is < -1000000 or > 1000000)
                 throw new DataValidationException(nameof(input.MinimumFormatScore), "out_of_range");
 
+            // The languages of the choice are known two-letter codes, each once and in the given order.
+            var languages = input.LanguageOrder.Select(LanguageCodes.ToTwoLetter).ToArray();
+            if (languages.Any(code => code is null))
+                throw new DataValidationException(nameof(input.LanguageOrder), "unknown_language");
+            var languageOrder = languages.OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+
             var stored = existing is null ? null : JsonSerializer.Deserialize<AcquisitionProfileDefinition>(existing, AcquisitionSelectionLogic.DefinitionOptions);
             var definition = new AcquisitionProfileDefinition(allowed, order, input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte)
             {
@@ -56,7 +63,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 FormatScores = input.FormatScores,
                 MinimumFormatScore = input.MinimumFormatScore,
                 CutoffFormatScore = input.CutoffFormatScore,
-                MinimumUpgradeFormatScore = input.MinimumUpgradeFormatScore
+                MinimumUpgradeFormatScore = input.MinimumUpgradeFormatScore,
+                LanguageOrder = languageOrder,
+                LanguageFallback = input.LanguageFallback
             };
             return JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions);
         }
