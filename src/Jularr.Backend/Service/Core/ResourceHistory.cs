@@ -3,13 +3,12 @@ using Jularr.Backend.Data.System.Instance.V1;
 using Jularr.Backend.Service.System.Instance.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Core
 {
     // Processor and memory use of this process once a minute for the last six hours; a restart begins empty.
     // Each minute it also follows the Diagnostics module for all in-memory diagnostics.
-    internal sealed class ResourceHistory(TimeProvider time, IServiceScopeFactory scopes, RecentLogs logs, ServiceTimings timings, ILogger<ResourceHistory> logger) : BackgroundService
+    internal sealed class ResourceHistory(TimeProvider time, WorkerJobRunner runner, RecentLogs logs, ServiceTimings timings) : BackgroundService
     {
         private const int Capacity = 360;
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
@@ -34,38 +33,33 @@ namespace Jularr.Backend.Service.Core
             using var timer = new PeriodicTimer(Interval, time);
             try
             {
-                await FollowModuleAsync(stoppingToken);
-                while (await timer.WaitForNextTickAsync(stoppingToken))
+                do
                 {
-                    await FollowModuleAsync(stoppingToken);
-                    process.Refresh();
-                    Sample(process);
+                    await runner.RunAsync("resources", async (services, token) =>
+                    {
+                        await FollowModuleAsync(services, token);
+                        process.Refresh();
+                        Sample(process);
+                    }, stoppingToken);
                 }
+                while (await timer.WaitForNextTickAsync(stoppingToken));
             }
             catch (OperationCanceledException)
             {
             }
         }
 
-        private async Task FollowModuleAsync(CancellationToken ct)
+        private async Task FollowModuleAsync(IServiceProvider services, CancellationToken ct)
         {
-            try
+            var enabled = (await services.GetRequiredService<ReadDiagnosticsStateV1>().ExecuteAsync<DiagnosticsStateV1>(new DiagnosticsStateParametersV1(), default, ct)).IsEnabled;
+            logs.Enable(enabled);
+            timings.Enable(enabled);
+            if (!enabled)
             {
-                await using var scope = scopes.CreateAsyncScope();
-                var enabled = (await scope.ServiceProvider.GetRequiredService<ReadDiagnosticsStateV1>().ExecuteAsync<DiagnosticsStateV1>(new DiagnosticsStateParametersV1(), default, ct)).IsEnabled;
-                logs.Enable(enabled);
-                timings.Enable(enabled);
-                if (!enabled)
+                lock (_samples)
                 {
-                    lock (_samples)
-                    {
-                        _samples.Clear();
-                    }
+                    _samples.Clear();
                 }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                logger.LogWarning(exception, "The Diagnostics module state could not be read.");
             }
         }
 

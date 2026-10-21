@@ -50,6 +50,8 @@ test('Reader typography keeps existing defaults and validates new local preferen
 test('player planning network failure displays the localized status', async () => {
     const source = readFileSync(new URL('../Modules/Player/player.entry.ts', import.meta.url), 'utf8').replace('import "./player.scss";', '');
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+    const skip = {};
+    runInNewContext(ts.transpileModule(readFileSync(new URL('../Modules/Player/Skip.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: skip });
     const status = { hidden: true, textContent: '' };
     let requests = 0;
     const player = {
@@ -60,7 +62,7 @@ test('player planning network failure displays the localized status', async () =
             : selector === '#player-sidebar' ? null : { dataset: {}, addEventListener() {}, setAttribute() {} }
     };
     runInNewContext(code, {
-        exports: {}, require: () => ({}),
+        exports: {}, require: name => name === './Skip' ? skip : {},
         document: { querySelector: () => player, createElement: () => ({ canPlayType: () => '' }), addEventListener() {} },
         matchMedia: () => ({ matches: false, addEventListener() {} }),
         // The player starts a deferred loading indicator before requesting its plan.

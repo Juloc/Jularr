@@ -20,7 +20,7 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 - A native settings popover has a stable size, fixed header/bottom tabs and one
   scrolling body. Basic links to Audio, Subtitles and Playback; Info uses actual
   delivery and decoded picture size. Current playback is the only settings scope.
-  Existing speed presets and one WebVTT subtitle track remain supported. The Playback tab also lists this playback's Quality (Automatic, Original, High, Data saver).
+  Existing speed presets and one WebVTT subtitle track remain supported. The Playback tab also lists this playback's Quality (Automatic, Original, High, Data saver). A Chapters tab appears for a file with chapters: each chapter with its time, the one playing marked, a tap seeks and closes the panel. A Skip button (Skip intro, Skip credits and so on) sits above the controls while playback is inside a marked stretch; where the profile chose Automatic the player jumps on arrival and shows a short note with Undo, and credits that run to the end of the file open the next episode after that note when autoplay is on. The seek bar has no chapter ticks.
 - The page composes a sidebar using authorized Work details and the current
   season's existing episode service. Compact rows reuse `EpisodeCard`; the current
   episode stays accent-colored. Wide/fullscreen/narrow views use the same sidebar
@@ -31,8 +31,7 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 ## Explicitly separate
 
 Series/media-type/admin persistence, expanded settings/preview transfer,
-dual subtitles and advanced timing/styling, version selection, chapter and
-skip markers, casting, audio waveform/processing, touch
+dual subtitles and advanced timing/styling, version selection, casting, audio waveform/processing, touch
 gestures and physical TV/Safari validation are not implemented by this appearance
 package. The profile's audio and subtitle choice, speed and autoplay of the next
 episode (with a countdown) and each device's quality are stored by their own

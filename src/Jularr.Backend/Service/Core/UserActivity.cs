@@ -1,7 +1,7 @@
 namespace Jularr.Backend.Service.Core
 {
     // When someone last used Jularr; background syncs that wait while it is used read it.
-    internal sealed class UserActivity(TimeProvider time)
+    public sealed class UserActivity(TimeProvider time)
     {
         private long _lastTicks;
 
