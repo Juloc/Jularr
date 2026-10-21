@@ -1232,22 +1232,6 @@
    "Root folder",
    "Cartella radice"
   ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Musica su questo dispositivo"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Originale"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Alta (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Ridotta (128 kbit/s)"
-  ],
   "takeover.rootFolders": [
    "Root folders",
    "Cartelle radice"
@@ -1675,10 +1659,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Se vuoto, come nome viene mostrata la piattaforma del dispositivo."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Originale riproduce il file così com'è. Alta e Ridotta convertono al volo i file musicali più grandi, risparmiando dati in mobilità."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",

@@ -278,10 +278,10 @@ namespace Jularr.Backend.Tests
             using var list = await host.SendAsync(HttpMethod.Get, "/Account/Sessions");
             StringAssert.Contains(await list.Content.ReadAsStringAsync(), "<p>Browser ");
 
-            // It may ask for smaller music.
-            using var smaller = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/audio-quality", new SessionAudioQualityDataV1(AudioQuality.Small));
+            // It may ask for smaller playback.
+            using var smaller = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/playback-quality", new SessionPlaybackQualityDataV1(PlaybackQuality.Saver));
             Assert.AreEqual(HttpStatusCode.OK, smaller.StatusCode, await smaller.Content.ReadAsStringAsync());
-            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"AudioQuality\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"PlaybackQuality\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
 
             // Paired to the Owner, its requests still wait for approval.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Device request')");

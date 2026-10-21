@@ -1232,22 +1232,6 @@
    "Root folder",
    "Folder root"
   ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Musik di perangkat ini"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Asli"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Tinggi (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Kecil (128 kbit/s)"
-  ],
   "takeover.rootFolders": [
    "Root folders",
    "Folder root"
@@ -1675,10 +1659,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Jika kosong, platform perangkat ditampilkan sebagai namanya."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Asli memutar file apa adanya. Tinggi dan Kecil mengonversi file musik yang lebih besar secara langsung, sehingga menghemat data saat bepergian."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
