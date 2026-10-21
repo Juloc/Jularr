@@ -94,6 +94,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField MonitoredValues = new() { ItemMaximumLength = 64, MaximumLength = 60 };
         public static readonly IntField MinimumPages = new() { Minimum = 1, Required = false };
 
+        // The languages of the choice, in order, and the fallback when no file carries one of them.
+        public static readonly StringArrayField LanguageOrder = new() { ItemMaximumLength = 8, MaximumLength = 16, SplitsCommas = true };
+        public static readonly EnumField LanguageFallback = new(typeof(LanguageFallbackType));
+
     }
 
     // Suggested sources of the catalog page.

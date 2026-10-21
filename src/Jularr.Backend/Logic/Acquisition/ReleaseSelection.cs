@@ -16,14 +16,14 @@ namespace Jularr.Backend.Logic.Acquisition
             // The source with the higher priority comes first, as in Readarr: its release is taken and the
             // quality decides only among the releases of that source. A complete file comes before a file
             // that is only a part of a work; among the complete ones the languages a request asks for come
-            // first, and when no candidate carries one of them the original language of the work does.
+            // first, then the fallback the profile names.
             var asked = evaluations.Where(evaluation => UpgradePolicy.IsRequested(profile, evaluation.Candidate.Languages)).ToArray();
-            var original = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsOriginal(profile, evaluation.Candidate.Languages)).ToArray();
+            var fallback = asked.Length > 0 ? [] : evaluations.Where(evaluation => UpgradePolicy.IsFallback(profile, evaluation.Candidate.Languages)).ToArray();
 
             var ranked = evaluations
                 .OrderBy(evaluation => evaluation.Candidate.IndexerPriority)
                 .ThenBy(evaluation => evaluation.Candidate.IsPart ? 1 : 0)
-                .ThenBy(evaluation => asked.Contains(evaluation) ? 0 : original.Contains(evaluation) ? 1 : 2)
+                .ThenBy(evaluation => asked.Contains(evaluation) ? 0 : fallback.Contains(evaluation) ? 1 : 2)
                 .ThenBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
                 .ThenBy(evaluation => evaluation.QualityRank)
                 .ThenByDescending(evaluation => evaluation.Score?.FormatScore ?? 0)

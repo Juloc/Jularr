@@ -1,4 +1,5 @@
 import "./Drawer.scss";
+import { onPage } from "../../Modules/Navigation/PageSwap";
 
 // The panels need script, so their buttons show with it (also in HTML a page script inserts later).
 document.documentElement.classList.add('drawers-ready');
@@ -36,4 +37,9 @@ document.addEventListener('click', event => {
     // A click on the backdrop lands on the dialog itself.
     const dialog = event.target instanceof HTMLDialogElement ? event.target : event.target.closest<HTMLDialogElement>('dialog.drawer');
     if (dialog && (event.target === dialog || event.target.closest('[data-drawer-close]'))) dialog.close();
+});
+
+// A drawer whose form the server answered with an error opens again, so the error is seen where it was made.
+onPage(import.meta.url, () => {
+    document.querySelectorAll<HTMLDialogElement>('dialog.drawer[data-drawer-auto]').forEach(dialog => { if (!dialog.open) dialog.showModal(); });
 });
