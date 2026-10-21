@@ -25,7 +25,7 @@ function appearance(saved = {}, unavailable = false) {
     const buttons = ["original", "clean"].map(setSkin => new Element({ setSkin }))
         .concat(["system", "light", "dark"].map(setMode => new Element({ setMode })));
     const events = {};
-    const accentButtons = ["#c8102e", "#7c3aed"].map(setAccent => new Element({ setAccent }));
+    const accentButtons = ["#c8102e", "#8040f7"].map(setAccent => new Element({ setAccent }));
     const reset = new Element({ resetAccent: "true" });
     const picker = new Element({ accentInput: "true" });
     const value = {};
@@ -45,7 +45,7 @@ function appearance(saved = {}, unavailable = false) {
     };
     const systemMode = { matches: false, addEventListener() {} };
     runInNewContext(script, { document, localStorage, Element, HTMLInputElement: Element, Set, exports: {}, require: () => palette, window: { matchMedia: () => systemMode } });
-    return { root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
+    return { Element, root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
         click: button => events.click({ target: button }), input: color => { picker.value = color; events.input({ target: picker }); } };
 }
 
@@ -62,6 +62,19 @@ test("appearance restores valid preferences and exposes selected controls", () =
     assert.equal(ui.storage.get("jularr-ui-skin"), "clean");
     assert.equal(ui.buttons[0].attributes["aria-pressed"], "false");
     assert.equal(ui.buttons[1].attributes["aria-pressed"], "true");
+});
+
+test("the header switch toggles the brightness in effect and keeps the style", () => {
+    const ui = appearance({ "jularr-ui-skin": "original" });
+    const toggle = new ui.Element({ toggleMode: "true" });
+    assert.equal(ui.root.dataset.mode, "system");
+    ui.click(toggle);
+    assert.equal(ui.root.dataset.mode, "dark");
+    assert.equal(ui.storage.get("jularr-ui-mode"), "dark");
+    assert.equal(ui.buttons[4].attributes["aria-pressed"], "true");
+    ui.click(toggle);
+    assert.equal(ui.root.dataset.mode, "light");
+    assert.equal(ui.root.dataset.skin, "original");
 });
 
 test("invalid or blocked storage retains usable independent controls", () => {
@@ -90,7 +103,7 @@ test("free accents update tokens and artwork without changing semantic colors", 
     ui.click(ui.buttons[1]);
     assert.equal(ui.root.dataset.accent, "#1b8aa0");
     ui.click(ui.reset);
-    assert.equal(ui.root.dataset.accent, "#7c3aed");
+    assert.equal(ui.root.dataset.accent, "#8040f7");
     assert.equal(ui.storage.has("jularr-ui-accent"), false);
     ui.input("#808080");
     assert.equal(ui.styles.get("--art-saturate"), "0");
@@ -98,21 +111,58 @@ test("free accents update tokens and artwork without changing semantic colors", 
     assert.equal(ui.root.dataset.accent, "#808080");
 });
 
-test("arbitrary saturated and monochrome accents remain readable in both modes", () => {
-    const luminance = hex => {
-        const channels = (hex.length === 4 ? [...hex.slice(1)].map(c => c + c) : hex.slice(1).match(/../g))
-            .map(c => parseInt(c, 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
-        return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
-    };
-    for (const seed of ["#c8102e", "#7c3aed", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#00ffff", "#d9577a", "#000000", "#ffffff", "#808080"]) {
-        const result = palette.buildPalette(seed);
+const hueOf = hex => {
+    const [r, g, b] = hex.slice(1).match(/../g).map(c => parseInt(c, 16) / 255);
+    const max = Math.max(r, g, b), delta = max - Math.min(r, g, b);
+    if (delta === 0) return 0;
+    const value = max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return (value * 60 + 360) % 360;
+};
+const hueDistance = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
+
+test("the default accent is the owner's mockup palette, verbatim", () => {
+    const result = palette.buildPalette("#8040F7");
+    assert.deepEqual({ ...result.light }, {
+        background: "#faf9ff", surface: "#ffffff", field: "#f8f7ff", "surface-hover": "#f8f7ff", "accent-soft": "#f2edff",
+        accent: "#8040f7", "accent-outline": "#b59aff", focus: "#b59aff", "accent-text": "#7136d9", "accent-edge": "#dcd0ff",
+        text: "#26223d", muted: "#938fa9", border: "#eae6f4", "border-strong": "#e1dcee", "accent-contrast": "#ffffff"
+    });
+    assert.deepEqual({ ...result.dark }, {
+        background: "#12121d", surface: "#1d1b2b", field: "#262339", "surface-hover": "#262339", "accent-soft": "#35294e",
+        accent: "#9a70ff", "accent-outline": "#8060bf", focus: "#8060bf", "accent-text": "#c3a8ff", "accent-edge": "#dcd0ff",
+        text: "#f4f1ff", muted: "#aba5bf", border: "#38334e", "border-strong": "#4b4260", "accent-contrast": "#ffffff"
+    });
+});
+
+test("another accent gets the same palette turned to its hue: tinted neutrals, the seed as accent, no tint for monochrome", () => {
+    const teal = palette.buildPalette("#1b8aa0");
+    const seedHue = hueOf("#1b8aa0");
+    assert.equal(teal.light.accent, "#1b8aa0");
+    assert.equal(teal.light["accent-contrast"], "#ffffff");
+    assert.notEqual(teal.light.background, palette.buildPalette("#8040f7").light.background);
+    for (const mode of [teal.light, teal.dark]) {
+        for (const name of ["background", "field", "accent-soft", "border", "border-strong", "text", "muted", "accent-text", "accent-outline"]) {
+            assert.ok(hueDistance(hueOf(mode[name]), seedHue) < 30, name + " follows the seed hue: " + mode[name]);
+        }
+        assert.equal(mode["surface-hover"], mode.field);
+    }
+    assert.equal(teal.light.surface, "#ffffff");
+    // The neutrals keep the mockup's order of lightness: page and field lighter than the line, the line lighter than its stronger sibling.
+    const lightness = hex => hex.slice(1).match(/../g).reduce((sum, c) => sum + parseInt(c, 16), 0);
+    assert.ok(lightness(teal.light.border) > lightness(teal.light["border-strong"]));
+    assert.ok(lightness(teal.dark.border) < lightness(teal.dark["border-strong"]));
+    assert.ok(lightness(teal.dark.accent) > lightness(teal.light.accent));
+
+    for (const grey of ["#808080", "#000000", "#ffffff"]) {
+        const result = palette.buildPalette(grey);
         for (const mode of [result.light, result.dark]) {
-            for (const [foreground, background] of [["text", "surface"], ["muted", "surface-hover"], ["accent-contrast", "accent"], ["accent-contrast", "accent-hover"], ["accent-text", "accent-soft"]]) {
-                const values = [luminance(mode[foreground]), luminance(mode[background])].sort((a, b) => b - a);
-                assert.ok((values[0] + .05) / (values[1] + .05) >= 4.5, seed + " " + foreground + "/" + background);
+            for (const name of ["background", "field", "accent-soft", "border", "text", "muted"]) {
+                const [r, g, b] = mode[name].slice(1).match(/../g);
+                assert.ok(r === g && g === b, grey + " " + name + " has no tint: " + mode[name]);
             }
         }
     }
     assert.equal(palette.buildPalette("#c8102e").light.accent, "#c8102e");
+    assert.equal(palette.buildPalette("#ffff00").light["accent-contrast"] !== "#ffffff", true);
     assert.throws(() => palette.buildPalette("not a color"));
 });

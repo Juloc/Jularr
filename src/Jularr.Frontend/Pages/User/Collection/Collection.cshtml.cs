@@ -46,6 +46,7 @@ namespace Jularr.Frontend.Pages.User.Collection
             page.Navigation("favorites.title");
             page.Parent("favorites.title", "/Favorites");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_collection is not { } collection)
             {
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -59,8 +60,7 @@ namespace Jularr.Frontend.Pages.User.Collection
                 var removeToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(new Div([.. works.Items.Select(item =>
                 {
-                    var card = new MediaCard(assets, item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, null))
+                    var card = MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, removeToken));
                     return collection.IsSmart ? (IUiComponent)card : new Div(card, new Form<CollectionWorkParametersV1>(form => form.Submit("media.remove", item.Title, valueHidden: true),
                         Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry");

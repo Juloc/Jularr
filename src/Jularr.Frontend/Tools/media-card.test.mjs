@@ -25,6 +25,7 @@ function mounted(desktop = false) {
         exports,
         Element,
         HTMLElement: Element,
+        Node: Element,
         matchMedia: () => ({ matches: desktop })
     });
     exports.initializeCards();
@@ -49,7 +50,7 @@ function mounted(desktop = false) {
     document.activeElement = poster;
 
     return {
-        events, registrations, initialize: exports.initializeCards, document, card, poster, link,
+        events, registrations, initialize: exports.initializeCards, document, card, poster, link, Element,
         click(target) { events.get('click')({ target }); },
         escape(target = poster) { events.get('keydown')({ key: 'Escape', target }); }
     };
@@ -59,7 +60,7 @@ test('repeated entry initialization registers one delegated click and keyboard h
     const view = mounted();
     view.initialize();
     view.initialize();
-    assert.deepEqual(view.registrations, ['click', 'keydown']);
+    assert.deepEqual(view.registrations, ['click', 'keydown', 'mouseover', 'focusin', 'mouseout', 'focusout', 'scroll']);
     assert.equal(view.events.has('pointerover'), false);
 });
 
@@ -90,6 +91,40 @@ test('fine-pointer desktop clicks never toggle the touch status', () => {
     assert.equal(view.card.dataset.open, undefined);
     view.escape();
     assert.equal(view.poster.blurred, true);
+});
+
+function withTitle(view, clipped) {
+    const tip = { hidden: true, textContent: '' };
+    const holder = Object.assign(new view.Element(), {
+        dataset: { full: 'The complete title of the work' },
+        scrollWidth: clipped ? 180 : 100,
+        clientWidth: 100,
+        querySelectorAll() { return []; },
+        contains(node) { return node === this; },
+        closest(selector) { return selector.includes('media-card__title') ? this : selector === '.media-card' ? { querySelector: () => tip } : null; }
+    });
+    return { holder, tip };
+}
+
+test('a clipped title shows its complete text over the cover and hides on leave', () => {
+    const view = mounted();
+    const { holder, tip } = withTitle(view, true);
+    view.events.get('mouseover')({ target: holder });
+    assert.equal(tip.hidden, false);
+    assert.equal(tip.textContent, 'The complete title of the work');
+    view.events.get('mouseout')({ target: holder, relatedTarget: null });
+    assert.equal(tip.hidden, true);
+    view.events.get('focusin')({ target: holder });
+    assert.equal(tip.hidden, false);
+    view.escape(holder);
+    assert.equal(tip.hidden, true);
+});
+
+test('a title that fits shows no tip', () => {
+    const view = mounted();
+    const { holder, tip } = withTitle(view, false);
+    view.events.get('mouseover')({ target: holder });
+    assert.equal(tip.hidden, true);
 });
 
 test('card script never starts a trailer or expands a poster', () => {

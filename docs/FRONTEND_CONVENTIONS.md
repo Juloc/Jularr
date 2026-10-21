@@ -117,9 +117,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Backend-owned. Hidden-field errors must be visible at form level; failed reads
   receive the shared Page error presentation, including empty-result pages; unknown errors render in the page too
   (`ErrorText`), not as a bare JSON answer.
-- Buttons and single-line fields use the shared pill radius. Form labels sit
-  in the fieldset's native legend cutout, without a painted label background,
-  remain associated through `for`/id and wrap without
+- Buttons and search use the pill radius, fields the 11px field radius. Form labels sit
+  above the field (11px/770, with the (i) after them), remain associated through `for`/id (a group of choices through its legend) and wrap without
   truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
   through `Form.Toggle` so Backend field metadata and POST values stay central.
 - `Form<T>` owns the layout: short fields share two columns where there is room and one
@@ -130,12 +129,11 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   groups fields in a titled panel under one save; `Form.ChoiceTable` shows options as rows
   and several fields as checkbox or radio columns (a quality ladder). Pages do not
   restyle form grids.
-- Owner's decision 15 Oct: no grey surfaces. Panels and tables are white (dark surface in
-  dark mode) with an accent-tinted outline (`--accent-line`); section titles and table heads
-  are bold in the accent text colour on `--accent-soft`; labels use the text colour.
-  Owner's decision 20 Oct: the light page background is white too, and the shell (sidebar, header, search, floating bar)
-  separates with 1px lines in the quiet `--line` token instead of shadows or filled panels; the current place uses
-  `--accent-soft` with `--accent-text`.
+- Owner's decision 15 Oct (look overridden 20/21 Oct by the mockups): no grey surfaces. Panels and tables are white
+  (dark surface in dark mode), fields the soft lavender `--field`, outlined by the one quiet 1px `--border`; section titles are bold in the
+  text colour, table heads are muted uppercase on `--field`; accent tints (`--accent-soft`, `--accent-outline`, `--accent-edge`) mark hover and selection only.
+  The shell (sidebar, header, search, floating bar) separates with the same 1px line instead of shadows or filled panels; the current place
+  uses `--accent-soft` with `--accent-text`.
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
@@ -143,17 +141,39 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   (Media, Library, Requests, Arr+) are collapsible groups in the sidebar whose pages are their own
   addresses; the area of the current page is open. Spread content over pages rather than
   stacking tab rows or crowding one page.
-- Tabs and subsection navigation reuse `NavigationTabs`: button-like segments
-  inside one shared capsule. `Tabs` adds only the server-selected content pane.
-  Keep the capsule single-row and horizontally scrollable when necessary, with
-  complete labels and a soft accent selection. Mobile shell navigation is an
-  opaque floating pill above the safe area, not an edge-to-edge footer. Its active
-  destination uses the accent; the compact Topbar keeps the brand mark and page context.
+- Tabs and subsection navigation reuse `NavigationTabs`: the mockups' filter row of
+  plain pills, the selection the lavender tint with its `--accent-edge` outline. `Tabs` adds only the server-selected content pane.
+  Keep the row single-line and horizontally scrollable when necessary, with complete labels. The shell follows the mockups: a 252px sidebar (230px, then
+  67px with icons only up to 1120px, the selected area tinted), on a phone (up to 640px) an off-canvas drawer over a dimmed page opened from the header's menu
+  button. The admin sidebar has an ADMINISTRATION eyebrow; the header has the trail, the one search with its `/` key hint and shortcut, a light/dark switch,
+  the inbox and the avatar (profile initials, linking to the settings). The bottom pill is gone.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.
 
 
+## Design tokens (owner's mockups, jobs redesign 21 Oct)
+
+One visual language for every page, owned by [Theme.scss](../src/Jularr.Frontend/Modules/Appearance/Theme.scss) (defaults, shape, type,
+status, shadows) and [Palette.ts](../src/Jularr.Frontend/Modules/Appearance/Palette.ts) (colours from the accent, applied at runtime). The
+default accent `#8040f7` reproduces the mockup palette **verbatim**; any other accent turns the same palette to its hue and chroma
+(tinted neutrals, lavender, lines), so the Owner's accent setting still drives everything. Components use the tokens, never literals; a page
+adds none of its own colours, radii, shadows or font sizes. The mockup values are the rule: contrast ratios are not a design constraint.
+
+| Group | Tokens (light / dark) |
+| --- | --- |
+| Surfaces | `--background` #faf9ff / #12121d, `--surface` #fff / #1d1b2b, `--field` (= `--surface-soft`, `--surface-hover`) #f8f7ff / #262339 |
+| Line | `--border` (= `--line`) #eae6f4 / #38334e: 1px, the only outline; `--border-strong` #e1dcee / #4b4260 for inputs and switches |
+| Text | `--text` #26223d / #f4f1ff, `--muted` #938fa9 / #aba5bf (secondary text, labels, captions) |
+| Accent | `--accent` #8040f7 / #9a70ff, `--accent-text` #7136d9 / #c3a8ff, `--accent-soft` (lavender) #f2edff / #35294e, `--accent-outline` (hover edge) and `--focus` #b59aff / #8060bf, `--accent-edge` (active chip outline) #dcd0ff, `--accent-contrast` white, `--accent-hover` |
+| Status | `--success` #159775 / #75dcb6, `--warning` #ad7618 / #ffcd82, `--danger` #c6536b / #ff9cb0, `--info` #487bd6 / #9dbdf7 and their `-soft` tints |
+| Shape | `--radius-control` 999px (buttons, chips, search, pills), `--radius-panel` 19px, `--radius-dialog` 22px, `--radius-inner` 13px (detail tiles, textareas), `--radius-tile` 12px (icon tiles), `--radius-field` 11px, `--radius-small` 10px |
+| Depth | `--shadow` 0 9px 30px (panels, tables, sections), `--shadow-drawer` -10px 0 40px #0002, `--shadow-overlay` 0 11px 30px #0004 (popovers, save pill, toast), `--scrim` #16122570 with a 4px blur; no other shadows, bevels or coloured stripes |
+| Type | Inter, then Segoe UI/system; body `--text-body` 12px, controls `--text-control` 11px/740, captions, labels, pills and table heads `--text-small` 10px (heads 810, uppercase, .65px); h1 27px/850 -1.05px, h2 `--text-heading` 14px/805 -.3px, drawer title 22px |
+| Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; all 44px for a coarse pointer; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity |
+
+Changing a look means changing a token or the one base component (Button, Form, Table, Tag, StateChip, Section, NavigationTabs, Toggle, SearchBox,
+SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Shell); all pages inherit it. Button variants: default, `Primary()`, `Soft()`, `Warn()`, `Compact()`, `IconOnly()`.
 ## Page identity and approved UX (MANDATORY)
 
 - **The shared Topbar breadcrumb/current-page label is the sole page title.**
@@ -348,28 +368,30 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   keep controls functional when browser storage is unavailable. Focused playback
   controls stay visible; honor reduced motion and prefer wrapping over truncation.
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
-  Disabled buttons remain opaque, with muted surface/text rather than reduced opacity.
+  Disabled buttons use the mockups' .4 opacity.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations
   and fix the owning style instead of stacking compensating overrides.
-- All catalog/Continue cards use the same canonical `MediaCard`: portrait cover,
-  availability top-left, bookmark top-right. Hover/focus shows title, supplied
-  year/rating and matching icon/text actions in equal-width columns immediately
-  above progress: Play/Continue/Read/Request left, Details right. Touch keeps these
-  actions reachable. A missing real primary action leaves only Details; do not
-  fabricate playback or requests. Series lifecycle, genres, descriptions and
-  language capsules belong in Details, not the cover. Unknown coarse state stays
-  readable in the hover content, never becomes a fabricated completeness dot.
-- Progress is flush at the bottom, full-width and 12px high, with a translucent
-  white track and rounded fill; the rounded card clips it. No time text, border,
-  shadow or surrounding capsule. It must not affect other content's layout.
+- All catalog/Continue cards use the same canonical `MediaCard` (the UiDesigner MediaCard, owner decision 20 Oct): a small
+  portrait cover of 133-150 px (a card to continue 176 px) with softly rounded corners, local availability top left as a tag,
+  the heart top right, then the linked title and one line of facts: `year · type · rating` (what is unknown is left out; the rating
+  is the catalog's, on a scale of ten). A card to continue reads `Type Year | detail` and `ContinueDetail` writes the detail (`S01 E05 ·
+  22 min left`, `Chapter 183`, `Track 4 · 3 min left`, `42%`). Every text is one line with an ellipsis; a clipped text shows in full in a
+  tip over the cover on hover, focus and tap. Hover or focus shows only the one contextual action over the cover, icon and short label
+  (Request, Watch, Continue, Read), never Details; touch keeps it visible. A missing real primary action shows none; do not
+  fabricate playback or requests. Series lifecycle, genres, descriptions and language capsules belong in Details, not the cover.
+  Grids hold as many covers per row as fit (`media-grid`), no two-row wrapping of card text.
+- Progress is a thin capsule inside the foot of the cover (translucent white track, accent fill); no time text and it never moves
+  other content. A page may add one short label over the cover, bottom left (Favorites shows where the profile stands).
 - Availability is green only when all monitored units have local profile-language
   audio; yellow means complete in other audio languages; orange means partial
   with profile audio; yellow–orange means partial in other audio languages.
   Subtitles do not change this classification. Purple downloading, blue searching/
   queued, gray requested and no dot for missing stay distinct. Hover expands the
-  dot into a compact icon/text capsule; partial rings retain supplied unit counts.
+  dot into a compact tag (icon and a short word or the unit counts) with the full sentence below it.
+  Library, Favorites, Collections, People, Franchise and Home read the whole projection; Discover
+  cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
 - Supplied trailers start muted after sustained mouse hover, widen the card without
@@ -398,7 +420,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   accent and no ornamental artwork; Original uses the restored ink/paper/blossom
   treatment. Both consume the same central tokens and components, never separate pages.
 - Original's default seed is Jularr red (`#c8102e`); Clean's is Jularr purple
-  (`#7c3aed`). Derive light/dark surfaces, readable accent labels and artwork hue
+  (`#813eff`, the mockups' accent; its palette is the mockups' reference palette, other seeds derive theirs). Derive light/dark surfaces, readable accent labels and artwork hue
   from one selected seed through the shared Appearance palette. Theme artwork
   and the mascot follow the accent; media artwork, provider logos
   and semantic status colors do not. The Jularr mark is the owner's J in a broken ring, one

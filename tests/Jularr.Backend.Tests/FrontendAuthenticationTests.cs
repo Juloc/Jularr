@@ -62,7 +62,7 @@ namespace Jularr.Backend.Tests
 
             // Native actions, encoded text.
             writer.GetStringBuilder().Clear();
-            var card = new MediaCard(assets, "<Title>", "/Details/1", null, "2026", "media.state.InProgress", "media.continue", "/Player/2")
+            var card = new MediaCard(assets, "<Title>", "/Details/1", null).Facts(2026, "media.type.Series", 7.84m).Action("media.continue", "/Player/2")
                 .Availability(availability).Continue(30000, 90000);
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
@@ -72,6 +72,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"media-card__title\"");
             StringAssert.Contains(html, "class=\"media-card__details\"");
             StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\"");
+            StringAssert.Contains(html, "<p class=\"media-card__info\" data-full=\"2026 &#xB7; Series &#xB7; " + 7.8m.ToString("0.0", CultureInfo.CurrentCulture) + "\">");
+            StringAssert.Contains(html, "class=\"media-card__title\" data-full=\"&lt;Title&gt;\"");
             Assert.IsFalse(html.Contains("data-trailer-id", StringComparison.Ordinal));
             Assert.AreEqual(1, Regex.Matches(html, "media-card__actions").Count);
             foreach (var omitted in new[] { "media-card__series", "media-card__genres", "media-card__languages", "media-card__remaining", "<iframe", "disabled=\"disabled\"" })
@@ -79,12 +81,35 @@ namespace Jularr.Backend.Tests
 
             // Progression has no invented duration.
             writer.GetStringBuilder().Clear();
-            new MediaCard(assets, "Book", "/Details/1", null, null, "media.state.InProgress").Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
+            new MediaCard(assets, "Book", "/Details/1", null).Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.IsFalse(writer.ToString().Contains("<progress", StringComparison.Ordinal));
             writer.GetStringBuilder().Clear();
-            new MediaCard(assets, "Book", "/Details/1", null, null, "media.state.InProgress").ContinueReading(0.455m).WriteTo(writer, HtmlEncoder.Default, texts);
+            new MediaCard(assets, "Book", "/Details/1", null).ContinueReading(0.455m).WriteTo(writer, HtmlEncoder.Default, texts);
             StringAssert.Contains(writer.ToString(), "<progress max=\"100\" value=\"46\"");
             Assert.IsFalse(writer.ToString().Contains("media-card__remaining", StringComparison.Ordinal));
+            Assert.IsFalse(writer.ToString().Contains("media-card__info", StringComparison.Ordinal));
+
+            // The facts leave out what is unknown; a card to continue reads "Type Year | detail".
+            writer.GetStringBuilder().Clear();
+            new MediaCard(assets, "Show", "/Details/1", null).Facts(null, "media.type.Series", null).WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "data-full=\"Series\"");
+            Assert.IsFalse(writer.ToString().Contains("media-card__rating", StringComparison.Ordinal));
+            writer.GetStringBuilder().Clear();
+            new MediaCard(assets, "Show", "/Details/1", null).Facts(2023, "media.type.Series", null).Resume("S01 E05 · 22 min left").WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "media-card media-card--resume");
+            StringAssert.Contains(writer.ToString(), "data-full=\"Series 2023 | S01 E05 &#xB7; 22 min left\"");
+
+            // The coarse state shows a tag only where the title is held or requested.
+            foreach (var (state, tag) in new[] { (MediaStateType.Available, "available"), (MediaStateType.Requested, "requested") })
+            {
+                writer.GetStringBuilder().Clear();
+                new MediaCard(assets, "Show", "/Details/1", null).State(state).WriteTo(writer, HtmlEncoder.Default, texts);
+                StringAssert.Contains(writer.ToString(), "media-availability-badge--" + tag);
+            }
+
+            writer.GetStringBuilder().Clear();
+            new MediaCard(assets, "Show", "/Details/1", null).State(MediaStateType.NotRequested).WriteTo(writer, HtmlEncoder.Default, texts);
+            Assert.IsFalse(writer.ToString().Contains("media-availability-badge", StringComparison.Ordinal));
 
             // Preview keeps real fallback links.
             writer.GetStringBuilder().Clear();
@@ -224,7 +249,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"tag tag--accent\"");
             StringAssert.Contains(html, "role=\"switch\"");
             StringAssert.Contains(html, "class=\"ui-field__label\"");
-            StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+            StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
             StringAssert.Contains(html, "class=\"navigation-tabs\"");
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
@@ -529,7 +554,7 @@ namespace Jularr.Backend.Tests
                 if (path == "/Admin/Works" && mediaAllowed)
                 {
                     var html = await page.Content.ReadAsStringAsync();
-                    StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+                    StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
                     StringAssert.Contains(html, "class=\"page-table works-table\"");
                     StringAssert.Contains(html, "/build/assets/Assets/Shared/shell.entry-");
                 }

@@ -1,63 +1,45 @@
+// The mockups' filter row: plain 11px/760 pills in the muted colour; hover lifts them onto a panel, the selection is the lavender tint
+// with the accent text and its own #dcd0ff outline. The row scrolls sideways when it does not fit.
 .navigation-tabs {
     display: inline-flex;
     justify-self: start;
     max-width: 100%;
     min-width: 0;
     align-items: center;
-    gap: 4px;
-    padding: 4px;
+    gap: 5px;
     overflow-x: auto;
     scrollbar-width: none;
     scroll-padding-inline: 4px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-control);
-    background: var(--surface);
+    // Room for the focus ring of the pills inside the scrolling row.
+    margin: -4px;
+    padding: 4px;
 
     // Keep native horizontal navigation.
     &::-webkit-scrollbar { display: none; }
-
-    // Separate small pills for filters of one list, without the shared capsule; they scroll sideways when they do not fit.
-    &--chips {
-        gap: 6px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-
-        .navigation-tabs__link {
-            min-height: 0;
-            padding: 8px 13px;
-            border: 1px solid var(--border);
-            background: var(--surface);
-            font-size: 11px;
-            font-weight: 710;
-            line-height: 1.35;
-
-            &:hover { border-color: var(--accent-line); background: var(--surface); color: var(--text); }
-            &--active, &--active:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
-        }
-    }
 
     &__link {
         display: inline-flex;
         flex: none;
         align-items: center;
         justify-content: center;
-        padding: 8px 16px;
-        min-height: 44px;
+        padding: 9px 14px;
+        border: 1px solid transparent;
         border-radius: var(--radius-control);
         color: var(--muted);
         text-decoration: none;
-        font-size: 13px;
-        font-weight: 650;
+        font-size: var(--text-control);
+        font-weight: 760;
+        line-height: 1.2;
         white-space: nowrap;
+        transition: background-color var(--transition), color var(--transition);
 
-        &:hover { background: var(--surface-hover); color: var(--text); }
+        &:hover { background: var(--surface); color: var(--accent-text); }
 
-        &--active {
+        &--active,
+        &--active:hover {
             background: var(--accent-soft);
             color: var(--accent-text);
-
-            &:hover { background: var(--accent-soft); color: var(--accent-text); }
+            border-color: var(--accent-edge);
         }
     }
 }
