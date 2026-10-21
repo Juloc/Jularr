@@ -18,6 +18,6 @@ namespace Jularr.Backend.Data.Fields.Account
         public static readonly DateTimeField RotatedAt = new() { Required = false };
         public static readonly StringField DeviceName = new(NpgsqlDbType.Varchar) { MaximumLength = 100, Required = false, AllowBlank = false, Trim = true };
         public static readonly StringField DevicePlatform = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false, AllowBlank = false, Trim = true };
-        public static readonly EnumField AudioQuality = new(typeof(Enums.Account.AudioQuality));
+        public static readonly EnumField PlaybackQuality = new(typeof(Enums.Account.PlaybackQuality));
     }
 }

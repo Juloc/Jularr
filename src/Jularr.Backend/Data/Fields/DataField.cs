@@ -190,6 +190,7 @@ namespace Jularr.Backend.Data.Fields
             {
                 if (Trim) text = text.Trim();
                 if (TrimsTrailingSlash) text = text.TrimEnd('/');
+                if (Format == StringFormat.Language) return text.ToLowerInvariant();
                 return Format == StringFormat.Locale && LocaleNames.TryGetValue(text, out var locale) ? locale : text;
             }
 
@@ -233,6 +234,11 @@ namespace Jularr.Backend.Data.Fields
             }
 
             // Restrict protocol input.
+            if (Format == StringFormat.Language && (text.Length != 2 || text.Any(character => character is < 'a' or > 'z')))
+            {
+                throw new DataValidationException(name, "invalid_locale");
+            }
+
             if (Format == StringFormat.HostName && Uri.CheckHostName(text) is not (UriHostNameType.Dns or UriHostNameType.IPv4))
             {
                 throw new DataValidationException(name, "invalid_host");

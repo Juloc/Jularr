@@ -82,7 +82,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await Parallel.ForEachAsync(sources, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, sources.Count), CancellationToken = token },
                     async (source, inner) =>
                     {
-                        if (await _direct.SearchAsync(source, wanted, inner) is not { } answers)
+                        if (await _direct.SearchAsync(source, wanted, inner, Enough) is not { } answers)
                         {
                             Interlocked.Increment(ref failures);
                             return;
@@ -93,6 +93,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             found.TryAdd(offer.Identity, offer);
                         }
                     });
+            }
+
+            // One way of one source is enough when the choice already has something to take; the indexers count too.
+            bool Enough(IReadOnlyList<ReleaseOffer> found)
+            {
+                var all = found.Concat(offers.Values).ToArray();
+                return AcquisitionSelectionLogic.Select(profile, target, kind, scope, all, focusLanguage).Ranked.Any(evaluation => evaluation.IsSelectable);
             }
 
             var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values, focusLanguage);

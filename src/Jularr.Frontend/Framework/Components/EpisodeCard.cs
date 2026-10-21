@@ -10,6 +10,16 @@ namespace Jularr.Frontend.Framework
         private long? _durationMs;
         private bool _compact;
         private bool _current;
+        private bool _watched;
+        private IUiComponent? _actions;
+
+        // The profile finished it; shown beside the state, with the actions that change it.
+        public EpisodeCard Watched(bool watched, IUiComponent? actions = null)
+        {
+            _watched = watched;
+            _actions = actions;
+            return this;
+        }
 
         public EpisodeCard Compact(bool current = false)
         {
@@ -56,7 +66,11 @@ namespace Jularr.Frontend.Framework
                     new Span(new ValueText(label)).Class("episode-card__label"),
                     title is null ? new Span() : new H3(new ValueText(title)).Class("episode-card__title"),
                     overview is null || _compact ? new Span() : new P(new ValueText(overview)).Class("episode-card__overview"),
-                    new Span(new Text(stateKey)).Class("state-chip state-chip--" + stateKey[(stateKey.LastIndexOf('.') + 1)..].ToLowerInvariant())
+                    new Div(
+                        new Span(new Text(stateKey)).Class("state-chip state-chip--" + stateKey[(stateKey.LastIndexOf('.') + 1)..].ToLowerInvariant()),
+                        _watched ? new Span(new Text("progress.watched")).Class("state-chip state-chip--watched") : new Span(),
+                        _actions is null ? new Span() : new Div(_actions).Class("episode-card__actions")
+                    ).Class("episode-card__foot")
                 ).Class("episode-card__body")
             ).Class(_compact ? "episode-card episode-card--compact" : "episode-card");
             if (_current) card.Attribute("aria-current", "true");

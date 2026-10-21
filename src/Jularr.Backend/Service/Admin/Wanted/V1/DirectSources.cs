@@ -49,7 +49,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public static string Format(string externalId) => externalId.Split(':').Last() is { Length: > 0 and <= 5 } format && format.All(char.IsAsciiLetterOrDigit) ? format : "epub";
 
-        public async Task<IReadOnlyList<ReleaseOffer>?> SearchAsync(AcquisitionConnectionData source, WantedTargetData target, CancellationToken ct)
+        public async Task<IReadOnlyList<ReleaseOffer>?> SearchAsync(AcquisitionConnectionData source, WantedTargetData target, CancellationToken ct,
+            Func<IReadOnlyList<ReleaseOffer>, bool>? enough = null)
         {
             // Named like book releases so the shared judge decides; an edition in the requested language is asked for by its title, Anna's Archive by its ISBN.
             var query = string.Join(' ', new[] { target.EditionTitles.FirstOrDefault() ?? target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
@@ -66,8 +67,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
-                        return [.. (await _annas.SearchAsync(site, AnnaQueries(target), ct)).Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
-                            record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes, record.IsPart))];
+                        // Every way to find the work is asked in turn; the choice says when one way was enough.
+                        var found = new List<ReleaseOffer>();
+                        foreach (var way in AnnaWays(target))
+                        {
+                            var records = await _annas.SearchAsync(site, way, ct);
+                            found.AddRange(records.Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
+                                record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes, record.IsPart)));
+                            if (enough is not null && enough(found))
+                            {
+                                break;
+                            }
+                        }
+
+                        return found;
                     default:
                         return [];
                 }
@@ -179,18 +192,23 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
         }
 
-        // Every way to find the work at Anna's Archive: its title with the author, its titles in the other
-        // languages and its ISBNs. The source knows only the query; the work knows the ways.
-        internal static IReadOnlyList<string> AnnaQueries(WantedTargetData target)
+        // Every way to find the work at Anna's Archive: the ISBNs name the edition exactly, then the title with
+        // the author, the title alone and the titles of the editions in the other languages.
+        internal static IReadOnlyList<string> AnnaWays(WantedTargetData target)
         {
-            var queries = new List<string>();
+            var ways = new List<string>();
             void Add(string? value)
             {
-                var query = value?.Trim();
-                if (!string.IsNullOrWhiteSpace(query) && !queries.Contains(query, StringComparer.OrdinalIgnoreCase))
+                var way = value?.Trim();
+                if (!string.IsNullOrWhiteSpace(way) && !ways.Contains(way, StringComparer.OrdinalIgnoreCase))
                 {
-                    queries.Add(query);
+                    ways.Add(way);
                 }
+            }
+
+            foreach (var isbn in target.Isbns.Take(MaximumIsbns))
+            {
+                Add(isbn);
             }
 
             Add(string.Join(' ', new[] { target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
@@ -201,12 +219,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 Add(title);
             }
 
-            foreach (var isbn in target.Isbns.Take(MaximumIsbns))
-            {
-                Add(isbn);
-            }
-
-            return queries;
+            return ways;
         }
 
         private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false)
