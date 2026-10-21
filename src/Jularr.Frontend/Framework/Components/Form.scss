@@ -14,6 +14,9 @@
     & > .ui-form__actions { grid-column: 1 / -1; }
 
     &__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+    &__actions:has(> .ui-form__note) { align-items: center; }
+    // What the buttons act on, at the start of their row.
+    &__note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; margin-inline-end: auto; }
     &__size { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 8px; }
     &__size > input, &__size > select { min-width: 0; }
 
@@ -213,7 +216,8 @@
         letter-spacing: -.3px;
     }
     & > .field-error,
-    & > .ui-field--wide { grid-column: 1 / -1; }
+    & > .ui-field--wide,
+    & > .ui-form__actions { grid-column: 1 / -1; }
 }
 
 // Options as rows, choices as columns.
