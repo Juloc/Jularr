@@ -117,4 +117,20 @@ WHERE
         LIMIT 1
     );
 
+-- What the Owner chose for each background job and how its last run went. The jobs themselves, their groups and timing live in code; a row appears with the first report or choice.
+-- The time a job last ran is kept at most once a minute; the running process holds the newest values.
+CREATE TABLE "WorkerJobs" (
+    "Key" varchar(32) PRIMARY KEY CHECK ("Key" ~ '^[a-z][A-Za-z]*$'),
+    "IsPaused" boolean NOT NULL DEFAULT FALSE,
+    -- Without a choice the job's own default counts.
+    "PausesWhileUsed" boolean NULL,
+    "LastStartedAt" timestamptz NULL,
+    "LastFinishedAt" timestamptz NULL,
+    -- 1 succeeded, 2 failed, 3 skipped (its module is off).
+    "LastResultTypeId" smallint NULL CHECK ("LastResultTypeId" BETWEEN 1 AND 3),
+    "LastErrorKey" varchar(64) NULL,
+    "NextRunAt" timestamptz NULL,
+    CHECK ("LastErrorKey" IS NULL OR "LastResultTypeId" = 2)
+);
+
 COMMIT;
