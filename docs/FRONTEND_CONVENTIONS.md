@@ -171,6 +171,18 @@ tokens, never literals; a page adds none of its own colours, radii, shadows or f
 | Type | Inter, then Segoe UI/system; body `--text-body` 13px, controls `--text-control` 12px/700, captions and table heads `--text-small` 11px; h1 27px/780 -0.9px, h2 `--text-heading` 16px/800 -0.3px |
 | Controls | `--control-height` 38px (44px for a coarse pointer), compact 30px, `--icon-size` 18px, 1px borders, 3px focus ring offset 2px, `--transition` .13s, press scales to .985 |
 
+- Owner's decision 21 Oct: admin lists are built from the list kit, never from their own grids or tables. A page composes `KpiTiles(...).Strip()`, one
+  `NavigationTabs` row of filter chips with counts (modifier `filters`), at most one filter field (`SearchBox` with `listFilter`; the header search is the
+  global one) and a `ListPanel` of `ListRow`s (name cell `ListIdentity` with an `IconTile`, `StateChip` with an icon per state, the row's actions, a caption for phones);
+  details open in a `Drawer` (`sheet`). The panel drops its `HideLevel` columns and becomes cards by its own width; the page's stylesheet sets only the column grid.
+  No page heading above it: the breadcrumb is the title.
+- Owner's decision 21 Oct: admin list pages keep their page actions, bulk actions and paging in the one floating
+  [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
+  floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with three optional zones as slots: actions (icon and short
+  label; a phone keeps the icons), bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count) and paging (previous, "Page 2 / 9"
+  or a range, next, optional page size select; plain GET links with the filters in the address, `pageNumber`). **No infinite scroll on admin pages**: lists are paged,
+  25 rows by default. With a visible save pill the dock stacks above it.
+
 Changing a look means changing a token or the one base component (Button, Form, Table, Tag, StateChip, Section, NavigationTabs, Toggle, SearchBox,
 SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
 

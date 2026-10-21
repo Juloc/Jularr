@@ -38,6 +38,27 @@
         }
     }
 
+    // The filter row of a list (jobs, queue): bare chips with their counts, the chosen one soft with its outline; one row that slides sideways, counts drop on a phone.
+    &--filters {
+        gap: 5px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+
+        .navigation-tabs__link {
+            min-height: 0;
+            padding: 8px 13px;
+            font-size: var(--text-small);
+            font-weight: 760;
+
+            &:hover { background: var(--surface); color: var(--accent-text); }
+            &--active, &--active:hover { border-color: var(--accent-outline); background: var(--accent-soft); color: var(--accent-text); }
+        }
+    }
+
+    &__count { padding-left: 5px; font-size: var(--text-small); opacity: .8; }
+    &--filters &__count { @media (max-width: 640px) { display: none; } }
+
     &__link {
         display: inline-flex;
         flex: none;

@@ -6,11 +6,17 @@
 @use "../../Framework/Components/Table";
 @use "../../Framework/Components/Tag";
 @use "../../Framework/Components/StateChip";
+@use "../../Framework/Components/IconTile";
+@use "../../Framework/Components/KpiTile";
+@use "../../Framework/Components/ListPanel";
+@use "../../Framework/Components/SwitchButton";
 @use "../../Framework/Components/Split";
 @use "../../Framework/Components/Section";
 @use "../../Framework/Components/ItemList";
 @use "../../Framework/Components/FactList";
 @use "../../Framework/Components/ContinueReadingBar";
+@use "../../Framework/Components/FloatingPill";
+@use "../../Framework/Components/ActionDock";
 @use "../../Framework/Components/SavePill";
 @use "../../Framework/Components/TimePicker";
 @use "../../Framework/Components/Tabs";

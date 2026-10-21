@@ -13,5 +13,6 @@
     overflow-wrap: anywhere;
 
     &--accent { border-color: var(--accent-outline); }
+    &--warning { border-color: var(--warning-soft); background: var(--warning-soft); color: var(--warning); }
     .ui-icon { width: 16px; height: 16px; }
 }

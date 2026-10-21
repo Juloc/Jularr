@@ -18,3 +18,21 @@
         &:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
     }
 }
+
+// A field of a page's toolbar: white, the icon inside at its start.
+.search-box--inline {
+    position: relative;
+    align-items: center;
+
+    .search-box__input { padding-left: 38px; background: var(--surface); font-size: var(--text-small); }
+}
+
+.search-box__icon {
+    position: absolute;
+    left: 14px;
+    display: inline-flex;
+    color: var(--muted);
+    pointer-events: none;
+
+    .ui-icon { width: 15px; height: 15px; }
+}

@@ -18,6 +18,14 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // A quiet action beside the primary one: the soft accent tint without an outline.
+        public Button Soft()
+        {
+            _tone = " button--soft";
+            ApplyStyle();
+            return this;
+        }
+
         public Button Compact()
         {
             _shape = " button--compact";

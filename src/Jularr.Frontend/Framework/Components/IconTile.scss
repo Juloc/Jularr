@@ -1,0 +1,27 @@
+// An icon on a rounded tile tinted by tone: the accent by default, the status colours on their own soft tint.
+.icon-tile {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-inner);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+
+    .ui-icon { width: var(--icon-size); height: var(--icon-size); }
+
+    &--neutral { background: var(--field); color: var(--muted); }
+    &--info { background: var(--info-soft); color: var(--info); }
+    &--success { background: var(--success-soft); color: var(--success); }
+    &--warning { background: var(--warning-soft); color: var(--warning); }
+    &--danger { background: var(--danger-soft); color: var(--danger); }
+
+    &--small {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-small);
+
+        .ui-icon { width: 15px; height: 15px; }
+    }
+}
