@@ -160,8 +160,8 @@ namespace Jularr.E2E.Tests
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
                 await page.Locator("[data-work-table=files] [data-edit-file]").ClickAsync();
                 var editor = page.Locator("#work-files-edit");
-                await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
-                await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
+                await editor.Locator("select[name=QualityKey]").SelectOptionAsync("HDTV-720p");
+                await editor.Locator("select[name=AudioLanguage]").SelectOptionAsync("ger");
                 await Steps.SubmitAsync(page, editor.Locator("form"));
                 await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 updated" })).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("tr.work-file")).ToContainTextAsync("HDTV-720p");
