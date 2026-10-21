@@ -309,12 +309,15 @@ namespace Jularr.E2E.Tests
 
         // A two-chapter EPUB 3.
         // A text PDF: one Helvetica line per entry, top to bottom, each page in its own content stream.
-        public static string WritePdf(string file, params string[][] pages) => WritePdf(file, null, pages);
+        public static string WritePdf(string file, params string[][] pages) => WritePdf(file, null, null, pages);
 
         // The pages with a coloured picture below the text of one of them.
-        public static string WritePdfWithPicture(string file, int picturePage, params string[][] pages) => WritePdf(file, picturePage, pages);
+        public static string WritePdfWithPicture(string file, int picturePage, params string[][] pages) => WritePdf(file, picturePage, null, pages);
 
-        private static string WritePdf(string file, int? picturePage, string[][] pages)
+        // The pages with a coloured picture that fills one of them, as a plate in a printed book does.
+        public static string WritePdfWithPlate(string file, int platePage, params string[][] pages) => WritePdf(file, null, platePage, pages);
+
+        private static string WritePdf(string file, int? picturePage, int? platePage, string[][] pages)
         {
             static string Escape(string text) => text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("(", "\\(", StringComparison.Ordinal).Replace(")", "\\)", StringComparison.Ordinal);
             var objects = new List<string> { "<< /Type /Catalog /Pages 2 0 R >>", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>" };
@@ -324,14 +327,14 @@ namespace Jularr.E2E.Tests
                 var lines = pages[number];
                 var stream = string.Concat(lines.Select((line, index) => "BT /F1 11 Tf 54 " + (780 - index * 15) + " Td (" + Escape(line) + ") Tj ET\n"));
                 var pictures = "";
-                if (number == picturePage)
+                if (number == picturePage || number == platePage)
                 {
                     // 64 by 48 RGB samples, uncompressed, drawn below the text.
                     var samples = new string([.. Enumerable.Range(0, 64 * 48).SelectMany(pixel => new[] { (char)(pixel % 64 * 4), (char)(pixel / 64 * 5), (char)160 })]);
                     objects.Add("<< /Type /XObject /Subtype /Image /Width 64 /Height 48 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length " + samples.Length + " >>\nstream\n" + samples
                         + "\nendstream");
                     pictures = " /XObject << /Im1 " + objects.Count + " 0 R >>";
-                    stream += "q 192 0 0 144 54 " + (780 - lines.Length * 15 - 160) + " cm /Im1 Do Q\n";
+                    stream += number == platePage ? "q 515 0 0 640 40 100 cm /Im1 Do Q\n" : "q 192 0 0 144 54 " + (780 - lines.Length * 15 - 160) + " cm /Im1 Do Q\n";
                 }
 
                 objects.Add("<< /Length " + stream.Length + " >>\nstream\n" + stream + "endstream");

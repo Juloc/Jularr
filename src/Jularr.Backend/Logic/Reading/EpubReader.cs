@@ -86,6 +86,14 @@ namespace Jularr.Backend.Logic.Reading
             return reader.ReadToEnd();
         }
 
+        // The start of an entry, enough for a picture's header.
+        public static byte[] ReadPrefix(ZipArchiveEntry entry, int length)
+        {
+            using var stream = entry.Open();
+            var buffer = new byte[(int)Math.Min(entry.Length, length)];
+            return buffer.AsSpan(0, stream.ReadAtLeast(buffer, buffer.Length, false)).ToArray();
+        }
+
         public static byte[] ReadBytes(ZipArchiveEntry entry)
         {
             using var stream = entry.Open();

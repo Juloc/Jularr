@@ -348,11 +348,14 @@ namespace Jularr.Backend.Data.User.Reading.V1
     // How the book opens: prepared text or pages, else its PDF in the browser's own viewer.
     public sealed class ReadingSourceV1 : BaseResponse
     {
-        public ReadingSourceV1(long workId, string title, ReadingFormatType readingFormatTypeId)
+        public ReadingSourceV1(long workId, string title, ReadingFormatType readingFormatTypeId, bool hasPdf, ReadingDerivationStatus? readingDerivationStatusTypeId, string? reason)
         {
             WorkId = workId;
             Title = title;
             ReadingFormatTypeId = readingFormatTypeId;
+            HasPdf = hasPdf;
+            ReadingDerivationStatusTypeId = readingDerivationStatusTypeId;
+            Reason = reason;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -363,6 +366,17 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingFormatTypeId))]
         public ReadingFormatType ReadingFormatTypeId { get; }
+
+        // The book has a PDF file, whether it reads from it or from a reading copy.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsPdf))]
+        public bool HasPdf { get; }
+
+        // Where the PDF stands on its way to a reading copy; none when the module is off or the book has its own EPUB.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingDerivationStatusTypeIdOptional))]
+        public ReadingDerivationStatus? ReadingDerivationStatusTypeId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Reason))]
+        public string? Reason { get; }
     }
 
     public sealed class ReadingFileV1 : BaseResponse, IFileOutput
