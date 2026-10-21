@@ -55,11 +55,11 @@ namespace Jularr.Frontend.Pages.Admin.Logs
 
         private IUiComponent Row(LogEntryV1 entry)
         {
-            var chip = entry.Level switch
+            var tone = entry.Level switch
             {
-                LogLevelType.Error => "state-chip state-chip--danger",
-                LogLevelType.Warning => "state-chip state-chip--warning",
-                _ => "state-chip state-chip--info"
+                LogLevelType.Error => UiTone.Danger,
+                LogLevelType.Warning => UiTone.Warning,
+                _ => UiTone.Info
             };
             var (origin, message) = entry.Source switch
             {
@@ -67,7 +67,7 @@ namespace Jularr.Frontend.Pages.Admin.Logs
                 LogSourceType.Job => (texts["jobs.job." + entry.Origin], ErrorText(entry.Message)),
                 _ => (entry.Origin, entry.Message)
             };
-            return new Div(new Span(new ValueText(entry.At.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("logs-list__when"), new Span(new Text("logs.level." + entry.Level)).Class(chip),
+            return new Div(new Span(new ValueText(entry.At.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("logs-list__when"), new StateChip(new Text("logs.level." + entry.Level), tone),
                 new Div(new Truncated(message), new Div(new Truncated(origin)).Class("logs-list__origin")).Class("logs-list__message")).Class("logs-list__row");
         }
 

@@ -198,8 +198,8 @@ namespace Jularr.Backend.Tests
                 var sql = new SqlStatement();
                 sql.Statement =
                     """
-                    INSERT INTO "Accounts" ("Id", "Email", "DisplayName", "AccountRoleTypeId")
-                    VALUES (@AccountId, @Email, 'Account A', @AccountRoleTypeId);
+                    INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId")
+                    VALUES (@AccountId, 'auth_binding', @Email, 'Account A', @AccountRoleTypeId);
                     INSERT INTO "AccountPasskeys" ("AccountId", "CredentialId", "PublicKey", "Transports", "DisplayName")
                     VALUES (@AccountId, @CredentialId, @PublicKey, @Transports, @DisplayName);
                     """;
@@ -227,7 +227,11 @@ namespace Jularr.Backend.Tests
 
             (string Statement, string Constraint)[] invalid =
             [
-                ("INSERT INTO \"Accounts\" (\"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES ('A@EXAMPLE.TEST', 'other', 2)", "UX_Accounts_Email"),
+                ("INSERT INTO \"Accounts\" (\"Username\", \"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES ('other_user', 'A@EXAMPLE.TEST', 'other', 2)", "UX_Accounts_Email"),
+                ("INSERT INTO \"Accounts\" (\"Username\", \"DisplayName\", \"AccountRoleTypeId\") VALUES ('AUTH_BINDING', 'other', 2)", "UX_Accounts_Username"),
+                ("INSERT INTO \"Accounts\" (\"Username\", \"DisplayName\", \"AccountRoleTypeId\") VALUES ('ab', 'other', 2)", "CK_Accounts_Username"),
+                ("INSERT INTO \"Accounts\" (\"Username\", \"DisplayName\", \"AccountRoleTypeId\") VALUES ('has space', 'other', 2)", "CK_Accounts_Username"),
+                ("INSERT INTO \"Accounts\" (\"Username\", \"DisplayName\", \"AccountRoleTypeId\") VALUES (repeat('a', 33), 'other', 2)", "CK_Accounts_Username"),
                 ("INSERT INTO \"AccountPasswords\" (\"AccountId\", \"PasswordHash\") VALUES (42, ' ')", "CK_AccountPasswords_Hash"),
                 ("INSERT INTO \"AccountPasskeys\" (\"AccountId\", \"CredentialId\", \"PublicKey\", \"BackedUp\") VALUES (41, decode('03', 'hex'), decode('04', 'hex'), TRUE)", "CK_AccountPasskeys_BackupState"),
                 ("INSERT INTO \"AccountTotpFactors\" (\"AccountId\", \"EncryptedSecret\", \"LastAcceptedStep\") VALUES (41, decode('ab', 'hex'), 1)", "CK_AccountTotpFactors_Timestamps"),

@@ -208,7 +208,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, servers.SabRequests);
             using var after = await host.SendAsync(HttpMethod.Get, checkedNow.Headers.Location!.OriginalString);
             var answered = await after.Content.ReadAsStringAsync();
-            StringAssert.Contains(answered, "state-chip--available");
+            StringAssert.Contains(answered, "state-chip--success");
             StringAssert.Contains(answered, "Stable");
 
             servers.SabAvailable = false;

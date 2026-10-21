@@ -15,6 +15,12 @@ CREATE TABLE "InstanceSettings" (
     "ReadingCacheWorks" integer NOT NULL DEFAULT 100 CHECK ("ReadingCacheWorks" BETWEEN 0 AND 10000),
     "UsersConfirmSources" boolean NOT NULL DEFAULT FALSE,
     "LibraryScanIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("LibraryScanIntervalHours" BETWEEN 0 AND 720),
+    -- Automatic backups every this many hours (0 switches them off); the newest ones are kept.
+    "BackupIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("BackupIntervalHours" BETWEEN 0 AND 720),
+    "BackupKeep" smallint NOT NULL DEFAULT 7 CHECK ("BackupKeep" BETWEEN 1 AND 365),
+    -- How often Plex, Jellyfin and Emby are read, and how often due wanted titles are searched.
+    "ProviderSyncIntervalMinutes" smallint NOT NULL DEFAULT 30 CHECK ("ProviderSyncIntervalMinutes" BETWEEN 5 AND 1440),
+    "WantedSearchIntervalMinutes" smallint NOT NULL DEFAULT 2 CHECK ("WantedSearchIntervalMinutes" BETWEEN 1 AND 1440),
     -- Finished activity leaves after this many days or once it takes more room than this.
     "HistoryRetentionDays" smallint NOT NULL DEFAULT 30 CHECK ("HistoryRetentionDays" BETWEEN 1 AND 3650),
     "HistoryMegabytes" integer NOT NULL DEFAULT 10 CHECK ("HistoryMegabytes" BETWEEN 1 AND 100000),

@@ -181,7 +181,7 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await Host.CreateAsync();
             await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
-            var request = new RegisterDataV1("new@example.test", "New", Password, Password, 1);
+            var request = new RegisterDataV1("new_user", Password, Password, 1);
 
             // Only with the Registration module.
             using var closed = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", request);
@@ -191,21 +191,88 @@ namespace Jularr.Backend.Tests
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", request);
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
             Assert.IsTrue((await created.Content.ReadFromJsonAsync<RegisterResultV1>())!.RequiresApproval);
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Email\" = 'new@example.test' AND NOT \"IsEnabled\" AND \"EmailVerifiedAt\" IS NULL AND \"AccountRoleTypeId\" = 2"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" AS membership JOIN \"Profiles\" AS profile ON profile.\"Id\" = membership.\"ProfileId\" JOIN \"Accounts\" AS account ON account.\"Id\" = membership.\"AccountId\" WHERE account.\"Email\" = 'new@example.test' AND profile.\"OwnerAccountId\" = account.\"Id\""));
-            var hash = await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" AS password JOIN \"Accounts\" AS account ON account.\"Id\" = password.\"AccountId\" WHERE account.\"Email\" = 'new@example.test'");
+
+            // No email is asked for; the profile is named after the username until its owner renames it.
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Username\" = 'new_user' AND \"Email\" IS NULL AND NOT \"IsEnabled\" AND \"EmailVerifiedAt\" IS NULL AND \"AccountRoleTypeId\" = 2"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" AS membership JOIN \"Profiles\" AS profile ON profile.\"Id\" = membership.\"ProfileId\" JOIN \"Accounts\" AS account ON account.\"Id\" = membership.\"AccountId\" WHERE account.\"Username\" = 'new_user' AND profile.\"OwnerAccountId\" = account.\"Id\" AND profile.\"DisplayName\" = 'new_user'"));
+            var hash = await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" AS password JOIN \"Accounts\" AS account ON account.\"Id\" = password.\"AccountId\" WHERE account.\"Username\" = 'new_user'");
             Assert.AreNotEqual(Password, hash);
 
-            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1(request.Email, Password));
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1(request.Username, Password));
             Assert.AreEqual(HttpStatusCode.Unauthorized, login.StatusCode);
-            using var duplicate = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("NEW@example.test", "Replacement", "different-password", "different-password", 1));
-            Assert.AreEqual(HttpStatusCode.OK, duplicate.StatusCode);
-            Assert.AreEqual(hash, await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" AS password JOIN \"Accounts\" AS account ON account.\"Id\" = password.\"AccountId\" WHERE account.\"Email\" = 'new@example.test'"));
+
+            // A taken username, in any case, is refused and replaces nothing.
+            using var duplicate = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("NEW_User", "Different-Passw0rd!", "Different-Passw0rd!", 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, duplicate.StatusCode);
+            StringAssert.Contains(await duplicate.Content.ReadAsStringAsync(), "username_taken");
+            Assert.AreEqual(hash, await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" AS password JOIN \"Accounts\" AS account ON account.\"Id\" = password.\"AccountId\" WHERE account.\"Username\" = 'new_user'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\""));
 
-            using var invalidLocale = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("rollback@example.test", "Rollback", Password, Password, 999));
+            using var invalidLocale = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("rollback_user", Password, Password, 999));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalidLocale.StatusCode);
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Email\" = 'rollback@example.test'"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Username\" = 'rollback_user'"));
+        }
+
+        [TestMethod]
+        [DataRow("ab", false)]
+        [DataRow("abc", true)]
+        [DataRow("a.b-c_9", true)]
+        [DataRow("has space", false)]
+        [DataRow("with@sign", false)]
+        [DataRow("ümlaut", false)]
+        public async Task Registration_UsernameRule_ThreeToThirtyTwoLettersDigitsDotsUnderscoresHyphens(string username, bool accepted)
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Registration'");
+            using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1(username, Password, Password, 1));
+            Assert.AreEqual(accepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest, response.StatusCode);
+            using var tooLong = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1(new string('a', 33), Password, Password, 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        }
+
+        // At least 12 characters and at least three of: lowercase, uppercase, digit, special.
+        [TestMethod]
+        [DataRow("abcdefghijkl", false)]
+        [DataRow("abcdefghijKL", false)]
+        [DataRow("abcdefgh1234", false)]
+        [DataRow("abcdefgh!@#$", false)]
+        [DataRow("ABCDEFGH1234", false)]
+        [DataRow("Abcdefg1234", false)]
+        [DataRow("Abcdefgh1234", true)]
+        [DataRow("abcdefgh123!", true)]
+        [DataRow("ABCDEFGH123!", true)]
+        [DataRow("Abcdefgh!@#$", true)]
+        [DataRow("Ab1!Ab1!Ab1!", true)]
+        [DataRow("correct horse battery staple", false)]
+        [DataRow("Correct horse battery staple", true)]
+        [DataRow("Correct horse 7 battery", true)]
+        public async Task Registration_PasswordPolicy_TwelveCharactersAndThreeOfFourKinds(string password, bool accepted)
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Registration'");
+            using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("policy_user", password, password, 1));
+            Assert.AreEqual(accepted ? HttpStatusCode.OK : HttpStatusCode.BadRequest, response.StatusCode, password);
+            if (!accepted && password.Length >= 12) StringAssert.Contains(await response.Content.ReadAsStringAsync(), "password_weak");
+            Assert.AreEqual(accepted ? 1L : 0L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Username\" = 'policy_user'"));
+        }
+
+        [TestMethod]
+        public async Task Login_ByUsernameOrEmail_AnyCase_AndFailureStaysUniform()
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            foreach (var login in new[] { "account_a", "ACCOUNT_A", "a@example.test", "A@Example.Test" })
+            {
+                using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1(login, Password));
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, login);
+            }
+
+            using var wrong = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("account_a", "wrong-password"));
+            using var unknown = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("nobody_here", "wrong-password"));
+            Assert.AreEqual(HttpStatusCode.Unauthorized, wrong.StatusCode);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, unknown.StatusCode);
         }
 
         [TestMethod]
@@ -309,6 +376,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(request.IsAuthenticated);
             Assert.IsTrue(request.RequiresApproval);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Email\" = 'plex@example.test' AND NOT \"IsEnabled\" AND \"EmailVerifiedAt\" IS NOT NULL"));
+            // The account Plex creates gets a usable username from the Plex name.
+            Assert.AreEqual("Plex_User", await host.ScalarAsync("SELECT \"Username\" FROM \"Accounts\" WHERE \"Email\" = 'plex@example.test'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountAuthChallenges\" WHERE \"ConsumedAt\" IS NOT NULL AND \"ProtectedState\" IS NULL"));
             using var replay = await host.SendAsync(HttpMethod.Post, path);
             Assert.AreEqual(HttpStatusCode.Unauthorized, replay.StatusCode);

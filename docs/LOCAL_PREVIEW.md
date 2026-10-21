@@ -47,6 +47,11 @@ This reset also deletes account sessions and requires signing in again; session 
 cannot preserve a deleted database. No baseline or preview-database change is part of
 the session persistence fix.
 
+A throwaway preview site that is not this runner (a worktree with its own database) gets the owner's books
+with [preview-test-library.ps1](../scripts/preview-test-library.ps1): it mounts `D:\testlibrary\books` read only as the
+library `Test books`, queues the scan through the Owner's session and assigns each folder's title to a Work, since no
+provider identifies the books in a preview. They then show in Library and open in the Reader; the folder is never changed.
+
 To stop safely, create the exact marker `D:\jularr-clean-start-server\stop.request`;
 the runner stops its own host and exits. To resume, remove only that marker and start
 the named Windows task. A stale status file is not proof of a live process: check

@@ -28,8 +28,8 @@ namespace Jularr.Backend.Service.Admin.Worker.V1
             return new BaseDataList<WorkerJobV1>([.. WorkerJobs.Definitions.Select(definition =>
             {
                 var status = _jobs.Describe(definition.Key, rows.GetValueOrDefault(definition.Key));
-                return new WorkerJobV1(definition.Key, definition.Group, status.State, definition.Interval is { } interval ? (int)interval.TotalSeconds : null, status.IsPaused, status.PausesWhileUsed,
-                    definition.CanPauseWhileUsed, definition.CanRunNow, status.LastStartedAt, status.LastFinishedAt, status.NextRunAt, status.LastErrorKey);
+                return new WorkerJobV1(definition.Key, definition.Group, status.State, status.Interval is { } interval ? (int)interval.TotalSeconds : null, status.IsPaused, status.PausesWhileUsed,
+                    definition.CanPauseWhileUsed, definition.CanRunNow, status.LastStartedAt, status.LastFinishedAt, status.NextRunAt, status.LastErrorKey, definition.ParentKey);
             })]);
         }
     }

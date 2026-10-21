@@ -4,6 +4,9 @@ namespace Jularr.Backend.Data.Fields.Authentication
     public static class AuthenticationFields
     {
         public static readonly StringField Password = new() { AllowBlank = false, MaximumLength = 128 };
+        // What a person types to sign in: the username or the email address.
+        public static readonly StringField Login = new(NpgsqlTypes.NpgsqlDbType.Citext) { AllowBlank = false, MaximumLength = 254 };
+
         public static readonly StringField NewPassword = new()
         {
             AllowBlank = false,

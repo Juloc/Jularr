@@ -1,68 +1,109 @@
-// The mockups' figures: a white panel on the quiet line, the name with its tinted icon tile on top, a large figure, one muted line below.
-.kpi-tiles {
+// Figures that sum a page up. White tiles on the quiet line; a narrow screen slides the row sideways, it never wraps.
+.kpi-tiles__row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+
+    @media (max-width: 900px) {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(150px, 1fr);
+        grid-template-columns: none;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar { display: none; }
+    }
 }
 
 .kpi-tile {
+    display: grid;
+    gap: 6px;
     min-width: 0;
-    padding: 17px 19px;
-    border: 1px solid var(--border);
+    padding: 14px 16px;
+    border: 1px solid var(--accent-line);
     border-radius: var(--radius-panel);
     background: var(--surface);
     box-shadow: var(--shadow);
+}
 
-    &__top {
+.kpi-tile__label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.kpi-tile__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.kpi-tile__icon { display: inline-flex; flex: none; color: var(--accent-text); }
+
+.kpi-tile__value { overflow: hidden; font-size: 26px; font-weight: 750; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+
+// The strip: one panel, four cells divided by the quiet line, a tinted icon tile before each figure.
+.kpi-tiles--strip {
+    container: kpi-strip / inline-size;
+    margin-bottom: 0;
+
+    .kpi-tiles__row {
+        grid-auto-flow: row;
+        grid-auto-columns: auto;
+        grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+        gap: 0;
+        margin-bottom: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
+
+    .kpi-tile--tinted {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        color: var(--muted);
-        font-size: var(--text-control);
-        font-weight: 720;
+        gap: 12px;
+        padding: 17px 23px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+
+        &:not(:first-child) { border-left: 1px solid var(--border); }
     }
 
-    &__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .kpi-tile__figure { min-width: 0; }
+    .kpi-tile__value { font-size: 20px; font-weight: 780; letter-spacing: -.8px; }
+    .kpi-tile__caption { margin-top: 3px; color: var(--muted); font-size: var(--text-small); font-weight: 650; }
+}
 
-    &__icon {
-        display: grid;
-        flex: none;
-        place-items: center;
-        width: 32px;
-        height: 32px;
-        border-radius: var(--radius-tile);
-        background: var(--accent-soft);
-        color: var(--accent-text);
-
-        &--good { background: var(--success-soft); color: var(--success); }
-        &--warn { background: var(--warning-soft); color: var(--warning); }
-        &--info { background: var(--info-soft); color: var(--info); }
-    }
-
-    &__value {
-        margin: 12px 0 3px;
-        overflow: hidden;
-        font-size: 29px;
-        font-weight: 850;
-        letter-spacing: -1.2px;
-        line-height: 1.15;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    &__foot {
-        color: var(--muted);
-        font-size: var(--text-small);
-
-        &--good { color: var(--success); }
-        &--warn { color: var(--warning); }
+// Two by two on a narrow container.
+@container kpi-strip (max-width: 620px) {
+    .kpi-tiles--strip {
+        .kpi-tiles__row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .kpi-tile--tinted { gap: 9px; min-height: 66px; padding: 12px; }
+        .kpi-tile--tinted:nth-child(odd) { border-left: 0; }
+        .kpi-tile--tinted:nth-child(n + 3) { border-top: 1px solid var(--border); }
+        .kpi-tile--tinted:last-child:nth-child(odd) { grid-column: 1 / -1; }
+        .kpi-tile__value { font-size: 18px; }
     }
 }
 
-@media (max-width: 640px) {
-    .kpi-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-    .kpi-tile { padding: 12px 13px; border-radius: 15px; }
-    .kpi-tile__icon { width: 28px; height: 28px; }
-    .kpi-tile__value { margin: 10px 0 4px; font-size: 24px; }
+// The card with a foot line (the Dashboard): the mockups' figure, large, with one muted line under it.
+.kpi-tile--card {
+    gap: 0;
+    padding: 17px 19px;
+
+    .kpi-tile__label { font-size: var(--text-control); font-weight: 720; }
+    .kpi-tile__value { margin: 12px 0 3px; font-size: 29px; font-weight: 850; letter-spacing: -1.2px; }
+}
+
+.kpi-tile__foot {
+    color: var(--muted);
+    font-size: var(--text-small);
+
+    &--success { color: var(--success); }
+    &--warning { color: var(--warning); }
 }

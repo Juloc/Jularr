@@ -196,7 +196,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync(razor: true, media: true);
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Bookmark test')");
             using var loginPage = await host.SendAsync(HttpMethod.Get, "/Account/Login");
-            using var login = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await loginPage.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            using var login = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await loginPage.Content.ReadAsStringAsync(), ("Username", "ACCOUNT_A"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, login.StatusCode);
 
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/101");
@@ -296,8 +296,16 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Route test')");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             var loginHtml = await login.Content.ReadAsStringAsync();
-            StringAssert.Contains(loginHtml, "data-set-skin=\"original\"");
-            StringAssert.Contains(loginHtml, "data-set-skin=\"clean\"");
+            // The sign-in page offers the two round buttons that go to the next design and the next brightness.
+            StringAssert.Contains(loginHtml, "data-cycle-skin");
+            StringAssert.Contains(loginHtml, "data-cycle-mode");
+            Assert.IsFalse(loginHtml.Contains("data-set-skin", StringComparison.Ordinal));
+            Assert.IsFalse(loginHtml.Contains("data-accent-input", StringComparison.Ordinal));
+
+            // No sign-in method besides the password is configured: no providers row, and the forgot-password note stays an inline hint.
+            Assert.IsFalse(loginHtml.Contains("auth-providers", StringComparison.Ordinal));
+            StringAssert.Contains(loginHtml, "id=\"forgot-hint\"");
+            StringAssert.Contains(loginHtml, "href=\"#forgot-hint\"");
 
             // Both skins' marks are rendered and the skin shows one; the browser tab and home screen show the Clean mark.
             Assert.AreEqual(1, Regex.Matches(loginHtml, "brand-symbol__clean").Count);
@@ -314,7 +322,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual("48", svg.Element("use")?.Attribute("height")?.Value);
             }
 
-            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(loginHtml, ("Email", "a@example.test"), ("Password", "test-password-123")));
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(loginHtml, ("Username", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
 
             // Folder moves preserve URLs.
@@ -327,6 +335,14 @@ namespace Jularr.Backend.Tests
                     var html = await page.Content.ReadAsStringAsync();
                     StringAssert.Contains(html, "data-set-skin=\"original\"");
                     StringAssert.Contains(html, "data-set-mode=\"system\"");
+                }
+
+                // The shell names the person by the profile, never by the account's username (which the sign-in page took: account_a).
+                if (path == "/")
+                {
+                    var html = await page.Content.ReadAsStringAsync();
+                    StringAssert.Contains(html, ">PA<");
+                    Assert.IsFalse(html.Contains("account_a", StringComparison.OrdinalIgnoreCase));
                 }
             }
 
@@ -355,14 +371,14 @@ namespace Jularr.Backend.Tests
             await texts.InitializeAsync(http);
 
             // Validate through the backend field.
-            var data = new RegisterDataV1("new@example.test", "New", "short", "short", 1);
+            var data = new RegisterDataV1("new_user", "short", "short", 1);
             var validation = Assert.ThrowsExactly<DataValidationException>(data.Validate);
             Assert.AreEqual("Password", validation.Field);
             Assert.AreEqual("too_short", validation.Code);
             new LoginDataV1("a@example.test", "short").Validate();
-            new RegisterDataV1("new@example.test", "New", "  valid passphrase  ", "  valid passphrase  ", 1).Validate();
-            Assert.AreEqual("password_mismatch", Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new@example.test", "New", "valid passphrase one", "valid passphrase two", 1).Validate()).Code);
-            Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new@example.test", "New", new string('x', 129), new string('x', 129), 1).Validate());
+            new RegisterDataV1("new_user", "  valid passphrase  ", "  valid passphrase  ", 1).Validate();
+            Assert.AreEqual("password_mismatch", Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new_user", "valid passphrase one", "valid passphrase two", 1).Validate()).Code);
+            Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new_user", new string('x', 129), new string('x', 129), 1).Validate());
 
             // The component consumes shared metadata/errors.
             var form = new Form<RegisterDataV1>(fields => fields.Password(item => item.Password, "account.field.password", "new-password"),
@@ -551,7 +567,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Policy test')");
             await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
-            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Username", "a@example.test"), ("Password", "test-password-123")));
             foreach (var path in new[] { "/Admin/Requests", "/Admin/Wanted", "/Admin/Works", "/Admin/Works/101", "/Admin/Library" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
@@ -560,7 +576,7 @@ namespace Jularr.Backend.Tests
                 {
                     var html = await page.Content.ReadAsStringAsync();
                     StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
-                    StringAssert.Contains(html, "class=\"page-table\"");
+                    StringAssert.Contains(html, "class=\"page-table works-table\"");
                     StringAssert.Contains(html, "/build/assets/Assets/Shared/shell.entry-");
                 }
                 if (path == "/Admin/Requests" && mediaAllowed)
@@ -591,7 +607,7 @@ namespace Jularr.Backend.Tests
             using var anonymous = await host.SendAsync(HttpMethod.Get, "/Settings");
             Assert.AreEqual(HttpStatusCode.Redirect, anonymous.StatusCode);
 
-            using var missingToken = await host.SendAsync(HttpMethod.Post, "/Account/Login", new Dictionary<string, string> { ["Email"] = "a@example.test", ["Password"] = "test-password-123" });
+            using var missingToken = await host.SendAsync(HttpMethod.Post, "/Account/Login", new Dictionary<string, string> { ["Username"] = "a@example.test", ["Password"] = "test-password-123" });
             Assert.AreEqual(HttpStatusCode.BadRequest, missingToken.StatusCode);
             using var loginPage = await host.SendAsync(HttpMethod.Get, "/Account/Login?ReturnUrl=https://foreign.example.test");
             var html = await loginPage.Content.ReadAsStringAsync();
@@ -599,13 +615,13 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "type=\"submit\"");
             Assert.IsFalse(html.Contains("disabled=", StringComparison.Ordinal));
 
-            using var invalidLogin = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(html, ("Email", "a@example.test"), ("Password", "wrong-password")));
+            using var invalidLogin = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(html, ("Username", "a@example.test"), ("Password", "wrong-password")));
             Assert.AreEqual(HttpStatusCode.Unauthorized, invalidLogin.StatusCode);
             var invalidHtml = await invalidLogin.Content.ReadAsStringAsync();
             StringAssert.Contains(invalidHtml, "role=\"alert\"");
             Assert.IsFalse(invalidHtml.Contains("wrong-password", StringComparison.Ordinal));
 
-            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login?ReturnUrl=https://foreign.example.test", Form(invalidHtml, ("Email", "a@example.test"), ("Password", "test-password-123")));
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login?ReturnUrl=https://foreign.example.test", Form(invalidHtml, ("Username", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
             Assert.AreEqual("/", signedIn.Headers.Location!.OriginalString);
 
@@ -661,7 +677,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync(razor: true);
             await host.Fixture.RunSqlAsync("INSERT INTO \"Profiles\" (\"Id\", \"OwnerAccountId\", \"DisplayName\", \"UiLocaleId\") VALUES (303, 41, 'Second profile', 2); INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (41, 303)");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
-            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Username", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
             StringAssert.Contains(signedIn.Headers.Location!.OriginalString, "/Account/Profiles");
             var oldCookies = new Dictionary<string, string>(host.Cookies);
@@ -700,6 +716,9 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             var html = await login.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "Sign in with Plex");
+            StringAssert.Contains(html, "auth-providers");
+            StringAssert.Contains(html, "Or continue with");
+            Assert.IsFalse(html.Contains("Trakt", StringComparison.Ordinal));
             using var started = await host.SendAsync(HttpMethod.Post, "/Account/Login?handler=Plex", Form(html));
             html = await started.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, started.StatusCode);
@@ -720,7 +739,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync(razor: true);
             await host.Fixture.RunSqlAsync("INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (42, 101); UPDATE \"Profiles\" SET \"OwnerAccountId\" = 42 WHERE \"Id\" = 101");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
-            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Username", "a@example.test"), ("Password", "test-password-123")));
             using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
             var html = await settings.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode);

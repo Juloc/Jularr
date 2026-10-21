@@ -64,22 +64,22 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
         {
             var failing = health.Services.Count(service => service.HealthStateTypeId == HealthStateType.Unavailable);
             yield return new KpiTile("dashboard.kpi.status", new Text(health.IsStable ? "dashboard.status.stable" : "dashboard.status.warning"), new Icon("status", assets, 18),
-                health.IsStable ? KpiTone.Good : KpiTone.Warn,
+                health.IsStable ? UiTone.Success : UiTone.Warning,
                 health.IsStable ? new Text(health.CheckedAt is null ? "dashboard.status.unchecked" : "dashboard.status.stable.foot")
                     : new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dashboard.status.warning.foot"], failing)),
-                health.IsStable ? KpiTone.Good : KpiTone.Warn);
-            yield return new KpiTile("dashboard.kpi.media", new ValueText(dashboard.Works.ToString("N0", CultureInfo.CurrentCulture)), new Icon("library", assets, 18), KpiTone.Accent,
+                health.IsStable ? UiTone.Success : UiTone.Warning);
+            yield return new KpiTile("dashboard.kpi.media", new ValueText(dashboard.Works.ToString("N0", CultureInfo.CurrentCulture)), new Icon("library", assets, 18), UiTone.Accent,
                 new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dashboard.media.files"], dashboard.Files.ToString("N0", CultureInfo.CurrentCulture))));
             if (ShowsDownloads && _summary is { } summary)
             {
-                yield return new KpiTile("dashboard.kpi.downloads", Live("active", LiveEntities.Count(summary.ActiveCount)), new Icon("download", assets, 18), KpiTone.Info,
-                    new Span(Live("errors", LiveEntities.Count(summary.ErrorCount)), new ValueText(" "), new Text("dashboard.downloads.failed")), summary.ErrorCount > 0 ? KpiTone.Warn : null);
+                yield return new KpiTile("dashboard.kpi.downloads", Live("active", LiveEntities.Count(summary.ActiveCount)), new Icon("download", assets, 18), UiTone.Info,
+                    new Span(Live("errors", LiveEntities.Count(summary.ErrorCount)), new ValueText(" "), new Text("dashboard.downloads.failed")), summary.ErrorCount > 0 ? UiTone.Warning : null);
             }
 
             if (texts.Can("requests.read", "Requests"))
             {
-                yield return new KpiTile("dashboard.kpi.requests", new ValueText(dashboard.OpenRequests.ToString("N0", CultureInfo.CurrentCulture)), new Icon("requests", assets, 18), KpiTone.Warn,
-                    new Text("dashboard.requests.foot"), dashboard.OpenRequests > 0 ? KpiTone.Warn : null);
+                yield return new KpiTile("dashboard.kpi.requests", new ValueText(dashboard.OpenRequests.ToString("N0", CultureInfo.CurrentCulture)), new Icon("requests", assets, 18), UiTone.Warning,
+                    new Text("dashboard.requests.foot"), dashboard.OpenRequests > 0 ? UiTone.Warning : null);
             }
         }
 
@@ -119,9 +119,9 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
         {
             var (tone, chip) = service.HealthStateTypeId switch
             {
-                HealthStateType.Available => ("good", "state-chip state-chip--available"),
-                HealthStateType.Unavailable => ("warn", "state-chip state-chip--warning"),
-                _ => ("accent", "state-chip")
+                HealthStateType.Available => ("good", UiTone.Success),
+                HealthStateType.Unavailable => ("warn", UiTone.Warning),
+                _ => ("accent", UiTone.Accent)
             };
             var checkedAt = service.CheckedAt is { } at
                 ? string.Format(CultureInfo.CurrentCulture, texts["dashboard.services.checked"], at.ToLocalTime().ToString("t", CultureInfo.CurrentCulture))
@@ -129,7 +129,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
             var detail = new List<IUiComponent> { new Strong(new Truncated(service.Name ?? "")), new Span(new ValueText(texts["health.type." + service.HealthServiceTypeId] + " · " + checkedAt)).Class("dashboard-services__facts") };
             if (ErrorText(service) is { } error) detail.Add(new Span(new Truncated(error)).Class("dashboard-services__facts dashboard-services__error"));
             return new Div(new Span(new Icon(ServiceIcon(service.HealthServiceTypeId), assets, 15)).Class("dashboard-services__icon dashboard-services__icon--" + tone), new Div([.. detail]).Class("dashboard-services__text"),
-                new Span(new Text("health.state." + service.HealthStateTypeId)).Class(chip)).Class("dashboard-services__row");
+                new StateChip(new Text("health.state." + service.HealthStateTypeId), chip)).Class("dashboard-services__row");
         }
 
         // Why a service did not answer, in the words of the error or the storage problem.

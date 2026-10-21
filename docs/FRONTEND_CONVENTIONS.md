@@ -87,11 +87,13 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Pages describe forms via `Form<TData>` field selectors and optional
   labels/autocomplete; **the Form owns HTML labels, controls, ids, disabled
   states and backend DataField metadata**. Do not copy input/label helper
-  classes into each page. Do not activate submission, provider buttons,
-  session persistence or password reveal actions without a real, authorized
-  backend operation and antiforgery handling.
+  classes into each page. Do not activate submission, provider buttons or
+  session persistence without a real, authorized backend operation and
+  antiforgery handling. A password field may carry the eye
+  ([PasswordReveal](../src/Jularr.Frontend/Framework/Components/PasswordReveal.cs), client-only) and a link on its label's row through
+  `FieldHelp.Trailing` and `FieldHelp.Aside`.
 - Field examples and explanations belong to the Backend field: `hint.<Fields>.<Field>.placeholder`
-  is the placeholder of typed fields (not names or passwords; an optional field shows what
+  is the placeholder of typed fields (not names; a password shows only a hint its page names; an optional field shows what
   happens when it stays empty, such as its default), `hint.<Fields>.<Field>.info` the text behind
   the label's (i), shown on hover, focus and tap ([FieldInfo](../src/Jularr.Frontend/Framework/Components/FieldInfo.cs)).
   A page passes `FieldHelp` only where the field means something special there; an empty key shows
@@ -172,6 +174,18 @@ adds none of its own colours, radii, shadows or font sizes. The mockup values ar
 | Type | Inter, then Segoe UI/system; body `--text-body` 12px, controls `--text-control` 11px/740, captions, labels, pills and table heads `--text-small` 10px (heads 810, uppercase, .65px); h1 27px/850 -1.05px, h2 `--text-heading` 14px/805 -.3px, drawer title 22px |
 | Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; all 44px for a coarse pointer; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity |
 
+- Owner's decision 21 Oct: admin lists are built from the list kit, never from their own grids or tables. A page composes `KpiTiles(...).Strip()`, one
+  `NavigationTabs` row of filter chips with counts (modifier `filters`), at most one filter field (`SearchBox` with `listFilter`; the header search is the
+  global one) and a `ListPanel` of `ListRow`s (name cell `ListIdentity` with an `IconTile`, `StateChip` with an icon per state, the row's actions, a caption for phones);
+  details open in a `Drawer` (`sheet`). The panel drops its `HideLevel` columns and becomes cards by its own width; the page's stylesheet sets only the column grid.
+  No page heading above it: the breadcrumb is the title.
+- Owner's decision 21 Oct: admin list pages keep their page actions, bulk actions and paging in the one floating
+  [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
+  floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with three optional zones as slots: actions (icon and short
+  label; a phone keeps the icons), bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count) and paging (previous, "Page 2 / 9"
+  or a range, next, optional page size select; plain GET links with the filters in the address, `pageNumber`). **No infinite scroll on admin pages**: lists are paged,
+  25 rows by default. With a visible save pill the dock stacks above it.
+
 Changing a look means changing a token or the one base component (Button, Form, Table, Tag, StateChip, Section, NavigationTabs, Toggle, SearchBox,
 SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Shell); all pages inherit it. Button variants: default, `Primary()`, `Soft()`, `Warn()`, `Compact()`, `IconOnly()`.
 ## Page identity and approved UX (MANDATORY)
@@ -222,8 +236,10 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel (continued titles first, then each type's best by rank; the device keeps how many
   and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
-  global Search; do not add another search field inside Discover. The Filter drawer narrows by
-  type, availability and release year only: no genre, language, rating or provider facets exist yet.
+  global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
+  (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
+  type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
+  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.
@@ -353,6 +369,8 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
 - Avoid N+1 calls, unbounded lists, repeated field metadata reflection,
   unnecessary allocations/extra requests, speculative caching and heavy JS.
   Keep the view HTML server-rendered and the language cache bounded.
+- A page that asks several providers asks them together (a few at a time, each with its own limit) and a provider that just failed
+  is remembered for a minute; slow shelves are logged and timed in `Server-Timing`.
 - Local content must not wait for optional external recommendations. Load their
   server-rendered fragments independently, retaining usable native links and
   visible failures. Do not parallelize operations over one shared SQL transaction.
@@ -394,12 +412,15 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
-- Supplied trailers start muted after sustained mouse hover, widen the card without
-  increasing its height, replace its cover and stop on leave, Escape, scrolling,
-  hidden document or page navigation. Use one official embed, no eager player.
-  The cached component module owns delegated handlers once across app-shell visits.
-  No trailer identifier means no preview request. Production list contracts still
-  lack trailer IDs; workshop samples are explicitly labeled, not library records.
+- The delayed hover preview (owner's UiDesigner MediaCard, 20 Oct): after about 1.8 s of the mouse resting on a cover, never on one of
+  its buttons, the card opens a panel as high as the cover over itself, fetched then from `/MediaPreview` (nothing loads before, nothing on
+  touch or devices without hover): the title's trailer in one muted, very wide, cropped frame (the one allowed external embed, the
+  privacy host, with Jularr's own play/pause and sound controls like the player's) above the linked title, or only the title and a
+  longer description where there is no trailer; the card's action and heart move into its foot beside Details. It closes on leave,
+  Escape, scrolling, resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
+  module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one title at a
+  time (a Work's trailer is its `Trailer` fact, a TMDB title's and an anime season's come from their provider within 3 s, otherwise the
+  local catalog's description alone).
 - Bookmark mutations use the existing Details POST, typed Form, antiforgery and
   Backend watchlist service (the page is called Favorites). Return only to validated local URLs. If a list does not
   supply current membership, the icon links to management in Details, not a false toggle.

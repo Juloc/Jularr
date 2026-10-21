@@ -23,6 +23,10 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
 - Book thickness follows calculated Reader pages, including typography and page
   width changes, not guessed printed-edition metadata. While whole-book counting
   is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
+- The two pages of a spread are mirror images: both use the cross-section of half the
+  block, so reading position never changes a page's height, vertical position,
+  outline, text box or page number (the number follows the paper's lower contour).
+  `LocalEpub_BookSpread_PagesAreMirrorImages` and `Tools/book-geometry.test.mjs` check it.
 
 This package starts from clean-start and carries forward the approved frame work.
 The overlapping #1228 remains untouched; #289 is roadmap context, not permission

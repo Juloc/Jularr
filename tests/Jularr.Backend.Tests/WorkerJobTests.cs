@@ -31,25 +31,29 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Twelve workers and the sampler. The queue and the downloads a restart interrupts start at once, every other job has its own offset.
-            Assert.AreEqual(14, Enum.GetValues<WorkerGroupType>().Length);
-            foreach (var key in new[] { "operations", "downloads", "resources" })
+            // Fifteen workers and the sampler. The queues and the downloads a restart interrupts start at once, every other job has its own offset;
+            // a provider of the provider sync has no schedule of its own.
+            Assert.AreEqual(16, Enum.GetValues<WorkerGroupType>().Length);
+            foreach (var key in new[] { "operations", "backupQueue", "benchmarkQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
             }
 
+            var parts = jobs.Where(job => job.ParentKey is not null).ToArray();
+            CollectionAssert.AreEquivalent(new[] { "providerSyncPlex", "providerSyncJellyfin", "providerSyncEmby" }, parts.Select(job => job.Key).ToArray());
+            Assert.IsTrue(parts.All(job => job.Group == WorkerGroupType.Provider && job.Interval is null && !job.CanRunNow));
             var delayed = jobs.Where(job => job.StartDelay > TimeSpan.Zero).ToArray();
-            Assert.AreEqual(jobs.Count - 3, delayed.Length);
+            Assert.AreEqual(jobs.Count - 5 - parts.Length, delayed.Length);
             Assert.AreEqual(delayed.Length, delayed.Select(job => job.StartDelay).Distinct().Count(), "Every delayed job has its own offset.");
             Assert.IsTrue(delayed.All(job => job.StartDelay < TimeSpan.FromMinutes(5)));
 
             // Heavy jobs wait while Jularr is used, downloads never do.
-            foreach (var key in new[] { "trickplay", "recognition", "readingCopies", "scanScheduling", "plexSync", "mediaServerSync", "aniListMatching" })
+            foreach (var key in new[] { "trickplay", "recognition", "readingCopies", "scanScheduling", "providerSync", "aniListMatching" })
             {
                 Assert.IsTrue(WorkerJobs.Definition(key).PausesWhileUsedByDefault, key);
             }
 
-            foreach (var key in new[] { "downloads", "usenet", "operations", "backup", "wantedSearch" })
+            foreach (var key in new[] { "downloads", "usenet", "operations", "backupQueue", "backup", "wantedSearch" })
             {
                 Assert.IsFalse(WorkerJobs.Definition(key).CanPauseWhileUsed, key);
             }
@@ -121,13 +125,18 @@ namespace Jularr.Backend.Tests
             time.Now = Start.AddMinutes(1);
             Assert.AreEqual(WorkerJobGate.Run, jobs.Begin("downloads"));
             Assert.IsNotNull(jobs.Finish("downloads", WorkerJobResultType.Succeeded, null), "The first pass is kept.");
+
+            // Tracking looks every minute, and again after 15 seconds while a download runs.
+            jobs.RunAgainWithin("downloads", TimeSpan.FromSeconds(15));
             time.Now = time.Now.AddSeconds(15);
             Assert.AreEqual(WorkerJobGate.Run, jobs.Begin("downloads"));
             Assert.IsNull(jobs.Finish("downloads", WorkerJobResultType.Succeeded, null), "A quiet success is not written every 15 seconds.");
+            jobs.RunAgainWithin("downloads", TimeSpan.FromSeconds(15));
             time.Now = time.Now.AddSeconds(15);
             Assert.AreEqual(WorkerJobGate.Run, jobs.Begin("downloads"));
             var failure = jobs.Finish("downloads", WorkerJobResultType.Failed, "provider_unavailable");
             Assert.AreEqual(WorkerJobResultType.Failed, failure?.ResultTypeId, "A failure is kept at once.");
+            jobs.RunAgainWithin("downloads", TimeSpan.FromSeconds(15));
             time.Now = time.Now.AddSeconds(15);
             jobs.Begin("downloads");
             Assert.IsNull(jobs.Finish("downloads", WorkerJobResultType.Failed, "provider_unavailable"), "The same failure again is not written again.");

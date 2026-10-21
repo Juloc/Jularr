@@ -23,6 +23,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly TmdbClient _tmdb;
         private static readonly TimeSpan FeedLifetime = TimeSpan.FromMinutes(3);
+
+        // A provider that just failed is not asked again for this long, so a page of shelves does not wait for it on every visit.
+        private static readonly TimeSpan FailureLifetime = TimeSpan.FromSeconds(60);
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _cache;
         private readonly CoverStore _covers;
@@ -102,6 +105,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 return cached!;
             }
 
+            var failedKey = "metadata.feed.failed." + connection.Language;
+            if (_cache.TryGetValue(failedKey, out string? failure))
+            {
+                throw new ServiceUnavailableException(failure!);
+            }
+
             try
             {
                 var results = await _tmdb.ReadFeedAsync(connection, Kind(mediaType), (TmdbFeed)feed, region, page, ct);
@@ -110,7 +119,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
             catch (TmdbException exception)
             {
-                throw Translate(exception);
+                var translated = Translate(exception);
+                if (translated is ServiceUnavailableException unavailable) _cache.Set(failedKey, unavailable.Code, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = FailureLifetime, Size = 1 });
+                throw translated;
             }
         }
 

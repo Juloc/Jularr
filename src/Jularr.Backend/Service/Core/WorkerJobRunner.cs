@@ -18,6 +18,15 @@ namespace Jularr.Backend.Service.Core
             {
                 await using var scope = scopes.CreateAsyncScope();
                 await step(scope.ServiceProvider, token);
+                return true;
+            }, ct);
+
+        // A step that finds nothing to do (a server that is not connected) leaves the job off instead of succeeded.
+        public Task<WorkerJobResultType?> RunIfConnectedAsync(string key, Func<IServiceProvider, CancellationToken, Task<bool>> step, CancellationToken ct) =>
+            RunPassAsync(key, async token =>
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                return await step(scope.ServiceProvider, token);
             }, ct);
 
         // The pass repeats while its step reports more work, each round in a new scope, and stops between rounds when the job is paused or has to wait.
@@ -42,9 +51,11 @@ namespace Jularr.Backend.Service.Core
                         await Task.Delay(pause, time, token);
                     }
                 }
+
+                return true;
             }, ct);
 
-        private async Task<WorkerJobResultType?> RunPassAsync(string key, Func<CancellationToken, Task> pass, CancellationToken ct)
+        private async Task<WorkerJobResultType?> RunPassAsync(string key, Func<CancellationToken, Task<bool>> pass, CancellationToken ct)
         {
             if (!await EnsureLoadedAsync(ct) || jobs.Begin(key) != WorkerJobGate.Run)
             {
@@ -55,7 +66,10 @@ namespace Jularr.Backend.Service.Core
             string? errorKey = null;
             try
             {
-                await pass(ct);
+                if (!await pass(ct))
+                {
+                    result = WorkerJobResultType.Skipped;
+                }
             }
             catch (SecurityException)
             {

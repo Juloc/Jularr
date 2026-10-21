@@ -3,7 +3,8 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // A form field's example and explanation, named by a page instead of the field's own; an empty key shows none, such as on a repeated password.
-    public sealed record FieldHelp(string? Placeholder = null, string? Info = null);
+    // Aside sits at the end of the label's row (a "Forgot password?" link), Trailing at the end of the field itself (a show-password button), Note below it (the rule for its value).
+    public sealed record FieldHelp(string? Placeholder = null, string? Info = null, IUiComponent? Aside = null, IUiComponent? Trailing = null, IUiComponent? Note = null);
 
     // The (i) beside a label: its explanation shows on hover, keyboard focus and a tap; nothing when the field has none.
     public sealed class FieldInfo(string key, string id) : IUiComponent

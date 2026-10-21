@@ -144,10 +144,12 @@ namespace Jularr.Backend.Service.Admin.Transcoding.V1
     public sealed class QueueTranscodeBenchmarkV1 : AdminService<TranscodeBenchmarkParametersV1, NoData>
     {
         private readonly TranscodeBenchmarkClient _client;
+        private readonly WorkSignals _signals;
 
-        internal QueueTranscodeBenchmarkV1(TranscodeBenchmarkClient client)
+        internal QueueTranscodeBenchmarkV1(TranscodeBenchmarkClient client, WorkSignals signals)
         {
             _client = client;
+            _signals = signals;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -165,5 +167,7 @@ namespace Jularr.Backend.Service.Admin.Transcoding.V1
 
             return new UpdateResult(await Context.QueueTranscodeBenchmarkAsync(new OperationCreationData(OperationKind.TranscodeBenchmark, null, Auth.AccountId), CancellationToken));
         }
+
+        protected override void OnCommitted() => _signals.Benchmarks.Notify();
     }
 }

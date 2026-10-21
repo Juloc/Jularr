@@ -23,12 +23,12 @@ namespace Jularr.Frontend.Pages.Admin.Performance
             var window = new Text("performance.window");
             page.Content.Add(new KpiTiles(
                 new KpiTile("performance.kpi.processor", new ValueText(latest is null ? "–" : latest.ProcessorPercent.ToString("0.#", CultureInfo.CurrentCulture) + " %"), new Icon("activity", assets, 18),
-                    KpiTone.Accent, window),
-                new KpiTile("performance.kpi.memory", new ValueText(latest is null ? "–" : ByteSize.Format(latest.MemoryBytes)), new Icon("server", assets, 18), KpiTone.Info, window),
+                    UiTone.Accent, window),
+                new KpiTile("performance.kpi.memory", new ValueText(latest is null ? "–" : ByteSize.Format(latest.MemoryBytes)), new Icon("server", assets, 18), UiTone.Info, window),
                 new KpiTile("performance.kpi.response", new ValueText(timings.Calls == 0 ? "–" : timings.AverageMilliseconds.ToString("N0", CultureInfo.CurrentCulture) + " ms"), new Icon("pulse", assets, 18),
-                    KpiTone.Good, window),
+                    UiTone.Success, window),
                 new KpiTile("performance.kpi.errors", new ValueText(timings.Calls == 0 ? "–" : ((double)timings.Errors / timings.Calls).ToString("P1", CultureInfo.CurrentCulture)), new Icon("info", assets, 18),
-                    timings.Errors > 0 ? KpiTone.Warn : KpiTone.Good, window)));
+                    timings.Errors > 0 ? UiTone.Warning : UiTone.Success, window)));
             if (resources.Samples.Count > 0)
             {
                 page.Content.Add(new UiSection("performance.history", [new ResourceChart(resources.Samples, resources.AvailableMemoryBytes)]));
