@@ -219,7 +219,9 @@ namespace Jularr.Backend.Service.User.Media.V1
                             AND (section."ParentNumber", section."Number") <= (coalesce(unitGroup."LastParentNumber", 0), unitGroup."LastNumber")
                         LIMIT 1
                     ) AS "GroupName",
-                    unit."Title" AS "UnitTitle"
+                    unit."Title" AS "UnitTitle",
+                    unit."Id" AS "WorkUnitId",
+                    coalesce(progress."ProgressPositionTypeId" IN (1, 2), FALSE) AS "HasProgress"
                 FROM
                     "MediaAssets" AS asset
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
@@ -506,10 +508,16 @@ namespace Jularr.Backend.Service.User.Media.V1
                             AND asset."MediaAssetTypeId" = 1
                             AND file."MissingSince" IS NULL
                             AND NOT file."IsSubtitle"
-                    )))::integer AS "AvailableCount"
+                    )))::integer AS "AvailableCount",
+                    season."Id",
+                    count(watched."Id")::integer AS "WatchedCount"
                 FROM
                     "WorkUnits" AS season
                     LEFT JOIN "WorkUnits" AS episode ON episode."ParentWorkUnitId" = season."Id" AND episode."WorkUnitTypeId" = 2
+                    LEFT JOIN "MediaProgress" AS watched ON watched."ProfileId" = @ProfileId
+                        AND watched."WorkId" = season."WorkId"
+                        AND watched."WorkUnitId" = episode."Id"
+                        AND watched."IsCompleted"
                 WHERE
                     season."WorkId" = @WorkId
                     AND season."WorkUnitTypeId" = 1
