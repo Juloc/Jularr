@@ -14,6 +14,7 @@ namespace Jularr.Backend.Data.Enums.Worker
         Subtitle = 9,
         Recognition = 10,
         Catalog = 11,
-        Sampler = 12
+        Sampler = 12,
+        Derivation = 13
     }
 }

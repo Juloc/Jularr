@@ -27,7 +27,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadWorkV1 readWork,
+        ReadReadingBookmarksV1 readBookmarks, DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadWorkV1 readWork,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
         : JularrPage
     {
@@ -44,6 +44,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IReadOnlyList<ReadingTocEntryV1> _toc = [];
         private IReadOnlyList<ReadingAnnotationV1> _marks = [];
         private PageResult<ReadingAnnotationV1>? _notes;
+        private IReadOnlyList<ReadingBookmarkV1> _bookmarks = [];
         private IReadOnlyList<ReadingSearchHitV1>? _hits;
         private SpeechPreferencesV1? _speech;
         private SaveSpeechPreferencesDataV1? _speechInput;
@@ -100,7 +101,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 _languages.Length > 0 ? Tool("globe", "reader.language", "language") : new Span(),
                 AppearanceTool(false),
                 new Button(new Icon("palette", assets)).IconOnly(texts["reader.settings.paper"]).Attribute("data-reader-open-settings", "paper").Attribute("aria-expanded", "false").Class("button button--icon reader__desktop-tool"),
-                Tool("bookmark", "reader.notes", "notes").Class("button button--icon reader__desktop-tool"),
+                BookmarkTool(),
+                Tool("pencil", "reader.notes", "notes").Class("button button--icon reader__desktop-tool"),
                 new Button(new Icon("headphones", assets)).IconOnly(texts["speech.title"]).Attribute("data-speech-toggle", "").Attribute("aria-pressed", "false").Attribute("disabled", "disabled"),
                 Tool("search", "reader.search", "search").Class("button button--icon reader__desktop-tool"),
                 new Button(new Icon("text-select", assets)).IconOnly(texts["reader.selectText"]).Attribute("data-reader-select", "").Attribute("aria-pressed", "false"),
@@ -109,12 +111,10 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             // A converted PDF downloads as EPUB beside the original; a finished translation as its own EPUB.
             var ebook = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/ebook";
+            var originalPdf = new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener");
             IUiComponent[] converted = _source?.ReadingFormatTypeId == ReadingFormatType.Pdf
-                ? [
-                    new A(new Text("reader.download.epub")).Class("button").Attribute("href", ebook).Attribute("download", ""),
-                    new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener")
-                ]
-                : [];
+                ? [new A(new Text("reader.download.epub")).Class("button").Attribute("href", ebook).Attribute("download", ""), originalPdf]
+                : _source?.HasPdf == true ? [originalPdf] : [];
             var downloads = new Div([
                 .. converted,
                 .. document.TranslatedLanguages.Select(code => new A(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["reader.download.translated"], LanguageName(code)))).Class("button")
@@ -148,6 +148,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 More(true, converted.Length > 0 || document.TranslatedLanguages.Length > 0),
                 Toolbar(),
                 Popover(),
+                FigureViewer(),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
                 new P().Class("reader__note").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")
             ).Class("reader")
@@ -162,11 +163,22 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-total", current.TotalCharacters.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-locator", document.Locator ?? "")
                 .Attribute("data-annotations-url", "/api/v1/reading/assets/" + asset + "/annotations")
+                .Attribute("data-bookmarks-url", "/api/v1/reading/assets/" + asset + "/bookmarks")
+                .Attribute("data-bookmark-delete-label", texts["reader.bookmarkDelete"])
                 .Attribute("data-annotations", JsonSerializer.Serialize(_marks, Json))
                 .Attribute("data-note-label", texts["reader.note"])
                 .Attribute("data-query", Query ?? "")
                 .Attribute("data-page-label", texts["reader.pagePosition"])
-                .Attribute("data-animation-failed", texts["reader.animationUnavailable"]);
+                .Attribute("data-animation-failed", texts["reader.animationUnavailable"])
+                .Attribute("data-figure-label", texts["reader.figure.open"]);
+            if (_source?.HasPdf == true)
+            {
+                // A page that only the PDF shows links to it.
+                view.Attribute("data-original-url", "/api/v1/reading/assets/" + asset + "/file")
+                    .Attribute("data-original-label", texts["reader.figure.original"])
+                    .Attribute("data-original-link", texts["reader.originalPdf"]);
+            }
+
             if (_speech is not null)
             {
                 view.Attribute("data-speech-preferences", JsonSerializer.Serialize(_speech, Json))
@@ -200,6 +212,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             {
                 page.Content.Add(new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status"));
             }
+            else if (SmartNote() is { } note)
+            {
+                page.Content.Add(new P(new Text(note)).Class("reader__note").Attribute("role", "status"));
+            }
         }
 
         // The browser's own PDF viewer; the link serves browsers without one.
@@ -210,11 +226,39 @@ namespace Jularr.Frontend.Pages.User.Reader
                 Header(source.Title, "", source.WorkId, [
                     new A(new Text("reader.openPdf")).Class("button").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")
                 ]), new Span(), new Frame().Class("reader__pdf").Attribute("src", file).Attribute("title", source.Title),
-                _status is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span()
+                (_status ?? SmartNote()) is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span()
             ).Class("reader reader--pdf").Attribute("data-format", "pdf");
         }
 
         private sealed class Frame() : HtmlElement("iframe");
+
+        // Where the PDF of this book stands on its way to a reading copy, when the module is on and it matters to the reader.
+        private string? SmartNote() => _source?.ReadingDerivationStatusTypeId switch
+        {
+            ReadingDerivationStatus.Preparing => "reader.smart.preparing",
+            ReadingDerivationStatus.Failed => _source.Reason == "offline" ? "reader.smart.preparing" : "reader.smart.failed",
+            ReadingDerivationStatus.Declined => _source.Reason switch
+            {
+                "pictures" => "reader.smart.declined.pictures",
+                "garbled" => "reader.smart.declined.garbled",
+                "no_text" or "scan" or "original_pages" => "reader.smart.declined.scan",
+                _ => null
+            },
+            _ => null
+        };
+
+        private sealed class Dialog(params IUiComponent[] children) : HtmlElement("dialog", children);
+
+        // The full-screen view of a figure; the script fills it with the picture that was tapped.
+        private IUiComponent FigureViewer() => new Dialog(
+            new Div(
+                new Button(new Icon("zoom-out", assets)).IconOnly(texts["reader.figure.zoomOut"]).Attribute("data-figure-zoom", "out"),
+                new Button(new Icon("zoom-in", assets)).IconOnly(texts["reader.figure.zoomIn"]).Attribute("data-figure-zoom", "in"),
+                new Button(new Icon("fit", assets)).IconOnly(texts["reader.figure.fit"]).Attribute("data-figure-zoom", "fit"),
+                new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-figure-close", "")
+            ).Class("reader-figure__tools"),
+            new Div(new Img().Attribute("alt", "").Class("reader-figure__image")).Class("reader-figure__stage")
+        ).Class("reader-figure").Attribute("aria-label", texts["reader.figure.view"]);
 
         // One page at a time with links that work without the script; the script adds spreads, direction and preloading.
         private IUiComponent ComicView(ReadingDocumentV1 document)
@@ -224,7 +268,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 && int.TryParse(locator[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var saved) ? saved : 0), 0, count - 1);
             var pages = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=";
             string Page(int number) => "?p=" + number.ToString(CultureInfo.InvariantCulture);
-            var top = Header(document.Title, "", document.WorkId, [AppearanceTool(true), Tool("player-more", "reader.more", "more")]);
+            var top = Header(document.Title, "", document.WorkId, [AppearanceTool(true), BookmarkTool(), Tool("player-more", "reader.more", "more")]);
             var previous = new A(new Icon("player-previous", assets)).Class("button button--icon").Attribute("aria-label", texts["reader.previous"]).Attribute("href", Page(Math.Max(0, index - 1))).Attribute("data-role", "previous");
             var next = new A(new Icon("player-next", assets)).Class("button button--icon").Attribute("aria-label", texts["reader.next"]).Attribute("href", Page(Math.Min(count - 1, index + 1))).Attribute("data-role", "next");
             if (index == 0) previous.Attribute("hidden", "hidden");
@@ -242,7 +286,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             // Bounded page links; the complete image list is never embedded in the response.
             var start = Math.Max(0, index - 10);
             var contents = new Nav([.. Enumerable.Range(start, Math.Min(20, count - start)).Select(number => new A(new ValueText((number + 1).ToString(CultureInfo.InvariantCulture)))
-                .Class("reader__toc-entry" + (number == index ? " is-current" : "")).Attribute("href", Page(number)))])
+                .Class("reader__toc-entry" + (number == index ? " is-current" : "")).Attribute("href", Page(number))), Bookmarks(true)])
                 .Class("reader__panel").Attribute("data-panel", "contents").Attribute("aria-label", texts["reader.contents"]);
 
             var note = document.IsCached ? (IUiComponent)new Span() : new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status");
@@ -252,6 +296,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-progress-url", "/api/v1/reading/assets/" + Id.ToString(CultureInfo.InvariantCulture) + "/progress")
                 .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
                 .Attribute("data-pages", pages)
+                .Attribute("data-bookmarks-url", "/api/v1/reading/assets/" + Id.ToString(CultureInfo.InvariantCulture) + "/bookmarks")
+                .Attribute("data-bookmark-delete-label", texts["reader.bookmarkDelete"])
                 .Attribute("data-page", index.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-count", count.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-direction", document.IsRightToLeft ? "rtl" : "ltr")
@@ -279,6 +325,10 @@ namespace Jularr.Frontend.Pages.User.Reader
         private HtmlElement Tool(string icon, string key, string action) => new Button(new Icon(icon, assets)).IconOnly(texts[key])
             .Attribute("data-action", action).Attribute("aria-expanded", "false");
 
+        // Marks or clears the current place; the script keeps the pressed state with the page.
+        private IUiComponent BookmarkTool() => new Button(new Icon("bookmark", assets)).IconOnly(texts["reader.bookmark"]).Class("button button--icon reader__desktop-tool")
+            .Attribute("data-reader-bookmark", "").Attribute("aria-pressed", "false");
+
         private IUiComponent AppearanceTool(bool images) => new Button(new Span(new ValueText("Aa")).Class("reader__type-icon"))
             .IconOnly(texts["reader.appearance"]).Attribute("data-reader-open-settings", images ? "all" : "text").Attribute("aria-expanded", "false");
 
@@ -294,6 +344,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             new Div(new H2(new Text("reader.more")), new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-reader-close", "more")).Class("reader__panel-heading"),
             text ? new Button(new Icon("search", assets), new Text("reader.search")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-open-panel", "search").Attribute("aria-expanded", "false") : new Span(),
             text ? new Button(new Icon("bookmark", assets), new Text("reader.notes")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-open-panel", "notes").Attribute("aria-expanded", "false") : new Span(),
+            new Button(new Icon("bookmark", assets), new Text("reader.bookmark")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-bookmark", "").Attribute("aria-pressed", "false"),
             text ? new Button(new Icon("headphones", assets), new Text("speech.settings")).Class("button reader__menu-item").Attribute("data-reader-open-panel", "speech").Attribute("aria-expanded", "false") : new Span(),
             new Button(new Icon("settings", assets), new Text("reader.settings")).Class("button reader__menu-item").Attribute("data-reader-open-settings", "all").Attribute("aria-expanded", "false"),
             new Button(new Icon("player-theater", assets), new Text("reader.theater")).Class("button reader__menu-item reader__mobile-item").Attribute("data-reader-command", "theater").Attribute("aria-pressed", "false"),
@@ -335,7 +386,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IUiComponent Notes(int index)
         {
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            var panel = new List<IUiComponent>();
+            var panel = new List<IUiComponent> { Bookmarks(false) };
             if (_notes is not { Items.Count: > 0 } notes)
             {
                 // A later empty page leads back.
@@ -358,6 +409,23 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             var div = new Div([.. panel]).Class("reader__panel").Attribute("data-panel", "notes").Attribute("aria-label", texts["reader.notes"]);
             return NotesPage > 1 ? div : div.Attribute("hidden", "hidden");
+        }
+
+        // The profile's places in the book in reading order; the script adds and removes them.
+        private IUiComponent Bookmarks(bool images)
+        {
+            string Share(decimal progression) => Math.Round(progression * 100).ToString("0", CultureInfo.InvariantCulture) + " %";
+            var list = new Ul([.. _bookmarks.Select(mark => new Li([
+                new A(new ValueText(images ? texts["reader.comic.page"] + " " + (mark.SectionIndex + 1).ToString(CultureInfo.InvariantCulture) : mark.Title ?? Share(mark.Progression))).Class("reader__note-quote")
+                    .Attribute("href", images ? "?p=" + mark.SectionIndex.ToString(CultureInfo.InvariantCulture)
+                        : "?s=" + mark.SectionIndex.ToString(CultureInfo.InvariantCulture) + "&b=" + mark.Block.ToString(CultureInfo.InvariantCulture)),
+                new P(new ValueText(Share(mark.Progression))).Class("reader__note-text"),
+                new Button(new ValueText(texts["reader.bookmarkDelete"])).Class("button").Attribute("type", "button").Attribute("data-bookmark-delete", "")])
+                .Class("reader__note").Attribute("data-bookmark-id", mark.Id.ToString(CultureInfo.InvariantCulture)).Attribute("data-section", mark.SectionIndex.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-block", mark.Block.ToString(CultureInfo.InvariantCulture)).Attribute("data-progression", mark.Progression.ToString(CultureInfo.InvariantCulture)))])
+                .Class("reader__notes").Attribute("data-role", "bookmark-list");
+            var group = new Div(new H3(new Text("reader.bookmarks")), list).Class("reader__bookmarks").Attribute("data-role", "bookmarks");
+            return _bookmarks.Count == 0 ? group.Attribute("hidden", "hidden") : group;
         }
 
         // Sections with the words; the script marks them in the opened section.
@@ -436,13 +504,14 @@ namespace Jularr.Frontend.Pages.User.Reader
                 _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
             }
             catch (ServiceUnavailableException exception) when (_source.ReadingFormatTypeId == ReadingFormatType.Pdf
-                && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing")
+                && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing" or "reading_pdf_unfit")
             {
                 // The browser may still show what Jularr cannot reflow, or not yet.
-                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : null;
+                _status = exception.Code is "reading_pdf_recognizing" or "reading_pdf_unfit" ? "errors." + exception.Code : null;
                 return;
             }
 
+            _bookmarks = await readBookmarks.ExecuteAsync<BaseDataList<ReadingBookmarkV1>>(new ReadingAssetParametersV1(Id), ct);
             if (_document.ReadingFormatTypeId == ReadingFormatType.Comic)
             {
                 return;

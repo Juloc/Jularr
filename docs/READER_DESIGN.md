@@ -43,6 +43,8 @@ buttons no longer float over the paper. The control strips are borderless; the
 shared Range owns its thin accent-coloured track, thumb and keyboard focus, with
 no surrounding seek-field outline. Clean uses the canonical purple accent.
 
+A header button marks or clears a bookmark at the current place (per profile and book file, at most 200); the list with chapter title and position is in the notes panel, in the page panel of an image book. A prose page print draws a hyphenated line break with its hyphen and the remainder at the line start.
+
 Read-aloud is required. The [Speech integration](SPEECH.md) now connects browser
 device voices with canonical server profile preferences, selection/visible-text
 reading, word paint on the existing book, following and Pause/Resume/Stop.
@@ -93,6 +95,23 @@ Images retain `p<page>`, solitary covers/wide pages, bounded preloading and a
 12-image vertical window. Completion in scroll mode requires the loaded final
 image's bottom, not merely entering that image. Scanned PDFs without prepared text
 retain the native browser viewer, without fabricated progress.
+
+## Figures
+
+A picture worth its own room is a figure, in the reader and in the EPUB download alike
+(`<figure data-figure>`, `epub:type="figure"`, the caption as `figcaption` and the
+alternative text): `page` fills a page of its own (paged views break before and after
+it; scroll views show it up to 90 % of the screen height), `wide` takes the width of
+the text; small decoration stays in the line. A PDF page that is mainly a large picture,
+a vector drawing (as an SVG that keeps its labels), a table or an irregular multi-column
+layout becomes such a figure instead of a tiny inline picture; EPUB pictures become
+figures by their declared kind or their size. A tap or click, Enter or Space on a figure
+opens the full-screen view (`dialog.reader-figure`): the picture fits the screen; wheel,
+pinch, double tap and the three buttons zoom, dragging moves a zoomed picture, Escape or
+a tap on the empty stage closes it. On the printed pages of the book view the figure is
+found by position, because those pages take no pointer events. A page only the original
+PDF can show stands in the text as a one-line note with a link to its page and is left
+out of the EPUB. The figure's look follows the global tokens; the cursor is `zoom-in`.
 
 ## Bounded whole-book measurement
 

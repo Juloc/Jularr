@@ -147,6 +147,68 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Bookmarks_StayWithTheProfileAreBoundedAndFollowTheModule()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (first, _) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            await OpenAsync(host, first);
+            var route = "/api/v1/reading/assets/" + first + "/bookmarks";
+
+            // One place keeps one bookmark; the second save only updates it.
+            using var created = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(1, 1, 0.6m, "Part Two"));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var id = (await created.Content.ReadFromJsonAsync<CreateReadingBookmarkResultV1>())!.Id;
+            using var again = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(1, 1, 0.7m, "Part Two"));
+            Assert.AreEqual(id, (await again.Content.ReadFromJsonAsync<CreateReadingBookmarkResultV1>())!.Id);
+            using var earlier = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(0, 0, 0.1m, null));
+            Assert.AreEqual(HttpStatusCode.OK, earlier.StatusCode, await earlier.Content.ReadAsStringAsync());
+            using var invalid = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(0, 0, 1.5m, null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+            // Reading order with the chapter title and place; the reader shows it and leads to it.
+            using var listed = await host.SendAsync(HttpMethod.Get, route);
+            var marks = (await listed.Content.ReadFromJsonAsync<BaseDataList<ReadingBookmarkV1>>())!;
+            CollectionAssert.AreEqual(new[] { 0, 1 }, marks.Select(mark => mark.SectionIndex).ToArray());
+            Assert.AreEqual("Part Two", marks[1].Title);
+            Assert.AreEqual(0.7m, marks[1].Progression);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first + "?s=0");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "href=\"?s=1&amp;b=1\"");
+
+            // Another profile neither sees nor deletes it.
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/202");
+            Assert.AreEqual(HttpStatusCode.OK, switched.StatusCode, await switched.Content.ReadAsStringAsync());
+            using var foreign = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(0, (await foreign.Content.ReadFromJsonAsync<BaseDataList<ReadingBookmarkV1>>())!.Count);
+            using var foreignDelete = await host.SendAsync(HttpMethod.Delete, route + "/" + id);
+            Assert.AreEqual(HttpStatusCode.NotFound, foreignDelete.StatusCode);
+            using var back = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/101");
+
+            // At most 200 places per book; an existing place still updates.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"ReadingBookmarks\" (\"ProfileId\", \"MediaAssetId\", \"SectionIndex\", \"Block\", \"Progression\") "
+                + "SELECT 101, " + first + ", 5, n, 0.5 FROM generate_series(1, 197) AS n");
+            using var last = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(6, 0, 0.5m, null));
+            Assert.AreEqual(HttpStatusCode.OK, last.StatusCode, await last.Content.ReadAsStringAsync());
+            using var over = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(6, 1, 0.5m, null));
+            StringAssert.Contains(await over.Content.ReadAsStringAsync(), "bookmark_limit");
+            using var update = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(6, 0, 0.9m, null));
+            Assert.AreEqual(HttpStatusCode.OK, update.StatusCode, await update.Content.ReadAsStringAsync());
+
+            // Delete, and the Reading module off closes the lists.
+            using var deleted = await host.SendAsync(HttpMethod.Delete, route + "/" + id);
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingBookmarks\" WHERE \"Id\" = " + id));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Reading'");
+            using var off = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+            using var offCreate = await host.SendAsync(HttpMethod.Post, route, new CreateReadingBookmarkDataV1(0, 0, 0.1m, null));
+            Assert.AreEqual(HttpStatusCode.Forbidden, offCreate.StatusCode);
+        }
+
+        [TestMethod]
         public async Task Search_FindsTheSectionsWithTheWords()
         {
             using var storage = new TemporaryDirectory();
@@ -275,7 +337,7 @@ namespace Jularr.Backend.Tests
         }
 
         // A plain RGB picture as PNG.
-        private static byte[] Picture(int width, int height)
+        internal static byte[] Picture(int width, int height)
         {
             var raw = new MemoryStream();
             for (var y = 0; y < height; y++)

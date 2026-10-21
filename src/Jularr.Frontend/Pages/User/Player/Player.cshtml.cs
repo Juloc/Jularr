@@ -12,8 +12,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Player
 {
-    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, ReadPlaybackPreferencesV1 readPreferences, ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes,
-        IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, ReadPlaybackPreferencesV1 readPreferences, ReadPlaybackMarkersV1 readMarkers, ReadPlaybackChaptersV1 readChapters,
+        ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         // The next episode starts after this many seconds unless the viewer stops it; an album's next track follows at once.
         private const int EpisodeCountdownSeconds = 10;
@@ -21,6 +21,8 @@ namespace Jularr.Frontend.Pages.User.Player
         private PlaybackPreferencesV1? _preferences;
         private PlaybackItemV1? _item;
         private IReadOnlyList<PlaybackTrackV1> _tracks = [];
+        private IReadOnlyList<PlaybackMarkerV1> _markers = [];
+        private IReadOnlyList<PlaybackChapterV1> _chapters = [];
         private WorkDetailsV1? _work;
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
 
@@ -48,7 +50,10 @@ namespace Jularr.Frontend.Pages.User.Player
                     item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null,
                     texts.CanPreviewSeeking() ? "/api/v1/playback/assets/" + asset + "/trickplay" : null,
                     _preferences is { } preferences ? new PlayerPreferences(preferences.Speed, preferences.AutoplayNext,
-                        item.WorkUnitTypeId == WorkUnitType.Episode ? EpisodeCountdownSeconds : 0, preferences.DeviceQuality.ToString(), "/api/v1/playback/preferences/speed") : null);
+                        item.WorkUnitTypeId == WorkUnitType.Episode ? EpisodeCountdownSeconds : 0, preferences.DeviceQuality.ToString(), "/api/v1/playback/preferences/speed",
+                        preferences.IntroSkipModeTypeId.ToString(), preferences.OutroSkipModeTypeId.ToString()) : null,
+                    [.. _markers.Select(marker => new PlayerMarker(marker.MediaMarkerKindTypeId.ToString(), marker.StartMs / 1000d, marker.EndMs / 1000d))],
+                    [.. _chapters.Select(chapter => new PlayerChapter(chapter.Title, chapter.StartMs / 1000d))]);
                 var player = new UiPlayer(source, assets);
                 if (_work is { } work)
                 {
@@ -91,6 +96,8 @@ namespace Jularr.Frontend.Pages.User.Player
             _item = await read.ExecuteAsync<PlaybackItemV1>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
             _tracks = await readTracks.ExecuteAsync<BaseDataList<PlaybackTrackV1>>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
             _preferences = await readPreferences.ExecuteAsync<PlaybackPreferencesV1>(new PlaybackPreferencesParametersV1(), HttpContext.RequestAborted);
+            _markers = await readMarkers.ExecuteAsync<BaseDataList<PlaybackMarkerV1>>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
+            _chapters = await readChapters.ExecuteAsync<BaseDataList<PlaybackChapterV1>>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
             if (_item is { } item && texts.Can("profile.media.read", "Library"))
             {
                 _work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(item.WorkId), HttpContext.RequestAborted);

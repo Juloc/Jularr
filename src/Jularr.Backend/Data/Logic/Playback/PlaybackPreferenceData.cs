@@ -7,15 +7,18 @@ namespace Jularr.Backend.Data.Logic.Playback
 {
     internal sealed class PlaybackPreferenceData : BaseData
     {
-        public PlaybackPreferenceData(long profileId, string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, bool autoplayPreviews)
+        public PlaybackPreferenceData(long profileId, string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext,
+            SkipMode introSkipModeTypeId, SkipMode outroSkipModeTypeId, bool autoplayPreviews)
         {
-            ProfileId = profileId;
             AutoplayPreviews = autoplayPreviews;
+            ProfileId = profileId;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
             Speed = speed;
             AutoplayNext = autoplayNext;
+            IntroSkipModeTypeId = introSkipModeTypeId;
+            OutroSkipModeTypeId = outroSkipModeTypeId;
         }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
@@ -35,6 +38,12 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode IntroSkipModeTypeId { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode OutroSkipModeTypeId { get; }
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
         public bool AutoplayPreviews { get; }

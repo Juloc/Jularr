@@ -1,4 +1,5 @@
 @use './Book';
+@use './Figures';
 
 // Reuse the regular app navigation, with the document header as the only top bar.
 .reader-page {
@@ -76,7 +77,7 @@
     &__bottom > :is(a,span:first-child:empty) { flex: 0 0 44px; }
     &__bottom > a[hidden] { display: inline-flex; visibility: hidden; pointer-events: none; }
     &__view-tools { display: flex; gap: 2px; flex-shrink: 0; margin-left: auto; }
-    &__view-tools [aria-pressed=true], [data-speech-toggle][aria-pressed=true], [data-speech-pause][aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    &__view-tools [aria-pressed=true], [data-reader-bookmark][aria-pressed=true], [data-speech-toggle][aria-pressed=true], [data-speech-pause][aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
     &__heading { flex: 1; min-width: 0; }
     &__identity { display: flex; align-items: center; flex: 1; min-width: 0; gap: 12px; }
     &__cover { flex: none; display: grid; place-items: center; width: 28px; height: 40px; border-radius: 3px; overflow: hidden; background: var(--surface-hover); color: var(--muted); }
@@ -103,9 +104,23 @@
     &__content :is(p,h1,h2,h3,h4,h5,h6,blockquote,pre,table,figure,ul,ol,dl) { max-width: min(var(--reader-text-width, 68ch), calc(100% - 48px)); margin-inline: auto; }
     &[data-indent=true] &__content p + p { text-indent: 1.25em; }
     &[data-hyphenation=false] &__content { hyphens: none; }
-    &[data-illustrations=false] &__content:not(.reader__images) :is(img, picture, figure) { display: none; }
+    &[data-illustrations=false] &__content:not(.reader__images) :is(img, picture, figure:not([data-figure=original])) { display: none; }
     &__content h1, &__content h2, &__content h3 { line-height: 1.25; }
     &__content img { display: block; max-width: 100%; max-height: 100%; height: auto; object-fit: contain; break-inside: avoid; }
+    // Figures: a picture with room of its own. A page figure fills a page, a wide one the width of the text; both open full screen.
+    &__content :is(figure[data-figure], img[data-figure]) { cursor: zoom-in; }
+    &__content figure[data-figure] { display: grid; justify-items: center; align-content: center; margin-block: 1.2em; break-inside: avoid; }
+    &__content figure[data-figure] img { width: auto; max-width: 100%; max-height: 100%; margin-inline: auto; }
+    &__content figure[data-figure] figcaption { max-width: 100%; margin-top: .6em; font-size: .85em; line-height: 1.4; text-align: center; color: var(--muted); }
+    &__content figure[data-figure=page] { max-width: 100%; margin-block: 0; padding-block: 8px; }
+    &[data-mode=paged] &__content figure[data-figure=page] { height: 100%; break-before: column; break-after: column; box-sizing: border-box; }
+    &[data-mode=paged] &__content figure[data-figure=page] img { max-height: calc(100% - 1.8em); }
+    &[data-mode=paged] &__content figure[data-figure=wide] img, &[data-mode=paged] &__content img[data-figure=wide] { max-height: 80cqh; }
+    &[data-mode=scroll] &__content figure[data-figure=page] img { max-height: 90dvh; }
+    &__content img[data-figure] { margin-inline: auto; }
+    &__content figure[data-figure=original] { margin-block: 1.2em; padding: 14px 18px; border: 1px solid var(--accent-line); border-radius: var(--radius-control); background: var(--accent-soft); text-align: center; cursor: default; }
+    &__content figure[data-figure=original] p { margin: 0; max-width: none; font-size: .9em; }
+    &__content figure[data-figure=original] a { color: var(--accent-text); }
     &__content a { color: inherit; }
     &__content table { border-collapse: collapse; }
     &__content td, &__content th { border: 1px solid var(--border); padding: 4px 8px; }
@@ -140,8 +155,9 @@
     &__panel p { margin: 0; font-size: 12px; }
     &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
     &__choices [aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    &__bookmarks { display: grid; gap: 10px; &[hidden] { display: none; } h3 { margin: 0; font-size: 13px; } }
     &__notes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-    &__note { display: grid; gap: 4px; }
+    &__note { display: grid; gap: 4px; > .button { justify-self: start; } }
     &__note-text { margin: 0; color: var(--muted); font-size: 14px; white-space: pre-wrap; }
     &__note-quote { color: inherit; }
     &__toolbar, &__popover { position: fixed; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; max-width: min(22rem, calc(100vw - 16px)); padding: 8px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); &[hidden] { display: none; } }

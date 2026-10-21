@@ -31,8 +31,8 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Eleven workers and the sampler. The queue and the downloads a restart interrupts start at once, every other job has its own offset.
-            Assert.AreEqual(12, Enum.GetValues<WorkerGroupType>().Length);
+            // Twelve workers and the sampler. The queue and the downloads a restart interrupts start at once, every other job has its own offset.
+            Assert.AreEqual(13, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
@@ -44,7 +44,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(delayed.All(job => job.StartDelay < TimeSpan.FromMinutes(5)));
 
             // Heavy jobs wait while Jularr is used, downloads never do.
-            foreach (var key in new[] { "trickplay", "recognition", "scanScheduling", "plexSync", "mediaServerSync", "aniListMatching" })
+            foreach (var key in new[] { "trickplay", "recognition", "readingCopies", "scanScheduling", "plexSync", "mediaServerSync", "aniListMatching" })
             {
                 Assert.IsTrue(WorkerJobs.Definition(key).PausesWhileUsedByDefault, key);
             }
@@ -268,7 +268,7 @@ namespace Jularr.Backend.Tests
             using var useDownloads = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/jobs/downloads/use", new WorkerJobUseDataV1(true));
             Assert.AreEqual(HttpStatusCode.BadRequest, useDownloads.StatusCode);
 
-            // A failure shows on the page, in Activity and as a notice that links to the page.
+            // A failure shows on the page, in Activity (its panel links to the page) and as a notice.
             var runner = host.Services.GetRequiredService<WorkerJobRunner>();
             time.Now = Start.AddHours(2);
             Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("subtitles", (_, _) => throw new InvalidOperationException("No provider."), default));
@@ -283,7 +283,7 @@ namespace Jularr.Backend.Tests
             var notice = items.Single(item => item.OperationTypeId == OperationType.Job);
             Assert.AreEqual("subtitles", notice.Title);
             Assert.AreEqual("internal_error", notice.ReasonKey);
-            using var activityPage = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            using var activityPage = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?operation=" + notice.Id);
             var activityHtml = await activityPage.Content.ReadAsStringAsync();
             StringAssert.Contains(activityHtml, "Open Jobs");
 

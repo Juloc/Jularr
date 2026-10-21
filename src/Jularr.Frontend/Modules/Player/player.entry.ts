@@ -1,6 +1,7 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
 import { keepAddress, pushAddress, releaseAddress, visit } from "../Navigation/PageSwap";
+import { activeMarker, chapterIndexAt, markerKey, modeFor, parseMarkers, parseMode, shouldAutoSkip, skipPlan, type Marker } from "./Skip";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -8,6 +9,7 @@ interface PlaybackPlan {
     playbackModeTypeId: number;
     streamUrl: string;
     resumePositionMs: number;
+    isReduced?: boolean;
 }
 
 const Modes = ["", "DirectPlay", "Remux", "Transcode"];
@@ -86,6 +88,20 @@ async function start(player: HTMLElement): Promise<void> {
     let quality: number | null = null;
     let countdown = 0;
     const next = player.querySelector<HTMLElement>("[data-role=next]")!;
+
+    // Skippable stretches come with the page, so a new plan (another quality or audio track) keeps them.
+    const markers = parseMarkers(player.dataset.markers);
+    const introMode = parseMode(player.dataset.skipIntro);
+    const outroMode = parseMode(player.dataset.skipOutro);
+    const skip = player.querySelector<HTMLButtonElement>("[data-action=skip]")!;
+    const skipped = player.querySelector<HTMLElement>("[data-role=skipped]")!;
+    const chapters = Array.from(player.querySelectorAll<HTMLButtonElement>("[data-chapter]"));
+    const handled = new Set<string>();
+    let offered: Marker | null = null;
+    let currentChapter = -1;
+    let undoPosition: number | null = null;
+    let skippedTimer = 0;
+    let leaving = false;
     const settings = player.querySelector<HTMLElement>('#player-settings')!;
     const sidebar = player.querySelector<HTMLElement>('#player-sidebar');
     const narrow = matchMedia('(max-width: 1100px)');
@@ -237,7 +253,9 @@ async function start(player: HTMLElement): Promise<void> {
             });
             if (response.ok) {
                 status.hidden = true;
-                return await response.json() as PlaybackPlan;
+                const planned = await response.json() as PlaybackPlan;
+                if (planned.isReduced) notice("playback_reduced");
+                return planned;
             }
 
             const code = await errorCode(response);
@@ -277,7 +295,11 @@ async function start(player: HTMLElement): Promise<void> {
                     }
                 }
             });
-            instance.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
+            instance.on(Hls.Events.ERROR, (_, data) => {
+                // A conversion stopped for room answers Gone; the server says which.
+                if (data.response?.code === 410) instance.destroy();
+                if (data.fatal || data.response?.code === 410) void failure();
+            });
             instance.loadSource(next.streamUrl);
             instance.attachMedia(video);
             hls = instance;
@@ -345,7 +367,7 @@ async function start(player: HTMLElement): Promise<void> {
         track.track.mode = "showing";
     }
 
-    video.addEventListener("error", () => { stopLoading(); show("failed"); });
+    video.addEventListener("error", () => void failure());
     video.addEventListener("waiting", () => { if (!video.paused) showLoading(); });
     video.addEventListener("stalled", () => { if (!video.paused) showLoading(); });
     video.addEventListener("seeking", () => { if (!video.paused) showLoading(); });
@@ -362,7 +384,74 @@ async function start(player: HTMLElement): Promise<void> {
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
         const currentProgress = player.querySelector<HTMLProgressElement>('.episode-card[aria-current=true] progress');
         if (currentProgress && Number.isFinite(video.duration)) { currentProgress.max = video.duration; currentProgress.value = video.currentTime; }
+        offerSkip();
+        markChapter();
     });
+
+    // A Skip button while playback is inside a stretch the profile wants offered; Automatic skips once on arrival and says so with a way back.
+    function offerSkip(): void {
+        const marker = leaving || !sourceReady || player.classList.contains("player--mini") ? null : activeMarker(markers, video.currentTime, introMode, outroMode);
+        if (marker && modeFor(marker.kind, introMode, outroMode) === "Automatic" && shouldAutoSkip(marker, video.currentTime, handled)) {
+            handled.add(markerKey(marker));
+            skipMarker(marker, true);
+            return;
+        }
+        if (marker === offered) return;
+        offered = marker;
+        skip.hidden = !marker;
+        if (marker) skip.querySelector<HTMLElement>("[data-role=skip-text]")!.textContent = text("data-skip-label", marker.kind);
+    }
+
+    // Jump to the end of the stretch, or to the next episode where credits run out and it follows by itself.
+    function skipMarker(marker: Marker, automatic: boolean): void {
+        handled.add(markerKey(marker));
+        skip.hidden = true;
+        offered = null;
+        const hasNext = !!player.querySelector("[data-action=next][data-href]");
+        const plan = skipPlan(marker, video.duration, hasNext, autoplay);
+        const from = video.currentTime;
+        if (plan.type === "next") {
+            if (!automatic) { go("next"); return; }
+            // The note is the chance to cancel before the next episode opens.
+            leaving = true;
+            announceSkip(text("data-skipped-label", "Next"), null);
+            skippedTimer = window.setTimeout(() => { hideSkipped(); go("next"); }, 5_000);
+            return;
+        }
+        video.currentTime = plan.to;
+        if (automatic) announceSkip(text("data-skipped-label", marker.kind), from);
+    }
+
+    function announceSkip(text: string, position: number | null): void {
+        clearTimeout(skippedTimer);
+        undoPosition = position;
+        skipped.querySelector<HTMLElement>("[data-role=skipped-text]")!.textContent = text;
+        skipped.hidden = false;
+        skippedTimer = window.setTimeout(hideSkipped, 6_000);
+    }
+
+    function hideSkipped(): void {
+        clearTimeout(skippedTimer);
+        leaving = false;
+        skipped.hidden = true;
+        undoPosition = null;
+    }
+
+    function undoSkip(): void {
+        const position = undoPosition;
+        hideSkipped();
+        if (position !== null) video.currentTime = position;
+    }
+
+    // The chapter playing is marked in the menu.
+    function markChapter(): void {
+        if (chapters.length === 0) return;
+        const index = chapterIndexAt(chapters.map(chapter => ({ start: Number(chapter.dataset.chapter) })), video.currentTime);
+        if (index === currentChapter) return;
+        currentChapter = index;
+        chapters.forEach((chapter, position) => chapter.setAttribute("aria-pressed", String(position === index)));
+    }
+
     video.addEventListener("volumechange", () => {
         volume.value = String(video.muted ? 0 : video.volume);
         volume.style.setProperty('--played', `${Number(volume.value) * 100}%`);
@@ -413,6 +502,8 @@ async function start(player: HTMLElement): Promise<void> {
         close: () => void minimize(),
         'next-now': () => { const href = next.dataset.href; stopCountdown(); if (href) location.assign(href); },
         'next-cancel': stopCountdown,
+        skip: () => { if (offered) skipMarker(offered, false); },
+        'skip-undo': undoSkip,
         previous: () => go("previous"),
         next: () => go("next"),
         minimize: () => void minimize(),
@@ -427,6 +518,13 @@ async function start(player: HTMLElement): Promise<void> {
             settings.querySelector<HTMLElement>('[role=tab][aria-selected=true]')!.focus();
             return;
         }
+        const chapter = target.closest<HTMLButtonElement>("[data-chapter]");
+        if (chapter) {
+            video.currentTime = Number(chapter.dataset.chapter);
+            settings.hidePopover();
+            return;
+        }
+
         const audio = target.closest<HTMLButtonElement>("[data-audio]");
         if (audio && !audio.disabled && !switching) {
             void replan(Number(audio.dataset.audio), quality).then(success => { if (success) choose('data-audio', audio); });
@@ -584,6 +682,29 @@ async function start(player: HTMLElement): Promise<void> {
         stopLoading();
         status.textContent = text("data-status", code) || text("data-status", "failed");
         status.hidden = false;
+    }
+
+    // A message that goes away by itself.
+    function notice(code: string): void {
+        show(code);
+        const shown = status.textContent;
+        window.setTimeout(() => { if (status.textContent === shown) status.hidden = true; }, 8_000);
+    }
+
+    // A conversion the server stopped to make room says so; anything else is a plain failure.
+    async function failure(): Promise<void> {
+        stopLoading();
+        if (!plan || plan.playbackModeTypeId === 1) {
+            show("failed");
+            return;
+        }
+
+        try {
+            const response = await fetch(plan.streamUrl, { credentials: "same-origin" });
+            show(response.ok ? "failed" : await errorCode(response));
+        } catch {
+            show("failed");
+        }
     }
 
     function text(attribute: string, key: string): string {

@@ -128,11 +128,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedTakeoverData : BaseData
     {
-        public WantedTakeoverData(long workId, long? acquisitionProfileId, long? libraryRootId = null)
+        public WantedTakeoverData(long workId, long? acquisitionProfileId, long? libraryRootId = null, bool isPaused = true)
         {
             WorkId = workId;
             AcquisitionProfileId = acquisitionProfileId;
             LibraryRootId = libraryRootId;
+            IsPaused = isPaused;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -144,6 +145,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The library its root folder was matched to.
         [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.Id), false)]
         public long? LibraryRootId { get; }
+
+        // A takeover waits for the Owner; a list import that monitors starts searching.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
+        public bool IsPaused { get; }
     }
 
     internal sealed class WantedItemUpdateData : BaseData
@@ -178,6 +183,34 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long Version { get; }
         [DataField(typeof(AcquisitionPolicyFields), nameof(AcquisitionPolicyFields.TagIds), false)]
         public long[]? TagIds { get; }
+    }
+
+    // Several targets and the priority they take.
+    internal sealed class WantedPriorityData : BaseData
+    {
+        public WantedPriorityData(long[] wantedItemIds, WantedPriorityType wantedPriorityTypeId)
+        {
+            WantedItemIds = wantedItemIds;
+            WantedPriorityTypeId = wantedPriorityTypeId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
+        public long[] WantedItemIds { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedPriorityTypeId))]
+        public WantedPriorityType WantedPriorityTypeId { get; }
+    }
+
+    // The targets whose next search is brought forward to now; none names every target.
+    internal sealed class WantedSearchStartData : BaseData
+    {
+        public WantedSearchStartData(long[] wantedItemIds)
+        {
+            WantedItemIds = wantedItemIds;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
+        public long[] WantedItemIds { get; }
     }
 
     // One unit's, or a season's, monitoring for a wanted Work.

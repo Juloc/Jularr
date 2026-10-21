@@ -5,7 +5,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // An episode with two audio tracks and a subtitle file plays in either language with subtitles; a broken episode stops with a visible failure.
+    // An episode with two audio tracks and a subtitle file plays in either language with subtitles; once the server's conversion limit is reached the player says it is busy; a broken episode stops with a visible failure.
     [TestClass]
     public sealed class TracksTests
     {
@@ -34,7 +34,8 @@ namespace Jularr.E2E.Tests
                 ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg,
-                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg)!
+                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg)!,
+                ["Media:MaxTranscodes"] = "1"
             });
             await using var session = await BrowserSession.StartAsync(jularr);
             var page = session.Page;
@@ -109,6 +110,85 @@ namespace Jularr.E2E.Tests
                 await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues?.length > 0)");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
+                // The file's chapters name its intro and credits: a Skip button while the intro plays (the new plan of the audio choice above kept the markers), then the chapter menu.
+                await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.pause(); video.currentTime = 2.5; }");
+                var skip = page.Locator("[data-action=skip]");
+                await Assertions.Expect(skip).ToBeVisibleAsync();
+                await Assertions.Expect(skip).ToHaveTextAsync("Skip intro");
+                await Evidence.SaveAsync(page, "player-skip-button");
+                await skip.ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime >= 5");
+                await Assertions.Expect(skip).ToBeHiddenAsync();
+                await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Chapters", Exact = true }).ClickAsync();
+                var chapters = page.Locator("[data-panel=chapters] [data-chapter]");
+                Assert.AreEqual(4, await chapters.CountAsync());
+                CollectionAssert.AreEqual(new[] { "Cold open", "Opening", "Part A", "End Credits" }, (await chapters.Locator("span:first-child").AllTextContentsAsync()).ToArray());
+                await Assertions.Expect(chapters.Nth(2)).ToHaveAttributeAsync("aria-pressed", "true");
+                await Evidence.SaveAsync(page, "player-chapters-menu");
+                await chapters.Nth(1).ClickAsync();
+                await page.WaitForFunctionAsync("() => { const time = document.querySelector('video').currentTime; return time >= 2 && time < 3; }");
+                await Assertions.Expect(page.Locator("#player-settings")).ToBeHiddenAsync();
+
+                // Automatic skipping jumps by itself and says so; credits that run to the end open the next episode after a pause that Undo cancels.
+                var antiforgery = await page.Locator(".player").GetAttributeAsync("data-antiforgery");
+                var saved = await page.EvaluateAsync<bool>("""
+                    async token => (await fetch('/api/v1/playback/preferences', { method: 'PUT', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', RequestVerificationToken: token },
+                        body: JSON.stringify({ audioLanguage: null, subtitleLanguage: null, subtitleModeTypeId: 4, speed: 1, autoplayNext: true, introSkipModeTypeId: 3, outroSkipModeTypeId: 3 }) })).ok
+                    """, antiforgery);
+                Assert.IsTrue(saved, "The automatic skip choice was not saved.");
+                await page.ReloadAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
+                await page.EvaluateAsync("() => { const video = document.querySelector('video'); video.pause(); video.currentTime = 2.2; }");
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime >= 5 && !document.querySelector('[data-role=skipped]').hidden");
+                await Assertions.Expect(page.Locator("[data-role=skipped-text]")).ToHaveTextAsync("Intro skipped");
+                await Evidence.SaveAsync(page, "player-skipped-toast");
+                await page.Locator("[data-action=skip-undo]").ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime < 3");
+                await Assertions.Expect(page.Locator("[data-role=skipped]")).ToBeHiddenAsync();
+                await Assertions.Expect(skip).ToBeVisibleAsync();
+                var playerUrl = page.Url;
+                await page.EvaluateAsync("() => { document.querySelector('video').currentTime = 8.2; }");
+                await Assertions.Expect(page.Locator("[data-role=skipped-text]")).ToHaveTextAsync("Next episode starts");
+                await page.Locator("[data-action=skip-undo]").ClickAsync();
+                await page.WaitForTimeoutAsync(5500);
+                Assert.AreEqual(playerUrl, page.Url, "The next episode opened although the skip was undone.");
+                // The first track plays directly and needs no room, which also gives back the conversion of the second one.
+                if (!await page.Locator("#player-settings").IsVisibleAsync()) await page.Locator("[data-action=settings]").ClickAsync();
+                await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
+                var direct = await page.RunAndWaitForResponseAsync(() => audio.Nth(0).ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(200, direct.Status);
+
+                // The server allows one 1080p conversion, so only four of these small ones fit; the one after finds no room.
+                var started = new List<string>();
+                var refusal = "";
+                for (var attempt = 0; attempt < 8 && refusal == ""; attempt++)
+                {
+                    var (code, body) = await StartConversionAsync(page);
+                    if (code == 200) started.Add(JsonDocument.Parse(body).RootElement.GetProperty("playbackSessionId").GetString()!);
+                    else refusal = body;
+                }
+
+                StringAssert.Contains(refusal, "playback_capacity_exhausted");
+                Assert.AreEqual(4, started.Count, started.Count + " conversions started before the limit.");
+
+                // The second track needs a conversion, which the server refuses, and the player says so.
+                var refused = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(503, refused.Status);
+                var busy = page.Locator("[data-role=status]");
+                await Assertions.Expect(busy).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual(await page.Locator("[data-status=playback_capacity_exhausted]").TextContentAsync(), await busy.TextContentAsync());
+                Assert.AreEqual("Server busy: transcoding is unavailable right now.", await busy.TextContentAsync());
+                await Evidence.SaveAsync(page, "player-server-busy");
+
+                // The refusals are the only server errors; ending the other sessions gives the room back.
+                Assert.IsTrue(session.Problems.All(problem => problem.Contains("503", StringComparison.Ordinal)), string.Join("\n", session.Problems));
+                session.Problems.Clear();
+                foreach (var id in started) await EndSessionAsync(page, id);
+
                 // The broken file stops with the player's general failure, not silently.
                 await page.GotoAsync(details);
                 await brokenEpisode.ClickAsync();
@@ -123,6 +203,35 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "tracks");
                 throw;
             }
+        }
+
+        // Asks for a conversion the way the player does, for a browser that plays H.264 and AAC from HLS only.
+        private static async Task<(int Status, string Body)> StartConversionAsync(IPage page)
+        {
+            var answer = await page.EvaluateAsync<JsonElement>("""
+                async () => {
+                    const player = document.querySelector('.player');
+                    const response = await fetch(player.dataset.startUrl, { method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', RequestVerificationToken: player.dataset.antiforgery },
+                        body: JSON.stringify({ containers: ['hls'], videoCodecs: ['h264'], audioCodecs: ['aac'], audioStreamIndex: null, quality: null }) });
+                    return { status: response.status, body: await response.text() };
+                }
+                """);
+            return (answer.GetProperty("status").GetInt32(), answer.GetProperty("body").GetString()!);
+        }
+
+        private static async Task EndSessionAsync(IPage page, string sessionId)
+        {
+            var status = await page.EvaluateAsync<int>("""
+                async id => {
+                    const player = document.querySelector('.player');
+                    const response = await fetch(player.dataset.sessionUrl + id, { method: 'PUT', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', RequestVerificationToken: player.dataset.antiforgery },
+                        body: JSON.stringify({ positionMs: 0, durationMs: null, isEnded: true, isCompleted: false }) });
+                    return response.status;
+                }
+                """, sessionId);
+            Assert.AreEqual(200, status);
         }
 
         // The download monitor imports one episode after the other.
@@ -176,8 +285,13 @@ namespace Jularr.E2E.Tests
         {
             Directory.CreateDirectory(folder);
             await File.WriteAllTextAsync(Path.Combine(folder, name + ".en.srt"), "1\n00:00:00,000 --> 00:00:09,000\nHello from the subtitle file.\n");
+
+            // Four chapters; the second is the opening and the last the credits.
+            var chapters = Path.Combine(Path.GetDirectoryName(folder)!, name + ".chapters.txt");
+            await File.WriteAllTextAsync(chapters, ";FFMETADATA1\n" + string.Concat(new[] { (0, 2000, "Cold open"), (2000, 5000, "Opening"), (5000, 8000, "Part A"), (8000, 10000, "End Credits") }
+                .Select(chapter => $"[CHAPTER]\nTIMEBASE=1/1000\nSTART={chapter.Item1}\nEND={chapter.Item2}\ntitle={chapter.Item3}\n")));
             using var process = Process.Start(new ProcessStartInfo(ffmpeg, ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=24:duration=10",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-f", "lavfi", "-i", "sine=frequency=660:duration=10",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-f", "lavfi", "-i", "sine=frequency=660:duration=10", "-i", chapters, "-map_metadata", "3", "-map_chapters", "3",
                 "-map", "0", "-map", "1", "-map", "2", "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "200k", "-c:a", "libopus",
                 "-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=ger", "-shortest", "-y", Path.Combine(folder, name + ".webm")])
             { RedirectStandardError = true })!;

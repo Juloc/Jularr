@@ -13,8 +13,8 @@ namespace Jularr.Backend.Data.User.Playback.V1
     // The profile's playback choices and how the asking device plays.
     public sealed class PlaybackPreferencesV1 : BaseResponse
     {
-        public PlaybackPreferencesV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, string profileLanguage,
-            PlaybackQuality deviceQuality, bool autoplayPreviews = true)
+        public PlaybackPreferencesV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, SkipMode introSkipModeTypeId,
+            SkipMode outroSkipModeTypeId, string profileLanguage, PlaybackQuality deviceQuality, bool autoplayPreviews = true)
         {
             AutoplayPreviews = autoplayPreviews;
             AudioLanguage = audioLanguage;
@@ -22,6 +22,8 @@ namespace Jularr.Backend.Data.User.Playback.V1
             SubtitleModeTypeId = subtitleModeTypeId;
             Speed = speed;
             AutoplayNext = autoplayNext;
+            IntroSkipModeTypeId = introSkipModeTypeId;
+            OutroSkipModeTypeId = outroSkipModeTypeId;
             ProfileLanguage = profileLanguage;
             DeviceQuality = deviceQuality;
         }
@@ -43,6 +45,13 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
 
+        // What happens at an intro or recap, and at credits or a preview.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode IntroSkipModeTypeId { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode OutroSkipModeTypeId { get; }
+
         // Whether a card that lingers on a touch device plays its preview by itself.
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
         public bool AutoplayPreviews { get; }
@@ -58,7 +67,8 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class SavePlaybackPreferencesDataV1 : BaseData
     {
-        public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, bool autoplayPreviews = true)
+        public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, SkipMode introSkipModeTypeId,
+            SkipMode outroSkipModeTypeId, bool autoplayPreviews = true)
         {
             AutoplayPreviews = autoplayPreviews;
             AudioLanguage = audioLanguage;
@@ -66,6 +76,8 @@ namespace Jularr.Backend.Data.User.Playback.V1
             SubtitleModeTypeId = subtitleModeTypeId;
             Speed = speed;
             AutoplayNext = autoplayNext;
+            IntroSkipModeTypeId = introSkipModeTypeId;
+            OutroSkipModeTypeId = outroSkipModeTypeId;
         }
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
@@ -83,6 +95,13 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
 
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode IntroSkipModeTypeId { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode OutroSkipModeTypeId { get; }
+
+        // Whether a card that lingers on a touch device plays its preview by itself.
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
         public bool AutoplayPreviews { get; }
     }

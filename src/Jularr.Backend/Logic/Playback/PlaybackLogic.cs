@@ -67,6 +67,17 @@ namespace Jularr.Backend.Logic.Playback
             };
         }
 
+        // The picture height a conversion delivers; unknown when the file's own is unknown and no cap applies. Copied video keeps its own.
+        public static int? ConversionHeight(IReadOnlyList<PlaybackTrackData> tracks, PlaybackConversion conversion)
+        {
+            var height = Select(tracks, MediaTrackType.Video)?.Height;
+            return height is { } own && conversion.MaxHeight is { } cap ? Math.Min(own, cap) : height ?? conversion.MaxHeight;
+        }
+
+        // What a conversion takes of the server's budget: re-encoded video by its picture height, everything else nothing.
+        public static int ConversionWeight(IReadOnlyList<PlaybackTrackData> tracks, PlaybackConversion conversion) =>
+            conversion.CopyVideo || Select(tracks, MediaTrackType.Video) is null ? 0 : TranscodeAdmissionLogic.Weight(ConversionHeight(tracks, conversion));
+
         public static async Task<Guid> CreatePlaybackSessionAsync(this LogicContext ctx, PlaybackSessionCreationData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -75,7 +86,7 @@ namespace Jularr.Backend.Logic.Playback
                 INSERT INTO
                     "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "PositionMs")
                 VALUES
-                    (gen_random_uuid(), @ProfileId, @MediaAssetId, @StoredFileId, @PlaybackModeTypeId, @PositionMs)
+                    (@PublicId, @ProfileId, @MediaAssetId, @StoredFileId, @PlaybackModeTypeId, @PositionMs)
                 RETURNING
                     "PublicId";
                 """;

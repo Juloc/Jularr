@@ -238,6 +238,27 @@ namespace Jularr.Backend.Logic.Library
                     WHERE
                         note."MediaAssetId" = retired."EarlierMediaAssetId"
                 ),
+                bookmarks AS (
+                    UPDATE
+                        "ReadingBookmarks" AS bookmark
+                    SET
+                        "MediaAssetId" = retired."NewMediaAssetId"
+                    FROM
+                        retired
+                    WHERE
+                        bookmark."MediaAssetId" = retired."EarlierMediaAssetId"
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "ReadingBookmarks" AS existing
+                            WHERE
+                                existing."ProfileId" = bookmark."ProfileId"
+                                AND existing."MediaAssetId" = retired."NewMediaAssetId"
+                                AND existing."SectionIndex" = bookmark."SectionIndex"
+                                AND existing."Block" = bookmark."Block"
+                        )
+                ),
                 removed AS (
                     DELETE FROM
                         "StoredFiles" AS file
