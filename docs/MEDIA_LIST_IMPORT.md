@@ -31,9 +31,9 @@ The example file (all eight types) is offered on the page and in
 
 ## Flow
 
-1. Upload a `.json` file or paste the list, choose how titles are added (add only, monitor, monitor and search).
-2. Preview, nothing changes: each row is New (a provider entry would be added), In library, Duplicate (same title as an earlier row), Open or Invalid with its reason. Per row: include, the candidate for an open row (or another search by title), the action, quality profile and library. Defaults per kind of title are offered where there is a choice.
-3. Import selected: rows are written one by one, each its own step. A report lists every row's outcome. At most 40 titles that are new to the library are read from their providers per run; the rest is reported as waiting and offered as a list of its own (Continue).
+1. Choose a `.json` file in the file input (drop zone, name, size, remove) or paste the list, and choose how titles are added (add only, monitor, monitor and search). The page offers the example as a download and as a sample to copy.
+2. Preview, nothing changes: each row is New (a provider entry would be added), In library, Duplicate (same title as an earlier row), Open or Invalid with its reason. Per row: include (a switch; Select all switches every row), the candidate for an open row (or another search by title), the action, quality profile and library. Defaults per kind of title are offered where there is a choice.
+3. Import selected: rows are written one by one, each its own step. A report lists every row's outcome. At most 40 titles that are new to the library are read from their providers per run; the rest is reported as waiting and offered as a list of its own (Continue with the rest), which keeps the defaults and each waiting row's own action, profile and library.
 
 ## Matching
 

@@ -1,0 +1,117 @@
+// The file input of the import mockup: a dashed drop zone with an icon tile, a title, the limits and the soft button; the chosen file is
+// a lavender row with its name, size and a remove button. Without script the native field shows instead, styled like the fields.
+.file-input {
+    position: relative;
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+
+    &__native {
+        width: 100%;
+        min-height: var(--field-height);
+        padding: 0 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-field);
+        background: var(--field);
+        color: var(--text);
+        font-size: var(--text-body);
+
+        &::file-selector-button {
+            height: var(--control-height-compact);
+            margin: 0 12px 0 0;
+            padding: 0 14px;
+            border: 0;
+            border-radius: var(--radius-control);
+            background: var(--accent-soft);
+            color: var(--accent-text);
+            font: inherit;
+            font-size: var(--text-control);
+            font-weight: var(--weight-control);
+            cursor: pointer;
+        }
+
+        &:focus-visible { outline: none; border-color: var(--accent-outline); }
+        &[aria-invalid="true"] { border-color: var(--danger); }
+    }
+
+    &__zone,
+    &__file { display: none; }
+
+    // The field behind the zone only opens the dialog; it stays reachable for assistive technology and is the form's value.
+    &[data-file-ready] &__native {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    &[data-file-ready] &__zone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 26px 20px;
+        border: 1.5px dashed var(--accent-edge);
+        border-radius: var(--radius-panel);
+        background: linear-gradient(130deg, color-mix(in srgb, var(--field) 50%, var(--surface)), color-mix(in srgb, var(--accent-soft) 60%, var(--surface)));
+        text-align: center;
+        transition: border-color var(--transition), background-color var(--transition);
+    }
+
+    &[data-file-ready]:hover &__zone,
+    &--dragging &__zone { border-color: var(--accent); background: var(--accent-soft); }
+    &[data-file-ready]:has(&__native:focus-visible) &__zone { border-color: var(--accent); }
+
+    &__tile {
+        display: grid;
+        place-items: center;
+        width: 54px;
+        height: 54px;
+        margin-bottom: 6px;
+        border-radius: var(--radius-tile);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        color: var(--accent);
+    }
+
+    &__title {
+        max-width: 100%;
+        overflow: hidden;
+        font-size: var(--text-heading);
+        font-weight: var(--weight-heading);
+        letter-spacing: -.3px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__limit {
+        max-width: 100%;
+        margin-bottom: 8px;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: var(--text-control);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &[data-file-ready] &__file:not([hidden]) {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 8px 7px 14px;
+        border-radius: var(--radius-inner);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-size: var(--text-body);
+        font-weight: 700;
+    }
+
+    &__name { flex: 1; }
+    &__size { flex: none; color: var(--muted); font-size: var(--text-control); font-weight: 600; }
+    &__error { margin: 0; }
+}
