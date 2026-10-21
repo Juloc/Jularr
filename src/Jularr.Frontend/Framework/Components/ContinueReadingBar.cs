@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Framework
                     .Attribute("aria-label", texts["media.readProgress"]).Class("continue-bar__progress"));
             }
 
-            IUiComponent cover = posterUrl is null ? new Icon("reading", assets) : new MediaImage(posterUrl, "", 92, 138);
+            var cover = MediaImage.Or(assets, posterUrl, "", 92, 138);
             // Cover and title continue as well; the action is the one keyboard stop.
             children.Add(new A(new Span(cover).Class("continue-bar__cover"), new Span([.. details]).Class("continue-bar__details"))
                 .Class("continue-bar__identity").Attribute("href", href).Attribute("tabindex", "-1").Attribute("aria-hidden", "true"));

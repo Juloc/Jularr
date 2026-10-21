@@ -419,9 +419,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             new Div(
                 new A(new Icon("chevron-left", assets)).Class("button button--icon").Attribute("aria-label", texts["common.back"])
                     .Attribute("href", "/Details/" + workId.ToString(CultureInfo.InvariantCulture)),
-                new A(_work?.PosterUrl is { } cover
-                    ? new MediaImage(cover, "", 28, 40, priority: true)
-                    : new Icon("reading", assets)).Class("reader__cover").Attribute("href", "/Details/" + workId.ToString(CultureInfo.InvariantCulture))
+                new A(MediaImage.Or(assets, _work?.PosterUrl, "", 28, 40, priority: true)).Class("reader__cover").Attribute("href", "/Details/" + workId.ToString(CultureInfo.InvariantCulture))
                         .Attribute("aria-label", title),
                 new Div(new H1(new ValueText(title)).Class("reader__title").Attribute("id", "reader-document-title"), new P(new ValueText(chapter)).Class("reader__chapter")).Class("reader__heading")).Class("reader__identity"),
             chapters ?? new Span(), new Nav(tools).Class("reader__tools"))
