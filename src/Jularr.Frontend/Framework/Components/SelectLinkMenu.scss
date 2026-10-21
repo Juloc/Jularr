@@ -14,16 +14,16 @@
         background: var(--surface);
         color: var(--text);
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: var(--text-control);
+        font-weight: var(--weight-control);
         list-style: none;
         white-space: nowrap;
 
         &::-webkit-details-marker { display: none; }
-        &:hover { border-color: var(--accent); }
+        &:hover { border-color: var(--accent-outline); color: var(--accent-text); }
     }
 
-    &[open] &__button { border-color: var(--accent); }
+    &[open] &__button { border-color: var(--accent-outline); }
 
     &__list {
         position: absolute;
@@ -34,17 +34,17 @@
         gap: 2px;
         min-width: 210px;
         padding: 6px;
-        border: 1px solid var(--accent-line);
-        border-radius: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
         background: var(--surface);
-        box-shadow: 0 14px 35px light-dark(rgb(32 19 58 / 14%), rgb(0 0 0 / 45%));
+        box-shadow: var(--shadow-overlay);
     }
 
     &__item {
         padding: 11px 12px;
-        border-radius: 10px;
+        border-radius: var(--radius-small);
         color: var(--text);
-        font-size: 12px;
+        font-size: var(--text-body);
         text-decoration: none;
 
         &:hover,
