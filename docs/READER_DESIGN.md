@@ -94,6 +94,23 @@ Images retain `p<page>`, solitary covers/wide pages, bounded preloading and a
 image's bottom, not merely entering that image. Scanned PDFs without prepared text
 retain the native browser viewer, without fabricated progress.
 
+## Figures
+
+A picture worth its own room is a figure, in the reader and in the EPUB download alike
+(`<figure data-figure>`, `epub:type="figure"`, the caption as `figcaption` and the
+alternative text): `page` fills a page of its own (paged views break before and after
+it; scroll views show it up to 90 % of the screen height), `wide` takes the width of
+the text; small decoration stays in the line. A PDF page that is mainly a large picture,
+a vector drawing (as an SVG that keeps its labels), a table or an irregular multi-column
+layout becomes such a figure instead of a tiny inline picture; EPUB pictures become
+figures by their declared kind or their size. A tap or click, Enter or Space on a figure
+opens the full-screen view (`dialog.reader-figure`): the picture fits the screen; wheel,
+pinch, double tap and the three buttons zoom, dragging moves a zoomed picture, Escape or
+a tap on the empty stage closes it. On the printed pages of the book view the figure is
+found by position, because those pages take no pointer events. A page only the original
+PDF can show stands in the text as a one-line note with a link to its page and is left
+out of the EPUB. The figure's look follows the global tokens; the cursor is `zoom-in`.
+
 ## Bounded whole-book measurement
 
 `BookPages.ts` reuses the current chapter and existing authorized section reads.

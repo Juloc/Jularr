@@ -166,4 +166,52 @@ CREATE TABLE "ReadingRecognitions" (
     "FailedAt" timestamptz
 );
 
+-- The reading copy of a PDF: an EPUB written beside it when that clearly helps. One row per PDF; a changed PDF or a newer analyzer converts it again.
+-- Preparing is a running or interrupted attempt, Ready a written copy, Declined a PDF that stays as it is (scan, mostly pictures, unreliable text), Failed an error retried later.
+CREATE TABLE "ReadingDerivationStatusTypes" (
+    "Id" smallint PRIMARY KEY,
+    "Key" varchar(32) NOT NULL UNIQUE
+);
+INSERT INTO "ReadingDerivationStatusTypes" ("Id", "Key") VALUES (1, 'Preparing'), (2, 'Ready'), (3, 'Declined'), (4, 'Failed');
+
+CREATE TABLE "ReadingDerivations" (
+    "StoredFileId" bigint NOT NULL PRIMARY KEY REFERENCES "StoredFiles" ("Id") ON DELETE CASCADE,
+    "SourceSizeBytes" bigint NOT NULL CHECK ("SourceSizeBytes" >= 0),
+    "SourceModifiedAt" timestamptz NOT NULL,
+    "SourceSha256" bytea NULL CHECK (length("SourceSha256") = 32),
+    "AnalyzerVersion" integer NOT NULL CHECK ("AnalyzerVersion" > 0),
+    "ReadingDerivationStatusTypeId" smallint NOT NULL REFERENCES "ReadingDerivationStatusTypes" ("Id"),
+    "Reason" varchar(32) NULL,
+    "EbookStoredFileId" bigint NULL REFERENCES "StoredFiles" ("Id") ON DELETE SET NULL,
+    "Pages" integer NULL CHECK ("Pages" >= 0),
+    "Chapters" integer NULL CHECK ("Chapters" >= 0),
+    "Figures" integer NULL CHECK ("Figures" >= 0),
+    "Attempts" smallint NOT NULL DEFAULT 1 CHECK ("Attempts" > 0),
+    "AttemptedAt" timestamptz NOT NULL DEFAULT now(),
+    "FinishedAt" timestamptz NULL
+);
+CREATE UNIQUE INDEX "UX_ReadingDerivations_Ebook" ON "ReadingDerivations" ("EbookStoredFileId") WHERE "EbookStoredFileId" IS NOT NULL;
+
+-- The files a book is read from: every stored file, except a derived EPUB whose copy is not ready or whose PDF has changed since. Readers choose among these.
+CREATE VIEW "ReadableStoredFiles" AS
+SELECT
+    file."Id",
+    file."MediaAssetId",
+    file."LibraryRootId",
+    file."RelativePath",
+    file."SizeBytes",
+    file."ModifiedAt",
+    file."MissingSince",
+    derivation."StoredFileId" IS NOT NULL AS "IsDerived",
+    derivation."AnalyzerVersion" AS "DerivedAnalyzerVersion"
+FROM
+    "StoredFiles" AS file
+    LEFT JOIN "ReadingDerivations" AS derivation ON derivation."EbookStoredFileId" = file."Id"
+    LEFT JOIN "StoredFiles" AS source ON source."Id" = derivation."StoredFileId"
+WHERE
+    derivation."StoredFileId" IS NULL
+    OR derivation."ReadingDerivationStatusTypeId" = 2
+    AND source."SizeBytes" = derivation."SourceSizeBytes"
+    AND source."ModifiedAt" = derivation."SourceModifiedAt";
+
 COMMIT;

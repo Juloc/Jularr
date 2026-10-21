@@ -109,12 +109,10 @@ namespace Jularr.Frontend.Pages.User.Reader
 
             // A converted PDF downloads as EPUB beside the original; a finished translation as its own EPUB.
             var ebook = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/ebook";
+            var originalPdf = new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener");
             IUiComponent[] converted = _source?.ReadingFormatTypeId == ReadingFormatType.Pdf
-                ? [
-                    new A(new Text("reader.download.epub")).Class("button").Attribute("href", ebook).Attribute("download", ""),
-                    new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener")
-                ]
-                : [];
+                ? [new A(new Text("reader.download.epub")).Class("button").Attribute("href", ebook).Attribute("download", ""), originalPdf]
+                : _source?.HasPdf == true ? [originalPdf] : [];
             var downloads = new Div([
                 .. converted,
                 .. document.TranslatedLanguages.Select(code => new A(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["reader.download.translated"], LanguageName(code)))).Class("button")
@@ -148,6 +146,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 More(true, converted.Length > 0 || document.TranslatedLanguages.Length > 0),
                 Toolbar(),
                 Popover(),
+                FigureViewer(),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
                 new P().Class("reader__note").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden")
             ).Class("reader")
@@ -166,7 +165,16 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-note-label", texts["reader.note"])
                 .Attribute("data-query", Query ?? "")
                 .Attribute("data-page-label", texts["reader.pagePosition"])
-                .Attribute("data-animation-failed", texts["reader.animationUnavailable"]);
+                .Attribute("data-animation-failed", texts["reader.animationUnavailable"])
+                .Attribute("data-figure-label", texts["reader.figure.open"]);
+            if (_source?.HasPdf == true)
+            {
+                // A page that only the PDF shows links to it.
+                view.Attribute("data-original-url", "/api/v1/reading/assets/" + asset + "/file")
+                    .Attribute("data-original-label", texts["reader.figure.original"])
+                    .Attribute("data-original-link", texts["reader.originalPdf"]);
+            }
+
             if (_speech is not null)
             {
                 view.Attribute("data-speech-preferences", JsonSerializer.Serialize(_speech, Json))
@@ -200,6 +208,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             {
                 page.Content.Add(new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status"));
             }
+            else if (SmartNote() is { } note)
+            {
+                page.Content.Add(new P(new Text(note)).Class("reader__note").Attribute("role", "status"));
+            }
         }
 
         // The browser's own PDF viewer; the link serves browsers without one.
@@ -210,11 +222,39 @@ namespace Jularr.Frontend.Pages.User.Reader
                 Header(source.Title, "", source.WorkId, [
                     new A(new Text("reader.openPdf")).Class("button").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")
                 ]), new Span(), new Frame().Class("reader__pdf").Attribute("src", file).Attribute("title", source.Title),
-                _status is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span()
+                (_status ?? SmartNote()) is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span()
             ).Class("reader reader--pdf").Attribute("data-format", "pdf");
         }
 
         private sealed class Frame() : HtmlElement("iframe");
+
+        // Where the PDF of this book stands on its way to a reading copy, when the module is on and it matters to the reader.
+        private string? SmartNote() => _source?.ReadingDerivationStatusTypeId switch
+        {
+            ReadingDerivationStatus.Preparing => "reader.smart.preparing",
+            ReadingDerivationStatus.Failed => _source.Reason == "offline" ? "reader.smart.preparing" : "reader.smart.failed",
+            ReadingDerivationStatus.Declined => _source.Reason switch
+            {
+                "pictures" => "reader.smart.declined.pictures",
+                "garbled" => "reader.smart.declined.garbled",
+                "no_text" or "scan" or "original_pages" => "reader.smart.declined.scan",
+                _ => null
+            },
+            _ => null
+        };
+
+        private sealed class Dialog(params IUiComponent[] children) : HtmlElement("dialog", children);
+
+        // The full-screen view of a figure; the script fills it with the picture that was tapped.
+        private IUiComponent FigureViewer() => new Dialog(
+            new Div(
+                new Button(new Icon("zoom-out", assets)).IconOnly(texts["reader.figure.zoomOut"]).Attribute("data-figure-zoom", "out"),
+                new Button(new Icon("zoom-in", assets)).IconOnly(texts["reader.figure.zoomIn"]).Attribute("data-figure-zoom", "in"),
+                new Button(new Icon("fit", assets)).IconOnly(texts["reader.figure.fit"]).Attribute("data-figure-zoom", "fit"),
+                new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-figure-close", "")
+            ).Class("reader-figure__tools"),
+            new Div(new Img().Attribute("alt", "").Class("reader-figure__image")).Class("reader-figure__stage")
+        ).Class("reader-figure").Attribute("aria-label", texts["reader.figure.view"]);
 
         // One page at a time with links that work without the script; the script adds spreads, direction and preloading.
         private IUiComponent ComicView(ReadingDocumentV1 document)
@@ -436,10 +476,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
             }
             catch (ServiceUnavailableException exception) when (_source.ReadingFormatTypeId == ReadingFormatType.Pdf
-                && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing")
+                && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing" or "reading_pdf_unfit")
             {
                 // The browser may still show what Jularr cannot reflow, or not yet.
-                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : null;
+                _status = exception.Code is "reading_pdf_recognizing" or "reading_pdf_unfit" ? "errors." + exception.Code : null;
                 return;
             }
 

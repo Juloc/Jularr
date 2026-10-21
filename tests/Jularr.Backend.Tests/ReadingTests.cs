@@ -275,7 +275,7 @@ namespace Jularr.Backend.Tests
         }
 
         // A plain RGB picture as PNG.
-        private static byte[] Picture(int width, int height)
+        internal static byte[] Picture(int width, int height)
         {
             var raw = new MemoryStream();
             for (var y = 0; y < height; y++)

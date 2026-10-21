@@ -820,6 +820,50 @@
    "Original PDF",
    "Original-PDF"
   ],
+  "reader.smart.preparing": [
+   "A reading copy of this PDF is being prepared in the background.",
+   "Eine Lesekopie dieses PDFs wird im Hintergrund vorbereitet."
+  ],
+  "reader.smart.failed": [
+   "The reading copy of this PDF could not be created. Reading is not affected.",
+   "Die Lesekopie dieses PDFs konnte nicht erstellt werden. Das Lesen bleibt unberührt."
+  ],
+  "reader.smart.declined.scan": [
+   "No reading copy was made: this PDF consists of scanned pages.",
+   "Es wurde keine Lesekopie erstellt: Dieses PDF besteht aus gescannten Seiten."
+  ],
+  "reader.smart.declined.pictures": [
+   "No reading copy was made: this PDF is mostly pictures.",
+   "Es wurde keine Lesekopie erstellt: Dieses PDF besteht überwiegend aus Bildern."
+  ],
+  "reader.smart.declined.garbled": [
+   "No reading copy was made: the text of this PDF is unreliable.",
+   "Es wurde keine Lesekopie erstellt: Der Text dieses PDFs ist unzuverlässig."
+  ],
+  "reader.figure.open": [
+   "Open full screen",
+   "Im Vollbild öffnen"
+  ],
+  "reader.figure.view": [
+   "Figure",
+   "Abbildung"
+  ],
+  "reader.figure.zoomIn": [
+   "Zoom in",
+   "Vergrößern"
+  ],
+  "reader.figure.zoomOut": [
+   "Zoom out",
+   "Verkleinern"
+  ],
+  "reader.figure.fit": [
+   "Fit to screen",
+   "An den Bildschirm anpassen"
+  ],
+  "reader.figure.original": [
+   "Page {0} is only shown in the original PDF.",
+   "Seite {0} wird nur im Original-PDF angezeigt."
+  ],
   "reader.download": [
    "Download",
    "Herunterladen"
@@ -5132,6 +5176,10 @@
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
   ],
+  "instance.module.SmartPdf": [
+   "Prepare EPUB reading copies of PDF books",
+   "EPUB-Lesekopien von PDF-Büchern vorbereiten"
+  ],
   "instance.module.DiscoverCache": [
    "Keep Discover's titles locally",
    "Discover-Titel lokal speichern"
@@ -7635,6 +7683,10 @@
   "errors.reading_pdf_without_text": [
    "This PDF holds scanned pages without text; it opens as a PDF.",
    "Dieses PDF enthält gescannte Seiten ohne Text; es wird als PDF geöffnet."
+  ],
+  "errors.reading_pdf_unfit": [
+   "This PDF is mostly pictures or its text is unreliable; it opens as a PDF.",
+   "Dieses PDF besteht überwiegend aus Bildern oder sein Text ist unzuverlässig; es wird als PDF geöffnet."
   ],
   "errors.reading_translation_incomplete": [
    "This book is not translated into that language in every section yet.",

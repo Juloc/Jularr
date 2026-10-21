@@ -18,6 +18,7 @@ namespace Jularr.Workers
             services.AddHostedService<TrickplayWorker>();
             services.AddHostedService<SubtitleWorker>();
             services.AddHostedService<RecognitionWorker>();
+            services.AddHostedService<DerivationWorker>();
             services.AddHostedService<CatalogWorker>();
             return services;
         }

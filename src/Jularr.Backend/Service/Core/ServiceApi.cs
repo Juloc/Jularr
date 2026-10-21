@@ -225,6 +225,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.TryAddTransient<ReadingContent>();
+            services.TryAddTransient<ReadingDerivation>();
+            services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<SpeechFiles>();
             services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(http => http.Timeout = TimeSpan.FromMinutes(5));
@@ -536,6 +538,13 @@ namespace Jularr.Backend.Service.Core
                 {
                     http.Response.Headers.CacheControl = "private,max-age=3600";
                     http.Response.Headers.XContentTypeOptions = "nosniff";
+
+                    // A vector picture shown on its own runs no script.
+                    if (binary.ContentType.StartsWith("image/svg", StringComparison.OrdinalIgnoreCase))
+                    {
+                        http.Response.Headers.ContentSecurityPolicy = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+                    }
+
                     return Results.Bytes(binary.Bytes, binary.ContentType);
                 }
 

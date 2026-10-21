@@ -721,6 +721,74 @@ namespace Jularr.E2E.Tests
         }
 
         [TestMethod]
+        [Timeout(180_000)]
+        public async Task LocalPdf_PageOfItsOwnPicture_ReadsAsFigureAndOpensFullScreenWithZoom()
+        {
+            using var folders = new Folders("Books");
+            string[] Text(int paragraphs) => [.. Enumerable.Range(1, paragraphs).SelectMany(number => new[] { "Paragraph " + number + " runs across the page like the text of any printed book",
+                "does, line after line, until it ends here.", "" })];
+            Directory.CreateDirectory(Path.Combine(folders.Library, "Books"));
+            Steps.WritePdfWithPlate(Path.Combine(folders.Library, "Books", "plate-book.pdf"), 1, ["Chapter One", "", "", "It is a truth universally acknowledged, that a single man in possession", "of a good fortune.", "", .. Text(14)],
+                [], [.. Text(16)], [.. Text(16)]);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await page.GotoAsync("/Admin/Library");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (true)
+                {
+                    await page.GotoAsync("/Admin/Library/Unmatched");
+                    if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                    Assert.IsTrue(DateTime.UtcNow < deadline, "The local test PDF was not scanned.");
+                    await Task.Delay(500);
+                }
+
+                await page.Locator("form [name=Title]").FillAsync("Plate book");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+
+                // The plate is a figure of its own page, between the chapter's text.
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("of a good fortune", new() { Timeout = 30_000 });
+                Assert.AreEqual("page", await page.Locator("[data-role=content] figure[data-figure]").First.GetAttributeAsync("data-figure"));
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true'");
+
+                // Reading on, the printed figure page opens full screen; it zooms, fits again and closes.
+                const string Visible = "() => { const box = document.querySelector('.reader__page-print img[data-figure]')?.getBoundingClientRect(); return !!box && box.width > 0 && box.left >= 0 && box.right <= innerWidth; }";
+                var turns = 0;
+                while (!await page.EvaluateAsync<bool>(Visible))
+                {
+                    Assert.IsTrue(++turns < 200, "The figure page was not reached.");
+                    await page.Locator("[data-turn='1']").First.ClickAsync();
+                    await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
+                }
+
+                var box = (await page.Locator(".reader__page-print img[data-figure]").First.BoundingBoxAsync())!;
+                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                var view = page.Locator("dialog.reader-figure");
+                await Assertions.Expect(view).ToBeVisibleAsync();
+                Assert.IsTrue(await view.Locator(".reader-figure__image").EvaluateAsync<bool>("image => image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2"));
+                await view.Locator("[data-figure-zoom=in]").ClickAsync();
+                Assert.AreEqual("true", await view.Locator(".reader-figure__stage").GetAttributeAsync("data-zoomed"));
+                await view.Locator("[data-figure-zoom=fit]").ClickAsync();
+                Assert.AreEqual("false", await view.Locator(".reader-figure__stage").GetAttributeAsync("data-zoomed"));
+                await Evidence.SaveAsync(page, "reader-figure-fullscreen");
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(view).ToBeHiddenAsync();
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "reader-figure-fullscreen");
+                throw;
+            }
+        }
+
+        [TestMethod]
         [Timeout(600_000)]
         public async Task PdfBook_FromRequestDownloadAndImportReadsReflowedAndContinues()
         {

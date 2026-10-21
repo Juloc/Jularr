@@ -57,6 +57,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.reading_invalid_file", "This book file cannot be opened."),
             new("errors.translation_unavailable", "Translation files cannot be fetched right now; the book stays in its language."),
             new("errors.reading_pdf_without_text", "This PDF holds scanned pages without text; it opens as a PDF."),
+            new("errors.reading_pdf_unfit", "This PDF is mostly pictures or its text is unreliable; it opens as a PDF."),
             new("errors.reading_translation_incomplete", "This book is not translated into that language in every section yet."),
             new("errors.reading_pdf_recognizing", "The scanned pages are being turned into text; until then the book opens as a PDF."),
             new("errors.ocr_unavailable", "The text recognition models cannot be fetched right now."),
