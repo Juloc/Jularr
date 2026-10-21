@@ -130,12 +130,11 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   groups fields in a titled panel under one save; `Form.ChoiceTable` shows options as rows
   and several fields as checkbox or radio columns (a quality ladder). Pages do not
   restyle form grids.
-- Owner's decision 15 Oct: no grey surfaces. Panels and tables are white (dark surface in
-  dark mode) with an accent-tinted outline (`--accent-line`); section titles and table heads
-  are bold in the accent text colour on `--accent-soft`; labels use the text colour.
-  Owner's decision 20 Oct: the light page background is white too, and the shell (sidebar, header, search, floating bar)
-  separates with 1px lines in the quiet `--line` token instead of shadows or filled panels; the current place uses
-  `--accent-soft` with `--accent-text`.
+- Owner's decision 15 Oct (look overridden 20 Oct by the mockups): no grey surfaces. Panels, tables and fields are white
+  (dark surface in dark mode) or the soft lavender `--field`, outlined by the one quiet 1px `--border`; section titles are bold in the
+  text colour, table heads are muted bold on `--field`; accent tints (`--accent-soft`, `--accent-outline`) mark hover and selection only.
+  The shell (sidebar, header, search, floating bar) separates with the same 1px line instead of shadows or filled panels; the current place
+  uses `--accent-soft` with `--accent-text`.
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
@@ -153,6 +152,27 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.
 
+
+## Design tokens (owner's mockups, 20 Oct)
+
+One visual language for every page, owned by [Theme.scss](../src/Jularr.Frontend/Modules/Appearance/Theme.scss) (defaults, shape, type,
+status) and [Palette.ts](../src/Jularr.Frontend/Modules/Appearance/Palette.ts) (colours from the accent, applied at runtime). Components use the
+tokens, never literals; a page adds none of its own colours, radii, shadows or font sizes.
+
+| Group | Tokens (light / dark) |
+| --- | --- |
+| Surfaces | `--background` #faf9ff / #11111a, `--surface` #fff / #1c1b29, `--field` (= `--surface-soft`) #f8f7ff / #252233, `--surface-hover` #f5f2ff / #2b2640 |
+| Line | `--border` (= `--line`, = legacy `--accent-line`) #ebe8f5 / #363247: 1px, the only outline; `--accent-outline` = accent 32% for hover and selection |
+| Text | `--text` #242039 / #f4f1fd, `--muted` #6c6882 / #aaa3bf (4.5:1 on every surface) |
+| Accent | `--accent` #813eff / #a980ff, `--accent-text` #6e34d2 / #baa0ff, `--accent-soft` #f0eaff / #33284e, `--accent-contrast` white / #11101a, `--accent-hover`, `--focus` = `--accent-text` |
+| Status | `--success`, `--warning`, `--danger`, `--info` and their `-soft` tints: text on its own tint is at least 4.5:1 |
+| Shape | `--radius-control` 999px (buttons, fields, tabs, badges), `--radius-panel` 20px (cards, tables, sections), `--radius-dialog` 22px, `--radius-inner` 14px (notices, textareas), `--radius-small` 10px (tooltips) |
+| Depth | `--shadow` faint card shadow, `--shadow-overlay` for popovers, dialogs and the save pill, `--scrim` behind dialogs; no bevels, glass or coloured stripes |
+| Type | Inter, then Segoe UI/system; body `--text-body` 13px, controls `--text-control` 12px/700, captions and table heads `--text-small` 11px; h1 27px/780 -0.9px, h2 `--text-heading` 16px/800 -0.3px |
+| Controls | `--control-height` 38px (44px for a coarse pointer), compact 30px, `--icon-size` 18px, 1px borders, 3px focus ring offset 2px, `--transition` .13s, press scales to .985 |
+
+Changing a look means changing a token or the one base component (Button, Form, Table, Tag, StateChip, Section, NavigationTabs, Toggle, SearchBox,
+SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
 
 ## Page identity and approved UX (MANDATORY)
 
@@ -398,7 +418,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   accent and no ornamental artwork; Original uses the restored ink/paper/blossom
   treatment. Both consume the same central tokens and components, never separate pages.
 - Original's default seed is Jularr red (`#c8102e`); Clean's is Jularr purple
-  (`#7c3aed`). Derive light/dark surfaces, readable accent labels and artwork hue
+  (`#813eff`, the mockups' accent; its palette is the mockups' reference palette, other seeds derive theirs). Derive light/dark surfaces, readable accent labels and artwork hue
   from one selected seed through the shared Appearance palette. Theme artwork
   and the mascot follow the accent; media artwork, provider logos
   and semantic status colors do not. The Jularr mark is the owner's J in a broken ring, one

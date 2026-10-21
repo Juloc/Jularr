@@ -7,14 +7,14 @@
     &__input {
         width: 100%;
         min-width: 0;
-        min-height: 44px;
-        padding: 8px 12px;
+        min-height: var(--control-height);
+        padding: 6px 15px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
-        background: var(--surface);
+        background: var(--field);
         color: var(--text);
 
         // Match outlined fields.
-        &:focus-visible { outline: none; border-color: var(--accent); }
+        &:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
     }
 }

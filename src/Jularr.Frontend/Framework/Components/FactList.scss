@@ -5,20 +5,22 @@
     margin: 0 0 24px;
 
     &__fact {
-        padding: 14px 16px;
+        padding: 16px 18px;
         border: 1px solid var(--border);
         border-radius: var(--radius-panel);
         background: var(--surface);
 
         dt {
             color: var(--muted);
-            font-size: 13px;
+            font-size: var(--text-small);
+            font-weight: 700;
         }
 
         dd {
             margin: 4px 0 0;
             font-size: 1.25rem;
-            font-weight: 650;
+            font-weight: var(--weight-heading);
+            letter-spacing: -.5px;
         }
     }
 }

@@ -77,6 +77,7 @@ namespace Jularr.Frontend.Framework
         private bool _steps;
         private bool _details;
         private bool _hidden;
+        private bool _compact;
 
         // A request's phase from the page's own data.
         public LiveProgress Request(AcquisitionRequestStatusType status, bool admin = false)
@@ -100,11 +101,24 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // For a list row: the phase above thin step segments whose names are tooltips, no bar of its own.
+        public LiveProgress Compact()
+        {
+            _compact = true;
+            return this;
+        }
+
         // Shown only while the stream knows something for the key.
         public LiveProgress Optional()
         {
             _hidden = true;
             return this;
+        }
+
+        private HtmlElement Step(AcquisitionRequestStatusType step)
+        {
+            var item = new Li(new Text("request.state." + step)).Class("live-steps__item");
+            return _compact ? item.TextAttribute("title", "request.state." + step) : item;
         }
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
@@ -113,7 +127,7 @@ namespace Jularr.Frontend.Framework
             if (_steps)
             {
                 parts.Add(new Ol([.. new[] { AcquisitionRequestStatusType.Approved, AcquisitionRequestStatusType.Searching, AcquisitionRequestStatusType.Downloading,
-                    AcquisitionRequestStatusType.Importing, AcquisitionRequestStatusType.Completed }.Select(step => (IUiComponent)new Li(new Text("request.state." + step)).Class("live-steps__item"))]).Class("live-steps"));
+                    AcquisitionRequestStatusType.Importing, AcquisitionRequestStatusType.Completed }.Select(step => (IUiComponent)Step(step))]).Class("live-steps"));
             }
 
             // Beside the steps the phase is read, not shown twice; where the steps have no room it is shown instead of their names.
@@ -128,7 +142,7 @@ namespace Jularr.Frontend.Framework
                 parts.Add(new Span().Class("live-progress__detail live-progress__detail--error").Attribute("data-live-text", "error").Attribute("hidden", "hidden"));
             }
 
-            var block = new Div([.. parts]).Class("live-progress").Attribute("data-live", key);
+            var block = new Div([.. parts]).Class(_compact ? "live-progress live-progress--compact" : "live-progress").Attribute("data-live", key);
             if (_status is { } known) block.Attribute("data-phase", LiveFacts.Marker(known)).Attribute("data-step", LiveFacts.Step(known).ToString(CultureInfo.InvariantCulture));
             if (_hidden) block.Attribute("data-live-optional", "").Attribute("hidden", "hidden");
             block.WriteTo(writer, encoder, texts);
