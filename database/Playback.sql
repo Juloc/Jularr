@@ -167,6 +167,8 @@ CREATE TABLE "ProfilePlaybackPreferences" (
     "SubtitleModeTypeId" smallint NOT NULL DEFAULT 4 CHECK ("SubtitleModeTypeId" BETWEEN 1 AND 4),
     "Speed" numeric(3, 2) NOT NULL DEFAULT 1 CHECK ("Speed" BETWEEN 0.5 AND 2),
     "AutoplayNext" boolean NOT NULL DEFAULT TRUE,
+    -- Whether a card that lingers on a touch device plays its preview by itself.
+    "AutoplayPreviews" boolean NOT NULL DEFAULT TRUE,
     "UpdatedAt" timestamptz NOT NULL DEFAULT now()
 );
 

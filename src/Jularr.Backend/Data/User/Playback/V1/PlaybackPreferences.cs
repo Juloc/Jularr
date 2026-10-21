@@ -14,8 +14,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
     public sealed class PlaybackPreferencesV1 : BaseResponse
     {
         public PlaybackPreferencesV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, string profileLanguage,
-            PlaybackQuality deviceQuality)
+            PlaybackQuality deviceQuality, bool autoplayPreviews = true)
         {
+            AutoplayPreviews = autoplayPreviews;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
@@ -42,6 +43,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
 
+        // Whether a card that lingers on a touch device plays its preview by itself.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
+        public bool AutoplayPreviews { get; }
+
         // The language of the profile's interface, the subtitle language it has when none is chosen.
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language), true)]
         public string ProfileLanguage { get; }
@@ -53,8 +58,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class SavePlaybackPreferencesDataV1 : BaseData
     {
-        public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext)
+        public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, bool autoplayPreviews = true)
         {
+            AutoplayPreviews = autoplayPreviews;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
@@ -76,6 +82,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
+        public bool AutoplayPreviews { get; }
     }
 
     // The speed chosen in the player, remembered for the profile.

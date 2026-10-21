@@ -46,7 +46,8 @@ namespace Jularr.Frontend.Pages.User.MediaPreview
             if (WorkId is { } workId)
             {
                 var work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(workId), token);
-                return Fragment(work.CanonicalTitle, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), work.BackdropUrl, work.PosterUrl, work.Overview, work.TrailerKey);
+                return Fragment(work.CanonicalTitle, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), work.BackdropUrl, work.PosterUrl, work.Overview, work.TrailerKey,
+                    MediaCardPreview.Facts(texts, work.ReleaseYear, work.MediaTypeId, work.MediaSubtypeId, work.RuntimeMinutes));
             }
 
             if (Scope is not null && Namespace is not null && ExternalId is not null)
@@ -65,7 +66,8 @@ namespace Jularr.Frontend.Pages.User.MediaPreview
                     {
                         var entry = await readCatalogEntry.ExecuteAsync<DiscoverCatalogEntryV1>(new DiscoverParametersV1(),
                             new ReadDiscoverCatalogEntryDataV1(scope.MediaTypeId, Namespace, ExternalId, scope.MediaSubtypeId), limit.Token);
-                        return Fragment(entry.Title, entry.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture) : href, entry.BackdropUrl, entry.PosterUrl, entry.Overview, entry.TrailerKey);
+                        return Fragment(entry.Title, entry.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture) : href, entry.BackdropUrl, entry.PosterUrl, entry.Overview, entry.TrailerKey,
+                            MediaCardPreview.Facts(texts, entry.ReleaseYear, scope.MediaTypeId, scope.MediaSubtypeId, null));
                     }
                     catch (Exception exception) when (IsProviderFailure(exception, token))
                     {
@@ -73,7 +75,7 @@ namespace Jularr.Frontend.Pages.User.MediaPreview
                     }
                 }
 
-                return await LocalAsync(Namespace, ExternalId, href, token);
+                return await LocalAsync(Namespace, ExternalId, href, scope.MediaTypeId, scope.MediaSubtypeId, token);
             }
 
             if (Type is MediaType.Movie or MediaType.Series && TmdbId is { } tmdbId)
@@ -84,14 +86,15 @@ namespace Jularr.Frontend.Pages.User.MediaPreview
                 try
                 {
                     var item = await readItem.ExecuteAsync<DiscoverItemV1>(new DiscoverItemParametersV1(Type.Value, tmdbId), default, limit.Token);
-                    return Fragment(item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture) : href, item.BackdropUrl, item.PosterUrl, item.Overview, item.TrailerKey);
+                    return Fragment(item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture) : href, item.BackdropUrl, item.PosterUrl, item.Overview, item.TrailerKey,
+                        MediaCardPreview.Facts(texts, item.ReleaseYear, item.MediaTypeId, null, null));
                 }
                 catch (Exception exception) when (IsProviderFailure(exception, token))
                 {
                     // The description of the local catalog remains.
                 }
 
-                return await LocalAsync(Type == MediaType.Movie ? "tmdb_movie" : "tmdb_tv", tmdbId.ToString(CultureInfo.InvariantCulture), href, token);
+                return await LocalAsync(Type == MediaType.Movie ? "tmdb_movie" : "tmdb_tv", tmdbId.ToString(CultureInfo.InvariantCulture), href, Type.Value, null, token);
             }
 
             return BadRequest();
@@ -101,12 +104,12 @@ namespace Jularr.Frontend.Pages.User.MediaPreview
             exception is ServiceUnavailableException || exception is OperationCanceledException && !requestAborted.IsCancellationRequested;
 
         // What the local catalog keeps of the title; a title it does not know needs no preview.
-        private async Task<IActionResult> LocalAsync(string @namespace, string externalId, string href, CancellationToken token)
+        private async Task<IActionResult> LocalAsync(string @namespace, string externalId, string href, MediaType type, MediaSubtype? subtype, CancellationToken token)
         {
             try
             {
                 var local = await readLocal.ExecuteAsync<DiscoverPreviewV1>(new ReadDiscoverPreviewParametersV1(@namespace, externalId), token);
-                return Fragment(local.Title, href, local.BackdropUrl, local.PosterUrl, local.Overview, null);
+                return Fragment(local.Title, href, local.BackdropUrl, local.PosterUrl, local.Overview, null, MediaCardPreview.Facts(texts, local.ReleaseYear, type, subtype, null));
             }
             catch (KeyNotFoundException)
             {
@@ -115,10 +118,10 @@ namespace Jularr.Frontend.Pages.User.MediaPreview
         }
 
         // A title without anything to show in the preview needs none.
-        private IActionResult Fragment(string title, string href, string? backdropUrl, string? posterUrl, string? overview, string? trailerKey) =>
+        private IActionResult Fragment(string title, string href, string? backdropUrl, string? posterUrl, string? overview, string? trailerKey, IReadOnlyList<string> facts) =>
             string.IsNullOrWhiteSpace(overview) && TrailerId(trailerKey) is null
                 ? new NoContentResult()
-                : Partial("_UiComponent", new MediaCardPreview(assets, title, href, backdropUrl, posterUrl, overview, TrailerId(trailerKey)));
+                : Partial("_UiComponent", new MediaCardPreview(assets, title, href, backdropUrl, posterUrl, overview, TrailerId(trailerKey), facts));
 
         // Only a well-formed YouTube video key is embedded.
         private static string? TrailerId(string? key) =>

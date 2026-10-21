@@ -36,6 +36,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(SubtitleMode.WhenForeign, preferences.SubtitleModeTypeId);
             Assert.AreEqual(1.00m, preferences.Speed);
             Assert.IsTrue(preferences.AutoplayNext);
+            Assert.IsTrue(preferences.AutoplayPreviews);
             Assert.AreEqual(PlaybackQuality.Automatic, preferences.DeviceQuality);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
@@ -45,15 +46,15 @@ namespace Jularr.Backend.Tests
             using var speed = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(1.5m));
             Assert.AreEqual(HttpStatusCode.OK, speed.StatusCode, await speed.Content.ReadAsStringAsync());
             preferences = await ReadAsync(host);
-            Assert.AreEqual((1.50m, SubtitleMode.WhenForeign, true), (preferences.Speed, preferences.SubtitleModeTypeId, preferences.AutoplayNext));
+            Assert.AreEqual((1.50m, SubtitleMode.WhenForeign, true, true), (preferences.Speed, preferences.SubtitleModeTypeId, preferences.AutoplayNext, preferences.AutoplayPreviews));
 
             // A full save replaces them; the speed alone then leaves the languages as they are. Languages are lower-cased codes.
-            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false));
+            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false, false));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var faster = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(2m));
             Assert.AreEqual(HttpStatusCode.OK, faster.StatusCode, await faster.Content.ReadAsStringAsync());
             preferences = await ReadAsync(host);
-            Assert.AreEqual(("de", "fr", SubtitleMode.ForcedOnly, 2.00m, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext));
+            Assert.AreEqual(("de", "fr", SubtitleMode.ForcedOnly, 2.00m, false, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext, preferences.AutoplayPreviews));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
             // Unknown languages and speeds outside the player's range are refused; no language is allowed.
@@ -95,6 +96,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "name=\"AudioLanguage\"");
             StringAssert.Contains(html, "name=\"AutoplayNext\"");
+            StringAssert.Contains(html, "name=\"AutoplayPreviews\"");
+            StringAssert.Contains(html, "data-autoplay-previews=\"true\"");
 
             using var saved = await host.SendAsync(HttpMethod.Post, "/Settings?handler=Playback", new Dictionary<string, string>
             {
@@ -104,17 +107,19 @@ namespace Jularr.Backend.Tests
                 ["subtitleModeTypeId"] = "3",
                 ["__Invariant"] = "Speed",
                 ["speed"] = "1.25",
-                ["autoplayNext"] = "false"
+                ["autoplayNext"] = "false",
+                ["autoplayPreviews"] = "false"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             var preferences = await ReadAsync(host);
-            Assert.AreEqual(("ja", (string?)null, SubtitleMode.Always, 1.25m, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext));
+            Assert.AreEqual(("ja", (string?)null, SubtitleMode.Always, 1.25m, false, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext, preferences.AutoplayPreviews));
 
             // The page shows what was saved.
             using var again = await host.SendAsync(HttpMethod.Get, "/Settings");
             var shown = await again.Content.ReadAsStringAsync();
             Assert.IsTrue(Regex.IsMatch(shown, "<option value=\"ja\" selected"), shown);
             Assert.IsTrue(Regex.IsMatch(shown, "<option value=\"1.25\" selected"), shown);
+            StringAssert.Contains(shown, "data-autoplay-previews=\"false\"");
         }
 
         [TestMethod]

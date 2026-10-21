@@ -7,9 +7,10 @@ namespace Jularr.Backend.Data.Logic.Playback
 {
     internal sealed class PlaybackPreferenceData : BaseData
     {
-        public PlaybackPreferenceData(long profileId, string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext)
+        public PlaybackPreferenceData(long profileId, string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, bool autoplayPreviews)
         {
             ProfileId = profileId;
+            AutoplayPreviews = autoplayPreviews;
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
@@ -34,6 +35,9 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayPreviews))]
+        public bool AutoplayPreviews { get; }
     }
 
     // The profile and the device asking.
