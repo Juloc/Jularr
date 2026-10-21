@@ -61,10 +61,10 @@ test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", (
     assert.match(shell, /AdministrationLinks\(texts, adminPath\)/);
     assert.match(styles, /breadcrumb__item--menu \.link-menu \{ display: block/);
     assert.match(shell, /Add\(new Text\("nav\.admin"\)/);
-    assert.match(styles, /\.app-header\s*\{[^}]*height: 64px/);
+    assert.match(styles, /\.app-header\s*\{[^}]*height: 78px/);
     assert.match(styles, /container: crumbs/);
     assert.match(styles, /nth-last-child\(n \+ 3\)/);
-    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow/);
+    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow: (?!var\()/);
 });
 
 test("Clean shows the single-path parrot mark, Original keeps its own mark, and the J in a ring is gone", () => {

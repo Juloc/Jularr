@@ -249,7 +249,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"tag tag--accent\"");
             StringAssert.Contains(html, "role=\"switch\"");
             StringAssert.Contains(html, "class=\"ui-field__label\"");
-            StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+            StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
             StringAssert.Contains(html, "class=\"navigation-tabs\"");
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
@@ -559,7 +559,7 @@ namespace Jularr.Backend.Tests
                 if (path == "/Admin/Works" && mediaAllowed)
                 {
                     var html = await page.Content.ReadAsStringAsync();
-                    StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+                    StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
                     StringAssert.Contains(html, "class=\"page-table\"");
                     StringAssert.Contains(html, "/build/assets/Assets/Shared/shell.entry-");
                 }

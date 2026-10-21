@@ -3,8 +3,8 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    min-height: var(--control-height);
-    padding: 6px 6px;
+    min-height: calc(var(--field-height) - 2px);
+    padding: 0 6px;
 
     &__part {
         width: 2.4ch;

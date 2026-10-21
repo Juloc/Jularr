@@ -496,15 +496,20 @@ namespace Jularr.Frontend.Framework
 
         private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false)
         {
-            // Label stays on the outline; a segmented control is named by its legend.
-            var content = new List<IUiComponent>
+            // The label sits above the field (the mockups' `.field label`); a segmented control is a group named by its legend.
+            var info = new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info");
+            var content = new List<IUiComponent>();
+            if (field.Control == FieldControl.Checkbox) content.Add(input);
+            else if (segmented)
             {
-                field.Control == FieldControl.Checkbox ? input : new HtmlFieldset(
-                    new HtmlLegend(segmented ? new Span(new Text(field.LabelKey)).Class("ui-field__label")
-                        : new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name),
-                        new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info")),
-                    input).Class(segmented ? "ui-field__control ui-field__control--segmented" : "ui-field__control")
-            };
+                content.Add(new HtmlFieldset(new HtmlLegend(new Span(new Text(field.LabelKey)).Class("ui-field__label"), info).Class("ui-field__top"),
+                    new Div(input).Class("ui-field__control ui-field__control--segmented")).Class("ui-field__group"));
+            }
+            else
+            {
+                content.Add(new Div(new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), info).Class("ui-field__top"));
+                content.Add(new Div(input).Class("ui-field__control"));
+            }
             if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
             if (_error?.Field == field.Name)
             {

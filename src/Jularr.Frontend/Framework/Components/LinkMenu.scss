@@ -34,23 +34,24 @@
         min-width: 200px;
         max-width: 80vw;
         padding: 6px;
-        border: 1px solid var(--line);
+        border: 1px solid var(--border);
         border-radius: var(--radius-panel);
         background: var(--surface);
+        box-shadow: var(--shadow-overlay);
     }
 
     &__link {
         display: flex;
         align-items: center;
-        min-height: 40px;
-        padding: 8px 12px;
-        border-radius: var(--radius-control);
+        min-height: 35px;
+        padding: 0 12px;
+        border-radius: var(--radius-small);
         color: var(--muted);
         text-decoration: none;
-        font-weight: 550;
+        font-size: var(--text-body);
         white-space: nowrap;
 
-        &:hover { background: var(--surface-hover); color: var(--text); }
-        &.is-active { background: var(--accent-soft); color: var(--accent-text); }
+        &:hover { background: var(--surface-hover); color: var(--accent-text); }
+        &.is-active { background: var(--accent-soft); color: var(--accent-text); font-weight: 810; }
     }
 }

@@ -1,4 +1,4 @@
-// The mockups' switch: a 40px pill with a 16px knob; off keeps a muted outline and knob so the state stays readable.
+// The mockups' switch: a 37x21 pill on the stronger line with a 13px muted knob; on, it fills with the accent and the knob turns white.
 .toggle {
     position: relative;
     display: inline-flex;
@@ -9,12 +9,12 @@
 
     // Native checkbox owns state.
     & > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-    &__label { font-weight: 600; overflow-wrap: anywhere; }
+    &__label { font-size: var(--text-body); overflow-wrap: anywhere; }
     &__track {
         position: relative;
-        flex: 0 0 40px;
-        height: 24px;
-        border: 1px solid var(--muted);
+        flex: 0 0 37px;
+        height: 21px;
+        border: 1px solid var(--border-strong);
         border-radius: 999px;
         background: var(--field);
         transition: background-color var(--transition), border-color var(--transition);
@@ -24,11 +24,11 @@
             position: absolute;
             inset-block-start: 3px;
             inset-inline-start: 3px;
-            width: 16px;
-            height: 16px;
+            width: 13px;
+            height: 13px;
             border-radius: 50%;
             background: var(--muted);
-            transition: inset-inline-start var(--transition), background-color var(--transition);
+            transition: inset-inline-start .2s, background-color var(--transition);
         }
     }
 
@@ -36,9 +36,9 @@
         border-color: var(--accent);
         background: var(--accent);
 
-        &::after { inset-inline-start: 19px; background: var(--accent-contrast); }
+        &::after { inset-inline-start: 19px; background: #fff; }
     }
     & > input:focus-visible + &__track { outline: 3px solid var(--focus); outline-offset: 2px; }
-    & > input:disabled ~ span { opacity: .6; cursor: not-allowed; }
+    & > input:disabled ~ span { opacity: .4; cursor: default; }
     & > input[aria-invalid="true"] + &__track { border-color: var(--danger); }
 }

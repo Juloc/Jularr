@@ -1,11 +1,11 @@
 .drawer {
-    // Fields and tabs are filled with a faint accent tint, not grey.
-    --tint: color-mix(in srgb, var(--accent) 5%, var(--surface));
+    // The lavender field tone for the chips and tabs inside the drawer.
+    --tint: var(--field);
 
     inset: 0 0 0 auto;
     display: flex;
     flex-direction: column;
-    width: min(470px, 100vw);
+    width: min(440px, 100vw);
     max-width: none;
     height: 100dvh;
     max-height: none;
@@ -13,12 +13,12 @@
     padding: 0;
     border: 0;
     background: var(--surface);
-    box-shadow: -15px 0 40px rgb(3 1 13 / 10%);
+    box-shadow: var(--shadow-drawer);
     color: var(--text);
     overscroll-behavior: contain;
 
     &:not([open]) { display: none; }
-    &::backdrop { background: rgb(16 16 30 / 69%); backdrop-filter: blur(3px); }
+    &::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
 
     &__heading {
         display: flex;
@@ -27,24 +27,24 @@
         justify-content: space-between;
         gap: 12px;
         min-height: 84px;
-        padding: 25px 27px;
+        padding: 26px 24px 21px;
         border-bottom: 1px solid var(--border);
 
-        h2 { margin: 0; font-size: 20px; letter-spacing: -.5px; }
+        h2 { margin: 0; font-size: 22px; letter-spacing: -.6px; }
     }
 
-    &__close.button { width: 38px; min-height: 38px; flex: none; }
+    &__close.button { width: var(--icon-button); min-height: var(--icon-button); flex: none; }
 
     // The tab row switches the panes of one drawer.
     &__tabs {
         display: flex;
         flex: none;
         gap: 5px;
-        margin: 20px 27px 4px;
-        padding: 5px;
+        margin: 20px 24px 4px;
+        padding: 4px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
-        background: var(--tint);
+        background: var(--field);
     }
 
     &__tab {
@@ -53,21 +53,21 @@
         align-items: center;
         justify-content: center;
         gap: 6px;
-        padding: 11px 8px;
-        border: 0;
+        padding: 9px 8px;
+        border: 1px solid transparent;
         border-radius: var(--radius-control);
         background: transparent;
         color: var(--muted);
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: var(--text-control);
+        font-weight: 760;
 
-        &--selected { background: var(--surface); color: var(--accent-text); box-shadow: 0 2px 8px rgb(0 0 0 / 6%); }
+        &--selected { background: var(--accent-soft); border-color: var(--accent-edge); color: var(--accent-text); }
     }
 
     &__pane { display: flex; flex: 1; flex-direction: column; min-height: 0; &[hidden] { display: none; } }
     &__content { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-    &__body { flex: 1; overflow-y: auto; padding: 0 27px 29px; overscroll-behavior: contain; }
+    &__body { flex: 1; overflow-y: auto; padding: 0 24px 24px; overscroll-behavior: contain; }
 
     &__body > .choice-group:not(.choice-group--section), &__body > .drawer__section {
         border-bottom: 1px solid var(--border);
@@ -79,28 +79,31 @@
     &__section > .choice-group:not(.choice-group--section) { padding-bottom: 0; &:last-child { padding-bottom: 20px; } }
     &__section > .choice-group--minor { padding-top: 10px; }
 
-    &__field-title { display: block; padding-top: 17px; font-size: 13px; font-weight: 770; }
+    &__field-title { display: block; padding-top: 17px; font-size: 13px; font-weight: 800; }
 
     &__footer {
         display: flex;
         flex: none;
         justify-content: space-between;
         gap: 10px;
-        padding: 17px 27px;
+        padding: 17px 24px;
         border-top: 1px solid var(--border);
         background: var(--surface);
 
         & > * { flex: 1; }
-        .button { min-height: 38px; padding: 0 17px; font-size: 12px; font-weight: 720; white-space: nowrap; }
     }
 
-    @media (max-width: 760px) {
-        width: 100vw;
+    // On a phone the drawer is a bottom sheet, as in the mockups: 82% of the screen, at most 740px, rounded at the top.
+    @media (max-width: 640px) {
+        inset: auto 0 0 0;
+        width: 100%;
+        height: min(82dvh, 740px);
+        border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
 
-        &__heading { min-height: 74px; padding: calc(env(safe-area-inset-top, 0px) + 14px) 20px 14px; h2 { font-size: 21px; } }
-        &__tabs { margin: 20px 20px 4px; }
-        &__body { padding: 0 18px 22px; }
-        &__footer { padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 16px); box-shadow: 0 -5px 24px rgb(35 26 72 / 5%); .button { min-height: 44px; } }
+        &__heading { min-height: 0; padding: 19px 19px 16px; }
+        &__tabs { margin: 16px 19px 4px; }
+        &__body { padding: 0 19px 22px; }
+        &__footer { padding: 13px 19px max(18px, env(safe-area-inset-bottom)); }
     }
 }
 
@@ -112,4 +115,8 @@ html:has(.drawer[open]) { overflow: hidden; }
 @media (prefers-reduced-motion: no-preference) {
     .drawer[open] { animation: drawer-in .23s ease; }
     @keyframes drawer-in { from { transform: translateX(40px); opacity: 0; } }
+    @media (max-width: 640px) {
+        .drawer[open] { animation-name: sheet-in; }
+        @keyframes sheet-in { from { transform: translateY(40px); opacity: 0; } }
+    }
 }
