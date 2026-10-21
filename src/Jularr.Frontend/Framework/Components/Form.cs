@@ -10,7 +10,7 @@ namespace Jularr.Frontend.Framework
     {
         private static long _nextId;
         private readonly List<IUiComponent> _content = [];
-        private readonly List<IUiComponent> _actions = [];
+        private List<IUiComponent> _actions = [];
         private List<IUiComponent> _target;
         private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
         private readonly HashSet<string> _hiddenFields = new(StringComparer.Ordinal);
@@ -143,14 +143,14 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        // A file field makes the form a multipart upload.
-        public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
+        // A file field is the file input (drop zone, chosen file, remove) and makes the form a multipart upload.
+        public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FrontendAssets assets)
         {
             var field = Declare(selector, FieldControl.File, labelKey);
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "file");
             if (field.Accept is { } accept) input.Attribute("accept", accept);
             Configure(field, input);
-            AddField(field, input, wide: true);
+            AddField(field, new FileInput(input, field.Accept ?? "", field.MaximumBytes ?? 0, assets), wide: true, bare: true);
             _isUpload = true;
             return this;
         }
@@ -263,10 +263,16 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Section(string titleKey, Action<Form<TData>> define)
         {
             var outer = _target;
+            var outerActions = _actions;
             var inner = new List<IUiComponent> { new HtmlLegend(new Text(titleKey)) };
             _target = inner;
+            _actions = [];
             define(this);
+
+            // Buttons declared inside a section close that section.
+            if (_actions.Count > 0) inner.Add(new Div([.. _actions]).Class("ui-form__actions"));
             _target = outer;
+            _actions = outerActions;
             _target.Add(new HtmlFieldset([.. inner]).Class("ui-form__section"));
             return this;
         }
@@ -369,6 +375,13 @@ namespace Jularr.Frontend.Framework
                 : new Span(new Text(key), valueHidden ? new Span(new ValueText(" " + value)).Class("visually-hidden") : new Span(new ValueText(value)));
             var button = new Button(label).Primary();
             return Submit(button);
+        }
+
+        // A note at the start of the buttons' row, such as what the buttons would act on.
+        public Form<TData> Note(IUiComponent note)
+        {
+            _actions.Add(new Div(note).Class("ui-form__note"));
+            return this;
         }
 
         // The page's save pill saves this form together with every other changed one; without script the button saves it alone.
@@ -492,9 +505,9 @@ namespace Jularr.Frontend.Framework
         // Lists and longer texts, such as addresses, get the whole row.
         private const int WideLength = 200;
         private const int MaxSegments = 3;
-        private const int MaxSegmentLength = 16;
+        private const int MaxSegmentLength = 20;
 
-        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false)
+        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false, bool bare = false)
         {
             // The label sits above the field (the mockups' `.field label`); a segmented control is a group named by its legend.
             var info = new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info");
@@ -508,7 +521,7 @@ namespace Jularr.Frontend.Framework
             else
             {
                 content.Add(new Div(new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), info).Class("ui-field__top"));
-                content.Add(new Div(input).Class("ui-field__control"));
+                content.Add(bare ? input : new Div(input).Class("ui-field__control"));
             }
             if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
             if (_error?.Field == field.Name)

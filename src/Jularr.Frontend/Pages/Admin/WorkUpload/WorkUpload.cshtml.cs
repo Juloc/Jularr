@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Pages.Admin.WorkUpload
     // Only this page accepts a request as large as a volume.
     [RequestSizeLimit(UploadFields.VolumeRequestBytes)]
     [RequestFormLimits(MultipartBodyLengthLimit = UploadFields.VolumeRequestBytes)]
-    public sealed class WorkUploadModel(UploadVolumeV1 upload, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class WorkUploadModel(UploadVolumeV1 upload, IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -21,10 +21,11 @@ namespace Jularr.Frontend.Pages.Admin.WorkUpload
         {
             page.Title("work.upload");
             page.Navigation("nav.admin");
+            page.Asset("Framework/Components/FileInput.entry.ts");
             page.Content.Add(new A(new Text("admin.work.title")).Attribute("href", WorkAddress));
             page.Content.Add(new Form<UploadVolumeDataV1>(form =>
             {
-                form.File(item => item.File, "work.upload.file");
+                form.File(item => item.File, "work.upload.file", assets);
                 form.Number(item => item.VolumeNumber, "work.upload.volume");
                 form.Submit("work.upload.submit");
             }, WorkAddress + "/Upload", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, FormError));
