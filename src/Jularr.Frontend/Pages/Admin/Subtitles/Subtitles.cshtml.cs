@@ -33,11 +33,6 @@ namespace Jularr.Frontend.Pages.Admin.Subtitles
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             page.Content.Add(new P(new ValueText(file.RelativePath)));
             page.Content.Add(new P(new Text("subtitles.present"), new ValueText(" " + (file.PresentLanguages.Length == 0 ? "–" : string.Join(", ", file.PresentLanguages)))));
-            if (TempData["SubtitleSaved"] is bool saved)
-            {
-                page.Content.Add(new P(new Text(saved ? "subtitles.saved" : "subtitles.exists")).Attribute("role", "status"));
-            }
-
             // The first wanted language the file lacks is asked first.
             var missing = file.WantedLanguages.FirstOrDefault(language => !file.PresentLanguages.Contains(language, StringComparer.OrdinalIgnoreCase)) ?? file.WantedLanguages.FirstOrDefault() ?? "";
             page.Content.Add(new Form<SearchSubtitlesDataV1>(form =>
@@ -79,7 +74,8 @@ namespace Jularr.Frontend.Pages.Admin.Subtitles
 
         public async Task<IActionResult> OnPostDownloadAsync([BindRequired] string offerId)
         {
-            TempData["SubtitleSaved"] = (await download.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(StoredFileId), new DownloadSubtitleDataV1(offerId), HttpContext.RequestAborted)).Success;
+            var saved = (await download.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(StoredFileId), new DownloadSubtitleDataV1(offerId), HttpContext.RequestAborted)).Success;
+            Hint(saved ? "subtitles.saved" : "subtitles.exists");
             return LocalRedirect(Address());
         }
 

@@ -45,6 +45,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var hasTracks = work.MediaTypeId == MediaType.Music;
             var hasUnits = isSeries || hasVolumes || hasTracks;
 
+            // Everything below the breadcrumb is one region: an action on this page (a switch, a search, a delete) swaps it and keeps the open sections.
+            var regionStart = page.Content.Count;
             page.Content.Add(Hero(work, csrf));
             var tabs = new List<NavigationTab> { new(isSeries ? "work.tab.seasons" : hasVolumes ? "work.tab.volumes" : hasTracks ? "work.tab.tracks" : hasGroups ? work.MediaTypeId == MediaType.Game ? "work.tab.platforms" : "work.tab.editions" : "work.tab.files", Address(), Tab == WorkTab.Units), new("work.tab.history", Address(WorkTab.History), Tab == WorkTab.History) };
             if (hasUnits && texts.CanManageMedia()) tabs.Add(new("work.tab.manage", Address(WorkTab.Files), Tab == WorkTab.Files));
@@ -72,6 +74,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (work.MediaTypeId == MediaType.Game && _profiles.Count > 0) page.Content.AddRange(_platformTargets.Values.Select(target => EditDialog(work, csrf, target, "work-edit-" + target.Id.ToString(CultureInfo.InvariantCulture), true)));
             if (texts.CanManageMedia()) page.Content.Add(DeleteDialog(csrf));
             if (texts.CanManageMedia() && (hasUnits ? Tab == WorkTab.Files : Tab == WorkTab.Units) && work.Files.Any(file => !file.IsMissing)) page.Content.Add(EditFilesDialog(work, csrf));
+            var region = page.Content.Skip(regionStart).ToArray();
+            page.Content.RemoveRange(regionStart, page.Content.Count - regionStart);
+            page.Content.Add(new Region("work-page", region));
         }
 
         // The cover on its banner, the title with its facts and figures, and the actions of an administrator.
@@ -133,36 +138,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
             // What its downloads do right now, shown only while there are some.
             if (CanAcquire && work.MediaTypeId != MediaType.Game && _wanted is { } target) status.Add(new LiveProgress(LiveKeys.Wanted(target.Id)).Details().Optional());
             if (CanAcquire && work.MediaTypeId == MediaType.Game) status.AddRange(_platformTargets.Values.Select(platform => new LiveProgress(LiveKeys.Wanted(platform.Id)).Details().Optional()));
-            if (TempData["WorkFilesDeleted"] is int deleted)
-            {
-                var kept = TempData["WorkFilesKept"] as int? ?? 0;
-                status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.deleted"], deleted) + (kept > 0 ? " · " + string.Format(CultureInfo.CurrentCulture, texts["work.files.kept"], kept) : "")))
-                    .Attribute("role", "status").Class("work-hero__status"));
-            }
-
-            if (TempData["VolumeUploaded"] is true) status.Add(new P(new Text("work.upload.done")).Attribute("role", "status").Class("work-hero__status"));
-            if (TempData["WorkFilesUpdated"] is int updated)
-            {
-                status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.updated"], updated))).Attribute("role", "status").Class("work-hero__status"));
-            }
-
-            if (TempData["WorkRenamed"] is int renamed)
-            {
-                status.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["work.files.renamed"], renamed, TempData["WorkRenameSkipped"] as int? ?? 0))).Attribute("role", "status").Class("work-hero__status"));
-            }
-
-            if (TempData["WantedSearched"] is string outcome)
-            {
-                status.Add(new P(new Text("acquisition.outcome." + outcome), new ValueText(TempData["WantedTaken"] is string taken ? ": " + taken : "")).Attribute("role", "status").Class("work-hero__status"));
-            }
 
             return new Section(
                 banner is null ? new Div() : (IUiComponent)new Div(new MediaImage(banner, "", 1280, 360)).Class("work-banner" + (work.BackdropUrl is null ? " work-banner--cover" : "")),
                 new Div(
                     new Div(cover).Class("work-cover"),
                     new Div(
-                        // The breadcrumb ends with the title: the heading stays for assistive technology only.
-                        new Div(new H1(new ValueText(work.CanonicalTitle)).Class("visually-hidden"), new Div([.. pills]).Class("work-pills")).Class("work-title"),
+                        new Div(new H1(new ValueText(work.CanonicalTitle)), new Div([.. pills]).Class("work-pills")).Class("work-title"),
                         facts.Length == 0 ? new Span() : new P(new ValueText(facts)).Class("work-facts"),
                         string.IsNullOrWhiteSpace(work.Overview) ? new Span() : new P(new ValueText(work.Overview)).Class("work-overview"),
                         new Div([.. status, new Div([.. figures]).Class("work-figures"), new Div([.. actions]).Class("work-actions")]).Class("work-hero__bottom")).Class("work-hero__body")).Class("work-hero__content")).Class("work-hero");
@@ -177,7 +159,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
             var seasonNumbers = seasons.ToDictionary(season => season.Id, season => season.Number);
             var content = new List<IUiComponent>
             {
-                new Div(NumberingSwitch(work), new Button(Icon("chevron-down", 22), new Text("work.collapseAll")).Attribute("data-collapse-all", "").Attribute("type", "button"),
+                new Div(NumberingSwitch(work), new Button(Icon("chevron-down", 22), new Span(new Text("work.collapseAll")).Attribute("data-collapse-label", "")).Attribute("data-collapse-all", "").Attribute("type", "button")
+                        .TextAttribute("data-collapse-text", "work.collapseAll").TextAttribute("data-expand-text", "work.expandAll"),
                     new Button(Icon("settings"), new Text("work.columns")).Attribute("data-columns-open", "").Attribute("data-columns-kind", "units").Attribute("type", "button").Class("button work-tools__columns")).Class("work-seasons__tools")
             };
             var first = true;
@@ -778,11 +761,11 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 }
 
                 form.Choices(data => data.TagIds, "arr.tags", _tagChoices);
-                form.Save();
+                form.Cancel();
+                form.Submit("common.save");
             }, Address(Tab, "Choice") + (ownTarget ? "&wantedItemId=" + wanted.Id.ToString(CultureInfo.InvariantCulture) : ""), csrf,
                 mine ?? new UpdateWantedDataV1(wanted.IsPaused, wanted.Version, wanted.AcquisitionProfileId, wanted.LibraryRootId, wanted.MonitorsNewUnits, tagIds: wanted.TagIds), mine is null ? null : FormError);
-            return new Dialog(new Div(new H2(new Text("work.edit")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)
-                .Class("work-dialog").Attribute("id", dialogId).Attribute("data-open", isOpen ? "true" : "false");
+            return new Modal(assets, dialogId, "work.edit", [form], isOpen);
         }
 
         // Sonarr's dialog: the title leaves the library, with its files when ticked, and with an exclusion when ticked.
@@ -793,10 +776,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
             {
                 form.Toggle(data => data.DeletesFiles, "work.delete.files");
                 form.Toggle(data => data.AddsExclusion, "work.delete.exclusion");
+                form.Cancel();
                 form.Submit("work.delete.title");
             }, Address(Tab, "DeleteTitle"), csrf, _deleteInput ?? new DeleteWorkDataV1(false, false), _deleteInput is null ? null : FormError);
-            return new Dialog(new Div(new H2(new Text("work.delete.title")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form)
-                .Class("work-dialog").Attribute("id", "work-delete").Attribute("data-open", isOpen ? "true" : "false");
+            return new Modal(assets, "work-delete", "work.delete.title", [form], isOpen);
         }
 
         // Quality and audio language of the chosen files; what is left unchanged stays as it is. The boxes or the row's pencil fill in the files.
@@ -809,6 +792,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 form.Content(new Div().Attribute("data-edit-ids", ""));
                 form.Select(data => data.QualityKey, "work.files.quality", [.. qualities]);
                 if (work.MediaTypeId is MediaType.Movie or MediaType.Series) form.Select(data => data.AudioLanguage, "work.files.audioLanguage", [.. languages]);
+                form.Cancel();
                 form.Submit("common.save");
             }, Address(Tab, "EditFiles"), csrf, new UpdateLibraryFileFactsDataV1([]));
             // A file with several audio tracks offers each its own language, shown when it alone is chosen.
@@ -821,8 +805,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                                 .Attribute("data-current", track.Language == language.Three ? "true" : "false"))]).Attribute("name", "trackLanguage-" + track.StreamIndex.ToString(CultureInfo.InvariantCulture))
                             .Attribute("data-current", track.Language ?? "")).Class("work-track"))]).Class("work-tracks")).Attribute("data-tracks-for", file.Id.ToString(CultureInfo.InvariantCulture)))
                 : [];
-            return new Dialog([new Div(new H2(new Text("work.files.editTitle")), new Button(new Text("folderPicker.close")).Attribute("data-dialog-close", "").Attribute("type", "button")).Class("work-dialog__head"), form, .. templates])
-                .Class("work-dialog").Attribute("id", "work-files-edit");
+            return new Modal(assets, "work-files-edit", "work.files.editTitle", [form, .. templates]);
         }
 
         private Button Labeled(string icon, string labelKey) => new(Icon(icon), new Text(labelKey));

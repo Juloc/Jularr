@@ -36,12 +36,22 @@ document.addEventListener("htmx:after:swap", event => {
     if (!isPageSwap(contextOf(event)) || !content) return;
     document.body.classList.add("app-page");
     hideUntilStyled(content);
-    if (!refreshing) {
+    if (staying) {
+        window.scrollTo(staying.x, staying.y);
+        staying = undefined;
+    } else if (!refreshing) {
         window.scrollTo(0, 0);
         content.querySelector<HTMLElement>("#main-content")?.focus({ preventScroll: true });
     }
     pageChanged();
 });
+
+// An action that shows the same page again keeps the reader where they were.
+let staying: { x: number; y: number } | undefined;
+
+export function stayHere(): void {
+    staying = { x: window.scrollX, y: window.scrollY };
+}
 
 // Page styles arrive with the content; it stays invisible until they apply, at most briefly.
 function hideUntilStyled(content: HTMLElement): void {
@@ -59,12 +69,30 @@ function hideUntilStyled(content: HTMLElement): void {
 }
 
 // Page scripts run once per document; their setup runs again for every new page they belong to.
-const setups = new Map<string, { setup: () => void; visit?: number }>();
+// A setup that is safe to run again over a page that stays (guarded per element) opts in with partial: it also runs after an action
+// swapped only a region of the page.
+const setups = new Map<string, { setup: () => void; partial: boolean; visit?: number }>();
 let visits = 0;
+let partial = false;
 
-export function onPage(module: string, setup: () => void): void {
-    setups.set(module, { setup });
+export function onPage(module: string, setup: () => void, options: { partial?: boolean } = {}): void {
+    setups.set(module, { setup, partial: options.partial === true });
     run(module);
+}
+
+// True while the setups run after an action swapped a region: what the page already had is still there.
+export const isPartialSwap = () => partial;
+
+// An action swapped a region of the page: the setups that opted in run over the new elements.
+export function regionSwapped(): void {
+    visits++;
+    partial = true;
+    try {
+        const present = new Set(Array.from(document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'), script => script.src));
+        for (const [module, entry] of setups) if (entry.partial && present.has(module)) run(module);
+    } finally {
+        partial = false;
+    }
 }
 
 function run(module: string): void {

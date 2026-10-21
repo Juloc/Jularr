@@ -407,7 +407,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     work."Title",
                     work."Overview",
                     work."ImageUrl" AS "PosterUrl",
-                    work."BackdropUrl"
+                    work."BackdropUrl",
+                    work."ReleaseYear"::integer AS "ReleaseYear"
                 FROM
                     "ExternalWorks" AS work
                 WHERE

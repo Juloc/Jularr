@@ -143,6 +143,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             _search = new SearchMetadataDataV1(mediaTypeId, query ?? "", releaseYear, mediaSubtypeId);
             await LoadDataAsync();
             _results = await search.ExecuteAsync<BaseDataList<MetadataSearchResultV1>>(_search, HttpContext.RequestAborted);
+            if (_results.Count == 0) Hint("admin.works.noMetadata");
             PreparePage();
             return Page();
         }

@@ -86,7 +86,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
         public async Task<IActionResult> OnPostGrabAsync(string? candidateId)
         {
             await grab.ExecuteAsync<UpdateResult>(new WantedItemParametersV1(Id), new GrabWantedReleaseDataV1(candidateId ?? ""), HttpContext.RequestAborted);
-            TempData["WantedGrabbed"] = true;
+            Hint("wanted.grabQueued");
             return LocalRedirect(WantedStatus.Home(Id));
         }
 
