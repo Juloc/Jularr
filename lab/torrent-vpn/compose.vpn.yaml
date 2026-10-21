@@ -1,0 +1,17 @@
+# The tunnel in front of the torrent client: everything the client sends goes through it,
+# and when the tunnel is gone the client has no route at all.
+#
+#   docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml up -d
+services:
+  qbittorrent:
+    depends_on:
+      vpn:
+        condition: service_healthy
+    network_mode: "service:vpn"
+    ports: []
+    volumes:
+      - ./qbittorrent/config:/config
+      - ./qbittorrent/downloads:/downloads
+
+  vpn:
+    profiles: []
