@@ -113,54 +113,7 @@
     .button--primary { border-color: #fff; background: #fff; color: #4c1d95; &:hover:not(:disabled) { background: #f1eaff; } }
 }
 
-// A switch that is a button: the track shows the state and the click changes it.
-.work-switch {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.work-switch__track {
-    position: relative;
-    flex: none;
-    width: 36px;
-    height: 21px;
-    border-radius: 999px;
-    background: light-dark(#cfcad8, #4a4556);
-
-    &::after {
-        content: "";
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        width: 17px;
-        height: 17px;
-        border-radius: 50%;
-        background: #fff;
-        transition: transform .12s;
-    }
-}
-
-.work-switch--on .work-switch__track { background: var(--accent); &::after { transform: translateX(15px); } }
 .work-actions .work-switch--on .work-switch__track { background: #fff; &::after { background: var(--accent); } }
-
-.work-switch--static {
-    gap: 0;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: light-dark(#cfcad8, #4a4556);
-    font-size: 0;
-
-    &.work-switch--on { background: var(--accent); }
-}
 
 // Seasons
 

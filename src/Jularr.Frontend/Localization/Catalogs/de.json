@@ -10203,6 +10203,186 @@
   "error.503.text": [
    "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly.",
    "Jularr ist gerade nicht verfügbar, etwa bei Wartung oder wenn der Speicher offline ist. Bitte versuche es gleich erneut."
+  ],
+  "favorites.layout.toggle": [
+   "Switch between grid and list",
+   "Zwischen Raster und Liste wechseln"
+  ],
+  "jobs.kpi.total": [
+   "Jobs",
+   "Jobs"
+  ],
+  "jobs.area": [
+   "Area",
+   "Bereich"
+  ],
+  "jobs.interval": [
+   "Interval",
+   "Intervall"
+  ],
+  "jobs.error": [
+   "Last error",
+   "Letzter Fehler"
+  ],
+  "jobs.about": [
+   "About this job",
+   "Über diesen Job"
+  ],
+  "jobs.enabled": [
+   "Enabled",
+   "Aktiviert"
+  ],
+  "jobs.use.setting": [
+   "Waits while Jularr is used",
+   "Wartet bei Nutzung"
+  ],
+  "jobs.detailsOf": [
+   "Details of {0}",
+   "Details zu {0}"
+  ],
+  "jobs.refresh": [
+   "Refresh",
+   "Aktualisieren"
+  ],
+  "jobs.pauseAll": [
+   "Pause all",
+   "Alle pausieren"
+  ],
+  "jobs.resumeAll": [
+   "Resume all",
+   "Alle fortsetzen"
+  ],
+  "jobs.filter": [
+   "Filter jobs",
+   "Jobs filtern"
+  ],
+  "jobs.filters": [
+   "Job states",
+   "Jobzustände"
+  ],
+  "jobs.count": [
+   "Jobs: {0}",
+   "Jobs: {0}"
+  ],
+  "jobs.empty": [
+   "No jobs match.",
+   "Keine passenden Jobs."
+  ],
+  "jobs.clear": [
+   "Clear filter",
+   "Filter zurücksetzen"
+  ],
+  "jobs.list": [
+   "Background jobs",
+   "Hintergrundjobs"
+  ],
+  "jobs.about.operations": [
+   "Scans the connected libraries for new and changed files when a scan is asked for.",
+   "Prüft die verbundenen Bibliotheken auf neue und geänderte Dateien, sobald ein Scan angefordert wird."
+  ],
+  "jobs.about.backupQueue": [
+   "Creates the backups that were asked for.",
+   "Erstellt die angeforderten Sicherungen."
+  ],
+  "jobs.about.downloads": [
+   "Follows the progress of external downloads and starts their import when they finish.",
+   "Verfolgt den Fortschritt externer Downloads und startet den Import, sobald sie fertig sind."
+  ],
+  "jobs.about.wantedSearch": [
+   "Looks for new releases of monitored titles, seasons and single episodes.",
+   "Sucht neue Releases für überwachte Titel, Staffeln und einzelne Folgen."
+  ],
+  "jobs.about.providerSync": [
+   "Reads the connected media servers and shares their progress. It saves resources while Jularr is used.",
+   "Liest die verbundenen Medienserver und gleicht ihren Fortschritt ab. Es spart Ressourcen, solange Jularr genutzt wird."
+  ],
+  "jobs.about.providerSyncPlex": [
+   "Syncs the connected Plex server on the schedule of the provider sync.",
+   "Gleicht den verbundenen Plex-Server nach dem Zeitplan des Anbieter-Abgleichs ab."
+  ],
+  "jobs.about.providerSyncJellyfin": [
+   "Syncs the connected Jellyfin server on the schedule of the provider sync.",
+   "Gleicht den verbundenen Jellyfin-Server nach dem Zeitplan des Anbieter-Abgleichs ab."
+  ],
+  "jobs.about.providerSyncEmby": [
+   "Syncs the connected Emby server on the schedule of the provider sync.",
+   "Gleicht den verbundenen Emby-Server nach dem Zeitplan des Anbieter-Abgleichs ab."
+  ],
+  "jobs.about.usenet": [
+   "Works through the download jobs of Jularr's own Usenet downloader.",
+   "Arbeitet die Download-Aufträge des eigenen Jularr-Usenet-Downloaders ab."
+  ],
+  "jobs.about.aniListMatching": [
+   "Checks open AniList matches of anime titles.",
+   "Prüft offene AniList-Zuordnungen von Anime-Titeln."
+  ],
+  "jobs.about.covers": [
+   "Fetches and renews the covers of titles from their providers.",
+   "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
+  ],
+  "jobs.about.storage": [
+   "Checks that the mounts and storage paths can be reached.",
+   "Prüft, ob die Mounts und Speicherpfade erreichbar sind."
+  ],
+  "jobs.about.scanScheduling": [
+   "Starts library scans that are due on their schedule.",
+   "Startet fällige Bibliotheksscans nach ihrem Zeitplan."
+  ],
+  "jobs.about.backup": [
+   "Creates a backup when the newest one is older than the interval set by the Owner.",
+   "Erstellt eine Sicherung, wenn die neueste älter ist als das vom Owner eingestellte Intervall."
+  ],
+  "jobs.about.maintenance": [
+   "Cleans up expired sessions, finished operations and old files.",
+   "Räumt abgelaufene Sitzungen, erledigte Vorgänge und alte Dateien auf."
+  ],
+  "jobs.about.trickplay": [
+   "Creates the thumbnails shown while seeking in videos.",
+   "Erstellt die Vorschaubilder, die beim Spulen in Videos erscheinen."
+  ],
+  "jobs.about.subtitles": [
+   "Searches subtitles for monitored titles in the wanted languages.",
+   "Sucht Untertitel für überwachte Titel in den gewünschten Sprachen."
+  ],
+  "jobs.about.recognition": [
+   "Recognizes the text of scanned pages so that it can be read and searched.",
+   "Erkennt den Text gescannter Seiten, damit er gelesen und durchsucht werden kann."
+  ],
+  "jobs.about.catalog": [
+   "Keeps the local Discover catalog up to date.",
+   "Hält den lokalen Discover-Katalog aktuell."
+  ],
+  "jobs.about.resources": [
+   "Samples the load of the process for the System page.",
+   "Misst die Auslastung des Prozesses für die Systemseite."
+  ],
+  "jobs.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "dock.page": [
+   "Page {0} / {1}",
+   "Seite {0} / {1}"
+  ],
+  "dock.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "dock.paging": [
+   "Pages",
+   "Seiten"
+  ],
+  "jobs.runAgain": [
+   "Run again",
+   "Erneut ausführen"
+  ],
+  "jobs.about.benchmarkQueue": [
+   "Measures how fast this server transcodes video, to set the transcoding limits.",
+   "Misst, wie schnell dieser Server Videos umwandelt, um die Grenzen der Umwandlung festzulegen."
+  ],
+  "jobs.about.readingCopies": [
+   "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",
+   "Schreibt neben digitale PDFs eine Lesekopie (EPUB), damit sie sich wie ein Buch lesen lassen."
   ]
  }
 }
