@@ -125,7 +125,7 @@
         &:popover-open { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
         > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px 2px 16px; font-weight: 700; }
         > header .button { width: 36px; min-height: 36px; padding: 0; border-color: transparent; background: transparent; &:hover:not(:disabled) { background: var(--surface-hover); } }
-        .navigation-tabs { display: flex; width: 100%; box-sizing: border-box; padding: 4px; gap: 2px; overflow: hidden; border: 0; border-radius: 0; background: var(--surface-hover); }
+        .navigation-tabs { display: flex; width: 100%; box-sizing: border-box; margin: 0; padding: 4px; gap: 2px; overflow: hidden; border: 0; border-radius: 0; background: var(--surface-hover); }
         .navigation-tabs__link { flex: 1 1 0; min-width: 0; min-height: 36px; padding: 6px 4px; font-size: 12px; }
         p { margin: 0; }
         // Compact fields: the shared form surface at a smaller height.

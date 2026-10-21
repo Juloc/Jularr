@@ -238,11 +238,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "data-action=\"settings\"");
             StringAssert.Contains(html, "data-panel=\"audio\"");
-            StringAssert.Contains(html, "data-audio=\"1\"");
-            StringAssert.Contains(html, "data-audio=\"2\"");
+            StringAssert.Contains(html, "data-setting=\"audio\"");
+            StringAssert.Contains(html, "<option value=\"1\"");
+            StringAssert.Contains(html, "<option value=\"2\"");
             StringAssert.Contains(html, "data-action=\"minimize\" aria-label=\"Minimize\" hidden=\"hidden\"");
             StringAssert.Contains(html, "Deutsch &#xB7; Kommentar &#xB7; Stereo");
-            StringAssert.Contains(html, "data-subtitle=\"" + sidecar.Key + "\"");
+            StringAssert.Contains(html, "<option value=\"" + sidecar.Key + "\"");
         }
 
         [TestMethod]

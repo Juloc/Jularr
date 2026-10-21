@@ -222,7 +222,7 @@ namespace Jularr.E2E.Tests
                         .filter(element => element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth)
                         .map(element => element.className + ' ' + element.scrollWidth + 'x' + element.scrollHeight + ' in ' + element.clientWidth + 'x' + element.clientHeight)
                     """);
-                CollectionAssert.AreEqual(Array.Empty<string>(), overflowing, $"{label}, {name}: something scrolls inside the settings.");
+                CollectionAssert.AreEqual(Array.Empty<string>(), overflowing, $"{label}, {name}: something scrolls inside the settings: " + string.Join("; ", overflowing));
             }
 
             await settings.GetByRole(AriaRole.Tab, new() { Name = "Basic", Exact = true }).ClickAsync();
