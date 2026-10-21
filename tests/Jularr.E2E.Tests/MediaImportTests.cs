@@ -1,8 +1,10 @@
+using System.Text;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // A small mixed list on the Import page: previewed, the open book chosen, imported, and repeated without a second copy of anything.
+    // The Import page: a small mixed list given as a file through the file input, previewed, imported and repeated without a second copy of anything;
+    // and a list longer than one run that carries the rows' own choices over to the rest.
     [TestClass]
     public sealed class MediaImportTests
     {
@@ -19,9 +21,14 @@ namespace Jularr.E2E.Tests
             ]}
             """;
 
+        // A switch is flipped through its visible track, as a person does.
+        private static Task FlipAsync(ILocator input) => input.Locator("xpath=ancestor::label[1]").ClickAsync();
+
+        private static FilePayload Payload(string name, string text, string type = "application/json") => new() { Name = name, MimeType = type, Buffer = Encoding.UTF8.GetBytes(text) };
+
         [TestMethod]
         [Timeout(300_000)]
-        public async Task MixedList_IsPreviewedImportedAndRepeatedWithoutDuplicates()
+        public async Task MixedList_IsUploadedPreviewedImportedAndRepeatedWithoutDuplicates()
         {
             using var folders = new Folders("Movies");
             await using var fakes = await FakeServices.StartAsync(folders.Downloads);
@@ -40,44 +47,103 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
 
-                // The page sits in the Media area of the administration.
+                // The page sits in the Media area of the administration; the file input shows its drop zone, the field behind it stays out of sight.
                 await page.GotoAsync("/Admin/Import");
                 await Assertions.Expect(page.Locator(".app-sidebar a[href='/Admin/Import']")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("[name=Json]")).ToBeVisibleAsync();
+                var input = page.Locator(".file-input[data-file-ready]");
+                await Assertions.Expect(input.Locator(".file-input__zone")).ToBeVisibleAsync();
+                await Assertions.Expect(input.GetByRole(AriaRole.Button, new() { Name = "Choose file" })).ToBeVisibleAsync();
+                await Assertions.Expect(input.Locator(".file-input__limit")).ToHaveTextAsync("JSON · up to 1.0 MB");
+                await Assertions.Expect(input.Locator("input[type=file]")).ToHaveCSSAsync("opacity", "0");
+                await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Waiting for a list");
                 await Evidence.SaveAsync(page, "media-import-upload");
 
+                // The example is a download and a sample that opens, with its copy button.
+                var example = page.GetByRole(AriaRole.Link, new() { Name = "Example file" });
+                await Assertions.Expect(example).ToHaveAttributeAsync("download", "jularr-media-list.json");
+                await page.Locator(".code-sample summary").ClickAsync();
+                await Assertions.Expect(page.Locator(".code-sample [data-code-text]")).ToContainTextAsync("\"version\": 1");
+                await page.Locator("[data-code-copy]").ClickAsync();
+                await Assertions.Expect(page.Locator("[data-code-copy]")).ToHaveAttributeAsync("data-state", "copied");
+                await Evidence.SaveAsync(page, "media-import-sample");
+
+                // A file of the wrong kind or beyond the limit is refused with its reason; nothing stays in the field.
+                var file = input.Locator("input[type=file]");
+                await file.SetInputFilesAsync(Payload("list.txt", "{}", "text/plain"));
+                await Assertions.Expect(input.Locator("[data-file-error]")).ToHaveTextAsync("Only JSON files are accepted.");
+                await file.SetInputFilesAsync(Payload("big.json", new string(' ', 1_048_577)));
+                await Assertions.Expect(input.Locator("[data-file-error]")).ToHaveTextAsync("The file is larger than 1.0 MB.");
+                Assert.AreEqual(0, await file.EvaluateAsync<int>("field => field.files.length"));
+                await Assertions.Expect(input.Locator("[data-file-chosen]")).ToBeHiddenAsync();
+
+                // The list is chosen: its name and size appear and the page reads it; removing it brings the page back.
+                await file.SetInputFilesAsync(Payload("list.json", List));
+                await Assertions.Expect(input.Locator("[data-file-name]")).ToHaveTextAsync("list.json");
+                await Assertions.Expect(input.Locator("[data-file-size]")).ToHaveTextAsync(Encoding.UTF8.GetByteCount(List).ToString(System.Globalization.CultureInfo.InvariantCulture) + " B");
+                await Assertions.Expect(input.Locator("[data-file-error]")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Valid list · 6 entries");
+                await Evidence.SaveAsync(page, "media-import-file");
+                await input.GetByRole(AriaRole.Button, new() { Name = "Remove file" }).ClickAsync();
+                await Assertions.Expect(input.Locator("[data-file-chosen]")).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Waiting for a list");
+                await page.Locator("[name=Json]").FillAsync("{\"version\":1,\"items\":[");
+                await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Not a valid list");
+                await page.Locator("[name=Json]").FillAsync("");
+                await file.SetInputFilesAsync(Payload("list.json", List));
+                await Assertions.Expect(input.Locator("[data-file-name]")).ToHaveTextAsync("list.json");
+
                 // The list is previewed: three new, one open with a proposed book, a duplicate and an invalid entry.
-                await page.Locator("[name=Json]").FillAsync(List);
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview"));
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
                 var summary = page.Locator(".media-import__summary");
-                foreach (var (count, status) in new[] { ("3", "New"), ("1", "Open"), ("1", "Duplicate"), ("1", "Invalid") })
+                foreach (var (number, status) in new[] { ("3", "New"), ("1", "Open"), ("1", "Duplicate"), ("1", "Invalid") })
                 {
-                    await Assertions.Expect(summary.Locator(".tag").Filter(new() { HasText = status })).ToContainTextAsync(count);
+                    await Assertions.Expect(summary.Locator(".tag").Filter(new() { HasText = status })).ToContainTextAsync(number);
                 }
 
                 var rows = page.Locator("main table tbody tr");
                 await Assertions.Expect(rows).ToHaveCountAsync(6);
                 await Assertions.Expect(rows.Nth(5)).ToContainTextAsync("Unknown key: bogus");
                 await Assertions.Expect(rows.Nth(4)).ToContainTextAsync("Same as row 1");
+                await Assertions.Expect(rows.Nth(0).Locator(".state-chip svg")).ToHaveCountAsync(1);
                 var book = rows.Nth(2);
                 await Assertions.Expect(book.Locator("select[name='Choices[2].Choice']")).ToHaveValueAsync("openlibrary:OL66554W");
                 await Assertions.Expect(book.Locator("input[type=checkbox][name='Choices[2].Include']")).Not.ToBeCheckedAsync();
                 await Assertions.Expect(rows.Nth(0).Locator("input[type=checkbox][name='Choices[0].Include']")).ToBeCheckedAsync();
-                await Evidence.SaveAsync(page, "media-import-preview");
+                await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action']")).ToHaveValueAsync("");
                 Assert.AreEqual(0, await page.Locator("main table tbody tr a[href^='/Admin/Works/']").CountAsync(), "The preview must not add anything.");
 
-                // A narrow screen keeps the page in its width, the table scrolls on its own.
+                // Select all follows the rows: three of four chosen, then all, then none (and nothing to import).
+                var all = page.Locator("[data-import-all]");
+                var count = page.Locator("[data-import-count]");
+                await Assertions.Expect(count).ToHaveTextAsync("3 of 4 selected");
+                await Assertions.Expect(all).Not.ToBeCheckedAsync();
+                await Evidence.SaveAsync(page, "media-import-preview");
+                await FlipAsync(all);
+                await Assertions.Expect(count).ToHaveTextAsync("4 of 4 selected");
+                await Assertions.Expect(book.Locator("input[type=checkbox][name='Choices[2].Include']")).ToBeCheckedAsync();
+                await FlipAsync(all);
+                await Assertions.Expect(count).ToHaveTextAsync("0 of 4 selected");
+                await Assertions.Expect(page.Locator("[data-import-apply]")).ToBeDisabledAsync();
+                await FlipAsync(book.Locator("input[name='Choices[2].Include']"));
+                await Assertions.Expect(count).ToHaveTextAsync("1 of 4 selected");
+                await Assertions.Expect(all).Not.ToBeCheckedAsync();
+                await FlipAsync(rows.Nth(0).Locator("input[name='Choices[0].Include']"));
+                await FlipAsync(rows.Nth(1).Locator("input[name='Choices[1].Include']"));
+                await FlipAsync(rows.Nth(3).Locator("input[name='Choices[3].Include']"));
+                await Assertions.Expect(all).ToBeCheckedAsync();
+
+                // A narrow screen keeps the page in its width.
                 await page.SetViewportSizeAsync(390, 844);
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"));
                 await Evidence.SaveAsync(page, "media-import-preview-mobile");
                 await page.SetViewportSizeAsync(1280, 720);
 
-                // The person takes the proposed book too and imports; every row reports its own outcome.
-                await book.Locator("input[type=checkbox][name='Choices[2].Include']").CheckAsync();
+                // The person imports the chosen rows; every row reports its own outcome.
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
                 await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Added, monitored" })).ToContainTextAsync("4");
                 await Assertions.Expect(page.Locator("main table tbody tr")).ToHaveCountAsync(4);
-                await Assertions.Expect(page.Locator("main table tbody tr .tag", new() { HasText = "Searching" })).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator("main table tbody tr .state-chip", new() { HasText = "Searching" })).ToHaveCountAsync(4);
                 await Evidence.SaveAsync(page, "media-import-result");
                 await page.SetViewportSizeAsync(390, 844);
                 await Evidence.SaveAsync(page, "media-import-result-mobile");
@@ -96,11 +162,12 @@ namespace Jularr.E2E.Tests
                     await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = title })).ToHaveCountAsync(1);
                 }
 
-                // The same list again finds everything in the library; importing it changes nothing.
+                // The same list again, pasted, finds everything in the library; importing it changes nothing.
                 await page.GotoAsync("/Admin/Import");
                 await page.Locator("[name=Json]").FillAsync(List.Replace("{\"type\":\"book\",\"title\":\"Pride and Prejudice\",\"author\":\"Jane Austen\"}",
                     "{\"type\":\"book\",\"ids\":{\"openlibrary\":\"OL66554W\"}}", StringComparison.Ordinal));
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview"));
+                await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Valid list · 6 entries");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
                 await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "In library" })).ToContainTextAsync("4");
                 await Assertions.Expect(page.Locator("main table tbody tr input[type=checkbox]")).ToHaveCountAsync(0);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
@@ -112,6 +179,60 @@ namespace Jularr.E2E.Tests
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {
                 await Evidence.SaveAsync(page, "failure-media-import");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task LongList_ContinuesWithTheChoicesOfItsRows()
+        {
+            using var folders = new Folders("Movies");
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.SetTmdbKeyAsync(page);
+
+                // Forty-two new films: a run takes forty and leaves two for the next.
+                var list = "{\"version\":1,\"items\":[" + string.Join(',', Enumerable.Range(30000, 42).Select(id => "{\"type\":\"movie\",\"ids\":{\"tmdb\":\"" + id + "\"}}")) + "]}";
+                await page.GotoAsync("/Admin/Import");
+                await page.Locator("input[type=file]").SetInputFilesAsync(Payload("bulk.json", list));
+                await Assertions.Expect(page.Locator("[data-import-status]")).ToHaveTextAsync("Valid list · 42 entries");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Preview import"));
+                var rows = page.Locator("main table tbody tr");
+                await Assertions.Expect(rows).ToHaveCountAsync(42);
+                await Assertions.Expect(page.Locator("[data-import-count]")).ToHaveTextAsync("42 of 42 selected");
+
+                // The last two rows differ from the list: the next one is only added, the last one is monitored without a search.
+                await page.Locator("select[name='Choices[40].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Add only" });
+                await page.Locator("select[name='Choices[41].Action']").SelectOptionAsync(new SelectOptionValue { Label = "Monitor" });
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
+                await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Waiting for the next run" })).ToContainTextAsync("2");
+                await Evidence.SaveAsync(page, "media-import-result-continue");
+
+                // The rest comes back as the first rows of the next preview with their own choices.
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Continue with the rest" }));
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+                await Assertions.Expect(rows.Nth(0).Locator("select[name='Choices[0].Action'] option:checked")).ToHaveTextAsync("Add only");
+                await Assertions.Expect(rows.Nth(1).Locator("select[name='Choices[1].Action'] option:checked")).ToHaveTextAsync("Monitor");
+                await Evidence.SaveAsync(page, "media-import-continued");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
+                await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30040" }).Locator(".state-chip")).ToHaveTextAsync("Added");
+                await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = "Bulk Movie 30041" }).Locator(".state-chip")).ToHaveTextAsync("Added, monitored");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-media-import-continue");
                 throw;
             }
         }
