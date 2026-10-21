@@ -166,7 +166,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             yield return Cell("select", selectable
                 ? new Input().Attribute("type", "checkbox").Attribute("name", "workIds").Attribute("value", id).Attribute("form", "works-bulk").TextAttribute("aria-label", "works.select")
                 : new Span());
-            yield return Cell("cover", new A(item.PosterUrl is { } poster ? new MediaImage(poster, "", 40, 60) : new Span().Class("works-cover__placeholder")).Class("works-cover")
+            yield return Cell("cover", new A(MediaImage.Or(assets, item.PosterUrl, "", 40, 60)).Class("works-cover")
                 .Attribute("href", home).Attribute("tabindex", "-1").Attribute("aria-hidden", "true"));
             yield return Cell("title", new A(new ValueText(item.CanonicalTitle)).Class("work-title-text works-title").Attribute("href", home).Attribute("title", item.CanonicalTitle));
         }

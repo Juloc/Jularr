@@ -953,6 +953,47 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
         }
 
+        // A folder of two films is sorted by hand: the names preview shows each file under the title and quality its owner chose, and the report says what became of each.
+        [TestMethod]
+        public async Task ManualImport_SortsFilesToTheirOwnTitles_WithTheQualityAPersonGave()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var otherId = await CreateWantedMovieAsync(host, "Other Movie", 2019, 501, 601);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, "unknown-rip.mkv"), new byte[2048]);
+
+            // The preview names the files as chosen: the second one under the other film, as a 720p Bluray.
+            BaseDataList<ManualImportChoiceV1> choices = new([new ManualImportChoiceV1(Feature + ".mkv", true, null, null), new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId, "Bluray-720p")]);
+            using var preview = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/names", new PreviewManualImportDataV1(choices));
+            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
+            var names = (await preview.Content.ReadFromJsonAsync<BaseDataList<ManualImportNameV1>>())!;
+            Assert.AreEqual(wantedId, names.Single(name => name.Path == Feature + ".mkv").WantedItemId);
+            var other = names.Single(name => name.Path == "unknown-rip.mkv");
+            Assert.AreEqual("Other Movie", other.WorkTitle);
+            StringAssert.StartsWith(other.TargetName!, "Other Movie (2019)");
+
+            // A quality the film cannot have is refused before anything is placed.
+            using var refused = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import", new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link,
+                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, null, "FLAC")])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import", new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link, choices));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var result = (await imported.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
+            Assert.AreEqual(2, result.Imported);
+            CollectionAssert.AreEquivalent(new[] { "Example Movie", "Other Movie" }, result.Files.Select(file => file.WorkTitle).ToArray());
+            Assert.IsTrue(result.Files.All(file => file.FailureKey is null));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
+            Assert.AreEqual("Bluray-720p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Movies", other.TargetName!)));
+        }
+
         [TestMethod]
         public async Task Movie_ManualSearchGrabMonitorAndImport_CompletesTheRequest()
         {
@@ -1334,6 +1375,40 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("UHD", uhd.Name);
             CollectionAssert.AreEqual(new[] { "WEBDL-2160p", "WEBDL-1080p" }, uhd.AllowedQualities);
             Assert.AreEqual(0, uhd.FormatScores.Count);
+        }
+
+        [TestMethod]
+        public async Task Profiles_TheLanguagesOfTheChoice_AndTheFallback_AreStoredAndReadBack()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var seeded = await ReadProfilesAsync(host);
+            var books = seeded.Single(profile => profile.MediaTypeId == MediaType.Book && profile.MediaSubtypeId == null && profile.IsDefault);
+            Assert.AreEqual(LanguageFallbackType.Original, books.LanguageFallback);
+            Assert.AreEqual(0, books.LanguageOrder.Length);
+
+            // The profile names the languages of the choice and the fallback.
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + books.Id,
+                new SaveAcquisitionProfileDataV1(books.Name, MediaType.Book, books.IsDefault, books.AllowedQualities, books.UpgradeAllowed,
+                    books.UpgradeCutoffQuality, null, null, books.Version, languageOrder: ["DE", "EN"], languageFallback: LanguageFallbackType.English));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            var stored = (await ReadProfilesAsync(host)).Single(profile => profile.Id == books.Id);
+            CollectionAssert.AreEqual(new[] { "de", "en" }, stored.LanguageOrder);
+            Assert.AreEqual(LanguageFallbackType.English, stored.LanguageFallback);
+
+            // An unknown language is rejected.
+            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + books.Id,
+                new SaveAcquisitionProfileDataV1(books.Name, MediaType.Book, books.IsDefault, books.AllowedQualities, books.UpgradeAllowed,
+                    books.UpgradeCutoffQuality, null, null, books.Version, languageOrder: ["XX"]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+            // The stored definition carries both into the profile of the acquisition.
+            var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
+                (string)(await host.ScalarAsync($"SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = {books.Id}"))!,
+                AcquisitionSelectionLogic.DefinitionOptions)!;
+            CollectionAssert.AreEqual(new[] { "de", "en" }, definition.LanguageOrder);
+            Assert.AreEqual(LanguageFallbackType.English, definition.LanguageFallback);
         }
 
         [TestMethod]
@@ -2572,19 +2647,21 @@ namespace Jularr.Backend.Tests
             return (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items;
         }
 
-        private static async Task<long> CreateWantedMovieAsync(Host host)
+        private static Task<long> CreateWantedMovieAsync(Host host) => CreateWantedMovieAsync(host, "Example Movie", 2020, 500, 600);
+
+        private static async Task<long> CreateWantedMovieAsync(Host host, string title, int year, long requestId, long wantedId)
         {
-            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Movie, "Example Movie", 2020));
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Movie, title, year));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
-            Assert.AreEqual(2020, work.ReleaseYear);
+            Assert.AreEqual(year, work.ReleaseYear);
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES (500, {work.Id}, 202, 42, 1, 2, 41, now());
-                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
-                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
+                VALUES ({requestId}, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES ({wantedId}, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES ({requestId}, {wantedId});
                 """);
-            return 600;
+            return wantedId;
         }
 
         private static async Task RunAsync<TService>(Host host) where TService : Service.Core.SystemService<AcquisitionCycleParametersV1, NoData>

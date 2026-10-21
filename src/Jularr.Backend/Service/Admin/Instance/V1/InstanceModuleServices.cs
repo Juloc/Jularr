@@ -25,7 +25,17 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     module."Id",
                     module."Key",
                     module."IsEnabled",
-                    module."Version"
+                    module."Version",
+                    ARRAY (
+                        SELECT
+                            dependency."RequiredKey"
+                        FROM
+                            "InstanceModuleDependencies" AS dependency
+                        WHERE
+                            dependency."ModuleKey" = module."Key"
+                        ORDER BY
+                            dependency."RequiredKey"
+                    )::text[] AS "Requires"
                 FROM
                     "InstanceModules" AS module
                 ORDER BY
@@ -46,6 +56,22 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.UpdateInstanceModuleAsync(new InstanceModuleUpdateData(Parameters.InstanceModuleId, Data.IsEnabled, Data.Version), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/instance/modules")]
+    public sealed class UpdateInstanceModulesV1 : AdminService<UpdateInstanceModulesParametersV1, UpdateInstanceModulesDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateInstanceModulesParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateInstanceModulesParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            // Every switch in one step, so that a module and what it needs can change together.
+            await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(), CancellationToken);
             return new UpdateResult(true);
         }
     }

@@ -33,7 +33,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.IsSubsetOf(new[] { "profile.media.read", "media.manual.update", "profile.watchlist.update", "instance.settings.read", "storage.update" }, capabilities.Permissions);
             CollectionAssert.Contains(capabilities.Modules, "Library");
 
-            // Disable through the canonical writer.
+            // Disable through the canonical writer; the modules that build on Library are off first, as the Backend requires.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN (SELECT \"ModuleKey\" FROM \"InstanceModuleDependencies\" WHERE \"RequiredKey\" = 'Library')");
             using var disabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(false, 1));
             Assert.AreEqual(HttpStatusCode.OK, disabled.StatusCode, await disabled.Content.ReadAsStringAsync());
             foreach (var route in new[] { "/api/v1/works/10", "/api/v1/watchlist", "/api/v1/admin/works", "/api/v1/admin/works/10" })
@@ -121,18 +122,12 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "href=\"/Favorites\"");
             StringAssert.Contains(html, "href=\"/Admin/Works\"");
 
-            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
+            // Library and the modules that build on it go off in one save of the Modules page.
+            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Modules");
             html = await editor.Content.ReadAsStringAsync();
             var csrf = WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
-            using var missing = await host.SendAsync(HttpMethod.Post, "/Admin/Instance?handler=Module&instanceModuleId=1", new Dictionary<string, string>
-            {
-                ["__RequestVerificationToken"] = csrf, ["Version"] = "1"
-            });
-            Assert.AreEqual(HttpStatusCode.BadRequest, missing.StatusCode);
-            using var disabled = await host.SendAsync(HttpMethod.Post, "/Admin/Instance?handler=Module&instanceModuleId=1", new Dictionary<string, string>
-            {
-                ["__RequestVerificationToken"] = csrf, ["Version"] = "1", ["IsEnabled"] = "False"
-            });
+            var dependants = Regex.Matches(html, "data-module=\"([A-Za-z]+)\" data-requires=\"[^\"]*Library[^\"]*\"").Select(match => (match.Groups[1].Value, false));
+            using var disabled = await host.SendAsync(HttpMethod.Post, "/Admin/Instance/Modules", InstanceModuleDependencyTests.Form(html, csrf, [("Library", false), .. dependants]));
             Assert.AreEqual(HttpStatusCode.Redirect, disabled.StatusCode, await disabled.Content.ReadAsStringAsync());
             using var updated = await host.SendAsync(HttpMethod.Get, "/Settings");
             html = await updated.Content.ReadAsStringAsync();
@@ -140,7 +135,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("href=\"/Admin/Works\"", StringComparison.Ordinal));
             using var denied = await host.SendAsync(HttpMethod.Get, "/Favorites");
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
-            using var stillEditable = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
+            using var stillEditable = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Modules");
             Assert.AreEqual(HttpStatusCode.OK, stillEditable.StatusCode);
         }
     }

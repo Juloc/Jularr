@@ -797,7 +797,7 @@ namespace Jularr.E2E.Tests
             Assert.IsFalse(await page.Locator(".app-header").IsVisibleAsync());
             Assert.IsFalse(await page.Locator(".reader__sidebar").IsVisibleAsync());
             Assert.AreEqual(1, await page.Locator(".reader__top .reader__cover").CountAsync());
-            Assert.AreEqual(1, await page.Locator(".reader__cover .ui-icon").CountAsync(), "Fixtures without artwork retain a deliberate cover fallback.");
+            Assert.AreEqual(1, await page.Locator(".reader__cover .no-cover__icon").CountAsync(), "Fixtures without artwork retain a deliberate cover fallback.");
             Assert.AreEqual(0, await page.Locator(".app-sidebar .reader__cover, .continue-bar, .save-pill").CountAsync());
             Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("el => el.hasAttribute('hx-boost:inherited')"), "The document renderer must not survive an in-place navigation away.");
             var initialCanvas = await canvas.BoundingBoxAsync();
