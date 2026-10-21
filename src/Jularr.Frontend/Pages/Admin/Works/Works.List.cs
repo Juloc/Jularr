@@ -226,9 +226,8 @@ namespace Jularr.Frontend.Pages.Admin.Works
             files.Control.Attribute("name", "deletesFiles");
             var exclusion = new Toggle("work.delete.exclusion");
             exclusion.Control.Attribute("name", "addsExclusion");
-            return new Dialog(new Div(new H2(new Text("works.delete.title")), new Button(new Text("common.close")).Attribute("data-dialog-close", "")).Class("work-dialog__head"),
-                new PostForm(Address("Delete"), csrf, [], new Div().Attribute("data-works-ids", ""), files, exclusion, new Button(new Text("works.delete.confirm")).Submit()).Class("works-delete-form"))
-                .Class("work-dialog").Attribute("id", "works-delete");
+            return new Modal(assets, "works-delete", "works.delete.title",
+                [new PostForm(Address("Delete"), csrf, [], new Div().Attribute("data-works-ids", ""), files, exclusion, new Button(new Text("works.delete.confirm")).Submit()).Class("works-delete-form")]);
         }
 
         // What happened to the titles of the last action: how many, and why the others stayed.
@@ -298,8 +297,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }, Address(), csrf, _input, _search is null && !_bulkFailed ? FormError : null));
 
             var open = _search is not null || _input is not null && FormError is not null;
-            return new Dialog(new Div(new H2(new Text("works.add")), new Button(new Text("common.close")).Attribute("data-dialog-close", "")).Class("work-dialog__head"), new Div([.. content]).Class("works-add-form"))
-                .Class("work-dialog work-dialog--wide").Attribute("id", "works-add").Attribute("data-open", open ? "true" : "false");
+            return new Modal(assets, "works-add", "works.add", [new Div([.. content]).Class("works-add-form")], open);
         }
     }
 }

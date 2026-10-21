@@ -66,7 +66,6 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 if (standalone && work.MediaTypeId == MediaType.Book && work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes())
                 {
                     page.Content.Add(new A(new Text("work.upload")).Class("button").Attribute("href", Home + "/Upload"));
-                    if (TempData["VolumeUploaded"] is true) page.Content.Add(new P(new Text("work.upload.done")).Attribute("role", "status"));
                 }
 
                 if (_input is null && _groupInput is null && _matchQuery is null && FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -122,7 +121,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             };
             if (_matches is { } matches)
             {
-                content.Add(matches.Count == 0 ? new P(new Text("discover.noResults")).Attribute("role", "status") : new Table<MetadataSearchResultV1>(matches)
+                if (matches.Count > 0) content.Add(new Table<MetadataSearchResultV1>(matches)
                     .Text(item => item.Title, "media.title")
                     .Content("media.year", item => new ValueText(item.ReleaseYear?.ToString(CultureInfo.InvariantCulture) ?? ""))
                     .Content("media.author", item => new ValueText(item.Author ?? ""))

@@ -76,7 +76,7 @@
     white-space: nowrap;
 }
 
-.work-facts, .work-overview, .work-hero__status { margin: 0; color: rgb(255 255 255 / 88%); }
+.work-facts, .work-overview { margin: 0; color: rgb(255 255 255 / 88%); }
 .work-overview { max-width: 760px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 
 .work-hero__bottom {
@@ -379,21 +379,6 @@ th[aria-sort="descending"] .work-sort::after { content: " ▾"; }
     letter-spacing: -2px;
     touch-action: none;
 }
-
-// The edit dialog
-
-.work-dialog {
-    width: min(560px, 92vw);
-    padding: 20px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--surface);
-    color: var(--text);
-
-    &::backdrop { background: rgb(20 14 36 / 55%); }
-}
-
-.work-dialog__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; h2 { margin: 0; font-size: 18px; } }
 
 // Two lines for every unit on a narrow screen: the first stays in view, the second is a tinted strip that slides sideways. A season is one scroller, so its strips slide together.
 

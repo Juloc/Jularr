@@ -65,12 +65,6 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                 content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": " + searchedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))));
             }
 
-            if (TempData["WantedSearched"] is string outcome)
-            {
-                content.Add(new P(new Text("acquisition.outcome." + outcome), new ValueText(TempData["WantedTaken"] is string taken ? ": " + taken : "")).Attribute("role", "status"));
-            }
-
-            if (TempData["WantedGrabbed"] is true) content.Add(new P(new Text("wanted.grabQueued")).Attribute("role", "status"));
             var actions = new List<IUiComponent>();
             if (CanAcquire)
             {
@@ -228,8 +222,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         public async Task<IActionResult> OnPostAutomaticAsync(int? parentUnitNumber, int? unitNumber)
         {
             var result = await automatic.ExecuteAsync<AutomaticSearchResultV1>(new WantedItemParametersV1(Id), new SearchWantedDataV1(parentUnitNumber, unitNumber), HttpContext.RequestAborted);
-            TempData["WantedSearched"] = result.OutcomeKey;
-            if (result.Title is { } title) TempData["WantedTaken"] = title;
+            HintText(texts["acquisition.outcome." + result.OutcomeKey] + (result.Title is { } title ? ": " + title : ""));
             return LocalRedirect(Address());
         }
 

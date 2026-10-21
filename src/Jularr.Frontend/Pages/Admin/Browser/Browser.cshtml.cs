@@ -21,18 +21,12 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         private BrowserStatusV1? _status;
         private PageResult<AcquisitionConnectionDetailsV1>? _connections;
         private PageResult<WantedDetailsV1>? _wanted;
-        private string? _message;
 
         protected override void Define(Page page)
         {
             page.Title("admin.browser.title");
             page.Navigation("nav.admin");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-
-            if (_message is not null)
-            {
-                page.Content.Add(new P(new ValueText(_message)).Attribute("role", "status"));
-            }
 
             // What the browser is and what it did last.
             page.Content.Add(new H2(new Text("admin.browser.state")));
@@ -81,7 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         public async Task<IActionResult> OnPostActionAsync(string action, string? url)
         {
             var result = await run.ExecuteAsync<BrowserStatusV1>(new BrowserParametersV1(), new RunBrowserActionDataV1(action ?? "start", url), HttpContext.RequestAborted);
-            _message = texts["admin.browser.ran"];
+            Hint("admin.browser.ran");
             await LoadDataAsync();
             return Page();
         }
@@ -89,7 +83,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         public async Task<IActionResult> OnPostTestAsync(long acquisitionConnectionId)
         {
             var result = await test.ExecuteAsync<AcquisitionConnectionTestV1>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), default, HttpContext.RequestAborted);
-            _message = result.IsAvailable ? texts["admin.browser.sourceOk"] : texts["admin.browser.sourceFailed"] + " " + (result.ErrorKey ?? "-");
+            HintText(result.IsAvailable ? texts["admin.browser.sourceOk"] : texts["admin.browser.sourceFailed"] + " " + (result.ErrorKey ?? "-"));
             await LoadDataAsync();
             return Page();
         }
@@ -101,7 +95,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
             await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(acquisitionConnectionId), new SaveAcquisitionConnectionDataV1(details.Name, details.AcquisitionConnectionTypeId, details.BaseUrl, null,
                 false, details.Priority, details.Categories, details.DownloadCategory, details.RemotePath, details.LocalPath, details.Username, details.MaxConnections, null,
                 details.MediaTypeIds, details.SearchesAutomatically, details.QueryLimit, details.GrabLimit, details.Host, details.Port, details.UseSsl, details.DownloadStorageMountId), HttpContext.RequestAborted);
-            _message = texts["admin.browser.sourceOff"];
+            Hint("admin.browser.sourceOff");
             await LoadDataAsync();
             return Page();
         }
@@ -110,7 +104,7 @@ namespace Jularr.Frontend.Pages.Admin.Browser
         public async Task<IActionResult> OnPostSearchAsync(long wantedItemId)
         {
             var result = await search.ExecuteAsync<BaseDataList<WantedReleaseCandidateV1>>(new WantedItemParametersV1(wantedItemId), new SearchWantedDataV1(), HttpContext.RequestAborted);
-            _message = texts["admin.browser.searched"] + " " + result.Count;
+            HintText(texts["admin.browser.searched"] + " " + result.Count);
             await LoadDataAsync();
             return Page();
         }
