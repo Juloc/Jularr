@@ -409,8 +409,8 @@ startet keine Schemaänderung. Bestehende unversionierte Testdatenbanken werden 
 automatisch übernommen. Ablauf und verbleibende Release-Abnahme: [Datenbank-Updates](docs/DATABASE_UPGRADES.md).
 
 Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
-Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch alle
-`Backup:IntervalHours` (Standard 24, 0 aus), die neuesten `Backup:Keep` (Standard 7, mindestens 1) bleiben.
+Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch im
+Intervall der Instanz-Einstellungen (Standard 24 Stunden, 0 aus); die neuesten Backups bleiben (Standard 7, mindestens 1).
 Ein Backup derselben Jularr-Version stellt `pg_restore` nur in der
 Einrichtung wieder her (`/Setup/Backup`); danach Jularr neu starten. Mit `Backup:Passphrase` liegt der
 Schlüsselbund nur verschlüsselt im Backup (AES-GCM, Schlüssel per PBKDF2) und die Wiederherstellung fragt

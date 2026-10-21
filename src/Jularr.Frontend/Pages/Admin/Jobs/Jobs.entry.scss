@@ -8,6 +8,9 @@
 
 .jobs-status > span:not(.state-chip) { margin-top: 4px; }
 
+// A provider of the provider sync sits indented below it.
+.jobs-job--part { padding-left: 16px; }
+
 .jobs-state { white-space: nowrap; }
 
 // A job's controls next to each other, wrapping on a narrow screen.

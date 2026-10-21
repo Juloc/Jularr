@@ -32,10 +32,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly IMemoryCache _offers;
         private readonly TimeProvider _time;
         private readonly DownloadStorage _downloads;
+        private readonly WorkSignals _signals;
 
         public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers,
-            TimeProvider time, DownloadStorage downloads)
+            TimeProvider time, DownloadStorage downloads, WorkSignals signals)
         {
+            _signals = signals;
             _downloads = downloads;
             _time = time;
             _newznab = newznab;
@@ -166,6 +168,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     await ctx.StartDownloadAsync(new DownloadStartData(reserved, Limit(offer.Guid!, 128)), token);
                     return true;
                 }, ct);
+
+                // Tracking and the downloader look at the new download at once.
+                _signals.Downloads.Notify();
                 return;
             }
 
@@ -281,6 +286,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await ctx.StartDownloadAsync(new DownloadStartData(operationId, Limit(externalId!, 128)), token);
                 return true;
             }, ct);
+            _signals.Downloads.Notify();
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, int? igdbPlatform, IEnumerable<PlannedQuery> queries, SearchBudget budget,

@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Worker;
+using Jularr.Backend.Data.Fields.Instance;
 using Jularr.Backend.Data.Fields.Worker;
 
 namespace Jularr.Backend.Data.Logic.Worker
@@ -95,5 +96,29 @@ namespace Jularr.Backend.Data.Logic.Worker
 
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.PausesWhileUsedChoice))]
         public bool? PausesWhileUsedChoice { get; }
+    }
+
+    // The Owner's intervals for the jobs that have one.
+    internal sealed class WorkerSettingsData : BaseData
+    {
+        public WorkerSettingsData(int backupIntervalHours, int backupKeep, int providerSyncIntervalMinutes, int wantedSearchIntervalMinutes)
+        {
+            BackupKeep = backupKeep;
+            BackupIntervalHours = backupIntervalHours;
+            ProviderSyncIntervalMinutes = providerSyncIntervalMinutes;
+            WantedSearchIntervalMinutes = wantedSearchIntervalMinutes;
+        }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupIntervalHours))]
+        public int BackupIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupKeep))]
+        public int BackupKeep { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ProviderSyncIntervalMinutes))]
+        public int ProviderSyncIntervalMinutes { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.WantedSearchIntervalMinutes))]
+        public int WantedSearchIntervalMinutes { get; }
     }
 }

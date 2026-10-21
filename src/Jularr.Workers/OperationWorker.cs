@@ -11,41 +11,58 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    // Queued scans and backups one after another; a restart resumes what it interrupted.
-    internal sealed class OperationWorker(TimeProvider time, WorkerJobRunner runner, ILogger<OperationWorker> logger) : BackgroundService
+    // Queued scans and backups, each in its own lane: scans one after another, one backup at a time, a backup also while a long scan runs.
+    // A lane sleeps until work is queued for it and looks again on a slow safety tick; a restart resumes what it interrupted.
+    internal sealed class OperationWorker(TimeProvider time, IServiceScopeFactory scopes, WorkerJobRunner runner, WorkSignals signals, ILogger<OperationWorker> logger) : BackgroundService
     {
-        private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan SafetyTick = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(30);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var recovered = false;
             try
             {
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    var result = await runner.RunWhileBusyAsync("operations", async (services, token) =>
-                    {
-                        // Resume work interrupted by a restart.
-                        if (!recovered)
-                        {
-                            await services.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, token);
-                            recovered = true;
-                        }
-
-                        return await RunNextAsync(services, logger, token);
-                    }, TimeSpan.Zero, time, stoppingToken);
-                    await Task.Delay(result == WorkerJobResultType.Failed ? RetryInterval : PollInterval, time, stoppingToken);
-                }
+                await RecoverAsync(stoppingToken);
+                await Task.WhenAll(RunLaneAsync("operations", OperationType.LibraryScan, signals.Scans, stoppingToken),
+                    RunLaneAsync("backupQueue", OperationType.Backup, signals.Backups, stoppingToken));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
             }
         }
 
-        internal static async Task<bool> RunNextAsync(IServiceProvider services, ILogger logger, CancellationToken ct)
+        // Work a restart interrupted is queued again before either lane starts.
+        private async Task RecoverAsync(CancellationToken ct)
         {
-            var claimed = await services.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new OperationQueueParametersV1(), default, ct);
+            while (true)
+            {
+                try
+                {
+                    await using var scope = scopes.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, ct);
+                    return;
+                }
+                catch (Exception exception) when (!ct.IsCancellationRequested)
+                {
+                    logger.LogWarning(exception, "Interrupted operations could not be queued again.");
+                    await Task.Delay(RetryInterval, time, ct);
+                }
+            }
+        }
+
+        private async Task RunLaneAsync(string job, OperationType operationType, WorkSignal signal, CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var result = await runner.RunWhileBusyAsync(job, (services, token) => RunNextAsync(services, logger, operationType, token), TimeSpan.Zero, time, ct);
+                await signal.WaitAsync(result == WorkerJobResultType.Failed ? RetryInterval : SafetyTick, time, ct);
+            }
+        }
+
+        // Claims the oldest queued operation of the lane's kind and runs it; false when none waits.
+        internal static async Task<bool> RunNextAsync(IServiceProvider services, ILogger logger, OperationType operationType, CancellationToken ct)
+        {
+            var claimed = await services.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(operationType), default, ct);
             if (claimed.OperationId is not { } operationId)
             {
                 return false;

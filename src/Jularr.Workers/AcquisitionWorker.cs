@@ -4,11 +4,11 @@ using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
-using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
+    // Looks for the wanted titles that are due on the Owner's interval, or as soon as a request makes one due.
     internal sealed class AcquisitionWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner, AcquisitionSearchSignal signal) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Acquisition)
     {
         protected override async Task RunOnceAsync(CancellationToken ct)
@@ -19,13 +19,8 @@ namespace Jularr.Workers
                 Jobs.RequestRun("wantedSearch");
             }
 
-            // Downloads are tracked often; metadata and due targets are refreshed in small passes.
-            await Runner.RunAsync("downloads", (services, token) => RunAllAsync(token, Step<MonitorDownloadsV1>(services), Step<RefreshStoredFileFormatsV1>(services)), ct);
-            await Runner.RunAsync("wantedSearch", (services, token) => RunAllAsync(token, Step<RefreshWantedMetadataV1>(services), Step<SearchDueWantedV1>(services)), ct);
-
-            // Plex availability follows the server.
-            await Runner.RunAsync("plexSync", (services, token) =>
-                services.GetRequiredService<SyncPlexLibraryV1>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, token), ct);
+            // Custom formats of the files, metadata of wanted titles and the searches in small passes.
+            await Runner.RunAsync("wantedSearch", (services, token) => RunAllAsync(token, Step<RefreshStoredFileFormatsV1>(services), Step<RefreshWantedMetadataV1>(services), Step<SearchDueWantedV1>(services)), ct);
         }
 
         protected override IEnumerable<Task<bool>> Wakeups(CancellationToken ct) => [signal.WaitForRequestAsync(ct).AsTask()];

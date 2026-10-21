@@ -8,8 +8,8 @@ namespace Jularr.E2E.Tests
     {
         private static readonly string[] Jobs =
         [
-            "Scans and backups", "Download tracking", "Wanted search", "Plex sync", "Usenet downloads", "AniList matching", "Provider covers", "Jellyfin and Emby sync", "Storage check", "Scan scheduling",
-            "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling"
+            "Library scans", "Backups", "Download tracking", "Wanted search", "Provider sync", "Plex sync", "Jellyfin sync", "Emby sync", "Usenet downloads", "AniList matching", "Provider covers",
+            "Storage check", "Scan scheduling", "Automatic backup", "Housekeeping", "Seek thumbnails", "Subtitles", "Text recognition", "Catalog sync", "Resource sampling"
         ];
 
         [TestMethod]

@@ -69,11 +69,13 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
     {
         private readonly BackupOptions _options;
         private readonly PostgresBackupTools _tools;
+        private readonly WorkSignals _signals;
 
-        internal QueueBackupV1(IOptions<BackupOptions> options, PostgresBackupTools tools)
+        internal QueueBackupV1(IOptions<BackupOptions> options, PostgresBackupTools tools, WorkSignals signals)
         {
             _options = options.Value;
             _tools = tools;
+            _signals = signals;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -90,6 +92,8 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
 
             return new UpdateResult(await Context.QueueBackupAsync(new OperationCreationData(OperationKind.Backup, null, Auth.AccountId), CancellationToken));
         }
+
+        protected override void OnCommitted() => _signals.Backups.Notify();
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/backups/{name}/removal")]

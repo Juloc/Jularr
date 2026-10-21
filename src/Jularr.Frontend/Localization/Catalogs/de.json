@@ -980,6 +980,22 @@
    "Library scan interval (hours)",
    "Intervall der Bibliotheksscans (Stunden)"
   ],
+  "admin.instance.backupIntervalHours": [
+   "Automatic backup interval (hours)",
+   "Intervall der automatischen Backups (Stunden)"
+  ],
+  "admin.instance.backupKeep": [
+   "Backups to keep",
+   "Backups behalten"
+  ],
+  "admin.instance.providerSyncIntervalMinutes": [
+   "Plex, Jellyfin and Emby sync interval (minutes)",
+   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
+  ],
+  "admin.instance.wantedSearchIntervalMinutes": [
+   "Wanted search period (minutes)",
+   "Suchintervall für Gesuchtes (Minuten)"
+  ],
   "admin.instance.historyRetentionDays": [
    "Keep finished activity for days",
    "Abgeschlossene Aktivitäten behalten (Tage)"
@@ -2087,6 +2103,38 @@
   "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
    "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
    "Stunden zwischen automatischen Bibliotheksscans; 0 schaltet sie aus. Schlafende NAS werden nicht geweckt."
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.info": [
+   "Hours between automatic backups; 0 switches them off.",
+   "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.info": [
+   "The newest backups stay, older ones are removed.",
+   "Die neuesten Backups bleiben, ältere werden entfernt."
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.info": [
+   "Minutes between two reads of the connected Plex, Jellyfin and Emby servers.",
+   "Minuten zwischen zwei Abgleichen der verbundenen Plex-, Jellyfin- und Emby-Server."
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.info": [
+   "Minutes between two searches of the wanted titles that are due.",
+   "Minuten zwischen zwei Suchen nach fälligen gesuchten Titeln."
   ],
   "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
    "30",
@@ -8028,13 +8076,25 @@
    "Sampler",
    "Messung"
   ],
+  "jobs.worker.Download": [
+   "Downloads",
+   "Downloads"
+  ],
+  "jobs.worker.Provider": [
+   "Providers",
+   "Anbieter"
+  ],
   "jobs.job": [
    "Job",
    "Job"
   ],
   "jobs.job.operations": [
-   "Scans and backups",
-   "Scans und Backups"
+   "Library scans",
+   "Bibliotheksscans"
+  ],
+  "jobs.job.backupQueue": [
+   "Backups",
+   "Backups"
   ],
   "jobs.job.downloads": [
    "Download tracking",
@@ -8044,9 +8104,21 @@
    "Wanted search",
    "Suche nach Gesuchtem"
   ],
-  "jobs.job.plexSync": [
+  "jobs.job.providerSync": [
+   "Provider sync",
+   "Anbieter-Abgleich"
+  ],
+  "jobs.job.providerSyncPlex": [
    "Plex sync",
    "Plex-Abgleich"
+  ],
+  "jobs.job.providerSyncJellyfin": [
+   "Jellyfin sync",
+   "Jellyfin-Abgleich"
+  ],
+  "jobs.job.providerSyncEmby": [
+   "Emby sync",
+   "Emby-Abgleich"
   ],
   "jobs.job.usenet": [
    "Usenet downloads",
@@ -8055,10 +8127,6 @@
   "jobs.job.aniListMatching": [
    "AniList matching",
    "AniList-Zuordnung"
-  ],
-  "jobs.job.mediaServerSync": [
-   "Jellyfin and Emby sync",
-   "Jellyfin- und Emby-Abgleich"
   ],
   "jobs.job.storage": [
    "Storage check",
@@ -8125,8 +8193,12 @@
    "Ausstehend"
   ],
   "jobs.continuous": [
-   "Continuous",
-   "Dauerhaft"
+   "On demand",
+   "Bei Bedarf"
+  ],
+  "jobs.off": [
+   "Off",
+   "Aus"
   ],
   "jobs.last": [
    "Last run",
