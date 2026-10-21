@@ -288,8 +288,18 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEquivalent(new[] { "en" }, show.AudioLanguages);
             CollectionAssert.AreEquivalent(new[] { "de" }, show.SubtitleLanguages);
 
+            // The rating is the one of the catalog entry the title came from; a title without one shows none.
+            await host.Fixture.RunSqlAsync("""
+                WITH identity AS (
+                    INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (20, 'tvdb', '9020') RETURNING "Namespace"
+                )
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Rating", "Votes") SELECT "Namespace", '9020', 1, 'The film', 7.65, 100 FROM identity;
+                """);
+            Assert.IsNull(show.Rating);
+
             // A film has no units; with the profile's audio it is complete.
             var film = await ReadCardAsync(host, "/api/v1/watchlist", 20);
+            Assert.AreEqual(7.65m, film.Rating);
             Assert.AreEqual(MediaAvailabilityState.ProfileAudio, film.AvailabilityStateId);
             Assert.AreEqual(1, film.AvailableUnits);
             Assert.AreEqual(1, film.MonitoredUnits);

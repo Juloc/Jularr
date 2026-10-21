@@ -106,7 +106,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             _loaded = true;
         }
 
-        private static FavoriteEntry Entry(LibraryItemV1 item) => new(item.Id, item.Title, item.PosterUrl, item.ReleaseYear, "media.state." + item.MediaStateTypeId, item.IsWatchlisted, item.ProgressStateId, item.ProgressPercent);
+        private static FavoriteEntry Entry(LibraryItemV1 item) => new(item);
 
         // A favorite that goes leaves its collections too, which the notice tells.
         public async Task<IActionResult> OnPostRemoveAsync(long[]? workIds)
@@ -209,5 +209,16 @@ namespace Jularr.Frontend.Pages.User.Favorites
     }
 
     // One title of the list with what its card shows.
-    public sealed record FavoriteEntry(long Id, string Title, string? PosterUrl, int? Year, string StatusKey, bool IsFavorite, ProgressStateType Progress, int ProgressPercent);
+    public sealed record FavoriteEntry(LibraryItemV1 Item)
+    {
+        public long Id => Item.Id;
+
+        public string Title => Item.Title;
+
+        public bool IsFavorite => Item.IsWatchlisted;
+
+        public ProgressStateType Progress => Item.ProgressStateId;
+
+        public int ProgressPercent => Item.ProgressPercent;
+    }
 }

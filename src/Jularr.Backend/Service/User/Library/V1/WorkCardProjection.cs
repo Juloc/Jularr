@@ -12,8 +12,23 @@ namespace Jularr.Backend.Service.User.Library.V1
             """
             work."Id",
             work."MediaTypeId",
+            visible."MediaSubtypeId",
             visible."Title" AS "Title",
             work."ReleaseYear"::integer AS "ReleaseYear",
+            (
+                -- The rating of the catalog entry the title came from; the best known one when several exist.
+                SELECT
+                    catalogEntry."Rating"
+                FROM
+                    "WorkExternalIdentities" AS identity
+                    JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
+                WHERE
+                    identity."WorkId" = work."Id"
+                    AND catalogEntry."Rating" IS NOT NULL
+                ORDER BY
+                    catalogEntry."Votes" DESC NULLS LAST
+                LIMIT 1
+            ) AS "Rating",
             (
                 SELECT
                     fact."Value"

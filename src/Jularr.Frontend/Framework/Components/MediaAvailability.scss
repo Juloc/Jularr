@@ -75,7 +75,7 @@
         > * { opacity: 0; transition: opacity .2s; }
         > .media-availability { flex: 0 0 auto; }
     }
-    &__label { font-size: 11px; line-height: 16px; color: var(--text); white-space: nowrap; }
+    &__label { min-width: 0; overflow: hidden; font-size: 11px; line-height: 16px; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
     &__hint {
         position: absolute;
         top: 100%;
@@ -100,12 +100,12 @@
 
 // Same reveal for every card.
 .media-card__surface:focus-within, .media-card__surface[data-open] {
-    .media-availability-badge__body { max-width: 152px; height: 24px; padding: 4px 8px; background: var(--surface); box-shadow: none; }
+    .media-availability-badge__body { max-width: min(152px, var(--availability-max, 152px)); height: 24px; padding: 4px 8px; background: var(--surface); box-shadow: none; }
     .media-availability-badge__body > * { opacity: 1; }
 }
 @media (hover: hover) and (pointer: fine) {
     .media-card__surface:hover {
-        .media-availability-badge__body { max-width: 152px; height: 24px; padding: 4px 8px; background: var(--surface); box-shadow: none; }
+        .media-availability-badge__body { max-width: min(152px, var(--availability-max, 152px)); height: 24px; padding: 4px 8px; background: var(--surface); box-shadow: none; }
         .media-availability-badge__body > * { opacity: 1; }
     }
 }

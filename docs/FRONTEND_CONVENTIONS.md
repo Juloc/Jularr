@@ -385,23 +385,25 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations
   and fix the owning style instead of stacking compensating overrides.
-- All catalog/Continue cards use the same canonical `MediaCard`: portrait cover,
-  availability top-left, bookmark top-right. Hover/focus shows title, supplied
-  year/rating and matching icon/text actions in equal-width columns immediately
-  above progress: Play/Continue/Read/Request left, Details right. Touch keeps these
-  actions reachable. A missing real primary action leaves only Details; do not
-  fabricate playback or requests. Series lifecycle, genres, descriptions and
-  language capsules belong in Details, not the cover. Unknown coarse state stays
-  readable in the hover content, never becomes a fabricated completeness dot.
-- Progress is flush at the bottom, full-width and 12px high, with a translucent
-  white track and rounded fill; the rounded card clips it. No time text, border,
-  shadow or surrounding capsule. It must not affect other content's layout.
+- All catalog/Continue cards use the same canonical `MediaCard` (the UiDesigner MediaCard, owner decision 20 Oct): a small
+  portrait cover of 133-150 px (a card to continue 176 px) with softly rounded corners, local availability top left as a tag,
+  the heart top right, then the linked title and one line of facts: `year · type · rating` (what is unknown is left out; the rating
+  is the catalog's, on a scale of ten). A card to continue reads `Type Year | detail` and `ContinueDetail` writes the detail (`S01 E05 ·
+  22 min left`, `Chapter 183`, `Track 4 · 3 min left`, `42%`). Every text is one line with an ellipsis; a clipped text shows in full in a
+  tip over the cover on hover, focus and tap. Hover or focus shows only the one contextual action over the cover, icon and short label
+  (Request, Watch, Continue, Read), never Details; touch keeps it visible. A missing real primary action shows none; do not
+  fabricate playback or requests. Series lifecycle, genres, descriptions and language capsules belong in Details, not the cover.
+  Grids hold as many covers per row as fit (`media-grid`), no two-row wrapping of card text.
+- Progress is a thin capsule inside the foot of the cover (translucent white track, accent fill); no time text and it never moves
+  other content. A page may add one short label over the cover, bottom left (Favorites shows where the profile stands).
 - Availability is green only when all monitored units have local profile-language
   audio; yellow means complete in other audio languages; orange means partial
   with profile audio; yellow–orange means partial in other audio languages.
   Subtitles do not change this classification. Purple downloading, blue searching/
   queued, gray requested and no dot for missing stay distinct. Hover expands the
-  dot into a compact icon/text capsule; partial rings retain supplied unit counts.
+  dot into a compact tag (icon and a short word or the unit counts) with the full sentence below it.
+  Library, Favorites, Collections, People, Franchise and Home read the whole projection; Discover
+  cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
 - Supplied trailers start muted after sustained mouse hover, widen the card without
