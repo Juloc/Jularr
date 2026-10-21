@@ -7,7 +7,7 @@ function replace(image: HTMLImageElement): void {
     const kind = image.dataset.noCover === "person" ? "person" : "poster";
     const standIn = template?.content.querySelector<HTMLElement>(`[data-kind="${kind}"]`)?.cloneNode(true) as HTMLElement | undefined;
     if (!standIn || !image.isConnected) return;
-    standIn.classList.add(...image.classList);
+    standIn.classList.add(...Array.from(image.classList));
     image.replaceWith(standIn);
 }
 
