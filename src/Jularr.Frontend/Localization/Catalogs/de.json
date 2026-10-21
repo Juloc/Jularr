@@ -6121,16 +6121,12 @@
    "Besuchern erlauben, ein Konto anzufragen, das ein Administrator aktiviert"
   ],
   "account.register.title": [
-   "Create an account",
+   "Create your account",
    "Konto erstellen"
   ],
   "account.register.submit": [
-   "Ask for an account",
-   "Konto anfragen"
-  ],
-  "account.register.pending": [
-   "Your account waits until an administrator enables it.",
-   "Dein Konto wartet, bis ein Administrator es aktiviert."
+   "Create account & request access",
+   "Konto erstellen & Zugang anfragen"
   ],
   "admin.instance.trustedProxies": [
    "Trusted reverse proxies",
@@ -8384,7 +8380,7 @@
    "The request was searched by hand:",
    "Die Anfrage wurde von Hand gesucht:"
   ],
-"admin.browser.ran": [
+  "admin.browser.ran": [
    "The browser did what was asked.",
    "Der Browser hat getan, was verlangt war."
   ],
@@ -8395,6 +8391,82 @@
   "admin.browser.sourceFailed": [
    "The source does not answer:",
    "Die Quelle antwortet nicht:"
+  ],
+  "account.login.userPlaceholder": [
+   "Your username",
+   "Dein Benutzername"
+  ],
+  "account.login.forgot": [
+   "Forgot password?",
+   "Passwort vergessen?"
+  ],
+  "account.login.forgotHint": [
+   "An administrator resets passwords. Jularr sends no emails.",
+   "Passwörter setzt ein Administrator zurück. Jularr verschickt keine E-Mails."
+  ],
+  "account.login.providers": [
+   "Or continue with",
+   "Oder weiter mit"
+  ],
+  "account.login.newHere": [
+   "New to Jularr?",
+   "Neu bei Jularr?"
+  ],
+  "account.login.requestAccess": [
+   "Request access",
+   "Zugang anfragen"
+  ],
+  "account.register.passwordPlaceholder": [
+   "At least 12 characters",
+   "Mindestens 12 Zeichen"
+  ],
+  "account.register.confirmPlaceholder": [
+   "Repeat your password",
+   "Passwort wiederholen"
+  ],
+  "account.register.approvalTitle": [
+   "Admin approval required",
+   "Freigabe durch einen Administrator nötig"
+  ],
+  "account.register.approvalText": [
+   "No email needed. Your account becomes active when an administrator approves it.",
+   "Keine E-Mail nötig. Dein Konto wird aktiv, sobald ein Administrator es freigibt."
+  ],
+  "account.register.backToSignIn": [
+   "Back to sign in",
+   "Zurück zur Anmeldung"
+  ],
+  "account.pending.status": [
+   "Approval pending",
+   "Freigabe ausstehend"
+  ],
+  "account.pending.title": [
+   "Account created",
+   "Konto erstellt"
+  ],
+  "account.pending.waiting": [
+   "{0}, your registration is waiting for an administrator to approve it.",
+   "{0}, deine Registrierung wartet auf die Freigabe durch einen Administrator."
+  ],
+  "account.pending.nextTitle": [
+   "What happens next?",
+   "Wie geht es weiter?"
+  ],
+  "account.pending.nextText": [
+   "Your admin reviews the request and activates the account. You can then sign in with the email address and password you chose.",
+   "Dein Admin prüft die Anfrage und aktiviert das Konto. Danach kannst du dich mit der gewählten E-Mail-Adresse und dem Passwort anmelden."
+  ],
+  "account.pending.noEmail": [
+   "No email notifications are sent.",
+   "Es werden keine E-Mail-Benachrichtigungen verschickt."
+  ],
+  "appearance.design": [
+   "Design",
+   "Design"
+  ],
+  "appearance.theme": [
+   "Theme",
+   "Farbschema"
   ]
  }
 }

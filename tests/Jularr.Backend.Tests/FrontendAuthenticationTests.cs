@@ -296,8 +296,16 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Route test')");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             var loginHtml = await login.Content.ReadAsStringAsync();
-            StringAssert.Contains(loginHtml, "data-set-skin=\"original\"");
-            StringAssert.Contains(loginHtml, "data-set-skin=\"clean\"");
+            // The sign-in page offers the two round buttons that go to the next design and the next brightness.
+            StringAssert.Contains(loginHtml, "data-cycle-skin");
+            StringAssert.Contains(loginHtml, "data-cycle-mode");
+            Assert.IsFalse(loginHtml.Contains("data-set-skin", StringComparison.Ordinal));
+            Assert.IsFalse(loginHtml.Contains("data-accent-input", StringComparison.Ordinal));
+
+            // No sign-in method besides the password is configured: no providers row, and the forgot-password note stays an inline hint.
+            Assert.IsFalse(loginHtml.Contains("auth-providers", StringComparison.Ordinal));
+            StringAssert.Contains(loginHtml, "id=\"forgot-hint\"");
+            StringAssert.Contains(loginHtml, "href=\"#forgot-hint\"");
 
             // Both skins' marks are rendered and the skin shows one; the browser tab and home screen show the Clean mark.
             Assert.AreEqual(1, Regex.Matches(loginHtml, "brand-symbol__clean").Count);
@@ -700,6 +708,9 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             var html = await login.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "Sign in with Plex");
+            StringAssert.Contains(html, "auth-providers");
+            StringAssert.Contains(html, "Or continue with");
+            Assert.IsFalse(html.Contains("Trakt", StringComparison.Ordinal));
             using var started = await host.SendAsync(HttpMethod.Post, "/Account/Login?handler=Plex", Form(html));
             html = await started.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, started.StatusCode);

@@ -64,7 +64,7 @@ document.addEventListener("htmx:after:swap", refreshControls);
 // Update shared controls.
 document.addEventListener("click", event => {
     if (!(event.target instanceof Element)) return;
-    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode], [data-set-accent], [data-reset-accent], [data-toggle-mode]");
+    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode], [data-set-accent], [data-reset-accent], [data-toggle-mode], [data-cycle-skin], [data-cycle-mode]");
     if (!button) return;
 
     if (button.dataset.setAccent || button.dataset.resetAccent) {
@@ -75,8 +75,12 @@ document.addEventListener("click", event => {
     // The header's switch: the other brightness than the one in effect (the device's own when the choice is System).
     const toggle = button.dataset.toggleMode !== undefined;
     const dark = root.dataset.mode === "dark" || root.dataset.mode === "system" && systemMode.matches;
-    const kind = !toggle && button.dataset.setSkin ? "skin" : "mode";
-    const value = toggle ? (dark ? "light" : "dark") : button.dataset.setSkin || button.dataset.setMode;
+    // The sign-in page's round buttons: the next skin, the next brightness (system, light, dark), then round again.
+    const cycle = button.dataset.cycleSkin !== undefined ? "skin" : button.dataset.cycleMode !== undefined ? "mode" : null;
+    const kind = cycle ?? (!toggle && button.dataset.setSkin ? "skin" : "mode");
+    const order = [...(kind === "skin" ? skins : modes)];
+    const value = cycle ? order[(order.indexOf(root.dataset[kind] ?? "") + 1) % order.length]
+        : toggle ? (dark ? "light" : "dark") : button.dataset.setSkin || button.dataset.setMode;
     const allowed = kind === "skin" ? skins : modes;
     if (!value || !allowed.has(value)) return;
 

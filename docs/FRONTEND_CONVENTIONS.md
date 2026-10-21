@@ -87,11 +87,13 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Pages describe forms via `Form<TData>` field selectors and optional
   labels/autocomplete; **the Form owns HTML labels, controls, ids, disabled
   states and backend DataField metadata**. Do not copy input/label helper
-  classes into each page. Do not activate submission, provider buttons,
-  session persistence or password reveal actions without a real, authorized
-  backend operation and antiforgery handling.
+  classes into each page. Do not activate submission, provider buttons or
+  session persistence without a real, authorized backend operation and
+  antiforgery handling. A password field may carry the eye
+  ([PasswordReveal](../src/Jularr.Frontend/Framework/Components/PasswordReveal.cs), client-only) and a link on its label's row through
+  `FieldHelp.Trailing` and `FieldHelp.Aside`.
 - Field examples and explanations belong to the Backend field: `hint.<Fields>.<Field>.placeholder`
-  is the placeholder of typed fields (not names or passwords; an optional field shows what
+  is the placeholder of typed fields (not names; a password shows only a hint its page names; an optional field shows what
   happens when it stays empty, such as its default), `hint.<Fields>.<Field>.info` the text behind
   the label's (i), shown on hover, focus and tap ([FieldInfo](../src/Jularr.Frontend/Framework/Components/FieldInfo.cs)).
   A page passes `FieldHelp` only where the field means something special there; an empty key shows

@@ -256,9 +256,8 @@ namespace Jularr.E2E.Tests
         {
             await Steps.SetModuleAsync(page, "Let visitors ask for an account", true);
             await user.GotoAsync("/Account/Register");
-            var form = Steps.FormWith(user, "Ask for an account");
+            var form = Steps.FormWith(user, "Create account & request access");
             await form.Locator("[name=Email]").FillAsync(Email);
-            await form.Locator("[name=DisplayName]").FillAsync("Viewer");
             await form.Locator("[name=Password]").FillAsync(Password);
             await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
             await Steps.SubmitAsync(user, form);

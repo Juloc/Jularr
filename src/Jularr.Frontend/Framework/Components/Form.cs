@@ -428,7 +428,7 @@ namespace Jularr.Frontend.Framework
             }
 
             Configure(field, input);
-            AddField(field, input, wide: control == FieldControl.Text && (field.ValueType.IsArray || field.MaximumLength is null or > WideLength));
+            AddField(field, input, wide: control == FieldControl.Text && (field.ValueType.IsArray || field.MaximumLength is null or > WideLength), help: help);
             return this;
         }
 
@@ -480,8 +480,8 @@ namespace Jularr.Frontend.Framework
             if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));
             if (field.IsAddress) input.Attribute("inputmode", "url").Attribute("spellcheck", "false").Attribute("autocapitalize", "off");
 
-            // Typed fields show an example of their form, an optional one what happens when it stays empty; passwords show nothing.
-            if (field.Control is FieldControl.Text or FieldControl.Number) input.TextAttribute("placeholder", field.PlaceholderKey);
+            // Typed fields show an example of their form, an optional one what happens when it stays empty; a password shows only the hint a page names for it.
+            if (field.Control is FieldControl.Text or FieldControl.Number or FieldControl.Password) input.TextAttribute("placeholder", field.PlaceholderKey);
             if (field.Scale is { } scale) input.Attribute("step", (1m / (decimal)Math.Pow(10, scale)).ToString(CultureInfo.InvariantCulture));
             if (_error?.Field == field.Name)
             {
@@ -494,7 +494,7 @@ namespace Jularr.Frontend.Framework
         private const int MaxSegments = 3;
         private const int MaxSegmentLength = 16;
 
-        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false)
+        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false, FieldHelp? help = null)
         {
             // The label sits above the field (the mockups' `.field label`); a segmented control is a group named by its legend.
             var info = new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info");
@@ -507,8 +507,11 @@ namespace Jularr.Frontend.Framework
             }
             else
             {
-                content.Add(new Div(new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), info).Class("ui-field__top"));
-                content.Add(new Div(input).Class("ui-field__control"));
+                content.Add(new Div([new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), info,
+                    .. help?.Aside is { } aside ? new[] { aside } : []]).Class("ui-field__top"));
+                content.Add(help?.Trailing is { } trailing
+                    ? new Div(input, trailing).Class("ui-field__control ui-field__control--trailing")
+                    : new Div(input).Class("ui-field__control"));
             }
             if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
             if (_error?.Field == field.Name)
