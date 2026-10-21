@@ -38,7 +38,7 @@ namespace Jularr.Backend.Data.User.Library.V1
     public sealed class LibraryItemV1 : BaseResponse
     {
         public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted,
-            MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, string[] audioLanguages, string[] subtitleLanguages)
+            MediaAvailabilityState availabilityStateId, int availableUnits, int monitoredUnits, string[] audioLanguages, string[] subtitleLanguages, ProgressStateType progressStateId, int progressPercent)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
@@ -52,6 +52,8 @@ namespace Jularr.Backend.Data.User.Library.V1
             MonitoredUnits = monitoredUnits;
             AudioLanguages = audioLanguages;
             SubtitleLanguages = subtitleLanguages;
+            ProgressStateId = progressStateId;
+            ProgressPercent = progressPercent;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -91,5 +93,12 @@ namespace Jularr.Backend.Data.User.Library.V1
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
         public string[] SubtitleLanguages { get; }
+
+        // Where the profile stands with the title; the percentage is of its units or of its position.
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId))]
+        public ProgressStateType ProgressStateId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressPercent))]
+        public int ProgressPercent { get; }
     }
 }
