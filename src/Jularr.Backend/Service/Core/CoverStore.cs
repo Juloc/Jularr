@@ -16,8 +16,8 @@ namespace Jularr.Backend.Service.Core
     // An image answered from the cache of titles that are not Works: a file, or its bytes when nothing is kept.
     internal sealed record ExternalCoverFile(string? Path, byte[]? Bytes, string ContentType, DateTimeOffset LastModified, string ETag);
 
-    // Provider images kept under the data folder like Sonarr's MediaCover: fetched once, kept as downloaded with a few JPEG widths beside them, served only by Jularr.
-    internal sealed partial class CoverStore(IOptions<MediaOptions> options, CoverClient client, MediaTranscoder transcoder, ILogger<CoverStore> logger)
+    // Provider images kept under the data folder like Sonarr's MediaCover: fetched once, kept as downloaded with a few widths beside them as JPEG XL (cjxl), WebP and JPEG, served only by Jularr.
+    internal sealed partial class CoverStore(IOptions<MediaOptions> options, CoverClient client, MediaTranscoder transcoder, JxlEncoder jxl, ILogger<CoverStore> logger)
     {
         // Without a folder nothing is kept and the providers' own addresses stay in use.
         public bool IsEnabled => options.Value.CoversPath.Length > 0;
@@ -78,7 +78,7 @@ namespace Jularr.Backend.Service.Core
             return stored;
         }
 
-        // The original as downloaded, then each width as WebP and as JPEG for clients without WebP; a width the tools cannot make is left out and the original answers for it.
+        // The original as downloaded, then each width as JPEG XL, WebP and JPEG; a format the tools cannot make is left out and the next one answers for it, the original at last.
         private async Task WriteAsync(WorkCoverTargetData target, byte[] bytes, string contentType, CancellationToken ct)
         {
             var folder = Folder(target.WorkId);
@@ -106,9 +106,10 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // One width as WebP and as JPEG next to each other, written aside and moved in whole.
+        // One width as JPEG XL (when cjxl is there), WebP and JPEG next to each other, written aside and moved in whole.
         private async Task ScaleAsync(string original, string stem, int width, CancellationToken ct)
         {
+            await ScaleJxlAsync(original, stem, width, ct);
             foreach (var extension in (string[])["webp", "jpg"])
             {
                 var scaled = stem + "." + Guid.NewGuid().ToString("N") + ".partial." + extension;
@@ -126,15 +127,45 @@ namespace Jularr.Backend.Service.Core
             }
         }
 
-        // The file that answers for a name and width: the stored width in the best format the client takes, else the original.
-        public (string Path, string ContentType)? Find(long workId, CoverKind kind, long? workUnitId, int? width, string originalContentType, bool acceptsWebP)
+        // JPEG XL is encoded from a lossless scaled copy, not from the JPEG, so the picture is compressed lossy only once.
+        private async Task ScaleJxlAsync(string original, string stem, int width, CancellationToken ct)
+        {
+            if (!jxl.IsAvailable)
+            {
+                return;
+            }
+
+            var token = Guid.NewGuid().ToString("N");
+            var lossless = stem + "." + token + ".partial.png";
+            var encoded = stem + "." + token + ".partial.jxl";
+            try
+            {
+                if (await transcoder.ScaleImageAsync(original, lossless, width, ct) && await jxl.EncodeAsync(lossless, encoded, ct))
+                {
+                    File.Move(encoded, stem + ".jxl", overwrite: true);
+                }
+            }
+            finally
+            {
+                File.Delete(lossless);
+                File.Delete(encoded);
+            }
+        }
+
+        // The file that answers for a name and width: the stored width in the best format the client names (JPEG XL, WebP), else JPEG, else the original.
+        public (string Path, string ContentType)? Find(long workId, CoverKind kind, long? workUnitId, int? width, string originalContentType, CoverFormats accepts)
         {
             var folder = Folder(workId);
             var name = CoverPaths.Name(kind, workUnitId);
             if (width is { } wanted)
             {
                 var stem = Path.Combine(folder, name + "-" + wanted.ToString(CultureInfo.InvariantCulture));
-                if (acceptsWebP && File.Exists(stem + ".webp"))
+                if (accepts.HasFlag(CoverFormats.Jxl) && File.Exists(stem + ".jxl"))
+                {
+                    return (stem + ".jxl", "image/jxl");
+                }
+
+                if (accepts.HasFlag(CoverFormats.WebP) && File.Exists(stem + ".webp"))
                 {
                     return (stem + ".webp", "image/webp");
                 }
@@ -152,7 +183,7 @@ namespace Jularr.Backend.Service.Core
         // The cache for titles that are not Works: the provider's image is fetched when nobody asked for it yet, kept by its address, and every serve counts as use.
         private static readonly SemaphoreSlim[] ExternalGates = [.. Enumerable.Range(0, 256).Select(_ => new SemaphoreSlim(1, 1))];
 
-        public async Task<ExternalCoverFile> ReadExternalAsync(string url, int? width, bool acceptsWebP, bool keeps, CancellationToken ct)
+        public async Task<ExternalCoverFile> ReadExternalAsync(string url, int? width, CoverFormats accepts, bool keeps, CancellationToken ct)
         {
             if (!CoverClient.IsProviderAddress(url) || width is { } wanted && !CoverPaths.ExternalWidths.Contains(wanted))
             {
@@ -208,7 +239,12 @@ namespace Jularr.Backend.Service.Core
                         await ScaleAsync(original, stem, size, ct);
                     }
 
-                    if (acceptsWebP && File.Exists(stem + ".webp"))
+                    if (accepts.HasFlag(CoverFormats.Jxl) && File.Exists(stem + ".jxl"))
+                    {
+                        return new ExternalCoverFile(stem + ".jxl", null, "image/jxl", created, "\"" + key + size.ToString(CultureInfo.InvariantCulture) + "x\"");
+                    }
+
+                    if (accepts.HasFlag(CoverFormats.WebP) && File.Exists(stem + ".webp"))
                     {
                         return new ExternalCoverFile(stem + ".webp", null, "image/webp", created, "\"" + key + size.ToString(CultureInfo.InvariantCulture) + "w\"");
                     }
@@ -326,7 +362,7 @@ namespace Jularr.Backend.Service.Core
             return removed;
         }
 
-        [GeneratedRegex("^(poster|backdrop|unit-[0-9]+)(?:-[0-9]+)?\\.(?:jpg|png|gif|webp|avif)$", RegexOptions.CultureInvariant)]
+        [GeneratedRegex("^(poster|backdrop|unit-[0-9]+)(?:-[0-9]+)?\\.(?:jpg|png|gif|webp|avif|jxl)$", RegexOptions.CultureInvariant)]
         private static partial Regex StoredFile();
     }
 }

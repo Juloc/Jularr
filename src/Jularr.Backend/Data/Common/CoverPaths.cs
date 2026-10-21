@@ -24,6 +24,41 @@ namespace Jularr.Backend.Data.Common
             _ => [250]
         };
 
+        // The formats the Accept header asks for by name; */* and image/* do not count, and a type with q=0 is refused. JPEG XL is offered only to browsers that ask for it.
+        public static CoverFormats Accepts(string? accept)
+        {
+            var formats = CoverFormats.None;
+            foreach (var range in (accept ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = range.Split(';', StringSplitOptions.TrimEntries);
+                var refused = parts.Skip(1).Any(part => part.StartsWith("q=", StringComparison.OrdinalIgnoreCase)
+                    && double.TryParse(part.AsSpan(2), NumberStyles.Float, CultureInfo.InvariantCulture, out var weight) && weight <= 0);
+                if (refused)
+                {
+                    continue;
+                }
+
+                if (parts[0].Equals("image/webp", StringComparison.OrdinalIgnoreCase))
+                {
+                    formats |= CoverFormats.WebP;
+                }
+                else if (parts[0].Equals("image/jxl", StringComparison.OrdinalIgnoreCase))
+                {
+                    formats |= CoverFormats.Jxl;
+                }
+            }
+
+            return formats;
+        }
+
+        // Added to the ETag so each format of one width is its own representation.
+        public static string ETagSuffix(string contentType) => contentType switch
+        {
+            "image/jxl" => "x",
+            "image/webp" => "w",
+            _ => ""
+        };
+
         // What the file is called inside its Work's folder and as the last part of the address.
         public static string Name(CoverKind kind, long? workUnitId) => kind switch
         {

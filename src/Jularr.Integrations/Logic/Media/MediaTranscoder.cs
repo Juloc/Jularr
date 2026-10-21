@@ -101,7 +101,7 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
-        // One image as a JPEG or WebP (by the output's extension) at most this wide, never enlarged; a single frame, so an animation becomes its first picture.
+        // One image as a JPEG, WebP or lossless PNG (by the output's extension) at most this wide, never enlarged; a single frame, so an animation becomes its first picture.
         public async Task<bool> ScaleImageAsync(string inputPath, string outputPath, int width, CancellationToken ct)
         {
             if (!IsAvailable)
@@ -118,7 +118,7 @@ namespace Jularr.Integrations.Logic.Media
             };
             foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file", "-i", inputPath, "-an", "-sn", "-dn", "-frames:v", "1",
                 "-vf", string.Create(CultureInfo.InvariantCulture, $"scale='min({width},iw)':-2:flags=lanczos"),
-                .. outputPath.EndsWith(".webp", StringComparison.Ordinal) ? (string[])["-c:v", "libwebp", "-quality", "80"] : ["-q:v", "3"], outputPath])
+                .. outputPath.EndsWith(".webp", StringComparison.Ordinal) ? (string[])["-c:v", "libwebp", "-quality", "80"] : outputPath.EndsWith(".png", StringComparison.Ordinal) ? [] : ["-q:v", "3"], outputPath])
             {
                 start.ArgumentList.Add(argument);
             }
