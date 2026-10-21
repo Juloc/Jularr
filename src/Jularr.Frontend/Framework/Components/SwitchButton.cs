@@ -1,6 +1,6 @@
 namespace Jularr.Frontend.Framework
 {
-    // A switch that submits its form: it shows the state and the click is the change. Its styles (`work-switch`) belong to the title page's stylesheet, which the pages using it load.
+    // A switch that submits its form: it shows the state and the click is the change. Its styles (`work-switch`) load with the shell.
     public sealed class SwitchButton : HtmlElement
     {
         public SwitchButton(bool isOn, string actionKey, string? labelKey = null) : base("button", [new Span().Class("work-switch__track"), labelKey is null ? new Span() : new Span(new Text(labelKey)).Class("work-switch__label")])

@@ -1,21 +1,48 @@
-// The job first, the worker and interval below; a state with its error.
-.jobs-job > span,
-.jobs-status > span:not(.state-chip) {
-    display: block;
-    color: var(--muted);
-    font-size: 0.85em;
+// The Jobs page's part of the list kit: the grid of its columns at three widths, and the row above the list.
+
+.action-dock form { display: inline-flex; margin: 0; }
+
+// The state chips on the left, the filter on the right; one row at every width.
+.jobs-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-width: 0;
+    margin-bottom: -6px;
+
+    .navigation-tabs { flex: 0 1 auto; }
+
+    &__filter { display: flex; flex: none; align-items: center; gap: 10px; }
+    &__count { color: var(--muted); font-size: var(--text-small); white-space: nowrap; }
+    .search-box { width: 235px; }
 }
 
-.jobs-status > span:not(.state-chip) { margin-top: 4px; }
+// A phone: tighter chips, so the state row stays one line.
+@media (max-width: 640px) {
+    .jobs-toolbar .navigation-tabs { gap: 3px; }
+    .jobs-toolbar .navigation-tabs__link { padding: 8px 9px; }
+    .jobs-toolbar { flex-wrap: wrap; row-gap: 12px; }
+    .jobs-toolbar .navigation-tabs { flex: 1 1 100%; }
+    .jobs-toolbar__filter { flex: 1 1 100%; }
+    .jobs-toolbar .search-box { flex: 1; width: auto; max-width: none; }
+}
 
-// A provider of the provider sync sits indented below it.
-.jobs-job--part { padding-left: 16px; }
+.jobs-list {
+    --list-columns: minmax(200px, 2.4fr) minmax(112px, 1.05fr) minmax(115px, 1.2fr) minmax(115px, 1.2fr) minmax(100px, 1.1fr) minmax(250px, 1.6fr);
+    --list-columns-medium: minmax(190px, 2fr) minmax(112px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(250px, 1.4fr);
+    --list-columns-narrow: minmax(160px, 2fr) minmax(112px, 1fr) minmax(115px, 1fr) minmax(250px, 1.3fr);
+}
 
-.jobs-state { white-space: nowrap; }
+// What the queue did, newest first.
+.jobs-history-block {
+    display: grid;
+    gap: 12px;
 
-// A job's controls next to each other, wrapping on a narrow screen.
-.jobs-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    h2 { margin: 0; }
+    a:not(.button) { justify-self: start; color: var(--accent-text); font-size: var(--text-control); font-weight: 700; text-decoration: none; &:hover { text-decoration: underline; } }
+}
+
+.jobs-history {
+    --list-columns: minmax(0, 3fr) minmax(130px, 1.2fr) minmax(140px, 1.3fr);
 }
