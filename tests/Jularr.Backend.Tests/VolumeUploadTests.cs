@@ -51,6 +51,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "enctype=\"multipart/form-data\"");
             StringAssert.Contains(html, "accept=\".cbz,.cbr,.cb7,.epub,.pdf\"");
+
+            // The file field is the file input with its limits.
+            StringAssert.Contains(html, "data-file-input");
+            StringAssert.Contains(html, "data-file-max=\"2000000000\"");
+            StringAssert.Contains(html, "CBZ, CBR, CB7, EPUB, PDF");
             Assert.IsFalse(Directory.EnumerateFiles(Path.Combine(storage.Path, mountId.ToString(), "Manga", "Blue Sea"), "*.partial").Any());
         }
 
