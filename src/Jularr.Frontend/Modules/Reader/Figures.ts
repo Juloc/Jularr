@@ -146,7 +146,7 @@ export function initializeFigures(reader: HTMLElement, content: HTMLElement): vo
 
 // The figure under the pointer on the printed pages of the book view, found by position.
 function printedPicture(reader: HTMLElement, event: { clientX: number; clientY: number }): HTMLImageElement | null {
-    for (const picture of reader.querySelectorAll<HTMLImageElement>('.reader__page-print img[data-figure]')) {
+    for (const picture of Array.from(reader.querySelectorAll<HTMLImageElement>('.reader__page-print img[data-figure]'))) {
         const box = picture.getBoundingClientRect();
         if (event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) return picture;
     }
