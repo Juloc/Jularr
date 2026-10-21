@@ -47,7 +47,7 @@ namespace Jularr.Frontend.Pages.Account.Login
             if (TempData["BackupRestored"] is true) card.Add(new P(new Text("admin.backup.restored")).Attribute("role", "status"));
             card.Add(new Form<LoginDataV1>(form =>
             {
-                form.Text(x => x.Email, "account.field.userName", "username", new FieldHelp("account.login.userPlaceholder", ""));
+                form.Text(x => x.Username, "account.field.userName", "username", new FieldHelp("account.login.userPlaceholder", ""));
                 form.Password(x => x.Password, "account.field.password", "current-password", new FieldHelp("", "", forgot, new PasswordReveal(assets)));
                 form.Submit(Styled(new Button(new Text("account.login.submit")), "auth-submit"));
             }, action, token, new LoginDataV1(_email, ""), FormError));
@@ -118,9 +118,9 @@ namespace Jularr.Frontend.Pages.Account.Login
             _allowsRegistration = (await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted)).AllowsRegistration;
         }
 
-        public async Task<IActionResult> OnPostAsync(string? email, string? password, string? returnUrl)
+        public async Task<IActionResult> OnPostAsync(string? username, string? password, string? returnUrl)
         {
-            _email = email ?? "";
+            _email = username ?? "";
             await LoadDataAsync();
 
             // Invoke the canonical service.

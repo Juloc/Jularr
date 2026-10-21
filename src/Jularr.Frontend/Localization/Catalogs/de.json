@@ -2169,8 +2169,8 @@
    "name@example.com"
   ],
   "hint.AccountFields.Email.info": [
-   "Used to sign in and for password resets.",
-   "Dient zur Anmeldung und zum Zurücksetzen des Passworts."
+   "Optional. Can be used to sign in instead of the username.",
+   "Optional. Kann statt des Benutzernamens zur Anmeldung dienen."
   ],
   "hint.AccountFields.DisplayName.info": [
    "Shown to other users, for example on requests.",
@@ -2209,8 +2209,8 @@
    "Drei bis sechs Ziffern, die beim Wechsel zu diesem Profil abgefragt werden."
   ],
   "hint.AuthenticationFields.NewPassword.info": [
-   "At least 12 characters; a passphrase of several words is easiest to remember.",
-   "Mindestens 12 Zeichen; eine Passphrase aus mehreren Wörtern merkt man sich am leichtesten."
+   "At least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters. A passphrase of several words is easiest to remember.",
+   "Mindestens 12 Zeichen, davon mindestens drei der Arten: Kleinbuchstaben, Großbuchstaben, Ziffern und Sonderzeichen. Eine Passphrase aus mehreren Wörtern merkt man sich am leichtesten."
   ],
   "hint.DevicePairingFields.Code.placeholder": [
    "123456",
@@ -9657,8 +9657,8 @@
    "Wie geht es weiter?"
   ],
   "account.pending.nextText": [
-   "Your admin reviews the request and activates the account. You can then sign in with the email address and password you chose.",
-   "Dein Admin prüft die Anfrage und aktiviert das Konto. Danach kannst du dich mit der gewählten E-Mail-Adresse und dem Passwort anmelden."
+   "Your admin reviews the request and activates the account. You can then sign in with the username and password you chose.",
+   "Dein Admin prüft die Anfrage und aktiviert das Konto. Danach kannst du dich mit dem gewählten Benutzernamen und Passwort anmelden."
   ],
   "account.pending.noEmail": [
    "No email notifications are sent.",
@@ -9671,6 +9671,38 @@
   "appearance.theme": [
    "Theme",
    "Farbschema"
+  ],
+  "account.field.username": [
+   "Username",
+   "Benutzername"
+  ],
+  "account.register.usernamePlaceholder": [
+   "Choose a username",
+   "Benutzernamen wählen"
+  ],
+  "account.register.usernameHelp": [
+   "3–32 characters · letters, numbers, dots, _ or -",
+   "3–32 Zeichen · Buchstaben, Zahlen, Punkte, _ oder -"
+  ],
+  "hint.AccountFields.Username.placeholder": [
+   "Choose a username",
+   "Benutzernamen wählen"
+  ],
+  "hint.AccountFields.Username.info": [
+   "3–32 characters: letters, numbers, dots, underscores or hyphens. This is what you sign in with.",
+   "3–32 Zeichen: Buchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche. Damit meldest du dich an."
+  ],
+  "errors.validation.password_weak": [
+   "Use at least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters.",
+   "Nimm mindestens 12 Zeichen, davon mindestens drei der Arten: Kleinbuchstaben, Großbuchstaben, Ziffern und Sonderzeichen."
+  ],
+  "errors.validation.invalid_username": [
+   "Use letters, numbers, dots, underscores or hyphens.",
+   "Nimm Buchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche."
+  ],
+  "errors.validation.username_taken": [
+   "This username is already taken.",
+   "Dieser Benutzername ist schon vergeben."
   ]
  }
 }

@@ -243,8 +243,8 @@ namespace Jularr.Backend.Tests
                         BEGIN;
                         INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch'), (2, 'en-GB', 'English');
                         SELECT setval(pg_get_serial_sequence('"UiLocales"', 'Id'), 2);
-                        INSERT INTO "Accounts" ("Id", "Email", "DisplayName", "AccountRoleTypeId")
-                        VALUES (41, 'a@example.test', 'Account A', 2), (42, 'b@example.test', 'Account B', 2);
+                        INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId")
+                        VALUES (41, 'account_a', 'a@example.test', 'Account A', 2), (42, 'account_b', 'b@example.test', 'Account B', 2);
                         INSERT INTO "ProfileReference"."Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
                         VALUES (101, 41, 'Profile A', 1), (202, 42, 'Profile B', 1);
                         INSERT INTO "ProfileReference"."AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 101), (42, 202);

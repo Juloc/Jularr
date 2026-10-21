@@ -53,7 +53,8 @@ namespace Jularr.Frontend.Pages.Account.Register
                 new H1(new Text("account.register.title")),
                 new Form<RegisterDataV1>(form =>
                 {
-                    form.Text(x => x.Email, "account.field.email", "email", new FieldHelp(Info: ""));
+                    form.Text(x => x.Username, "account.field.username", "username",
+                        new FieldHelp("account.register.usernamePlaceholder", "", Note: new P(new Text("account.register.usernameHelp")).Class("auth-field-note")));
                     form.Password(x => x.Password, "account.field.password", "new-password",
                         new FieldHelp("account.register.passwordPlaceholder", "", Trailing: new PasswordReveal(assets)));
                     form.Password(x => x.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password",
@@ -83,21 +84,19 @@ namespace Jularr.Frontend.Pages.Account.Register
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? email, string? password, string? passwordConfirmation, long uiLocaleId)
+        public async Task<IActionResult> OnPostAsync(string? username, string? password, string? passwordConfirmation, long uiLocaleId)
         {
             if (!await IsOpenAsync())
             {
                 return NotFound();
             }
 
-            // A name for the profile comes from the address until the person picks their own; passwords are never written back into the form.
-            var name = (email ?? "").Split('@')[0].Trim();
-            var displayName = name.Length == 0 ? (email ?? "").Trim() : name;
-            _input = new RegisterDataV1(email ?? "", displayName, "", "", uiLocaleId);
+            // Passwords are never written back into the form.
+            _input = new RegisterDataV1(username ?? "", "", "", uiLocaleId);
             await register.ExecuteAsync<RegisterResultV1>(new AuthenticationParametersV1(),
-                new RegisterDataV1(email ?? "", displayName, password ?? "", passwordConfirmation ?? "", uiLocaleId), HttpContext.RequestAborted);
+                new RegisterDataV1(username ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId), HttpContext.RequestAborted);
             TempData["Registered"] = true;
-            TempData["RegisteredName"] = (email ?? "").Trim();
+            TempData["RegisteredName"] = (username ?? "").Trim();
             return RedirectToPage("/Account/Register/Register");
         }
 
@@ -127,7 +126,7 @@ namespace Jularr.Frontend.Pages.Account.Register
         {
             _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
             var instance = (await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted)).UiLocaleId;
-            _input ??= new RegisterDataV1("", "", "", "", LocalePreference.Preferred(Request, _locales, instance));
+            _input ??= new RegisterDataV1("", "", "", LocalePreference.Preferred(Request, _locales, instance));
         }
     }
 }

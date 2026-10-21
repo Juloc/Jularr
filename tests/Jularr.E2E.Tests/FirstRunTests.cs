@@ -57,7 +57,7 @@ namespace Jularr.E2E.Tests
                 await page.GetByRole(AriaRole.Button, new() { Name = "Filter", Exact = true }).ClickAsync();
                 await Assertions.Expect(page.Locator("dialog.filter-dialog[open]")).ToBeVisibleAsync();
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray(), string.Join(Environment.NewLine, problems));
             }
             catch
             {

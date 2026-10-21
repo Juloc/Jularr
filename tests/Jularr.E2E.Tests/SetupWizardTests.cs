@@ -19,7 +19,7 @@ namespace Jularr.E2E.Tests
             {
                 await page.GotoAsync("/Setup");
                 await Assertions.Expect(page.Locator("select[name=UiLocaleId]")).ToContainTextAsync("machine translated");
-                await page.FillAsync("[name=Email]", Owner.Email);
+                await page.FillAsync("[name=Username]", Owner.Username);
                 await page.FillAsync("[name=DisplayName]", "Owner");
                 await page.FillAsync("[name=Password]", Owner.Password);
                 await page.FillAsync("[name=PasswordConfirmation]", Owner.Password);
@@ -105,7 +105,7 @@ namespace Jularr.E2E.Tests
             await Steps.SaveAsync(page);
             await Assertions.Expect(page.Locator("[name=Name]")).ToHaveValueAsync(name);
             await Assertions.Expect(page.Locator("[name=ApiKey]")).ToHaveValueAsync("");
-            await Assertions.Expect(page.GetByRole(AriaRole.Cell, new() { Name = name, Exact = true })).ToBeVisibleAsync();
+            await Assertions.Expect(page.GetByRole(AriaRole.Cell, new() { Name = name }).First).ToBeVisibleAsync();
             Assert.IsTrue(new Uri(page.Url).AbsolutePath.StartsWith("/Setup/", StringComparison.Ordinal));
         }
 

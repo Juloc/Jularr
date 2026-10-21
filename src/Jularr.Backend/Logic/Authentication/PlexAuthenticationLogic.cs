@@ -161,7 +161,8 @@ namespace Jularr.Backend.Logic.Authentication
                     throw new SecurityException("Verified email and connected library access are required.");
                 }
 
-                var creation = new AccountCreationData(identity.Email, identity.DisplayName, !registration.RequiresApproval, DateTime.UtcNow);
+                var username = await ctx.UniqueUsernameAsync(identity.DisplayName.Length > 0 ? identity.DisplayName : identity.Email.Split('@')[0], ct);
+                var creation = new AccountCreationData(username, identity.Email, identity.DisplayName, !registration.RequiresApproval, DateTime.UtcNow);
                 var id = await ctx.CreateAccountAsync(creation, registration.UiLocaleId, ct)
                     ?? throw new SecurityException("An existing account must be linked explicitly.");
 

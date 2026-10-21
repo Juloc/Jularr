@@ -454,7 +454,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Account/Logout");
             await SubmitAsync(page, FormWith(page, "Sign out"));
             await page.GotoAsync("/Account/Login");
-            await page.FillAsync("[name=Email]", Owner.Email);
+            await page.FillAsync("[name=Username]", Owner.Username);
             await page.FillAsync("[name=Password]", Owner.Password);
             await page.Locator("form button[type=submit]").First.ClickAsync();
             await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
