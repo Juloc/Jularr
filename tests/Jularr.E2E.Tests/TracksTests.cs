@@ -189,7 +189,16 @@ namespace Jularr.E2E.Tests
                 // The first track plays directly and needs no room, which also gives back the conversion of the second one.
                 if (!await page.Locator("#player-settings").IsVisibleAsync()) await page.Locator("[data-action=settings]").ClickAsync();
                 await page.Locator("#player-settings").GetByRole(AriaRole.Tab, new() { Name = "Audio", Exact = true }).ClickAsync();
-                var direct = await page.RunAndWaitForResponseAsync(() => audio.Nth(0).ClickAsync(),
+                var firstTrack = await tracks.Nth(0).GetAttributeAsync("value");
+                if (await audio.InputValueAsync() == firstTrack)
+                {
+                    // A select only answers a change: go to the second track first, which still fits.
+                    var toSecond = await page.RunAndWaitForResponseAsync(() => audio.SelectOptionAsync(stream!),
+                        response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
+                    Assert.AreEqual(200, toSecond.Status);
+                }
+
+                var direct = await page.RunAndWaitForResponseAsync(() => audio.SelectOptionAsync(firstTrack!),
                     response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(200, direct.Status);
 
@@ -207,7 +216,7 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(4, started.Count, started.Count + " conversions started before the limit.");
 
                 // The second track needs a conversion, which the server refuses, and the player says so.
-                var refused = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
+                var refused = await page.RunAndWaitForResponseAsync(() => audio.SelectOptionAsync(stream!),
                     response => response.Request.Method == "POST" && response.Url.Contains("/sessions", StringComparison.Ordinal), new() { Timeout = Steps.MediaTimeout });
                 Assert.AreEqual(503, refused.Status);
                 var busy = page.Locator("[data-role=status]");
