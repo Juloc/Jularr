@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
@@ -354,9 +355,18 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class DiscoverItemV1 : BaseResponse
     {
+        // A title of a list: the lists carry no trailer.
         public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             MediaStateType mediaStateTypeId, string? plexUrl, decimal? rating)
+            : this(mediaTypeId, tmdbId, workId, title, releaseYear, overview, posterUrl, backdropUrl, mediaStateTypeId, plexUrl, rating, null)
         {
+        }
+
+        [JsonConstructor]
+        public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
+            MediaStateType mediaStateTypeId, string? plexUrl, decimal? rating, string? trailerKey)
+        {
+            TrailerKey = trailerKey;
             Rating = rating;
             MediaTypeId = mediaTypeId;
             TmdbId = tmdbId;
@@ -404,6 +414,49 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // The catalog's rating on a scale of ten; null while it has none.
         [DataField(typeof(WorkFields), nameof(WorkFields.Rating))]
         public decimal? Rating { get; }
+
+        // The YouTube key of the title's trailer, where the provider names one (a single title read, not the lists).
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey), false)]
+        public string? TrailerKey { get; }
+    }
+
+    public sealed class ReadDiscoverPreviewParametersV1 : BaseParameters
+    {
+        public ReadDiscoverPreviewParametersV1(string @namespace, string externalId)
+        {
+            Namespace = @namespace;
+            ExternalId = externalId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+    }
+
+    // What the local catalog keeps of a title for the description of a card's hover preview.
+    public sealed class DiscoverPreviewV1 : BaseResponse
+    {
+        public DiscoverPreviewV1(string title, string? overview, string? posterUrl, string? backdropUrl)
+        {
+            Title = title;
+            Overview = overview;
+            PosterUrl = posterUrl;
+            BackdropUrl = backdropUrl;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? BackdropUrl { get; }
     }
 
     public sealed class ReadContinueParametersV1 : BaseParameters

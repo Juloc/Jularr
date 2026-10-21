@@ -13,7 +13,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
 
         private State Current => new(Picked, Sort, ValidYear, ValidStatus, CollectionId, Math.Max(1, PageNumber));
 
-        private string? ValidYear => Year is "2020" or "old" ? Year : null;
+        private string? ValidYear => YearChoice.Valid(Year);
 
         private static readonly (string Slug, ProgressStateType State, string LabelKey)[] Statuses =
         [
@@ -25,29 +25,17 @@ namespace Jularr.Frontend.Pages.User.Favorites
 
         private ProgressStateType? ProgressState => Statuses.Where(status => status.Slug == ValidStatus).Select(status => (ProgressStateType?)status.State).FirstOrDefault();
 
-        // The slugs of the address, whatever the profile lists.
-        private IReadOnlyList<string> Picked => [.. Types.SelectMany(type => type.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Where(slug => slug != "all" && LibraryScopes.All.Any(scope => scope.Slug == slug)).Distinct()];
+        // The media types of the address against the types the profile lists.
+        private ScopeSelection Scopes => _scopes ??= new ScopeSelection(Types, _media);
 
-        private IReadOnlyList<LibraryScope> Listed => [.. LibraryScopes.Listed(_media).Where(scope => scope.Slug != "all")];
+        private IReadOnlyList<string> Picked => Scopes.Picked;
 
-        // The listed types asked for, or every listed type.
-        private IReadOnlyList<LibraryScope> Chosen => Listed.Where(scope => Picked.Contains(scope.Slug)).ToList() is { Count: > 0 } picked ? picked : Listed;
-
-        private bool IsAll => Chosen.Count == Listed.Count;
-
-        // A type lists its titles without subtype and a subtype lists that subtype across types; all types need no filter.
-        private (MediaType[] Types, MediaSubtype[] Subtypes) ScopeFilter() => IsAll ? ([], [])
-            : ([.. Chosen.Where(scope => scope.Subtype is null && scope.Type is not null).Select(scope => scope.Type!.Value)], [.. Chosen.Where(scope => scope.Subtype is not null).Select(scope => scope.Subtype!.Value)]);
-
-        private (int? From, int? To) YearRange() => ValidYear switch { "2020" => (2020, null), "old" => (null, 2019), _ => (null, null) };
-
-        private string? TypeParameter(IReadOnlyList<string> types) => types.Count == 0 || _loaded && Listed.All(scope => types.Contains(scope.Slug)) ? null : string.Join(',', types);
+        private bool IsAll => Scopes.IsAll;
 
         private string Address(State state)
         {
             var values = new List<string>();
-            if (TypeParameter(state.Types) is { } types) values.Add("type=" + Uri.EscapeDataString(types).Replace("%2C", ","));
+            if (Scopes.Parameter(state.Types) is { } types) values.Add("type=" + Uri.EscapeDataString(types).Replace("%2C", ","));
             if (state.Sort != LibrarySortType.RecentlyAdded) values.Add("sort=" + state.Sort);
             if (state.Year is not null) values.Add("year=" + state.Year);
             if (state.Status is not null) values.Add("status=" + state.Status);
@@ -79,12 +67,13 @@ namespace Jularr.Frontend.Pages.User.Favorites
             page.Asset("Pages/User/Favorites/Favorites.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            page.Asset("Framework/Components/LayoutToggle.entry.ts");
 
             var canCollect = texts.CanCollect();
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var parts = new List<IUiComponent>();
             if (canCollect) parts.Add(CollectionStrip());
-            parts.Add(MediaTypeBar());
+            parts.Add(TypeBar());
             parts.Add(Toolbar(canCollect));
             if (canCollect) parts.Add(BulkBar(csrf));
 
@@ -144,46 +133,23 @@ namespace Jularr.Frontend.Pages.User.Favorites
                     .Class("button button--icon favorites-collection__edit"), "favorites-edit-" + collection.Id.ToString(CultureInfo.InvariantCulture)));
             }
 
-            return new Div([.. wrapper]).Class(collection is null ? "favorites-collection favorites-collection--all" : "favorites-collection");
+            return new Div([.. wrapper]).Class("favorites-collection");
         }
 
-        // All, then a capsule per area whose types are chosen one by one; the filter opens beside them.
-        private IUiComponent MediaTypeBar()
+        // The shared media-type bar; the filter opens beside it.
+        private IUiComponent TypeBar()
         {
-            var listed = Listed.Select(scope => scope.Slug).ToList();
-            var chosen = Chosen.Select(scope => scope.Slug).ToHashSet();
-
-            // Chosen entries, or none for all of them.
-            string Types(IEnumerable<string> slugs)
-            {
-                var wanted = listed.Where(slug => slugs.Contains(slug)).ToList();
-                return Address(Current with { Types = wanted.Count == listed.Count ? [] : wanted, Page = 1 });
-            }
-
-            var groups = new List<CapsuleGroup>();
-            foreach (var area in MediaAreas.All)
-            {
-                var members = area.Slugs.Where(listed.Contains).ToList();
-                if (members.Count == 0) continue;
-
-                var shown = members.Count(chosen.Contains);
-                var solo = !IsAll && chosen.Count == members.Count && shown == members.Count;
-                var state = IsAll || shown == 0 ? CapsuleGroupState.Idle : solo ? CapsuleGroupState.Solo : shown < members.Count ? CapsuleGroupState.Partial : CapsuleGroupState.Included;
-                groups.Add(new CapsuleGroup(area.LabelKey, area.Icon, Types(solo ? listed : members), state, [.. members.Select(slug =>
-                    new CapsuleItem("library.scope." + slug, Types(IsAll ? [slug] : chosen.Contains(slug) ? chosen.Except([slug]) : chosen.Append(slug)), !IsAll && chosen.Contains(slug), !IsAll && !chosen.Contains(slug)))]));
-            }
-
             var filter = new List<IUiComponent> { new Icon("filter", assets) };
             if (ValidYear is not null) filter.Add(new Span(new ValueText("1")).Class("capsule-bar__badge"));
             var tools = new List<IUiComponent> { Drawer.Opener(new Button([.. filter]).IconOnly(texts["favorites.filter.open"]).Class("button button--icon capsule-bar__tool"), "favorites-filter") };
-            return new CapsuleBar(assets, "discover.mediaTypes", "discover.all", Types([]), IsAll, groups, tools);
+            return new MediaTypeBar(assets, Scopes.ListedSlugs, Scopes.ChosenSlugs, "library.scope.", types => Address(Current with { Types = types, Page = 1 }), tools);
         }
 
         // Progress, then selecting titles for their collections, the order and how the titles are laid out.
         private IUiComponent Toolbar(bool canCollect)
         {
             var keep = new Dictionary<string, string>();
-            if (TypeParameter(Picked) is { } types) keep["type"] = types;
+            if (Scopes.Parameter(Picked) is { } types) keep["type"] = types;
             if (ValidYear is not null) keep["year"] = ValidYear;
             if (ValidStatus is not null) keep["status"] = ValidStatus;
             if (CollectionId is { } collection) keep["collection"] = collection.ToString(CultureInfo.InvariantCulture);
@@ -199,7 +165,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             }
 
             settings.Add(new ChoiceSelect("/Favorites", "sort", "library.sort", sorts, keep));
-            settings.Add(new Button(new Icon("grid", assets), new Icon("list", assets)).IconOnly(texts["favorites.layout.toggle"]).Class("button button--icon favorites-toolbar__layout").Attribute("data-favorites-layout", ""));
+            settings.Add(new LayoutToggle(assets));
             return new Div(new NavigationTabs(tabs, "favorites.status", "chips"), new Div([.. settings]).Class("favorites-toolbar__settings")).Class("favorites-toolbar");
         }
 
@@ -283,27 +249,13 @@ namespace Jularr.Frontend.Pages.User.Favorites
             return new Div(form).Class("favorites-picker").Attribute("id", PickerId).Attribute("popover", "auto");
         }
 
-        // Types by area and the release year; one GET form, so the address holds the choice.
+        // Types by area and the release year; the sort and the collection stay in the address.
         private IUiComponent FilterDrawer()
         {
-            var chosen = Chosen.Select(scope => scope.Slug).ToHashSet();
-            var body = new List<IUiComponent>();
-            foreach (var area in MediaAreas.All)
-            {
-                var members = area.Slugs.Where(slug => Listed.Any(scope => scope.Slug == slug)).ToList();
-                if (members.Count > 0) body.Add(new ChoiceGroup(assets, area.LabelKey, "type", [.. members.Select(slug => new ChoicePick(slug, chosen.Contains(slug), "library.scope." + slug))], new ChoiceOptions(Multiple: true)));
-            }
-
-            body.Add(new ChoiceGroup(assets, "discover.filter.year", "year", [new("", ValidYear is null, "discover.all"), new("2020", ValidYear == "2020", "discover.year.since2020"),
-                new("old", ValidYear == "old", "discover.year.before2020")]));
-            if (Sort != LibrarySortType.RecentlyAdded) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "sort").Attribute("value", Sort.ToString()));
-            if (CollectionId is { } collection) body.Add(new Input().Attribute("type", "hidden").Attribute("name", "collection").Attribute("value", collection.ToString(CultureInfo.InvariantCulture)));
-
-            return OnePane("favorites-filter", "favorites.filter.title", "filter", body,
-            [
-                new A(new Text("discover.reset")).Class("button").Attribute("href", Address(Current with { Types = [], Year = null, Page = 1 })),
-                new Button(new Text("common.apply")).Primary().Submit()
-            ], "/Favorites");
+            var keep = new Dictionary<string, string>();
+            if (Sort != LibrarySortType.RecentlyAdded) keep["sort"] = Sort.ToString();
+            if (CollectionId is { } collection) keep["collection"] = collection.ToString(CultureInfo.InvariantCulture);
+            return new MediaFilterDrawer(assets, "favorites-filter", "favorites.filter.title", "/Favorites", Scopes, ValidYear, Address(Current with { Types = [], Year = null, Page = 1 }), keep);
         }
 
         private IUiComponent CreateDrawer(string csrf) => OnePane("favorites-create", "collections.new", "plus",

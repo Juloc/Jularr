@@ -1,5 +1,6 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
@@ -21,24 +22,23 @@ namespace Jularr.Backend.Service.User.Library.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // Works the profile lists that have media, a Plex item or an acquisition target; search stays local.
+            // The order is decided over the cheap candidate rows, the card projection runs for the page alone.
+            var orderBy = Parameters.LibrarySortTypeId switch
+            {
+                LibrarySortType.Year => "work.\"ReleaseYear\" DESC NULLS LAST, visible.\"Title\", work.\"Id\"",
+                LibrarySortType.Progress => "workProgress.\"ProgressPercent\" DESC NULLS LAST, visible.\"Title\", work.\"Id\"",
+                LibrarySortType.Title => "visible.\"Title\", work.\"Id\"",
+                _ => "available.\"AddedAt\" DESC NULLS LAST, visible.\"Title\", work.\"Id\""
+            };
+            var progress = Parameters.LibrarySortTypeId == LibrarySortType.Progress ? WorkCardProjection.ProgressJoin : "";
             var sql = new SqlStatement();
-            sql.Statement =
+            sql.Statement = WorkCardProjection.Page(
                 $$"""
                 SELECT
-                    {{WorkCardProjection.Columns}},
-                    EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WatchlistEntries" AS entry
-                        WHERE
-                            entry."WorkId" = work."Id"
-                            AND entry."ProfileId" = @ProfileId
-                    ) AS "IsWatchlisted"
+                    work."Id"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
-                    {{WorkCardProjection.Joins}}
                     LEFT JOIN LATERAL (
                         SELECT
                             max(file."CreatedAt") AS "AddedAt"
@@ -49,6 +49,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                             asset."WorkId" = work."Id"
                     ) AS available ON TRUE
                     LEFT JOIN "WorkExternalIdentities" AS plex ON plex."WorkId" = work."Id" AND plex."Namespace" = 'plex'
+                    {{progress}}
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
@@ -60,8 +61,13 @@ namespace Jularr.Backend.Service.User.Library.V1
                         WHERE
                             wanted."WorkId" = work."Id"
                     ))
-                    AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
-                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
+                    AND (
+                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
+                    )
+                    AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
+                    AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
                     AND (@Query::text IS NULL OR EXISTS (
                         SELECT
                             1
@@ -72,15 +78,22 @@ namespace Jularr.Backend.Service.User.Library.V1
                             AND title."Title" ILIKE '%' || replace(replace(replace(@Query, '\', '\\'), '%', '\%'), '_', '\_') || '%'
                     ))
                 ORDER BY
-                    CASE WHEN @LibrarySortTypeId = 1 THEN available."AddedAt" END DESC NULLS LAST,
-                    CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
-                    CASE WHEN @LibrarySortTypeId = 4 THEN workProgress."ProgressPercent" END DESC NULLS LAST,
-                    visible."Title",
-                    work."Id"
+                    {{orderBy}}
                 LIMIT @PageSize
-                OFFSET @Offset;
-                """;
-            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, Parameters.Query, Parameters.LibrarySortTypeId));
+                OFFSET @Offset
+                """,
+                """
+                EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        "WatchlistEntries" AS entry
+                    WHERE
+                        entry."WorkId" = work."Id"
+                        AND entry."ProfileId" = @ProfileId
+                )
+                """);
+            sql.Parameters.Add(new LibraryPageFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.Query));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);

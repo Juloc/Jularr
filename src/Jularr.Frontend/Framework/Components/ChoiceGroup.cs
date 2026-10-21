@@ -3,8 +3,8 @@ using System.Text.Encodings.Web;
 
 namespace Jularr.Frontend.Framework
 {
-    // The label is a UI text key or, for a number, the value itself.
-    public sealed record ChoicePick(string Value, bool Checked, string? LabelKey = null);
+    // The label is a UI text key or, for a number, the value itself; Scopes names (comma-separated) the media types a choice is for, for a script that hides it for others.
+    public sealed record ChoicePick(string Value, bool Checked, string? LabelKey = null, string? Scopes = null);
 
     // Pills show their state in colour; Checks are native checkboxes in two columns; Section frames checks with an icon and a count.
     public enum ChoiceLayout { Pills, Checks, Section }
@@ -25,6 +25,7 @@ namespace Jularr.Frontend.Framework
             {
                 var input = new Input().Attribute("type", settings.Multiple ? "checkbox" : "radio").Attribute("name", name).Attribute("value", pick.Value);
                 if (pick.Checked) input.Attribute("checked", "checked");
+                if (pick.Scopes is not null) input.Attribute("data-scopes", pick.Scopes);
                 foreach (var (attribute, value) in settings.Attributes ?? new Dictionary<string, string>()) input.Attribute(attribute, value);
                 return (IUiComponent)new Label(input, new Span(pick.LabelKey is null ? new ValueText(pick.Value) : new Text(pick.LabelKey)))
                     .Class(settings.Layout == ChoiceLayout.Pills ? "choice-group__item" : "choice-group__check");

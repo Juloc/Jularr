@@ -26,7 +26,8 @@ namespace Jularr.Frontend.Pages.User.Favorites
     {
         private const int PageSize = 48;
 
-        private IReadOnlyList<ProfileMediaV1> _media = [];
+        private IReadOnlyList<ProfileMediaV1>? _media;
+        private ScopeSelection? _scopes;
         private IReadOnlyList<CollectionV1> _collections = [];
         private IReadOnlyList<FavoriteEntry> _entries = [];
         private IReadOnlyList<LibraryItemV1> _newest = [];
@@ -69,6 +70,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             var token = HttpContext.RequestAborted;
             var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: token)).ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
             _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
+            _scopes = null;
 
             // Collections shape the strip; the newest favorites give the first card its covers.
             if (texts.CanCollect())
@@ -80,9 +82,9 @@ namespace Jularr.Frontend.Pages.User.Favorites
             }
 
             // One bounded page of the favorites or of the chosen collection.
-            var (types, subtypes) = ScopeFilter();
+            var (types, subtypes) = Scopes.Filter();
             var page = Math.Max(1, PageNumber);
-            var (yearFrom, yearTo) = YearRange();
+            var (yearFrom, yearTo) = YearChoice.Range(Year);
             if (_current is { } collection)
             {
                 var works = await readCollectionWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(collection.Id, page, PageSize, types, subtypes, yearFrom, yearTo, ProgressState, Sort), token);

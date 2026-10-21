@@ -116,6 +116,22 @@
    "Play trailer",
    "Trailer abspielen"
   ],
+  "media.preview.trailer": [
+   "Trailer",
+   "Trailer"
+  ],
+  "media.preview.pauseTrailer": [
+   "Pause trailer",
+   "Trailer anhalten"
+  ],
+  "media.preview.muteTrailer": [
+   "Mute trailer",
+   "Trailer stummschalten"
+  ],
+  "media.preview.unmuteTrailer": [
+   "Unmute trailer",
+   "Trailer-Ton einschalten"
+  ],
   "media.preview.noTrailer": [
    "No trailer available",
    "Kein Trailer verfügbar"
@@ -5920,7 +5936,15 @@
    "Filter",
    "Filter"
   ],
-  "favorites.layout.toggle": [
+  "library.filter.open": [
+   "Open filter",
+   "Filter öffnen"
+  ],
+  "library.filter.title": [
+   "Filter",
+   "Filter"
+  ],
+  "list.layout.toggle": [
    "Switch between grid and list",
    "Zwischen Raster und Liste wechseln"
   ],
