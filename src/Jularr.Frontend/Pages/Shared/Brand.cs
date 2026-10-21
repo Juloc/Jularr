@@ -9,8 +9,10 @@ namespace Jularr.Frontend.Pages.Shared
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            // One single-colour mark in the text colour, in both skins and brightnesses.
-            var glyph = new Span(Mark())
+            // Both marks are rendered; the skin shows exactly one (Brand.scss).
+            var glyph = new Span(
+                Mark("brand-clean", "brand-symbol__clean"),
+                Mark("brand-original", "brand-symbol__original"))
                 .Class(login ? "brand-symbol auth-symbol" : "brand-symbol")
                 .Attribute("aria-hidden", "true");
             var name = new Span(new ValueText(texts.InstanceName));
@@ -37,11 +39,11 @@ namespace Jularr.Frontend.Pages.Shared
             }
         }
 
-        private IUiComponent Mark()
+        private IUiComponent Mark(string name, string cssClass)
         {
             // Symbol owns logo scaling.
-            return new Svg(new Use().Attribute("href", assets.IconHref("brand-mark")).Attribute("width", "48").Attribute("height", "48"))
-                .Class("brand-symbol__mark").Attribute("viewBox", "0 0 48 48")
+            return new Svg(new Use().Attribute("href", assets.IconHref(name)).Attribute("width", "48").Attribute("height", "48"))
+                .Class(cssClass).Attribute("viewBox", "0 0 48 48")
                 .Attribute("width", "48").Attribute("height", "48").Attribute("focusable", "false");
         }
     }

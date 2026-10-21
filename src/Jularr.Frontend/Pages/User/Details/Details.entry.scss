@@ -21,6 +21,17 @@
     .ui-field { margin: 0; }
 }
 
+// What was watched and the buttons to change it: a film's own, then the series' under its seasons and the shown season's above its episodes.
+.details-progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+
+    .details-seasons + & { margin: 12px 0 0; }
+}
+
 .details-paging {
     display: flex;
     justify-content: center;
