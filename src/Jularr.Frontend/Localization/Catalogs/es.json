@@ -2960,38 +2960,6 @@
    "Requested",
    "Solicitado"
   ],
-  "media.availability.badge.Available": [
-   "Available locally",
-   "Disponible en local"
-  ],
-  "media.availability.badge.ProfileAudio": [
-   "Profile audio available",
-   "Audio del perfil disponible"
-  ],
-  "media.availability.badge.OtherAudio": [
-   "Other audio languages",
-   "Otros idiomas de audio"
-  ],
-  "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · Otro audio"
-  ],
-  "media.availability.badge.Partial": [
-   "{0}/{1} available",
-   "{0}/{1} disponibles"
-  ],
-  "media.availability.badge.Downloading": [
-   "Downloading",
-   "Descargando"
-  ],
-  "media.availability.badge.Searching": [
-   "Searching",
-   "Buscando"
-  ],
-  "media.availability.badge.Requested": [
-   "Requested",
-   "Solicitado"
-  ],
   "media.availability.Partial": [
    "{0} of {1} monitored episodes or units are available.",
    "{0} de {1} episodios o unidades supervisados están disponibles."

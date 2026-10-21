@@ -11,11 +11,14 @@ namespace Jularr.Backend.Data.User.Media.V1
 {
     public sealed class ReadWatchlistParametersV1 : BaseParameters
     {
-        public ReadWatchlistParametersV1(int page = 1, int pageSize = 25, MediaType? mediaTypeId = null, MediaSubtype? mediaSubtypeId = null,
-            LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
+        public ReadWatchlistParametersV1(int page = 1, int pageSize = 25, MediaType[]? mediaTypeIds = null, MediaSubtype[]? mediaSubtypeIds = null, int? releaseYearFrom = null,
+            int? releaseYearTo = null, ProgressStateType? progressStateId = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
         {
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
+            ProgressStateId = progressStateId;
+            MediaTypeIds = mediaTypeIds ?? [];
+            MediaSubtypeIds = mediaSubtypeIds ?? [];
+            ReleaseYearFrom = releaseYearFrom;
+            ReleaseYearTo = releaseYearTo;
             LibrarySortTypeId = librarySortTypeId;
             Page = page;
             PageSize = pageSize;
@@ -24,16 +27,42 @@ namespace Jularr.Backend.Data.User.Media.V1
         public int Page { get; }
         public int PageSize { get; }
 
-        // A type alone lists its Works without subtype; a subtype lists that subtype across types.
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
-        public MediaType? MediaTypeId { get; }
+        // A type lists its Works without subtype, a subtype lists that subtype across types; none lists everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
 
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
-        public MediaSubtype? MediaSubtypeId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearFrom { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearTo { get; }
+
+        // Only titles the profile has not started, is in the middle of or has finished.
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
 
         // Recently added means added to the watchlist.
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
         public LibrarySortType LibrarySortTypeId { get; }
+    }
+
+    public sealed class ReadWatchlistCountParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class WatchlistCountV1 : BaseResponse
+    {
+        public WatchlistCountV1(int total)
+        {
+            Total = total;
+        }
+
+        // Every favorite the profile can open, whatever a list narrows it to.
+        [DataField(typeof(WorkFields), nameof(WorkFields.AvailableUnits))]
+        public int Total { get; }
     }
 
     public sealed class PersonParametersV1 : BaseParameters
@@ -92,42 +121,6 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Abbreviation))]
         public string? Abbreviation { get; }
-    }
-
-    // What a poster card in a list shows.
-    public sealed class WorkCardV1 : BaseResponse
-    {
-        public WorkCardV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? posterUrl)
-        {
-            Id = id;
-            MediaTypeId = mediaTypeId;
-            MediaSubtypeId = mediaSubtypeId;
-            CanonicalTitle = canonicalTitle;
-            IsWatchlisted = isWatchlisted;
-            ReleaseYear = releaseYear;
-            PosterUrl = posterUrl;
-        }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
-        public long Id { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
-        public MediaType MediaTypeId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
-        public MediaSubtype? MediaSubtypeId { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
-        public string CanonicalTitle { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
-        public bool IsWatchlisted { get; }
-
-        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
-        public int? ReleaseYear { get; }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
-        public string? PosterUrl { get; }
     }
 
     public sealed class WorkDetailsV1 : BaseResponse

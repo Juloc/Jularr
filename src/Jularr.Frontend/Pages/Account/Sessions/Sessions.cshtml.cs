@@ -20,6 +20,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
         protected override void Define(Page page)
         {
             page.Title("settings.sessions");
+            page.Parent("settings.title", "/Settings");
             page.Navigation("nav.settings");
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             if (_sessions is not null)

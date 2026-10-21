@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Frontend.Framework;
@@ -12,7 +13,7 @@ namespace Jularr.Frontend.Pages.User.Franchise
     public sealed class FranchiseModel(ReadFranchiseV1 read, ReadFranchiseWorksV1 readWorks, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private FranchiseV1? _franchise;
-        private PageResult<WorkCardV1>? _works;
+        private PageResult<LibraryItemV1>? _works;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -22,15 +23,15 @@ namespace Jularr.Frontend.Pages.User.Franchise
 
         protected override void Define(Page page)
         {
-            page.Title("franchise.title");
+            page.Title("franchise.title", _franchise?.Name);
+            page.Parent("nav.library", "/Library");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Franchise/Franchise.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_franchise is { } franchise && _works is { } works)
             {
-                page.Content.Add(new H2(new ValueText(franchise.Name)));
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-                page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))
+                page.Content.Add(new Div([.. works.Items.Select(item => MediaCard.For(assets, item)
                     .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid"));
                 if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(works.Page - 1)));
                 if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(works.Page + 1)));
@@ -49,7 +50,7 @@ namespace Jularr.Frontend.Pages.User.Franchise
         protected override async Task LoadDataAsync()
         {
             _franchise = await read.ExecuteAsync<FranchiseV1>(new FranchiseParametersV1(Id), HttpContext.RequestAborted);
-            _works = await readWorks.ExecuteAsync<PageResult<WorkCardV1>>(new FranchiseWorksParametersV1(Id, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new FranchiseWorksParametersV1(Id, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
         }
 
         private string Address(int page) => "/Franchise/" + Id.ToString(CultureInfo.InvariantCulture) + "?pageNumber=" + page.ToString(CultureInfo.InvariantCulture);

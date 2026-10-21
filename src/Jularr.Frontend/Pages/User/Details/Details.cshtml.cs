@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Backend.Data.User.Discover.V1;
@@ -26,7 +27,7 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, ReadDiscoverScopesV1 readScopes, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery,
         FrontendAssets assets, UiText texts) : JularrPage
     {
-        private IReadOnlyList<WorkCardV1> _related = [];
+        private IReadOnlyList<LibraryItemV1> _related = [];
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
         private IReadOnlyList<DiscoverScopeV1> _scopes = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
@@ -53,6 +54,7 @@ namespace Jularr.Frontend.Pages.User.Details
         protected override void Define(Page page)
         {
             page.Title("details.title", _work?.CanonicalTitle);
+            page.Parent("nav.library", "/Library");
             page.Navigation("nav.home");
             page.Asset("Pages/User/Details/Details.entry.scss");
             if (_recommendations.Count > 0 || _related.Count > 0)
@@ -79,7 +81,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
                     work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null, work.Genres, work.Studio,
                     work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }
-                    .Where(part => part is not null)), work.Overview, actionKey, actionHref));
+                    .Where(part => part is not null)), work.Overview, actionKey, actionHref, titleInBreadcrumb: true));
 
                 // Each author, artist or studio leads to their other titles.
                 var creators = new List<IUiComponent>();
@@ -102,7 +104,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 actions.Add(new Form<UpdateWatchlistDataV1>(form =>
                 {
                     form.Hidden(item => item.IsWatchlisted);
-                    form.Submit(work.IsWatchlisted ? "media.watchlist.remove" : "media.watchlist.add");
+                    form.Submit(work.IsWatchlisted ? "media.favorites.remove" : "media.favorites.add");
                 }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture), csrf,
                     new UpdateWatchlistDataV1(!work.IsWatchlisted), FormError));
 
@@ -134,10 +136,11 @@ namespace Jularr.Frontend.Pages.User.Details
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : FormError));
                 }
 
-                // The profile's request shows its state and leads to the requests.
+                // The profile's request names its phase live and leads to the requests.
                 if (work.RequestStatusTypeId is { } requested && texts.CanRequest())
                 {
-                    actions.Add(new A(new Text("request.state." + requested)).Class("button").Attribute("href", "/Requests"));
+                    actions.Add(new LivePhaseButton(LiveKeys.RequestOfWork(work.Id), requested, "/Requests"));
+                    page.Asset("Framework/Components/LiveProgress.entry.ts");
                 }
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
@@ -197,9 +200,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 // The other titles of its film series, then similar titles leading to their Work or their request.
                 if (work.FranchiseId is { } series)
                 {
-                    page.Content.Add(new MediaShelf(assets, "details.related", "/Franchise/" + series.ToString(CultureInfo.InvariantCulture), [.. _related.Select(item => (IUiComponent)new MediaCard(assets,
-                        item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
-                        MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)).Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]));
+                    page.Content.Add(new MediaShelf(assets, "details.related", "/Franchise/" + series.ToString(CultureInfo.InvariantCulture), [.. _related.Select(item => (IUiComponent)MediaCard.For(assets, item).Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]));
                 }
 
                 page.Content.Add(new MediaShelf(assets, "details.recommendations", null, [.. _recommendations.Where(item => item.WorkId is not null || _scopes.Any(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog)).Select(Recommendation)]));
@@ -239,12 +240,11 @@ namespace Jularr.Frontend.Pages.User.Details
                 .Class("details-languages-card");
         }
 
-        // A known title also goes on the watchlist from its card.
+        // A known title also goes into the favorites from its card.
         private IUiComponent Recommendation(DiscoverItemV1 item)
         {
-            var card = new MediaCard(assets, item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
-                    : "/Discover/" + _scopes.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
-                item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId);
+            var card = MediaCard.For(assets, item, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
+                : "/Discover/" + _scopes.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture));
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
         }
@@ -457,7 +457,7 @@ namespace Jularr.Frontend.Pages.User.Details
             _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             if (_work.FranchiseId is { } franchiseId)
             {
-                _related = [.. (await readFranchise.ExecuteAsync<PageResult<WorkCardV1>>(new FranchiseWorksParametersV1(franchiseId, pageSize: 20), HttpContext.RequestAborted)).Items
+                _related = [.. (await readFranchise.ExecuteAsync<PageResult<LibraryItemV1>>(new FranchiseWorksParametersV1(franchiseId, pageSize: 20), HttpContext.RequestAborted)).Items
                     .Where(item => item.Id != Id)];
             }
 

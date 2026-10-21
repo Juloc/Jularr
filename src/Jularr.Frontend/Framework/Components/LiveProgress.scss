@@ -1,0 +1,169 @@
+// Progress that a stream keeps current: the script patches text, bar value and data-phase / data-step; the look follows those.
+.live-progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    min-width: 0;
+
+    &[hidden],
+    &__bar[hidden],
+    &__phase[hidden],
+    &__facts[hidden],
+    &__detail[hidden] { display: none; }
+
+    &__phase { font-weight: 650; }
+
+    // Beside the step names the phase is only read.
+    &__phase--steps {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    &__bar {
+        appearance: none;
+        flex: 1 1 140px;
+        min-width: 100px;
+        max-width: 280px;
+        height: 8px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        overflow: hidden;
+        &::-webkit-progress-bar { background: var(--accent-soft); border-radius: 999px; }
+        &::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+        &::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+        @media (prefers-reduced-motion: no-preference) {
+            &::-webkit-progress-value { transition: width 0.9s linear; }
+        }
+    }
+
+    &__facts { font-size: 0.85em; }
+
+    // Release, indexer and client for an administrator, each on its own line.
+    &__detail {
+        flex: 1 0 100%;
+        font-size: 0.85em;
+        overflow-wrap: anywhere;
+        &--error { color: var(--danger); }
+    }
+
+    &[data-phase="completed"] &__phase { color: var(--success); }
+    &[data-phase="failed"] &__phase,
+    &[data-phase="rejected"] &__phase,
+    &[data-phase="cancelled"] &__phase { color: var(--danger); }
+
+    // The steps of a request: the reached ones take the accent.
+    &[data-step="0"] .live-steps { display: none; }
+}
+
+.live-steps {
+    display: flex;
+    flex: 1 0 100%;
+    gap: 4px;
+    margin: 0 0 4px;
+    padding: 0;
+    list-style: none;
+
+    &__item {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-top: 6px;
+        border-top: 3px solid var(--accent-soft);
+        font-size: 0.8em;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+}
+
+// On a narrow screen the five step names have no room: the segments stay, the phase is written out instead.
+@media (max-width: 720px) {
+    .live-progress__phase--steps {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+        white-space: normal;
+    }
+
+    .live-steps__item {
+        padding-top: 0;
+        font-size: 0;
+    }
+}
+
+// A list row: the phase with its percent above five thin segments, names as tooltips, the time left below; the segments are the bar.
+.live-progress--compact {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 5px;
+
+    .live-progress__phase {
+        order: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        &::before {
+            content: "";
+            flex: none;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+    }
+
+    &[data-phase="completed"] .live-progress__phase::before,
+    &[data-phase="failed"] .live-progress__phase::before,
+    &[data-phase="rejected"] .live-progress__phase::before,
+    &[data-phase="cancelled"] .live-progress__phase::before { background: currentColor; }
+
+    .live-progress__phase--steps {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: hidden;
+        clip-path: none;
+        white-space: nowrap;
+    }
+
+    .live-steps {
+        order: 1;
+        flex: none;
+        margin: 0;
+    }
+
+    .live-steps__item {
+        height: 5px;
+        padding: 0;
+        border-top-width: 5px;
+        border-radius: 999px;
+        font-size: 0;
+    }
+
+    .live-progress__bar { display: none; }
+    .live-progress__facts { order: 2; color: var(--muted); }
+}
+
+@for $step from 1 through 5 {
+    .live-progress[data-step="#{$step}"] .live-steps__item:nth-child(-n + #{$step}) {
+        border-top-color: var(--accent);
+        color: var(--accent-text);
+    }
+}
+
+// The request button names the phase beside its percent.
+.button[data-live][data-phase="completed"] { color: var(--success); }

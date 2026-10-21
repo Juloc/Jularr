@@ -15,6 +15,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (standalone)
             {
                 page.Title("admin.work.title", _work?.CanonicalTitle);
+                page.Parent("admin.works.title", "/Admin/Works");
                 page.Navigation("nav.admin");
 
                 // Its searches, episodes and releases live with its Arr+ target.

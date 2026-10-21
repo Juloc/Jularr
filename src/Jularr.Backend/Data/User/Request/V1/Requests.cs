@@ -12,14 +12,32 @@ namespace Jularr.Backend.Data.User.Request.V1
 {
     public sealed class ReadRequestsParametersV1 : BaseParameters
     {
-        public ReadRequestsParametersV1(int page = 1, int pageSize = 25)
+        public ReadRequestsParametersV1(int page = 1, int pageSize = 25, RequestListFilterType requestListFilterTypeId = RequestListFilterType.All, RequestSortType requestSortTypeId = RequestSortType.Newest,
+            MediaType? mediaTypeId = null, MediaSubtype? mediaSubtypeId = null)
         {
             Page = page;
             PageSize = pageSize;
+            RequestListFilterTypeId = requestListFilterTypeId;
+            RequestSortTypeId = requestSortTypeId;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestListFilterTypeId))]
+        public RequestListFilterType RequestListFilterTypeId { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestSortTypeId))]
+        public RequestSortType RequestSortTypeId { get; }
+
+        // A type alone lists its Works without subtype; a subtype lists that subtype across types.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
     }
 
     public sealed class CreateRequestParametersV1 : BaseParameters
@@ -83,8 +101,14 @@ namespace Jularr.Backend.Data.User.Request.V1
     public sealed class RequestDetailsV1 : BaseResponse
     {
         public RequestDetailsV1(long id, long workId, string canonicalTitle, string requestedLanguage, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, DateTime createdAt,
-            long? operationId = null, string? manualUrl = null, ActivityEventType? latestStepTypeId = null, DateTime? latestStepAt = null, bool readsTranslated = false)
+            long? operationId = null, string? manualUrl = null, ActivityEventType? latestStepTypeId = null, DateTime? latestStepAt = null, bool readsTranslated = false,
+            MediaType mediaTypeId = MediaType.Movie, MediaSubtype? mediaSubtypeId = null, string? posterUrl = null, string? qualityName = null, bool isWithdrawable = false)
         {
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            PosterUrl = posterUrl;
+            QualityName = qualityName;
+            IsWithdrawable = isWithdrawable;
             ReadsTranslated = readsTranslated;
             LatestStepTypeId = latestStepTypeId;
             LatestStepAt = latestStepAt;
@@ -132,6 +156,22 @@ namespace Jularr.Backend.Data.User.Request.V1
 
         // A book not published in the requested language comes in its own and is read translated.
         public bool ReadsTranslated { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        // The quality the request asked for; without a choice the defaults apply.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name), false)]
+        public string? QualityName { get; }
+
+        // Until it is imported the requester can take the request back.
+        public bool IsWithdrawable { get; }
     }
 
     public sealed class RequestParametersV1 : BaseParameters
