@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "nl",
  "name": "Nederlands",
  "reviewed": false,
@@ -5561,7 +5561,7 @@
    "De bron openen en bevestigen"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Bestandslink van de bron"
   ],
   "activity.continueDownload": [

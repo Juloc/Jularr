@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.User.Settings
 
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
-        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<HomeShelfV1> _layout = [];
         private AuthenticationResultV1? _authentication;
@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         private bool _savingPin;
         private SpeechPreferencesV1? _speech;
         private SaveSpeechPreferencesDataV1? _speechInput;
+        private IReadOnlyList<SpeechModelV1> _speechModels = [];
 
         protected override void Define(Page page)
         {
@@ -50,6 +51,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             page.Navigation("nav.settings");
             page.Asset("Modules/Appearance/appearance.entry.scss");
             page.Asset("Modules/Speech/settings.entry.ts");
+            page.Asset("Modules/Speech/settings.entry.scss");
             page.Content.Add(new UiSection("appearance.title", [new Appearance()]));
 
             // Show only supported profile settings.
@@ -123,7 +125,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 if (_speech is not null && texts.Can("profile.self.update"))
                 {
                     page.Content.Add(new UiSection("speech.title", [new SpeechSettings(_speech, texts.Locale, "/Settings?handler=Speech",
-                        antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", _speechInput is not null ? FormError : null, _speechInput)]));
+                        antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", _speechInput is not null ? FormError : null, _speechInput, _speechModels)]));
                 }
             }
             else
@@ -291,6 +293,10 @@ namespace Jularr.Frontend.Pages.User.Settings
             {
                 _profile = await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
                 _speech = await readSpeech.ExecuteAsync<SpeechPreferencesV1>(new ReadProfileParametersV1(profileId), token);
+                if (texts.Can("profile.media.read", "Reading"))
+                {
+                    _speechModels = await readSpeechModels.ExecuteAsync<BaseDataList<SpeechModelV1>>(new SpeechModelsParametersV1(), token);
+                }
                 _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
                 if (texts.CanArrangeHome())

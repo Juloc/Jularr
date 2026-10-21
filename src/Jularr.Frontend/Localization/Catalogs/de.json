@@ -1,4 +1,4 @@
-{
+﻿{
  "locale": "de",
  "name": "Deutsch",
  "reviewed": true,
@@ -1067,6 +1067,18 @@
   "admin.catalog.removeWindow": [
    "Remove last window",
    "Letztes Fenster entfernen"
+  ],
+  "admin.catalog.covers": [
+   "Images of other titles",
+   "Bilder anderer Titel"
+  ],
+  "admin.catalog.coversKeepDays": [
+   "Keep unused images for days",
+   "Ungenutzte Bilder aufbewahren (Tage)"
+  ],
+  "admin.catalog.coversMaximumMegabytes": [
+   "Largest size in MB, 0 keeps none",
+   "Größte Menge in MB, 0 speichert nichts"
   ],
   "form.time.hour": [
    "Hour",
@@ -2765,20 +2777,20 @@
    "Wartet auf Freigabe"
   ],
   "request.state.Approved": [
-   "Looking for media",
-   "Medien werden gesucht"
+   "Requested",
+   "Angefragt"
   ],
   "request.state.Searching": [
-   "Looking for media",
-   "Medien werden gesucht"
+   "Searching",
+   "Wird gesucht"
   ],
   "request.state.Downloading": [
-   "Getting media",
-   "Medien werden geholt"
+   "Downloading",
+   "Wird geladen"
   ],
   "request.state.Importing": [
-   "Preparing",
-   "Wird vorbereitet"
+   "Importing",
+   "Wird importiert"
   ],
   "request.state.Completed": [
    "Available",
@@ -2795,6 +2807,14 @@
   "request.state.Cancelled": [
    "Request cancelled",
    "Anfrage abgebrochen"
+  ],
+  "live.eta": [
+   "{0} left",
+   "noch {0}"
+  ],
+  "live.progress": [
+   "Progress",
+   "Fortschritt"
   ],
   "media.notForProfile": [
    "Media is not available for this profile.",
@@ -3027,6 +3047,210 @@
   "discover.loadFailed": [
    "Results could not be loaded. Try again or open the next page.",
    "Die Ergebnisse konnten nicht geladen werden. Versuche es erneut oder öffne die nächste Seite."
+  ],
+  "hero.label": [
+   "Highlights",
+   "Highlights"
+  ],
+  "hero.previous": [
+   "Previous highlight",
+   "Vorheriges Highlight"
+  ],
+  "hero.next": [
+   "Next highlight",
+   "Nächstes Highlight"
+  ],
+  "hero.pause": [
+   "Pause highlights",
+   "Highlights pausieren"
+  ],
+  "hero.resume": [
+   "Play highlights",
+   "Highlights abspielen"
+  ],
+  "hero.show": [
+   "Highlight {0} of {1}",
+   "Highlight {0} von {1}"
+  ],
+  "common.apply": [
+   "Apply",
+   "Anwenden"
+  ],
+  "discover.area.watch": [
+   "Watch",
+   "Watch"
+  ],
+  "discover.area.read": [
+   "Read",
+   "Read"
+  ],
+  "discover.area.hear": [
+   "Hear",
+   "Hear"
+  ],
+  "discover.area.play": [
+   "Game",
+   "Game"
+  ],
+  "discover.pickAll": [
+   "Select all",
+   "Alle wählen"
+  ],
+  "discover.clearAll": [
+   "Clear",
+   "Abwählen"
+  ],
+  "discover.filter.title": [
+   "Filter",
+   "Filter"
+  ],
+  "discover.filter.open": [
+   "Open filter",
+   "Filter öffnen"
+  ],
+  "discover.filter.availability": [
+   "Availability",
+   "Verfügbarkeit"
+  ],
+  "discover.filter.year": [
+   "Release year",
+   "Erscheinungsjahr"
+  ],
+  "discover.availability.request": [
+   "Can be requested",
+   "Anfragbar"
+  ],
+  "discover.year.since2020": [
+   "Since 2020",
+   "Ab 2020"
+  ],
+  "discover.year.before2020": [
+   "Before 2020",
+   "Vor 2020"
+  ],
+  "discover.reset": [
+   "Reset",
+   "Zurücksetzen"
+  ],
+  "discover.view.open": [
+   "Customize Discover",
+   "Ansicht gestalten"
+  ],
+  "discover.view.title": [
+   "Customize Discover",
+   "Discover gestalten"
+  ],
+  "discover.view.toggle": [
+   "Switch between rows and grid",
+   "Zwischen Reihen und Raster wechseln"
+  ],
+  "discover.feeds": [
+   "Lists",
+   "Listen"
+  ],
+  "discover.feed.Continue": [
+   "Continue",
+   "Fortsetzen"
+  ],
+  "discover.sort": [
+   "Sort",
+   "Sortierung"
+  ],
+  "discover.sort.ranking": [
+   "Ranking",
+   "Rangfolge"
+  ],
+  "discover.sort.newest": [
+   "Newest",
+   "Neueste"
+  ],
+  "discover.sort.az": [
+   "Title A–Z",
+   "Titel A–Z"
+  ],
+  "discover.hero.perType": [
+   "Highlights per type",
+   "Highlights pro Medientyp"
+  ],
+  "discover.hero.perType.1": [
+   "1 title",
+   "1 Titel"
+  ],
+  "discover.hero.perType.2": [
+   "2 titles",
+   "2 Titel"
+  ],
+  "discover.hero.perType.3": [
+   "3 titles",
+   "3 Titel"
+  ],
+  "discover.hero.max": [
+   "Maximum highlights",
+   "Maximale Highlights"
+  ],
+  "discover.hero.continue": [
+   "Include continue",
+   "Fortsetzen einbeziehen"
+  ],
+  "discover.hero.auto": [
+   "Rotate automatically",
+   "Automatisch wechseln"
+  ],
+  "discover.action.request": [
+   "Request",
+   "Anfragen"
+  ],
+  "discover.action.watch": [
+   "Play",
+   "Abspielen"
+  ],
+  "discover.action.continueRead": [
+   "Continue reading",
+   "Weiterlesen"
+  ],
+  "discover.action.continueHear": [
+   "Continue listening",
+   "Weiterhören"
+  ],
+  "discover.chooseMedia": [
+   "Choose media",
+   "Medien auswählen"
+  ],
+  "discover.allTypes": [
+   "All media types",
+   "Alle Medientypen"
+  ],
+  "discover.selected": [
+   "{0} of {1} selected",
+   "{0} von {1} ausgewählt"
+  ],
+  "discover.tab.filter": [
+   "Filter",
+   "Filter"
+  ],
+  "discover.tab.view": [
+   "View & highlights",
+   "Ansicht & Hero"
+  ],
+  "discover.applyClose": [
+   "Apply & close",
+   "Anwenden & schließen"
+  ],
+  "discover.filter.feed": [
+   "Result list",
+   "Ergebnisfeed"
+  ],
+  "discover.layout": [
+   "Show shelves as",
+   "Medien-Reihen anzeigen"
+  ],
+  "discover.layout.rows": [
+   "Rows",
+   "Reihen"
+  ],
+  "discover.layout.grid": [
+   "Grid",
+   "Raster"
   ],
   "media.state.NotRequested": [
    "Not requested",
@@ -4932,13 +5156,21 @@
    "Critical",
    "Kritisch"
   ],
-  "calendar.view.month": [
+  "calendar.view.Month": [
    "Month",
    "Monat"
   ],
-  "calendar.view.agenda": [
-   "Agenda",
-   "Agenda"
+  "calendar.view.Week": [
+   "Week",
+   "Woche"
+  ],
+  "calendar.view.Day": [
+   "Day",
+   "Tag"
+  ],
+  "calendar.views": [
+   "Calendar view",
+   "Kalenderansicht"
   ],
   "calendar.more": [
    "+{0} more",
@@ -4949,24 +5181,108 @@
    "Kalender"
   ],
   "calendar.earlier": [
-   "Earlier",
-   "Früher"
-  ],
-  "calendar.today": [
-   "From today",
-   "Ab heute"
+   "Previous period",
+   "Voriger Zeitraum"
   ],
   "calendar.later": [
-   "Later",
-   "Später"
+   "Next period",
+   "Nächster Zeitraum"
+  ],
+  "calendar.today": [
+   "Today",
+   "Heute"
   ],
   "calendar.pages": [
-   "Calendar weeks",
-   "Kalenderwochen"
+   "Period",
+   "Zeitraum"
   ],
-  "calendar.empty": [
-   "Nothing is released in these two weeks for your watchlist, requests or library.",
-   "In diesen zwei Wochen erscheint nichts aus deiner Merkliste, deinen Anfragen oder deiner Bibliothek."
+  "calendar.search": [
+   "Search the calendar",
+   "Kalender durchsuchen"
+  ],
+  "calendar.status": [
+   "Status",
+   "Status"
+  ],
+  "calendar.status.all": [
+   "All statuses",
+   "Alle Status"
+  ],
+  "calendar.status.Available": [
+   "In library",
+   "In der Bibliothek"
+  ],
+  "calendar.status.Requested": [
+   "Requested",
+   "Angefragt"
+  ],
+  "calendar.status.Watchlisted": [
+   "On watchlist",
+   "Auf der Merkliste"
+  ],
+  "calendar.area.watch": [
+   "Watch",
+   "Schauen"
+  ],
+  "calendar.area.read": [
+   "Read",
+   "Lesen"
+  ],
+  "calendar.area.hear": [
+   "Hear",
+   "Hören"
+  ],
+  "calendar.area.play": [
+   "Play",
+   "Spielen"
+  ],
+  "calendar.areaState": [
+   "{0}: {1} of {2} selected",
+   "{0}: {1} von {2} gewählt"
+  ],
+  "calendar.customize": [
+   "Customize view",
+   "Ansicht gestalten"
+  ],
+  "calendar.filter": [
+   "Filter",
+   "Filter"
+  ],
+  "calendar.apply": [
+   "Apply",
+   "Übernehmen"
+  ],
+  "calendar.reset": [
+   "Reset",
+   "Zurücksetzen"
+  ],
+  "calendar.shown": [
+   "Releases per day",
+   "Veröffentlichungen pro Tag"
+  ],
+  "calendar.shownOption": [
+   "{0} releases",
+   "{0} Veröffentlichungen"
+  ],
+  "calendar.count.one": [
+   "1 release",
+   "1 Veröffentlichung"
+  ],
+  "calendar.count": [
+   "{0} releases",
+   "{0} Veröffentlichungen"
+  ],
+  "calendar.dayLabel": [
+   "{0}, releases: {1}",
+   "{0}, Veröffentlichungen: {1}"
+  ],
+  "calendar.dayEmpty": [
+   "No releases on this day.",
+   "Keine Veröffentlichungen an diesem Tag."
+  ],
+  "calendar.weekDays": [
+   "Days of the week",
+   "Wochentage"
   ],
   "instance.module.Calendar": [
    "Release calendar",
@@ -5865,7 +6181,7 @@
    "Quelle öffnen und bestätigen"
   ],
   "activity.fileLink": [
-   "File link from the source",
+   "The address of the file itself (the .epub link), not the page",
    "Dateilink von der Quelle"
   ],
   "activity.continueDownload": [

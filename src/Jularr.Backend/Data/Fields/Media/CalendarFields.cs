@@ -6,5 +6,6 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField Days = new() { Minimum = 1, Maximum = 62 };
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsWatchlisted = new();
+        public static readonly BoolField IsRequested = new();
     }
 }

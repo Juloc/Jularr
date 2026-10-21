@@ -189,7 +189,7 @@ namespace Jularr.Backend.Logic.Media
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Overview",
                     work."Creator",
-                    work."ImageUrl",
+                    coalesce(known."StoredImageUrl", work."ImageUrl") AS "ImageUrl",
                     work."BackdropUrl",
                     known."WorkId",
                     known."MediaStateTypeId",
@@ -227,6 +227,20 @@ namespace Jularr.Backend.Logic.Media
                         SELECT
                             visible."WorkId",
                             state."MediaStateTypeId",
+                            (
+                                SELECT
+                                    fact."Value"
+                                FROM
+                                    "WorkMetadataFacts" AS fact
+                                WHERE
+                                    fact."WorkId" = visible."WorkId"
+                                    AND fact."FactKey" = 'Poster'
+                                    AND fact."Value" LIKE '/api/v1/covers/%'
+                                    AND EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = visible."WorkId" AND own."Namespace" = work."Namespace" AND own."Value" = work."Value")
+                                ORDER BY
+                                    fact."IsManual" DESC
+                                LIMIT 1
+                            ) AS "StoredImageUrl",
                             (
                                 SELECT
                                     'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
@@ -333,7 +347,7 @@ namespace Jularr.Backend.Logic.Media
                             work."ReleaseYear"::integer AS "ReleaseYear",
                             work."Overview",
                             work."Creator",
-                            work."ImageUrl",
+                            coalesce(known."StoredImageUrl", work."ImageUrl") AS "ImageUrl",
                             work."BackdropUrl",
                             known."WorkId",
                             known."MediaStateTypeId",
@@ -345,6 +359,20 @@ namespace Jularr.Backend.Logic.Media
                                 SELECT
                                     visible."WorkId",
                                     state."MediaStateTypeId",
+                                    (
+                                        SELECT
+                                            fact."Value"
+                                        FROM
+                                            "WorkMetadataFacts" AS fact
+                                        WHERE
+                                            fact."WorkId" = visible."WorkId"
+                                            AND fact."FactKey" = 'Poster'
+                                            AND fact."Value" LIKE '/api/v1/covers/%'
+                                            AND EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS own WHERE own."WorkId" = visible."WorkId" AND own."Namespace" = work."Namespace" AND own."Value" = work."Value")
+                                        ORDER BY
+                                            fact."IsManual" DESC
+                                        LIMIT 1
+                                    ) AS "StoredImageUrl",
                                     (
                                         SELECT
                                             'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"

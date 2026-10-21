@@ -1,5 +1,6 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
+using System.Collections.Concurrent;
 using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
@@ -75,6 +76,26 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
             Assert.AreEqual(0, Directory.EnumerateFiles(downloads.Path, "*", SearchOption.AllDirectories).Count());
+        }
+
+        [TestMethod]
+        public async Task Book_TheIndexerAndTheDirectSource_AreAskedAtTheSameTime()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeBookSources { WaitForIndexer = true };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await CreateWantedAsync(host, work.Id);
+
+            // The direct source waits for the indexer's search; it only comes when both are asked at the same time.
+            await RunAsync<SearchDueWantedV1>(host);
+            var order = sources.Order.ToArray();
+            var direct = Array.LastIndexOf(order, "direct");
+            var indexer = Array.IndexOf(order, "indexer");
+            var end = Array.LastIndexOf(order, "direct-end");
+            Assert.IsTrue(direct >= 0 && indexer > direct && indexer < end, "the indexer was not asked while the direct source was waiting");
         }
 
         [TestMethod]
@@ -272,7 +293,7 @@ namespace Jularr.Backend.Tests
 
             // Asked for in French, which it was never published in: the automatic search takes the book in its own language immediately.
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "UiLocales" ("Locale", "Name") VALUES ('fr-FR', 'Français');
+                INSERT INTO "UiLocales" ("Locale", "Name") VALUES ('fr-FR', 'FranÃ§ais');
                 """);
             var wantedId = await CreateWantedAsync(host, work.Id);
             await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr-FR')");
@@ -401,6 +422,9 @@ namespace Jularr.Backend.Tests
         internal sealed class FakeBookSources : HttpMessageHandler
         {
             public int SabGrabs { get; private set; }
+            public int IndexerSearches { get; private set; }
+            public bool WaitForIndexer { get; set; }
+            public ConcurrentQueue<string> Order { get; } = new();
             public List<string> HardcoverRequests { get; } = [];
             public byte[] EpubBytes { get; set; } = ReadingTests.BuildEpub("Pride and Prejudice");
             public string CatalogLanguage { get; set; } = "en";
@@ -421,7 +445,7 @@ namespace Jularr.Backend.Tests
                                   {"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003","series":["Penguin Classics"]},
                                   {"key":"/books/OL2M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","publish_date":"1990","series":["Austen Novels ; 2"]},
                                   {"key":"/books/OL3M","title":"Stolz und Vorurteil","languages":[{"key":"/languages/ger"}],"physical_format":"ebook","isbn_13":["978-3-7306-0144-2"],"publishers":["Anaconda"],"publish_date":"2014","contributors":[{"role":"Translator","name":"Werner Beck"}]},
-                                  {"key":"/books/OL4M","title":"Orgueil et préjugés","physical_format":"Paperback"}
+                                  {"key":"/books/OL4M","title":"Orgueil et prÃ©jugÃ©s","physical_format":"Paperback"}
                                 ]}
                                 """),
                             "/trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537}]}"""),
@@ -431,6 +455,17 @@ namespace Jularr.Backend.Tests
                         HardcoverRequests.Add(request.Headers.Authorization + " " + await request.Content!.ReadAsStringAsync(cancellationToken));
                         return Json("""{"data":{"editions":[{"book":{"id":5,"book_series":[{"position":2,"series":{"id":77,"name":"Jane Austen's Novels"}}]}}]}}""");
                     case "gutendex.example.test":
+                        Order.Enqueue("direct");
+                        if (WaitForIndexer)
+                        {
+                            // The direct source waits for the indexer's search; it only comes when both are asked at the same time.
+                            for (var attempt = 0; attempt < 100 && IndexerSearches == 0; attempt++)
+                            {
+                                await Task.Delay(100, cancellationToken);
+                            }
+                        }
+
+                        Order.Enqueue("direct-end");
                         if (CatalogLanguage == "de") return Json("""{"results":[{"id":1343,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["de"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1343.epub3.images"}}]}""");
                         return Json("""{"results":[{"id":1342,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1342.epub3.images"}},{"id":7,"title":"Without Epub","authors":[],"languages":["en"],"formats":{"text/plain":"x"}}]}""");
                     case "www.gutenberg.org" when uri.AbsolutePath == "/ebooks/1342.epub3.images":
@@ -438,6 +473,8 @@ namespace Jularr.Backend.Tests
                     case "www.gutenberg.org":
                         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(EpubBytes) };
                     case "indexer.example.test":
+                        IndexerSearches++;
+                        Order.Enqueue("indexer");
                         return Xml("""
                             <rss><channel>
                               <item><title>Seth Grahame-Smith - Pride and Prejudice and Zombies (epub)</title><guid>zombies</guid><link>https://indexer.example.test/getnzb/zombies</link><size>1000000</size></item>
@@ -461,3 +498,4 @@ namespace Jularr.Backend.Tests
         }
     }
 }
+

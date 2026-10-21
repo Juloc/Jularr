@@ -11,7 +11,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Catalog
 {
     // The kept provider catalogs of full local discovery: how far each has come and the Owner's choices for it.
-    public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadInstanceModulesV1 readModules, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class CatalogModel(ReadExternalWorkSyncsV1 read, UpdateExternalWorkSyncV1 update, ReadCoverCacheV1 readCovers, UpdateCoverCacheV1 updateCovers, ReadInstanceModulesV1 readModules, IAntiforgery antiforgery,
+        UiText texts) : JularrPage
     {
         private const int MaxWindows = 8;
         private IReadOnlyList<ExternalWorkSyncV1> _syncs = [];
@@ -19,6 +20,8 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
         private bool _keeps;
         private string? _draftNamespace;
         private UpdateExternalWorkSyncDataV1? _draft;
+        private CoverCacheV1? _covers;
+        private UpdateCoverCacheDataV1? _coversDraft;
 
         protected override void Define(Page page)
         {
@@ -57,6 +60,17 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                         form.Save();
                     }, address, token, data, _draftNamespace == sync.Namespace ? FormError : null)]));
             }
+
+            // The images of titles that are not Works are kept for a while and up to a size.
+            var covers = _coversDraft ?? new UpdateCoverCacheDataV1(_covers!.KeepDays, _covers.MaximumMegabytes, _covers.Version);
+            page.Content.Add(new UiSection("admin.catalog.covers", [
+                new Form<UpdateCoverCacheDataV1>(form =>
+                {
+                    form.Hidden(item => item.Version);
+                    form.Number(item => item.KeepDays, "admin.catalog.coversKeepDays");
+                    form.Number(item => item.MaximumMegabytes, "admin.catalog.coversMaximumMegabytes");
+                    form.Save();
+                }, "/Admin/Catalog?handler=Covers", token, covers, _coversDraft is null ? null : FormError)]));
         }
 
         // Adding or removing a window shows the draft again; only Save keeps it.
@@ -83,6 +97,13 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             return LocalRedirect("/Admin/Catalog");
         }
 
+        public async Task<IActionResult> OnPostCoversAsync(int keepDays, int maximumMegabytes, long version)
+        {
+            _coversDraft = new UpdateCoverCacheDataV1(keepDays, maximumMegabytes, version);
+            await updateCovers.ExecuteAsync<UpdateResult>(new ReadCoverCacheParametersV1(), _coversDraft, HttpContext.RequestAborted);
+            return LocalRedirect("/Admin/Catalog");
+        }
+
         public async Task<IActionResult> OnPostWindowsAsync(string @namespace, bool isEnabled, int requestsPerMinute, bool pausesWhileUsed, long version, List<WindowRow>? windows, bool add)
         {
             var rows = windows ?? [];
@@ -99,6 +120,7 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
         {
             var ct = HttpContext.RequestAborted;
             _syncs = await read.ExecuteAsync<BaseDataList<ExternalWorkSyncV1>>(new ReadExternalWorkSyncsParametersV1(), ct);
+            _covers = await readCovers.ExecuteAsync<CoverCacheV1>(new ReadCoverCacheParametersV1(), ct);
             var modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), ct);
             _keeps = modules.Any(module => module.Key == "DiscoverCache" && module.IsEnabled);
             _isOn = _keeps && modules.Any(module => module.Key == "LocalDiscovery" && module.IsEnabled);

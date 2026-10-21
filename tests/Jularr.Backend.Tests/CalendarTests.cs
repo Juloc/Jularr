@@ -28,6 +28,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") VALUES (101, 10), (101, 40);
                 INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId") VALUES (30, 101, 41, 1);
                 """);
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"MediaSubtypeId\" = 1 WHERE \"Id\" = 10");
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
@@ -41,23 +42,45 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2m, entries[0].ParentUnitNumber);
             Assert.IsNull(entries[1].WorkUnitTypeId);
             Assert.IsTrue(entries[2].IsWatchlisted);
+            Assert.IsTrue(entries[0].IsRequested);
+            Assert.IsFalse(entries[1].IsRequested);
+            Assert.AreEqual(Jularr.Backend.Data.Enums.Media.MediaSubtype.Anime, entries[2].MediaSubtypeId);
+            Assert.IsNull(entries[1].MediaSubtypeId);
 
-            using var page = await host.SendAsync(HttpMethod.Get, "/Calendar?view=agenda");
-            var html = await page.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "Next Week");
-            StringAssert.Contains(html, "Coming Movie");
-            Assert.IsFalse(html.Contains("Not Mine", StringComparison.Ordinal));
+            // A week shows the releases of its days; the type, the status and the search narrow it.
+            string Week(string query = "") => "/Calendar?view=week&date=" + today.AddDays(3).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + query;
+            async Task<string> Html(string address)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, address);
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+                return html;
+            }
 
-            // The month of the movie shows it in its grid; the series filter leaves it out.
-            var month = "/Calendar?month=" + today.AddDays(3).ToString("yyyy-MM", CultureInfo.InvariantCulture);
-            using var grid = await host.SendAsync(HttpMethod.Get, month);
+            var week = await Html(Week());
+            StringAssert.Contains(week, "Coming Movie");
+            Assert.IsFalse(week.Contains("Not Mine", StringComparison.Ordinal));
+            Assert.IsFalse((await Html(Week("&type=series"))).Contains("Coming Movie", StringComparison.Ordinal));
+            StringAssert.Contains(await Html(Week("&type=movies")), "Coming Movie");
+            StringAssert.Contains(await Html(Week("&status=watchlisted")), "Coming Movie");
+            Assert.IsFalse((await Html(Week("&status=available"))).Contains("Coming Movie", StringComparison.Ordinal));
+            StringAssert.Contains(await Html(Week("&q=coming")), "Coming Movie");
+            Assert.IsFalse((await Html(Week("&q=zzz"))).Contains("Coming Movie", StringComparison.Ordinal));
+
+            // The next week holds the episode of the anime; the day view lists one day.
+            var nextWeek = "/Calendar?view=week&date=" + today.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            StringAssert.Contains(await Html(nextWeek + "&type=anime"), "Watched Show");
+            Assert.IsFalse((await Html(nextWeek + "&type=series")).Contains("Watched Show", StringComparison.Ordinal));
+            var day = await Html("/Calendar?view=day&date=" + today.AddDays(3).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            StringAssert.Contains(day, "Coming Movie");
+            StringAssert.Contains(day, "calendar__strip-dates");
+
+            // The month of the movie shows it in its grid.
+            using var grid = await host.SendAsync(HttpMethod.Get, "/Calendar?date=" + today.AddDays(3).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             var gridHtml = await grid.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, grid.StatusCode, gridHtml);
             StringAssert.Contains(gridHtml, "calendar__grid");
             StringAssert.Contains(gridHtml, "Coming Movie");
-            using var series = await host.SendAsync(HttpMethod.Get, month + "&type=Series");
-            Assert.IsFalse((await series.Content.ReadAsStringAsync()).Contains("Coming Movie", StringComparison.Ordinal));
 
             using var tooLong = await host.SendAsync(HttpMethod.Get, "/api/v1/calendar?from=" + today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&days=100");
             Assert.AreEqual(HttpStatusCode.BadRequest, tooLong.StatusCode);

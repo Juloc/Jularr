@@ -291,7 +291,20 @@ namespace Jularr.Backend.Service.Core
                     SELECT
                         identity."Namespace",
                         identity."Value",
-                        identity."WorkId"
+                        identity."WorkId",
+                        (
+                            SELECT
+                                fact."Value"
+                            FROM
+                                "WorkMetadataFacts" AS fact
+                            WHERE
+                                fact."WorkId" = identity."WorkId"
+                                AND fact."FactKey" = 'Poster'
+                                AND fact."Value" LIKE '/api/v1/covers/%'
+                            ORDER BY
+                                fact."IsManual" DESC
+                            LIMIT 1
+                        ) AS "PosterUrl"
                     FROM
                         "WorkExternalIdentities" AS identity
                         JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value"
@@ -299,7 +312,8 @@ namespace Jularr.Backend.Service.Core
                     SELECT
                         identity."Namespace",
                         identity."Value",
-                        unit."WorkId"
+                        unit."WorkId",
+                        NULL::text
                     FROM
                         "WorkUnitExternalIdentities" AS identity
                         JOIN "WorkUnits" AS unit ON unit."Id" = identity."WorkUnitId"
@@ -308,13 +322,14 @@ namespace Jularr.Backend.Service.Core
                 sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(results.Select(result => new { result.Namespace, Value = result.ExternalId })
                     .Concat(results.Select(result => (Result: result, Series: AnimeSeries(result))).Where(item => item.Series is not null)
                         .Select(item => new { Namespace = WorkMetadata.Namespace(MediaType.Series), Value = item.Series!.Value.ToString(CultureInfo.InvariantCulture) })))));
-                return ctx.ReadSql.ReadListAsync<WorkIdentityData>(sql, token);
+                return ctx.ReadSql.ReadListAsync<WorkIdentityPosterData>(sql, token);
             }, ct);
             var works = known.DistinctBy(identity => (identity.Namespace, identity.Value)).ToDictionary(identity => (identity.Namespace, identity.Value), identity => identity.WorkId);
+            var posters = known.Where(identity => identity.PosterUrl is not null).GroupBy(identity => (identity.Namespace, identity.Value)).ToDictionary(group => group.Key, group => group.First().PosterUrl);
             return [.. results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,
                 result.ReleaseYear, result.Overview, works.TryGetValue((result.Namespace, result.ExternalId), out var workId) ? workId
                     : AnimeSeries(result) is { } series && works.TryGetValue((WorkMetadata.Namespace(MediaType.Series), series.ToString(CultureInfo.InvariantCulture)), out var seriesWork) ? seriesWork : null,
-                result.Author, result.PosterUrl))];
+                result.Author, posters.GetValueOrDefault((result.Namespace, result.ExternalId)) ?? result.PosterUrl))];
         }
 
         // The TMDB series an anime entry was already resolved to.

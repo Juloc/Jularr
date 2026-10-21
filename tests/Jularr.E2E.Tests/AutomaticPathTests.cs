@@ -27,6 +27,7 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
                 ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
@@ -99,6 +100,7 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Providers:AniList"] = fakes.AniList.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
@@ -169,7 +171,9 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
+                ["Providers:Images:covers.openlibrary.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
             await using var owner = await BrowserSession.StartAsync(jularr);

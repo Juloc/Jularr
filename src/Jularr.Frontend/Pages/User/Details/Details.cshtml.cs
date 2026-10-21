@@ -133,10 +133,11 @@ namespace Jularr.Frontend.Pages.User.Details
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : FormError));
                 }
 
-                // The profile's request shows its state and leads to the requests.
+                // The profile's request names its phase live and leads to the requests.
                 if (work.RequestStatusTypeId is { } requested && texts.CanRequest())
                 {
-                    actions.Add(new A(new Text("request.state." + requested)).Class("button").Attribute("href", "/Requests"));
+                    actions.Add(new LivePhaseButton(LiveKeys.RequestOfWork(work.Id), requested, "/Requests"));
+                    page.Asset("Framework/Components/LiveProgress.entry.ts");
                 }
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));

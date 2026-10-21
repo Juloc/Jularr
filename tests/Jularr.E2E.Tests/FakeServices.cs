@@ -32,7 +32,7 @@ namespace Jularr.E2E.Tests
         private const string Album = $$"""{"id":"{{AlbumId}}","title":"Example Album","primary-type":"Album","first-release-date":"2019-05-03","artist-credit":[{"name":"Example Artist","joinphrase":""}]}""";
 
         private const string Movie = """{"id":10378,"title":"Big Buck Bunny","original_title":"Big Buck Bunny","release_date":"2008-05-30","overview":"A giant rabbit takes revenge on three bullies.","original_language":"en","genres":[{"id":16,"name":"Animation"}],"external_ids":{"imdb_id":"tt1254207"}}""";
-        private const string Series = """{"id":99001,"name":"Jularr Test Series","original_name":"Jularr Test Series","first_air_date":"2020-04-01","overview":"Two test episodes.","original_language":"en","origin_country":["DE"],"external_ids":{"tvdb_id":990001},"seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":2}]}""";
+        private const string Series = """{"id":99001,"name":"Jularr Test Series","original_name":"Jularr Test Series","first_air_date":"2020-04-01","poster_path":"/series.png","backdrop_path":"/series-backdrop.png","overview":"Two test episodes.","original_language":"en","origin_country":["DE"],"external_ids":{"tvdb_id":990001},"seasons":[{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":2}]}""";
 
         private readonly WebApplication _app;
         private readonly ConcurrentQueue<string> _grabbed = new();
@@ -50,6 +50,16 @@ namespace Jularr.E2E.Tests
         public Uri Address { get; }
 
         public Uri Tmdb3 => new(Address, "tmdb/3/");
+
+        // The provider's image host: TMDB's posters and backdrops are served from here and counted.
+        public Uri Images => new(Address, "images/");
+
+        public int ImageRequests => _imageRequests;
+
+        private int _imageRequests;
+
+        // A one-pixel PNG every image address answers with.
+        private static readonly byte[] Pixel = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
 
         public Uri MusicBrainz => new(Address, "musicbrainz/ws/2/");
 
@@ -71,9 +81,13 @@ namespace Jularr.E2E.Tests
 
         private volatile bool _holdDownloads;
         private volatile bool _failDownloads;
+        private volatile int _heldPercent = 40;
 
         // Grabbed jobs wait in the queue until finished.
         public bool HoldDownloads { get => _holdDownloads; set => _holdDownloads = value; }
+
+        // How far held jobs say they are, of a size of 1000 MB.
+        public int HeldPercent { get => _heldPercent; set => _heldPercent = value; }
 
         // Finished jobs report a broken download.
         public bool FailDownloads { get => _failDownloads; set => _failDownloads = value; }
@@ -112,6 +126,11 @@ namespace Jularr.E2E.Tests
                 }
             });
             app.MapGet("/tmdb/3/{**path}", Tmdb);
+            app.MapGet("/images/{**path}", () =>
+            {
+                Interlocked.Increment(ref services._imageRequests);
+                return Results.Bytes(Pixel, "image/png");
+            });
             app.MapGet("/musicbrainz/ws/2/{**path}", MusicBrainzAnswer);
             app.MapGet("/openlibrary/{**path}", OpenLibraryAnswer);
             app.MapPost("/anilist/", AniListAnswer);
@@ -288,8 +307,10 @@ namespace Jularr.E2E.Tests
 
                     return Json("""{"status":true}""");
                 case "queue":
+                    var percent = HeldPercent;
                     var queued = _held.Values.Select(waiting =>
-                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
+                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"" + percent + "\",\"mb\":\"1000\",\"mbleft\":\"" + (1000 - 10 * percent)
+                        + "\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
                     return Json("{\"queue\":{\"paused\":false,\"slots\":[" + string.Join(',', queued) + "]}}");
                 case "status":
                     return Json("""{"status":{"completedir":"/downloads"}}""");
