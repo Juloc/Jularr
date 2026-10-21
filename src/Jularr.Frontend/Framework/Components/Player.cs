@@ -1,19 +1,25 @@
+using System.Globalization;
 using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Enums.Account;
 
 namespace Jularr.Frontend.Framework
 {
     // Server-rendered player chrome; Modules/Player owns the client behavior.
     public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null,
         IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null, string? PreviousHref = null, string? NextHref = null,
-        string? TrickplayUrl = null);
+        string? TrickplayUrl = null, PlayerPreferences? Preferences = null);
+
+    // What the profile and the device chose before playing: the speed, whether the next episode follows (after a countdown of that many seconds, none for music), and the quality in use.
+    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl);
 
     // One audio or subtitle choice; unsupported ones stay visible but disabled.
-    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsDefault, bool IsSupported);
+    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsSelected, bool IsSupported);
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
         private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
-        private static readonly string[] Speeds = ["0.75", "1", "1.25", "1.5", "2"];
+        private static readonly string[] Speeds = ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
+        private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();
         private IUiComponent? _sidebar;
 
         public UiPlayer Sidebar(IUiComponent content)
@@ -86,6 +92,12 @@ namespace Jularr.Frontend.Framework
                     ).Class("player__bottom"),
                     Settings()
                 ).Class("player__chrome"),
+                // The next episode follows after a countdown the viewer can end.
+                new Div(
+                    new Span().Attribute("data-role", "next-text").Attribute("data-template", texts["player.next.countdown"]),
+                    new Button(new Text("player.next.play")).Class("button button--primary").Attribute("data-action", "next-now"),
+                    new Button(new Text("player.next.cancel")).Class("button").Attribute("data-action", "next-cancel")
+                ).Class("player__next").Attribute("data-role", "next").Attribute("role", "status").Attribute("hidden", "hidden"),
                 new P().Class("player__status").Attribute("role", "status").Attribute("data-role", "status").Attribute("hidden", "hidden"),
                 new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
                 new Div([
@@ -108,6 +120,10 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-antiforgery", source.AntiforgeryToken)
                 .Attribute("data-subtitle-url", source.SubtitleUrl ?? "")
                 .Attribute("data-trickplay-url", source.TrickplayUrl ?? "")
+                .Attribute("data-preferred-speed", Speed)
+                .Attribute("data-autoplay", source.Preferences is { AutoplayNext: true } ? "true" : "false")
+                .Attribute("data-countdown", (source.Preferences?.CountdownSeconds ?? 0).ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-speed-url", source.Preferences?.SpeedUrl ?? "")
                 .WriteTo(writer, encoder, texts);
 
             // Without a neighbour the button stays visible but inactive.
@@ -127,20 +143,25 @@ namespace Jularr.Frontend.Framework
             IUiComponent Settings()
             {
                 var audio = Audio.Count == 0 ? (IUiComponent)new P(new Text("player.track.unknown"))
-                    : new Div([.. Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))]);
-                var subtitles = new Div(Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),
-                    new Div([.. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))]));
+                    : new Div([.. Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsSelected, track.IsSupported, track.Language))]);
+                var subtitles = new Div(Option("subtitle", "", new Text("player.subtitles.off"), !Subtitles.Any(track => track.IsSelected), true, null),
+                    new Div([.. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), track.IsSelected, track.IsSupported, track.Language))]));
                 var speed = new Div([.. Speeds.Select(value => new Button(new ValueText(value + "×")).Class("button player__option")
-                    .Attribute("data-speed", value).Attribute("aria-pressed", value == "1" ? "true" : "false"))]).Class("player__speeds");
+                    .Attribute("data-speed", value).Attribute("aria-pressed", value == Speed ? "true" : "false"))]).Class("player__speeds");
+                var quality = new Div([.. Qualities.Select(value => new Button(new Text("playback.quality." + value)).Class("button player__option")
+                    .Attribute("data-quality", ((byte)value).ToString(CultureInfo.InvariantCulture)).Attribute("aria-pressed", value.ToString() == source.Preferences?.QualityKey ? "true" : "false"))]).Class("player__qualities");
                 var names = new[] { "basic", "audio", "subtitles", "playback", "info" };
                 return new Div(
                     new Header(new Span(new Text("player.currentPlayback")),
                         new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
                     new Div(
                         Pane("basic", new Div(
-                            Jump("audio", "player.audio", Audio.FirstOrDefault(track => track.IsDefault)?.Label ?? Audio.FirstOrDefault()?.Label),
-                            Jump("subtitles", "player.subtitles", null), Jump("playback", "player.speed", "1×"))),
-                        Pane("audio", audio), Pane("subtitles", subtitles), Pane("playback", new H2(new Text("player.speed")), speed),
+                            Jump("audio", "player.audio", Audio.FirstOrDefault(track => track.IsSelected)?.Label ?? Audio.FirstOrDefault()?.Label),
+                            Jump("subtitles", "player.subtitles", Subtitles.FirstOrDefault(track => track.IsSelected)?.Label),
+                            Jump("playback", "player.speed", Speed + "×", "speed"),
+                            Jump("playback", "playback.quality", texts["playback.quality." + (source.Preferences?.QualityKey ?? "Automatic")], "quality"))),
+                        Pane("audio", audio), Pane("subtitles", subtitles),
+                        Pane("playback", new H2(new Text("player.speed")), speed, new H2(new Text("playback.quality")), quality),
                         Pane("info", new P(new Text("player.delivery")), new P().Attribute("data-role", "mode"),
                             new P().Attribute("data-role", "resolution"))
                     ).Class("player__settings-body"),
@@ -155,8 +176,8 @@ namespace Jularr.Frontend.Framework
                     if (name != "basic") pane.Attribute("hidden", "hidden");
                     return pane;
                 }
-                HtmlElement Jump(string pane, string labelKey, string? value) => new Button(new Icon(pane == "audio" ? "headphones" : pane == "subtitles" ? "subtitles" : "settings", assets),
-                    new Span(new Text(labelKey), new Span(value is null ? new Text(pane == "audio" ? "player.track.unknown" : "player.subtitles.off") : new ValueText(value)).Attribute("data-current", pane)),
+                HtmlElement Jump(string pane, string labelKey, string? value, string? current = null) => new Button(new Icon(pane == "audio" ? "headphones" : pane == "subtitles" ? "subtitles" : "settings", assets),
+                    new Span(new Text(labelKey), new Span(value is null ? new Text(pane == "audio" ? "player.track.unknown" : "player.subtitles.off") : new ValueText(value)).Attribute("data-current", current ?? pane)),
                     new Icon("chevron-down", assets)).Class("button player__setting-link").Attribute("data-setting-pane", pane);
             }
 
@@ -168,6 +189,9 @@ namespace Jularr.Frontend.Framework
                 return option;
             }
         }
+
+        // The speed as the player writes it: 1, 1.25 and so on.
+        private string Speed => (source.Preferences?.Speed ?? 1m).ToString("0.##", CultureInfo.InvariantCulture);
 
         private IReadOnlyList<PlayerTrack> Audio => source.AudioTracks ?? [];
 

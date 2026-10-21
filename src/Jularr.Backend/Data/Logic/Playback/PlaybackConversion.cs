@@ -21,5 +21,9 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         // Converted audio's rate in kilobits a second.
         public int? AudioKilobits { get; init; }
+
+        // Converted video's largest height and rate in kilobits a second.
+        public int? MaxHeight { get; init; }
+        public int? VideoKilobits { get; init; }
     }
 }

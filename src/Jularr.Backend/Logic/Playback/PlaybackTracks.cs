@@ -2,6 +2,9 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Logic.Playback
@@ -33,6 +36,35 @@ namespace Jularr.Backend.Logic.Playback
             key.Length > 1 && key[0] == 's' && int.TryParse(key.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var stream) ? (stream, null)
             : key.Length > 1 && key[0] == 'f' && long.TryParse(key.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var file) ? (null, file)
             : throw new KeyNotFoundException("The subtitle was not found.");
+
+        // The audio track in the wanted language, the file's default one when it has none (or none is wanted).
+        public static PlaybackChoiceTrack? ChooseAudio(IReadOnlyList<PlaybackChoiceTrack> tracks, string? language)
+        {
+            var audio = tracks.Where(track => track.Type == MediaTrackType.Audio).ToList();
+            var fallback = audio.FirstOrDefault(track => track.IsDefault) ?? audio.FirstOrDefault();
+            return language is null ? fallback : audio.Where(track => Language(track) == language).OrderByDescending(track => track.IsDefault).FirstOrDefault() ?? fallback;
+        }
+
+        // Subtitles by mode: none, forced ones, a full track, or a full track only while the audio is foreign; a language without a track shows none.
+        public static PlaybackChoiceTrack? ChooseSubtitle(IReadOnlyList<PlaybackChoiceTrack> tracks, PlaybackChoiceData preference, PlaybackChoiceTrack? audio)
+        {
+            var language = preference.SubtitleLanguage ?? preference.ProfileLanguage;
+            var subtitles = tracks.Where(track => track.Type == MediaTrackType.Subtitle && Language(track) == language).ToList();
+            var forced = subtitles.FirstOrDefault(track => track.IsForced);
+            var full = subtitles.FirstOrDefault(track => !track.IsForced) ?? forced;
+
+            // An unknown audio language is not foreign.
+            var foreign = Language(audio) is { } spoken && spoken != language;
+            return preference.SubtitleModeTypeId switch
+            {
+                SubtitleMode.Off => null,
+                SubtitleMode.ForcedOnly => forced,
+                SubtitleMode.Always => full,
+                _ => foreign ? full : forced
+            };
+        }
+
+        private static string? Language(PlaybackChoiceTrack? track) => LanguageCodes.ToTwoLetter(track?.Language);
 
         // Image subtitles need burning in, which no plan offers yet.
         public static bool IsText(string? codec) => codec is not null && TextCodecs.Contains(codec);

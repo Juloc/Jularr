@@ -170,6 +170,19 @@ CREATE TABLE "ReadingLanguages" (
     PRIMARY KEY ("ProfileId", "WorkId")
 );
 
+-- What a profile plays by default; a profile without a row plays the file's own audio, shows subtitles while the audio is foreign in the profile's language, at normal speed.
+CREATE TABLE "ProfilePlaybackPreferences" (
+    "ProfileId" bigint PRIMARY KEY REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    -- Two-letter codes; no audio language keeps the file's default track, no subtitle language follows the profile's language.
+    "AudioLanguage" varchar(2) NULL CHECK ("AudioLanguage" ~ '^[a-z]{2}$'),
+    "SubtitleLanguage" varchar(2) NULL CHECK ("SubtitleLanguage" ~ '^[a-z]{2}$'),
+    -- 1 off, 2 forced only, 3 always, 4 only while the audio is foreign.
+    "SubtitleModeTypeId" smallint NOT NULL DEFAULT 4 CHECK ("SubtitleModeTypeId" BETWEEN 1 AND 4),
+    "Speed" numeric(3, 2) NOT NULL DEFAULT 1 CHECK ("Speed" BETWEEN 0.5 AND 2),
+    "AutoplayNext" boolean NOT NULL DEFAULT TRUE,
+    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
+);
+
 -- A scanned PDF waiting for text recognition; the worker reads its pages and prepares it like any book. A failed one waits for a changed file.
 CREATE TABLE "ReadingRecognitions" (
     "StoredFileId" bigint NOT NULL PRIMARY KEY REFERENCES "StoredFiles" ("Id") ON DELETE CASCADE,

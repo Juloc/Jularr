@@ -1244,22 +1244,6 @@
    "Root folder",
    "Pasta raiz"
   ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Música neste dispositivo"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Original"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Alta (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Pequena (128 kbit/s)"
-  ],
   "takeover.rootFolders": [
    "Root folders",
    "Pastas raiz"
@@ -1687,10 +1671,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Se vazio, a plataforma do dispositivo é exibida como nome."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Original reproduz o arquivo como está. Alta e Pequena convertem arquivos de música maiores na hora, o que economiza dados fora de casa."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
