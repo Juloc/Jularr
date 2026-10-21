@@ -30,7 +30,7 @@ referenced inside CSS. Do not add a parallel `/assets/` endpoint.
 
 ## Current frontend
 
-- User: Discover, Library, Details, Watchlist, Requests, Player, Reader and Settings.
+- User: Discover, Library, Details, Favorites, Requests, Player, Reader and Settings.
 - Discover displays local data first, then loads authorized recommendation HTML;
   the native recommendation link and normal browse routes work without JavaScript.
 - MediaCard shares Continue, Library and Discover presentations. Continue uses

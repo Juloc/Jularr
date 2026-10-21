@@ -1,5 +1,6 @@
 import { initializeShelves } from '../../../Framework/Components/MediaShelf';
 import { initializeCards } from '../../../Framework/Components/MediaCard';
+import { initializeHero } from '../../../Framework/Components/HeroCarousel';
 import { inserted, onPage } from '../../../Modules/Navigation/PageSwap';
 
 // The header search of this page loads results here instead of swapping the page; set up once per visit.
@@ -22,6 +23,7 @@ onPage(import.meta.url, setup);
 function setup(): void {
     initializeShelves();
     initializeCards();
+    initializeHero();
 
     const searchForm = document.querySelector<HTMLFormElement>('.app-header .search-box');
     const searchInput = searchForm?.querySelector<HTMLInputElement>('input[type="search"]');
@@ -155,6 +157,7 @@ function setup(): void {
                 }
 
                 initializeShelves(results!);
+                initializeHero(results!);
 
                 // Repeated pages require deliberate navigation.
                 if (!append || appended > 0) observeNext();
