@@ -1,4 +1,4 @@
-// The mark is one shape in the text colour: black on white, white on dark, in every skin.
+// Clean shows the single-colour parrot in the text colour (black on white, white on dark); Original keeps its ring-and-ink mark.
 .brand-symbol {
     display: inline-grid;
     place-items: center;
@@ -8,6 +8,12 @@
     color: var(--text);
 
     & > svg { width: 100%; height: 100%; }
+    &__original { display: none; }
+}
+
+html[data-skin="original"] .brand-symbol {
+    &__clean { display: none; }
+    &__original { display: block; }
 }
 
 .auth-brand { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-bottom: 22px; }
