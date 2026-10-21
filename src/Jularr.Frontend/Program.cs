@@ -34,9 +34,12 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-// EmulatorJS cores are .data files.
+// EmulatorJS cores are .data files; pdf.js loads character maps, standard fonts and colour profiles.
 var contentTypes = new FileExtensionContentTypeProvider();
 contentTypes.Mappings[".data"] = "application/octet-stream";
+contentTypes.Mappings[".bcmap"] = "application/octet-stream";
+contentTypes.Mappings[".pfb"] = "application/octet-stream";
+contentTypes.Mappings[".icc"] = "application/octet-stream";
 app.UseStaticFiles(new StaticFileOptions
 {
     ContentTypeProvider = contentTypes,

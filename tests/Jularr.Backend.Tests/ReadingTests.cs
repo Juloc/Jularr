@@ -245,18 +245,8 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
-            var (_, second) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var second = await AddReadablePdfAsync(host, storage.Path);
             const string Long = "and the long line runs on across the whole width of the page like book text does";
-            var pdf = BuildPdf(
-                [(760, "1"), (732, "The first paragraph starts here " + Long), (718, "with a word that breaks at the line end into hyph-"), (704, "enated halves and ends here."),
-                    (676, "The second paragraph " + Long), (662, "and does not end on this page " + Long)],
-                [(780, "but continues on the next one and ends."), (752, "2"), (724, "The second chapter " + Long), (710, "ends with this sentence.")],
-                [(780, "A last paragraph " + Long), (766, "closes the book.")]);
-            pdf = WithPicture(pdf, page: 2, top: 700);
-            File.WriteAllBytes(Path.Combine(storage.Path, "1", "Books", "Second Book", "Second Book.pdf"), pdf);
-            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = now() WHERE \"MediaAssetId\" = " + second);
-            await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
-                + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', " + pdf.Length + ", now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
 
             // Headers drop, chapters come from their numbers, paragraphs join across lines and pages.
             var document = await OpenAsync(host, second);
@@ -307,6 +297,126 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(converted, "src=\"images/00000.png\"");
             Assert.IsNotNull(epub.GetEntry("OEBPS/images/00000.png"));
             StringAssert.Contains(Entry(epub, "OEBPS/nav.xhtml"), "href=\"s00001.xhtml\"");
+        }
+
+        // A second book whose only file is a PDF of three pages of ordinary book text in two chapters, with a picture on the second page.
+        private static async Task<long> AddReadablePdfAsync(Host host, string storage)
+        {
+            var (_, second) = await CreateBooksAsync(host, storage, "First Book", "Second Book");
+            const string Long = "and the long line runs on across the whole width of the page like book text does";
+            var pdf = BuildPdf(
+                [(760, "1"), (732, "The first paragraph starts here " + Long), (718, "with a word that breaks at the line end into hyph-"), (704, "enated halves and ends here."),
+                    (676, "The second paragraph " + Long), (662, "and does not end on this page " + Long)],
+                [(780, "but continues on the next one and ends."), (752, "2"), (724, "The second chapter " + Long), (710, "ends with this sentence.")],
+                [(780, "A last paragraph " + Long), (766, "closes the book.")]);
+            pdf = WithPicture(pdf, page: 2, top: 700);
+            File.WriteAllBytes(Path.Combine(storage, "1", "Books", "Second Book", "Second Book.pdf"), pdf);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = now() WHERE \"MediaAssetId\" = " + second);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
+                + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', " + pdf.Length + ", now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
+            return second;
+        }
+
+        [TestMethod]
+        public async Task ReadingView_IsKeptPerProfileAndBook_NextToTheLanguage_AndAutomaticDropsIt()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (first, second) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+
+            async Task<ReadingView?> ChosenAsync(long asset)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + asset + "/source");
+                return (await response.Content.ReadFromJsonAsync<ReadingSourceV1>())!.ReadingViewTypeId;
+            }
+
+            async Task SaveAsync(string path, object data)
+            {
+                using var response = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + first + "/" + path, data);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
+
+            // The choice of one book does not touch another; a language and a view share one row.
+            Assert.IsNull(await ChosenAsync(first));
+            await SaveAsync("view", new SaveReadingViewDataV1(ReadingView.Original));
+            Assert.AreEqual(ReadingView.Original, await ChosenAsync(first));
+            Assert.IsNull(await ChosenAsync(second));
+            await SaveAsync("language", new SaveReadingLanguageDataV1("original"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingPreferences\""));
+            await SaveAsync("view", new SaveReadingViewDataV1(ReadingView.Smart));
+            Assert.AreEqual(ReadingView.Smart, await ChosenAsync(first));
+
+            // Automatic again forgets the view and keeps the language; with neither the row is gone.
+            await SaveAsync("view", new SaveReadingViewDataV1(null));
+            Assert.IsNull(await ChosenAsync(first));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingPreferences\""));
+            await SaveAsync("language", new SaveReadingLanguageDataV1(null));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingPreferences\""));
+        }
+
+        [TestMethod]
+        public async Task Pdf_ReadsInTheViewTheProfileChose_AndTheOtherViewOpensAtTheSamePage()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var second = await AddReadablePdfAsync(host, storage.Path);
+            var address = "/Read/" + second;
+            async Task<string> PageAsync(string query = "")
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, address + query);
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+                return html;
+            }
+
+            // Automatic opens the Smart Book of a PDF with text, and offers the three views.
+            var smart = await PageAsync();
+            StringAssert.Contains(smart, "data-role=\"content\"");
+            StringAssert.Contains(smart, "data-view-chosen=\"auto\"");
+            StringAssert.Contains(smart, "data-view-url=\"/api/v1/reading/assets/" + second + "/view\"");
+            foreach (var choice in new[] { "auto", "smart", "original" })
+            {
+                StringAssert.Contains(smart, "data-view-choice=\"" + choice + "\"");
+            }
+
+            // The original pages of the same book on request, without any text: the file is all they use.
+            var original = await PageAsync("?view=original&pg=2");
+            StringAssert.Contains(original, "data-format=\"pages\"");
+            StringAssert.Contains(original, "data-page=\"2\"");
+            Assert.IsFalse(original.Contains("data-role=\"content\"", StringComparison.Ordinal));
+
+            // The choice of the profile is kept: the book now opens as its original pages by itself, at the page where the profile stopped.
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + second + "/view", new SaveReadingViewDataV1(ReadingView.Original));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode);
+            using var progress = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + second + "/progress", new SaveReadingProgressDataV1("p3", 1m, true));
+            Assert.AreEqual(HttpStatusCode.OK, progress.StatusCode);
+            var kept = await PageAsync();
+            StringAssert.Contains(kept, "data-format=\"pages\"");
+            StringAssert.Contains(kept, "data-page=\"3\"");
+            StringAssert.Contains(kept, "data-view-chosen=\"original\"");
+
+            // A page of the original leads into the text where it starts, and a place in the text to its page.
+            var document = await OpenAsync(host, second);
+            Assert.IsTrue(document.IsRecommended);
+            using var position = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + second + "/position?page=3");
+            Assert.AreEqual(HttpStatusCode.OK, position.StatusCode, await position.Content.ReadAsStringAsync());
+            var place = (await position.Content.ReadFromJsonAsync<ReadingPositionV1>())!;
+            using var back = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + second + "/position?sectionIndex=0&block=0");
+            Assert.AreEqual(HttpStatusCode.OK, back.StatusCode, await back.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await back.Content.ReadFromJsonAsync<ReadingPositionV1>())!.Page);
+            var textAtPage = await PageAsync("?view=smart&pg=3");
+            StringAssert.Contains(textAtPage, "data-role=\"content\"");
+            StringAssert.Contains(textAtPage, "data-start-block=\"" + place.Block + "\"");
+
+            // The profile's page notes stay with the profile and the book, anchored to the page and the first words of it.
+            using var note = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + second + "/page-notes", new CreateReadingPageNoteDataV1(3, "A last paragraph", "Check this page."));
+            Assert.AreEqual(HttpStatusCode.OK, note.StatusCode, await note.Content.ReadAsStringAsync());
+            StringAssert.Contains(await PageAsync("?view=original&pg=3"), "Check this page.");
+            Assert.AreEqual("A last paragraph", await host.ScalarAsync("SELECT \"Anchor\" FROM \"ReadingPageNotes\""));
+            var noteId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"ReadingPageNotes\""))!;
+            using var removed = await host.SendAsync(HttpMethod.Delete, "/api/v1/reading/assets/" + second + "/page-notes/" + noteId);
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingPageNotes\""));
         }
 
         internal static string Entry(ZipArchive archive, string name)
@@ -436,7 +546,11 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + second);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "<iframe class=\"reader__pdf\" src=\"/api/v1/reading/assets/" + second + "/file\"");
+
+            // It opens as its original pages, drawn by the browser from that file; the Smart Book is not offered where there is no text.
+            StringAssert.Contains(html, "data-format=\"pages\"");
+            StringAssert.Contains(html, "data-file-url=\"/api/v1/reading/assets/" + second + "/file\"");
+            Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
         }
 
         [TestMethod]

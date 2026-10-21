@@ -1,17 +1,16 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Jularr.Integrations.Logic.Ocr;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Core;
 
 namespace Jularr.Backend.Logic.Reading
 {
     // A PDF with a text layer as a reflowable book: running headers and footers drop, lines join into paragraphs across pages and columns, short numbered or titled lines start chapters.
-    // Pictures, drawings, tables and irregular pages stay whole as figures where they stood; a page only the original can show is marked as such. Scanned pages are read by a recognizer where one is given.
+    // Pictures, drawings, tables and irregular pages stay whole as figures where they stood; a page only the original can show is marked as such. Scanned pages the recognizer has read count like a text layer, a scan's own recognition layer too: where its text does not hold together the page stays whole, as a picture or the original.
     internal static partial class PdfBook
     {
         // Raised when the converted output changes; old documents are prepared again.
-        public const int AnalyzerVersion = 3;
+        public const int AnalyzerVersion = 4;
         public const int MaximumPages = 5000;
 
         // Pictures smaller than an icon are decoration; a book keeps a bounded number of bounded pictures.
@@ -21,8 +20,6 @@ namespace Jularr.Backend.Logic.Reading
 
         // A picture over most of the page is the page itself: a scan, a plate or a cover.
         private const double FullPage = 0.85;
-        private const double ScanCoverage = 0.5;
-        private const float MinimumConfidence = 0.5f;
 
         // A page picture shows as a page of its own from this share of the page, as the text's width from a smaller one.
         private const double PageFigureShare = 0.45;
@@ -48,7 +45,8 @@ namespace Jularr.Backend.Logic.Reading
         [GeneratedRegex(@"[.!?”""’)…:]$")]
         private static partial Regex SentenceEnd();
 
-        public static PdfBookContent Read(Stream stream, Func<byte[], OcrPage>? recognize = null)
+        // Scanned pages the recognizer has read are given by page number; a page it left out, or read to nothing reliable, stays with the original.
+        public static PdfBookContent Read(Stream stream, IReadOnlyDictionary<int, RecognizedPage>? recognized = null)
         {
             var state = new BookState();
             List<List<PdfLine>> pages;
@@ -60,7 +58,7 @@ namespace Jularr.Backend.Logic.Reading
                     throw new InvalidDataException("The PDF has too many pages.");
                 }
 
-                pages = [.. pdf.GetPages().Select(page => ReadPage(page, state, recognize))];
+                pages = [.. pdf.GetPages().Select(page => ReadPage(page, state, recognized))];
             }
             catch (Exception exception) when (IsFault(exception))
             {
@@ -88,7 +86,7 @@ namespace Jularr.Backend.Logic.Reading
             or KeyNotFoundException or FormatException or OverflowException or NullReferenceException or InvalidCastException or ArithmeticException;
 
         // A page's lines, pictures and figures top to bottom, and what the analysis found on it.
-        private static List<PdfLine> ReadPage(UglyToad.PdfPig.Content.Page page, BookState state, Func<byte[], OcrPage>? recognize)
+        private static List<PdfLine> ReadPage(UglyToad.PdfPig.Content.Page page, BookState state, IReadOnlyDictionary<int, RecognizedPage>? recognized)
         {
             PdfPageScan scan;
             try
@@ -104,7 +102,7 @@ namespace Jularr.Backend.Logic.Reading
             var result = new PageResult();
             try
             {
-                Analyse(page, scan, state, recognize, result);
+                Analyse(page, scan, state, recognized, result);
             }
             catch (Exception exception) when (IsFault(exception))
             {
@@ -116,6 +114,13 @@ namespace Jularr.Backend.Logic.Reading
             state.TextCharacters += result.Kind == PdfPageKind.Placeholder ? 0 : result.Characters ?? scan.Words.Where(word => !word.Hidden || result.Kind == PdfPageKind.Text).Sum(word => word.Text.Length);
             state.Reports.Add(new PdfPageReport(scan.Number, result.Kind, result.Reason, characters, scan.Words.Count, scan.Pictures.Count, scan.Pictures.Count(picture => picture.Decoded is null),
                 scan.Shapes, result.Columns, scan.IsHidden, result.Quality));
+
+            // Every line and picture knows its page: the anchor between the original and the reading text.
+            foreach (var item in result.Items)
+            {
+                item.Page = scan.Number;
+            }
+
             return InReadingOrder(result.Items);
         }
 
@@ -132,7 +137,7 @@ namespace Jularr.Backend.Logic.Reading
             return ordered;
         }
 
-        private static void Analyse(UglyToad.PdfPig.Content.Page page, PdfPageScan scan, BookState state, Func<byte[], OcrPage>? recognize, PageResult result)
+        private static void Analyse(UglyToad.PdfPig.Content.Page page, PdfPageScan scan, BookState state, IReadOnlyDictionary<int, RecognizedPage>? recognized, PageResult result)
         {
             var area = scan.Box.Area;
             var words = scan.Words;
@@ -141,14 +146,18 @@ namespace Jularr.Backend.Logic.Reading
             var quality = PdfQuality.Score(words.Select(word => word.Text));
             result.Quality = quality;
 
-            // A scan without any text goes to the recognizer.
-            if (recognize is not null && words.Count == 0 && Recognized(page, recognize) is { } read)
+            // A scan without any text: the lines the recognizer read, where they hold together.
+            string? unreliable = null;
+            if (words.Count == 0 && recognized is not null && recognized.TryGetValue(scan.Number, out var read) && read.Reason == RecognizedPage.Recognized)
             {
-                result.Kind = PdfPageKind.Text;
-                result.Reason = "recognized";
-                result.Characters = read.Sum(line => line.Text.Length);
-                result.Items.AddRange(read);
-                return;
+                var recognizedWords = read.Words(scan.Box);
+                result.Quality = PdfQuality.Score(recognizedWords.SelectMany(word => word.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
+                if (!read.IsUncertain && ScanText(scan, recognizedWords, result, RecognizedPage.Recognized))
+                {
+                    return;
+                }
+
+                unreliable = read.IsUncertain ? "unreliable-uncertain" : result.Reason;
             }
 
             var full = scan.Pictures.Where(picture => picture.Box.Area >= area * FullPage).ToList();
@@ -161,10 +170,14 @@ namespace Jularr.Backend.Logic.Reading
             {
                 if (hidden && textual)
                 {
-                    result.Kind = PdfPageKind.Text;
-                    result.Reason = "scan-layer";
-                    result.Items.AddRange(PdfLayout.Lines(words, scan.Box.Height));
-                    return;
+                    // The layer shows as text only where it holds together; else the page stays a picture.
+                    if (ScanText(scan, words, result, "scan-layer"))
+                    {
+                        return;
+                    }
+
+                    unreliable = result.Reason;
+                    result.Items.Clear();
                 }
 
                 if (words.Count == 0 && readable is null && full.Sum(picture => picture.StoredBytes) < BlankScanBytes)
@@ -177,14 +190,14 @@ namespace Jularr.Backend.Logic.Reading
                 if (readable is not null && Picture(state, readable, scan, "page", Excerpt(words, hidden && quality >= 0.6)) is { } figure)
                 {
                     result.Kind = PdfPageKind.Figure;
-                    result.Reason = "page-picture";
+                    result.Reason = unreliable ?? "page-picture";
                     result.Items.Add(figure);
                     result.Items.AddRange(PdfLayout.Lines([.. words.Where(word => !word.Hidden)], scan.Box.Height));
                     return;
                 }
 
                 result.Kind = PdfPageKind.Placeholder;
-                result.Reason = readable is null ? "unreadable-picture" : "limit";
+                result.Reason = unreliable ?? (readable is null ? "unreadable-picture" : "limit");
                 result.Items.Add(Stand(scan.Number, scan.Box.Top));
                 return;
             }
@@ -390,41 +403,26 @@ namespace Jularr.Backend.Logic.Reading
             return merged;
         }
 
-        // The scan's lines in page points, grouped by baseline like a text page's words.
-        private static List<PdfLine>? Recognized(UglyToad.PdfPig.Content.Page page, Func<byte[], OcrPage> recognize)
+        // A scan's text, from its recognition layer or from the recognizer: the lines in reading order where the page holds together. Answers false, with the reason in the result, where it does not.
+        private static bool ScanText(PdfPageScan scan, IReadOnlyList<PdfWord> words, PageResult result, string reason)
         {
-            var scan = page.GetImages().Where(image => image.BoundingBox.Width * image.BoundingBox.Height >= page.Width * page.Height * ScanCoverage).MaxBy(image => image.BoundingBox.Width * image.BoundingBox.Height);
-            var bytes = scan is null ? null : scan.TryGetPng(out var png) ? png : scan.RawMemory.Span is [0xFF, 0xD8, ..] ? scan.RawMemory.ToArray() : null;
-            if (scan is null || bytes is null || bytes.Length > MaximumImageBytes * 4)
+            var body = Mode(words.Select(word => Math.Round(word.Size)).DefaultIfEmpty(10));
+            var rows = PdfLayout.Lines(words, scan.Box.Height);
+            var gutters = PdfLayout.Gutters(words, PdfLayout.Geometry(words, scan.Box.Height), body, out var irregular);
+            var lines = gutters.Count > 0 && !irregular ? PdfLayout.ColumnLines(words, gutters, scan.Box.Height) : rows;
+            result.Columns = gutters.Count + 1;
+            var why = irregular ? "columns" : PdfQuality.Unreliable([.. words.Select(word => word.Text)], lines, scan.Box.Width);
+            if (why is not null)
             {
-                return null;
+                result.Reason = "unreliable-" + why;
+                return false;
             }
 
-            OcrPage read;
-            try
-            {
-                read = recognize(bytes);
-            }
-            catch (InvalidDataException)
-            {
-                return null;
-            }
-
-            var (scaleX, scaleY) = (scan.BoundingBox.Width / read.Width, scan.BoundingBox.Height / read.Height);
-            var lines = new List<PdfLine>();
-            foreach (var box in read.Lines.Where(line => line.Confidence >= MinimumConfidence).OrderByDescending(line => line.Bottom))
-            {
-                var (bottom, size) = (scan.BoundingBox.Top - box.Bottom * scaleY, (box.Bottom - box.Top) * scaleY * 0.7);
-                var line = lines.LastOrDefault(candidate => Math.Abs(candidate.Bottom - bottom) < Math.Max(size, 1) * 0.4);
-                if (line is null)
-                {
-                    lines.Add(line = new PdfLine(bottom, size, page.Height));
-                }
-
-                line.Words.Add((scan.BoundingBox.Left + box.Left * scaleX, scan.BoundingBox.Left + box.Right * scaleX, box.Text));
-            }
-
-            return [.. lines.OrderByDescending(line => line.Bottom)];
+            result.Kind = PdfPageKind.Text;
+            result.Reason = reason;
+            result.Characters = words.Sum(word => word.Text.Length);
+            result.Items.AddRange(lines);
+            return true;
         }
 
         // Lines in the top or bottom tenth of the page whose text repeats, digits aside, on a fifth of the pages are headers or footers.
@@ -443,6 +441,7 @@ namespace Jularr.Backend.Logic.Reading
         {
             var chapters = new List<PdfChapter>();
             string? title = null;
+            int titlePage = 0, paragraphPage = 0, paragraphEnd = 0;
             var paragraphs = new List<PdfBlock>();
             var lines = new List<string>();
             PdfLine? previous = null;
@@ -451,25 +450,25 @@ namespace Jularr.Backend.Logic.Reading
             {
                 if (lines.Count > 0)
                 {
-                    paragraphs.Add(new PdfBlock(Join(lines), null));
+                    paragraphs.Add(new PdfBlock(Join(lines), null, Page: paragraphPage, EndPage: paragraphEnd));
                     lines.Clear();
                 }
 
                 if (paragraphs.Count >= MaximumParagraphs)
                 {
-                    CloseChapter(title);
+                    CloseChapter(title, titlePage);
                 }
             }
 
-            void CloseChapter(string? next)
+            void CloseChapter(string? next, int nextPage)
             {
                 if (paragraphs.Count > 0 || title is not null)
                 {
-                    chapters.Add(new PdfChapter(title, [.. paragraphs]));
+                    chapters.Add(new PdfChapter(title, [.. paragraphs], titlePage));
                     paragraphs.Clear();
                 }
 
-                title = next;
+                (title, titlePage) = (next, nextPage);
             }
 
             foreach (var page in pages)
@@ -500,7 +499,7 @@ namespace Jularr.Backend.Logic.Reading
                             last = page[index];
                         }
 
-                        CloseChapter(heading);
+                        CloseChapter(heading, line.Page);
                         previous = last;
                         continue;
                     }
@@ -515,13 +514,19 @@ namespace Jularr.Backend.Logic.Reading
                         CloseParagraph();
                     }
 
+                    if (lines.Count == 0)
+                    {
+                        paragraphPage = line.Page;
+                    }
+
+                    paragraphEnd = line.Page;
                     lines.Add(line.Text);
                     previous = line;
                 }
             }
 
             CloseParagraph();
-            CloseChapter(null);
+            CloseChapter(null, 0);
             return chapters;
         }
 
@@ -562,16 +567,16 @@ namespace Jularr.Backend.Logic.Reading
         }
     }
 
-    // One chapter of a converted PDF: its heading, if any, and its paragraphs, pictures and figures in order.
-    internal sealed record PdfChapter(string? Title, IReadOnlyList<PdfBlock> Blocks);
+    // One chapter of a converted PDF: its heading, if any, and its paragraphs, pictures and figures in order; the heading's page is 0 without one.
+    internal sealed record PdfChapter(string? Title, IReadOnlyList<PdfBlock> Blocks, int TitlePage = 0);
 
-    // A paragraph's text, or a picture's path with how it is shown (a page of its own, the text's width, or none for a small one), its alternative text and caption; a stand-in for a page names the page.
-    internal sealed record PdfBlock(string? Text, string? Image, string? Figure = null, string? Alt = null, string? Caption = null, int Page = 0);
+    // A paragraph's text, or a picture's path with how it is shown (a page of its own, the text's width, or none for a small one), its alternative text and caption; Page is the page of the PDF it starts on, EndPage the one it ends on where that is another, and a stand-in for a page names it.
+    internal sealed record PdfBlock(string? Text, string? Image, string? Figure = null, string? Alt = null, string? Caption = null, int Page = 0, int EndPage = 0);
 
     internal sealed record PdfImage(string Path, string MediaType, byte[] Bytes);
 
     internal sealed record PdfBookContent(IReadOnlyList<PdfChapter> Chapters, IReadOnlyList<PdfImage> Images, IReadOnlyList<PdfPageReport> Pages, PdfVerdict Reading, PdfVerdict Ebook);
 
-    // A PDF of scanned pages: it stays a PDF for the browser's own viewer.
+    // A PDF of scanned pages: it stays with its original pages, until a recognizer has read them.
     internal sealed class PdfWithoutTextException() : Exception("The PDF has no text layer.");
 }

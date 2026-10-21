@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
 
@@ -161,73 +162,7 @@ namespace Jularr.Backend.Logic.Reading
             return (await ctx.ReadRequiredAsync<ReadingEvictionData>(sql, ct)).Count;
         }
 
-        // With the Ocr module on, a scanned PDF waits for recognition; a changed file is tried again after a failure. Answers whether it waits.
-        public static async Task<bool> RequestReadingRecognitionAsync(this LogicContext ctx, ReadingRecognitionData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                WITH enabled AS (
-                    SELECT
-                        1
-                    FROM
-                        "InstanceModules"
-                    WHERE
-                        "Key" = 'Ocr'
-                        AND "IsEnabled"
-                ), saved AS (
-                    INSERT INTO
-                        "ReadingRecognitions" ("StoredFileId", "SourceSizeBytes", "SourceModifiedAt")
-                    SELECT
-                        @StoredFileId,
-                        @SizeBytes,
-                        @ModifiedAt
-                    FROM
-                        enabled
-                    ON CONFLICT ("StoredFileId") DO UPDATE
-                    SET
-                        "SourceSizeBytes" = EXCLUDED."SourceSizeBytes",
-                        "SourceModifiedAt" = EXCLUDED."SourceModifiedAt",
-                        "RequestedAt" = now(),
-                        "FailedAt" = NULL
-                    WHERE
-                        "ReadingRecognitions"."SourceSizeBytes" <> EXCLUDED."SourceSizeBytes"
-                        OR "ReadingRecognitions"."SourceModifiedAt" <> EXCLUDED."SourceModifiedAt"
-                    RETURNING
-                        "FailedAt"
-                )
-                SELECT
-                    EXISTS (SELECT 1 FROM enabled)
-                    AND coalesce((SELECT "FailedAt" IS NULL FROM saved), (SELECT "FailedAt" IS NULL FROM "ReadingRecognitions" WHERE "StoredFileId" = @StoredFileId), FALSE) AS "IsPending";
-                """;
-            sql.Parameters.Add(data);
-            return (await ctx.Sql.ReadRequiredAsync<ReadingRecognitionStateData>(sql, ct)).IsPending;
-        }
-
-        // A recognized scan leaves the queue; a failed one stays until its file changes.
-        public static async Task FinishReadingRecognitionAsync(this LogicContext ctx, ReadingRecognitionResultData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement = data.IsFailed
-                ? """
-                  UPDATE
-                      "ReadingRecognitions"
-                  SET
-                      "FailedAt" = now()
-                  WHERE
-                      "StoredFileId" = @StoredFileId;
-                  """
-                : """
-                  DELETE FROM
-                      "ReadingRecognitions"
-                  WHERE
-                      "StoredFileId" = @StoredFileId;
-                  """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-        }
-
-        // The choice belongs to the book the asset is part of, if the profile may open it.
+        // The choice belongs to the book the asset is part of, if the profile may open it. Language and view share one row; a row with neither is gone.
         public static async Task SaveReadingLanguageAsync(this LogicContext ctx, ReadingLanguageData data, CancellationToken ct)
         {
             if (data.ReadingLanguage is { } language && language != "original" && !System.Text.RegularExpressions.Regex.IsMatch(language, "^[a-z]{2,3}$"))
@@ -235,37 +170,131 @@ namespace Jularr.Backend.Logic.Reading
                 throw new DataValidationException(nameof(data.ReadingLanguage), "invalid_value");
             }
 
+            if (data.ReadingLanguage is null)
+            {
+                // Without the language a row that holds no view goes; one that does keeps it.
+                var clear = new SqlStatement();
+                clear.Statement =
+                    """
+                    WITH removed AS (
+                        DELETE FROM
+                            "ReadingPreferences" AS chosen
+                        USING
+                            "MediaAssets" AS asset
+                        WHERE
+                            asset."Id" = @MediaAssetId
+                            AND chosen."ProfileId" = @ProfileId
+                            AND chosen."WorkId" = asset."WorkId"
+                            AND chosen."ReadingViewTypeId" IS NULL
+                        RETURNING
+                            chosen."WorkId"
+                    )
+                    UPDATE
+                        "ReadingPreferences" AS chosen
+                    SET
+                        "Language" = NULL,
+                        "UpdatedAt" = now()
+                    FROM
+                        "MediaAssets" AS asset
+                    WHERE
+                        asset."Id" = @MediaAssetId
+                        AND chosen."ProfileId" = @ProfileId
+                        AND chosen."WorkId" = asset."WorkId"
+                        AND chosen."ReadingViewTypeId" IS NOT NULL;
+                    """;
+                clear.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(clear, ct);
+                return;
+            }
+
             var sql = new SqlStatement();
-            sql.Statement = data.ReadingLanguage is null
-                ? """
-                  DELETE FROM
-                      "ReadingLanguages" AS chosen
-                  USING
-                      "MediaAssets" AS asset
-                  WHERE
-                      asset."Id" = @MediaAssetId
-                      AND chosen."ProfileId" = @ProfileId
-                      AND chosen."WorkId" = asset."WorkId";
-                  """
-                : """
-                  INSERT INTO
-                      "ReadingLanguages" ("ProfileId", "WorkId", "Language")
-                  SELECT
-                      @ProfileId,
-                      asset."WorkId",
-                      @ReadingLanguage
-                  FROM
-                      "MediaAssets" AS asset
-                      JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
-                  WHERE
-                      asset."Id" = @MediaAssetId
-                  ON CONFLICT ("ProfileId", "WorkId") DO UPDATE
-                  SET
-                      "Language" = EXCLUDED."Language",
-                      "UpdatedAt" = now();
-                  """;
+            sql.Statement =
+                """
+                INSERT INTO
+                    "ReadingPreferences" ("ProfileId", "WorkId", "Language")
+                SELECT
+                    @ProfileId,
+                    asset."WorkId",
+                    @ReadingLanguage
+                FROM
+                    "MediaAssets" AS asset
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                WHERE
+                    asset."Id" = @MediaAssetId
+                ON CONFLICT ("ProfileId", "WorkId") DO UPDATE
+                SET
+                    "Language" = EXCLUDED."Language",
+                    "UpdatedAt" = now();
+                """;
             sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0 && data.ReadingLanguage is not null)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
+            {
+                throw new KeyNotFoundException("The book was not found.");
+            }
+        }
+
+        // The view of a book's PDF the profile chose on all its devices; none is automatic again.
+        public static async Task SaveReadingViewAsync(this LogicContext ctx, ReadingViewData data, CancellationToken ct)
+        {
+            if (data.ReadingViewTypeId is null)
+            {
+                // Without the view a row that holds no language goes; one that does keeps it.
+                var clear = new SqlStatement();
+                clear.Statement =
+                    """
+                    WITH removed AS (
+                        DELETE FROM
+                            "ReadingPreferences" AS chosen
+                        USING
+                            "MediaAssets" AS asset
+                        WHERE
+                            asset."Id" = @MediaAssetId
+                            AND chosen."ProfileId" = @ProfileId
+                            AND chosen."WorkId" = asset."WorkId"
+                            AND chosen."Language" IS NULL
+                        RETURNING
+                            chosen."WorkId"
+                    )
+                    UPDATE
+                        "ReadingPreferences" AS chosen
+                    SET
+                        "ReadingViewTypeId" = NULL,
+                        "UpdatedAt" = now()
+                    FROM
+                        "MediaAssets" AS asset
+                    WHERE
+                        asset."Id" = @MediaAssetId
+                        AND chosen."ProfileId" = @ProfileId
+                        AND chosen."WorkId" = asset."WorkId"
+                        AND chosen."Language" IS NOT NULL;
+                    """;
+                clear.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(clear, ct);
+                return;
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "ReadingPreferences" ("ProfileId", "WorkId", "ReadingViewTypeId")
+                SELECT
+                    @ProfileId,
+                    asset."WorkId",
+                    @ReadingViewTypeId
+                FROM
+                    "MediaAssets" AS asset
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                WHERE
+                    asset."Id" = @MediaAssetId
+                    AND asset."MediaAssetTypeId" IN (3, 4)
+                ON CONFLICT ("ProfileId", "WorkId") DO UPDATE
+                SET
+                    "ReadingViewTypeId" = EXCLUDED."ReadingViewTypeId",
+                    "UpdatedAt" = now();
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
             {
                 throw new KeyNotFoundException("The book was not found.");
             }
@@ -307,6 +336,12 @@ namespace Jularr.Backend.Logic.Reading
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new KeyNotFoundException("The reading target was not found.");
+            }
+
+            // A page of the original in view (p12 is page 12) is where a scan's recognition reads next.
+            if (data.Locator.Length > 1 && data.Locator[0] == 'p' && int.TryParse(data.Locator.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var page) && page is >= 1 and <= 100_000)
+            {
+                await ctx.WantReadingPageAsync(new ReadingWantedPageData(data.MediaAssetId, page), ct);
             }
         }
     }

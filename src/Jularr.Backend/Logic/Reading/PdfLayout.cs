@@ -40,11 +40,13 @@ namespace Jularr.Backend.Logic.Reading
         // A picture's path among the book's resources; it has no words.
         public string? Image { get; init; }
 
-        // How a picture or drawing is shown, its text alternative and caption, and the page a stand-in points to.
+        // How a picture or drawing is shown, its text alternative and caption.
         public string? Figure { get; init; }
         public string? Alt { get; init; }
         public string? Caption { get; init; }
-        public int Page { get; init; }
+
+        // The page of the PDF the line stands on; a stand-in points to it.
+        public int Page { get; set; }
         private string? _text;
     }
 
@@ -79,6 +81,9 @@ namespace Jularr.Backend.Logic.Reading
 
             return [.. Rows(words).Select(row => FromWords(row, pageHeight))];
         }
+
+        // The rows of a page by where their words stand, whatever order the words were written in: how a page's columns show.
+        public static List<PdfLine> Geometry(IReadOnlyList<PdfWord> words, double pageHeight) => [.. Rows(words).Select(row => FromWords(row, pageHeight))];
 
         // Words on one baseline, top to bottom.
         private static List<List<PdfWord>> Rows(IEnumerable<PdfWord> words)
@@ -194,6 +199,21 @@ namespace Jularr.Backend.Logic.Reading
 
             chosen.Sort();
             return chosen;
+        }
+
+        // Whether the lines of a recognition layer run through each other: a line holding the text of two columns, or the left edge jumping across the page again and again.
+        public static bool IsInterleaved(IReadOnlyList<PdfLine> lines, double pageWidth)
+        {
+            var text = lines.Where(line => line.Image is null && line.Figure is null && line.Words.Count > 0).ToArray();
+            if (text.Length < 8)
+            {
+                return false;
+            }
+
+            var gap = Math.Max(20, pageWidth * 0.06);
+            var wide = text.Count(line => line.Words.OrderBy(word => word.Left).Zip(line.Words.OrderBy(word => word.Left).Skip(1), (first, second) => second.Left - first.Right).DefaultIfEmpty(0).Max() > gap);
+            var jumps = text.Zip(text.Skip(1), (first, second) => Math.Abs(second.Left - first.Left)).Count(distance => distance > pageWidth * 0.18);
+            return wide >= text.Length * 0.15 || jumps >= text.Length * 0.25;
         }
 
         // The lines of text in columns: bands between rows spanning the page, each read column by column.

@@ -3,3 +3,4 @@
 /Assets/Generated/
 *.tsbuildinfo
 /wwwroot/emulator/
+/wwwroot/pdfjs/

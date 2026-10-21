@@ -170,22 +170,69 @@ function describePictures(reader: HTMLElement, content: HTMLElement): void {
     });
 }
 
-// The stand-in for a page that only the original shows: which page, and a link to it.
+// The stand-in for a page that only the original shows: a note with the page and a link to it in the original pages, until the page itself is drawn in its place.
 function describeStandIns(reader: HTMLElement, content: HTMLElement): void {
     const url = reader.dataset.originalUrl;
     const template = reader.dataset.originalLabel;
     if (!url || !template) return;
-    content.querySelectorAll<HTMLElement>('figure[data-figure=original]').forEach(figure => {
+    const figures = Array.from(content.querySelectorAll<HTMLElement>('figure[data-figure=original]')).filter(figure => {
         const page = Number(figure.dataset.page);
-        if (!Number.isInteger(page) || page < 1 || figure.firstChild) return;
+        return Number.isInteger(page) && page >= 1 && !figure.firstChild;
+    });
+    for (const figure of figures) {
+        const page = Number(figure.dataset.page);
         const text = document.createElement('p');
         text.textContent = template.replace('{0}', String(page)) + ' ';
         const link = document.createElement('a');
-        link.href = `${url}#page=${page}`;
-        link.target = '_blank';
-        link.rel = 'noopener';
+        link.href = `${url}&pg=${page}`;
         link.textContent = reader.dataset.originalLink ?? '';
         text.append(link);
         figure.append(text);
-    });
+    }
+
+    if (figures.length > 0 && reader.dataset.fileUrl) void drawStandIns(reader, content, figures);
+}
+
+// A page that only the original shows is drawn in the text by the browser: the whole page as a picture that opens full screen like any figure. Pages are drawn as they come near, a bounded number per section.
+const MaximumDrawn = 40;
+const DrawnWidth = 1200;
+async function drawStandIns(reader: HTMLElement, content: HTMLElement, figures: HTMLElement[]): Promise<void> {
+    let engine: typeof import('./PdfEngine');
+    try { engine = await import('./PdfEngine'); } catch { return; }
+    const alt = reader.dataset.originalAlt ?? '';
+    const state = new WeakSet<HTMLElement>();
+    let drawn = 0;
+    let chain = Promise.resolve();
+    const draw = (figure: HTMLElement): void => {
+        if (state.has(figure) || drawn >= MaximumDrawn) return;
+        state.add(figure);
+        drawn++;
+        chain = chain.then(async () => {
+            const page = Number(figure.dataset.page);
+            try {
+                const document = await engine.openPdf(reader.dataset.fileUrl!);
+                const proxy = await document.getPage(page);
+                const natural = proxy.getViewport({ scale: 1 });
+                const canvas = window.document.createElement('canvas');
+                await engine.drawPage(proxy, canvas, DrawnWidth / natural.width).promise;
+                const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+                if (!blob) return;
+                const picture = new Image();
+                picture.src = URL.createObjectURL(blob);
+                picture.alt = alt.replace('{0}', String(page));
+                picture.dataset.figure = 'page';
+                picture.tabIndex = 0;
+                picture.setAttribute('role', 'button');
+                const link = figure.querySelector('a');
+                const caption = window.document.createElement('figcaption');
+                if (link) caption.append(link);
+                figure.replaceChildren(picture, caption);
+                figure.dataset.state = 'ready';
+            } catch { /* The note and its link stay: the original pages show the page. */ }
+        });
+    };
+    if (!('IntersectionObserver' in window)) { figures.forEach(draw); return; }
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { draw(entry.target as HTMLElement); observer.unobserve(entry.target); } }),
+        { root: content, rootMargin: '600px 2000px' });
+    figures.forEach(figure => observer.observe(figure));
 }
