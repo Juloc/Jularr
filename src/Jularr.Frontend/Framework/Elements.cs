@@ -147,6 +147,7 @@ namespace Jularr.Frontend.Framework
     public sealed class Video(params IUiComponent[] children) : HtmlElement("video", children);
     public sealed class Progress() : HtmlElement("progress");
     public sealed class Strong(params IUiComponent[] children) : HtmlElement("strong", children);
+    public sealed class Small(params IUiComponent[] children) : HtmlElement("small", children);
     public sealed class Dl(params IUiComponent[] children) : HtmlElement("dl", children);
     public sealed class Dt(params IUiComponent[] children) : HtmlElement("dt", children);
     public sealed class Dd(params IUiComponent[] children) : HtmlElement("dd", children);
