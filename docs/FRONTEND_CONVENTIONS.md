@@ -359,6 +359,13 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   share caches across users. Always deploy new assets before the
   HTML/manifest that references them, and retain old hashes during
   rolling deployments until old pages have expired.
+- **Installable, not offline.** `Modules/Pwa` makes the app installable on a phone or desktop:
+  `/manifest.webmanifest` (name Jularr, standalone, scope `/`, the fingerprinted brand icons including the maskable one, theme
+  colour the default accent seed, background the surface) and `/service-worker.js` (site root, `Service-Worker-Allowed: /`,
+  `no-cache`), both public; `_Layout` links the manifest and the Apple/theme tags for every page (app, sign-in, setup) and loads
+  `pwa.entry.ts`, which registers the worker after load. The worker has an empty fetch handler: it never answers a request and
+  caches nothing, so htmx swaps, `/live/events`, sign-in redirects and range requests behave as without it. Always on (no module
+  switch fits; it only offers installation). No path base: the host serves from the root. Offline use is a separate decision.
 - Media image components require dimensions (prevent layout shift),
   `decoding="async"`, `loading="lazy"` below the fold and appropriately
   sized `srcset/sizes` when the Backend returns variants. The critical
