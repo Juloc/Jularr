@@ -421,12 +421,18 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
-- The delayed hover preview (owner's UiDesigner MediaCard, 20 Oct): after about 1.8 s of the mouse resting on a cover, never on one of
-  its buttons, the card opens a panel as high as the cover over itself, fetched then from `/MediaPreview` (nothing loads before, nothing on
-  touch or devices without hover): the title's trailer in one muted, very wide, cropped frame (the one allowed external embed, the
-  privacy host, with Jularr's own play/pause and sound controls like the player's) above the linked title, or only the title and a
-  longer description where there is no trailer; the card's action and heart move into its foot beside Details. It closes on leave,
-  Escape, scrolling, resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
+- The delayed hover preview (owner's hover-card mockup, 21 Oct): after 550 ms of the mouse resting on a cover, never on one of
+  its buttons (or of the keyboard focus on it), the card opens a panel over the row, as high as the card and 1.84 times as wide,
+  fetched then from `/MediaPreview` (nothing loads before, nothing by hover on touch or devices without hover). The cards of the row
+  never change width or position: the card under the panel is only hidden, and the panel shifts sideways to stay inside the row and
+  the viewport. Trailer mode: the title's trailer in a 16:9 frame (the one allowed external embed, the privacy host, one muted, very
+  wide, cropped frame; Jularr's own pause top left, sound top right, a progress line and `0:12 / 2:24` from the player's own
+  messages, a running line when it reports none) above the linked title, the year, type and runtime, and two lines of description;
+  description mode, for a title without a trailer: a larger title, the facts and the longer description. The foot holds the
+  card's action (a pill), its heart and Details. A touch device has no hover: a card that stays in view near the middle for 2 s
+  opens the same panel by itself, one at a time, unless the profile switched `AutoplayPreviews` off (rendered as
+  `data-autoplay-previews` on `#app-content`; data saver and offline also keep it off). It closes on leave, Escape, scrolling,
+  resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
   module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one title at a
   time (a Work's trailer is its `Trailer` fact, a TMDB title's and an anime season's come from their provider within 3 s, otherwise the
   local catalog's description alone).

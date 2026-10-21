@@ -23,6 +23,8 @@ namespace Jularr.Backend.Tests
         public async Task Schema_FieldDefinitionsAndCatalogs_MatchPostgres()
         {
             await using var fixture = await Fixture.CreateAsync();
+            // The schema check covers the account schema only; the stand-in of the playback table the profile read joins is not part of it.
+            await fixture.RunSqlAsync("DROP TABLE \"ProfileReference\".\"ProfilePlaybackPreferences\"");
             var definitions = new Dictionary<string, Type>
             {
                 ["Accounts"] = typeof(AccountFields),

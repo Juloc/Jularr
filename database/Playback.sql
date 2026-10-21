@@ -192,6 +192,8 @@ CREATE TABLE "ProfilePlaybackPreferences" (
     -- What happens at an intro (or recap) and at credits (or preview): 1 nothing, 2 a Skip button, 3 skipped by itself.
     "IntroSkipModeTypeId" smallint NOT NULL DEFAULT 2 CHECK ("IntroSkipModeTypeId" BETWEEN 1 AND 3),
     "OutroSkipModeTypeId" smallint NOT NULL DEFAULT 2 CHECK ("OutroSkipModeTypeId" BETWEEN 1 AND 3),
+    -- Whether a card that lingers on a touch device plays its preview by itself.
+    "AutoplayPreviews" boolean NOT NULL DEFAULT TRUE,
     "UpdatedAt" timestamptz NOT NULL DEFAULT now()
 );
 

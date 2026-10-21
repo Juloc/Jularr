@@ -237,7 +237,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         private IUiComponent PlaybackForm(PlaybackPreferencesV1 preferences)
         {
             var input = _playbackInput ?? new SavePlaybackPreferencesDataV1(preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed,
-                preferences.AutoplayNext, preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId);
+                preferences.AutoplayNext, preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId, preferences.AutoplayPreviews);
             IEnumerable<SelectOption> LanguageOptions(string? chosen, string emptyKey) => [new SelectOption("", texts[emptyKey]),
                 .. Languages.Concat(chosen is null || Languages.Contains(chosen) ? [] : [chosen]).Select(code => new SelectOption(code, LanguageLabel.Name(code) ?? code))];
             return new Form<SavePlaybackPreferencesDataV1>(form =>
@@ -252,13 +252,14 @@ namespace Jularr.Frontend.Pages.User.Settings
                 var skipModes = Enum.GetValues<SkipMode>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["playback.skipMode." + mode])).ToArray();
                 form.Select(item => item.IntroSkipModeTypeId, "playback.introSkipMode", skipModes);
                 form.Select(item => item.OutroSkipModeTypeId, "playback.outroSkipMode", skipModes);
+                form.Toggle(item => item.AutoplayPreviews, "playback.autoplayPreviews");
                 form.Save();
             }, Url.Page("/User/Settings/Settings", "Playback"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, input, _playbackInput is not null ? FormError : null);
         }
 
-        public async Task<IActionResult> OnPostPlaybackAsync(string? audioLanguage, string? subtitleLanguage, [BindRequired] SubtitleMode subtitleModeTypeId, [BindRequired] decimal speed, bool autoplayNext, [BindRequired] SkipMode introSkipModeTypeId, [BindRequired] SkipMode outroSkipModeTypeId)
+        public async Task<IActionResult> OnPostPlaybackAsync(string? audioLanguage, string? subtitleLanguage, [BindRequired] SubtitleMode subtitleModeTypeId, [BindRequired] decimal speed, bool autoplayNext, [BindRequired] SkipMode introSkipModeTypeId, [BindRequired] SkipMode outroSkipModeTypeId, bool autoplayPreviews)
         {
-            _playbackInput = new SavePlaybackPreferencesDataV1(audioLanguage, subtitleLanguage, subtitleModeTypeId, speed, autoplayNext, introSkipModeTypeId, outroSkipModeTypeId);
+            _playbackInput = new SavePlaybackPreferencesDataV1(audioLanguage, subtitleLanguage, subtitleModeTypeId, speed, autoplayNext, introSkipModeTypeId, outroSkipModeTypeId, autoplayPreviews);
             await savePlayback.ExecuteAsync<UpdateResult>(new PlaybackPreferencesParametersV1(), _playbackInput, HttpContext.RequestAborted);
             return RedirectToPage("/User/Settings/Settings");
         }
