@@ -71,7 +71,8 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 - [Download storage](Pages/Admin/DownloadStorage/DownloadStorage.cshtml.cs), also `/Setup/DownloadStorage` after library storage with Acquisition: per-area Incomplete/Complete folder dialogs, reserve, optional limits and parallel jobs. Uses the canonical Storage services; browser tests: `DownloadStorageTests`.
 
-- [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
+- [Transcoding](Pages/Admin/Transcoding/Transcoding.cshtml.cs) (`/Admin/Transcoding`, sidebar group System): the machine's encoders with the last benchmark's speeds and proposal, Run benchmark (the page reads itself again while it runs, [client](Pages/Admin/Transcoding/Transcoding.entry.ts)) and the editable limits with the save pill; `TranscodeTests`, E2E `TranscodingTests`.
+- [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments, sessions and the account's transcoding priority.
 - [Backup](Pages/Admin/Backup/Backup.cshtml.cs): backups with their schema version, back up now, delete; under `/Setup/Backup` also restore.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
 - [Discover catalog](Pages/Admin/Catalog/Catalog.cshtml.cs) (`/Admin/Catalog`, linked from Settings): each kept catalog's titles, pending entries and last complete pass; keep whole, requests per minute, pause while Jularr is used and sync windows, and the days and size of the cache of images of titles that are not Works (`CatalogSettingsTests`).

@@ -170,7 +170,7 @@ CREATE TABLE "OperationTypes" (
     "Id" smallint PRIMARY KEY,
     "Key" varchar(32) NOT NULL UNIQUE
 );
-INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download'), (3, 'Backup'), (4, 'Job');
+INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download'), (3, 'Backup'), (4, 'Job'), (5, 'TranscodeBenchmark');
 
 CREATE TABLE "OperationStatusTypes" (
     "Id" smallint PRIMARY KEY,
@@ -222,6 +222,7 @@ CREATE TABLE "Operations" (
 );
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_ActiveBackup" ON "Operations" ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2);
+CREATE UNIQUE INDEX "UX_Operations_ActiveBenchmark" ON "Operations" ("OperationTypeId") WHERE "OperationTypeId" = 5 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;
 CREATE UNIQUE INDEX "UX_Operations_OpenJobNotice" ON "Operations" ("WorkerJobKey") WHERE "OperationTypeId" = 4 AND "DismissedAt" IS NULL;
 CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationTypeId", "OperationStatusTypeId", "CreatedAt", "Id");
