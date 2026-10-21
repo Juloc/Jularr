@@ -3,8 +3,8 @@
 .capsule-bar {
     container: capsule-bar / inline-size;
     margin-bottom: 17px;
-    // Capsules are filled with a faint accent tint, not grey.
-    --capsule-fill: color-mix(in srgb, var(--accent) 5%, var(--surface));
+    // Capsules are filled with the lavender field tone.
+    --capsule-fill: var(--field);
 
     &__row {
         display: flex;
@@ -15,7 +15,7 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
         background: var(--surface);
-        box-shadow: 0 3px 18px rgb(93 84 131 / 4%);
+        box-shadow: var(--shadow);
     }
 
     &__areas {
@@ -44,12 +44,12 @@
         border-radius: var(--radius-control);
         background: var(--capsule-fill);
         color: var(--muted);
-        font-size: 12px;
-        font-weight: 750;
+        font-size: var(--text-control);
+        font-weight: 760;
         text-decoration: none;
 
         &:hover { color: var(--text); }
-        &--on, &--on:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); box-shadow: 0 3px 12px rgb(129 62 255 / 15%); }
+        &--on, &--on:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
     }
 }
 
@@ -75,12 +75,12 @@
         padding: 0 10px;
         border-radius: var(--radius-control);
         color: var(--accent-text);
-        font-size: 11px;
-        font-weight: 820;
+        font-size: var(--text-control);
+        font-weight: 810;
         text-decoration: none;
 
         &:hover, &--solo { background: var(--accent-soft); }
-        &--solo { box-shadow: inset 0 0 0 1px rgb(154 123 241 / 17%); }
+        &--solo { outline: 1px solid var(--accent-edge); outline-offset: -1px; }
     }
 
     &__divider { flex: none; width: 1px; height: 19px; margin: 0 5px 0 2px; background: var(--border); }
@@ -92,8 +92,8 @@
         padding: 0 10px;
         border-radius: var(--radius-control);
         color: var(--text);
-        font-size: 11px;
-        font-weight: 700;
+        font-size: var(--text-control);
+        font-weight: 740;
         text-decoration: none;
 
         &:hover { background: var(--surface); }

@@ -1,72 +1,82 @@
-// Shared skin tokens: the design language of the owner's mockups (20 Oct). The colours below are the defaults before the palette
-// script derives the same names from the accent (Palette.ts); radii, type, controls, status and shadows are fixed here.
+// Shared skin tokens: the owner's mockups, verbatim (jobs redesign, 21 Oct). The colours below are the defaults before the palette script
+// derives the same names from the accent (Palette.ts, where the default accent reproduces these values exactly); status, shape, type,
+// controls and shadows are fixed here.
 :root {
-    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
     color-scheme: light;
 
-    // Surfaces: a white page with a lavender breath, white panels, soft lavender fields and hover.
-    --background: light-dark(#faf9ff, #11111a);
-    --surface: light-dark(#fff, #1c1b29);
-    --surface-hover: light-dark(#f5f2ff, #2b2640);
-    --field: light-dark(#f8f7ff, #252233);
+    // Surfaces: the page, white panels, soft lavender fields; a hovered row takes the field tone.
+    --background: light-dark(#faf9ff, #12121d);
+    --surface: light-dark(#fff, #1d1b2b);
+    --field: light-dark(#f8f7ff, #262339);
     --surface-soft: var(--field);
-    // The one quiet 1px line of every border, divider and outline.
-    --border: light-dark(#ebe8f5, #363247);
+    --surface-hover: var(--field);
+    // The one quiet 1px line of every border and divider, and the stronger line of inputs and switches.
+    --border: light-dark(#eae6f4, #38334e);
     --line: var(--border);
-    // Legacy name of the panel outline: the same quiet line (the mockups have no accent-tinted outlines).
+    --border-strong: light-dark(#e1dcee, #4b4260);
+    // Legacy name of the panel outline.
     --accent-line: var(--border);
-    // Hover and selected outlines: the accent at a third.
-    --accent-outline: color-mix(in srgb, var(--accent) 32%, var(--surface));
-    --text: light-dark(#242039, #f4f1fd);
-    --muted: light-dark(#6c6882, #aaa3bf);
+    --text: light-dark(#26223d, #f4f1ff);
+    --muted: light-dark(#938fa9, #aba5bf);
 
-    // One accent: #813eff in light, #a980ff in dark.
-    --accent: light-dark(#813eff, #a980ff);
-    --accent-contrast: light-dark(#fff, #11101a);
-    --accent-text: light-dark(#6e34d2, #baa0ff);
-    --accent-hover: light-dark(#7427ed, #b794ff);
-    --accent-soft: light-dark(#f0eaff, #33284e);
-    --focus: var(--accent-text);
+    // One accent: the lavender tint (selection, soft buttons, current place), the soft purple of hover edges and the focus ring,
+    // the active chip's outline.
+    --accent: light-dark(#8040f7, #9a70ff);
+    --accent-contrast: #fff;
+    --accent-text: light-dark(#7136d9, #c3a8ff);
+    --accent-hover: light-dark(color-mix(in oklab, var(--accent) 90%, #000), color-mix(in oklab, var(--accent) 90%, #fff));
+    --accent-soft: light-dark(#f2edff, #35294e);
+    --accent-outline: light-dark(#b59aff, #8060bf);
+    --accent-edge: #dcd0ff;
+    --focus: var(--accent-outline);
 
-    // Status: text on its own soft tint, each pair at least 4.5:1.
-    --success: light-dark(#007f5d, #70d8b3);
-    --success-soft: light-dark(#e8f8f1, #1d4439);
-    --warning: light-dark(#9e6100, #efc782);
-    --warning-soft: light-dark(#fff5e4, #483724);
-    --danger: light-dark(#b8485e, #f3a1b1);
-    --danger-soft: light-dark(#fff0f2, #522b38);
-    --info: light-dark(#3a6dba, #a9c6fb);
-    --info-soft: light-dark(#ebf2ff, #293952);
+    // Status: text on its own tint.
+    --success: light-dark(#159775, #75dcb6);
+    --success-soft: light-dark(#e8f8f1, #20453a);
+    --warning: light-dark(#ad7618, #ffcd82);
+    --warning-soft: light-dark(#fff4df, #493823);
+    --danger: light-dark(#c6536b, #ff9cb0);
+    --danger-soft: light-dark(#ffeff2, #4e2939);
+    --info: light-dark(#487bd6, #9dbdf7);
+    --info-soft: light-dark(#edf3ff, #273653);
 
-    // Shapes: pills for controls and capsules, 20px cards, 22px dialogs; shadows stay faint.
+    // Shapes: pills for buttons, chips and search; 19px panels, 13px stat and detail tiles, 12px icon tiles, 11px fields.
     --radius-control: 999px;
-    --radius-panel: 20px;
+    --radius-panel: 19px;
     --radius-dialog: 22px;
-    --radius-inner: 14px;
+    --radius-inner: 13px;
+    --radius-tile: 12px;
+    --radius-field: 11px;
     --radius-small: 10px;
-    --shadow: 0 8px 30px light-dark(rgb(62 43 115 / 3%), rgb(0 0 0 / 20%));
-    --shadow-overlay: 0 20px 60px light-dark(rgb(28 13 64 / 22%), rgb(0 0 0 / 55%));
-    --scrim: rgb(24 18 34 / 55%);
+    // Depth: the card shadow on panels, the drawer's and the floating pill's own.
+    --shadow: 0 9px 30px light-dark(rgb(55 37 105 / 4.5%), #0003);
+    --shadow-drawer: -10px 0 40px #0002;
+    --shadow-menu: 10px 0 40px #0002;
+    --shadow-overlay: 0 11px 30px #0004;
+    --scrim: #16122570;
 
-    // Type: 13px text, 12px controls, 11px captions and table heads; headings tighten with their size.
-    --text-body: 13px;
-    --text-control: 12px;
-    --text-small: 11px;
-    --text-heading: 16px;
-    --weight-control: 700;
-    --weight-heading: 800;
+    // Type: 12px text and row titles, 11px controls, 10px captions, labels and table heads; headings tighten with their size.
+    --text-body: 12px;
+    --text-control: 11px;
+    --text-small: 10px;
+    --text-heading: 14px;
+    --weight-control: 740;
+    --weight-heading: 805;
 
-    // Controls: 38px pills (30px compact), 44px where a finger is the pointer; 18px icons.
-    --control-height: 38px;
-    --control-height-compact: 30px;
+    // Controls: 37px buttons (32px in a row), 36px round icon buttons, 40px fields; 44px where a finger is the pointer.
+    --control-height: 37px;
+    --control-height-compact: 32px;
+    --icon-button: 36px;
+    --field-height: 40px;
     --icon-size: 18px;
-    --transition: .13s;
+    --transition: .15s;
     --art-hue-rotate: 0deg;
     --art-saturate: 1;
 }
 
 @media (pointer: coarse) {
-    :root { --control-height: 44px; --control-height-compact: 44px; }
+    :root { --control-height: 44px; --control-height-compact: 44px; --icon-button: 44px; --field-height: 44px; }
 }
 
 // Brightness stays independent.
