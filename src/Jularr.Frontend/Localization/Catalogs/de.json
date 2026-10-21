@@ -2808,6 +2808,82 @@
    "Request cancelled",
    "Anfrage abgebrochen"
   ],
+  "requests.filter": [
+   "Request status",
+   "Anfragestatus"
+  ],
+  "requests.filter.All": [
+   "All",
+   "Alle"
+  ],
+  "requests.filter.Awaiting": [
+   "Awaiting",
+   "Freigabe"
+  ],
+  "requests.filter.Active": [
+   "Active",
+   "Aktiv"
+  ],
+  "requests.filter.Available": [
+   "Available",
+   "Verfügbar"
+  ],
+  "requests.filter.Problems": [
+   "Problems",
+   "Probleme"
+  ],
+  "requests.filter.History": [
+   "History",
+   "Verlauf"
+  ],
+  "requests.sort.Newest": [
+   "Newest",
+   "Neueste"
+  ],
+  "requests.sort.Oldest": [
+   "Oldest",
+   "Älteste"
+  ],
+  "requests.sort.Status": [
+   "Status",
+   "Status"
+  ],
+  "requests.sort.Title": [
+   "Title A-Z",
+   "Titel A–Z"
+  ],
+  "requests.layout": [
+   "Layout",
+   "Ansicht"
+  ],
+  "requests.layout.rows": [
+   "List",
+   "Liste"
+  ],
+  "requests.layout.cards": [
+   "Cards",
+   "Karten"
+  ],
+  "requests.reset": [
+   "Clear filters",
+   "Filter zurücksetzen"
+  ],
+  "requests.withdraw": [
+   "Withdraw request",
+   "Anfrage zurückziehen"
+  ],
+  "requests.withdraw.confirm": [
+   "Withdraw this request?",
+   "Diese Anfrage zurückziehen?"
+  ],
+  "requests.withdraw.submit": [
+   "Withdraw",
+   "Zurückziehen"
+  ],
+  "requests.activity": [
+   "Activity",
+   "Aktivität"
+  ],
   "live.eta": [
    "{0} left",
    "noch {0}"

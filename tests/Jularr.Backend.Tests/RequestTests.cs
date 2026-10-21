@@ -55,6 +55,138 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Requests_FilterAndSort_ByStateTypeAndTitle()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Accounts" SET "AccountRoleTypeId" = 2 WHERE "Id" = 41;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (30, 1, 'Alpha'), (31, 1, 'Zulu');
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "CreatedAt", "DecidedByAccountId", "DecidedAt") VALUES
+                    (301, 10, 101, 41, 1, 1, now() - interval '5 days', NULL, NULL),
+                    (302, 20, 101, 41, 1, 4, now() - interval '4 days', 41, now()),
+                    (303, 30, 101, 41, 1, 6, now() - interval '3 days', 41, now()),
+                    (304, 31, 101, 41, 1, 8, now() - interval '2 days', 41, now());
+                """);
+            await SignInAsync(host);
+
+            async Task<long[]> ReadAsync(string query)
+            {
+                using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/requests" + query);
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+                return [.. (await response.Content.ReadFromJsonAsync<PageResult<UserRequest>>())!.Items.Select(item => item.Id)];
+            }
+
+            // Each view lists its states, newest first by default.
+            CollectionAssert.AreEqual(new long[] { 304, 303, 302, 301 }, await ReadAsync(""));
+            CollectionAssert.AreEqual(new long[] { 301 }, await ReadAsync("?requestListFilterTypeId=Awaiting"));
+            CollectionAssert.AreEqual(new long[] { 302 }, await ReadAsync("?requestListFilterTypeId=Active"));
+            CollectionAssert.AreEqual(new long[] { 303 }, await ReadAsync("?requestListFilterTypeId=Available"));
+            CollectionAssert.AreEqual(new long[] { 304 }, await ReadAsync("?requestListFilterTypeId=Problems"));
+            CollectionAssert.AreEqual(new long[] { 303 }, await ReadAsync("?requestListFilterTypeId=History"));
+
+            // Order by age, title and how far the request is; a type narrows the list.
+            CollectionAssert.AreEqual(new long[] { 301, 302, 303, 304 }, await ReadAsync("?requestSortTypeId=Oldest"));
+            CollectionAssert.AreEqual(new long[] { 304, 301, 302, 303 }, await ReadAsync("?requestSortTypeId=Status"));
+            CollectionAssert.AreEqual(new long[] { 303, 302, 304 }, (await ReadAsync("?requestSortTypeId=Title")).Where(id => id != 301).ToArray());
+            CollectionAssert.AreEqual(new long[] { 302 }, await ReadAsync("?mediaTypeId=Book"));
+
+            // Only requests that are not imported yet can be withdrawn.
+            using var all = await host.SendAsync(HttpMethod.Get, "/api/v1/requests");
+            var items = (await all.Content.ReadFromJsonAsync<PageResult<UserRequest>>())!.Items;
+            CollectionAssert.AreEquivalent(new long[] { 301, 302 }, items.Where(item => item.IsWithdrawable).Select(item => item.Id).ToArray());
+        }
+
+        [TestMethod]
+        public async Task WithdrawRequest_OwnUntilImported_PausesOnlyUnsharedTargets()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Accounts" SET "AccountRoleTypeId" = 2 WHERE "Id" = 41;
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (30, 1, 'Third'), (31, 1, 'Fourth');
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt") VALUES
+                    (301, 10, 101, 41, 1, 1, NULL, NULL),
+                    (302, 20, 101, 41, 1, 4, 41, now()),
+                    (303, 30, 101, 41, 1, 6, 41, now()),
+                    (304, 31, 101, 41, 1, 3, 41, now()),
+                    (305, 31, 202, 42, 1, 2, 41, now()),
+                    (306, 10, 202, 42, 2, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (900, 20), (901, 31);
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (302, 900), (304, 901), (305, 901);
+                """);
+            await SignInAsync(host);
+            async Task<HttpStatusCode> WithdrawAsync(long id)
+            {
+                using var response = await host.SendAsync(HttpMethod.Put, "/api/v1/requests/" + id + "/withdraw");
+                return response.StatusCode;
+            }
+
+            // Waiting for approval or being downloaded: taken back.
+            Assert.AreEqual(HttpStatusCode.OK, await WithdrawAsync(301));
+            Assert.AreEqual((short)9, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 301"));
+            Assert.AreEqual(HttpStatusCode.OK, await WithdrawAsync(302));
+            Assert.AreEqual((short)9, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 302"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\" WHERE \"Id\" = 900"), "A target nobody else waits for stops searching.");
+
+            // A target another person still waits for keeps searching.
+            Assert.AreEqual(HttpStatusCode.OK, await WithdrawAsync(304));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\" WHERE \"Id\" = 901"));
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 305"));
+
+            // Another profile's request reads as missing; one that is imported stays with the administrators; a repeat is refused.
+            Assert.AreEqual(HttpStatusCode.NotFound, await WithdrawAsync(306));
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 306"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, await WithdrawAsync(303));
+            Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 303"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, await WithdrawAsync(301));
+            Assert.AreEqual(HttpStatusCode.NotFound, await WithdrawAsync(999));
+        }
+
+        [TestMethod]
+        public async Task Razor_Requests_ShowRowsFiltersAndWithdraw()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Accounts" SET "AccountRoleTypeId" = 2 WHERE "Id" = 41;
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt") VALUES
+                    (301, 10, 101, 41, 1, 4, 41, now()),
+                    (302, 20, 101, 41, 1, 6, 41, now());
+                """);
+            await SignInAsync(host);
+            using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+
+            // Rows with their steps, the status tabs and the type menu; a finished request has no way to withdraw.
+            var html = await browser.GetStringAsync("/Requests");
+            StringAssert.Contains(html, "&lt;Work&gt;");
+            StringAssert.Contains(html, "requests-bar");
+            StringAssert.Contains(html, "live-progress--compact");
+            StringAssert.Contains(html, "request=301");
+            Assert.IsFalse(html.Contains("request-drawer__foot", StringComparison.Ordinal));
+            var movies = await browser.GetStringAsync("/Requests?type=movies&state=Active");
+            StringAssert.Contains(movies, "&lt;Work&gt;");
+            Assert.IsFalse(movies.Contains(">Book<", StringComparison.Ordinal));
+            var available = await browser.GetStringAsync("/Requests?state=Available");
+            Assert.IsFalse(available.Contains("&lt;Work&gt;", StringComparison.Ordinal));
+            StringAssert.Contains(available, "Book");
+
+            // The panel of a running request offers to withdraw it, after asking; the finished one offers nothing.
+            var panel = await browser.GetStringAsync("/Requests?request=301");
+            StringAssert.Contains(panel, "request-drawer__withdraw");
+            StringAssert.Contains(panel, "Withdraw this request?");
+            Assert.IsFalse((await browser.GetStringAsync("/Requests?request=302")).Contains("request-drawer__withdraw", StringComparison.Ordinal));
+            var token = WebUtility.HtmlDecode(Regex.Match(panel, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+            using var withdrawn = await browser.PostAsync("/Requests?handler=Withdraw&requestId=301", new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.Redirect, withdrawn.StatusCode, await withdrawn.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)9, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 301"));
+            StringAssert.Contains(await browser.GetStringAsync("/Requests"), "Request cancelled");
+
+            // A finished request cannot be taken back, also not by a crafted form.
+            using var refused = await browser.PostAsync("/Requests?handler=Withdraw&requestId=302", new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 302"));
+        }
+
+        [TestMethod]
         public async Task RequestRules_BoundMediaLimitApprovalAndQuality()
         {
             await using var host = await CreateHostAsync();
