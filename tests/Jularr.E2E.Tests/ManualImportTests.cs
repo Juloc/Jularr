@@ -111,7 +111,7 @@ namespace Jularr.E2E.Tests
                 while (waiting is null)
                 {
                     Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
-                    await page.GotoAsync("/Admin/Activity?Tab=Queue");
+                    await page.GotoAsync("/Admin/Activity");
                     var row = page.Locator("tr", new() { HasText = "does not clearly match the film" });
                     if (await row.CountAsync() > 0) waiting = row.First;
                     else await page.WaitForTimeoutAsync(3000);

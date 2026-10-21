@@ -31,6 +31,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         work."MediaSubtypeId",
                         work."CanonicalTitle",
                         wanted."IsPaused",
+                        wanted."WantedPriorityTypeId",
                         wanted."MonitorsNewUnits",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
@@ -97,6 +98,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted_state."MediaSubtypeId",
                         wanted_state."CanonicalTitle",
                         wanted_state."IsPaused",
+                        wanted_state."WantedPriorityTypeId",
                         wanted_state."MonitorsNewUnits",
                         wanted_state."LastSearchedAt",
                         wanted_state."LastOutcomeKey",
@@ -123,6 +125,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
+                    wanted_page."WantedPriorityTypeId",
                     ARRAY(SELECT tagged."TagId" FROM "WorkTags" AS tagged WHERE tagged."WorkId" = wanted_page."WorkId" ORDER BY tagged."TagId") AS "TagIds",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
@@ -192,6 +195,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         work."MediaSubtypeId",
                         work."CanonicalTitle",
                         wanted."IsPaused",
+                        wanted."WantedPriorityTypeId",
                         wanted."MonitorsNewUnits",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
@@ -213,6 +217,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
+                    wanted_page."WantedPriorityTypeId",
                     ARRAY(SELECT tagged."TagId" FROM "WorkTags" AS tagged WHERE tagged."WorkId" = wanted_page."WorkId" ORDER BY tagged."TagId") AS "TagIds",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
@@ -359,8 +364,57 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
     }
 
+    // Several targets get one priority; the automatic search takes the high ones first and waits for nobody.
+    [ServiceEndpoint("POST", "/api/v1/admin/wanted/priority")]
+    public sealed class UpdateWantedPriorityV1 : AdminService<UpdateWantedPriorityParametersV1, UpdateWantedPriorityDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateWantedPriorityParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(UpdateWantedPriorityParametersV1 parameters, Type resultType) => new("wanted.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SetWantedPriorityAsync(new WantedPriorityData(Data.WantedItemIds, Data.WantedPriorityTypeId), ct);
+                return true;
+            }, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    // The chosen targets, or all that are due, are searched now instead of on schedule.
+    [ServiceEndpoint("POST", "/api/v1/admin/wanted/search")]
+    public sealed class StartWantedSearchV1 : AdminService<StartWantedSearchParametersV1, StartWantedSearchDataV1>
+    {
+        private readonly AcquisitionSearchSignal _searchSignal;
+
+        internal StartWantedSearchV1(AcquisitionSearchSignal searchSignal)
+        {
+            _searchSignal = searchSignal;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(StartWantedSearchParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition");
+        protected override ServicePermission GetPermission(StartWantedSearchParametersV1 parameters, Type resultType) => new("wanted.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.StartWantedSearchAsync(new WantedSearchStartData(Data.WantedItemIds), ct);
+                return true;
+            }, CancellationToken);
+            return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted() => _searchSignal.RequestSearch();
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/wanted/{wantedItemId:long}/units")]
-    public sealed class ReadWantedUnitsV1 : AdminService<ReadWantedUnitsParametersV1>
+    public sealed class ReadWantedUnitsV1: AdminService<ReadWantedUnitsParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WantedUnitV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadWantedUnitsParametersV1 parameters) => ModuleRequirement.All("Requests");
