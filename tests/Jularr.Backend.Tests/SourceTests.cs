@@ -352,7 +352,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task AnnasArchive_SearchGathersTheFilesOfEveryWay()
         {
-            // The first way finds one file, the second another; the files of both are gathered.
+            // One way finds one file, the next another; the caller asks for them one after the other.
             var sources = new FakeSources { RealRows = true };
             sources.SearchPages["zweiterWeg"] = """
                 <html><body>
@@ -360,31 +360,34 @@ namespace Jularr.Backend.Tests
                 </body></html>
                 """;
             var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
-            var records = await client.SearchAsync(new Uri("https://annas.example.test/"), ["Pride and Prejudice Austen", "zweiterWeg"], CancellationToken.None);
+            var first = await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None);
+            var second = await client.SearchAsync(new Uri("https://annas.example.test/"), "zweiterWeg", CancellationToken.None);
 
-            Assert.AreEqual(2, records.Count);
-            Assert.AreEqual("0123456789abcdef0123456789abcdef", records[0].Md5);
-            Assert.AreEqual("11111111111111111111111111111111", records[1].Md5);
+            Assert.AreEqual(1, first.Count);
+            Assert.AreEqual("0123456789abcdef0123456789abcdef", first[0].Md5);
+            Assert.AreEqual(1, second.Count);
+            Assert.AreEqual("11111111111111111111111111111111", second[0].Md5);
         }
 
         [TestMethod]
-        public void AnnaQueries_NameTheWorkInEveryWay()
+        public void AnnaWays_NameTheWorkInEveryWay_TheIsbnFirst()
         {
-            // The work knows the ways: the title with the author, the titles of its editions and its ISBNs.
+            // The work knows the ways: the ISBN names the edition exactly, then the title with the author,
+            // the title alone and the titles of the editions in the other languages.
             var target = new WantedTargetData(1, 2, MediaType.Book, null, "Rich Dad, Poor Dad", null, ["Rich Dad, Poor Dad"], null, null, null, [], false, false, false, 0, [],
                 ["de"], "Robert Kiyosaki", null, null, editionTitles: ["Rich Dad Poor Dad", "Padre Rico, Padre Pobre"], isbns: ["3959720106", "9781612681139"]);
 
-            var queries = DirectSources.AnnaQueries(target);
+            var ways = DirectSources.AnnaWays(target);
 
             CollectionAssert.AreEqual(new[]
             {
+                "3959720106",
+                "9781612681139",
                 "Rich Dad, Poor Dad Robert Kiyosaki",
                 "Rich Dad, Poor Dad",
                 "Rich Dad Poor Dad",
-                "Padre Rico, Padre Pobre",
-                "3959720106",
-                "9781612681139"
-            }, queries.ToArray());
+                "Padre Rico, Padre Pobre"
+            }, ways.ToArray());
         }
 
         [TestMethod]
