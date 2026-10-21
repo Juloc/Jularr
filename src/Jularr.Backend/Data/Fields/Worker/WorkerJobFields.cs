@@ -10,12 +10,13 @@ namespace Jularr.Backend.Data.Fields.Worker
         public static readonly EnumField WorkerJobStateTypeId = new(typeof(WorkerJobStateType));
         public static readonly EnumField ResultTypeId = new(typeof(WorkerJobResultType));
         public static readonly EnumField LastResultTypeId = new(typeof(WorkerJobResultType)) { Required = false };
+        public static readonly StringField ParentKey = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false };
         public static readonly BoolField IsPaused = new();
         public static readonly BoolField PausesWhileUsed = new();
         public static readonly BoolField PausesWhileUsedChoice = new() { Required = false };
         public static readonly BoolField CanPauseWhileUsed = new();
         public static readonly BoolField CanRunNow = new();
-        public static readonly IntField IntervalSeconds = new() { Minimum = 1, Required = false };
+        public static readonly IntField IntervalSeconds = new() { Minimum = 0, Required = false };
         public static readonly DateTimeField StartedAt = new() { Required = false };
         public static readonly DateTimeField FinishedAt = new();
         public static readonly DateTimeField LastStartedAt = new() { Required = false };

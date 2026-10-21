@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Admin.Backup.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.System.Backup.V1;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Backup.V1;
@@ -91,7 +92,7 @@ namespace Jularr.Backend.Tests
 
             // The worker claims it like a scan; without pg_dump nothing half-written stays.
             await using var scope = host.Services.CreateAsyncScope();
-            var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new OperationQueueParametersV1(), default, CancellationToken.None);
+            var claimed = await scope.ServiceProvider.GetRequiredService<ClaimOperationV1>().ExecuteAsync<ClaimOperationResultV1>(new ClaimOperationParametersV1(OperationType.Backup), default, CancellationToken.None);
             Assert.AreEqual(OperationType.Backup, claimed.OperationTypeId);
             var failure = await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() =>
                 scope.ServiceProvider.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), default, CancellationToken.None));
@@ -102,6 +103,37 @@ namespace Jularr.Backend.Tests
             var state = await ReadAsync(host);
             Assert.IsFalse(state.IsRunning);
             Assert.AreEqual("backup_tool_missing", state.ErrorKey);
+        }
+
+        [TestMethod]
+        public async Task Schedule_FollowsTheOwnersInterval_ZeroSwitchesItOff_AndRunNowQueuesAnyway()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            await using var host = await CreateHostAsync(new Dictionary<string, string>
+            {
+                ["Backup:Path"] = folder.Path,
+                ["Backup:PgDumpPath"] = Path.Combine(folder.Path, "missing", "pg_dump.exe")
+            });
+            await using var scope = host.Services.CreateAsyncScope();
+            var schedule = scope.ServiceProvider.GetRequiredService<ScheduleBackupV1>();
+            async Task<bool> QueuedAsync(bool isForced = false) => (await schedule.ExecuteAsync<UpdateResult>(new BackupScheduleParametersV1(isForced), default)).Success;
+            Task<object?> CountAsync() => host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 3");
+
+            // 0 hours: no automatic backup, but the Owner's run now still queues one.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"BackupIntervalHours\" = 0");
+            Assert.IsFalse(await QueuedAsync());
+            Assert.AreEqual(0L, await CountAsync());
+            Assert.IsTrue(await QueuedAsync(isForced: true));
+            await host.Fixture.RunSqlAsync("DELETE FROM \"Operations\" WHERE \"OperationTypeId\" = 3");
+
+            // A backup younger than the interval keeps the next one away; an older one does not.
+            await WriteBackupAsync(folder.Path, DateTime.UtcNow.AddHours(-3).ToString("'jularr-'yyyyMMdd-HHmmss"), BackupFiles.SchemaFingerprint);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"BackupIntervalHours\" = 6");
+            Assert.IsFalse(await QueuedAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"BackupIntervalHours\" = 2");
+            Assert.IsTrue(await QueuedAsync());
+            Assert.AreEqual(1L, await CountAsync());
+            Assert.IsFalse(await QueuedAsync(), "One is already waiting.");
         }
 
         [TestMethod]

@@ -30,7 +30,7 @@ using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
-    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection)
+    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, StorageAccess storage, TimeProvider time, SabnzbdClient sabnzbd, IDataProtectionProvider protection, WorkSignals signals)
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, StorageFiles source, ImportSourceRef sourceRef, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
@@ -260,6 +260,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             await replacements.ReplaceAsync(context, assets, request.Profile, ct);
+
+            // The scan that analyses the new streams starts at once.
+            signals.Scans.Notify();
 
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, request.MediaTypeId, ct);

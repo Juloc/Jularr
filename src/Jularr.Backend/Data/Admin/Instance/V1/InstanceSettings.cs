@@ -14,8 +14,13 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
     public sealed class InstanceSettingsDetailsV1 : BaseResponse
     {
         public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks, bool usersConfirmSources, int libraryScanIntervalHours,
-            int historyRetentionDays, int historyMegabytes, int collectionLimit, int unitGroupLimit, string[] subtitleLanguages, string? publicUrl, string[] trustedProxies)
+            int historyRetentionDays, int historyMegabytes, int collectionLimit, int unitGroupLimit, string[] subtitleLanguages, string? publicUrl, string[] trustedProxies,
+            int backupIntervalHours, int backupKeep, int providerSyncIntervalMinutes, int wantedSearchIntervalMinutes)
         {
+            WantedSearchIntervalMinutes = wantedSearchIntervalMinutes;
+            ProviderSyncIntervalMinutes = providerSyncIntervalMinutes;
+            BackupKeep = backupKeep;
+            BackupIntervalHours = backupIntervalHours;
             TrustedProxies = trustedProxies;
             PublicUrl = publicUrl;
             SubtitleLanguages = subtitleLanguages;
@@ -56,6 +61,22 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.LibraryScanIntervalHours))]
         public int LibraryScanIntervalHours { get; }
 
+        // Automatic backups every this many hours; 0 turns them off.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupIntervalHours))]
+        public int BackupIntervalHours { get; }
+
+        // The newest backups that are kept.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupKeep))]
+        public int BackupKeep { get; }
+
+        // Minutes between two reads of the connected Plex, Jellyfin and Emby servers.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ProviderSyncIntervalMinutes))]
+        public int ProviderSyncIntervalMinutes { get; }
+
+        // Minutes between two searches of the wanted titles that are due.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.WantedSearchIntervalMinutes))]
+        public int WantedSearchIntervalMinutes { get; }
+
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryRetentionDays))]
         public int HistoryRetentionDays { get; }
 
@@ -84,8 +105,13 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
     {
         public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version, int? readingCacheMegabytes = null, int? readingCacheWorks = null, bool? usersConfirmSources = null,
             int? libraryScanIntervalHours = null, int? historyRetentionDays = null, int? historyMegabytes = null, int? collectionLimit = null, int? unitGroupLimit = null,
-            string[]? subtitleLanguages = null, string? publicUrl = null, string[]? trustedProxies = null)
+            string[]? subtitleLanguages = null, string? publicUrl = null, string[]? trustedProxies = null,
+            int? backupIntervalHours = null, int? backupKeep = null, int? providerSyncIntervalMinutes = null, int? wantedSearchIntervalMinutes = null)
         {
+            WantedSearchIntervalMinutes = wantedSearchIntervalMinutes;
+            ProviderSyncIntervalMinutes = providerSyncIntervalMinutes;
+            BackupKeep = backupKeep;
+            BackupIntervalHours = backupIntervalHours;
             TrustedProxies = trustedProxies;
             PublicUrl = publicUrl;
             SubtitleLanguages = subtitleLanguages;
@@ -114,6 +140,18 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.LibraryScanIntervalHours), false)]
         public int? LibraryScanIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupIntervalHours), false)]
+        public int? BackupIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupKeep), false)]
+        public int? BackupKeep { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ProviderSyncIntervalMinutes), false)]
+        public int? ProviderSyncIntervalMinutes { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.WantedSearchIntervalMinutes), false)]
+        public int? WantedSearchIntervalMinutes { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryRetentionDays), false)]
         public int? HistoryRetentionDays { get; }

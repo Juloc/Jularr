@@ -568,7 +568,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 }
             }
 
-            return new UpdateResult(true);
+            // Whether downloads are still running tells the worker how soon to look again.
+            return new UpdateResult(downloads.Count > 0);
         }
 
         private async Task RecoverAsync(DownloadData download, SabnzbdConnection client)
