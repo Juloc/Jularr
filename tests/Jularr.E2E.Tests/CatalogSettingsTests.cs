@@ -36,6 +36,14 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(aniList.Locator("[name='Windows[0].StartsAt']")).ToHaveValueAsync("22:30");
             await Assertions.Expect(aniList.Locator("[name='Windows[0].EndsAt']")).ToHaveValueAsync("01:00");
             await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeHiddenAsync();
+
+            // The cache of images of other titles is sized here and saved the same way.
+            var covers = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Images of other titles", Exact = true }) }).Locator("form[data-save]");
+            await Assertions.Expect(covers.GetByLabel("Keep unused images for days")).ToHaveValueAsync("7");
+            await covers.GetByLabel("Largest size in MB, 0 keeps none").FillAsync("120");
+            await Steps.SaveAsync(page);
+            await page.ReloadAsync();
+            await Assertions.Expect(covers.GetByLabel("Largest size in MB, 0 keeps none")).ToHaveValueAsync("120");
         }
     }
 }

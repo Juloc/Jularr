@@ -28,7 +28,7 @@ namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
         DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, ReadWorkV1 readWork,
-        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
+        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
         : JularrPage
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
@@ -47,6 +47,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IReadOnlyList<ReadingSearchHitV1>? _hits;
         private SpeechPreferencesV1? _speech;
         private SaveSpeechPreferencesDataV1? _speechInput;
+        private IReadOnlyList<SpeechModelV1> _speechModels = [];
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -174,6 +175,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     .TextAttribute("data-speech-translation-label", "speech.translationPending")
                     .TextAttribute("data-speech-unavailable-label", "speech.unavailable")
                     .TextAttribute("data-speech-failed-label", "speech.failed")
+                    .TextAttribute("data-speech-loading-label", "speech.loading")
                     .TextAttribute("data-speech-speaking-label", "speech.speaking")
                     .TextAttribute("data-speech-paused-label", "speech.paused")
                     .TextAttribute("data-speech-pause-label", "speech.pause")
@@ -449,6 +451,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             var profile = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: ct)).ProfileId
                 ?? throw new UnauthorizedAccessException("An active profile is required.");
             _speech = await readSpeech.ExecuteAsync<SpeechPreferencesV1>(new ReadProfileParametersV1(profile), ct);
+            _speechModels = await readSpeechModels.ExecuteAsync<BaseDataList<SpeechModelV1>>(new SpeechModelsParametersV1(), ct);
 
             // Without a section in the address, continue where this profile stopped.
             var index = SectionIndex ?? (_document.Locator is { } locator && locator.StartsWith('s') && int.TryParse(locator[1..].Split('/')[0], NumberStyles.None, CultureInfo.InvariantCulture, out var saved)
@@ -477,7 +480,7 @@ namespace Jularr.Frontend.Pages.User.Reader
         private IUiComponent SpeechPanel(ReadingDocumentV1 document, int index) => new Div(
             new Div(new H2(new Text("speech.settings")), new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("data-reader-close", "speech")).Class("reader__panel-heading"),
             _speech is null ? new Span() : new SpeechSettings(_speech, SpeechLanguage(document), "/Read/" + Id.ToString(CultureInfo.InvariantCulture)
-                + "?handler=Speech&s=" + index.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", FormError, _speechInput)
+                + "?handler=Speech&s=" + index.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", FormError, _speechInput, _speechModels)
         ).Class("reader__panel").Attribute("data-panel", "speech").Attribute("hidden", "hidden");
 
         private IUiComponent SpeechTransport() => new Div(

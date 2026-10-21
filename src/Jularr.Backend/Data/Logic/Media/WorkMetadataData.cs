@@ -193,6 +193,30 @@ namespace Jularr.Backend.Data.Logic.Media
         public long WorkId { get; }
     }
 
+    // A provider entry that is a Work, with the poster Jularr keeps for it when the entry is the Work's own.
+    internal sealed class WorkIdentityPosterData : BaseData
+    {
+        public WorkIdentityPosterData(string @namespace, string value, long workId, string? posterUrl)
+        {
+            Namespace = @namespace;
+            Value = value;
+            WorkId = workId;
+            PosterUrl = posterUrl;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string Value { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+    }
+
     internal sealed class MetadataLanguageData : BaseData
     {
         public MetadataLanguageData(string locale)
@@ -234,12 +258,14 @@ namespace Jularr.Backend.Data.Logic.Media
     // Viewer state of a provider title that already is a Work.
     internal sealed class DiscoverOverlayData : BaseData
     {
-        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl)
+        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl, string? posterUrl, string? backdropUrl)
         {
             Value = value;
             WorkId = workId;
             MediaStateTypeId = mediaStateTypeId;
             PlexUrl = plexUrl;
+            PosterUrl = posterUrl;
+            BackdropUrl = backdropUrl;
         }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
@@ -253,6 +279,13 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
         public string? PlexUrl { get; }
+
+        // The images Jularr keeps for the Work; the provider's own stay in use until then.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? BackdropUrl { get; }
     }
 
     internal sealed class LibraryFilterData : BaseData
@@ -276,6 +309,38 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
         public LibrarySortType LibrarySortTypeId { get; }
+    }
+
+    // What a profile's personal list is narrowed to and how it is ordered; no scope lists every type.
+    internal sealed class WorkListFilterData : BaseData
+    {
+        public WorkListFilterData(MediaType[] mediaTypeIds, MediaSubtype[] mediaSubtypeIds, int? releaseYearFrom, int? releaseYearTo, ProgressStateType? progressStateId, LibrarySortType? librarySortTypeId)
+        {
+            ProgressStateId = progressStateId;
+            MediaTypeIds = mediaTypeIds;
+            MediaSubtypeIds = mediaSubtypeIds;
+            ReleaseYearFrom = releaseYearFrom;
+            ReleaseYearTo = releaseYearTo;
+            LibrarySortTypeId = librarySortTypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeIds))]
+        public MediaType[] MediaTypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeIds))]
+        public MediaSubtype[] MediaSubtypeIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearFrom { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear), false)]
+        public int? ReleaseYearTo { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ProgressStateId), false)]
+        public ProgressStateType? ProgressStateId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId), false)]
+        public LibrarySortType? LibrarySortTypeId { get; }
     }
 
     // The provider's series of a Work and the Work's place in it, or none.

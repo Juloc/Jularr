@@ -271,27 +271,24 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Route test')");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             var loginHtml = await login.Content.ReadAsStringAsync();
-            StringAssert.Contains(loginHtml, "brand-symbol__original");
-            StringAssert.Contains(loginHtml, "brand-symbol__clean");
             StringAssert.Contains(loginHtml, "data-set-skin=\"original\"");
             StringAssert.Contains(loginHtml, "data-set-skin=\"clean\"");
 
-            // Logos share an unshifted viewport.
-            foreach (var skin in new[] { "clean", "original" })
-            {
-                var markup = Regex.Match(loginHtml, "<svg[^>]*class=\"brand-symbol__" + skin + "\"[^>]*>.*?</svg>", RegexOptions.Singleline);
-                Assert.IsTrue(markup.Success, skin);
-                var svg = XElement.Parse(markup.Value);
-                Assert.AreEqual("0 0 48 48", svg.Attribute("viewBox")?.Value, skin);
-                Assert.AreEqual("48", svg.Element("use")?.Attribute("width")?.Value, skin);
-                Assert.AreEqual("48", svg.Element("use")?.Attribute("height")?.Value, skin);
-            }
+            // One mark for both skins, in an unshifted viewport; the browser tab shows it too.
+            Assert.AreEqual(1, Regex.Matches(loginHtml, "brand-symbol__mark").Count);
+            StringAssert.Contains(loginHtml, "rel=\"icon\"");
+            var markup = Regex.Match(loginHtml, "<svg[^>]*class=\"brand-symbol__mark\"[^>]*>.*?</svg>", RegexOptions.Singleline);
+            Assert.IsTrue(markup.Success);
+            var svg = XElement.Parse(markup.Value);
+            Assert.AreEqual("0 0 48 48", svg.Attribute("viewBox")?.Value);
+            Assert.AreEqual("48", svg.Element("use")?.Attribute("width")?.Value);
+            Assert.AreEqual("48", svg.Element("use")?.Attribute("height")?.Value);
 
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(loginHtml, ("Email", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
 
             // Folder moves preserve URLs.
-            foreach (var path in new[] { "/", "/Details/101", "/Watchlist", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
+            foreach (var path in new[] { "/", "/Details/101", "/Favorites", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path);
@@ -302,6 +299,11 @@ namespace Jularr.Backend.Tests
                     StringAssert.Contains(html, "data-set-mode=\"system\"");
                 }
             }
+
+            // The watchlist is Favorites now; old links keep their choices.
+            using var watchlist = await host.SendAsync(HttpMethod.Get, "/Watchlist?type=movies&sort=Title");
+            Assert.AreEqual(HttpStatusCode.MovedPermanently, watchlist.StatusCode);
+            Assert.AreEqual("/Favorites?type=movies&sort=Title", watchlist.Headers.Location?.OriginalString);
 
             // Player routes take canonical asset identities.
             using var player = await host.SendAsync(HttpMethod.Get, "/Player/101");

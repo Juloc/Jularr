@@ -25,6 +25,7 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                     unit."ReleasedOn" AS "Day",
                     work."Id" AS "WorkId",
                     work."MediaTypeId",
+                    visible."MediaSubtypeId",
                     visible."Title" AS "Title",
                     (
                         SELECT
@@ -51,7 +52,8 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                         WHERE
                             asset."WorkUnitId" = unit."Id"
                     ) AS "IsAvailable",
-                    entry."WorkId" IS NOT NULL AS "IsWatchlisted"
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted",
+                    EXISTS (SELECT 1 FROM "AcquisitionRequests" AS asked WHERE asked."WorkId" = work."Id" AND asked."RequestedByProfileId" = @ProfileId) AS "IsRequested"
                 FROM
                     "WorkUnits" AS unit
                     JOIN "Works" AS work ON work."Id" = unit."WorkId"
@@ -74,6 +76,7 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                     work."ReleasedOn" AS "Day",
                     work."Id" AS "WorkId",
                     work."MediaTypeId",
+                    visible."MediaSubtypeId",
                     visible."Title" AS "Title",
                     (
                         SELECT
@@ -100,7 +103,8 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                         WHERE
                             asset."WorkId" = work."Id"
                     ) AS "IsAvailable",
-                    entry."WorkId" IS NOT NULL AS "IsWatchlisted"
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted",
+                    EXISTS (SELECT 1 FROM "AcquisitionRequests" AS asked WHERE asked."WorkId" = work."Id" AND asked."RequestedByProfileId" = @ProfileId) AS "IsRequested"
                 FROM
                     "Works" AS work
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id" AND NOT visible."IsHidden"

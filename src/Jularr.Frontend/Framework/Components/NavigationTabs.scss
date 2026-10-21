@@ -17,6 +17,27 @@
     // Keep native horizontal navigation.
     &::-webkit-scrollbar { display: none; }
 
+    // Separate small pills for filters of one list, without the shared capsule; they scroll sideways when they do not fit.
+    &--chips {
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+
+        .navigation-tabs__link {
+            min-height: 0;
+            padding: 8px 13px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            font-size: 11px;
+            font-weight: 710;
+            line-height: 1.35;
+
+            &:hover { border-color: var(--accent-line); background: var(--surface); color: var(--text); }
+            &--active, &--active:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+        }
+    }
+
     &__link {
         display: inline-flex;
         flex: none;

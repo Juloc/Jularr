@@ -15,8 +15,12 @@
 @use "../../Framework/Components/TimePicker";
 @use "../../Framework/Components/Tabs";
 @use "../../Framework/Components/NavigationTabs";
+@use "../../Framework/Components/LinkMenu";
 @use "../../Framework/SetupWizard";
 @use "../../Modules/Appearance/Theme";
+
+// The browser tab icon is a build asset; this reference makes the build fingerprint and publish it (layout: Assets.ImageUrl).
+:root { --jularr-favicon: url("./favicon.svg"); }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { min-height: 100%; }

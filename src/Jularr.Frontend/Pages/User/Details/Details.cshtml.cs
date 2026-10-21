@@ -51,6 +51,7 @@ namespace Jularr.Frontend.Pages.User.Details
         protected override void Define(Page page)
         {
             page.Title("details.title", _work?.CanonicalTitle);
+            page.Parent("nav.library", "/Library");
             page.Navigation("nav.home");
             page.Asset("Pages/User/Details/Details.entry.scss");
             if (_recommendations.Count > 0 || _related.Count > 0)
@@ -77,7 +78,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
                     work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null, work.Genres, work.Studio,
                     work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }
-                    .Where(part => part is not null)), work.Overview, actionKey, actionHref));
+                    .Where(part => part is not null)), work.Overview, actionKey, actionHref, titleInBreadcrumb: true));
 
                 // Each author, artist or studio leads to their other titles.
                 var creators = new List<IUiComponent>();
@@ -100,7 +101,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 actions.Add(new Form<UpdateWatchlistDataV1>(form =>
                 {
                     form.Hidden(item => item.IsWatchlisted);
-                    form.Submit(work.IsWatchlisted ? "media.watchlist.remove" : "media.watchlist.add");
+                    form.Submit(work.IsWatchlisted ? "media.favorites.remove" : "media.favorites.add");
                 }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture), csrf,
                     new UpdateWatchlistDataV1(!work.IsWatchlisted), FormError));
 
@@ -132,10 +133,11 @@ namespace Jularr.Frontend.Pages.User.Details
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : FormError));
                 }
 
-                // The profile's request shows its state and leads to the requests.
+                // The profile's request names its phase live and leads to the requests.
                 if (work.RequestStatusTypeId is { } requested && texts.CanRequest())
                 {
-                    actions.Add(new A(new Text("request.state." + requested)).Class("button").Attribute("href", "/Requests"));
+                    actions.Add(new LivePhaseButton(LiveKeys.RequestOfWork(work.Id), requested, "/Requests"));
+                    page.Asset("Framework/Components/LiveProgress.entry.ts");
                 }
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
@@ -234,7 +236,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 .Class("details-languages-card");
         }
 
-        // A known title also goes on the watchlist from its card.
+        // A known title also goes into the favorites from its card.
         private IUiComponent Recommendation(DiscoverItemV1 item)
         {
             var card = new MediaCard(assets, item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)

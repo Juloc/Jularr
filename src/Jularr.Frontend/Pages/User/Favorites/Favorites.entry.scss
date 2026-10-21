@@ -1,0 +1,430 @@
+@use "../../../Framework/Components/MediaCard";
+@use "../../../Framework/Components/CapsuleBar";
+@use "../../../Framework/Components/ChoiceGroup";
+
+// Controls that need script show once it has run.
+html:not(.favorites-ready) {
+    [data-favorites-bulk-toggle], [data-favorites-layout], .favorites-chip, .favorites-heart__manage, .favorites-entry__select { display: none; }
+}
+
+// The collections as cards with the covers of their first titles.
+.favorites-collections {
+    display: flex;
+    gap: 13px;
+    padding: 3px 2px 10px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+}
+
+.favorites-collection {
+    position: relative;
+    flex: 1 0 206px;
+    min-width: 190px;
+    max-width: 340px;
+    min-height: 116px;
+    scroll-snap-align: start;
+
+    &__card {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 116px;
+        padding: 15px;
+        overflow: hidden;
+        isolation: isolate;
+        border: 1px solid var(--accent-line);
+        border-radius: 20px;
+        background: var(--surface);
+        color: var(--text);
+        text-decoration: none;
+
+        &:hover { border-color: var(--accent); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        &--current, &--current:hover { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    }
+
+    &--all &__card {
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, white));
+        color: var(--accent-contrast);
+    }
+
+    &__info {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-start;
+        min-width: 0;
+        max-width: 50%;
+        height: 100%;
+
+        strong { font-size: 15px; overflow-wrap: anywhere; }
+        small { color: var(--muted); font-size: 11px; }
+    }
+
+    &--all &__info small { color: inherit; }
+
+    &__posters {
+        position: absolute;
+        top: 21px;
+        right: 10px;
+        bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        width: 52%;
+        min-width: 0;
+        pointer-events: none;
+    }
+
+    &__poster {
+        flex: none;
+        width: 47px;
+        height: 72px;
+        margin-left: -25px;
+        overflow: hidden;
+        border: 2px solid var(--surface);
+        border-radius: 9px;
+        background: var(--accent-soft);
+        box-shadow: 0 5px 13px rgb(23 17 44 / 19%);
+        transform: rotate(4deg);
+
+        &:nth-child(even) { transform: rotate(-5deg) translateY(4px); }
+        .media-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    .button.favorites-collection__edit {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        z-index: 2;
+        width: 29px;
+        min-height: 29px;
+        opacity: 0;
+        color: var(--muted);
+
+        .ui-icon { width: 15px; height: 15px; }
+        &:hover { color: var(--accent-text); }
+    }
+
+    &:hover .favorites-collection__edit, &:focus-within .favorites-collection__edit { opacity: 1; }
+    @media (hover: none) { .button.favorites-collection__edit { opacity: 1; } }
+
+    &__new {
+        display: flex;
+        flex: 0 0 110px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 116px;
+        padding: 0 10px;
+        border: 1.5px dashed var(--accent-line);
+        border-radius: 20px;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 720;
+        text-align: center;
+        cursor: pointer;
+
+        .ui-icon { width: 24px; height: 24px; }
+        &:hover { border-color: var(--accent); background: var(--surface-hover); color: var(--accent-text); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    }
+}
+
+// What to select, how the titles are ordered and laid out.
+html.favorites-ready .favorites-heart__toggle { display: none; }
+
+.favorites-notice {
+    margin: 0 0 12px;
+    padding: 10px 16px;
+    border: 1px solid var(--accent-line);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.favorites-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 0 4px;
+
+    &__settings { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+
+    &__select[aria-pressed="true"] &__label--off, &__select[aria-pressed="false"] &__label--on { display: none; }
+
+    // The icon shows the layout a click leads to.
+    &__layout.button { width: 36px; min-height: 36px; .ui-icon:last-child { display: none; } }
+}
+
+html[data-favorites-layout="list"] .favorites-toolbar__layout .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
+
+// Actions on the selected titles.
+.favorites-bulk {
+    position: sticky;
+    top: 12px;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 17px;
+    padding: 11px 13px;
+    border: 1px solid var(--accent-line);
+    border-radius: 15px;
+    background: var(--accent-soft);
+    box-shadow: var(--shadow);
+
+    &[hidden] { display: none; }
+    &__status, &__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    form { margin: 0; }
+}
+
+.favorites-empty {
+    margin: 0;
+    padding: 44px 20px;
+    border: 1px dashed var(--accent-line);
+    border-radius: 20px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.favorites-grid {
+    align-items: start;
+
+    @media (max-width: 760px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px 12px;
+    }
+}
+
+// A card with the collections it is in.
+.favorites-entry {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 260px;
+    min-width: 0;
+
+    .media-card { max-width: none; }
+
+    // Where the profile stands with the title, over the cover.
+    &__badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 3;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: var(--accent-contrast);
+        font-size: 10px;
+        font-weight: 760;
+        pointer-events: none;
+    }
+
+    // Selecting covers the whole card.
+    &__select {
+        position: absolute;
+        top: 0;
+        right: 0;
+        left: 0;
+        z-index: 6;
+        display: none;
+        align-items: flex-start;
+        justify-content: flex-start;
+        aspect-ratio: 2 / 3;
+        padding: 10px;
+        border: 0;
+        border-radius: 24px;
+        background: transparent;
+        color: transparent;
+        cursor: pointer;
+
+        .ui-icon { width: 28px; height: 28px; padding: 5px; border: 2px solid var(--surface); border-radius: 50%; background: rgb(25 25 42 / 70%); }
+        &[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--accent); }
+        &[aria-pressed="true"] .ui-icon { background: var(--accent); color: var(--accent-contrast); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    }
+}
+
+.favorites--bulk {
+    .favorites-entry__select { display: flex; }
+    .media-card__bookmark, .favorites-chip, .favorites-entry__badge { visibility: hidden; }
+}
+
+.favorites-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 5px;
+    max-width: 100%;
+    min-height: 28px;
+    padding: 4px 10px;
+    border: 1px dashed var(--accent-line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+
+    &--set { border-color: transparent; background: var(--accent-soft); color: var(--accent-text); }
+    &:hover { border-color: var(--accent); color: var(--accent-text); }
+    &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+}
+
+// The same titles as rows.
+html[data-favorites-layout="list"] .favorites-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
+    gap: 10px;
+    justify-items: stretch;
+
+    .favorites-entry {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        max-width: none;
+        padding: 10px;
+        border: 1px solid var(--accent-line);
+        border-radius: 17px;
+        background: var(--surface);
+    }
+
+    .media-card { flex: 1; flex-direction: row; align-items: center; gap: 13px; width: auto; }
+    .media-card__surface { flex: none; width: 74px; border-radius: 10px; }
+    .media-card__details { min-height: 0; padding: 0; }
+    .media-card__bookmark { top: 3px; right: 3px; .button { width: 26px; min-height: 26px; .ui-icon { width: 13px; height: 13px; } } }
+    .favorites-entry__badge { top: 14px; left: 14px; padding: 3px 7px; font-size: 9px; }
+    .favorites-chip { flex: none; max-width: 40%; }
+    .favorites-entry__select { bottom: 0; aspect-ratio: auto; border-radius: 17px; }
+}
+
+// One popover for every title; a bottom sheet on phones.
+.favorites-picker {
+    width: min(318px, calc(100vw - 20px));
+    max-height: min(72dvh, 500px);
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--accent-line);
+    border-radius: 20px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 19px 60px rgb(30 18 65 / 24%);
+
+    &:popover-open { display: flex; }
+    &::backdrop { background: transparent; }
+
+    @supports (position-area: bottom) {
+        position-area: bottom span-right;
+        position-try-fallbacks: flip-block, flip-inline;
+        justify-self: start;
+        align-self: start;
+        margin: 8px 0;
+    }
+
+    @media (max-width: 760px) {
+        position-area: none;
+        inset: auto 0 0;
+        justify-self: auto;
+        align-self: auto;
+        width: 100vw;
+        max-height: 80dvh;
+        margin: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        border-radius: 22px 22px 0 0;
+
+        &::backdrop { background: rgb(20 16 38 / 50%); }
+    }
+
+    form { display: flex; flex: 1; flex-direction: column; min-height: 0; margin: 0; }
+
+    &__heading {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 15px 16px 12px;
+        border-bottom: 1px solid var(--border);
+
+        strong { font-size: 16px; }
+        span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+    }
+
+    &__options { flex: 1; min-height: 0; max-height: 225px; padding: 9px 10px; overflow-y: auto; @media (max-width: 760px) { max-height: 30dvh; } }
+    &__none { margin: 0; padding: 8px; color: var(--muted); font-size: 12px; }
+
+    &__option {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 44px;
+        padding: 6px 7px;
+        border-radius: 12px;
+        cursor: pointer;
+
+        &:hover { background: var(--surface-hover); }
+        input { flex: none; width: 16px; height: 16px; accent-color: var(--accent); }
+        .ui-icon { flex: none; color: var(--accent-text); }
+    }
+
+    &__text { display: flex; flex-direction: column; min-width: 0; gap: 2px; strong { font-size: 12px; overflow-wrap: anywhere; } small { color: var(--muted); font-size: 10px; } }
+
+    &__create {
+        display: flex;
+        gap: 8px;
+        padding: 10px 15px;
+        border-block: 1px solid var(--border);
+
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--field);
+            color: var(--text);
+            font: inherit;
+            font-size: 12px;
+
+            &:focus { outline: none; border-color: var(--accent); }
+        }
+
+        .button { flex: none; width: 34px; min-height: 34px; border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+    }
+
+    &__footer { display: flex; align-items: center; gap: 8px; padding: 11px 14px; > :last-child { margin-inline-start: auto; } }
+    &__remove { border: 0; color: var(--danger); }
+}
+
+[data-favorites-remove][hidden] { display: none; }
+
+// Deleting is its own, last block of the edit panel.
+.favorites-edit__delete {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+
+    p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+    form { margin: 0; }
+}

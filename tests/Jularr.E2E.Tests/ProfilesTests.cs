@@ -20,6 +20,7 @@ namespace Jularr.E2E.Tests
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
             await using var owner = await BrowserSession.StartAsync(jularr);
@@ -83,7 +84,7 @@ namespace Jularr.E2E.Tests
                 // The user's request waits for the Owner; once approved it is searched, downloaded and arrives.
                 await Steps.RequestAsync(visitor, "Bunny", FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
-                await Assertions.Expect(visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Waiting for approval");
+                await Assertions.Expect(visitor.Locator(".request-row", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Waiting for approval");
                 await page.GotoAsync("/Admin/Requests");
                 await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).Locator("form")
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
@@ -93,7 +94,7 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, film);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
-                await Assertions.Expect(visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
+                await Assertions.Expect(visitor.Locator(".request-row", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Available");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), owner.Problems.ToArray());
                 CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.ToArray());

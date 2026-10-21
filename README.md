@@ -18,6 +18,15 @@ Nächste fachliche Schritte: [Backend-Slices](docs/BACKEND_NEXT.md) (Plan, keine
 Instanz-Einrichtung: [vier Schritte, Presets und Owner](docs/INSTANCE_SETUP.md).
 Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
+## Reader und Vorlesen
+
+Der Reader nutzt standardmäßig Gerätestimmen. Optionale neuronale Stimmen laufen
+lokal im Browser: Der Owner aktiviert ein Modell in der Modulverwaltung; auf dem
+Gerät wird es ausdrücklich installiert, die Stimmwahl im Profil gespeichert.
+Keine automatische Modellinstallation und keine serverseitige Sprachsynthese.
+[Verhalten, Prüfungen und offene Anschlüsse](docs/SPEECH.md),
+[Lizenzumfang des Browser-Clients](src/Jularr.Frontend/BROWSER-LICENSE.md).
+
 ## Docker Compose
 
 [compose.yaml](compose.yaml) braucht nur Image, Port und Volumes; `.env.example` nach `.env`
@@ -173,8 +182,8 @@ Der [Setup Wizard](docs/INSTANCE_SETUP.md) bündelt Owner und Sprache, Module, B
 
 `/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
 den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`
-und `/Watchlist` lesen persistierte Medien und bearbeiten ausschließlich die
-Merkliste des aktiven Profils. `/Admin/Requests/Users` liest das vorhandene
+und `/Favorites` (früher `/Watchlist`) lesen persistierte Medien und bearbeiten ausschließlich die
+Favoriten und Sammlungen des aktiven Profils. `/Admin/Requests/Users` liest das vorhandene
 Kontenverzeichnis; Quoten/Regelzuweisungen sind noch nicht implementiert.
 Diese Grundlage benötigt zusätzlich die frische [Media-Baseline](database/Media.sql).
 

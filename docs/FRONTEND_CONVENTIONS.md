@@ -133,6 +133,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Owner's decision 15 Oct (look overridden 20 Oct by the mockups): no grey surfaces. Panels, tables and fields are white
   (dark surface in dark mode) or the soft lavender `--field`, outlined by the one quiet 1px `--border`; section titles are bold in the
   text colour, table heads are muted bold on `--field`; accent tints (`--accent-soft`, `--accent-outline`) mark hover and selection only.
+  The shell (sidebar, header, search, floating bar) separates with the same 1px line instead of shadows or filled panels; the current place
+  uses `--accent-soft` with `--accent-text`.
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
@@ -181,6 +183,15 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   hero title, banner, card heading, or description at the top of the content.
   No automatic "page description" below the breadcrumb. Standalone unauthenticated
   pages without the shared Topbar (e.g. Login) may use a semantic `H1`.
+- Owner's decision 20 Oct: the breadcrumb sits top-left in the header on every page as Area > Group > Page > Title, every
+  part a link except the last. [Shell.cs](../src/Jularr.Frontend/Pages/Shared/Shell.cs) adds the area (Admin) and the sidebar
+  group itself; a page names only what lies between with `page.Parent(key, href)` / `page.ParentName(name, href)` and its
+  item as `page.Title(key, name)`. Narrow headers show only the last two parts; a longer trail scrolls, never wraps.
+  Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
+- Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration areas, all open; the user
+  entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
+  The Instance area exists in admin mode only. On a narrow header a breadcrumb part with sub-pages opens them as a menu.
+  The header is one row at every width: the search shrinks to its icon on a phone, the trail scrolls.
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations
   are shown only for meaningful tasks or failure/help states, never as filler.
@@ -206,13 +217,17 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
 - Discover separates media-type scope, browse view and filters. Its All
   landing has a shared Hero/Continue followed by per-enabled-type shelves
   in the approved order; only provider-supported rankings may appear. A ranking
-  opens from its shelf's See all and names itself with a way back (one tab row).
-  Cards use the shared cover presentation and Backend-supplied state below. The
-  header owns the **one** global Search and Filter entry; do not add another
-  search/filter field inside Discover. User/profile ordering is respected.
+  opens from its shelf's See all and names itself with a way back. Owner's mockup of 19 Oct
+  ("capsules"): one capsule row (All, then Watch, Read, Hear and Game with their types; several
+  types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
+  as one carousel (continued titles first, then each type's best by rank; the device keeps how many
+  and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
+  global Search; do not add another search field inside Discover. The Filter drawer narrows by
+  type, availability and release year only: no genre, language, rating or provider facets exist yet.
+  Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.
-- Apply the same module/profile visibility gate to Watchlist, Library and
+- Apply the same module/profile visibility gate to Favorites, Library and
   every other media-type navigation, plus playback routes/actions when the
   instance Playback module is disabled.
 
@@ -384,7 +399,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   No trailer identifier means no preview request. Production list contracts still
   lack trailer IDs; workshop samples are explicitly labeled, not library records.
 - Bookmark mutations use the existing Details POST, typed Form, antiforgery and
-  Backend watchlist service. Return only to validated local URLs. If a list does not
+  Backend watchlist service (the page is called Favorites). Return only to validated local URLs. If a list does not
   supply current membership, the icon links to management in Details, not a false toggle.
   Provider-only titles without a canonical Work ID have no bookmark action yet.
   Shelves retain native touch/keyboard scrolling and local chevrons, no visible
@@ -404,9 +419,11 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   treatment. Both consume the same central tokens and components, never separate pages.
 - Original's default seed is Jularr red (`#c8102e`); Clean's is Jularr purple
   (`#813eff`, the mockups' accent; its palette is the mockups' reference palette, other seeds derive theirs). Derive light/dark surfaces, readable accent labels and artwork hue
-  from one selected seed through the shared Appearance palette. Theme artwork,
-  the mascot and Jularr marks follow the accent; media artwork, provider logos
-  and semantic status colors do not. Current choices are device-local; do not
+  from one selected seed through the shared Appearance palette. Theme artwork
+  and the mascot follow the accent; media artwork, provider logos
+  and semantic status colors do not. The Jularr mark is the owner's J in a broken ring, one
+  single-colour shape ([brand-mark.svg](../src/Jularr.Frontend/Pages/Shared/brand-mark.svg), the text colour in both skins and
+  brightnesses; the tab icon is [favicon.svg](../src/Jularr.Frontend/Assets/Shared/favicon.svg)). Current choices are device-local; do not
   imply implemented instance/profile policy or persistence.
 - Development-only design workshops may show explicitly labeled sample data and
   disabled component states. They must not start library playback or pretend to

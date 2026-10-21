@@ -26,6 +26,7 @@ using Jularr.Frontend.Localization;
 using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Jularr.Backend.Service.Core.Localization;
 
 namespace Jularr.Backend.Tests
@@ -396,7 +397,7 @@ namespace Jularr.Backend.Tests
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
             public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null,
-                Action<IServiceCollection>? services = null)
+                Action<IServiceCollection>? services = null, Action<IEndpointRouteBuilder>? endpoints = null)
             {
                 // Catalog baselines are installed together, as in a fresh installation; Razor pages need all of them.
                 library |= media || storage || razor;
@@ -499,6 +500,9 @@ namespace Jularr.Backend.Tests
                 }
                 var plex = new PlexHandler();
                 builder.Services.AddHttpClient<PlexClient>().ConfigurePrimaryHttpMessageHandler(() => plex);
+
+                // Tests never reach a provider's image server; a test of covers names its own.
+                builder.Services.AddHttpClient<Jularr.Integrations.Logic.Media.CoverClient>().ConfigurePrimaryHttpMessageHandler(() => new NoImages());
                 services?.Invoke(builder.Services);
 
                 var app = builder.Build();
@@ -522,8 +526,21 @@ namespace Jularr.Backend.Tests
                     app.MapRazorPages();
                 }
                 app.MapJularrServices();
+                endpoints?.Invoke(app);
                 await app.StartAsync();
                 return new Host(fixture, app, plex);
+            }
+
+            // A response that stays open: the caller reads its body as it arrives and disposes it to end it.
+            public async Task<HttpResponseMessage> OpenStreamAsync(string path, CancellationToken cancellationToken = default)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, path);
+                if (Cookies.Count > 0)
+                {
+                    request.Headers.Add("Cookie", string.Join("; ", Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+                }
+
+                return await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             }
 
             public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? data = null)
@@ -594,6 +611,11 @@ namespace Jularr.Backend.Tests
                     Directory.Delete(data, true);
                 }
             }
+        }
+
+        private sealed class NoImages : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
         internal sealed class PlexHandler : HttpMessageHandler

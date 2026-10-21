@@ -12,7 +12,12 @@ namespace Jularr.E2E.Tests
         {
             using var folders = new Folders("Series");
             await using var fakes = await FakeServices.StartAsync(folders.Downloads);
-            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Providers:Tmdb"] = fakes.Tmdb3.ToString(), ["Storage:LocalPaths:0"] = folders.Library });
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
             await using var session = await BrowserSession.StartAsync(jularr);
             var page = session.Page;
 
@@ -23,11 +28,19 @@ namespace Jularr.E2E.Tests
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Series", "Series"));
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
 
+                // Adding the title stored its poster and backdrop; the page shows them from Jularr's own address and never from the provider.
+                Assert.IsTrue(fakes.ImageRequests >= 2);
+
                 // The wanted page of a series leads to the title's page; the breadcrumb names the list it belongs to.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
                 StringAssert.Contains(new Uri(page.Url).AbsolutePath, "/Admin/Works/");
                 await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = FakeServices.SeriesTitle, Level = 1 })).ToBeVisibleAsync();
-                await Assertions.Expect(page.Locator(".app-header-location a", new() { HasText = "Works" })).ToBeVisibleAsync();
+                var cover = page.Locator("img.media-image[src^='/api/v1/covers/']");
+                await Assertions.Expect(cover.First).ToBeVisibleAsync();
+                Assert.IsTrue(await cover.First.EvaluateAsync<bool>("image => image.complete && image.naturalWidth > 0"), "The stored cover did not load.");
+                Assert.AreEqual(0, await page.Locator("img[src*='image.tmdb.org']").CountAsync());
+                Assert.IsTrue(fakes.ImageRequests >= 2);
+                await Assertions.Expect(page.Locator(".app-header-location a.breadcrumb__link", new() { HasText = "Works" })).ToBeVisibleAsync();
                 foreach (var tab in new[] { "Seasons", "History", "Metadata" })
                 {
                     await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = tab })).ToBeVisibleAsync();

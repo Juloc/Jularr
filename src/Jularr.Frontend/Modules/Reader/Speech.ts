@@ -1,5 +1,7 @@
 import { DeviceSession, type SpeechItem, type SpeechState } from '../Speech/DeviceSession';
 import { deviceVoice, initializeSpeechSettings, preferenceFor, type SpeechPreferences } from '../Speech/Preferences';
+import { installedModels } from '../Speech/ModelStore';
+import type { NeuralSession } from '../Speech/NeuralSession';
 
 // Text coordinates stay on canonical content. Highlights never wrap or mutate its nodes.
 export function speechRange(source: Range, start: number, length: number): Range | undefined {
@@ -30,10 +32,13 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const pause = reader.querySelector<HTMLButtonElement>('[data-speech-pause]')!;
     const status = reader.querySelector<HTMLElement>('[data-speech-status]')!;
     const synth = globalThis.speechSynthesis;
-    if (!synth || typeof SpeechSynthesisUtterance === 'undefined' || !reader.dataset.speechPreferences) return;
+    if (!reader.dataset.speechPreferences) return;
     const preferences = JSON.parse(reader.dataset.speechPreferences) as SpeechPreferences;
     let manualUntil = 0;
     let preparing = 0;
+    let session: DeviceSession | NeuralSession | undefined;
+    let pendingContext: AudioContext | undefined;
+    let neuralModel: string | undefined;
     const highlights = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
     const HighlightConstructor = (globalThis as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
     let activeWord: Range | undefined;
@@ -42,20 +47,25 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const changed = (state: SpeechState) => {
         reader.dataset.speechState = state;
         transport.hidden = state === 'idle';
-        toggle.setAttribute('aria-pressed', String(state === 'speaking' || state === 'paused'));
+        toggle.setAttribute('aria-pressed', String(state === 'speaking' || state === 'paused' || state === 'loading'));
         pause.setAttribute('aria-pressed', String(state === 'paused'));
         pause.setAttribute('aria-label', state === 'paused' ? reader.dataset.speechResumeLabel! : reader.dataset.speechPauseLabel!);
-        status.textContent = state === 'failed' ? reader.dataset.speechFailedLabel! : state === 'paused' ? reader.dataset.speechPausedLabel!
+        status.textContent = state === 'loading' ? reader.dataset.speechLoadingLabel! : state === 'failed' ? reader.dataset.speechFailedLabel! : state === 'paused' ? reader.dataset.speechPausedLabel!
             : state === 'speaking' ? reader.dataset.speechSpeakingLabel! : '';
         if (state === 'idle' || state === 'failed') clear();
     };
     const paintWord = () => {
         if (!activeWord || !highlights || !HighlightConstructor || reader.dataset.bookState && reader.dataset.bookState !== 'idle') return;
         const ranges = [activeWord];
-        const block = activeWord.startContainer.parentElement?.closest<HTMLElement>('[data-b]');
-        if (block && block.contains(activeWord.endContainer)) {
-            const before = document.createRange(); before.selectNodeContents(block); before.setEnd(activeWord.startContainer, activeWord.startOffset);
-            const from = before.toString().length, to = from + activeWord.toString().length;
+        const firstBlock = activeWord.startContainer.parentElement?.closest<HTMLElement>('[data-b]');
+        const blocks = firstBlock && firstBlock.contains(activeWord.endContainer) ? [firstBlock]
+            : Array.from(content.querySelectorAll<HTMLElement>('[data-b]')).filter(block => !block.querySelector('[data-b]') && activeWord!.intersectsNode(block));
+        for (const block of blocks) {
+            const local = document.createRange(); local.selectNodeContents(block);
+            if (block.contains(activeWord.startContainer)) local.setStart(activeWord.startContainer, activeWord.startOffset);
+            if (block.contains(activeWord.endContainer)) local.setEnd(activeWord.endContainer, activeWord.endOffset);
+            const before = document.createRange(); before.selectNodeContents(block); before.setEnd(local.startContainer, local.startOffset);
+            const from = before.toString().length, to = from + local.toString().length;
             const text = block.textContent ?? '';
             for (const ink of Array.from(reader.querySelectorAll<HTMLElement>(`[data-print-block="${block.dataset.b}"]`))) {
                 const start = Number(ink.dataset.printStart), end = Number(ink.dataset.printEnd);
@@ -69,14 +79,16 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
         }
         highlights.set('reader-speech-word', new HighlightConstructor(...ranges));
     };
-    const session = new DeviceSession(synth, text => new SpeechSynthesisUtterance(text), changed, (item, offset, length) => {
+    const highlight = (item: import('../Speech/DeviceSession').SpeechItem, offset: number, length: number) => {
         const range = speechRange(item.range, offset, length);
         if (!range) return;
         activeWord = range;
         const box = range.getClientRects()[0], bounds = content.getBoundingClientRect();
         if (box && Date.now() >= manualUntil && (box.left < bounds.left - 1 || box.right > bounds.right + 1 || box.top < bounds.top || box.bottom > bounds.bottom)) reveal(range);
         paintWord();
-    });
+    };
+    const device = synth && typeof SpeechSynthesisUtterance !== 'undefined'
+        ? new DeviceSession(synth, text => new SpeechSynthesisUtterance(text), changed, highlight) : undefined;
 
     function* items(): Generator<SpeechItem> {
         const selection = getSelection();
@@ -95,11 +107,15 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
         }
     }
 
-    const stop = () => { preparing++; session.stop(); };
+    const stop = () => {
+        preparing++; session?.stop(); neuralModel = undefined;
+        if (pendingContext && pendingContext.state !== 'closed') void pendingContext.close().catch(() => {});
+        pendingContext = undefined;
+    };
     toggle.disabled = false;
     toggle.addEventListener('click', async () => {
-        if (session.state === 'speaking') { session.pause(); return; }
-        if (session.state === 'paused') { session.resume(); return; }
+        if (session?.state === 'speaking' || session?.state === 'loading') { session.pause(); return; }
+        if (session?.state === 'paused') { session.resume(); return; }
         const version = ++preparing;
         if (reader.dataset.translationState === 'loading') {
             changed('failed'); status.textContent = reader.dataset.speechTranslationLabel!; return;
@@ -107,17 +123,35 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
         const chosen = reader.dataset.readingLanguage;
         const language = chosen && chosen !== 'original' && reader.dataset.translationState !== 'failed' ? chosen : reader.dataset.speechOriginalLanguage!;
         const preference = preferenceFor(preferences, language);
-        if (preference?.providerTypeId === 2) { changed('failed'); status.textContent = reader.dataset.speechUnavailableLabel!; return; }
+        if (preference?.providerTypeId === 2) {
+            try {
+                // Create/resume during the user's gesture, before asynchronous imports or cache reads.
+                const context = pendingContext = new AudioContext();
+                void context.resume().catch(() => {});
+                const [{ NeuralSession }, models] = await Promise.all([import('../Speech/NeuralSession'), installedModels()]);
+                if (version !== preparing) { if (context.state !== 'closed') void context.close(); return; }
+                const model = models.find(model => model.id === preference.modelId && model.voice === preference.voiceId
+                    && model.language.toLowerCase().split('-')[0] === language.toLowerCase().split('-')[0]);
+                if (!model) { stop(); changed('failed'); status.textContent = reader.dataset.speechUnavailableLabel!; return; }
+                session?.stop();
+                session = new NeuralSession(changed, highlight);
+                neuralModel = model.id; pendingContext = undefined;
+                session.start(items(), { rate: preferences.rate, pitch: preferences.pitch, volume: preferences.volume, language }, model, context);
+            } catch { if (version === preparing) { stop(); changed('failed'); } }
+            return;
+        }
+        if (!device || !synth) { changed('failed'); return; }
         if (!synth.getVoices().length) await new Promise<void>(resolve => {
             const ready = () => { synth.removeEventListener('voiceschanged', ready); clearTimeout(timer); resolve(); };
             const timer = window.setTimeout(ready, 1500);
             synth.addEventListener('voiceschanged', ready, { once: true });
         });
         if (version !== preparing) return;
+        session?.stop(); session = device; neuralModel = undefined;
         session.start(items(), { rate: preferences.rate, pitch: preferences.pitch, volume: preferences.volume, language,
             voice: deviceVoice(synth.getVoices(), language, preference?.voiceId ?? null) });
     });
-    pause.addEventListener('click', () => session.state === 'paused' ? session.resume() : session.pause());
+    pause.addEventListener('click', () => session?.state === 'paused' ? session.resume() : session?.pause());
     reader.querySelector('[data-speech-stop]')!.addEventListener('click', stop);
     reader.querySelectorAll('[data-language-choice]').forEach(button => button.addEventListener('click', stop));
     const manual = () => { manualUntil = Date.now() + 3000; };
@@ -128,7 +162,8 @@ export function initializeReadAloud(reader: HTMLElement, content: HTMLElement, r
     const prints = new MutationObserver(paintWord);
     prints.observe(reader.querySelector('.reader-book')!, { childList: true, subtree: true });
     prints.observe(reader, { attributes: true, attributeFilter: ['data-book-state'] });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { preparing++; session.pause(); } });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { preparing++; session?.pause(); if (pendingContext) stop(); } });
+    window.addEventListener('speech-model-removed', event => { if ((event as CustomEvent<string>).detail === neuralModel) stop(); });
     window.addEventListener('pagehide', stop);
     changed('idle');
 }
