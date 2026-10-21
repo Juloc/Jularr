@@ -95,7 +95,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             .Text(item => item.CreatedAt, "operation.created");
 
         // The work first, the release below it.
-        private IUiComponent Job(ActivityItemV1 item) => item.WorkId is { } workId
+        private IUiComponent Job(ActivityItemV1 item) => item.OperationTypeId == OperationType.Job ? new Div(new Text("jobs.job." + item.Title)).Class("activity-job") : item.WorkId is { } workId
             ? new Div(new A(new Truncated(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), new Div(new Truncated(item.Title)).Class("activity-job__release")).Class("activity-job")
             : new Div(new Truncated(item.Title)).Class("activity-job");
 
@@ -143,7 +143,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private IUiComponent RowActions(ActivityItemV1 item, string? csrf)
         {
             var actions = new List<IUiComponent>();
-            if (item.OperationStatusTypeId == OperationStatusType.Failed)
+            // A background job runs again by itself; the Jobs page shows it.
+            if (item.OperationStatusTypeId == OperationStatusType.Failed && item.OperationTypeId != OperationType.Job)
             {
                 actions.Add(IconAction(item, "Retry", "sync", "activity.retry", csrf));
             }
@@ -194,7 +195,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             return new Div(
                 new A(new ValueText("")).Class("activity-drawer__scrim").Attribute("href", close).Attribute("tabindex", "-1").Attribute("aria-hidden", "true"),
                 new Aside(
-                    new Header(new Div(new H2(new ValueText(item.WorkTitle ?? item.Title)).Attribute("id", "activity-drawer-title"), new Span(new Text("operation.type." + item.OperationTypeId)).Class("activity-drawer__meta")),
+                    new Header(new Div(new H2(item.OperationTypeId == OperationType.Job ? new Text("jobs.job." + item.Title) : new ValueText(item.WorkTitle ?? item.Title)).Attribute("id", "activity-drawer-title"), new Span(new Text("operation.type." + item.OperationTypeId)).Class("activity-drawer__meta")),
                         new A(new Icon("close", assets, 18)).Class("button button--icon").Attribute("href", close).TextAttribute("aria-label", "common.close")).Class("activity-drawer__head"),
                     new Div([.. body]).Class("activity-drawer__body")).Class("activity-drawer").Attribute("role", "dialog").Attribute("aria-modal", "true").Attribute("aria-labelledby", "activity-drawer-title"))
                 .Class("activity-drawer-host");
@@ -203,6 +204,14 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         // A failure is retried or put aside; a waiting download is read again, assigned by hand or taken out; a running one is told to wait or taken out.
         private IEnumerable<IUiComponent> PanelActions(ActivityItemV1 item, string? csrf)
         {
+            // A background job runs again by itself; the Jobs page shows it.
+            if (item.OperationTypeId == OperationType.Job)
+            {
+                yield return new A(new Text("jobs.open")).Class("button").Attribute("href", "/Admin/Jobs");
+                yield return Action(item, "Dismiss", "activity.dismiss", csrf);
+                yield break;
+            }
+
             if (item.OperationStatusTypeId == OperationStatusType.Failed)
             {
                 yield return Action(item, "Retry", "activity.retry", csrf);

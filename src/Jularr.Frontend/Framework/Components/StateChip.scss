@@ -26,8 +26,10 @@
 
     &--available,
     &--known,
-    &--watched { background: var(--success-soft); color: var(--success); }
+    &--watched,
+    &--idle { background: var(--success-soft); color: var(--success); }
     &--warning { background: var(--warning-soft); color: var(--warning); }
-    &--danger { background: var(--danger-soft); color: var(--danger); }
+    &--danger,
+    &--failed { background: var(--danger-soft); color: var(--danger); }
     &--info { background: var(--info-soft); color: var(--info); }
 }
