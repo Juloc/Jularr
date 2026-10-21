@@ -103,7 +103,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "name=\"apple-mobile-web-app-title\"");
             StringAssert.Contains(html, "name=\"apple-mobile-web-app-status-bar-style\"");
             StringAssert.Contains(html, "rel=\"apple-touch-icon\"");
-            StringAssert.Matches(html, new System.Text.RegularExpressions.Regex(@"<script type=""module"" src=""/build/assets/[^""]*pwa\.entry[^""]*\.js""></script>"));
+            StringAssert.Matches(html, new System.Text.RegularExpressions.Regex(@"<script src=""/build/assets/[^""]*pwa\.entry[^""]*\.js"" type=""module""></script>"));
         }
     }
 }
