@@ -260,7 +260,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             var work = await _metadata.ReadWorkAsync(connection, Parameters.MediaTypeId, Parameters.TmdbId, CancellationToken);
             var overlay = await DiscoverQueries.ReadOverlayAsync(Context, Parameters.MediaTypeId, [work.Id], Auth.ProfileId!.Value, CancellationToken);
             var result = new TmdbSearchResult(work.Id, work.Title, work.OriginalTitle, work.Year, work.Overview, work.PosterPath, work.BackdropPath);
-            return DiscoverQueries.ToItem(Parameters.MediaTypeId, result, overlay);
+            return DiscoverQueries.ToItem(Parameters.MediaTypeId, result, overlay, work.Details.TrailerKey);
         }
     }
 
@@ -387,6 +387,36 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             return await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+        }
+    }
+
+    // The description of a catalog title from what the local catalog keeps of it; no provider is asked.
+    [ServiceEndpoint("GET", "/api/v1/discover/preview")]
+    public sealed class ReadDiscoverPreviewV1 : UserService<ReadDiscoverPreviewParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DiscoverPreviewV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadDiscoverPreviewParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadDiscoverPreviewParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Title",
+                    work."Overview",
+                    work."ImageUrl" AS "PosterUrl",
+                    work."BackdropUrl"
+                FROM
+                    "ExternalWorks" AS work
+                WHERE
+                    work."Namespace" = @Namespace
+                    AND work."Value" = @ExternalId
+                    AND NOT work."IsAdult";
+                """;
+            sql.Parameters.Add(Parameters);
+            return await Context.ReadSql.ReadRequiredAsync<DiscoverPreviewV1>(sql, CancellationToken);
         }
     }
 
@@ -753,11 +783,11 @@ namespace Jularr.Backend.Service.User.Discover.V1
         // TMDB's average vote; nothing while nobody voted.
         private static decimal? Rating(double? voteAverage) => voteAverage is > 0 and <= 10 ? Math.Round((decimal)voteAverage.Value, 2) : null;
 
-        public static DiscoverItemV1 ToItem(MediaType mediaType, TmdbSearchResult result, IReadOnlyDictionary<int, DiscoverOverlayData> overlay)
+        public static DiscoverItemV1 ToItem(MediaType mediaType, TmdbSearchResult result, IReadOnlyDictionary<int, DiscoverOverlayData> overlay, string? trailerKey = null)
         {
             var known = overlay.GetValueOrDefault(result.Id);
             return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, TextLimit.Cut(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000),
-                known?.PosterUrl ?? TmdbClient.PosterUrl(result.PosterPath), known?.BackdropUrl ?? TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl, Rating(result.VoteAverage));
+                known?.PosterUrl ?? TmdbClient.PosterUrl(result.PosterPath), known?.BackdropUrl ?? TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl, Rating(result.VoteAverage), trailerKey);
         }
     }
 }

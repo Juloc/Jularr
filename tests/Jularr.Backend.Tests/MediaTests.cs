@@ -79,10 +79,10 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow("mediaTypeId=2", new long[] { 10 })]
-        [DataRow("mediaSubtypeId=1", new long[] { 20, 40 })]
-        [DataRow("mediaTypeId=3", new long[] { 30 })]
-        [DataRow("mediaSubtypeId=2", new long[] { 50 })]
+        [DataRow("mediaTypeIds=2", new long[] { 10 })]
+        [DataRow("mediaSubtypeIds=1", new long[] { 20, 40 })]
+        [DataRow("mediaTypeIds=3", new long[] { 30 })]
+        [DataRow("mediaSubtypeIds=2", new long[] { 50 })]
         [DataRow("", new long[] { 10, 20, 30, 40, 50 })]
         public async Task Library_Subtypes_LeaveTheirParentList(string filter, long[] expected)
         {
@@ -94,6 +94,38 @@ namespace Jularr.Backend.Tests
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?" + filter);
             var page = (await library.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!;
             CollectionAssert.AreEquivalent(expected, page.Items.Select(item => item.Id).ToArray());
+        }
+
+        [TestMethod]
+        public async Task Library_NarrowsByTypesAndYears_OrdersAndPagesTheCardsOfOnePage()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES
+                    (10, 1, NULL, 'Film 1999', 1999), (20, 1, NULL, 'Film 2005', 2005), (30, 1, NULL, 'Film 2021', 2021), (40, 2, NULL, 'Series 2010', 2010),
+                    (50, 2, 1, 'Anime 2022', 2022), (60, 3, NULL, 'Book 2015', 2015);
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                INSERT INTO "WatchlistEntries" ("ProfileId", "WorkId") VALUES (101, 30);
+                INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId", "PositionMs", "DurationMs") VALUES (101, 20, 1, 750, 1000), (101, 10, 1, 250, 1000);
+                """);
+
+            // Several types and subtypes at once, a release year range and every order narrow the list.
+            CollectionAssert.AreEquivalent(new long[] { 10, 20, 30, 60 }, await LibraryAsync(host, "mediaTypeIds=1&mediaTypeIds=3"));
+            CollectionAssert.AreEquivalent(new long[] { 40, 50 }, await LibraryAsync(host, "mediaTypeIds=2&mediaSubtypeIds=1"));
+            CollectionAssert.AreEquivalent(new long[] { 30, 50 }, await LibraryAsync(host, "releaseYearFrom=2020"));
+            CollectionAssert.AreEquivalent(new long[] { 10, 20, 40 }, await LibraryAsync(host, "releaseYearTo=2010"));
+            CollectionAssert.AreEqual(new long[] { 50, 30, 60, 40, 20, 10 }, await LibraryAsync(host, "librarySortTypeId=3"));
+            CollectionAssert.AreEqual(new long[] { 50, 60, 10, 20, 30, 40 }, await LibraryAsync(host, "librarySortTypeId=2"));
+            CollectionAssert.AreEqual(new long[] { 20, 10, 50, 60, 30, 40 }, await LibraryAsync(host, "librarySortTypeId=4"));
+
+            // A page holds the cards of its own titles, in the order of the whole list, and the next page goes on from there.
+            CollectionAssert.AreEqual(new long[] { 60, 40 }, await LibraryAsync(host, "librarySortTypeId=3&page=2&pageSize=2"));
+            using var page = await host.SendAsync(HttpMethod.Get, "/api/v1/library?librarySortTypeId=3&page=1&pageSize=2");
+            var cards = (await page.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items;
+            Assert.AreEqual("Anime 2022|Film 2021", string.Join("|", cards.Select(card => card.Title)));
+            Assert.IsFalse(cards[0].IsWatchlisted);
+            Assert.IsTrue(cards[1].IsWatchlisted);
+            Assert.AreEqual(MediaSubtype.Anime, cards[0].MediaSubtypeId);
         }
 
         [TestMethod]
@@ -111,8 +143,8 @@ namespace Jularr.Backend.Tests
 
             // Anime off: its Works return to their parent lists.
             await SwitchAsync(host, "Anime", false, 1);
-            CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, "mediaTypeId=2"));
-            CollectionAssert.AreEquivalent(Array.Empty<long>(), await LibraryAsync(host, "mediaSubtypeId=1"));
+            CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, "mediaTypeIds=2"));
+            CollectionAssert.AreEquivalent(Array.Empty<long>(), await LibraryAsync(host, "mediaSubtypeIds=1"));
 
             // Series off: its Works leave the user area, Anime movies come back with Anime.
             await SwitchAsync(host, "Series", false, 1);

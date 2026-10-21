@@ -12,7 +12,12 @@ namespace Jularr.E2E.Tests
         [Timeout(300_000)]
         public async Task FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors()
         {
-            await using var jularr = await JularrInstance.StartAsync();
+            // No real provider is asked: every address points at a closed port, so Discover's shelves show their unavailable notice.
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = "http://127.0.0.1:9/", ["Providers:OpenLibrary"] = "http://127.0.0.1:9/", ["Providers:AniList"] = "http://127.0.0.1:9/",
+                ["Providers:MusicBrainz"] = "http://127.0.0.1:9/", ["Providers:Igdb"] = "http://127.0.0.1:9/"
+            });
             using var playwright = await Playwright.CreateAsync();
             await using var browser = await playwright.Chromium.LaunchAsync();
             var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
@@ -25,6 +30,7 @@ namespace Jularr.E2E.Tests
             page.PageError += (_, error) => problems.Enqueue(page.Url + ": " + error);
             page.Response += (_, response) =>
             {
+                if (response.Status >= 400) Evidence.Log("[http] " + response.Status + " " + response.Url);
                 if (response.Status >= 500) problems.Enqueue(response.Url + ": HTTP " + response.Status);
             };
 
@@ -56,7 +62,7 @@ namespace Jularr.E2E.Tests
                 await page.GetByRole(AriaRole.Button, new() { Name = "Filter", Exact = true }).ClickAsync();
                 await Assertions.Expect(page.Locator("dialog.filter-dialog[open]")).ToBeVisibleAsync();
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
+                Assert.AreEqual("", string.Join(Environment.NewLine, problems));
             }
             catch
             {

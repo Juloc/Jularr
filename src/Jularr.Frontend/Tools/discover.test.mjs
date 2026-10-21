@@ -184,7 +184,7 @@ test('recommendation fragments preserve local content and obsolete responses are
 
 test('Hero never arrives in an asynchronous recommendations fragment', () => {
     const source = readFileSync(new URL('../Pages/User/Discover/Index.cshtml.cs', import.meta.url), 'utf8');
-    assert.match(source, /await LoadHeroAsync\(selected\)/);
+    assert.match(source, /await LoadHeroAsync\(selected, /);
     assert.doesNotMatch(source, /discover-featured/);
     assert.match(source, /if \(_hero\.Count > 0\)/);
 });

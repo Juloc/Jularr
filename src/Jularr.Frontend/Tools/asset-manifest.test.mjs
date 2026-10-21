@@ -173,13 +173,15 @@ test("shared cards are small, softly rounded covers with single-line text below 
     assert.doesNotMatch(css, /media-card__genres|media-card__series|media-card__languages|media-card--minimal/);
 });
 
-test("card entry delegates one touch status handler without trailer autoplay", () => {
+test("card entry delegates one touch status handler and starts a trailer only from the delayed hover", () => {
     const entry = manifest["Framework/Components/MediaCard.entry.ts"];
     const script = readFileSync(join(build, entry.file), "utf8");
     assert.ok(!script.includes("pointerover"), "Reimporting the entry must not recreate global listeners.");
     const chunks = entry.imports?.map(key => readFileSync(join(build, manifest[key].file), "utf8")) ?? [];
     assert.ok(chunks.some(chunk => chunk.includes("data-open") && chunk.includes("keydown")));
-    assert.ok(chunks.every(chunk => !chunk.includes("youtube.com/embed") && !chunk.includes("pointerover")));
+    // The delayed hover preview is the one trailer embed: muted, from the privacy host, only after the delay.
+    assert.ok(chunks.every(chunk => !chunk.includes("youtube.com/embed")));
+    assert.ok(chunks.some(chunk => chunk.includes("youtube-nocookie.com/embed") && chunk.includes("autoplay=1&mute=1")));
 });
 
 test("manifest URLs are relative and cannot escape the asset root", () => {

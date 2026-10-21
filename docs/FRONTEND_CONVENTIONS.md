@@ -222,8 +222,10 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   types may be chosen, `type=a,b`) with the Customize and Filter drawers at its end, the highlights
   as one carousel (continued titles first, then each type's best by rank; the device keeps how many
   and whether it turns by itself), feed chips, sort and a rows/grid switch. The header owns the **one**
-  global Search; do not add another search field inside Discover. The Filter drawer narrows by
-  type, availability and release year only: no genre, language, rating or provider facets exist yet.
+  global Search; do not add another search field inside Discover. The Filter drawer lists the media types first, then the local availability
+  (in Jularr, can be requested), then only what the chosen types have: the release year and their rankings; the rankings a chosen
+  type lacks leave the panel as the types change. No genre, platform, language, runtime or rating facets exist yet (Discover's
+  catalogs keep no such data). Library and Favorites share the same media-type bar, filter panel (types, release year), order and layout.
   Cards use the shared cover presentation and Backend-supplied state below. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
   old `Jularr.Web` persistence or invent a new module toggle in Frontend.
@@ -353,6 +355,8 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
 - Avoid N+1 calls, unbounded lists, repeated field metadata reflection,
   unnecessary allocations/extra requests, speculative caching and heavy JS.
   Keep the view HTML server-rendered and the language cache bounded.
+- A page that asks several providers asks them together (a few at a time, each with its own limit) and a provider that just failed
+  is remembered for a minute; slow shelves are logged and timed in `Server-Timing`.
 - Local content must not wait for optional external recommendations. Load their
   server-rendered fragments independently, retaining usable native links and
   visible failures. Do not parallelize operations over one shared SQL transaction.
@@ -394,12 +398,15 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList); all pages inherit it.
   cards carry the coarse state of the Work and show a tag only for a held or requested title.
   Backend must supply these facts. Existing list services do not yet expose audio
   completeness: production does not infer it from `MediaStateType` or episode counts.
-- Supplied trailers start muted after sustained mouse hover, widen the card without
-  increasing its height, replace its cover and stop on leave, Escape, scrolling,
-  hidden document or page navigation. Use one official embed, no eager player.
-  The cached component module owns delegated handlers once across app-shell visits.
-  No trailer identifier means no preview request. Production list contracts still
-  lack trailer IDs; workshop samples are explicitly labeled, not library records.
+- The delayed hover preview (owner's UiDesigner MediaCard, 20 Oct): after about 1.8 s of the mouse resting on a cover, never on one of
+  its buttons, the card opens a panel as high as the cover over itself, fetched then from `/MediaPreview` (nothing loads before, nothing on
+  touch or devices without hover): the title's trailer in one muted, very wide, cropped frame (the one allowed external embed, the
+  privacy host, with Jularr's own play/pause and sound controls like the player's) above the linked title, or only the title and a
+  longer description where there is no trailer; the card's action and heart move into its foot beside Details. It closes on leave,
+  Escape, scrolling, resizing, a click elsewhere, a hidden document or page navigation, and drops its frame. The cached component
+  module owns the delegated handlers once across app-shell visits. List contracts carry no trailer IDs: the page asks one title at a
+  time (a Work's trailer is its `Trailer` fact, a TMDB title's and an anime season's come from their provider within 3 s, otherwise the
+  local catalog's description alone).
 - Bookmark mutations use the existing Details POST, typed Form, antiforgery and
   Backend watchlist service (the page is called Favorites). Return only to validated local URLs. If a list does not
   supply current membership, the icon links to management in Details, not a false toggle.

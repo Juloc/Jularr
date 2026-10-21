@@ -65,3 +65,6 @@
     // Sits under another group of the same section.
     &--minor { padding-top: 0; .choice-group__label { font-size: 11px; font-weight: 700; } }
 }
+
+// A choice or a group a script hides (the rankings a chosen type lacks) stays hidden whatever their display.
+.choice-group[hidden], .choice-group__item[hidden], .choice-group__check[hidden] { display: none; }
