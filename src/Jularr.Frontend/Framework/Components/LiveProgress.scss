@@ -165,3 +165,26 @@
 
 // The request button names the phase beside its percent.
 .button[data-live][data-phase="completed"] { color: var(--success); }
+
+// The request button of a title: the phase with its icon, and the download's percent as a thin bar along its foot.
+.live-phase-button {
+    position: relative;
+    overflow: hidden;
+
+    &__bar {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        appearance: none;
+        height: 3px;
+        border: 0;
+        background: transparent;
+        color: var(--accent);
+
+        &::-webkit-progress-bar { background: transparent; }
+        &::-webkit-progress-value { background: var(--accent); }
+        &::-moz-progress-bar { background: var(--accent); }
+        &[hidden] { display: none; }
+    }
+}

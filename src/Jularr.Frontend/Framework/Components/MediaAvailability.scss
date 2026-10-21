@@ -97,6 +97,17 @@
     &:focus-visible &__body { outline: 1px solid var(--accent); outline-offset: 2px; }
 }
 
+// The tag of a title's own poster rests open.
+.media-availability-badge--expanded {
+    top: 6px;
+    left: 6px;
+    min-width: 0;
+    max-width: calc(100% - 12px);
+    height: auto;
+    padding: 0;
+    .media-availability-badge__body { max-width: 152px; min-width: 0; height: 24px; padding: 4px 8px; background: var(--surface); box-shadow: none; > * { opacity: 1; } }
+}
+
 // Same reveal for every card.
 .media-card__surface:focus-within, .media-card__surface[data-open] {
     .media-availability-badge__body { max-width: min(152px, var(--availability-max, 152px)); height: 24px; padding: 4px 8px; background: var(--surface); box-shadow: none; }

@@ -153,10 +153,11 @@ namespace Jularr.Frontend.Framework
     }
 
     // The button that names a request's phase, with its percent while it downloads, and leads to the requests.
-    public sealed class LivePhaseButton(string key, AcquisitionRequestStatusType status, string href) : IUiComponent
+    public sealed class LivePhaseButton(FrontendAssets assets, string key, AcquisitionRequestStatusType status, string href) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts) =>
-            new A(new ValueText(LiveFacts.Phase(texts, status, null))).Class("button").Attribute("href", href).Attribute("data-live", key).Attribute("data-live-text", "phase")
-                .Attribute("data-phase", LiveFacts.Marker(status)).WriteTo(writer, encoder, texts);
+            new A(new Icon("download", assets, 16), new Span(new ValueText(LiveFacts.Phase(texts, status, null))).Attribute("data-live-text", "phase"),
+                    new Progress().Attribute("max", "100").Attribute("hidden", "hidden").Attribute("data-live-value", "percent").TextAttribute("aria-label", "live.progress").Class("live-phase-button__bar"))
+                .Class("button live-phase-button").Attribute("href", href).Attribute("data-live", key).Attribute("data-phase", LiveFacts.Marker(status)).WriteTo(writer, encoder, texts);
     }
 }

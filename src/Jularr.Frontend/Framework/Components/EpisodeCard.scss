@@ -1,24 +1,37 @@
+// An episode as a card of the board's proposal: the still (16:9) with its number and a thin progress line, then the title with one line of facts,
+// and the state with the actions below. The line layout puts the same parts in a row; the compact one is the player's list.
 .episode-card {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--accent-line);
-    border-radius: var(--radius-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
     background: var(--surface);
-    box-shadow: var(--shadow);
 
     &__art {
         position: relative;
         display: block;
         aspect-ratio: 16 / 9;
         overflow: hidden;
-        background: var(--accent-soft);
+        background: linear-gradient(150deg, var(--accent-soft), var(--accent-edge));
         color: #fff;
 
         .media-image { width: 100%; height: 100%; object-fit: cover; }
     }
 
     &__placeholder { width: 100%; height: 100%; }
+
+    // The number sits over the still, bottom left, on a dark chip.
+    &__index {
+        position: absolute;
+        bottom: 6px;
+        left: 7px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgb(20 12 40 / 62%);
+        font-size: var(--text-small);
+        font-weight: 800;
+    }
 
     &__runtime {
         position: absolute;
@@ -59,41 +72,65 @@
         left: 0;
         appearance: none;
         width: 100%;
-        height: 4px;
+        height: 3px;
         border: 0;
-        background: rgb(255 255 255 / 35%);
+        background: rgb(255 255 255 / 30%);
         color: var(--episode-progress, var(--accent));
 
-        &::-webkit-progress-bar { background: rgb(255 255 255 / 35%); }
+        &::-webkit-progress-bar { background: rgb(255 255 255 / 30%); }
         &::-webkit-progress-value { background: var(--episode-progress, var(--accent)); }
         &::-moz-progress-bar { background: var(--episode-progress, var(--accent)); }
     }
 
-    &__body {
-        display: flex;
-        flex: 1;
-        flex-direction: column;
-        gap: 6px;
-        padding: 12px 14px 14px;
-    }
+    &__body { display: flex; flex: 1; flex-direction: column; gap: 8px; min-width: 0; padding: 10px 12px; }
+    &__text { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; min-width: 0; }
 
     &__label { color: var(--accent-text); font-size: 12px; font-weight: 700; }
+    &__title { margin: 0; font-size: 12.5px; font-weight: 760; line-height: 1.3; }
+    &__facts { margin: 0; color: var(--muted); font-size: 11px; }
 
-    &__title { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
+    // The state and the actions of one episode; the actions sit at the end.
+    &__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; }
+    &__actions { display: flex; gap: 5px; margin-inline-start: auto; > div { display: flex; gap: 5px; } }
 
-    &__overview {
-        display: -webkit-box;
-        overflow: hidden;
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.45;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
+    // 30px icon buttons; a watched episode's check is green.
+    &__actions .button--icon {
+        width: 30px;
+        min-height: 30px;
+
+        .ui-icon { width: 14px; height: 14px; }
+
+        &[aria-pressed="true"] { border-color: transparent; background: var(--success-soft); color: var(--success); }
     }
 
-    // The chips and the actions of one row; the actions sit at its end.
-    &__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; }
-    &__actions { margin-inline-start: auto; > div { display: flex; gap: 2px; } }
+    // One line of a list: still, title with facts, state, actions.
+    &--list {
+        display: grid;
+        grid-template-columns: 118px minmax(0, 1fr);
+        align-items: center;
+        gap: 14px;
+        padding: 10px 16px 10px 12px;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
+        background: transparent;
+
+        &:last-child { border-bottom: 0; }
+        &:hover { background: var(--field); }
+
+        .episode-card__art { border-radius: var(--radius-small); }
+        .episode-card__body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 0; }
+        .episode-card__title { font-size: 13px; }
+        .episode-card__facts { margin-top: 0; }
+        .episode-card__foot { flex-wrap: nowrap; justify-content: flex-end; gap: 14px; margin-top: 0; }
+
+        @media (max-width: 1180px) { grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+        @media (max-width: 700px) {
+            grid-template-columns: 78px minmax(0, 1fr);
+            .episode-card__body { grid-template-columns: minmax(0, 1fr) auto; }
+            .episode-card__foot .state-chip { display: none; }
+        }
+    }
 
     &--compact {
         display: grid;
@@ -102,7 +139,7 @@
         gap: 10px;
         padding: 6px;
         border: 0;
-        box-shadow: none;
+        border-radius: var(--radius-panel);
         .episode-card__art { border-radius: 8px; }
         .episode-card__body { min-width: 0; padding: 0; gap: 3px; }
         .episode-card__runtime { top: 2px; right: 2px; padding: 1px 4px; font-size: 10px; }

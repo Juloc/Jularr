@@ -1635,9 +1635,10 @@ namespace Jularr.Backend.Tests
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + work.Id);
             var detailsHtml = await details.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, detailsHtml);
-            StringAssert.Contains(detailsHtml, "href=\"/Details/" + work.Id + "?season=2\"");
+            using var episodesTab = await host.SendAsync(HttpMethod.Get, "/Details/" + work.Id + "?tab=episodes");
+            var episodesHtml = await episodesTab.Content.ReadAsStringAsync();
+            StringAssert.Contains(episodesHtml, "href=\"/Details/" + work.Id + "?tab=episodes&amp;season=2\"");
             StringAssert.Contains(detailsHtml, "S01 E01");
-            StringAssert.Contains(detailsHtml, "The first.");
             using var later = await host.SendAsync(HttpMethod.Get, "/Details/" + work.Id + "?season=2");
             StringAssert.Contains(await later.Content.ReadAsStringAsync(), "Upcoming");
 

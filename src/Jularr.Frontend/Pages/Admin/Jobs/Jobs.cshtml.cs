@@ -86,9 +86,9 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 new KpiTile("jobs.state.Paused", Number(counts["paused"]), Glyph("pause"), UiTone.Warning),
                 new KpiTile("jobs.state.Failed", Number(counts["failed"]), Glyph("alert"), UiTone.Danger)).Strip());
 
-            var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, _jobs.Count) };
+            var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, Count: _jobs.Count) };
             chips.AddRange(Groups.Where(group => group is "ready" or "waiting" or "paused" or "running" or "failed" || counts[group] > 0 || group == state)
-                .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, counts[group])));
+                .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, Count: counts[group])));
             var keep = state is null ? null : new Dictionary<string, string> { ["state"] = state };
             page.Content.Add(new Div(new NavigationTabs(chips, "jobs.filters", "filters"),
                 new Div(new SearchBox(Address, "jobs.filter", QueryFilter, keep, ".jobs-list", Glyph("search", 15)),
