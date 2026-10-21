@@ -135,7 +135,10 @@ export function bookDimensions(printedPages: number, microns: number, currentPag
     const readLeaves = Math.min(leaves, Math.max(0, Math.floor(currentPage / 2)));
     const leftMm = readLeaves * microns / 1000, rightMm = (leaves - readLeaves) * microns / 1000;
     const centreMm = Math.min(leftMm, rightMm) * .35;
-    return { leaves, readLeaves, leftMm, rightMm, centreMm,
+    // The pages of a spread are mirror images: both share the cross-section of half the block, so
+    // reading position never changes a page's height, vertical position, outline, margins or number.
+    const blockMm = leaves * microns / 2000, spineMm = blockMm * .35;
+    return { leaves, readLeaves, leftMm, rightMm, centreMm, blockMm, spineMm,
         leftAngle: Math.atan2(leftMm - centreMm, 148) * 180 / Math.PI,
         rightAngle: -Math.atan2(rightMm - centreMm, 148) * 180 / Math.PI, boardMm: boardTenths / 10,
         totalMm: leaves * microns / 1000 + 2 * boardTenths / 10 };

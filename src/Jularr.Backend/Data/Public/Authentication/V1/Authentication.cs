@@ -13,14 +13,15 @@ namespace Jularr.Backend.Data.Public.Authentication.V1
 
     public sealed class LoginDataV1 : BaseData
     {
-        public LoginDataV1(string email, string password)
+        public LoginDataV1(string username, string password)
         {
-            Email = email;
+            Username = username;
             Password = password;
         }
 
-        [DataField(typeof(AccountFields), nameof(AccountFields.Email))]
-        public string Email { get; }
+        // The username or the email address of the account.
+        [DataField(typeof(AuthenticationFields), nameof(AuthenticationFields.Login))]
+        public string Username { get; }
 
         [DataField(typeof(AuthenticationFields), nameof(AuthenticationFields.Password))]
         public string Password { get; }
@@ -28,20 +29,16 @@ namespace Jularr.Backend.Data.Public.Authentication.V1
 
     public sealed class RegisterDataV1 : BaseData
     {
-        public RegisterDataV1(string email, string displayName, string password, string passwordConfirmation, long uiLocaleId)
+        public RegisterDataV1(string username, string password, string passwordConfirmation, long uiLocaleId)
         {
-            Email = email;
-            DisplayName = displayName;
+            Username = username;
             Password = password;
             PasswordConfirmation = passwordConfirmation;
             UiLocaleId = uiLocaleId;
         }
 
-        [DataField(typeof(AccountFields), nameof(AccountFields.Email))]
-        public string Email { get; }
-
-        [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName), true, 100)]
-        public string DisplayName { get; }
+        [DataField(typeof(AccountFields), nameof(AccountFields.Username))]
+        public string Username { get; }
 
         [DataField(typeof(AuthenticationFields), nameof(AuthenticationFields.NewPassword))]
         public string Password { get; }

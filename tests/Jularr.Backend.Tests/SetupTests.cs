@@ -40,6 +40,9 @@ namespace Jularr.Backend.Tests
             // Fields and cross-field validation.
             using var shortPassword = await host.SendAsync(HttpMethod.Post, "/Setup", Form(html, "short", "short"));
             Assert.AreEqual(HttpStatusCode.BadRequest, shortPassword.StatusCode);
+            using var weakPassword = await host.SendAsync(HttpMethod.Post, "/Setup", Form(html, "ownerpassword123", "ownerpassword123"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, weakPassword.StatusCode);
+            StringAssert.Contains(await weakPassword.Content.ReadAsStringAsync(), "at least three of");
             using var invalidBinding = await host.SendAsync(HttpMethod.Post, "/Setup", Form(html, "owner-password-123", "owner-password-123", "not-a-number"));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalidBinding.StatusCode);
             StringAssert.Contains(await invalidBinding.Content.ReadAsStringAsync(), "name=\"PasswordConfirmation\"");
@@ -54,6 +57,9 @@ namespace Jularr.Backend.Tests
 
             // Owner, profile and session commit together.
             using var created = await host.SendAsync(HttpMethod.Post, "/Setup", Form(html, "owner-password-123", "owner-password-123"));
+            Assert.AreEqual("owner_one", await host.ScalarAsync("SELECT \"Username\" FROM \"Accounts\""));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"Email\" FROM \"Accounts\""));
+            Assert.AreEqual("First Owner", await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Profiles\""));
             Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode);
             Assert.AreEqual("/Setup/Progress", created.Headers.Location!.OriginalString);
 
@@ -128,7 +134,7 @@ namespace Jularr.Backend.Tests
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/setup");
             StringAssert.Contains(await state.Content.ReadAsStringAsync(), "\"requiresOwner\":false");
             using var replay = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner",
-                new CreateOwnerDataV1("second@example.test", "Second", "owner-password-123", "owner-password-123", 1));
+                new CreateOwnerDataV1("second_owner", "Second", "owner-password-123", "owner-password-123", 1));
             Assert.AreEqual(HttpStatusCode.Forbidden, replay.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\""));
         }
@@ -139,7 +145,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync(razor: true);
             await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
             using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
-            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner@example.test", "Owner", "owner-password-123", "owner-password-123", 1));
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner_one", "Owner", "owner-password-123", "owner-password-123", 1));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             using var page = await host.SendAsync(HttpMethod.Get, "/Setup/Instance");
             var html = await page.Content.ReadAsStringAsync();
@@ -188,9 +194,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("/", finish.Headers.Location!.OriginalString, await finish.Content.ReadAsStringAsync());
 
             // Local account requests remain available without a Plex connection and always await approval.
-            using var registered = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("applicant@example.test", "Applicant", "applicant-password-123", "applicant-password-123", 1));
+            using var registered = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("applicant", "applicant-password-123", "applicant-password-123", 1));
             Assert.AreEqual(HttpStatusCode.OK, registered.StatusCode, await registered.Content.ReadAsStringAsync());
-            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"Accounts\" WHERE \"Email\" = 'applicant@example.test'"));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"Accounts\" WHERE \"Username\" = 'applicant'"));
         }
 
         [TestMethod]
@@ -211,7 +217,7 @@ namespace Jularr.Backend.Tests
             var french = choices.Single(locale => locale.Locale == "fr");
             Assert.IsTrue(french.IsMachineTranslated);
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr'"));
-            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner@example.test", "Owner", "owner-password-123", "owner-password-123", french.Id));
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner_one", "Owner", "owner-password-123", "owner-password-123", french.Id));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr'"));
             Assert.AreEqual(french.Id, await host.ScalarAsync("SELECT \"UiLocaleId\" FROM \"InstanceSettings\""));
@@ -273,7 +279,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
 
             // Independent service scopes race.
-            var attempts = await Task.WhenAll(CreateOwnerAttemptAsync(host, "first@example.test"), CreateOwnerAttemptAsync(host, "second@example.test"));
+            var attempts = await Task.WhenAll(CreateOwnerAttemptAsync(host, "first_owner"), CreateOwnerAttemptAsync(host, "second_owner"));
             Assert.AreEqual(1, attempts.Count(created => created));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountPasswords\""));
@@ -286,7 +292,7 @@ namespace Jularr.Backend.Tests
             using var scope = host.Services.CreateScope();
             var state = await scope.ServiceProvider.GetRequiredService<ReadSetupV1>().ExecuteAsync<ReadSetupResultV1>();
             Assert.IsFalse(state.RequiresOwner);
-            Assert.IsFalse(await CreateOwnerAttemptAsync(host, "replacement@example.test"));
+            Assert.IsFalse(await CreateOwnerAttemptAsync(host, "replacement_owner"));
         }
 
         private static async Task<bool> CreateOwnerAttemptAsync(Host host, string email)
@@ -318,7 +324,7 @@ namespace Jularr.Backend.Tests
             return new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = WebUtility.HtmlDecode(token.Groups[1].Value),
-                ["Email"] = "owner@example.test",
+                ["Username"] = "owner_one",
                 ["DisplayName"] = "First Owner",
                 ["Password"] = password,
                 ["PasswordConfirmation"] = confirmation,

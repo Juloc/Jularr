@@ -33,8 +33,9 @@ namespace Jularr.Backend.Data.Logic.Account
 
     public sealed class AccountCreationData : BaseData
     {
-        public AccountCreationData(string email, string displayName, bool isEnabled, DateTime? emailVerifiedAt, AccountRoleType accountRoleTypeId = AccountRoleType.User)
+        public AccountCreationData(string username, string? email, string displayName, bool isEnabled, DateTime? emailVerifiedAt, AccountRoleType accountRoleTypeId = AccountRoleType.User)
         {
+            Username = username;
             Email = email;
             DisplayName = displayName;
             IsEnabled = isEnabled;
@@ -42,8 +43,11 @@ namespace Jularr.Backend.Data.Logic.Account
             AccountRoleTypeId = accountRoleTypeId;
         }
 
-        [DataField(typeof(AccountFields), nameof(AccountFields.Email))]
-        public string Email { get; }
+        [DataField(typeof(AccountFields), nameof(AccountFields.Username))]
+        public string Username { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.Email), false)]
+        public string? Email { get; }
 
         [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName))]
         public string DisplayName { get; }

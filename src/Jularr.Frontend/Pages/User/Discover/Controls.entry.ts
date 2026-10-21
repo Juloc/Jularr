@@ -1,3 +1,4 @@
+import { shownFeeds, showsFeedGroup } from './Feeds';
 import { heroDefaults, readHeroPreferences, writeHeroPreferences, type HeroPreferences } from '../../../Framework/Components/HeroCarousel';
 
 // Device-local choices of Discover. Everything is delegated from the document, so it also reaches HTML a page script inserts later.
@@ -53,6 +54,25 @@ function syncGroup(group: Element | null): void {
     all?.setAttribute('aria-pressed', String(every.length > 0 && every.every(box => box.checked)));
 }
 
+// The rankings a chosen type lacks leave the filter, and the group goes when only "all" is left.
+function syncFeeds(form: HTMLFormElement | null): void {
+    if (!form) return;
+    const boxes = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="type"]'));
+    const feeds = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="feed"]'));
+    const shown = shownFeeds(feeds.map(feed => feed.dataset.scopes?.split(',')), boxes.filter(box => box.checked).map(box => box.value), boxes.map(box => box.value));
+    feeds.forEach((feed, index) => {
+        const label = feed.closest('label');
+        if (label) label.hidden = !shown[index];
+        if (!shown[index] && feed.checked) {
+            const all = feeds.find(other => other.value === '');
+            if (all) all.checked = true;
+        }
+    });
+
+    const group = feeds[0]?.closest<HTMLElement>('.choice-group');
+    if (group) group.hidden = !showsFeedGroup(shown);
+}
+
 document.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
 
@@ -74,6 +94,7 @@ document.addEventListener('click', event => {
         const all = boxes.every(box => box.checked);
         boxes.forEach(box => { box.checked = !all; });
         syncGroup(group);
+        syncFeeds(pick.closest('form'));
     }
 
     // Selects every type, whatever the area.
@@ -82,13 +103,18 @@ document.addEventListener('click', event => {
         const section = every.closest('.drawer__section');
         section?.querySelectorAll<HTMLInputElement>('input[name="type"]').forEach(box => { box.checked = true; });
         section?.querySelectorAll('.choice-group').forEach(syncGroup);
+        syncFeeds(every.closest('form'));
     }
 });
 
 document.addEventListener('change', event => {
     const input = event.target;
     if (!(input instanceof HTMLInputElement)) return;
-    if (input.name === 'type' && input.type === 'checkbox') syncGroup(input.closest('.choice-group'));
+    if (input.name === 'type' && input.type === 'checkbox') {
+        syncGroup(input.closest('.choice-group'));
+        syncFeeds(input.form);
+    }
+
     if (input.dataset.discoverLayoutChoice !== undefined) storeLayout(input.value === 'grid');
     if (!input.dataset.heroPref) return;
 

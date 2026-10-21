@@ -23,6 +23,8 @@ function mounted(desktop = false) {
     runInNewContext(script, {
         document,
         exports,
+        require: () => ({ attachCardPreview() {} }),
+        window: { location: { origin: 'http://localhost' } },
         Element,
         HTMLElement: Element,
         Node: Element,
@@ -127,6 +129,7 @@ test('a title that fits shows no tip', () => {
     assert.equal(tip.hidden, true);
 });
 
-test('card script never starts a trailer or expands a poster', () => {
-    assert.doesNotMatch(source, /youtube\.com\/embed|data-hover-trailer|data-expanded|pointerover|setTimeout|createElement/);
+test('card script leaves the delayed preview to its own module and starts no trailer itself', () => {
+    assert.match(source, /attachCardPreview\(/);
+    assert.doesNotMatch(source, /youtube|data-hover-trailer|data-expanded|pointerover|createElement/);
 });

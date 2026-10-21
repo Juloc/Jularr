@@ -122,6 +122,52 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Preview_AnswersFromTheLocalCatalog_AndTheTmdbItemNamesItsTrailer()
+        {
+            await using var host = await CreateHostAsync(fake: new FakeTmdb());
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Overview", "ImageUrl", "BackdropUrl", "IsAdult") VALUES
+                    ('openlibrary', 'OL1W', 3, 'A Book', 'A long description of the book.', 'https://img.test/book.jpg', NULL, FALSE),
+                    ('openlibrary', 'OL2W', 3, 'Adult Book', 'Not for the preview.', NULL, NULL, TRUE);
+                """);
+
+            // No provider is asked: the description is what the catalog keeps; unknown and adult titles have none.
+            using var local = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=OL1W");
+            Assert.AreEqual(HttpStatusCode.OK, local.StatusCode, await local.Content.ReadAsStringAsync());
+            var preview = (await local.Content.ReadFromJsonAsync<DiscoverPreviewV1>())!;
+            Assert.AreEqual("A Book", preview.Title);
+            Assert.AreEqual("A long description of the book.", preview.Overview);
+            Assert.AreEqual("https://img.test/book.jpg", preview.PosterUrl);
+            using var unknown = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=missing");
+            Assert.AreEqual(HttpStatusCode.NotFound, unknown.StatusCode);
+            using var adult = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=OL2W");
+            Assert.AreEqual(HttpStatusCode.NotFound, adult.StatusCode);
+
+            // A single TMDB title names its trailer; the lists do not carry one.
+            using var item = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603");
+            Assert.AreEqual("vKQi3bBA1y8", (await item.Content.ReadFromJsonAsync<DiscoverItemV1>())!.TrailerKey);
+            using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
+            Assert.IsNull((await feed.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!.Single().TrailerKey);
+        }
+
+        [TestMethod]
+        public async Task Feed_AProviderThatJustFailed_IsNotAskedAgainAtOnce()
+        {
+            var tmdb = new FakeTmdb { IsUnavailable = true };
+            await using var host = await CreateHostAsync(fake: tmdb);
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Top));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, first.StatusCode);
+            var asked = tmdb.Requests.Count;
+            Assert.IsTrue(asked > 0);
+
+            // The next shelves of the page do not wait for it again, even while it answers again; the memory is short.
+            tmdb.IsUnavailable = false;
+            using var second = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.New));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, second.StatusCode);
+            Assert.AreEqual(asked, tmdb.Requests.Count);
+        }
+
+        [TestMethod]
         public async Task Catalog_ReadWhole_AnswersEveryShelfAndSuggestsWhileTyping()
         {
             var tmdb = new FakeTmdb();
@@ -345,13 +391,61 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
             using var empty = await host.SendAsync(HttpMethod.Get, "/Library?type=movies&p=2");
             StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "class=\"page-actions\" aria-label=\"Pages\"");
-            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "/Library?type=movies&amp;sort=RecentlyAdded");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "href=\"/Library?type=movies\"");
             using var invalid = await host.SendAsync(HttpMethod.Get, "/Library?p=2147483647");
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
             StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "class=\"ui-page-error\"");
             Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(await invalid.Content.ReadAsStringAsync(), "role=\"alert\"").Count);
             using var search = await host.SendAsync(HttpMethod.Get, "/?q=Matrix");
             StringAssert.Contains(await search.Content.ReadAsStringAsync(), "The Matrix Show");
+        }
+
+        [TestMethod]
+        public async Task Razor_Cards_OfferTheHoverPreview_AndLibraryShowsTheSharedBars()
+        {
+            var tmdb = new FakeTmdb();
+            await using var host = await CreateHostAsync(razor: true, fake: tmdb);
+
+            // A card names where its delayed hover preview comes from, and nothing is requested before the hover.
+            using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
+            var html = await recommendations.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "data-preview-src=\"/MediaPreview?type=Movie&amp;tmdb=603\"");
+            Assert.IsFalse(html.Contains("youtube", StringComparison.OrdinalIgnoreCase));
+
+            // The fragment brings the description and the trailer the provider names; a malformed key is never embedded.
+            using var preview = await host.SendAsync(HttpMethod.Get, "/MediaPreview?type=Movie&tmdb=603");
+            html = await preview.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, html);
+            StringAssert.Contains(html, "class=\"media-card__preview\"");
+            StringAssert.Contains(html, "data-preview-mode=\"trailer\"");
+            StringAssert.Contains(html, "data-trailer-id=\"vKQi3bBA1y8\"");
+            StringAssert.Contains(html, "data-trailer-action=\"toggle\"");
+            StringAssert.Contains(html, "data-trailer-action=\"mute\"");
+            StringAssert.Contains(html, "A hacker learns the truth.");
+            StringAssert.Contains(html, "href=\"/Discover/movies/603\"");
+
+            // While the provider cannot answer the catalog's own description remains; a title nobody knows needs none.
+            tmdb.IsUnavailable = true;
+            using var offline = await host.SendAsync(HttpMethod.Get, "/MediaPreview?type=Movie&tmdb=603");
+            Assert.AreEqual(HttpStatusCode.OK, offline.StatusCode);
+            StringAssert.Contains(await offline.Content.ReadAsStringAsync(), "A hacker learns the truth.");
+            using var unknown = await host.SendAsync(HttpMethod.Get, "/MediaPreview?type=Movie&tmdb=999999");
+            Assert.AreEqual(HttpStatusCode.NoContent, unknown.StatusCode);
+            using var invalid = await host.SendAsync(HttpMethod.Get, "/MediaPreview");
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+            // Library, like Favorites and Discover, has the one media-type bar, a filter panel, the order and the layout.
+            using var library = await host.SendAsync(HttpMethod.Get, "/Library");
+            html = await library.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, library.StatusCode, html);
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "class=\"capsule-bar__areas\"").Count);
+            StringAssert.Contains(html, "id=\"library-filter\"");
+            StringAssert.Contains(html, "data-drawer-open=\"library-filter\"");
+            StringAssert.Contains(html, "data-layout-toggle");
+            StringAssert.Contains(html, "name=\"year\"");
+            StringAssert.Contains(html, "name=\"sort\"");
+            using var narrowed = await host.SendAsync(HttpMethod.Get, "/Library?type=movies,series&year=2020&sort=Year");
+            Assert.AreEqual(HttpStatusCode.OK, narrowed.StatusCode);
         }
 
         [TestMethod]

@@ -38,6 +38,31 @@ test("Login is a short page composition, Form owns field HTML", () => {
     assert.match(form, /Attribute\("disabled", "disabled"\)/);
 });
 
+test("Sign in, request access and approval pending are the owner's login mockup: one card, two round appearance buttons, no extras", () => {
+    const login = load("Pages/Account/Login/Login.cshtml.cs");
+    const register = load("Pages/Account/Register/Register.cshtml.cs");
+    const styles = load("Pages/Account/Login/Login.entry.scss");
+    const dock = load("Modules/Appearance/AppearanceDock.cs");
+    for (const source of [login, register, dock]) assert.doesNotMatch(source, /Attribute\("(?:style|on[a-z]+)"/);
+    for (const source of [login, register]) {
+        assert.match(source, /new AppearanceDock\(assets\)/);
+        assert.doesNotMatch(source, /new Appearance\(/);
+    }
+    assert.match(styles, /width: min\(100%, 423px\)/);
+    assert.match(styles, /padding: 29px 30px 26px/);
+    assert.match(styles, /border-radius: 24px/);
+    assert.match(dock, /data-cycle-skin/);
+    assert.match(dock, /data-cycle-mode/);
+    // Providers appear only where the instance offers the sign-in; Trakt is not one.
+    assert.match(login, /_authentication\?\.PlexLoginEnabled == true/);
+    assert.doesNotMatch(login + register, /Trakt|Watch|Hear/);
+    // The forgot-password note is an inline hint, not a mail flow.
+    assert.match(login, /account\.login\.forgotHint/);
+    // A registration names no display name or locale field; the pending page names the account once.
+    assert.doesNotMatch(register, /form\.Select|profile\.field\.displayName/);
+    assert.match(register, /account\.pending\.waiting/);
+});
+
 test("Shell has one owning C# file, not feature-specific Framework wrappers", () => {
     const view = load("Pages/Shared/_AppShell.cshtml");
     const shell = load("Pages/Shared/Shell.cs");

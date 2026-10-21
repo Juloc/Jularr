@@ -1,22 +1,10 @@
 import { onPage } from '../../../Modules/Navigation/PageSwap';
 
-// Device-local layout, selecting titles and the state of the collections popover. Everything is delegated from the document,
+// Selecting titles and the state of the collections popover. Everything is delegated from the document,
 // so it also reaches pages swapped in later; the selection lives in the buttons of the page itself.
-const layoutKey = 'favorites-layout';
 const pickerId = 'favorites-picker';
 
 document.documentElement.classList.add('favorites-ready');
-
-function applyLayout(layout: string | null): void {
-    if (layout === 'list') document.documentElement.dataset.favoritesLayout = 'list';
-    else delete document.documentElement.dataset.favoritesLayout;
-}
-
-try {
-    applyLayout(localStorage.getItem(layoutKey));
-} catch {
-    // Without storage the titles stay in a grid.
-}
 
 function selected(): HTMLElement[] {
     return Array.from(document.querySelectorAll<HTMLElement>('.favorites [data-favorites-select][aria-pressed="true"]'));
@@ -78,18 +66,6 @@ document.addEventListener('click', event => {
     const picker = event.target.closest<HTMLElement>('[data-favorites-picker]');
     if (picker) {
         preparePicker(picker.dataset.favoritesPicker ?? '');
-        return;
-    }
-
-    if (event.target.closest('[data-favorites-layout]')) {
-        const list = document.documentElement.dataset.favoritesLayout !== 'list';
-        applyLayout(list ? 'list' : null);
-        try {
-            localStorage.setItem(layoutKey, list ? 'list' : 'grid');
-        } catch {
-            // The layout then applies to this visit only.
-        }
-
         return;
     }
 

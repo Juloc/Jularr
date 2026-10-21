@@ -69,7 +69,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
         protected override async Task<IServiceOutput> OnCreate()
         {
             // Verify credentials under lock.
-            var account = await Context.AuthenticatePasswordAsync(new AccountEmailParameters(Data.Email), Data.Password, CancellationToken);
+            var account = await Context.AuthenticatePasswordAsync(new AccountLoginParameters(Data.Username), Data.Password, CancellationToken);
 
             // Issue the session atomically.
             var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), CancellationToken);
@@ -87,8 +87,8 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            // Request approval, never auto-enable.
-            var account = new AccountCreationData(Data.Email, Data.DisplayName, false, null);
+            // Request approval, never auto-enable; the profile is named after the username until its owner renames it.
+            var account = new AccountCreationData(Data.Username, null, Data.Username, false, null);
             await Context.CreateRegistrationRequestAsync(account, Data.Password, Data.UiLocaleId, CancellationToken);
 
             return new RegisterResultV1();
