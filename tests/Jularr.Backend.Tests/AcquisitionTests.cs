@@ -1334,6 +1334,40 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Profiles_TheLanguagesOfTheChoice_AndTheFallback_AreStoredAndReadBack()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var seeded = await ReadProfilesAsync(host);
+            var books = seeded.Single(profile => profile.MediaTypeId == MediaType.Book && profile.MediaSubtypeId == null && profile.IsDefault);
+            Assert.AreEqual(LanguageFallbackType.Original, books.LanguageFallback);
+            Assert.AreEqual(0, books.LanguageOrder.Length);
+
+            // The profile names the languages of the choice and the fallback.
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + books.Id,
+                new SaveAcquisitionProfileDataV1(books.Name, MediaType.Book, books.IsDefault, books.AllowedQualities, books.UpgradeAllowed,
+                    books.UpgradeCutoffQuality, null, null, books.Version, languageOrder: ["DE", "EN"], languageFallback: LanguageFallbackType.English));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            var stored = (await ReadProfilesAsync(host)).Single(profile => profile.Id == books.Id);
+            CollectionAssert.AreEqual(new[] { "de", "en" }, stored.LanguageOrder);
+            Assert.AreEqual(LanguageFallbackType.English, stored.LanguageFallback);
+
+            // An unknown language is rejected.
+            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + books.Id,
+                new SaveAcquisitionProfileDataV1(books.Name, MediaType.Book, books.IsDefault, books.AllowedQualities, books.UpgradeAllowed,
+                    books.UpgradeCutoffQuality, null, null, books.Version, languageOrder: ["XX"]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+            // The stored definition carries both into the profile of the acquisition.
+            var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
+                (string)(await host.ScalarAsync($"SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = {books.Id}"))!,
+                AcquisitionSelectionLogic.DefinitionOptions)!;
+            CollectionAssert.AreEqual(new[] { "de", "en" }, definition.LanguageOrder);
+            Assert.AreEqual(LanguageFallbackType.English, definition.LanguageFallback);
+        }
+
+        [TestMethod]
         public async Task Blocklist_BlocksAndAllowsReleasesOfTheTarget()
         {
             using var storage = new TemporaryDirectory();
