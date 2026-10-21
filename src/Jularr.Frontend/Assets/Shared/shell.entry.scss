@@ -19,8 +19,16 @@
 @use "../../Framework/SetupWizard";
 @use "../../Modules/Appearance/Theme";
 
-// The browser tab icon is a build asset; this reference makes the build fingerprint and publish it (layout: Assets.ImageUrl).
-:root { --jularr-favicon: url("./favicon.svg"); }
+// The tab and home-screen icons are build assets; these references make the build fingerprint and publish them (layout: Assets.ImageUrl).
+// The 192/512 and maskable PNGs are for an installed-app manifest, which the app does not have yet.
+:root {
+    --jularr-favicon: url("./favicon.svg");
+    --jularr-icon-32: url("./icon-32.png");
+    --jularr-icon-apple: url("./apple-touch-icon.png");
+    --jularr-icon-192: url("./icon-192.png");
+    --jularr-icon-512: url("./icon-512.png");
+    --jularr-icon-maskable: url("./icon-maskable-512.png");
+}
 
 *, *::before, *::after { box-sizing: border-box; }
 html { min-height: 100%; }

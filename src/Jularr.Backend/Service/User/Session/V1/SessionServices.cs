@@ -30,7 +30,7 @@ namespace Jularr.Backend.Service.User.Session.V1
                     (session."PublicId" = @SessionPublicId) AS "IsCurrent",
                     session."DeviceName",
                     session."DevicePlatform",
-                    session."AudioQuality"
+                    session."PlaybackQuality"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
@@ -99,9 +99,9 @@ namespace Jularr.Backend.Service.User.Session.V1
         }
     }
 
-    // Music on this device plays as the original or converted to a smaller size.
-    [ServiceEndpoint("PUT", "/api/v1/sessions/{sessionPublicId:guid}/audio-quality")]
-    public sealed class UpdateSessionAudioQualityV1 : UserService<SessionDeviceParametersV1, SessionAudioQualityDataV1>
+    // Playback quality of this device: automatic, the original, or capped to save data.
+    [ServiceEndpoint("PUT", "/api/v1/sessions/{sessionPublicId:guid}/playback-quality")]
+    public sealed class UpdateSessionPlaybackQualityV1 : UserService<SessionDeviceParametersV1, SessionPlaybackQualityDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
@@ -110,7 +110,7 @@ namespace Jularr.Backend.Service.User.Session.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SetSessionAudioQualityAsync(new SessionRevocationData(Parameters.SessionPublicId, Auth.AccountId!.Value), Data, CancellationToken);
+            await Context.SetSessionPlaybackQualityAsync(new SessionRevocationData(Parameters.SessionPublicId, Auth.AccountId!.Value), Data, CancellationToken);
             return new UpdateResult(true);
         }
     }

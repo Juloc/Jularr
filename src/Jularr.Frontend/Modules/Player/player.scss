@@ -84,6 +84,7 @@
     &__settings-pane { display: grid; gap: 10px; align-content: start; > div { display: grid; gap: 8px; } }
     &__option { width: 100%; justify-content: start; text-align: start; overflow-wrap: anywhere; }
     &__speeds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    &__qualities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     &__setting-link { width: 100%; justify-content: space-between; margin-bottom: 8px; text-align: start; > span { flex: 1; display: grid; gap: 2px; } [data-current] { color: var(--muted); font-size: .8rem; font-weight: 400; } }
     &__sidebar { contain: size; min-height: 0; overflow: auto; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); border: 1px solid var(--accent-line); color: var(--text); }
     &__sidebar h2 { font-size: 1rem; }
@@ -91,6 +92,13 @@
     &__sidebar-close { display: none; margin-left: auto; }
     &__sidebar[popover] { position: fixed; inset: auto 12px 96px auto; width: min(360px, calc(100vw - 24px)); max-height: calc(100dvh - 120px); margin: 0; contain: none; .player__sidebar-close { display: flex; } }
     &__episodes { display: grid; gap: 8px; margin-top: 12px; }
+    // The next episode waits above the controls and can be ended.
+    &__next {
+        position: absolute; inset: auto 16px 96px auto; z-index: 3; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 10px 12px;
+        border: 1px solid var(--accent-line); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--text); box-shadow: var(--shadow);
+        > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+    }
+    &--mini &__next { display: none; }
     &__status, &__save-error { position: absolute; z-index: 4; max-width: calc(100% - 24px); margin: 12px; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); color: var(--text); }
     &__status { inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
     &__save-error { top: 64px; left: 0; }

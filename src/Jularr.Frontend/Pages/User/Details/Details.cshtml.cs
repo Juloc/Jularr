@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Data.User.Library.V1;
@@ -23,7 +24,8 @@ namespace Jularr.Frontend.Pages.User.Details
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
         ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
-        ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, ReadDiscoverScopesV1 readScopes, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, ReadDiscoverScopesV1 readScopes, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery,
+        FrontendAssets assets, UiText texts) : JularrPage
     {
         private IReadOnlyList<LibraryItemV1> _related = [];
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
@@ -142,6 +144,9 @@ namespace Jularr.Frontend.Pages.User.Details
                 }
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
+
+                // A film's own progress: what the profile finished and the way to change it.
+                if (work.MediaTypeId == MediaType.Movie && texts.CanReadMedia()) page.Content.Add(FilmProgress(playable));
 
                 // The trailer beside a movie's languages; all its versions open on demand.
                 var overview = new List<IUiComponent>();
@@ -262,7 +267,8 @@ namespace Jularr.Frontend.Pages.User.Details
             {
                 var current = season.SeasonNumber == SelectedSeason;
                 var facts = string.Join(" · ", new[] { string.Format(CultureInfo.CurrentCulture, texts["details.episodeCount"], season.EpisodeCount),
-                    season.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }.OfType<string>());
+                    season.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
+                    season.WatchedCount > 0 ? string.Format(CultureInfo.CurrentCulture, texts["details.watchedCount"], season.WatchedCount) : null }.OfType<string>());
                 var link = new A(season.ImageUrl is null ? new Span().Class("details-season__poster") : new MediaImage(season.ImageUrl, "", 92, 138),
                     new Span(new Strong(new ValueText(SeasonName(season))), new Span(new ValueText(facts)).Class("details-season__facts")).Class("details-season__text"))
                     .Class(current ? "details-season details-season--current" : "details-season").Attribute("href", home + "?season=" + season.SeasonNumber.ToString(CultureInfo.InvariantCulture));
@@ -282,13 +288,77 @@ namespace Jularr.Frontend.Pages.User.Details
                         episode.Title, episode.Overview, episode.ImageUrl, episode.RuntimeMinutes,
                         episode.IsUpcoming && episode.MediaStateTypeId != MediaStateType.Available ? "details.upcoming" : "media.state." + episode.MediaStateTypeId,
                         canPlay && episode.MediaAssetId is { } asset ? "/Player/" + asset.ToString(CultureInfo.InvariantCulture) : null, resume)
-                    .Progress(episode.IsCompleted ? null : episode.ResumePositionMs, episode.DurationMs));
+                    .Progress(episode.IsCompleted ? null : episode.ResumePositionMs, episode.DurationMs)
+                    .Watched(episode.IsCompleted, EpisodeActions(episode)));
             }
 
+            // The series' and the shown season's progress with the ways to change it.
+            var chosen = _seasons.FirstOrDefault(season => season.SeasonNumber == SelectedSeason);
+            var canMark = texts.CanReadMedia();
+            var seriesStart = _availability?.Items.FirstOrDefault(CanOpen) is { } first ? PlayHref(first) : null;
+            var seasonStart = _episodes.Where(episode => canPlay && episode.MediaAssetId is not null).Select(episode => "/Player/" + episode.MediaAssetId!.Value.ToString(CultureInfo.InvariantCulture))
+                .FirstOrDefault();
+            var seriesBar = !canMark ? new Span() : ProgressBar("series", null, seriesStart, _seasons.Any(season => season.WatchedCount > 0) || _episodes.Any(episode => episode.ResumePositionMs > 0));
+            var seasonBar = !canMark || chosen is null ? new Span() : ProgressBar("season", chosen.Id, seasonStart, chosen.WatchedCount > 0 || _episodes.Any(episode => episode.ResumePositionMs > 0));
+
             return new Div(
-                new Section(new H2(new Text("details.seasons")), new Nav([.. seasons]).Class("details-seasons").Attribute("aria-label", texts["details.seasons"])),
-                new Section(new H2(new Text("details.episodes")), _episodes.Count == 0 ? new P(new Text("details.noEpisodes")) : new Div([.. episodes]).Class("details-episodes")))
+                new Section(new H2(new Text("details.seasons")), new Nav([.. seasons]).Class("details-seasons").Attribute("aria-label", texts["details.seasons"]), seriesBar),
+                new Section(new H2(new Text("details.episodes")), seasonBar, _episodes.Count == 0 ? new P(new Text("details.noEpisodes")) : new Div([.. episodes]).Class("details-episodes")))
                 .Class("details-series");
+        }
+
+        // Watched and unwatched for a whole series or season, and starting it over; start over shows where something was watched.
+        private IUiComponent ProgressBar(string scope, long? unitId, string? playHref, bool started) => new Div(
+            ProgressForm("progress." + scope + ".markWatched", ProgressAction.Watched, unitId),
+            ProgressForm("progress." + scope + ".markUnwatched", ProgressAction.Unwatched, unitId),
+            started && playHref is not null ? ProgressForm("progress." + scope + ".startOver", ProgressAction.Unwatched, unitId, playHref) : new Span()).Class("details-progress");
+
+        // The film's chip and buttons; starting over needs something to start again.
+        private IUiComponent FilmProgress(WorkAvailabilityV1? playable)
+        {
+            var item = _availability?.Items.FirstOrDefault(entry => entry.WorkUnitId is null && entry.MediaAssetTypeId == MediaAssetType.Video);
+            var watched = item?.IsCompleted == true;
+            var started = item?.ResumePositionMs is > 0;
+            return new Div(
+                watched ? new Span(new Text("progress.watched")).Class("state-chip state-chip--watched") : new Span(),
+                watched ? ProgressForm("progress.markUnwatched", ProgressAction.Unwatched, null) : ProgressForm("progress.markWatched", ProgressAction.Watched, null),
+                (watched || started) && playable is not null ? ProgressForm("progress.startOver", ProgressAction.Unwatched, null, PlayHref(playable)) : new Span()).Class("details-progress");
+        }
+
+        // An episode: watched or not with one icon, and starting over where it was begun or finished.
+        private IUiComponent? EpisodeActions(WorkEpisodeV1 episode)
+        {
+            if (!texts.CanReadMedia()) return null;
+            var started = episode.IsCompleted || episode.ResumePositionMs > 0;
+            return new Div(
+                ProgressForm(episode.IsCompleted ? "progress.markUnwatched" : "progress.markWatched", episode.IsCompleted ? ProgressAction.Unwatched : ProgressAction.Watched, episode.Id, null, "check"),
+                started && texts.CanPlay() && episode.MediaAssetId is { } asset
+                    ? ProgressForm("progress.startOver", ProgressAction.Unwatched, episode.Id, "/Player/" + asset.ToString(CultureInfo.InvariantCulture), "history")
+                    : new Span());
+        }
+
+        // One button posting a change of the profile's progress; with a play address it is "start over" and opens the player or reader afterwards.
+        private IUiComponent ProgressForm(string labelKey, ProgressAction action, long? unitId, string? playHref = null, string? icon = null)
+        {
+            var hidden = new List<(string Name, string Value)> { ("action", ((byte)action).ToString(CultureInfo.InvariantCulture)), ("returnUrl", Request.Path + Request.QueryString) };
+            if (unitId is { } unit) hidden.Add(("unitId", unit.ToString(CultureInfo.InvariantCulture)));
+            if (playHref is not null) hidden.Add(("playHref", playHref));
+            var button = icon is null ? new Button(new Text(labelKey)).Compact().Submit() : new Button(new Icon(icon, assets)).IconOnly(texts[labelKey]).Submit().Attribute("title", texts[labelKey]);
+            return new PostForm("/Details/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=Progress", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, hidden, button);
+        }
+
+        public async Task<IActionResult> OnPostProgressAsync([BindRequired] ProgressAction action, long? unitId, string? playHref, string? returnUrl)
+        {
+            await updateProgress.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), new UpdateWorkProgressDataV1(action, unitId), HttpContext.RequestAborted);
+
+            // Starting over opens the player or the reader at the beginning.
+            if (playHref is not null && Url.IsLocalUrl(playHref) && (playHref.StartsWith("/Player/", StringComparison.Ordinal) || playHref.StartsWith("/Read/", StringComparison.Ordinal)))
+            {
+                return LocalRedirect(playHref);
+            }
+
+            if (Url.IsLocalUrl(returnUrl)) return LocalRedirect(returnUrl);
+            return RedirectToPage("/User/Details/Details", new { id = Id });
         }
 
         private string SeasonName(WorkSeasonV1 season) => season.SeasonNumber == 0 ? texts["details.specials"]
@@ -305,7 +375,19 @@ namespace Jularr.Frontend.Pages.User.Details
             .Content("details.subtitles", item => new ValueText(string.Join(", ", item.SubtitleLanguages)))
             .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? Clock(duration) : ""))
             .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))
-            .Content("common.actions", Play);
+            .Content("details.progress", item => IsReadable(item) && item.HasProgress
+                ? new Span(new Text(item.IsCompleted ? "progress.read" : "progress.started")).Class(item.IsCompleted ? "state-chip state-chip--watched" : "state-chip state-chip--inprogress")
+                : new Span())
+            .Content("common.actions", item => new Div(Play(item), Mark(item)));
+
+        // A book's volume where the profile has progress: read or unread, or begun again.
+        private IUiComponent Mark(WorkAvailabilityV1 item)
+        {
+            if (!IsReadable(item) || !item.HasProgress || item.WorkUnitId is not { } unit || !texts.CanReadMedia()) return new Span();
+            return new Div(
+                ProgressForm(item.IsCompleted ? "progress.markUnread" : "progress.markRead", item.IsCompleted ? ProgressAction.Unwatched : ProgressAction.Watched, unit),
+                texts.CanRead() ? ProgressForm("progress.startOver", ProgressAction.Unwatched, unit, PlayHref(item)) : new Span());
+        }
 
         private IUiComponent Play(WorkAvailabilityV1 item)
         {

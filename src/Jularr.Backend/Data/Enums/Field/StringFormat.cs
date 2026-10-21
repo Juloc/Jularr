@@ -14,6 +14,9 @@ namespace Jularr.Backend.Data.Enums.Field
         HttpUrl = 9,
 
         // HTTP or NNTP service address.
-        ServiceUrl = 10
+        ServiceUrl = 10,
+
+        // Two-letter ISO 639-1 language, lower case.
+        Language = 11
     }
 }

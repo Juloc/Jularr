@@ -176,8 +176,8 @@ CREATE TABLE "AccountSessions" (
     -- A paired TV, phone or app has a platform; browser sign-ins have none. A device without its own name shows the default.
     "DeviceName" varchar(100),
     "DevicePlatform" varchar(32),
-    -- Music this device plays: 1 the original, 2 converted to 256 kbit/s, 3 to 128 kbit/s.
-    "AudioQuality" smallint NOT NULL DEFAULT 1 CHECK ("AudioQuality" BETWEEN 1 AND 3),
+    -- How this device plays: 1 automatic, 2 the original, 3 capped to 1080p and 256 kbit/s audio, 4 capped to 480p and 128 kbit/s.
+    "PlaybackQuality" smallint NOT NULL DEFAULT 1 CHECK ("PlaybackQuality" BETWEEN 1 AND 4),
     CONSTRAINT "PK_AccountSessions" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_AccountSessions_PublicId" UNIQUE ("PublicId"),
     CONSTRAINT "UX_AccountSessions_TokenHash" UNIQUE ("TokenHash"),

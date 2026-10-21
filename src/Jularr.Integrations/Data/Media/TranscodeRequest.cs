@@ -30,5 +30,9 @@ namespace Jularr.Integrations.Data.Media
 
         // Converted audio's rate in kilobits a second.
         public int AudioKilobits { get; init; } = 192;
+
+        // Converted video's largest height and rate in kilobits a second; none is no cap.
+        public int? MaxHeight { get; init; }
+        public int? VideoKilobits { get; init; }
     }
 }

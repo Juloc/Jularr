@@ -33,10 +33,10 @@ namespace Jularr.Backend.Data.Logic.Playback
     internal sealed class PlaybackSourceData : BaseData
     {
         public PlaybackSourceData(long storedFileId, string relativePath, string rootRelativePath, long storageMountId,
-            string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long? durationMs, long? resumePositionMs, long? bitRate, AudioQuality audioQuality)
+            string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long? durationMs, long? resumePositionMs, long? bitRate, PlaybackQuality playbackQuality)
         {
             BitRate = bitRate;
-            AudioQuality = audioQuality;
+            PlaybackQuality = playbackQuality;
             StoredFileId = storedFileId;
             RelativePath = relativePath;
             RootRelativePath = rootRelativePath;
@@ -79,18 +79,20 @@ namespace Jularr.Backend.Data.Logic.Playback
         public long? BitRate { get; }
 
         // The playing device's music quality.
-        [DataField(typeof(Fields.Account.AccountSessionFields), nameof(Fields.Account.AccountSessionFields.AudioQuality))]
-        public AudioQuality AudioQuality { get; }
+        [DataField(typeof(Fields.Account.AccountSessionFields), nameof(Fields.Account.AccountSessionFields.PlaybackQuality))]
+        public PlaybackQuality PlaybackQuality { get; }
     }
 
     internal sealed class PlaybackTrackData : BaseData
     {
-        public PlaybackTrackData(int streamIndex, MediaTrackType mediaTrackTypeId, string? codec, bool isDefault)
+        public PlaybackTrackData(int streamIndex, MediaTrackType mediaTrackTypeId, string? codec, bool isDefault, string? language = null, int? height = null)
         {
             StreamIndex = streamIndex;
             MediaTrackTypeId = mediaTrackTypeId;
             Codec = codec;
             IsDefault = isDefault;
+            Language = language;
+            Height = height;
         }
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex))]
@@ -104,6 +106,12 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.IsDefault))]
         public bool IsDefault { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language))]
+        public string? Language { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
+        public int? Height { get; }
     }
 
     internal sealed class PlaybackSessionCreationData : BaseData

@@ -13,7 +13,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
 {
     // The input stays readable for FFmpeg until the session's job stops.
     internal sealed record PlaybackTranscodeSource(Guid SessionId, long ProfileId, StorageInput Input, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio,
-        long DurationMs, int? AudioKilobits = null)
+        long DurationMs, int? AudioKilobits = null, int? MaxHeight = null, int? VideoKilobits = null)
     {
         public int SegmentCount => (int)Math.Ceiling(DurationMs / (PlaybackTranscodes.SegmentSeconds * 1000d));
     }
@@ -151,7 +151,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var software = job.SoftwareFallback || _options.VideoEncoderArguments.Length == 0;
             var request = new TranscodeRequest(job.Source.Input.Location, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
                 job.Source.CopyVideo, job.Source.CopyAudio, software ? MediaOptions.SoftwareEncoderArguments : _options.VideoEncoderArguments,
-                software ? [] : _options.HardwareAccelerationArguments) { AudioKilobits = job.Source.AudioKilobits ?? 192 };
+                software ? [] : _options.HardwareAccelerationArguments)
+            {
+                AudioKilobits = job.Source.AudioKilobits ?? 192,
+                MaxHeight = job.Source.MaxHeight,
+                VideoKilobits = job.Source.VideoKilobits
+            };
 
             // Counting and starting share one reservation, so parallel starts respect the budget.
             lock (_capacity)

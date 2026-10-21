@@ -20,12 +20,12 @@ namespace Jularr.E2E.Tests
             var problems = new ConcurrentQueue<string>();
             page.Console += (_, message) =>
             {
-                if (message.Type == "error") problems.Enqueue(page.Url + ": " + message.Text);
+                if (message.Type == "error" && !IsProviderCover(message.Location)) problems.Enqueue(page.Url + ": " + message.Text);
             };
             page.PageError += (_, error) => problems.Enqueue(page.Url + ": " + error);
             page.Response += (_, response) =>
             {
-                if (response.Status >= 500) problems.Enqueue(response.Url + ": HTTP " + response.Status);
+                if (response.Status >= 500 && !IsProviderCover(response.Url)) problems.Enqueue(response.Url + ": HTTP " + response.Status);
             };
 
             try
@@ -38,7 +38,8 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(links.Length > 5, "The menu shows too few pages: " + string.Join(", ", links));
                 foreach (var link in links.Where(link => !link.StartsWith("/Account/Logout", StringComparison.Ordinal)))
                 {
-                    var response = await page.GotoAsync(link);
+                    // The page itself is what is checked: covers of the real catalogs may load slowly or never in a test run.
+                    var response = await page.GotoAsync(link, new() { WaitUntil = WaitUntilState.DOMContentLoaded });
                     Assert.IsNotNull(response, link);
                     Assert.IsTrue(response.Status < 400, link + " answered " + response.Status);
                     Assert.AreEqual(1, await page.Locator("main").CountAsync(), link + " has no page content");
@@ -64,5 +65,8 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        // Covers of the real catalogs (Open Library, TMDB) are fetched through the server from sites this test does not control.
+        private static bool IsProviderCover(string? address) => address?.Contains("/api/v1/covers/external", StringComparison.Ordinal) == true;
     }
 }

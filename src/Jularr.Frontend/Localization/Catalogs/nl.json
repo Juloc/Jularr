@@ -1232,22 +1232,6 @@
    "Root folder",
    "Hoofdmap"
   ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Muziek op dit apparaat"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Origineel"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Hoog (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Klein (128 kbit/s)"
-  ],
   "takeover.rootFolders": [
    "Root folders",
    "Hoofdmappen"
@@ -1675,10 +1659,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Leeg toont het platform van het apparaat als naam."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Origineel speelt het bestand af zoals het is. Hoog en Klein converteren grotere muziekbestanden direct, wat onderweg data bespaart."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
