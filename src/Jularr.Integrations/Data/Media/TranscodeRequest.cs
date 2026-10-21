@@ -34,5 +34,8 @@ namespace Jularr.Integrations.Data.Media
         // Converted video's largest height and rate in kilobits a second; none is no cap.
         public int? MaxHeight { get; init; }
         public int? VideoKilobits { get; init; }
+
+        // The filter that applies the height cap, with {height} where it goes; without one only software encoding scales.
+        public string? ScaleFilter { get; init; }
     }
 }

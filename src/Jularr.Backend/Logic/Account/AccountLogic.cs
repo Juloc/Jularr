@@ -34,6 +34,7 @@ namespace Jularr.Backend.Logic.Account
                     "AccountRoleTypeId" = @AccountRoleTypeId,
                     "IsEnabled" = @IsEnabled,
                     "MayConfirmSources" = coalesce(@MayConfirmSources, account."MayConfirmSources"),
+                    "TranscodingPriority" = coalesce(@TranscodingPriority, account."TranscodingPriority"),
                     "CredentialRevision" = account."CredentialRevision" + CASE
                         WHEN account."AccountRoleTypeId" <> @AccountRoleTypeId OR account."IsEnabled" <> @IsEnabled THEN 1
                         ELSE 0
@@ -146,9 +147,9 @@ namespace Jularr.Backend.Logic.Account
             sql.Statement =
                 """
                 INSERT INTO
-                    "Accounts" ("Email", "DisplayName", "AccountRoleTypeId", "IsEnabled", "EmailVerifiedAt")
+                    "Accounts" ("Email", "DisplayName", "AccountRoleTypeId", "IsEnabled", "EmailVerifiedAt", "TranscodingPriority")
                 VALUES
-                    (@Email, @DisplayName, @AccountRoleTypeId, @IsEnabled, @EmailVerifiedAt)
+                    (@Email, @DisplayName, @AccountRoleTypeId, @IsEnabled, @EmailVerifiedAt, @AccountRoleTypeId::smallint = 1)
                 ON CONFLICT ("Email") DO NOTHING
                 RETURNING
                     "Id";

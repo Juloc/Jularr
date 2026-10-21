@@ -7241,8 +7241,20 @@
    "Dieser Untertitel kann nicht angezeigt werden."
   ],
   "errors.playback_capacity_exhausted": [
-   "The server is converting as many streams as it allows. Please try again shortly.",
-   "Der Server konvertiert bereits so viele Streams, wie er zulässt. Bitte versuche es gleich erneut."
+   "Server busy: transcoding is unavailable right now.",
+   "Server ausgelastet: Umwandeln ist gerade nicht möglich."
+  ],
+  "errors.playback_evicted": [
+   "Playback ended because the server needed the capacity. Try again at a lower quality.",
+   "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
+  ],
+  "errors.benchmark_unavailable": [
+   "The benchmark needs FFmpeg, which this server does not have.",
+   "Der Benchmark braucht FFmpeg, das dieser Server nicht hat."
+  ],
+  "errors.benchmark_failed": [
+   "No encoder of this server ran the benchmark clips.",
+   "Kein Encoder dieses Servers konnte die Benchmark-Clips verarbeiten."
   ],
   "errors.storage_wake_failed": [
    "The Wake-on-LAN packet could not be sent.",
@@ -8095,6 +8107,154 @@
   "admin.browser.sourceFailed": [
    "The source does not answer:",
    "Die Quelle antwortet nicht:"
+  ],
+  "nav.group.system": [
+   "System",
+   "System"
+  ],
+  "admin.transcoding.title": [
+   "Transcoding",
+   "Transcoding"
+  ],
+  "admin.transcoding.hardware": [
+   "Hardware",
+   "Hardware"
+  ],
+  "admin.transcoding.benchmark": [
+   "Benchmark",
+   "Benchmark"
+  ],
+  "admin.transcoding.settings": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "admin.transcoding.encoder": [
+   "Encoder",
+   "Encoder"
+  ],
+  "admin.transcoding.device": [
+   "Device",
+   "Gerät"
+  ],
+  "admin.transcoding.available": [
+   "Available",
+   "Verfügbar"
+  ],
+  "admin.transcoding.speed1080": [
+   "1080p speed",
+   "Tempo 1080p"
+  ],
+  "admin.transcoding.speed4k": [
+   "4K to 1080p speed",
+   "Tempo 4K auf 1080p"
+  ],
+  "admin.transcoding.notRun": [
+   "Not run",
+   "Nicht gelaufen"
+  ],
+  "admin.transcoding.run": [
+   "Run benchmark",
+   "Benchmark starten"
+  ],
+  "admin.transcoding.running": [
+   "The benchmark is running.",
+   "Der Benchmark läuft."
+  ],
+  "admin.transcoding.failed": [
+   "The last benchmark failed.",
+   "Der letzte Benchmark ist fehlgeschlagen."
+  ],
+  "admin.transcoding.ranAt": [
+   "Last run",
+   "Letzter Lauf"
+  ],
+  "admin.transcoding.never": [
+   "Never",
+   "Nie"
+  ],
+  "admin.transcoding.cores": [
+   "Processor cores",
+   "Prozessorkerne"
+  ],
+  "admin.transcoding.proposedAcceleration": [
+   "Proposed acceleration",
+   "Vorgeschlagene Beschleunigung"
+  ],
+  "admin.transcoding.proposedMaximum": [
+   "Proposed maximum",
+   "Vorgeschlagenes Maximum"
+  ],
+  "admin.transcoding.acceleration": [
+   "Acceleration",
+   "Beschleunigung"
+  ],
+  "admin.transcoding.maxTranscodes": [
+   "Conversions at once",
+   "Gleichzeitige Umwandlungen"
+  ],
+  "admin.transcoding.ladder": [
+   "Lower qualities offered",
+   "Angebotene niedrigere Qualitäten"
+  ],
+  "admin.transcoding.acceleration.Auto": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "admin.transcoding.acceleration.Software": [
+   "Software",
+   "Software"
+  ],
+  "admin.transcoding.acceleration.Vaapi": [
+   "VAAPI",
+   "VAAPI"
+  ],
+  "admin.transcoding.acceleration.Qsv": [
+   "Intel Quick Sync",
+   "Intel Quick Sync"
+  ],
+  "admin.transcoding.acceleration.Nvenc": [
+   "NVIDIA NVENC",
+   "NVIDIA NVENC"
+  ],
+  "admin.transcoding.acceleration.VideoToolbox": [
+   "Apple VideoToolbox",
+   "Apple VideoToolbox"
+  ],
+  "hint.TranscodeFields.TranscodeAccelerationTypeId.info": [
+   "Automatic uses the encoder the last benchmark found best, else the configured one.",
+   "Automatisch nutzt den Encoder, den der letzte Benchmark als besten fand, sonst den konfigurierten."
+  ],
+  "hint.TranscodeFields.MaxTranscodes.info": [
+   "Counted in 1080p conversions; a smaller picture counts less, copying the video counts nothing.",
+   "Gezählt in 1080p-Umwandlungen; ein kleineres Bild zählt weniger, das Kopieren des Videos zählt nichts."
+  ],
+  "hint.TranscodeFields.LadderHeights.info": [
+   "Offered, highest first, when the server has no room for the wanted conversion.",
+   "Angeboten, die höchste zuerst, wenn der Server für die gewünschte Umwandlung keinen Platz hat."
+  ],
+  "admin.accounts.transcodingPriority": [
+   "Transcoding priority",
+   "Transcoding-Vorrang"
+  ],
+  "hint.AccountFields.TranscodingPriority.info": [
+   "When the server is full, this account's conversion stops the newest one of an account without priority.",
+   "Ist der Server voll, beendet die Umwandlung dieses Kontos die neueste eines Kontos ohne Vorrang."
+  ],
+  "operation.type.TranscodeBenchmark": [
+   "Transcoding benchmark",
+   "Transcoding-Benchmark"
+  ],
+  "player.status.playback_capacity_exhausted": [
+   "Server busy: transcoding is unavailable right now.",
+   "Server ausgelastet: Umwandeln ist gerade nicht möglich."
+  ],
+  "player.status.playback_evicted": [
+   "Playback ended because the server needed the capacity. Choose a lower quality to continue.",
+   "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Wähle eine niedrigere Qualität, um fortzufahren."
+  ],
+  "player.status.playback_reduced": [
+   "The server is busy, so this plays in a lower quality.",
+   "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ]
  }
 }
