@@ -13,14 +13,16 @@ namespace Jularr.Backend.Data.User.Playback.V1
     // The profile's playback choices and how the asking device plays.
     public sealed class PlaybackPreferencesV1 : BaseResponse
     {
-        public PlaybackPreferencesV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, string profileLanguage,
-            PlaybackQuality deviceQuality)
+        public PlaybackPreferencesV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, SkipMode introSkipModeTypeId,
+            SkipMode outroSkipModeTypeId, string profileLanguage, PlaybackQuality deviceQuality)
         {
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
             Speed = speed;
             AutoplayNext = autoplayNext;
+            IntroSkipModeTypeId = introSkipModeTypeId;
+            OutroSkipModeTypeId = outroSkipModeTypeId;
             ProfileLanguage = profileLanguage;
             DeviceQuality = deviceQuality;
         }
@@ -42,6 +44,13 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
 
+        // What happens at an intro or recap, and at credits or a preview.
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode IntroSkipModeTypeId { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode OutroSkipModeTypeId { get; }
+
         // The language of the profile's interface, the subtitle language it has when none is chosen.
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language), true)]
         public string ProfileLanguage { get; }
@@ -53,13 +62,16 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class SavePlaybackPreferencesDataV1 : BaseData
     {
-        public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext)
+        public SavePlaybackPreferencesDataV1(string? audioLanguage, string? subtitleLanguage, SubtitleMode subtitleModeTypeId, decimal speed, bool autoplayNext, SkipMode introSkipModeTypeId,
+            SkipMode outroSkipModeTypeId)
         {
             AudioLanguage = audioLanguage;
             SubtitleLanguage = subtitleLanguage;
             SubtitleModeTypeId = subtitleModeTypeId;
             Speed = speed;
             AutoplayNext = autoplayNext;
+            IntroSkipModeTypeId = introSkipModeTypeId;
+            OutroSkipModeTypeId = outroSkipModeTypeId;
         }
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.Language))]
@@ -76,6 +88,12 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.AutoplayNext))]
         public bool AutoplayNext { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode IntroSkipModeTypeId { get; }
+
+        [DataField(typeof(PlaybackPreferenceFields), nameof(PlaybackPreferenceFields.SkipModeTypeId))]
+        public SkipMode OutroSkipModeTypeId { get; }
     }
 
     // The speed chosen in the player, remembered for the profile.
