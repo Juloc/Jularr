@@ -93,7 +93,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(5_000_000L, jellyfin.Positions["m603"]);
 
             // The providers page shows who shares progress with which profile.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers?view=servers");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, WebUtility.HtmlEncode(jellyfin.ProfileName + " shares progress with " + jellyfin.ProfileName));

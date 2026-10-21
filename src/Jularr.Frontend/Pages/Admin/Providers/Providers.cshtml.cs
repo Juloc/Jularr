@@ -157,7 +157,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }
 
             var icon2 = provider.Key == "plex" ? "plex" : ServerKeys.Contains(provider.Key) ? "server" : "globe";
-            return new FeatureCard(new IconTile(Glyph(icon2, 18), UiTone.Accent), texts["provider.name." + provider.Key], texts["provider.hint." + provider.Key], null, body, start, end, "provider-" + provider.Key);
+            return new FeatureCard(new IconTile(Glyph(icon2, 18), UiTone.Accent), texts.Has("provider.name." + provider.Key) ? texts["provider.name." + provider.Key] : provider.Key, texts.Has("provider.hint." + provider.Key) ? texts["provider.hint." + provider.Key] : "", null, body, start, end, "provider-" + provider.Key);
         }
 
         private bool HasSettings(string key) => KeyProviders.Contains(key) || key == "plex" && _plex is not null || MediaServerTypes.FromProviderKey(key) is { } type && _servers.ContainsKey(type);
@@ -193,7 +193,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 open = _serverInput == type;
             }
 
-            return body.Count == 0 ? null : new Modal(assets, "provider-settings-" + provider.Key, "provider.name." + provider.Key, body, open);
+            return body.Count == 0 ? null : new Modal(assets, "provider-settings-" + provider.Key, texts.Has("provider.name." + provider.Key) ? "provider.name." + provider.Key : "admin.providers.title", body, open);
         }
 
         private void DefinePlex(List<IUiComponent> body, PlexServerDetailsV1 plex, string? csrf)

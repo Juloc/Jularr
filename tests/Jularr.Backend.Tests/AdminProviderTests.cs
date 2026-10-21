@@ -136,10 +136,9 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
-            // A two-way choice is one segmented control; its first option names the field.
-            var fields = Regex.Matches(html, "id=\"(form-[^\"]+-IsEnabled)(?:-0)?\"").Select(match => match.Groups[1].Value).ToArray();
-            // Media servers appear with their module, which is off.
-            var registered = (long)(await host.ScalarAsync("SELECT count(*) FROM \"Providers\" WHERE \"Key\" NOT IN ('jellyfin', 'emby')"))!;
+            // Every provider is one card with its own switch; the media servers are on their own chip (and their modules are off).
+            var fields = Regex.Matches(html, "id=\"(provider-[a-z0-9-]+)\"").Select(match => match.Groups[1].Value).ToArray();
+            var registered = (long)(await host.ScalarAsync("SELECT count(*) FROM \"Providers\" WHERE \"Key\" NOT IN ('plex', 'jellyfin', 'emby')"))!;
             Assert.AreEqual(registered, fields.Length);
             Assert.AreEqual(registered, fields.Distinct(StringComparer.Ordinal).Count());
             var csrf = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
