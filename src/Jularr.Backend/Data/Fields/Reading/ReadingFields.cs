@@ -20,6 +20,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly BoolField IsCached = new();
         public static readonly BoolField IsMissing = new();
         public static readonly BoolField IsPending = new();
+        public static readonly BoolField IsPdf = new();
         public static readonly StringField Path = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, AllowBlank = false };
         public static readonly StringField MediaType = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false };
         public static readonly ByteArrayField Bytes = new();
@@ -40,5 +41,13 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly IntField Count = new() { Minimum = 0 };
         public static readonly StringField Query = new() { MinimumLength = 2, MaximumLength = 100, AllowBlank = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
         public static readonly StringField Snippet = new() { MaximumLength = 400 };
+        public static readonly ByteArrayField Sha256 = new() { MinimumLength = 32, MaximumLength = 32, Required = false };
+        public static readonly EnumField ReadingDerivationStatusTypeId = new(typeof(ReadingDerivationStatus));
+        public static readonly EnumField ReadingDerivationStatusTypeIdOptional = new(typeof(ReadingDerivationStatus)) { Required = false };
+        public static readonly StringField Reason = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false };
+        public static readonly IntField Pages = new() { Minimum = 0, Required = false };
+        public static readonly IntField Chapters = new() { Minimum = 0, Required = false };
+        public static readonly IntField Figures = new() { Minimum = 0, Required = false };
+        public static readonly IntField Attempts = new() { Minimum = 0 };
     }
 }

@@ -162,6 +162,9 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
             if (!visible(box) || getComputedStyle(image).display === 'none') continue;
             const copy = image.cloneNode(false) as HTMLImageElement;
             copy.removeAttribute('id'); copy.removeAttribute('data-index'); copy.alt = '';
+            copy.removeAttribute('tabindex'); copy.removeAttribute('role'); copy.removeAttribute('aria-label');
+            const figure = image.closest<HTMLElement>('[data-figure]');
+            if (figure?.dataset.figure) copy.dataset.figure = figure.dataset.figure;
             Object.assign(copy.style, { width: `${box.width}px`, height: `${box.height}px`, maxWidth: 'none', maxHeight: 'none', objectFit: getComputedStyle(image).objectFit });
             append(copy, box);
         }

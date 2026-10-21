@@ -22,10 +22,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
     public sealed class OpenReadingV1 : UserService<ReadingAssetParametersV1, NoData>
     {
         private readonly ReadingContent _content;
+        private readonly ReadingActivity _activity;
 
-        internal OpenReadingV1(ReadingContent content)
+        internal OpenReadingV1(ReadingContent content, ReadingActivity activity)
         {
             _content = content;
+            _activity = activity;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -61,13 +63,14 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             SELECT
                                 candidate.*
                             FROM
-                                "StoredFiles" AS candidate
+                                "ReadableStoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
                                 AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                                AND (NOT candidate."IsDerived" OR candidate."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
-                                candidate."RelativePath" ~* '\.pdf$',
+                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
                                 candidate."ModifiedAt" DESC,
                                 candidate."Id"
                             LIMIT 1
@@ -99,7 +102,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return ctx.ReadSql.ReadOptionalAsync<ReadingSourceData>(sql, ct);
             }, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
 
-            var documentId = await _content.OpenAsync(Context, source, CancellationToken);
+            // Background conversion waits while a person opens a book.
+            long documentId;
+            using (_activity.Begin())
+            {
+                documentId = await _content.OpenAsync(Context, source, CancellationToken);
+            }
+
             return await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -161,7 +170,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // EPUB and comics are prepared; a book whose only present file is a PDF opens as one.
+            // EPUB and comics are prepared; a book whose only present file is a PDF opens as one. A reading copy counts while it is ready and its PDF unchanged.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -173,20 +182,62 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$' AND file."MissingSince" IS NULL) THEN 2
                         WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') AND NOT bool_or(file."RelativePath" ~* '\.epub$') THEN 4
                         ELSE 1
-                    END::smallint AS "ReadingFormatTypeId"
+                    END::smallint AS "ReadingFormatTypeId",
+                    bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL) AS "HasPdf",
+                    progress."Status" AS "ReadingDerivationStatusTypeId",
+                    progress."Reason"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
-                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                    JOIN "ReadableStoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                        AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                        AND (NOT file."IsDerived" OR file."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            CASE
+                                WHEN derivation."SourceSizeBytes" = pdf."SizeBytes" AND derivation."SourceModifiedAt" = pdf."ModifiedAt" AND derivation."AnalyzerVersion" = @PdfAnalyzerVersion
+                                    THEN derivation."ReadingDerivationStatusTypeId"
+                                ELSE 1
+                            END::smallint AS "Status",
+                            CASE
+                                WHEN derivation."SourceSizeBytes" = pdf."SizeBytes" AND derivation."SourceModifiedAt" = pdf."ModifiedAt" AND derivation."AnalyzerVersion" = @PdfAnalyzerVersion
+                                    THEN derivation."Reason"
+                            END AS "Reason"
+                        FROM
+                            "StoredFiles" AS pdf
+                            LEFT JOIN "ReadingDerivations" AS derivation ON derivation."StoredFileId" = pdf."Id"
+                        WHERE
+                            pdf."MediaAssetId" = asset."Id"
+                            AND pdf."RelativePath" ~* '\.pdf$'
+                            AND pdf."MissingSince" IS NULL
+                            AND EXISTS (SELECT 1 FROM "InstanceModules" AS module WHERE module."Key" = 'SmartPdf' AND module."IsEnabled")
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "StoredFiles" AS other
+                                WHERE
+                                    other."MediaAssetId" = asset."Id"
+                                    AND other."RelativePath" ~* '\.epub$'
+                                    AND other."MissingSince" IS NULL
+                                    AND NOT EXISTS (SELECT 1 FROM "ReadingDerivations" AS derived WHERE derived."EbookStoredFileId" = other."Id")
+                            )
+                        ORDER BY
+                            pdf."ModifiedAt" DESC,
+                            pdf."Id"
+                        LIMIT 1
+                    ) AS progress ON TRUE
                 WHERE
                     asset."Id" = @MediaAssetId
                     AND asset."MediaAssetTypeId" IN (3, 4)
                 GROUP BY
                     work."Id",
-                    visible."Title";
+                    visible."Title",
+                    progress."Status",
+                    progress."Reason";
                 """;
-            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion, PdfBook.AnalyzerVersion));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingSourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
         }

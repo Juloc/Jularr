@@ -68,6 +68,7 @@ namespace Jularr.Backend.Service.Core
             new("trickplay", WorkerGroupType.Trickplay, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(75), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("subtitles", WorkerGroupType.Subtitle, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(100), canPauseWhileUsed: true),
             new("recognition", WorkerGroupType.Recognition, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(20), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            new("readingCopies", WorkerGroupType.Derivation, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(25), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
 
             // Each catalog decides for itself whether it waits while Jularr is used.
             new("catalog", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
