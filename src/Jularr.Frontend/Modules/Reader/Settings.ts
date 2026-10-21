@@ -16,6 +16,7 @@ export interface ReaderSettings {
     colour: string;
     animation: 'system' | 'on' | 'off';
     preset: 'book' | 'novel' | 'manga';
+    fit: 'page' | 'width';
 }
 
 const Key = 'jularr.reader';
@@ -39,7 +40,8 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         colour: typeof stored.colour === 'string' && /^#[a-f\d]{6}$/i.test(stored.colour) ? stored.colour
             : stored.theme === 'dark' ? '#141414' : stored.theme === 'sepia' ? '#f4ecd8' : '#f7f3ec',
         animation: stored.animation === 'on' || stored.animation === 'off' ? stored.animation : 'system',
-        preset: stored.preset === 'novel' || stored.preset === 'manga' ? stored.preset : 'book'
+        preset: stored.preset === 'novel' || stored.preset === 'manga' ? stored.preset : 'book',
+        fit: stored.fit === 'width' ? 'width' : 'page'
     };
 }
 
@@ -49,7 +51,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
     const settings = readerSettings(stored, reader.dataset.direction === 'rtl');
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
     const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', FontFamily: 'font', TextWidth: 'width', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
-        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset' };
+        Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
     const apply = (): void => {
         reader.dataset.mode = settings.mode;
         reader.dataset.layout = settings.layout;

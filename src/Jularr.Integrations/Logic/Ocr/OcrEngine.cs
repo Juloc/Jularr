@@ -4,7 +4,7 @@ using SkiaSharp;
 
 namespace Jularr.Integrations.Logic.Ocr
 {
-    // PP-OCRv5 on the CPU: the detection model marks text lines, the recognition model reads each. Book scans stand upright, so a line is an axis-aligned box.
+    // PP-OCRv5 on the CPU with a bounded share of its cores: the detection model marks text lines, the recognition model reads each. Book scans stand upright, so a line is an axis-aligned box.
     public sealed class OcrEngine : IDisposable
     {
         // The detection input stays within this side; book text keeps enough pixels to be found.
@@ -25,7 +25,7 @@ namespace Jularr.Integrations.Logic.Ocr
 
         public OcrEngine(string detectionModel, string recognitionModel)
         {
-            using var options = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, IntraOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2) };
+            using var options = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, IntraOpNumThreads = Math.Clamp(Environment.ProcessorCount / 4, 1, 4) };
             _detection = new InferenceSession(detectionModel, options);
             _recognition = new InferenceSession(recognitionModel, options);
 
@@ -36,7 +36,10 @@ namespace Jularr.Integrations.Logic.Ocr
         }
 
         // Text lines of a page picture with their boxes in its pixels, top to bottom.
-        public OcrPage Read(byte[] picture)
+        public OcrPage Read(byte[] picture) => Read(picture, 0);
+
+        // A page the PDF shows turned clockwise by this many degrees is read upright; the boxes are in the upright picture's pixels.
+        public OcrPage Read(byte[] picture, int rotation)
         {
             using var decoded = SKBitmap.Decode(picture) ?? throw new InvalidDataException("The page picture cannot be decoded.");
             if ((long)decoded.Width * decoded.Height > MaximumPixels)
@@ -44,7 +47,9 @@ namespace Jularr.Integrations.Logic.Ocr
                 throw new InvalidDataException("The page picture is too large.");
             }
 
-            using var page = decoded.ColorType == SKColorType.Rgba8888 ? decoded.Copy() : decoded.Copy(SKColorType.Rgba8888);
+            using var copy = decoded.ColorType == SKColorType.Rgba8888 ? decoded.Copy() : decoded.Copy(SKColorType.Rgba8888);
+            using var turned = rotation % 360 == 0 ? null : Turn(copy, ((rotation % 360) + 360) % 360);
+            var page = turned ?? copy;
             var lines = new List<OcrLine>();
             foreach (var box in Detect(page))
             {
@@ -56,6 +61,19 @@ namespace Jularr.Integrations.Logic.Ocr
             }
 
             return new OcrPage(page.Width, page.Height, [.. lines.OrderBy(line => line.Top).ThenBy(line => line.Left)]);
+        }
+
+        // The picture turned clockwise by a multiple of 90 degrees.
+        private static SKBitmap Turn(SKBitmap source, int degrees)
+        {
+            var sideways = degrees is 90 or 270;
+            var turned = new SKBitmap(sideways ? source.Height : source.Width, sideways ? source.Width : source.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using var canvas = new SKCanvas(turned);
+            canvas.Translate(turned.Width / 2f, turned.Height / 2f);
+            canvas.RotateDegrees(degrees);
+            canvas.Translate(-source.Width / 2f, -source.Height / 2f);
+            canvas.DrawBitmap(source, 0, 0);
+            return turned;
         }
 
         private List<SKRectI> Detect(SKBitmap page)

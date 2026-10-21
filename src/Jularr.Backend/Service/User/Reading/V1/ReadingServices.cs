@@ -127,6 +127,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         document."Language",
                         chosen."Language" AS "ReadingLanguage",
                         work."OriginalLanguage",
+                        coalesce((document."Structure" ->> 'Recommended')::boolean, TRUE) AS "IsRecommended",
+                        coalesce(jsonb_array_length(document."Structure" -> 'OriginalPages'), 0) AS "OriginalPages",
                         ARRAY(
                             SELECT
                                 split_part(translation."Path", '/', 2)
@@ -151,7 +153,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             AND progress."WorkId" = asset."WorkId"
                             AND progress."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                             AND progress."ProgressPositionTypeId" = 2
-                        LEFT JOIN "ReadingLanguages" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
+                        LEFT JOIN "ReadingPreferences" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
                     WHERE
                         document."Id" = @DocumentId;
                     """;
@@ -185,11 +187,18 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     END::smallint AS "ReadingFormatTypeId",
                     bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL) AS "HasPdf",
                     progress."Status" AS "ReadingDerivationStatusTypeId",
-                    progress."Reason"
+                    progress."Reason",
+                    chosen."ReadingViewTypeId",
+                    stopped."Locator"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    LEFT JOIN "ReadingPreferences" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
+                    LEFT JOIN "MediaProgress" AS stopped ON stopped."ProfileId" = @ProfileId
+                        AND stopped."WorkId" = asset."WorkId"
+                        AND stopped."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
+                        AND stopped."ProgressPositionTypeId" = 2
                     JOIN "ReadableStoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                         AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
                         AND (NOT file."IsDerived" OR file."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
@@ -235,7 +244,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     work."Id",
                     visible."Title",
                     progress."Status",
-                    progress."Reason";
+                    progress."Reason",
+                    chosen."ReadingViewTypeId",
+                    stopped."Locator";
                 """;
             sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion, PdfBook.AnalyzerVersion));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
@@ -369,7 +380,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             section.position <= @SectionIndex
                     )::bigint AS "CharactersBefore",
                     document."TotalCharacters",
-                    (document."Structure" -> 'Sections' -> @SectionIndex ->> 'Blocks')::integer AS "Blocks"
+                    (document."Structure" -> 'Sections' -> @SectionIndex ->> 'Blocks')::integer AS "Blocks",
+                    coalesce((document."Structure" -> 'Sections' -> @SectionIndex ->> 'PageFrom')::integer, 0) AS "PageFrom"
                 FROM
                     "ReadingDocuments" AS document
                     JOIN "ReadingResources" AS resource ON resource."ReadingDocumentId" = document."Id"
@@ -451,8 +463,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     matches++;
                 }
 
+                // A converted PDF's hit names the page the match stands on.
+                var page = section.Html.Contains(ReadingHtml.PdfPageAttribute, StringComparison.Ordinal) ? ReadingHtml.PageOfText(section.Html, query) : null;
                 var from = Math.Max(0, first - 120);
-                hits.Add(new ReadingSearchHitV1(section.SectionIndex, section.Title, text.Substring(from, Math.Min(300, text.Length - from)).Trim(), matches));
+                hits.Add(new ReadingSearchHitV1(section.SectionIndex, section.Title, text.Substring(from, Math.Min(300, text.Length - from)).Trim(), matches, page));
                 if (hits.Count == 50)
                 {
                     break;

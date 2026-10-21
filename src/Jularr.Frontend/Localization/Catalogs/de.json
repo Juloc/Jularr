@@ -9599,6 +9599,98 @@
   "jobs.job.readingCopies": [
    "Reading copies",
    "Lesekopien"
+  ],
+  "reader.settings.view": [
+   "View",
+   "Ansicht"
+  ],
+  "reader.settings.pages": [
+   "Pages",
+   "Seiten"
+  ],
+  "reader.view.auto": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "reader.view.smart": [
+   "Smart Book",
+   "Smart Book"
+  ],
+  "reader.view.original": [
+   "Original pages",
+   "Originalseiten"
+  ],
+  "reader.view.failed": [
+   "The view could not be saved.",
+   "Die Ansicht konnte nicht gespeichert werden."
+  ],
+  "reader.view.smartUnavailable": [
+   "The Smart Book is not ready yet; the original pages are shown.",
+   "Das Smart Book ist noch nicht fertig; die Originalseiten werden angezeigt."
+  ],
+  "reader.offer.smart": [
+   "The Smart Book of this book is ready.",
+   "Das Smart Book dieses Buchs ist fertig."
+  ],
+  "reader.offer.open": [
+   "Open",
+   "Öffnen"
+  ],
+  "reader.original.loading": [
+   "Loading the pages…",
+   "Seiten werden geladen …"
+  ],
+  "reader.original.failed": [
+   "The original pages could not be shown.",
+   "Die Originalseiten konnten nicht angezeigt werden."
+  ],
+  "reader.original.page": [
+   "Page",
+   "Seite"
+  ],
+  "reader.original.zoom": [
+   "Zoom",
+   "Zoom"
+  ],
+  "reader.original.fit": [
+   "Fit",
+   "Anpassung"
+  ],
+  "reader.original.fit.page": [
+   "Whole page",
+   "Ganze Seite"
+  ],
+  "reader.original.fit.width": [
+   "Page width",
+   "Seitenbreite"
+  ],
+  "reader.recognition.progress": [
+   "Reading the scanned pages: {0} of {1}",
+   "Gescannte Seiten werden gelesen: {0} von {1}"
+  ],
+  "reader.pageNote.label": [
+   "Note on this page",
+   "Notiz zu dieser Seite"
+  ],
+  "reader.pageNote.save": [
+   "Save note",
+   "Notiz speichern"
+  ],
+  "reader.pageNote.page": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "reader.figure.originalPages": [
+   "Open the original pages",
+   "Originalseiten öffnen"
+  ],
+  "reader.figure.originalAlt": [
+   "Original page {0}",
+   "Originalseite {0}"
+  ],
+  "reader.download.omitted": [
+   "{0} pages are only in the original and are not part of this EPUB.",
+   "{0} Seiten gibt es nur im Original; sie sind nicht Teil dieses EPUBs."
   ]
  }
 }

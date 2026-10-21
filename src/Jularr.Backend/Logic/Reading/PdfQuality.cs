@@ -50,6 +50,25 @@ namespace Jularr.Backend.Logic.Reading
             return total == 0 ? 1 : 1 - (double)junk / total;
         }
 
+        // Text read out of a picture (a scan's recognition layer, a recognizer) is shown as reading text only where it holds together: null when it does, else why not.
+        // A page with little text and noise is an illustration with a few labels; a full page tolerates the odd split word. Lines that run through each other are a layout reflow cannot reconstruct.
+        public static string? Unreliable(IReadOnlyList<string> words, IReadOnlyList<PdfLine> lines, double pageWidth)
+        {
+            // A recognizer's line holds several words.
+            var tokens = words.SelectMany(word => word.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToArray();
+            if (tokens.Length == 0)
+            {
+                return null;
+            }
+
+            if (Score(tokens) < (tokens.Length < 80 ? 0.9 : 0.7) || tokens.Length >= 15 && tokens.Average(token => token.Length) < 2.5)
+            {
+                return "noise";
+            }
+
+            return PdfLayout.IsInterleaved(lines, pageWidth) ? "columns" : null;
+        }
+
         // A book is a text book when its pages mostly read as text; pictures and drawings are kept as figures, pages that only the original shows are not allowed.
         public static PdfVerdict Judge(IReadOnlyList<PdfPageReport> pages, bool forEbook)
         {
