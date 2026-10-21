@@ -83,19 +83,20 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
-            var sources = new FakeBookSources { WaitForIndexer = true };
+            var sources = new FakeBookSources();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
             using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             await CreateWantedAsync(host, work.Id);
 
-            // The direct source waits for the indexer's search; it only comes when both are asked at the same time.
+            // The direct source waits for the indexer's search (not while the host is set up, where nothing asks the indexer); it only comes when both are asked at the same time.
+            sources.StartCounting();
             await RunAsync<SearchDueWantedV1>(host);
             var order = sources.Order.ToArray();
             var direct = Array.LastIndexOf(order, "direct");
             var indexer = Array.IndexOf(order, "indexer");
             var end = Array.LastIndexOf(order, "direct-end");
-            Assert.IsTrue(direct >= 0 && indexer > direct && indexer < end, "the indexer was not asked while the direct source was waiting");
+            Assert.IsTrue(direct >= 0 && indexer > direct && indexer < end, "the indexer was not asked while the direct source was waiting: " + string.Join(",", order));
         }
 
         [TestMethod]
@@ -424,6 +425,14 @@ namespace Jularr.Backend.Tests
             public int SabGrabs { get; private set; }
             public int IndexerSearches { get; private set; }
             public bool WaitForIndexer { get; set; }
+
+            // Forgets what the set-up asked, so that only the next search is observed, and makes the direct source wait for the indexer from now on.
+            public void StartCounting()
+            {
+                Order.Clear();
+                IndexerSearches = 0;
+                WaitForIndexer = true;
+            }
             public ConcurrentQueue<string> Order { get; } = new();
             public List<string> HardcoverRequests { get; } = [];
             public byte[] EpubBytes { get; set; } = ReadingTests.BuildEpub("Pride and Prejudice");
@@ -473,8 +482,8 @@ namespace Jularr.Backend.Tests
                     case "www.gutenberg.org":
                         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(EpubBytes) };
                     case "indexer.example.test":
-                        IndexerSearches++;
                         Order.Enqueue("indexer");
+                        IndexerSearches++;
                         return Xml("""
                             <rss><channel>
                               <item><title>Seth Grahame-Smith - Pride and Prejudice and Zombies (epub)</title><guid>zombies</guid><link>https://indexer.example.test/getnzb/zombies</link><size>1000000</size></item>
