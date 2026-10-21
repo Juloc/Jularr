@@ -129,7 +129,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Times use `Form.Time` ([TimePicker](../src/Jularr.Frontend/Framework/Components/TimePicker.ts), from the UiDesigner study): hour and
   minute fields on a desktop, a wheel sheet on Android, the system's own picker on iOS (owner's decision 19 Oct); the native
   time field stays the submitted value and the picker without script.
-- `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
+- `Form.File` adds a file field from a Backend `FileField` (accepted extensions, size) as the [FileInput](../src/Jularr.Frontend/Framework/Components/FileInput.cs): a drop zone with a button, the chosen file with its size and a remove button; the native file field stays behind it (it opens the system dialog and is the submitted value, and without script it shows as a styled field). Every file field uses it (the page opts in with `FileInput.entry.ts`); never a bare native file control. It makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
 - `Form.Select` may declare a local draft refresh action and a fallback button label. `Form.entry.ts` replaces only the server-rendered form on a field change; the action preserves the draft and performs no mutation. The native button remains usable without JavaScript. Pages opt into the component asset.
 - Form transport values are invariant, independently of the display language.
   Explicit device-only settings may opt into `Form<T>(..., local: true)`: the same

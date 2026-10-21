@@ -10,7 +10,7 @@ namespace Jularr.Frontend.Framework
     {
         private static long _nextId;
         private readonly List<IUiComponent> _content = [];
-        private readonly List<IUiComponent> _actions = [];
+        private List<IUiComponent> _actions = [];
         private List<IUiComponent> _target;
         private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
         private readonly HashSet<string> _hiddenFields = new(StringComparer.Ordinal);
@@ -150,14 +150,14 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        // A file field makes the form a multipart upload.
-        public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
+        // A file field is the file input (drop zone, chosen file, remove) and makes the form a multipart upload.
+        public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FrontendAssets assets)
         {
             var field = Declare(selector, FieldControl.File, labelKey);
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "file");
             if (field.Accept is { } accept) input.Attribute("accept", accept);
             Configure(field, input);
-            AddField(field, input, wide: true);
+            AddField(field, new FileInput(input, field.Accept ?? "", field.MaximumBytes ?? 0, assets), wide: true, bare: true);
             _isUpload = true;
             return this;
         }
@@ -283,10 +283,16 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Section(string titleKey, Action<Form<TData>> define)
         {
             var outer = _target;
+            var outerActions = _actions;
             var inner = new List<IUiComponent> { new HtmlLegend(new Text(titleKey)) };
             _target = inner;
+            _actions = [];
             define(this);
+
+            // Buttons declared inside a section close that section.
+            if (_actions.Count > 0) inner.Add(new Div([.. _actions]).Class("ui-form__actions"));
             _target = outer;
+            _actions = outerActions;
             _target.Add(new HtmlFieldset([.. inner]).Class("ui-form__section"));
             return this;
         }
@@ -389,6 +395,13 @@ namespace Jularr.Frontend.Framework
                 : new Span(new Text(key), valueHidden ? new Span(new ValueText(" " + value)).Class("visually-hidden") : new Span(new ValueText(value)));
             var button = new Button(label).Primary();
             return Submit(button);
+        }
+
+        // A note at the start of the buttons' row, such as what the buttons would act on.
+        public Form<TData> Note(IUiComponent note)
+        {
+            _actions.Add(new Div(note).Class("ui-form__note"));
+            return this;
         }
 
         // The page's save pill saves this form together with every other changed one; without script the button saves it alone.
@@ -524,9 +537,9 @@ namespace Jularr.Frontend.Framework
         // Lists and longer texts, such as addresses, get the whole row.
         private const int WideLength = 200;
         private const int MaxSegments = 3;
-        private const int MaxSegmentLength = 16;
+        private const int MaxSegmentLength = 20;
 
-        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false, bool stepper = false, FieldAffix? affix = null, FieldHelp? help = null)
+        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false, bool stepper = false, FieldAffix? affix = null, FieldHelp? help = null, bool bare = false)
         {
             // The label sits above the field (the mockups' `.field label`); a segmented control is a group named by its legend.
             var info = new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info");
@@ -541,15 +554,22 @@ namespace Jularr.Frontend.Framework
             {
                 content.Add(new Div([new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), info,
                     .. help?.Aside is { } aside ? new[] { aside } : []]).Class("ui-field__top"));
-                // A number steps with its own plus and minus (shown by script; the browser's spin buttons are hidden).
-                // An icon leads the field and a unit follows it, before the stepper.
-                var parts = new List<IUiComponent>();
-                if (affix?.Prefix is { } prefix) parts.Add(new Span(prefix).Class("ui-field__prefix").Attribute("aria-hidden", "true"));
-                parts.Add(input);
-                if (affix?.SuffixKey is { } suffix) parts.Add(new Span(new Text(suffix)).Class("ui-field__suffix"));
-                if (stepper) parts.Add(NumberStepper());
-                if (help?.Trailing is { } trailing) parts.Add(trailing);
-                content.Add(new Div([.. parts]).Class("ui-field__control" + (stepper ? " ui-field__control--number" : "") + (affix is null ? "" : " ui-field__control--affixed") + (help?.Trailing is null ? "" : " ui-field__control--trailing")));
+                if (bare)
+                {
+                    content.Add(input);
+                }
+                else
+                {
+                    // A number steps with its own plus and minus (shown by script; the browser's spin buttons are hidden).
+                    // An icon leads the field and a unit follows it, before the stepper.
+                    var parts = new List<IUiComponent>();
+                    if (affix?.Prefix is { } prefix) parts.Add(new Span(prefix).Class("ui-field__prefix").Attribute("aria-hidden", "true"));
+                    parts.Add(input);
+                    if (affix?.SuffixKey is { } suffix) parts.Add(new Span(new Text(suffix)).Class("ui-field__suffix"));
+                    if (stepper) parts.Add(NumberStepper());
+                    if (help?.Trailing is { } trailing) parts.Add(trailing);
+                    content.Add(new Div([.. parts]).Class("ui-field__control" + (stepper ? " ui-field__control--number" : "") + (affix is null ? "" : " ui-field__control--affixed") + (help?.Trailing is null ? "" : " ui-field__control--trailing")));
+                }
                 if (help?.Note is { } note) content.Add(note);
             }
             if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
