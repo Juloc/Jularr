@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
 {
     public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales,
         ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, ReadInstanceMediaV1 readMedia, UpdateInstanceMediaV1 updateMedia, IAntiforgery antiforgery,
-        UiText texts) : JularrPage
+        UiText texts, FrontendAssets assets) : JularrPage
     {
         private InstanceSettingsDetailsV1? _settings;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
@@ -42,20 +42,20 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Hidden(item => item.Version);
                     form.Text(item => item.Name, "admin.instance.name");
                     form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
-                    form.Number(item => item.ReadingCacheMegabytes, "admin.instance.readingCacheMegabytes");
+                    form.Number(item => item.ReadingCacheMegabytes, "admin.instance.readingCacheMegabytes", affix: FieldAffix.Unit("unit.megabytes"));
                     form.Number(item => item.ReadingCacheWorks, "admin.instance.readingCacheWorks");
                     form.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
-                    form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
-                    form.Number(item => item.BackupIntervalHours, "admin.instance.backupIntervalHours");
+                    form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours", affix: FieldAffix.Unit("unit.hours"));
+                    form.Number(item => item.BackupIntervalHours, "admin.instance.backupIntervalHours", affix: FieldAffix.Unit("unit.hours"));
                     form.Number(item => item.BackupKeep, "admin.instance.backupKeep");
-                    form.Number(item => item.ProviderSyncIntervalMinutes, "admin.instance.providerSyncIntervalMinutes");
-                    form.Number(item => item.WantedSearchIntervalMinutes, "admin.instance.wantedSearchIntervalMinutes");
-                    form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
-                    form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
+                    form.Number(item => item.ProviderSyncIntervalMinutes, "admin.instance.providerSyncIntervalMinutes", affix: FieldAffix.Unit("unit.minutes"));
+                    form.Number(item => item.WantedSearchIntervalMinutes, "admin.instance.wantedSearchIntervalMinutes", affix: FieldAffix.Unit("unit.minutes"));
+                    form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays", affix: FieldAffix.Unit("unit.days"));
+                    form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes", affix: FieldAffix.Unit("unit.megabytes"));
                     if (texts.Can(null, "Collections")) form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
                     if (texts.Can(null, "UnitGroups")) form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
-                    if (texts.Can(null, "Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
+                    if (texts.Can(null, "Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages", affix: new FieldAffix(new Icon("subtitles", assets, 15)));
                     if (texts.Can(null, "Devices")) form.Text(item => item.PublicUrl, "admin.instance.publicUrl");
                     else form.Hidden(item => item.PublicUrl);
                     form.Text(item => item.TrustedProxies, "admin.instance.trustedProxies");

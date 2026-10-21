@@ -377,7 +377,7 @@
    "リクエスト上限"
   ],
   "request.rule.period": [
-   "Rolling period (days)",
+   "Rolling period",
    "集計期間（日数）"
   ],
   "request.rule.approval": [
@@ -981,7 +981,7 @@
    "インスタンス名"
   ],
   "admin.instance.readingCacheMegabytes": [
-   "Reading cache for offline storage (MB)",
+   "Reading cache for offline storage",
    "オフライン保存用の閲覧キャッシュ（MB）"
   ],
   "admin.instance.readingCacheWorks": [
@@ -989,15 +989,15 @@
    "閲覧キャッシュ：最近読んだ本"
   ],
   "admin.instance.libraryScanIntervalHours": [
-   "Library scan interval (hours)",
+   "Library scan interval",
    "ライブラリのスキャン間隔（時間）"
   ],
   "admin.instance.historyRetentionDays": [
-   "Keep finished activity for days",
+   "Keep finished activity for",
    "完了したアクティビティを保持する日数"
   ],
   "admin.instance.historyMegabytes": [
-   "Activity history size in MB",
+   "Activity history size",
    "アクティビティ履歴のサイズ（MB）"
   ],
   "admin.instance.collectionLimit": [
@@ -4560,22 +4560,6 @@
    "Recommendations",
    "おすすめ"
   ],
-  "home.moveUp": [
-   "Up",
-   "上へ"
-  ],
-  "home.moveDown": [
-   "Down",
-   "下へ"
-  ],
-  "home.hide": [
-   "Hide",
-   "非表示にする"
-  ],
-  "home.show": [
-   "Show",
-   "表示する"
-  ],
   "instance.module.HomeLayout": [
    "Personal home page order",
    "ホームページの個人用の並び順"
@@ -5225,7 +5209,7 @@
    "専用のごみ箱：フォルダー"
   ],
   "library.replacement.days": [
-   "Days in the recycle bin",
+   "Keep in the recycle bin",
    "ごみ箱に残す日数"
   ],
   "library.keepOnly": [

@@ -99,12 +99,24 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   A page passes `FieldHelp` only where the field means something special there; an empty key shows
   none. Labels stay short: units belong in the label, explanations in the (i).
 - Owner's decision 19 Oct: settings forms end with `form.Save()` instead of their own save button. The page's one
-  [save pill](../src/Jularr.Frontend/Framework/Components/SavePill.cs) appears centred in the content while a value
+  [save dock](../src/Jularr.Frontend/Framework/Components/SavePill.cs) (the [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs) in its
+  form-page mode: "N changes", Discard, Save) appears centred in the content while a value
   differs from the loaded page, marks the changed fields and saves every changed form in turn; a failing form keeps its
   error while the others save. Discard shows the saved page again in place without asking; leaving with changes asks.
   Actions (test, search, delete) stay their own buttons. Without script each form keeps its visible save button.
   Pages with many small forms of one kind label each form with its item instead of repeating a field label.
   A form shown again as a draft (a row added, a choice applied) counts as unsaved in the pill until saved or discarded.
+- Owner's decision 21 Oct: no control looks like the system's. A `select` is the styled [Dropdown](../src/Jularr.Frontend/Framework/Components/Dropdown.ts):
+  the field's button and its own popup list (keyboard, type-ahead, placed below or above), enhanced from every native select of the app on every page; the native
+  select stays in the form, hidden, as the submitted value and the field without script (a context that styles its select by a class gives the button the same class).
+  Checkboxes and radios are the shared box and dot ([Checkbox](../src/Jularr.Frontend/Framework/Components/Checkbox.cs)); a number steps with its own plus and minus
+  ([NumberStepper](../src/Jularr.Frontend/Framework/Components/NumberStepper.ts)); a slider shows its number while it moves (`Form.entry.ts` is part of every page); a file field
+  has the pill button of the page (the system's file dialog itself cannot be restyled). `Form.entry.ts` and `Dropdown.entry.ts` load in the shell; pages do not opt in.
+- A field may wear a `FieldAffix` (`Text`, `Number`, `Select`, `Range`): an icon circle at its start (the page builds the icon) and a quiet unit at its end, from a `unit.*` text key, inside the frame
+  and before a number's plus and minus. A unit belongs there, not in the label ("Library scan interval" + hours); validation and stepping stay the field's own.
+- A list the person puts in order is a [SortableList](../src/Jularr.Frontend/Framework/Components/SortableList.cs) (`Form.Sortable`): rows with a drag handle (pointer events;
+  arrow keys on the handle), the position, an icon tile, title and one state line, a switch and a menu of moves; the rows send their keys in order and the switched-on ones,
+  and every move counts as a change of the save dock.
 - Times use `Form.Time` ([TimePicker](../src/Jularr.Frontend/Framework/Components/TimePicker.ts), from the UiDesigner study): hour and
   minute fields on a desktop, a wheel sheet on Android, the system's own picker on iOS (owner's decision 19 Oct); the native
   time field stays the submitted value and the picker without script.
@@ -140,8 +152,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
 - Owner's decision 15 Oct: a page has at most one row of tabs. Administration areas
-  (Media, Library, Requests, Arr+) are collapsible groups in the sidebar whose pages are their own
-  addresses; the area of the current page is open. Spread content over pages rather than
+  (Media, Library, Requests, Arr+) are groups in the sidebar whose pages are their own
+  addresses; a click on a group goes to its first page (no empty group page, nothing collapses) and the administration lists the pages below it, the current one marked.
+  Spread content over pages rather than
   stacking tab rows or crowding one page.
 - Tabs and subsection navigation reuse `NavigationTabs`: the mockups' filter row of
   plain pills, the selection the lavender tint with its `--accent-edge` outline. `Tabs` adds only the server-selected content pane.
@@ -172,7 +185,7 @@ adds none of its own colours, radii, shadows or font sizes. The mockup values ar
 | Shape | `--radius-control` 999px (buttons, chips, search, pills), `--radius-panel` 19px, `--radius-dialog` 22px, `--radius-inner` 13px (detail tiles, textareas), `--radius-tile` 12px (icon tiles), `--radius-field` 11px, `--radius-small` 10px |
 | Depth | `--shadow` 0 9px 30px (panels, tables, sections), `--shadow-drawer` -10px 0 40px #0002, `--shadow-overlay` 0 11px 30px #0004 (popovers, save pill, toast), `--scrim` #16122570 with a 4px blur; no other shadows, bevels or coloured stripes |
 | Type | Inter, then Segoe UI/system; body `--text-body` 12px, controls `--text-control` 11px/740, captions, labels, pills and table heads `--text-small` 10px (heads 810, uppercase, .65px); h1 27px/850 -1.05px, h2 `--text-heading` 14px/805 -.3px, drawer title 22px |
-| Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; all 44px for a coarse pointer; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity |
+| Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; all 44px for a coarse pointer; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity; menu entries (sidebar, popups) are pills, fields use `--radius-field` |
 
 - Owner's decision 21 Oct: admin lists are built from the list kit, never from their own grids or tables. A page composes `KpiTiles(...).Strip()`, one
   `NavigationTabs` row of filter chips with counts (modifier `filters`), at most one filter field (`SearchBox` with `listFilter`; the header search is the
@@ -185,6 +198,9 @@ adds none of its own colours, radii, shadows or font sizes. The mockup values ar
   label; a phone keeps the icons), bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count) and paging (previous, "Page 2 / 9"
   or a range, next, optional page size select; plain GET links with the filters in the address, `pageNumber`). **No infinite scroll on admin pages**: lists are paged,
   25 rows by default. With a visible save pill the dock stacks above it.
+
+Everything that changes colour with the theme follows the switch with `transition: color var(--transition)` (or the colour it changes), the wordmark and the mark included; no element has a
+colour of its own that skips it.
 
 Changing a look means changing a token or the one base component (Button, Form, Table, Tag, StateChip, Section, NavigationTabs, Toggle, SearchBox,
 SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Shell); all pages inherit it. Button variants: default, `Primary()`, `Soft()`, `Warn()`, `Compact()`, `IconOnly()`.

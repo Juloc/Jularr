@@ -516,6 +516,33 @@ namespace Jularr.Backend.Tests
             Assert.ThrowsExactly<InvalidOperationException>(() => new Form<LoginDataV1>(fields => fields.Range(item => item.Password, "account.field.password"), local: true));
         }
 
+        [TestMethod]
+        public async Task Form_Affix_PutsIconAndUnitInsideTheFieldAndKeepsItsMetadata()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+            var form = new Form<RangeData>(fields => fields.Number(item => item.Fraction, "reader.spacing", affix: FieldAffix.Unit("unit.megabytes")), "/Settings", "token", new RangeData());
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+
+            // The unit follows the number inside the frame, before its plus and minus; bounds, step and invariant binding stay.
+            StringAssert.Contains(html, "ui-field__control ui-field__control--number ui-field__control--affixed");
+            Assert.IsTrue(Regex.IsMatch(html, "<input[^>]*name=\"Fraction\"[^>]*min=\"0.25\" max=\"2.75\"[^>]*>\\s*<span class=\"ui-field__suffix\">MB</span><div class=\"ui-field__stepper\""), html);
+            StringAssert.Contains(html, "name=\"__Invariant\" value=\"Fraction\"");
+
+            // An icon leads a text field and is hidden from assistive technology; no unit, no suffix.
+            var text = new Form<LoginDataV1>(fields => fields.Text(item => item.Username, "account.field.username", affix: new FieldAffix(new Span(new ValueText("CC")))), "/Settings", "token");
+            using var other = new StringWriter();
+            text.WriteTo(other, HtmlEncoder.Default, texts);
+            StringAssert.Contains(other.ToString(), "<span class=\"ui-field__prefix\" aria-hidden=\"true\"><span>CC</span></span><input");
+            Assert.IsFalse(other.ToString().Contains("ui-field__suffix", StringComparison.Ordinal));
+        }
+
         private sealed class RangeData : BaseData
         {
             [DataField(typeof(RangeFields), nameof(RangeFields.Fraction))]

@@ -50,7 +50,6 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             page.Title("admin.manualImport.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/FolderPicker.entry.ts");
-            page.Asset("Framework/Components/Form.entry.ts");
             page.Asset("Pages/Admin/ManualImport/ManualImport.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (Imported is { } count)

@@ -37,7 +37,6 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Work/Work.entry.scss");
             page.Asset("Pages/Admin/Work/Work.entry.ts");
-            page.Asset("Framework/Components/Form.entry.ts");
             page.Asset("Framework/Components/LiveProgress.entry.ts");
             var isSeries = work.MediaTypeId == MediaType.Series;
             var hasVolumes = work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is not null;
