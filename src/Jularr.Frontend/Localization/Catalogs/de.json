@@ -3396,6 +3396,238 @@
    "Versions & languages",
    "Versionen & Sprachen"
   ],
+  "details.tabs": [
+   "Parts of the page",
+   "Bereiche"
+  ],
+  "details.tab.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "details.tab.volumes.manga": [
+   "Volumes & chapters",
+   "Bände & Kapitel"
+  ],
+  "details.tab.volumes.lightNovel": [
+   "Volumes",
+   "Bände"
+  ],
+  "details.tab.volumes.book": [
+   "Parts",
+   "Teile"
+  ],
+  "details.tab.tracks": [
+   "Tracks",
+   "Tracks"
+  ],
+  "details.tab.people": [
+   "People",
+   "Personen"
+  ],
+  "details.tab.similar": [
+   "Similar",
+   "Ähnliches"
+  ],
+  "details.tab.facts": [
+   "Details",
+   "Details"
+  ],
+  "details.tab.versions": [
+   "Versions",
+   "Versionen"
+  ],
+  "details.tab.editions": [
+   "Editions",
+   "Ausgaben"
+  ],
+  "details.tab.files": [
+   "Files",
+   "Dateien"
+  ],
+  "details.people.creators": [
+   "Made by",
+   "Von"
+  ],
+  "details.people.cast": [
+   "Cast",
+   "Besetzung"
+  ],
+  "details.people.crew": [
+   "Crew",
+   "Stab"
+  ],
+  "details.fact.creators": [
+   "Made by",
+   "Von"
+  ],
+  "details.fact.series": [
+   "Series",
+   "Reihe"
+  ],
+  "details.fact.rating": [
+   "Rating",
+   "Bewertung"
+  ],
+  "details.fact.originalTitle": [
+   "Original title",
+   "Originaltitel"
+  ],
+  "details.fact.released": [
+   "Released",
+   "Erscheinung"
+  ],
+  "details.fact.runtime": [
+   "Length",
+   "Laufzeit"
+  ],
+  "details.fact.studio": [
+   "Studio",
+   "Studio"
+  ],
+  "details.fact.structure": [
+   "Structure",
+   "Aufbau"
+  ],
+  "details.fact.platforms": [
+   "Platforms",
+   "Plattformen"
+  ],
+  "details.fact.language": [
+   "Original language",
+   "Originalsprache"
+  ],
+  "details.seasonCount": [
+   "{0} seasons",
+   "{0} Staffeln"
+  ],
+  "details.chapterCount": [
+   "{0} chapters",
+   "{0} Kapitel"
+  ],
+  "details.disc": [
+   "Disc {0}",
+   "Disc {0}"
+  ],
+  "details.track.number": [
+   "No.",
+   "Nr."
+  ],
+  "details.track.title": [
+   "Title",
+   "Titel"
+  ],
+  "details.trailer": [
+   "Trailer",
+   "Trailer"
+  ],
+  "details.request": [
+   "Request",
+   "Anfragen"
+  ],
+  "details.more": [
+   "More",
+   "Mehr"
+  ],
+  "details.manage": [
+   "Manage title",
+   "Titel verwalten"
+  ],
+  "details.version": [
+   "Version",
+   "Version"
+  ],
+  "details.edition": [
+   "Edition",
+   "Ausgabe"
+  ],
+  "details.platform": [
+   "Platform",
+   "Plattform"
+  ],
+  "details.sort": [
+   "Order",
+   "Reihenfolge"
+  ],
+  "details.sort.asc": [
+   "Episode ascending",
+   "Folge aufsteigend"
+  ],
+  "details.sort.desc": [
+   "Episode descending",
+   "Folge absteigend"
+  ],
+  "details.sort.unwatched": [
+   "Unwatched first",
+   "Ungesehene zuerst"
+  ],
+  "details.layout": [
+   "Layout",
+   "Ansicht"
+  ],
+  "details.layout.list": [
+   "List",
+   "Liste"
+  ],
+  "details.layout.cards": [
+   "Cards",
+   "Karten"
+  ],
+  "details.percent": [
+   "{0} %",
+   "{0} %"
+  ],
+  "details.progressEpisodes": [
+   "{0} / {1} episodes",
+   "{0} / {1} Folgen"
+  ],
+  "details.state.unwatched": [
+   "Unwatched",
+   "Ungesehen"
+  ],
+  "details.state.unread": [
+   "Unread",
+   "Ungelesen"
+  ],
+  "details.state.unheard": [
+   "Unheard",
+   "Ungehört"
+  ],
+  "details.state.local": [
+   "Local",
+   "Lokal"
+  ],
+  "details.state.notLocal": [
+   "Not local",
+   "Nicht lokal"
+  ],
+  "details.editionFormat.Print": [
+   "Print",
+   "Print"
+  ],
+  "details.editionFormat.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "details.editionFormat.Audiobook": [
+   "Audiobook",
+   "Hörbuch"
+  ],
+  "details.editionFormat.Comic": [
+   "Comic",
+   "Comic"
+  ],
+  "progress.heard": [
+   "Heard",
+   "Gehört"
+  ],
+  "progress.markHeard": [
+   "Mark heard",
+   "Als gehört markieren"
+  ],
+  "progress.markUnheard": [
+   "Mark unheard",
+   "Als ungehört markieren"
+  ],
   "details.seasons": [
    "Seasons",
    "Staffeln"

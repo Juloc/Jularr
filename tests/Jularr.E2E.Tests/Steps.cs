@@ -285,6 +285,7 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, result.First.Locator("form"));
             var details = "/Details/" + new Uri(page.Url).Segments.Last();
             await page.GotoAsync(details);
+            await page.Locator("summary.action-menu__button", new() { HasText = "Request" }).ClickAsync();
             await SubmitAsync(page, FormWith(page, "Request this work"));
             return details;
         }

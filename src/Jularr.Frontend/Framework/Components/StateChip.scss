@@ -27,9 +27,32 @@
     &--available,
     &--known,
     &--watched,
-    &--idle { background: var(--success-soft); color: var(--success); }
+    &--idle,
+    &--success { background: var(--success-soft); color: var(--success); }
     &--warning { background: var(--warning-soft); color: var(--warning); }
     &--danger,
     &--failed { background: var(--danger-soft); color: var(--danger); }
+    &--accent { background: var(--accent-soft); color: var(--accent-text); }
     &--info { background: var(--info-soft); color: var(--info); }
+
+    // Nothing to report yet: the field tint with its own quiet outline.
+    &--neutral { background: var(--field); border: 1px solid var(--border); color: var(--muted); }
+
+    // The icon takes the dot's place.
+    &--icon::before { display: none; }
+
+    &__icon {
+        display: inline-flex;
+        flex: none;
+
+        .ui-icon { width: 14px; height: 14px; }
+    }
+
+    &--spinning &__icon .ui-icon { animation: state-chip-spin 1.6s linear infinite; }
+}
+
+@keyframes state-chip-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .state-chip--spinning .state-chip__icon .ui-icon { animation: none; }
 }

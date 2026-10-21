@@ -29,7 +29,7 @@ namespace Jularr.Backend.Tests
 
             // Each available episode names its section; the details page heads them.
             CollectionAssert.AreEqual(new[] { "Part 1", "Part 1", "Part 2" }, await GroupNamesAsync(host));
-            using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/10?tab=episodes");
             var html = await details.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, html);
             StringAssert.Contains(html, "<h3>Part 2</h3>");
