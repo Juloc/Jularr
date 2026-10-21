@@ -213,15 +213,14 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            Assert.IsTrue(Regex.IsMatch(html, "data-audio=\"1\"[^>]*aria-pressed=\"true\""), html);
-            Assert.IsTrue(Regex.IsMatch(html, "data-subtitle=\"s5\"[^>]*aria-pressed=\"true\""), html);
+            Assert.IsTrue(Regex.IsMatch(html, "<select id=\"player-audio-basic\"[^>]*>(<option[^>]*>[^<]*</option>)*?<option value=\"1\" selected=\"selected\" data-chosen=\"true\""), html);
+            Assert.IsTrue(Regex.IsMatch(html, "<select id=\"player-subtitle-basic\"[^>]*>(<option[^>]*>[^<]*</option>)*?<option value=\"s5\" selected=\"selected\" data-chosen=\"true\""), html);
             StringAssert.Contains(html, "data-preferred-speed=\"1.5\"");
             StringAssert.Contains(html, "data-autoplay=\"true\"");
-            Assert.IsTrue(Regex.IsMatch(html, "data-quality=\"1\"[^>]*aria-pressed=\"true\""), html);
-            foreach (var quality in new[] { "2", "3", "4" })
-            {
-                Assert.IsTrue(Regex.IsMatch(html, "data-quality=\"" + quality + "\"[^>]*aria-pressed=\"false\""), html);
-            }
+            var quality = Regex.Match(html, "<select id=\"player-quality-basic\".*?</select>", RegexOptions.Singleline).Value;
+            Assert.AreEqual(1, Regex.Matches(quality, "<option value=\"1\" selected=\"selected\" data-chosen=\"true\"").Count, html);
+            Assert.AreEqual(4, Regex.Matches(quality, "<option\\b").Count);
+            Assert.AreEqual(1, Regex.Matches(quality, "selected=\"selected\"").Count);
         }
 
         [TestMethod]
@@ -259,8 +258,9 @@ namespace Jularr.Backend.Tests
             // The player's menu offers all four.
             using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
             var html = await page.Content.ReadAsStringAsync();
-            Assert.IsTrue(Regex.IsMatch(html, "data-quality=\"4\"[^>]*aria-pressed=\"true\""), html);
-            Assert.AreEqual(4, Regex.Matches(html, "data-quality=\"").Count);
+            var saverField = Regex.Match(html, "<select id=\"player-quality-basic\".*?</select>", RegexOptions.Singleline).Value;
+            Assert.IsTrue(Regex.IsMatch(saverField, "<option value=\"4\" selected=\"selected\" data-chosen=\"true\""), html);
+            Assert.AreEqual(4, Regex.Matches(saverField, "<option\\b").Count);
 
             // Without a converter nothing can be capped; the player says so instead of playing something too large.
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", Browser);

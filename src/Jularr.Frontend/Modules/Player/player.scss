@@ -1,4 +1,28 @@
+@use "sass:math";
 @use "../../Framework/Components/EpisodeCard";
+
+// Panels over the controls (settings, chapters, episodes, skip, next episode) share one place: above the timeline's right edge.
+@mixin above-timeline($gap: 8px) {
+    @supports (position-area: top) {
+        position-anchor: --player-timeline;
+        position-area: top span-left;
+        position-try-fallbacks: none;
+        inset: auto;
+        margin: 12px 0 $gap;
+        max-height: stretch;
+    }
+}
+
+// The panel surface is the only lightly translucent part; light and dark come from the theme.
+@mixin panel-surface {
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter: blur(12px);
+    color: var(--text);
+    box-shadow: var(--shadow);
+    @media (prefers-reduced-transparency: reduce) { background: var(--surface); backdrop-filter: none; }
+}
 
 .player-page { background: var(--background); color: var(--text); }
 .player-main { width: 100%; min-height: 100dvh; }
@@ -13,6 +37,8 @@
     &:has(.player__sidebar:not([popover])) { grid-template-columns: minmax(0, 1fr) 320px; }
     &__stage { position: relative; min-width: 0; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--radius-panel); background: #000; color: #fff; }
     &__video { display: block; width: 100%; height: 100%; object-fit: contain; }
+    &--fit-cover &__video { object-fit: cover; }
+    &--fit-original &__video { object-fit: scale-down; }
     &__loading, &__feedback {
         position: absolute; top: 50%; left: 50%; z-index: 2;
         display: grid; place-items: center; pointer-events: none;
@@ -41,15 +67,34 @@
     &__context { margin: 2px 0 0; font-size: .8rem; }
     &__bottom { align-self: end; display: grid; gap: 4px; padding: 12px 16px; background: linear-gradient(transparent, rgb(0 0 0 / 75%)); }
     &__progress { position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; font-size: .8rem; }
+    // Played in the accent, buffered more opaque than what is still to load; the thumb is white.
     &__timeline, &__volume {
-        appearance: none; height: 5px; margin: 12px 0; border-radius: 999px;
-        background: linear-gradient(to right, var(--accent) var(--played, 0%), rgb(255 255 255 / 30%) var(--played, 0%));
+        appearance: none; height: 6px; margin: 12px 0; border-radius: 999px;
+        background: linear-gradient(to right, var(--accent) var(--played, 0%), rgb(255 255 255 / 65%) var(--played, 0%), rgb(255 255 255 / 65%) max(var(--played, 0%), var(--buffered, 0%)),
+            rgb(255 255 255 / 28%) max(var(--played, 0%), var(--buffered, 0%)));
         cursor: pointer;
-        &::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); }
-        &::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--accent); }
+        &::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+        &::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+        &:focus-visible { outline: none; }
+        &:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+        &:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
     }
-    &__timeline { width: 100%; }
+    &__track { position: relative; display: grid; min-width: 0; }
+    &__timeline { width: 100%; anchor-name: --player-timeline; }
     &__volume { width: 80px; }
+    // Chapter ticks sit on the timeline; the position comes from the chapter's start.
+    &__marks { position: absolute; inset: 0; pointer-events: none; &:not([data-ready]) { display: none; } }
+    &__mark {
+        position: absolute; top: 50%; left: calc(7px + (100% - 14px) * var(--at, 0) / 100); width: 6px; height: 6px; padding: 0;
+        border: 1px solid #fff; border-radius: 50%; background: #202127; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer;
+        &::before { content: ""; position: absolute; inset: -9px -6px; }
+        &::after {
+            content: attr(data-title); position: absolute; bottom: calc(100% + 14px); left: 50%; transform: translateX(-50%); max-width: 240px; padding: 3px 9px; border-radius: 8px;
+            background: #202127; color: #fff; font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none;
+        }
+        &:is(:hover, :focus-visible)::after { opacity: 1; }
+        &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    }
     &__preview { position: absolute; bottom: calc(100% + 10px); z-index: 3; border-radius: 8px; background-repeat: no-repeat; background-color: #000; pointer-events: none; }
     &__actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
     &__audio, &__transport, &__options { display: flex; align-items: center; gap: 2px; }
@@ -60,55 +105,113 @@
         &:hover:not(:disabled) { background: rgb(255 255 255 / 14%); }
         &[aria-pressed=true] { background: transparent; color: var(--accent); }
         &:disabled { background: #242428; color: #98989f; opacity: 1; }
+        &[hidden] { display: none; }
         .ui-icon { width: 24px; height: 24px; }
     }
     &__button--primary .ui-icon { width: 32px; height: 32px; }
-    &__button--primary .ui-icon:last-child, &--playing &__button--primary .ui-icon:first-child,
-    [data-action=mute] .ui-icon:last-child, &--muted [data-action=mute] .ui-icon:first-child { display: none; }
-    &--playing &__button--primary .ui-icon:last-child, &--muted [data-action=mute] .ui-icon:last-child { display: block; }
+    &__button--primary .ui-icon:last-child, &--playing &__button--primary .ui-icon:first-child { display: none; }
+    &--playing &__button--primary .ui-icon:last-child { display: block; }
+    // The speaker shows three, two or one wave, or none when muted.
+    [data-volume-icon] { display: none; }
+    &:not([data-volume-level]) [data-volume-icon="3"], &[data-volume-level="3"] [data-volume-icon="3"], &[data-volume-level="2"] [data-volume-icon="2"],
+    &[data-volume-level="1"] [data-volume-icon="1"], &[data-volume-level="0"] [data-volume-icon="0"] { display: grid; }
 
-    // One top-layer surface; only the content scrolls.
+    // One top-layer surface, fixed size: tabs below, no scrolling inside, so every pane is sized to fit.
     &__settings {
-        position: fixed; inset: auto 16px 96px auto; width: min(480px, calc(100vw - 24px)); height: 440px;
-        margin: 0; padding: 0; border: 1px solid var(--accent-line); border-radius: 24px;
-        background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--text); box-shadow: var(--shadow); overflow: hidden;
+        position: fixed; inset: auto 16px 96px auto; box-sizing: border-box; width: min(400px, calc(100vw - 24px)); height: min(460px, calc(100dvh - 24px));
+        margin: 0; padding: 0; overflow: hidden;
+        @include panel-surface;
+        @include above-timeline;
         &:popover-open { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
-        > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; }
-        > header .button { width: 40px; min-height: 40px; padding: 0; }
-        .navigation-tabs { width: 100%; border: 0; border-radius: 0; background: var(--surface-hover); padding: 4px; }
-        .navigation-tabs__link { flex: 1; padding: 9px 6px; text-align: center; }
-        h2 { margin: 0; font-size: 1rem; }
+        > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px 2px 16px; font-weight: 700; }
+        > header .button { width: 36px; min-height: 36px; padding: 0; border-color: transparent; background: transparent; &:hover:not(:disabled) { background: var(--surface-hover); } }
+        .navigation-tabs { display: flex; width: 100%; box-sizing: border-box; margin: 0; padding: 4px; gap: 2px; overflow: hidden; border: 0; border-radius: 0; background: var(--surface-hover); }
+        .navigation-tabs__link { flex: 1 1 0; min-width: 0; min-height: 36px; padding: 6px 4px; font-size: 12px; }
         p { margin: 0; }
+        // Compact fields: the shared form surface at a smaller height.
+        .ui-field { gap: 0; }
+        .ui-field__control { padding: 0 12px; }
+        .ui-field__control > :is(input:not([type=range]), select) { min-height: 34px; padding-block: 4px; }
+        .ui-segment > span { min-height: 30px; padding: 0 8px; font-size: 13px; }
+        .ui-field__control--segmented { padding: 0 4px 4px; }
+        .toggle { min-height: 36px; }
     }
-    &__settings-body { min-height: 0; overflow: auto; padding: 8px 14px 14px; }
-    &__settings-pane { display: grid; gap: 10px; align-content: start; > div { display: grid; gap: 8px; } }
+    &__settings-body { min-height: 0; overflow: hidden; padding: 6px 12px 10px; }
+    &__settings-pane { display: grid; gap: 8px; align-content: start; }
+    &__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    // Slider with its number; the dots below mark the usual speeds.
+    &__speed {
+        display: grid; grid-template-columns: minmax(0, 1fr) 78px; grid-template-rows: auto auto; align-items: center; column-gap: 10px;
+        &-range {
+            appearance: none; grid-column: 1; width: 100%; height: 34px; margin: 0; padding: 0; background: transparent; accent-color: var(--accent); cursor: pointer;
+            &::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--accent) var(--range-progress, 0%), color-mix(in srgb, var(--accent) 14%, var(--surface)) var(--range-progress, 0%)); }
+            &::-moz-range-track { height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+            &::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--accent); }
+            &::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: var(--accent); }
+            &::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--accent); }
+            &:focus-visible { outline: none; }
+            &:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+            &:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+        }
+        &-number {
+            grid-column: 2; grid-row: 1 / span 2; width: 100%; min-width: 0; min-height: 30px; padding: 2px 8px; border: 1px solid var(--border); border-radius: var(--radius-control);
+            background: var(--surface); color: var(--text); text-align: end; font-variant-numeric: tabular-nums;
+            &:focus-visible { outline: none; border-color: var(--accent); }
+        }
+        &-points { position: relative; grid-column: 1; height: 16px; margin-inline: 7px; }
+        &-point {
+            position: absolute; top: 0; left: calc(var(--p, 0) * 100%); width: 16px; height: 16px; padding: 0; border: 0; background: transparent; color: var(--muted); transform: translateX(-50%); cursor: pointer;
+            &::before { content: ""; position: absolute; top: 6px; left: 6px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+            &::after {
+                content: attr(data-speed) "×"; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: 8px;
+                background: var(--surface); color: var(--text); font-size: 11px; opacity: 0; pointer-events: none; box-shadow: var(--shadow);
+            }
+            &:is(:hover, :focus-visible)::after { opacity: 1; }
+            &:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 50%; }
+            &[aria-pressed=true] { color: var(--accent-text); &::before { top: 5px; left: 5px; width: 6px; height: 6px; } }
+            @each $value in (0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4) { &[data-speed="#{$value}"] { --p: #{math.div($value - 0.25, 3.75)}; } }
+        }
+    }
+    &__facts {
+        display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; margin: 0; padding-top: 4px;
+        dt { color: var(--muted); font-size: 12px; font-weight: 650; }
+        dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+    }
     &__option { width: 100%; justify-content: start; text-align: start; overflow-wrap: anywhere; }
-    &__speeds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    &__qualities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    &__setting-link { width: 100%; justify-content: space-between; margin-bottom: 8px; text-align: start; > span { flex: 1; display: grid; gap: 2px; } [data-current] { color: var(--muted); font-size: .8rem; font-weight: 400; } }
     &__sidebar { contain: size; min-height: 0; overflow: auto; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); border: 1px solid var(--accent-line); color: var(--text); }
     &__sidebar h2 { font-size: 1rem; }
     &__sidebar p { overflow-wrap: anywhere; }
     &__sidebar-close { display: none; margin-left: auto; }
-    &__sidebar[popover] { position: fixed; inset: auto 12px 96px auto; width: min(360px, calc(100vw - 24px)); max-height: calc(100dvh - 120px); margin: 0; contain: none; .player__sidebar-close { display: flex; } }
+    &__sidebar[popover] {
+        position: fixed; inset: auto 12px 96px auto; width: min(360px, calc(100vw - 24px)); max-height: calc(100dvh - 120px); margin: 0; contain: none;
+        @include panel-surface;
+        @include above-timeline;
+        .player__sidebar-close { display: flex; }
+    }
     &__episodes { display: grid; gap: 8px; margin-top: 12px; }
+    // The chapters list scrolls where there are many; it is a list like the episodes.
+    &__chapters {
+        position: fixed; inset: auto 12px 96px auto; box-sizing: border-box; width: min(320px, calc(100vw - 24px)); max-height: min(460px, calc(100dvh - 24px)); margin: 0; padding: 0; overflow: hidden;
+        @include panel-surface;
+        @include above-timeline;
+        &:popover-open { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+        > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px 2px 16px; font-weight: 700; }
+        > header .button { width: 36px; min-height: 36px; padding: 0; border-color: transparent; background: transparent; &:hover:not(:disabled) { background: var(--surface-hover); } }
+    }
+    &__chapter-list { display: grid; align-content: start; gap: 6px; min-height: 0; padding: 6px 12px 12px; overflow-y: auto; }
+    &__chapter { justify-content: space-between; gap: 12px; }
+    &__chapter-time { flex: none; opacity: .75; font-variant-numeric: tabular-nums; font-size: .8rem; }
     // The next episode waits above the controls and can be ended.
-    &__next {
+    &__next, &__skipped {
         position: absolute; inset: auto 16px 96px auto; z-index: 3; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 10px 12px;
-        border: 1px solid var(--accent-line); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--text); box-shadow: var(--shadow);
+        @include panel-surface;
+        @include above-timeline;
         > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
     }
     &--mini &__next { display: none; }
     // Skip offers sit where the next episode waits; the viewer decides, so the chrome fading does not hide them.
-    &__skip { position: absolute; inset: auto 16px 96px auto; z-index: 3; }
-    &__skipped {
-        position: absolute; inset: auto 16px 96px auto; z-index: 3; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 10px 12px;
-        border: 1px solid var(--accent-line); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--text); box-shadow: var(--shadow);
-        > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-    }
-    &--mini &__skip, &--mini &__skipped { display: none; }
-    &__chapter { justify-content: space-between; gap: 12px; }
-    &__chapter-time { flex: none; opacity: .75; font-variant-numeric: tabular-nums; font-size: .8rem; }
+    &__skip { position: absolute; inset: auto 16px 96px auto; z-index: 3; @include above-timeline; }
+    &--mini &__skip, &--mini &__skipped, &--mini &__marks { display: none; }
     &__status, &__save-error { position: absolute; z-index: 4; max-width: calc(100% - 24px); margin: 12px; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); color: var(--text); }
     &__status { inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
     &__save-error { top: 64px; left: 0; }
@@ -151,26 +254,36 @@
     .player:has(.player__sidebar:not([popover])) { grid-template-columns: 1fr; }
     .player__sidebar:not([popover]) { display: none; }
 }
+// The bar keeps room for its buttons: fewer transport buttons first, then the compact phone layout.
+@media (max-width: 840px) {
+    .player__transport [data-action=back], .player__transport [data-action=forward] { display: none; }
+}
+// The phone layout floats the transport over the picture, where all five buttons have room.
+@media (max-width: 760px) {
+    .player__actions { grid-template-columns: auto 1fr; }
+    .player__transport { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
+    .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: inline-grid; }
+    .player__volume, [data-action=theater] { display: none; }
+    .player--mini .player__heading { display: none; }
+}
 @media (max-width: 600px) {
+    .player:not(.player--mini) .player__transport [data-action=back], .player:not(.player--mini) .player__transport [data-action=forward] { display: none; }
     .player { padding: 0; }
     .player__stage { border-radius: 0; }
     .player__top { padding: 6px; }
     .player__title { font-size: .85rem; }
     .player__context { display: none; }
     .player__bottom { padding: 6px 12px; }
-    .player__actions { grid-template-columns: auto 1fr; }
-    .player__transport { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
-    .player__transport [data-action=back], .player__transport [data-action=forward], .player__volume, [data-action=theater] { display: none; }
     .player__button { width: 36px; min-height: 36px; }
-    .player--mini .player__heading { display: none; }
 }
+// Small screens give the settings the whole screen; a wide short one flows its fields into columns instead of scrolling.
 @media (max-width: 620px), (max-height: 600px) {
-    .player__settings { inset: 12px; width: calc(100vw - 24px); height: calc(100dvh - 24px); }
-    html:has(.player__settings:popover-open) { overflow: hidden; }
+    .player__settings, .player__chapters { position-area: none; inset: 12px; margin: 0; width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: none; }
+    .player__settings-pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+    html:has(.player__settings:popover-open, .player__chapters:popover-open) { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
     .player__chrome { transition: none; }
     .player__loading-ring { animation: none; }
     .player__feedback--animate { animation: none; }
 }
-@media (prefers-reduced-transparency: reduce) { .player__settings { background: var(--surface); } }
