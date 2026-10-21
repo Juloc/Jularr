@@ -88,7 +88,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public SaveAcquisitionProfileDataV1(string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
             int? minimumSizeMb, int? maximumSizeMb, long? version = null, MediaSubtype? mediaSubtypeId = null, string[]? qualityOrder = null,
             BaseDataList<QualityGroupV1>? qualityGroups = null, BaseDataList<CustomFormatScoreV1>? formatScores = null,
-            int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1)
+            int minimumFormatScore = 0, int cutoffFormatScore = 0, int minimumUpgradeFormatScore = 1, string[]? languageOrder = null,
+            LanguageFallbackType languageFallback = LanguageFallbackType.Original)
         {
             Name = name;
             MediaTypeId = mediaTypeId;
@@ -106,6 +107,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             MinimumFormatScore = minimumFormatScore;
             CutoffFormatScore = cutoffFormatScore;
             MinimumUpgradeFormatScore = minimumUpgradeFormatScore;
+            LanguageOrder = languageOrder ?? [];
+            LanguageFallback = languageFallback;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
@@ -153,6 +156,14 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(FormatScoreFields), nameof(FormatScoreFields.MinimumUpgrade))]
         public int MinimumUpgradeFormatScore { get; }
+
+        // The languages of the choice, in order; empty takes the languages the request asks for.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageOrder), false)]
+        public string[] LanguageOrder { get; }
+
+        // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageFallback), false)]
+        public LanguageFallbackType LanguageFallback { get; }
         public override void Validate()
         {
             base.Validate();
@@ -168,7 +179,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
             int? minimumSizeMb, int? maximumSizeMb, MediaSubtype? mediaSubtypeId, string[]? qualityOrder, BaseDataList<QualityGroupV1>? qualityGroups,
             BaseDataList<CustomFormatScoreV1>? formatScores, int minimumFormatScore, int cutoffFormatScore, int minimumUpgradeFormatScore,
-            int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages)
+            int wantedCount, long version, string[] monitoredTypes, string[] monitoredLanguages, int? minimumPages,
+            string[]? languageOrder = null, LanguageFallbackType languageFallback = LanguageFallbackType.Original)
         {
             Id = id;
             Name = name;
@@ -191,6 +203,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             MonitoredTypes = monitoredTypes;
             MonitoredLanguages = monitoredLanguages;
             MinimumPages = minimumPages;
+            LanguageOrder = languageOrder ?? [];
+            LanguageFallback = languageFallback;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
@@ -253,6 +267,14 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MinimumPages))]
         public int? MinimumPages { get; }
+
+        // The languages of the choice, in order; empty takes the languages the request asks for.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageOrder), false)]
+        public string[] LanguageOrder { get; }
+
+        // The fallback when no file carries an asked language: the original language of the work, English, or nothing.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.LanguageFallback), false)]
+        public LanguageFallbackType LanguageFallback { get; }
     }
     public sealed class CreateAcquisitionProfileResultV1 : BaseResponse
     {

@@ -1,4 +1,4 @@
-﻿{
+{
  "locale": "de",
  "name": "Deutsch",
  "reviewed": true,
@@ -1676,6 +1676,30 @@
    "Qualities",
    "Qualitäten"
   ],
+  "profile.section.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "profile.languageOrder": [
+   "Languages of the choice, in order (comma separated)",
+   "Sprachen der Auswahl, in Reihenfolge (mit Komma getrennt)"
+  ],
+  "profile.languageFallback": [
+   "Fallback when no file carries an asked language",
+   "Rückfall, wenn keine Datei eine gewünschte Sprache hat"
+  ],
+  "profile.languageFallback.Original": [
+   "Original",
+   "Originalsprache"
+  ],
+  "profile.languageFallback.English": [
+   "English",
+   "Englisch"
+  ],
+  "profile.languageFallback.None": [
+   "No fallback",
+   "Kein Rückfall"
+  ],
   "profile.allowed": [
    "Allowed",
    "Erlaubt"
@@ -2135,6 +2159,14 @@
   "hint.AcquisitionProfileFields.MaximumSizeMb.info": [
    "Larger releases are skipped.",
    "Größere Releases werden übersprungen."
+  ],
+  "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
+   "de, en, ja",
+   "de, en, ja"
+  ],
+  "hint.AcquisitionProfileFields.LanguageOrder.info": [
+   "The languages of the choice, in order. Empty takes the languages the request asks for.",
+   "Die Sprachen der Auswahl, in Reihenfolge. Leer übernimmt die Sprachen der Anfrage."
   ],
   "hint.RequestRuleFields.Description.info": [
    "Shown to users the rule applies to.",
