@@ -288,7 +288,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
 
             // Folder moves preserve URLs.
-            foreach (var path in new[] { "/", "/Details/101", "/Watchlist", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
+            foreach (var path in new[] { "/", "/Details/101", "/Favorites", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path);
@@ -299,6 +299,11 @@ namespace Jularr.Backend.Tests
                     StringAssert.Contains(html, "data-set-mode=\"system\"");
                 }
             }
+
+            // The watchlist is Favorites now; old links keep their choices.
+            using var watchlist = await host.SendAsync(HttpMethod.Get, "/Watchlist?type=movies&sort=Title");
+            Assert.AreEqual(HttpStatusCode.MovedPermanently, watchlist.StatusCode);
+            Assert.AreEqual("/Favorites?type=movies&sort=Title", watchlist.Headers.Location?.OriginalString);
 
             // Player routes take canonical asset identities.
             using var player = await host.SendAsync(HttpMethod.Get, "/Player/101");

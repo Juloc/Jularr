@@ -22,11 +22,6 @@ namespace Jularr.Frontend.Pages.Shared
                 var library = new ShellLink("nav.library", "/Library", "library");
                 primary.Add(library);
                 mobile.Insert(1, library);
-                if (texts.CanCollect())
-                {
-                    primary.Add(new ShellLink("collections.title", "/Collections", "bookmark"));
-                }
-
                 if (texts.CanSeeCalendar())
                 {
                     primary.Add(new ShellLink("calendar.title", "/Calendar", "calendar"));
@@ -37,9 +32,9 @@ namespace Jularr.Frontend.Pages.Shared
                     secondary.Add(new ShellLink("statistics.title", "/Statistics", "activity"));
                 }
 
-                var watchlist = new ShellLink("watchlist.title", "/Watchlist", "home");
-                primary.Add(watchlist);
-                mobile.Add(watchlist);
+                var favorites = new ShellLink("favorites.title", "/Favorites", "heart");
+                primary.Add(favorites);
+                mobile.Add(favorites);
             }
 
             if (texts.CanRequest())
