@@ -303,7 +303,7 @@ namespace Jularr.Backend.Service.User.Media.V1
     [ServiceEndpoint("GET", "/api/v1/people/{personId:long}/works")]
     public sealed class ReadPersonWorksV1 : UserService<ReadPersonWorksParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<LibraryItemV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadPersonWorksParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadPersonWorksParametersV1 parameters, Type resultType) => new("profile.media.read");
         protected override PageRequest GetPageRequest(ReadPersonWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
@@ -313,29 +313,14 @@ namespace Jularr.Backend.Service.User.Media.V1
             // Everything the profile may see that credits the person, for the Work or one of its units, oldest first.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
-                    work."Id",
-                    work."MediaTypeId",
-                    visible."MediaSubtypeId",
-                    visible."Title" AS "CanonicalTitle",
-                    entry."WorkId" IS NOT NULL AS "IsWatchlisted",
-                    work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl"
+                    {{WorkCardProjection.Columns}},
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    {{WorkCardProjection.Joins}}
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = visible."ProfileId"
                 WHERE
                     visible."ProfileId" = @ProfileId
@@ -359,7 +344,7 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new PersonParametersV1(Parameters.PersonId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
+            return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
     }
 
@@ -388,20 +373,54 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
-                    AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
-                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
+                    AND (
+                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
+                    )
+                    AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
+                    AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
+                    AND (@ProgressStateId::smallint IS NULL OR workProgress."ProgressStateId" = @ProgressStateId)
                 ORDER BY
                     CASE WHEN @LibrarySortTypeId = 1 THEN entry."CreatedAt" END DESC NULLS LAST,
                     CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 4 THEN workProgress."ProgressPercent" END DESC NULLS LAST,
                     visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, null, Parameters.LibrarySortTypeId));
+            sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/watchlist/count")]
+    public sealed class ReadWatchlistCountV1 : UserService<ReadWatchlistCountParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WatchlistCountV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWatchlistCountParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadWatchlistCountParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The favorites the profile can open.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    count(*)::integer AS "Total"
+                FROM
+                    "WatchlistEntries" AS entry
+                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
+                WHERE
+                    entry."ProfileId" = @ProfileId
+                    AND NOT visible."IsHidden";
+                """;
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return await Context.ReadSql.ReadRequiredAsync<WatchlistCountV1>(sql, CancellationToken);
         }
     }
 

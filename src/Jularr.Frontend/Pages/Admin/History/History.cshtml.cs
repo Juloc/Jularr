@@ -20,7 +20,9 @@ namespace Jularr.Frontend.Pages.Admin.History
 
         protected override void Define(Page page)
         {
-            page.Title("admin.history.title", WorkId is not null ? _events?.Items.FirstOrDefault()?.WorkTitle : null);
+            var work = WorkId is not null ? _events?.Items.FirstOrDefault()?.WorkTitle : null;
+            page.Title("admin.history.title", work);
+            if (work is not null) page.Parent("admin.history.title", "/Admin/History");
             page.Navigation("nav.admin");
             if (_events is not { } events)
             {

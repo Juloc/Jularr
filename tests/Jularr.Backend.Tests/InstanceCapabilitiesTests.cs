@@ -118,7 +118,7 @@ namespace Jularr.Backend.Tests
             using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
             html = await settings.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "lang=\"de-DE\"");
-            StringAssert.Contains(html, "href=\"/Watchlist\"");
+            StringAssert.Contains(html, "href=\"/Favorites\"");
             StringAssert.Contains(html, "href=\"/Admin/Works\"");
 
             using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
@@ -136,9 +136,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, disabled.StatusCode, await disabled.Content.ReadAsStringAsync());
             using var updated = await host.SendAsync(HttpMethod.Get, "/Settings");
             html = await updated.Content.ReadAsStringAsync();
-            Assert.IsFalse(html.Contains("href=\"/Watchlist\"", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("href=\"/Favorites\"", StringComparison.Ordinal));
             Assert.IsFalse(html.Contains("href=\"/Admin/Works\"", StringComparison.Ordinal));
-            using var denied = await host.SendAsync(HttpMethod.Get, "/Watchlist");
+            using var denied = await host.SendAsync(HttpMethod.Get, "/Favorites");
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
             using var stillEditable = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
             Assert.AreEqual(HttpStatusCode.OK, stillEditable.StatusCode);

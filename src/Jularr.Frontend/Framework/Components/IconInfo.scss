@@ -19,7 +19,7 @@
         text-decoration: none;
 
         &::-webkit-details-marker { display: none; }
-        .ui-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+        .ui-icon { width: var(--icon-size); height: var(--icon-size); flex: 0 0 auto; }
     }
 
     &__label,
@@ -33,13 +33,13 @@
         max-width: 150px;
         padding: 8px;
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: var(--radius-small);
         background: var(--surface);
         color: var(--text);
-        font-size: 12px;
+        font-size: var(--text-control);
         line-height: 1.5;
         overflow-wrap: anywhere;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-overlay);
     }
 
     // Summary remains painted when closed.

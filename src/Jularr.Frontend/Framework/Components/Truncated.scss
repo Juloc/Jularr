@@ -1,0 +1,40 @@
+.truncated {
+    position: relative;
+    display: block;
+    min-width: 0;
+
+    &__text {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    // Written out only while the text is cut off.
+    &__tip {
+        display: none;
+        position: absolute;
+        z-index: 6;
+        top: 100%;
+        left: 0;
+        width: max-content;
+        max-width: min(320px, 80vw);
+        margin-top: 4px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-small);
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--text-body);
+        font-weight: 500;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        box-shadow: var(--shadow-overlay);
+        pointer-events: none;
+    }
+
+    &--clipped:hover > &__tip,
+    &--clipped:focus > &__tip,
+    &--clipped:focus-within > &__tip { display: block; }
+}

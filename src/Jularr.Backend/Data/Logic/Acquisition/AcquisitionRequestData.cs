@@ -65,6 +65,33 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long? GamePlatformId { get; }
     }
 
+    // A requester taking back their own request.
+    internal sealed class AcquisitionRequestWithdrawData : BaseData
+    {
+        public AcquisitionRequestWithdrawData(long id, long requestedByProfileId)
+        {
+            Id = id;
+            RequestedByProfileId = requestedByProfileId;
+        }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long RequestedByProfileId { get; }
+    }
+
+    internal sealed class AcquisitionRequestStateData : BaseData
+    {
+        public AcquisitionRequestStateData(AcquisitionRequestStatusType acquisitionRequestStatusTypeId)
+        {
+            AcquisitionRequestStatusTypeId = acquisitionRequestStatusTypeId;
+        }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId))]
+        public AcquisitionRequestStatusType AcquisitionRequestStatusTypeId { get; }
+    }
+
     internal sealed class AcquisitionRequestUpdateData : BaseData
     {
         public AcquisitionRequestUpdateData(long id, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, long version, long actorAccountId)

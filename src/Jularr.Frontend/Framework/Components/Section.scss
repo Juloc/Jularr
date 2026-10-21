@@ -1,11 +1,12 @@
+// A titled card: the mockups' softbox with a bold section heading in the text colour.
 .ui-section {
-    padding: 18px 22px;
+    padding: 20px 22px;
     background: var(--surface);
-    border: 1px solid var(--accent-line);
+    border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow);
 
-    h2 { margin: 0 0 10px; color: var(--accent-text); font-size: 16px; font-weight: 700; }
+    h2 { margin: 0 0 12px; }
 }
 
 // Buttons and small forms that belong together, in one wrapping row.
@@ -19,5 +20,5 @@
 td .page-actions { gap: 6px 8px; }
 
 @media (max-width: 650px) {
-    .ui-section { padding: 14px 16px; }
+    .ui-section { padding: 15px 16px; }
 }

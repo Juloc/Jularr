@@ -48,6 +48,25 @@ namespace Jularr.Backend.Logic.Media
             }
             else
             {
+                // A favorite that goes leaves every collection of the profile.
+                var leaving = new SqlStatement();
+                leaving.Statement =
+                    """
+                    DELETE FROM "CollectionWorks"
+                    WHERE
+                        "WorkId" = @WorkId
+                        AND "CollectionId" IN (
+                            SELECT
+                                collection."Id"
+                            FROM
+                                "Collections" AS collection
+                            WHERE
+                                collection."ProfileId" = @ProfileId
+                        );
+                    """;
+                leaving.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(leaving, ct);
+
                 sql.Statement =
                     """
                     DELETE FROM "WatchlistEntries"

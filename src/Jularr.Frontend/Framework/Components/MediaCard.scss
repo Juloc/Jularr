@@ -1,44 +1,96 @@
 @use "MediaImage";
 @use "MediaAvailability";
 
+// The one cover of every catalog: a small, softly rounded cover with its linked title and one line of facts below.
 .media-card {
+    --card-width: 144px;
+    --card-radius: 12px;
+
     position: relative;
     display: flex;
     flex-direction: column;
-    width: 230px;
+    width: var(--card-width);
     flex: 0 0 auto;
     min-width: 0;
+    container-type: inline-size;
     scroll-snap-align: start;
+
+    // A card to continue is a little wider so that where the profile stands stays readable.
+    &--resume { --card-width: 176px; }
 
     &__surface {
         position: relative;
         aspect-ratio: 2 / 3;
         isolation: isolate;
         overflow: hidden;
-        border-radius: 24px;
+        border-radius: var(--card-radius);
         background: var(--surface);
+        // The availability tag never runs under the bookmark.
+        --availability-max: calc(100cqw - 48px);
     }
     &__art { display: block; width: 100%; height: 100%; }
     &__art .media-image { width: 100%; height: 100%; object-fit: cover; }
-    &__placeholder { display: grid; height: 100%; place-items: center; padding: 16px; color: var(--muted); text-align: center; }
-    &__details { min-height: 76px; padding: 9px 2px 0; }
+    &__placeholder { display: grid; height: 100%; place-items: center; padding: 12px; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+
+    // The title and the facts; each stays one line.
+    &__details { position: relative; min-width: 0; padding: 8px 2px 0; }
     &__title {
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-        height: 38px;
-        min-width: 0;
         margin: 0;
         overflow: hidden;
-        overflow-wrap: anywhere;
-        font-size: 14px;
-        line-height: 19px;
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 18px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    &__title a { color: var(--text); text-decoration: none; }
-    &__title a:hover { color: var(--accent-text); text-decoration: underline; }
-    &__title a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    &__meta { margin-top: 4px; color: var(--muted); font-size: 12px; }
-    &__state { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+    &__link {
+        display: block;
+        overflow: hidden;
+        color: var(--text);
+        text-decoration: none;
+        text-overflow: ellipsis;
+        &:hover { color: var(--accent-text); }
+        &:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+    }
+    &__info {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        margin: 2px 0 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 16px;
+        white-space: nowrap;
+
+        > * { flex: none; min-width: 0; }
+        > * + *::before { content: "·"; margin: 0 5px; }
+        &--resume > * + *::before { content: "|"; margin: 0 5px; }
+    }
+    &__type, &__lead { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+    &__detail { flex: 0 0 auto; }
+    &__rating { display: inline-flex; align-items: center; gap: 3px; .ui-icon { color: var(--accent-text); fill: currentColor; } }
+
+    // Shown over the cover when a clipped text is hovered or focused.
+    &__tip {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 4px);
+        left: 0;
+        z-index: 6;
+        padding: 6px 8px;
+        border: 1px solid var(--accent-line);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        color: var(--text);
+        font-size: 12px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        pointer-events: none;
+    }
+
+    // The one contextual action: icon and short label.
     &__actions {
         position: absolute;
         inset: 0;
@@ -46,55 +98,92 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 12px;
+        padding: 8px;
+        background: linear-gradient(transparent, rgb(0 0 0 / 28%));
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
         transition: opacity .16s ease, visibility .16s ease;
+        > * { max-width: 100%; pointer-events: auto; }
+        form { margin: 0; }
     }
-    &__actions > * { position: relative; pointer-events: auto; }
-    &__actions form { margin: 0; }
-    &__bookmark { position: absolute; top: 6px; right: 6px; z-index: 3; }
+    &__primary {
+        min-width: 0;
+        &-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
 
-    // Progress and local availability retain their established poster placement.
-    &__progress {
+    // The heart sits top right on a white disc.
+    &__bookmark {
         position: absolute;
-        inset: auto 0 0;
+        top: 6px;
+        right: 6px;
+        z-index: 4;
+        form { margin: 0; }
+        .button {
+            width: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            height: 32px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            .ui-icon { width: 17px; height: 17px; }
+            &:not([aria-pressed="true"]) { background: rgb(255 255 255 / 90%); color: #26222e; &:hover { background: #fff; } }
+        }
+    }
+
+    // A short label over the cover, bottom left.
+    &__label { position: absolute; bottom: 14px; left: 6px; z-index: 3; max-width: calc(100% - 12px); pointer-events: none; }
+
+    // Progress is a thin capsule over the foot of the cover.
+    &__progress-shell {
+        position: absolute;
+        inset: auto 8px 6px;
         z-index: 3;
+        padding: 2px;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 28%);
+        pointer-events: none;
+    }
+    &__progress {
+        display: block;
         appearance: none;
         width: 100%;
-        height: 12px;
+        height: 3px;
+        overflow: hidden;
         border: 0;
-        background: rgb(255 255 255 / 65%);
+        border-radius: 999px;
+        background: rgb(255 255 255 / 45%);
         color: var(--accent);
         &::-webkit-progress-bar { background: transparent; }
-        &::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
-        &::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+        &::-webkit-progress-value { border-radius: inherit; background: var(--accent); }
+        &::-moz-progress-bar { border-radius: inherit; background: var(--accent); }
     }
 
     &__surface:focus-within, &__surface[data-open] {
         .media-card__actions { opacity: 1; visibility: visible; }
     }
     @media (hover: hover) and (pointer: fine) {
-        &__surface:hover {
-            .media-card__actions { opacity: 1; visibility: visible; }
-            .media-card__art .media-image { filter: brightness(.78); }
-        }
+        &__surface:hover .media-card__actions { opacity: 1; visibility: visible; }
     }
     @media (hover: none), (pointer: coarse) {
         &__actions { opacity: 1; visibility: visible; }
+        &__bookmark .button { width: 44px; min-width: 44px; min-height: 44px; height: 44px; }
     }
     @media (prefers-reduced-motion: reduce) {
         &__actions { transition: none; }
     }
-    .media-availability-badge__hint { max-width: 200px; }
+    .media-availability-badge { top: 0; left: 0; }
+    .media-availability-badge__hint { max-width: calc(100cqw - 12px); }
 }
 
+// Grids hold more of the small covers per row; the columns stretch only to a card's largest width.
 .media-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 133px), 150px));
+    justify-content: space-between;
     justify-items: center;
-    gap: 24px;
-    .media-card { width: 100%; max-width: 260px; }
+    gap: 18px 14px;
+    .media-card { width: 100%; max-width: 150px; }
 }
 .media-grid + .page-actions { margin-top: 24px; }

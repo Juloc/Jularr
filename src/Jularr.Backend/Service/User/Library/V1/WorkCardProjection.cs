@@ -12,8 +12,23 @@ namespace Jularr.Backend.Service.User.Library.V1
             """
             work."Id",
             work."MediaTypeId",
+            visible."MediaSubtypeId",
             visible."Title" AS "Title",
             work."ReleaseYear"::integer AS "ReleaseYear",
+            (
+                -- The rating of the catalog entry the title came from; the best known one when several exist.
+                SELECT
+                    catalogEntry."Rating"
+                FROM
+                    "WorkExternalIdentities" AS identity
+                    JOIN "ExternalWorks" AS catalogEntry ON catalogEntry."Namespace" = identity."Namespace" AND catalogEntry."Value" = identity."Value"
+                WHERE
+                    identity."WorkId" = work."Id"
+                    AND catalogEntry."Rating" IS NOT NULL
+                ORDER BY
+                    catalogEntry."Votes" DESC NULLS LAST
+                LIMIT 1
+            ) AS "Rating",
             (
                 SELECT
                     fact."Value"
@@ -31,7 +46,56 @@ namespace Jularr.Backend.Service.User.Library.V1
             availability."AvailableUnits",
             availability."MonitoredUnits",
             tracks."AudioLanguages",
-            tracks."SubtitleLanguages"
+            tracks."SubtitleLanguages",
+            workProgress."ProgressStateId",
+            workProgress."ProgressPercent"
+            """;
+
+        // Where the profile stands with the title: finished when its own progress or every unit is completed,
+        // in progress when anything was started, else not started. Needs only the Work as "work" and the profile.
+        public const string ProgressJoin =
+            """
+            CROSS JOIN LATERAL (
+                SELECT
+                    count(*)::integer AS "Total",
+                    count(*) FILTER (WHERE unitProgress."IsCompleted")::integer AS "Done",
+                    count(*) FILTER (WHERE NOT unitProgress."IsCompleted" AND (coalesce(unitProgress."PositionMs", 0) > 0 OR coalesce(unitProgress."Progression", 0) > 0))::integer AS "Started"
+                FROM
+                    "WorkUnits" AS leaf
+                    LEFT JOIN "MediaProgress" AS unitProgress ON unitProgress."ProfileId" = @ProfileId AND unitProgress."WorkId" = work."Id" AND unitProgress."WorkUnitId" = leaf."Id"
+                WHERE
+                    leaf."WorkId" = work."Id"
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkUnits" AS child
+                        WHERE
+                            child."ParentWorkUnitId" = leaf."Id"
+                    )
+            ) AS unitCounts
+            LEFT JOIN "MediaProgress" AS ownProgress ON ownProgress."ProfileId" = @ProfileId AND ownProgress."WorkId" = work."Id" AND ownProgress."WorkUnitId" IS NULL
+            CROSS JOIN LATERAL (
+                SELECT
+                    state."ProgressStateId",
+                    CASE
+                        WHEN state."ProgressStateId" = 3 THEN 100
+                        WHEN state."ProgressStateId" = 1 THEN 0
+                        WHEN unitCounts."Total" > 0 THEN least(99, greatest(1, round(unitCounts."Done" * 100.0 / unitCounts."Total")))
+                        WHEN ownProgress."Progression" IS NOT NULL THEN least(99, greatest(1, round(ownProgress."Progression" * 100)))
+                        WHEN ownProgress."DurationMs" IS NOT NULL THEN least(99, greatest(1, round(coalesce(ownProgress."PositionMs", 0) * 100.0 / ownProgress."DurationMs")))
+                        ELSE 1
+                    END::integer AS "ProgressPercent"
+                FROM
+                    (
+                        SELECT
+                            CASE
+                                WHEN coalesce(ownProgress."IsCompleted", FALSE) OR unitCounts."Total" > 0 AND unitCounts."Done" = unitCounts."Total" THEN 3
+                                WHEN unitCounts."Done" > 0 OR unitCounts."Started" > 0 OR coalesce(ownProgress."PositionMs", 0) > 0 OR coalesce(ownProgress."Progression", 0) > 0 THEN 2
+                                ELSE 1
+                            END::smallint AS "ProgressStateId"
+                    ) AS state
+            ) AS workProgress
             """;
 
         // The joins every card needs; the profile is the one the query reads for.
@@ -192,6 +256,6 @@ namespace Jularr.Backend.Service.User.Library.V1
                         LIMIT 1
                     ) AS wanted ON TRUE
             ) AS acquisition
-            """;
+            """ + "\n" + ProgressJoin;
     }
 }

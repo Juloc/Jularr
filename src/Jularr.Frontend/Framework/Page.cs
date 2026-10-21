@@ -96,6 +96,9 @@ namespace Jularr.Frontend.Framework
         }
     }
 
+    // One breadcrumb part: a resource key or an item's own name, linking to the page it names.
+    public sealed record Crumb(string Text, string Href, bool IsKey = true);
+
     public sealed class Page
     {
         public bool Shell { get; set; } = true;
@@ -104,7 +107,7 @@ namespace Jularr.Frontend.Framework
         public string? TitleKey { get; private set; }
         public string? DocumentTitle { get; private set; }
         public string? NavigationKey { get; private set; }
-        public List<(string Key, string Href)> Parents { get; } = [];
+        public List<Crumb> Parents { get; } = [];
         public List<IUiComponent> Content { get; } = [];
         public List<string> AssetEntries { get; } = [];
 
@@ -115,7 +118,11 @@ namespace Jularr.Frontend.Framework
             DocumentTitle = documentTitle;
         }
         // A page below another names it in the breadcrumb; the document title then names the page itself.
-        public void Parent(string key, string href) => Parents.Add((key, href));
+        // The shell adds the area (Admin) and the sidebar group by itself; a page names only what lies between.
+        public void Parent(string key, string href) => Parents.Add(new Crumb(key, href));
+
+        // The same for a named item (a title, a collection) instead of a resource key.
+        public void ParentName(string name, string href) => Parents.Add(new Crumb(name, href, false));
 
         public void Asset(string entry)
         {

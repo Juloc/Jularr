@@ -3,72 +3,63 @@ type Rgb = [number, number, number];
 type Tokens = Record<string, string>;
 
 export const OriginalAccent = "#c8102e";
-export const CleanAccent = "#7c3aed";
+export const CleanAccent = "#8040f7";
 
-// One seed, two accessible palettes.
+// The owner's mockup palette (jobs redesign, 21 Oct), verbatim: it is the palette of the default accent. The names are the app's tokens:
+// background = bg, surface = panel, field/surface-hover = panel2, accent-soft = lav, accent = purple, accent-outline/focus = purple-soft,
+// accent-text = ptext, text = ink, border = line, border-strong = line2, accent-edge = the active chip's #dcd0ff outline.
+const Reference: { light: Tokens; dark: Tokens } = {
+    light: {
+        background: "#faf9ff", surface: "#ffffff", field: "#f8f7ff", "surface-hover": "#f8f7ff", "accent-soft": "#f2edff",
+        accent: "#8040f7", "accent-outline": "#b59aff", focus: "#b59aff", "accent-text": "#7136d9", "accent-edge": "#dcd0ff",
+        text: "#26223d", muted: "#938fa9", border: "#eae6f4", "border-strong": "#e1dcee", "accent-contrast": "#ffffff"
+    },
+    dark: {
+        background: "#12121d", surface: "#1d1b2b", field: "#262339", "surface-hover": "#262339", "accent-soft": "#35294e",
+        accent: "#9a70ff", "accent-outline": "#8060bf", focus: "#8060bf", "accent-text": "#c3a8ff", "accent-edge": "#dcd0ff",
+        text: "#f4f1ff", muted: "#aba5bf", border: "#38334e", "border-strong": "#4b4260", "accent-contrast": "#ffffff"
+    }
+};
+
+// One seed, two palettes: the reference palette with its hue turned to the seed's and its tints scaled to the seed's chroma, so the
+// default accent reproduces the mockup exactly and any other accent gets the same hue-tinted neutrals, lavender and lines.
 export function buildPalette(seed: string): { light: Tokens; dark: Tokens; rotation: string; saturation: string } {
     if (!/^#[a-f\d]{6}$/i.test(seed)) throw new RangeError("Expected a six-digit hex accent.");
     const color = fromHex(seed);
     const monochrome = color.c < 0.025;
-    const rotation = ((hue(seed) - hue(OriginalAccent)) % 360 + 540) % 360 - 180;
-    return {
-        light: mode(color, monochrome, false), dark: mode(color, monochrome, true),
-        rotation: (monochrome ? 0 : rotation).toFixed(1) + "deg", saturation: monochrome ? "0" : "1"
-    };
+    const rotation = (monochrome ? 0 : ((hue(seed) - hue(OriginalAccent)) % 360 + 540) % 360 - 180).toFixed(1) + "deg";
+    if (seed.toLowerCase() === CleanAccent) return { light: Reference.light, dark: Reference.dark, rotation, saturation: "1" };
+    return { light: mode(color, seed, monochrome, false), dark: mode(color, seed, monochrome, true), rotation, saturation: monochrome ? "0" : "1" };
 }
 
-function mode(seed: Color, monochrome: boolean, dark: boolean): Tokens {
-    // Tint neutral surfaces gently.
-    const chroma = monochrome ? 0 : Math.min(0.25, Math.max(0.09, seed.c));
-    const neutral = monochrome ? 0 : Math.min(0.007, chroma * 0.035);
-    const color = (l: number, c = neutral) => toHex({ l, c, h: seed.h });
-    const background = color(dark ? 0.165 : 0.962);
-    const surface = color(dark ? 0.205 : 0.992);
-    const hover = color(dark ? 0.235 : 0.952);
-    const field = color(dark ? 0.18 : 0.995);
-    const grounds = [background, surface, hover, field];
-    const direction = dark ? 0.01 : -0.01;
-    const readable = (l: number, c: number, target: number, backgrounds = grounds) => ensureContrast({ l, c, h: seed.h }, backgrounds, target, direction);
-
-    // Keep actions and labels readable.
-    let solid: Color = {
-        l: monochrome ? (dark ? 0.93 : 0.22) : Math.min(dark ? 0.80 : 0.82, Math.max(dark ? 0.50 : 0.40, seed.l)),
-        c: chroma, h: seed.h
+function mode(seed: Color, seedHex: string, monochrome: boolean, dark: boolean): Tokens {
+    const referenceSeed = fromHex(CleanAccent);
+    const reference = dark ? Reference.dark : Reference.light;
+    // Tints follow the seed's chroma, never fainter than three fifths of the mockup's (none for a monochrome seed); the hue turns by the seed's distance from the reference hue.
+    const scale = monochrome ? 0 : Math.min(1.25, Math.max(0.6, seed.c / referenceSeed.c));
+    const turn = seed.h - referenceSeed.h;
+    const tinted = (name: string): string => {
+        const base = fromHex(reference[name]);
+        return toHex({ l: base.l, c: base.c * scale, h: base.h + turn });
     };
-    const ink = color(0.18, Math.min(chroma * 0.2, 0.02));
-    let accent = toHex(solid);
-    let label = "#ffffff";
-    for (let step = 0; step < 60; step++) {
-        accent = toHex(solid);
-        if (contrast(accent, "#ffffff") >= 4.5) break;
-        if (contrast(accent, ink) >= 4.5) { label = ink; break; }
-        solid = { ...solid, l: solid.l + (solid.l >= 0.62 ? 0.01 : -0.01) };
-    }
-    const soft = color(dark ? 0.285 : 0.935, Math.min(chroma * (dark ? 0.35 : 0.22), dark ? 0.06 : 0.04));
-    const accentText = readable(monochrome ? (dark ? 0.90 : 0.25) : (dark ? Math.max(solid.l, 0.74) : Math.min(solid.l, 0.50)), chroma * 0.85, 4.5, [...grounds, soft]);
-    const accentHover = toHex({ ...solid, l: solid.l + (label === "#ffffff" ? -0.05 : 0.05) });
+
+    // The accent is the seed itself in light and its lighter sibling in dark; its text colour keeps the mockup's step from it.
+    const accent = dark
+        ? { l: monochrome ? 0.93 : Math.min(0.8, Math.max(0.62, seed.l + 0.095)), c: seed.c * 0.81, h: seed.h + 1.3 }
+        : { l: monochrome ? 0.22 : seed.l, c: seed.c, h: seed.h };
+    const accentText = dark
+        ? { l: monochrome ? 0.9 : Math.min(0.85, Math.max(0.74, seed.l + 0.227)), c: seed.c * 0.49, h: seed.h + 5.6 }
+        : { l: monochrome ? 0.25 : Math.min(0.56, seed.l - 0.052), c: seed.c * 0.91, h: seed.h + 0.6 };
+    const accentHex = dark || monochrome ? toHex(accent) : seedHex.toLowerCase();
 
     return {
-        background, surface, "surface-hover": hover, field,
-        border: color(dark ? 0.40 : 0.80),
-        text: readable(dark ? 0.955 : 0.21, neutral * 1.2, 12),
-        muted: readable(dark ? 0.71 : 0.50, neutral, 4.5),
-        accent, "accent-contrast": label, "accent-text": accentText, "accent-soft": soft,
-        "accent-hover": contrast(accentHover, label) >= 4.5 ? accentHover : accent,
-        focus: accentText
+        background: tinted("background"), surface: tinted("surface"), field: tinted("field"), "surface-hover": tinted("surface-hover"),
+        "accent-soft": tinted("accent-soft"), accent: accentHex, "accent-outline": tinted("accent-outline"), focus: tinted("focus"),
+        "accent-text": toHex(accentText), "accent-edge": tinted("accent-edge"),
+        text: tinted("text"), muted: tinted("muted"), border: tinted("border"), "border-strong": tinted("border-strong"),
+        // White on the accent, unless the accent itself is a light colour.
+        "accent-contrast": accent.l > 0.78 ? toHex({ l: 0.2, c: Math.min(seed.c * 0.2, 0.02), h: seed.h }) : "#ffffff"
     };
-}
-
-function ensureContrast(start: Color, grounds: string[], target: number, direction: number): string {
-    let color = start;
-    for (let step = 0; step < 100; step++) {
-        const hex = toHex(color);
-        if (grounds.every(ground => contrast(hex, ground) >= target)) return hex;
-        const next = color.l + direction;
-        if (next < 0 || next > 1) return hex;
-        color = { ...color, l: next };
-    }
-    return toHex(color);
 }
 
 // Standard sRGB / OKLCH conversion.

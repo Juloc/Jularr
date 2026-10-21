@@ -1,6 +1,8 @@
+// The mockups' table: a 19px card on the quiet line with the card shadow, a head in 10px/810 uppercase muted capitals on the field tone,
+// 1px row lines, a field-tone hover.
 .page-table-wrap {
     overflow-x: auto;
-    border: 1px solid var(--accent-line);
+    border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--surface);
     box-shadow: var(--shadow);
@@ -10,39 +12,47 @@
     width: 100%;
     border-collapse: collapse;
     text-align: start;
+    font-size: var(--text-control);
 
     th {
         text-align: start;
-        background: var(--accent-soft);
-        border-bottom: 1px solid var(--accent-line);
-        padding: 12px 15px;
-        font-size: 12px;
-        font-weight: 700;
+        background: var(--field);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 22px 13px;
+        font-size: var(--text-small);
+        font-weight: 810;
+        letter-spacing: .65px;
+        text-transform: uppercase;
         white-space: nowrap;
-        color: var(--accent-text);
+        color: var(--muted);
     }
 
+    // A row is at least 76px high (the cell height is its minimum); the first column's link is the row's title.
     td {
-        padding: 12px 15px;
+        height: 76px;
+        padding: 12px 22px;
         border-top: 1px solid var(--border);
     }
 
+    td a:not(.button) { color: var(--text); font-size: var(--text-body); font-weight: 800; line-height: 1.25; text-decoration: none; &:hover { color: var(--accent-text); } }
+
+    tbody tr:first-child td { border-top: 0; }
     tbody tr:hover { background: var(--surface-hover); }
 
-    // Row actions stay compact and light, side by side.
+    // Row actions stay compact and light, side by side; the main one is the lavender tint that fills with the accent on hover.
     td .button {
-        min-height: 32px;
-        padding: 5px 12px;
-        font-size: 13px;
+        min-height: var(--control-height-compact);
+        padding: 0 11px;
+        font-size: var(--text-small);
         white-space: nowrap;
     }
 
     td .button--primary {
-        border-color: var(--accent-line);
+        border-color: transparent;
         background-color: var(--accent-soft);
         color: var(--accent-text);
 
-        &:hover:not(:disabled) { background-color: var(--accent-soft); border-color: var(--accent); }
+        &:hover:not(:disabled) { background-color: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
     }
 
     td .ui-form__actions,
@@ -51,4 +61,22 @@
 
 @media (max-width: 650px) {
     .page-table th { white-space: normal; }
+    .page-table :is(th, td) { padding-inline: 14px; }
+    .page-table td { height: auto; }
+}
+
+// A typed table on a phone: the head goes, every row is a card of "label value" lines, as in the mockups.
+@media (max-width: 640px) {
+    .page-table-wrap--stack { overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    .page-table-wrap--stack .page-table {
+        display: block;
+
+        thead { display: none; }
+        tbody { display: grid; gap: 9px; }
+        tbody tr { display: grid; gap: 8px; padding: 13px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+        tbody tr:hover { background: var(--surface); }
+        td { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: auto; padding: 0; border: 0; text-align: end; }
+        td:empty { display: none; }
+        td::before { content: attr(data-label) / ""; flex: none; color: var(--muted); font-size: var(--text-small); font-weight: 680; text-align: start; }
+    }
 }

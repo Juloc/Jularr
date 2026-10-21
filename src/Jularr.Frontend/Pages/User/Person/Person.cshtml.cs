@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Frontend.Framework;
@@ -12,7 +13,7 @@ namespace Jularr.Frontend.Pages.User.Person
     public sealed class PersonModel(ReadPersonV1 readPerson, ReadPersonWorksV1 readWorks, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private PersonV1? _person;
-        private PageResult<WorkCardV1>? _works;
+        private PageResult<LibraryItemV1>? _works;
 
         [BindProperty(SupportsGet = true)]
         public long PersonId { get; set; }
@@ -22,16 +23,16 @@ namespace Jularr.Frontend.Pages.User.Person
 
         protected override void Define(Page page)
         {
-            page.Title("person.title");
+            page.Title("person.title", _person?.Name);
+            page.Parent("nav.library", "/Library");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Person/Person.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_person is { } person && _works is { } works)
             {
-                page.Content.Add(new H2(new ValueText(person.Name)));
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(works.Items.Count > 0
-                    ? new Div([.. works.Items.Select(item => new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))
+                    ? new Div([.. works.Items.Select(item => MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid")
                     : new P(new Text("person.empty")));
                 if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(works.Page - 1)));
@@ -51,7 +52,7 @@ namespace Jularr.Frontend.Pages.User.Person
         protected override async Task LoadDataAsync()
         {
             _person = await readPerson.ExecuteAsync<PersonV1>(new PersonParametersV1(PersonId), HttpContext.RequestAborted);
-            _works = await readWorks.ExecuteAsync<PageResult<WorkCardV1>>(new ReadPersonWorksParametersV1(PersonId, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
+            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadPersonWorksParametersV1(PersonId, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
         }
 
         private string Address(int page) => "/People/" + PersonId.ToString(CultureInfo.InvariantCulture) + "?pageNumber=" + page.ToString(CultureInfo.InvariantCulture);
