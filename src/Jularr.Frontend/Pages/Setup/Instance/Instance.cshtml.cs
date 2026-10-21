@@ -27,7 +27,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             if (_settings is not { } settings || _progress is not { } progress) return;
 
             var input = _input ?? new SaveSetupModulesDataV1(settings.Name, settings.Version, progress.Version,
-                new BaseDataList<SetupModuleInputV1>(_modules.Select(module => new SetupModuleInputV1(module.Id, module.IsEnabled, module.Version))));
+                new BaseDataList<InstanceModuleInputV1>(_modules.Select(module => new InstanceModuleInputV1(module.Id, module.IsEnabled, module.Version))));
             var presets = new[] { "complete", "mediaServer", "requests" }.Select(preset => new Button(new Text("setup.preset." + preset)).Attribute("data-setup-preset", preset)).ToArray<IUiComponent>();
             var choices = new Div(presets).Class("setup-modules__presets").Attribute("hidden", "hidden").Attribute("role", "group").TextAttribute("aria-label", "setup.presets");
             var keys = _modules.ToDictionary(module => module.Id, module => module.Key);
@@ -67,7 +67,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
         public async Task<IActionResult> OnPostAsync(string? name, long version, long setupVersion, List<ModuleRow> modules)
         {
             _input = new SaveSetupModulesDataV1(name ?? "", version, setupVersion,
-                new BaseDataList<SetupModuleInputV1>(modules.Select(module => new SetupModuleInputV1(module.Id, module.IsEnabled, module.Version))));
+                new BaseDataList<InstanceModuleInputV1>(modules.Select(module => new InstanceModuleInputV1(module.Id, module.IsEnabled, module.Version))));
             await save.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), _input, HttpContext.RequestAborted);
             return LocalRedirect("/Setup/Storage");
         }

@@ -12,7 +12,8 @@ namespace Jularr.Frontend.Framework
         private int MonitoredUnits { get; } = monitoredUnits;
         private bool IsPartial => State is MediaAvailabilityState.Partial or MediaAvailabilityState.PartialOtherAudio;
 
-        public IUiComponent Badge(string href, string? previewId = null) => new AvailabilityBadge(this, href, previewId);
+        // Expanded shows the status capsule at rest, as on a title's own poster; on a card it opens on hover and focus.
+        public IUiComponent Badge(string href, string? previewId = null, bool expanded = false) => new AvailabilityBadge(this, href, previewId, expanded);
 
         internal string GetLabel(UiText texts)
         {
@@ -57,7 +58,7 @@ namespace Jularr.Frontend.Framework
         }
 
         // Dot and expanded status capsule.
-        private sealed class AvailabilityBadge(MediaAvailability symbol, string href, string? previewId) : IUiComponent
+        private sealed class AvailabilityBadge(MediaAvailability symbol, string href, string? previewId, bool expanded) : IUiComponent
         {
             public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
             {
@@ -67,7 +68,7 @@ namespace Jularr.Frontend.Framework
                 if (symbol.IsPartial) badgeLabel = string.Format(CultureInfo.CurrentCulture, badgeLabel, symbol.AvailableUnits, symbol.MonitoredUnits);
                 var link = new A(new Span(new CompactSymbol(symbol), new Span(new ValueText(badgeLabel)).Class("media-availability-badge__label"))
                     .Class("media-availability-badge__body"), new Span(new ValueText(label)).Class("media-availability-badge__hint").Attribute("aria-hidden", "true"))
-                    .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant())
+                    .Class("media-availability-badge media-availability-badge--" + symbol.State.ToString().ToLowerInvariant() + (expanded ? " media-availability-badge--expanded" : ""))
                     .Attribute("href", href).Attribute("aria-label", label);
                 if (previewId is not null) link.Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog").Attribute("data-navigation", "full");
                 link.WriteTo(writer, encoder, texts);

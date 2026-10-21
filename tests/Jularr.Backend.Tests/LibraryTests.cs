@@ -331,7 +331,7 @@ namespace Jularr.Backend.Tests
             Assert.IsNotNull(shown.LastScanAt);
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
-            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Versions &amp; languages");
+            StringAssert.Contains(await details.Content.ReadAsStringAsync(), ">Versions<");
 
             // Renaming moves files through the confirmed preview only.
             using var preview = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Rename");

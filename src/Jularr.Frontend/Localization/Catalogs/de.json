@@ -10515,6 +10515,342 @@
   "jobs.about.readingCopies": [
    "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",
    "Schreibt neben digitale PDFs eine Lesekopie (EPUB), damit sie sich wie ein Buch lesen lassen."
+  ],
+  "profile.section.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "profile.languageOrder": [
+   "Languages of the choice, in order (comma separated)",
+   "Sprachen der Auswahl, in Reihenfolge (mit Komma getrennt)"
+  ],
+  "profile.languageFallback": [
+   "Fallback when no file carries an asked language",
+   "Rückfall, wenn keine Datei eine gewünschte Sprache hat"
+  ],
+  "profile.languageFallback.Original": [
+   "Original",
+   "Originalsprache"
+  ],
+  "profile.languageFallback.English": [
+   "English",
+   "Englisch"
+  ],
+  "profile.languageFallback.None": [
+   "No fallback",
+   "Kein Rückfall"
+  ],
+  "hint.AcquisitionProfileFields.LanguageOrder.placeholder": [
+   "de, en, ja",
+   "de, en, ja"
+  ],
+  "hint.AcquisitionProfileFields.LanguageOrder.info": [
+   "The languages of the choice, in order. Empty takes the languages the request asks for.",
+   "Die Sprachen der Auswahl, in Reihenfolge. Leer übernimmt die Sprachen der Anfrage."
+  ],
+  "details.tabs": [
+   "Parts of the page",
+   "Bereiche"
+  ],
+  "details.tab.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "details.tab.volumes.manga": [
+   "Volumes & chapters",
+   "Bände & Kapitel"
+  ],
+  "details.tab.volumes.lightNovel": [
+   "Volumes",
+   "Bände"
+  ],
+  "details.tab.volumes.book": [
+   "Parts",
+   "Teile"
+  ],
+  "details.tab.tracks": [
+   "Tracks",
+   "Tracks"
+  ],
+  "details.tab.people": [
+   "People",
+   "Personen"
+  ],
+  "details.tab.similar": [
+   "Similar",
+   "Ähnliches"
+  ],
+  "details.tab.facts": [
+   "Details",
+   "Details"
+  ],
+  "details.tab.versions": [
+   "Versions",
+   "Versionen"
+  ],
+  "details.tab.editions": [
+   "Editions",
+   "Ausgaben"
+  ],
+  "details.tab.files": [
+   "Files",
+   "Dateien"
+  ],
+  "details.people.creators": [
+   "Made by",
+   "Von"
+  ],
+  "details.people.cast": [
+   "Cast",
+   "Besetzung"
+  ],
+  "details.people.crew": [
+   "Crew",
+   "Stab"
+  ],
+  "details.fact.creators": [
+   "Made by",
+   "Von"
+  ],
+  "details.fact.series": [
+   "Series",
+   "Reihe"
+  ],
+  "details.fact.rating": [
+   "Rating",
+   "Bewertung"
+  ],
+  "details.fact.originalTitle": [
+   "Original title",
+   "Originaltitel"
+  ],
+  "details.fact.released": [
+   "Released",
+   "Erscheinung"
+  ],
+  "details.fact.runtime": [
+   "Length",
+   "Laufzeit"
+  ],
+  "details.fact.studio": [
+   "Studio",
+   "Studio"
+  ],
+  "details.fact.structure": [
+   "Structure",
+   "Aufbau"
+  ],
+  "details.fact.platforms": [
+   "Platforms",
+   "Plattformen"
+  ],
+  "details.fact.language": [
+   "Original language",
+   "Originalsprache"
+  ],
+  "details.seasonCount": [
+   "{0} seasons",
+   "{0} Staffeln"
+  ],
+  "details.chapterCount": [
+   "{0} chapters",
+   "{0} Kapitel"
+  ],
+  "details.disc": [
+   "Disc {0}",
+   "Disc {0}"
+  ],
+  "details.track.number": [
+   "No.",
+   "Nr."
+  ],
+  "details.track.title": [
+   "Title",
+   "Titel"
+  ],
+  "details.trailer": [
+   "Trailer",
+   "Trailer"
+  ],
+  "details.request": [
+   "Request",
+   "Anfragen"
+  ],
+  "details.more": [
+   "More",
+   "Mehr"
+  ],
+  "details.manage": [
+   "Manage title",
+   "Titel verwalten"
+  ],
+  "details.version": [
+   "Version",
+   "Version"
+  ],
+  "details.edition": [
+   "Edition",
+   "Ausgabe"
+  ],
+  "details.platform": [
+   "Platform",
+   "Plattform"
+  ],
+  "details.sort": [
+   "Order",
+   "Reihenfolge"
+  ],
+  "details.sort.asc": [
+   "Episode ascending",
+   "Folge aufsteigend"
+  ],
+  "details.sort.desc": [
+   "Episode descending",
+   "Folge absteigend"
+  ],
+  "details.sort.unwatched": [
+   "Unwatched first",
+   "Ungesehene zuerst"
+  ],
+  "details.layout": [
+   "Layout",
+   "Ansicht"
+  ],
+  "details.layout.list": [
+   "List",
+   "Liste"
+  ],
+  "details.layout.cards": [
+   "Cards",
+   "Karten"
+  ],
+  "details.percent": [
+   "{0} %",
+   "{0} %"
+  ],
+  "details.progressEpisodes": [
+   "{0} / {1} episodes",
+   "{0} / {1} Folgen"
+  ],
+  "details.state.unwatched": [
+   "Unwatched",
+   "Ungesehen"
+  ],
+  "details.state.unread": [
+   "Unread",
+   "Ungelesen"
+  ],
+  "details.state.unheard": [
+   "Unheard",
+   "Ungehört"
+  ],
+  "details.state.local": [
+   "Local",
+   "Lokal"
+  ],
+  "details.state.notLocal": [
+   "Not local",
+   "Nicht lokal"
+  ],
+  "details.editionFormat.Print": [
+   "Print",
+   "Print"
+  ],
+  "details.editionFormat.Ebook": [
+   "E-book",
+   "E-Book"
+  ],
+  "details.editionFormat.Audiobook": [
+   "Audiobook",
+   "Hörbuch"
+  ],
+  "details.editionFormat.Comic": [
+   "Comic",
+   "Comic"
+  ],
+  "progress.heard": [
+   "Heard",
+   "Gehört"
+  ],
+  "progress.markHeard": [
+   "Mark heard",
+   "Als gehört markieren"
+  ],
+  "progress.markUnheard": [
+   "Mark unheard",
+   "Als ungehört markieren"
+  ],
+  "settings.tabs": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "settings.tab.instance": [
+   "Instance",
+   "Instanz"
+  ],
+  "settings.tab.modules": [
+   "Modules",
+   "Module"
+  ],
+  "settings.tab.mediaTypes": [
+   "Media types",
+   "Medientypen"
+  ],
+  "settings.tab.languages": [
+   "Languages",
+   "Sprachen"
+  ],
+  "settings.tab.naming": [
+   "Naming",
+   "Benennung"
+  ],
+  "settings.module.needs": [
+   "Needs",
+   "Benötigt"
+  ],
+  "settings.module.neededBy": [
+   "Needed by",
+   "Benötigt von"
+  ],
+  "settings.instance.general": [
+   "General",
+   "Allgemein"
+  ],
+  "settings.instance.schedules": [
+   "Schedules",
+   "Zeitpläne"
+  ],
+  "settings.instance.history": [
+   "History and caches",
+   "Verlauf und Zwischenspeicher"
+  ],
+  "settings.instance.access": [
+   "Access and security",
+   "Zugriff und Sicherheit"
+  ],
+  "admin.languages.list": [
+   "Interface languages",
+   "Oberflächensprachen"
+  ],
+  "admin.languages.edit": [
+   "Edit language",
+   "Sprache bearbeiten"
+  ],
+  "admin.languages.actions": [
+   "Language actions",
+   "Aktionen für Sprachen"
+  ],
+  "admin.modules.actions": [
+   "Module actions",
+   "Aktionen für Module"
+  ],
+  "library.naming.actions": [
+   "Naming actions",
+   "Aktionen für die Benennung"
+  ],
+  "dock.pageOnly": [
+   "Page {0}",
+   "Seite {0}"
   ]
  }
 }

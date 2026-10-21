@@ -16,6 +16,8 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly StringField Folder = new() { MaximumLength = 400, Required = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
         public static readonly StringField File = new() { MaximumLength = 300, AllowBlank = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
         public static readonly StringField Example = new() { MaximumLength = 1000, Required = false };
+        // The error code of a pattern that cannot be used, as the save would name it.
+        public static readonly StringField Problem = new() { MaximumLength = 64, Required = false };
         public static readonly LongField Version = new() { Minimum = 1 };
     }
 }
