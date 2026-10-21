@@ -1,0 +1,44 @@
+// A centred dialog: title row with the X, a scrolling body, and the form's actions as the footer.
+.modal {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-dialog);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-overlay);
+    overflow: hidden;
+
+    &[open] { display: flex; flex-direction: column; }
+    &::backdrop { background: var(--scrim); }
+
+    &__head {
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--border);
+
+        h2 { margin: 0; font-size: var(--text-heading); font-weight: var(--weight-heading); }
+    }
+
+    &__body {
+        min-height: 0;
+        padding: 18px 22px 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    // Cancel and the primary action close the dialog at its bottom edge.
+    &__body > .ui-form > .ui-form__actions {
+        position: sticky;
+        bottom: 0;
+        margin: 4px -22px 0;
+        padding: 14px 22px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+    }
+}

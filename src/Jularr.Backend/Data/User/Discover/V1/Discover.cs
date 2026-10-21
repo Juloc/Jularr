@@ -438,8 +438,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
     // What the local catalog keeps of a title for the description of a card's hover preview.
     public sealed class DiscoverPreviewV1 : BaseResponse
     {
-        public DiscoverPreviewV1(string title, string? overview, string? posterUrl, string? backdropUrl)
+        public DiscoverPreviewV1(string title, string? overview, string? posterUrl, string? backdropUrl, int? releaseYear = null)
         {
+            ReleaseYear = releaseYear;
             Title = title;
             Overview = overview;
             PosterUrl = posterUrl;
@@ -457,6 +458,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
     }
 
     public sealed class ReadContinueParametersV1 : BaseParameters

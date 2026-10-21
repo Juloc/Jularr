@@ -21,12 +21,6 @@ namespace Jularr.Frontend.Pages.Admin.Sources
 
             // Every enabled source is searched together; setup adds what needs nothing from the Owner.
             page.Content.Add(new Form<SourceCatalogParametersV1>(form => form.Submit("sources.setUpAll"), "/Admin/Acquisition/Sources?handler=SetUp", csrf, new SourceCatalogParametersV1()));
-            if (TempData["SourcesAdded"] is string added)
-            {
-                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["sources.setUpResult"], added.Length == 0 ? "-" : added,
-                    TempData["SourcesNeedAccount"] as string is { Length: > 0 } waiting ? waiting : "-"))).Attribute("role", "status"));
-            }
-
             foreach (var group in _sources.Where(source => source.SourceGroupId != SourceGroup.Subtitles || texts.Can(null, "Subtitles")).GroupBy(source => source.SourceGroupId))
             {
                 page.Content.Add(new UiSection("sources.group." + group.Key, [new Table<SourceCatalogItemV1>([.. group])
@@ -65,8 +59,9 @@ namespace Jularr.Frontend.Pages.Admin.Sources
         {
             var result = await setUp.ExecuteAsync<SourceSetupResultV1>(new SourceCatalogParametersV1(), default, HttpContext.RequestAborted);
             var names = (await read.ExecuteAsync<BaseDataList<SourceCatalogItemV1>>(new SourceCatalogParametersV1(), HttpContext.RequestAborted)).ToDictionary(item => item.Key, item => item.Name);
-            TempData["SourcesAdded"] = string.Join(", ", result.Added.Select(key => names.GetValueOrDefault(key, key)));
-            TempData["SourcesNeedAccount"] = string.Join(", ", result.NeedsAccount.Select(key => names.GetValueOrDefault(key, key)));
+            var added = string.Join(", ", result.Added.Select(key => names.GetValueOrDefault(key, key)));
+            var waiting = string.Join(", ", result.NeedsAccount.Select(key => names.GetValueOrDefault(key, key)));
+            Hint("sources.setUpResult", added.Length == 0 ? "-" : added, waiting.Length == 0 ? "-" : waiting);
             return RedirectToPage("/Admin/Sources/Sources");
         }
 

@@ -46,7 +46,7 @@ namespace Jularr.Frontend.Pages.Admin.WorkUpload
         {
             var data = new UploadVolumeDataV1(file is null ? null : new UploadedFile(file.FileName, file.Length, file.OpenReadStream), volumeNumber);
             await upload.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), data, HttpContext.RequestAborted);
-            TempData["VolumeUploaded"] = true;
+            Hint("work.upload.done");
             return LocalRedirect(WorkAddress);
         }
 
