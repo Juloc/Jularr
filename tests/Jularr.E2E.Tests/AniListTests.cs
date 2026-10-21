@@ -110,12 +110,21 @@ namespace Jularr.E2E.Tests
             await Steps.FollowAsync(page, row.GetByRole(AriaRole.Button, new() { Name = "Run now", Exact = true }));
         }
 
+        // The episodes watched of the series, as its hero says it ("1 / 4 episodes").
+        private static async Task<int> WatchedAsync(IPage page)
+        {
+            var caption = page.Locator(".media-hero__progress-caption");
+            if (await caption.CountAsync() == 0) return 0;
+            var match = System.Text.RegularExpressions.Regex.Match(await caption.First.InnerTextAsync(), @"(\d+)\s*/\s*\d+ episodes");
+            return match.Success ? int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : 0;
+        }
+
         private static async Task WaitForWatchedAsync(IPage page, int expectedEpisodes)
         {
             for (var attempt = 0; attempt < 60; attempt++)
             {
                 await page.GotoAsync("/Details/" + Work);
-                if (await page.Locator(".episode-card", new() { HasText = "Watched" }).CountAsync() == expectedEpisodes)
+                if (await WatchedAsync(page) == expectedEpisodes)
                 {
                     return;
                 }
@@ -123,7 +132,7 @@ namespace Jularr.E2E.Tests
                 await Task.Delay(500);
             }
 
-            Assert.AreEqual(expectedEpisodes, await page.Locator(".episode-card", new() { HasText = "Watched" }).CountAsync());
+            Assert.AreEqual(expectedEpisodes, await WatchedAsync(page));
         }
     }
 }
