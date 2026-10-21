@@ -254,8 +254,8 @@ namespace Jularr.Frontend.Pages.User.Details
         private static string PersonHref(long personId) => "/People/" + personId.ToString(CultureInfo.InvariantCulture);
 
         // Cast with their character, crew with their job; each leads to the person's other titles.
-        private static IUiComponent Person(WorkCreditV1 credit) => new A(
-            credit.ImageUrl is null ? new Div().Class("details-person__placeholder") : new MediaImage(credit.ImageUrl, credit.Name, 185, 278),
+        private IUiComponent Person(WorkCreditV1 credit) => new A(
+            MediaImage.Or(assets, credit.ImageUrl, credit.Name, 185, 278, NoCoverKind.Person, placeholderClass: "details-person__placeholder"),
             new Strong(new ValueText(credit.Name)),
             credit.Credit is null ? new Span() : new Span(new ValueText(credit.Credit)).Class("details-person__role"))
             .Class("details-person").Attribute("href", PersonHref(credit.PersonId));
@@ -269,7 +269,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 var facts = string.Join(" · ", new[] { string.Format(CultureInfo.CurrentCulture, texts["details.episodeCount"], season.EpisodeCount),
                     season.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
                     season.WatchedCount > 0 ? string.Format(CultureInfo.CurrentCulture, texts["details.watchedCount"], season.WatchedCount) : null }.OfType<string>());
-                var link = new A(season.ImageUrl is null ? new Span().Class("details-season__poster") : new MediaImage(season.ImageUrl, "", 92, 138),
+                var link = new A(MediaImage.Or(assets, season.ImageUrl, "", 92, 138, placeholderClass: "details-season__poster"),
                     new Span(new Strong(new ValueText(SeasonName(season))), new Span(new ValueText(facts)).Class("details-season__facts")).Class("details-season__text"))
                     .Class(current ? "details-season details-season--current" : "details-season").Attribute("href", home + "?season=" + season.SeasonNumber.ToString(CultureInfo.InvariantCulture));
                 return current ? (IUiComponent)link.Attribute("aria-current", "page") : link;
@@ -283,7 +283,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (episode.GroupName is { } name && name != group) episodes.Add(new H3(new ValueText(name)));
                 group = episode.GroupName;
                 var resume = episode.ResumePositionMs is > 0 and { } position && !episode.IsCompleted ? Clock(position) : null;
-                episodes.Add(new EpisodeCard(
+                episodes.Add(new EpisodeCard(assets,
                         "S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
                         episode.Title, episode.Overview, episode.ImageUrl, episode.RuntimeMinutes,
                         episode.IsUpcoming && episode.MediaStateTypeId != MediaStateType.Available ? "details.upcoming" : "media.state." + episode.MediaStateTypeId,

@@ -4,7 +4,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // One episode: its still with length and progress, number, title and summary, and its state; a playable one opens the player.
-    public sealed class EpisodeCard(string label, string? title, string? overview, string? imageUrl, int? runtimeMinutes, string stateKey, string? playHref, string? resumeAt = null) : IUiComponent
+    public sealed class EpisodeCard(FrontendAssets assets, string label, string? title, string? overview, string? imageUrl, int? runtimeMinutes, string stateKey, string? playHref, string? resumeAt = null) : IUiComponent
     {
         private long? _positionMs;
         private long? _durationMs;
@@ -39,7 +39,7 @@ namespace Jularr.Frontend.Framework
         {
             var art = new List<IUiComponent>
             {
-                imageUrl is null ? new Div().Class("episode-card__placeholder") : new MediaImage(imageUrl, label, 400, 225)
+                MediaImage.Or(assets, imageUrl, label, 400, 225)
             };
             if (runtimeMinutes is { } minutes)
             {

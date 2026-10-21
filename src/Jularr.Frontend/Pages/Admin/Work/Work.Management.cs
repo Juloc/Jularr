@@ -78,7 +78,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         private IUiComponent Hero(WorkManagementV1 work, string? csrf)
         {
             var banner = work.BackdropUrl ?? work.PosterUrl;
-            var cover = work.PosterUrl is { } poster ? new MediaImage(poster, "", 210, 315, priority: true) : (IUiComponent)new Div().Class("work-cover__placeholder");
+            var cover = MediaImage.Or(assets, work.PosterUrl, "", 210, 315, priority: true);
             var pills = new List<IUiComponent>();
             if (work.ReleaseYear is { } year) pills.Add(new Span(new ValueText(year.ToString(CultureInfo.InvariantCulture))).Class("work-pill"));
             pills.Add(new Span(new Text(MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId))).Class("work-pill"));
@@ -831,7 +831,6 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         private HtmlElement IconSubmit(string icon, string labelKey) => new IconButton(Icon(icon, 22)).Attribute("type", "submit").Class("work-icon").TextAttribute("aria-label", labelKey).TextAttribute("title", labelKey);
 
-        private sealed class Template(params IUiComponent[] children) : HtmlElement("template", children);
 
         private sealed class Fieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
 

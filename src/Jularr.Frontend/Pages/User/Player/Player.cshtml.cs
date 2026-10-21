@@ -62,7 +62,7 @@ namespace Jularr.Frontend.Pages.User.Player
                     if (_episodes.Count > 0)
                     {
                         tabs.Add(new("details.episodes", "#player-episodes", true));
-                        panes.Add(new Div(_episodes.Select(episode => (IUiComponent)new EpisodeCard(
+                        panes.Add(new Div(_episodes.Select(episode => (IUiComponent)new EpisodeCard(assets,
                             MediaUnitLabel.Format(texts, WorkUnitType.Episode, episode.Number, episode.SeasonNumber, null) ?? "",
                             episode.Title, null, episode.ImageUrl, episode.RuntimeMinutes, "media.state." + episode.MediaStateTypeId,
                             episode.MediaAssetId is { } episodeAsset ? "/Player/" + episodeAsset.ToString(CultureInfo.InvariantCulture) : null)

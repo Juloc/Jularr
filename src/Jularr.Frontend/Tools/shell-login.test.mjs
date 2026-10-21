@@ -103,8 +103,8 @@ test("Clean shows the single-path parrot mark, Original keeps its own mark, and 
     assert.ok(!existsSync(resolve(root, "Pages/Shared/brand-mark.svg")), "the J in a ring must not exist");
 
     const brand = load("Pages/Shared/Brand.cs");
-    assert.match(brand, /Mark\("brand-clean", "brand-symbol__clean"\)/);
-    assert.match(brand, /Mark\("brand-original", "brand-symbol__original"\)/);
+    assert.match(brand, /Mark\(assets, "brand-clean", "brand-symbol__clean"\)/);
+    assert.match(brand, /Mark\(assets, "brand-original", "brand-symbol__original"\)/);
     assert.match(load("Pages/Shared/Brand.scss"), /html\[data-skin="original"\] \.brand-symbol \{\s*&__clean \{ display: none; \}\s*&__original \{ display: block; \}/);
 
     const favicon = load("Assets/Shared/favicon.svg");
