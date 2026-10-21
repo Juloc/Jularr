@@ -140,6 +140,8 @@ namespace Jularr.Backend.Service.Core
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
             services.AddSingleton(new MediaProbeClient { ExecutablePath = Executables.Resolve(configuration["Media:FfprobePath"], "ffprobe") });
             services.AddSingleton(new MediaTranscoder { ExecutablePath = Executables.Resolve(configuration["Media:FfmpegPath"], "ffmpeg") });
+            services.AddSingleton(new JxlEncoder { ExecutablePath = Executables.Resolve(configuration["Media:CjxlPath"], "cjxl") });
+            services.AddHostedService<JxlStartupCheck>();
             services.AddSingleton(new AudioFingerprinter { ExecutablePath = Executables.Resolve(configuration["Media:FpcalcPath"], "fpcalc") });
             services.AddSingleton(new ArchiveTools
             {
