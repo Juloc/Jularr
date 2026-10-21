@@ -189,7 +189,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 ORDER BY
                     ordered."Position";
                 """;
-            sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeId, Parameters.IsMonitored, Parameters.WorkListStatusId, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query,
+            sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeId, Parameters.IsMonitored, Parameters.WorkListStatusId, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query,
                 Parameters.WorkSortTypeId, Parameters.IsDescending));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkListItemV1>(sql, CancellationToken);

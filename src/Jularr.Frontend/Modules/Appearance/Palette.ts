@@ -22,10 +22,12 @@ function mode(seed: Color, monochrome: boolean, dark: boolean): Tokens {
     const chroma = monochrome ? 0 : Math.min(0.25, Math.max(0.09, seed.c));
     const neutral = monochrome ? 0 : Math.min(0.007, chroma * 0.035);
     const color = (l: number, c = neutral) => toHex({ l, c, h: seed.h });
-    const background = color(dark ? 0.165 : 0.962);
-    const surface = color(dark ? 0.205 : 0.992);
-    const hover = color(dark ? 0.235 : 0.952);
-    const field = color(dark ? 0.18 : 0.995);
+    // Owner's decision 20 Oct: light surfaces are plain white, never grey; hover is an accent tint.
+    const white = (l: number) => color(l, 0);
+    const background = dark ? color(0.165) : white(1);
+    const surface = dark ? color(0.205) : white(1);
+    const hover = dark ? color(0.235) : color(0.965, Math.min(chroma * 0.1, 0.02));
+    const field = dark ? color(0.18) : white(1);
     const grounds = [background, surface, hover, field];
     const direction = dark ? 0.01 : -0.01;
     const readable = (l: number, c: number, target: number, backgrounds = grounds) => ensureContrast({ l, c, h: seed.h }, backgrounds, target, direction);

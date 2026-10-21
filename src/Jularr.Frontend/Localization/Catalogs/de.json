@@ -2516,6 +2516,10 @@
    "Arr+",
    "Arr+"
   ],
+  "nav.group.instance": [
+   "Instance",
+   "Instanz"
+  ],
   "acquisition.role.Search": [
    "Indexers",
    "Indexer"
@@ -2804,6 +2808,82 @@
    "Request cancelled",
    "Anfrage abgebrochen"
   ],
+  "requests.filter": [
+   "Request status",
+   "Anfragestatus"
+  ],
+  "requests.filter.All": [
+   "All",
+   "Alle"
+  ],
+  "requests.filter.Awaiting": [
+   "Awaiting",
+   "Freigabe"
+  ],
+  "requests.filter.Active": [
+   "Active",
+   "Aktiv"
+  ],
+  "requests.filter.Available": [
+   "Available",
+   "Verfügbar"
+  ],
+  "requests.filter.Problems": [
+   "Problems",
+   "Probleme"
+  ],
+  "requests.filter.History": [
+   "History",
+   "Verlauf"
+  ],
+  "requests.sort.Newest": [
+   "Newest",
+   "Neueste"
+  ],
+  "requests.sort.Oldest": [
+   "Oldest",
+   "Älteste"
+  ],
+  "requests.sort.Status": [
+   "Status",
+   "Status"
+  ],
+  "requests.sort.Title": [
+   "Title A-Z",
+   "Titel A–Z"
+  ],
+  "requests.layout": [
+   "Layout",
+   "Ansicht"
+  ],
+  "requests.layout.rows": [
+   "List",
+   "Liste"
+  ],
+  "requests.layout.cards": [
+   "Cards",
+   "Karten"
+  ],
+  "requests.reset": [
+   "Clear filters",
+   "Filter zurücksetzen"
+  ],
+  "requests.withdraw": [
+   "Withdraw request",
+   "Anfrage zurückziehen"
+  ],
+  "requests.withdraw.confirm": [
+   "Withdraw this request?",
+   "Diese Anfrage zurückziehen?"
+  ],
+  "requests.withdraw.submit": [
+   "Withdraw",
+   "Zurückziehen"
+  ],
+  "requests.activity": [
+   "Activity",
+   "Aktivität"
+  ],
   "live.eta": [
    "{0} left",
    "noch {0}"
@@ -2861,8 +2941,8 @@
    "Module"
   ],
   "admin.instance.module.retained": [
-   "Disabling Library blocks media services and hides their navigation. Existing media and watchlists are retained.",
-   "Das Deaktivieren der Bibliothek sperrt die Mediendienste und blendet deren Navigation aus. Vorhandene Medien und Merklisten bleiben erhalten."
+   "Disabling Library blocks media services and hides their navigation. Existing media and favorites are retained.",
+   "Das Deaktivieren der Bibliothek sperrt die Mediendienste und blendet deren Navigation aus. Vorhandene Medien und Favoriten bleiben erhalten."
   ],
   "common.all": [
    "All",
@@ -3600,9 +3680,9 @@
    "Settings",
    "Einstellungen"
   ],
-  "nav.watchlist": [
-   "Watchlist",
-   "Merkliste"
+  "nav.favorites": [
+   "Favorites",
+   "Favoriten"
   ],
   "player.title": [
    "Player",
@@ -3692,9 +3772,9 @@
    "Shell",
    "Shell"
   ],
-  "preview.watchlist": [
-   "Watchlist",
-   "Merkliste"
+  "preview.favorites": [
+   "Favorites",
+   "Favoriten"
   ],
   "requests.approved": [
    "Approved",
@@ -4496,9 +4576,9 @@
    "Installed quality unknown",
    "Vorhandene Qualität unbekannt"
   ],
-  "watchlist.title": [
-   "Watchlist",
-   "Merkliste"
+  "favorites.title": [
+   "Favorites",
+   "Favoriten"
   ],
   "storage.title": [
    "Storage",
@@ -5375,6 +5455,122 @@
   "collections.removeFrom": [
    "Remove",
    "Entfernen"
+  ],
+  "favorites.noMatch": [
+   "No favorites match these filters.",
+   "Keine Favoriten passen zu diesen Filtern."
+  ],
+  "favorites.noWorks": [
+   "No titles in this collection yet.",
+   "Noch keine Titel in dieser Sammlung."
+  ],
+  "favorites.collections": [
+   "Collections",
+   "Sammlungen"
+  ],
+  "favorites.all": [
+   "All favorites",
+   "Alle Favoriten"
+  ],
+  "favorites.titles": [
+   "{0} titles",
+   "{0} Titel"
+  ],
+  "favorites.collection.edit": [
+   "Edit {0}",
+   "{0} bearbeiten"
+  ],
+  "favorites.collection.filter": [
+   "Edit filter",
+   "Filter bearbeiten"
+  ],
+  "favorites.filter.open": [
+   "Open filter",
+   "Filter öffnen"
+  ],
+  "favorites.filter.title": [
+   "Filter",
+   "Filter"
+  ],
+  "favorites.layout.toggle": [
+   "Switch between grid and list",
+   "Zwischen Raster und Liste wechseln"
+  ],
+  "favorites.select": [
+   "Select",
+   "Auswählen"
+  ],
+  "favorites.select.done": [
+   "Done",
+   "Fertig"
+  ],
+  "favorites.select.item": [
+   "Select {0}",
+   "{0} auswählen"
+  ],
+  "favorites.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "favorites.selectShown": [
+   "Select all shown",
+   "Alle sichtbaren wählen"
+  ],
+  "favorites.clearSelection": [
+   "Clear selection",
+   "Abwählen"
+  ],
+  "favorites.assign": [
+   "Add to collections",
+   "In Sammlungen einordnen"
+  ],
+  "favorites.status": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "favorites.status.notStarted": [
+   "Not started",
+   "Nicht begonnen"
+  ],
+  "favorites.status.inProgress": [
+   "In progress",
+   "Begonnen"
+  ],
+  "favorites.status.finished": [
+   "Finished",
+   "Abgeschlossen"
+  ],
+  "favorites.removedFromCollections": [
+   "Removed from favorites and from its collections.",
+   "Aus Favoriten und aus den Sammlungen entfernt."
+  ],
+  "favorites.heart.item": [
+   "Favorite and collections of {0}",
+   "Favorit und Sammlungen von {0}"
+  ],
+  "library.sort.Progress": [
+   "Progress",
+   "Fortschritt"
+  ],
+  "favorites.removeFromCollection": [
+   "Remove from this collection",
+   "Aus dieser Sammlung entfernen"
+  ],
+  "favorites.chip.none": [
+   "Add to collection",
+   "Sammlung zuordnen"
+  ],
+  "favorites.picker.newName": [
+   "New collection name",
+   "Name der neuen Sammlung"
+  ],
+  "favorites.picker.create": [
+   "Create collection and add",
+   "Sammlung erstellen und zuordnen"
+  ],
+  "common.done": [
+   "Done",
+   "Fertig"
   ],
   "instance.module.Collections": [
    "Collections",
@@ -6644,21 +6840,21 @@
    "Game",
    "Spiel"
   ],
-  "media.watchlist.add": [
-   "Add to watchlist",
-   "Zur Merkliste hinzufügen"
+  "media.favorites.add": [
+   "Add to favorites",
+   "Zu Favoriten hinzufügen"
   ],
-  "media.watchlist.manage": [
-   "Manage watchlist in Details",
-   "Merkliste in den Details verwalten"
+  "media.favorites.manage": [
+   "Manage favorites in Details",
+   "Favoriten in den Details verwalten"
   ],
-  "media.watchlist.remove": [
-   "Remove from watchlist",
-   "Von der Merkliste entfernen"
+  "media.favorites.remove": [
+   "Remove from favorites",
+   "Aus Favoriten entfernen"
   ],
-  "media.watchlist.empty": [
-   "Your watchlist is empty.",
-   "Deine Merkliste ist leer."
+  "media.favorites.empty": [
+   "Your favorites are empty.",
+   "Du hast noch keine Favoriten."
   ],
   "errors.invalid_data": [
    "Please check the supplied values.",

@@ -7,7 +7,7 @@ namespace Jularr.Frontend.Framework
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var id = "search-" + labelKey.Replace('.', '-');
+            var id = InputId(labelKey);
             var children = new List<IUiComponent>
             {
                 new Label(new Text(labelKey)).Class("visually-hidden").Attribute("for", id),
@@ -23,6 +23,9 @@ namespace Jularr.Frontend.Framework
 
             new SearchForm([.. children]).Class("search-box").Attribute("action", action).Attribute("method", "get").Attribute("role", "search").WriteTo(writer, encoder, texts);
         }
+
+        // Other chrome (the header's icon) points its label at the field.
+        public static string InputId(string labelKey) => "search-" + labelKey.Replace('.', '-');
 
         private sealed class SearchForm(params IUiComponent[] children) : HtmlElement("form", children);
 

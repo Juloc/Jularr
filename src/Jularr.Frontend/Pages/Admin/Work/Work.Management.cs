@@ -160,7 +160,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 new Div(
                     new Div(cover).Class("work-cover"),
                     new Div(
-                        new Div(new H1(new ValueText(work.CanonicalTitle)), new Div([.. pills]).Class("work-pills")).Class("work-title"),
+                        // The breadcrumb ends with the title: the heading stays for assistive technology only.
+                        new Div(new H1(new ValueText(work.CanonicalTitle)).Class("visually-hidden"), new Div([.. pills]).Class("work-pills")).Class("work-title"),
                         facts.Length == 0 ? new Span() : new P(new ValueText(facts)).Class("work-facts"),
                         string.IsNullOrWhiteSpace(work.Overview) ? new Span() : new P(new ValueText(work.Overview)).Class("work-overview"),
                         new Div([.. status, new Div([.. figures]).Class("work-figures"), new Div([.. actions]).Class("work-actions")]).Class("work-hero__bottom")).Class("work-hero__body")).Class("work-hero__content")).Class("work-hero");

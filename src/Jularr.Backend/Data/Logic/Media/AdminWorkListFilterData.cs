@@ -7,9 +7,9 @@ using Jularr.Backend.Data.Fields.Media;
 namespace Jularr.Backend.Data.Logic.Media
 {
     // The filters and the order of the library list, without its paging.
-    internal sealed class WorkListFilterData : BaseData
+    internal sealed class AdminWorkListFilterData : BaseData
     {
-        public WorkListFilterData(MediaType? mediaTypeId, bool? isMonitored, WorkListStatus? workListStatusId, long? libraryRootId, long? acquisitionProfileId, string? query, WorkSortType workSortTypeId,
+        public AdminWorkListFilterData(MediaType? mediaTypeId, bool? isMonitored, WorkListStatus? workListStatusId, long? libraryRootId, long? acquisitionProfileId, string? query, WorkSortType workSortTypeId,
             bool isDescending)
         {
             MediaTypeId = mediaTypeId;

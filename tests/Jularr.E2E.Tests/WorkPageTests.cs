@@ -40,7 +40,7 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(await cover.First.EvaluateAsync<bool>("image => image.complete && image.naturalWidth > 0"), "The stored cover did not load.");
                 Assert.AreEqual(0, await page.Locator("img[src*='image.tmdb.org']").CountAsync());
                 Assert.IsTrue(fakes.ImageRequests >= 2);
-                await Assertions.Expect(page.Locator(".app-header-location a", new() { HasText = "Works" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".app-header-location a.breadcrumb__link", new() { HasText = "Works" })).ToBeVisibleAsync();
                 foreach (var tab in new[] { "Seasons", "History", "Metadata" })
                 {
                     await Assertions.Expect(page.Locator(".navigation-tabs__link", new() { HasText = tab })).ToBeVisibleAsync();
