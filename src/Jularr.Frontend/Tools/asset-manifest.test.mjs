@@ -125,16 +125,14 @@ test("shared navigation stays single-row and the phone's sidebar is an off-canva
     assert.match(css, /body\{min-width:0/);
 });
 
-test("appearance choices wrap at their natural width and search retains an accessible target", () => {
+test("appearance choices wrap at their natural width and search keeps its own minimum height", () => {
     const appearance = readFileSync(join(build, manifest["Modules/Appearance/appearance.entry.scss"].file), "utf8");
     assert.match(appearance, /\.appearance__choices>\.button\{[^}]*flex:1 0 auto;[^}]*max-width:100%;overflow-wrap:anywhere/);
     assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
 
     const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
     assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:39px/);
-    // Controls are 37px for a mouse and 44px where a finger is the pointer.
     assert.match(shell, /--control-height:\s*37px/);
-    assert.match(shell, /@media\s*\(pointer:\s*coarse\)\{:root\{--control-height:\s*44px/);
     assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent-outline\)/);
 });
 

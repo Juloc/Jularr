@@ -148,8 +148,3 @@
     .activity-list--queue .page-table :is(th, td):is(:nth-child(3), :nth-child(4)) { display: none; }
     .activity-drawer { width: 100vw; }
 }
-
-@media (pointer: coarse) {
-    .activity-bar .navigation-tabs--activity .navigation-tabs__link { min-height: 40px; }
-    .page-table td .activity-actions .button--icon { width: 36px; min-height: 36px; }
-}

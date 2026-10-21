@@ -38,9 +38,7 @@
         &::-webkit-progress-bar { background: var(--accent-soft); border-radius: 999px; }
         &::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
         &::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
-        @media (prefers-reduced-motion: no-preference) {
-            &::-webkit-progress-value { transition: width 0.9s linear; }
-        }
+        &::-webkit-progress-value { transition: width 0.9s linear; }
     }
 
     &__facts { font-size: 0.85em; }

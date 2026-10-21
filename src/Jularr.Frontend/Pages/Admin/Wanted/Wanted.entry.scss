@@ -57,7 +57,3 @@
 
     .wanted-list .page-table :is(th, td):is(:nth-child(3), :nth-child(5), :nth-child(6)) { display: none; }
 }
-
-@media (pointer: coarse) {
-    .page-table td .wanted-actions .button--icon { width: 36px; min-height: 36px; }
-}

@@ -306,7 +306,6 @@ html[data-skin="original"] .sidebar-secondary {
 .nav-link--sub { min-height: 35px; padding: 0 12px; border-radius: var(--radius-small); color: var(--muted); font-weight: 400; }
 .nav-link--sub:hover { color: var(--accent-text); }
 .nav-link--sub.is-active { font-weight: 810; }
-@media (prefers-reduced-motion: reduce) { .nav-group > summary::after { transition: none; } }
 
 // The area of the administration: a small caps eyebrow above the areas.
 .nav-eyebrow {
@@ -422,4 +421,3 @@ html[data-skin="original"] .sidebar-secondary {
         }
     }
 }
-@media (max-width: 640px) and (prefers-reduced-motion: reduce) { .app-sidebar { transition: none; } }

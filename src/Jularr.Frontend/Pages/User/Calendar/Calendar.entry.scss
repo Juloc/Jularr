@@ -454,7 +454,3 @@ $types: (
         &__strip-date { padding: 7px 1px; strong { font-size: 15px; } }
     }
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .calendar * { transition: none; }
-}

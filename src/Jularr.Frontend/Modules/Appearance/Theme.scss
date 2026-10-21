@@ -64,7 +64,7 @@
     --weight-control: 740;
     --weight-heading: 805;
 
-    // Controls: 37px buttons (32px in a row), 36px round icon buttons, 40px fields; 44px where a finger is the pointer.
+    // Controls: 37px buttons (32px in a row), 36px round icon buttons, 40px fields.
     --control-height: 37px;
     --control-height-compact: 32px;
     --icon-button: 36px;
@@ -73,10 +73,6 @@
     --transition: .15s;
     --art-hue-rotate: 0deg;
     --art-saturate: 1;
-}
-
-@media (pointer: coarse) {
-    :root { --control-height: 44px; --control-height-compact: 44px; --icon-button: 44px; --field-height: 44px; }
 }
 
 // Brightness stays independent.

@@ -244,7 +244,3 @@
     .request-drawer { width: 100vw; }
 }
 
-@media (pointer: coarse) {
-    .requests-bar .navigation-tabs--requests .navigation-tabs__link { min-height: 40px; }
-    .requests-menu__trigger { min-height: 44px; }
-}

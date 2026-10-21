@@ -95,7 +95,6 @@
     &:hover &__hint, &:focus-visible &__hint { display: block; }
     &:focus-visible { outline: none; }
     &:focus-visible &__body { outline: 1px solid var(--accent); outline-offset: 2px; }
-    @media (prefers-reduced-motion: reduce) { &__body, &__body > * { transition: none; } }
 }
 
 // Same reveal for every card.

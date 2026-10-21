@@ -21,7 +21,6 @@
     backdrop-filter: blur(12px);
     color: var(--text);
     box-shadow: var(--shadow);
-    @media (prefers-reduced-transparency: reduce) { background: var(--surface); backdrop-filter: none; }
 }
 
 .player-page { background: var(--background); color: var(--text); }
@@ -281,9 +280,4 @@
     .player__settings, .player__chapters { position-area: none; inset: 12px; margin: 0; width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: none; }
     .player__settings-pane { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
     html:has(.player__settings:popover-open, .player__chapters:popover-open) { overflow: hidden; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .player__chrome { transition: none; }
-    .player__loading-ring { animation: none; }
-    .player__feedback--animate { animation: none; }
 }
