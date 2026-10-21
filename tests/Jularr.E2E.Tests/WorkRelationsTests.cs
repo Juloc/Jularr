@@ -40,7 +40,7 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(work.Locator(".relation__title")).ToHaveAttributeAsync("href", "/Details/8002");
             await Assertions.Expect(catalog.Locator(".state-chip").First).ToContainTextAsync("Alternative version");
             await Assertions.Expect(catalog.Locator(".state-chip").First).ToHaveAttributeAsync("title", "Source: AniList");
-            await Assertions.Expect(catalog.Locator(".state-chip", new() { HasText = "Not in library" })).ToBeVisibleAsync();
+            await Assertions.Expect(catalog.Locator(".state-chip", new() { HasText = "Not in library" }).First).ToBeVisibleAsync();
             await Assertions.Expect(catalog.Locator(".relation__title")).ToHaveAttributeAsync("href", "/Discover/movies/555");
             await Assertions.Expect(catalog.Locator("a.button", new() { HasText = "Request" })).ToHaveAttributeAsync("href", "/Discover/movies/555");
             await Assertions.Expect(work.Locator("a.button", new() { HasText = "Request" })).ToHaveCountAsync(0);
