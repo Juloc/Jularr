@@ -21,6 +21,5 @@ namespace Jularr.Frontend.Framework
                 .Class("reader-book__sheet").Attribute("data-book-sheet", side))
             .Class("reader-book__half reader-book__half--" + side);
 
-        private sealed class Template(params IUiComponent[] content) : HtmlElement("template", content);
     }
 }

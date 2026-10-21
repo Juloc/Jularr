@@ -97,7 +97,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
         // The portrait, the name and the character or job in one line each; leads to the person's other titles.
         private IUiComponent Person(WorkCreditV1 credit) => new A(
-            new Div(credit.ImageUrl is null ? new Icon("user", assets, 40) : new MediaImage(credit.ImageUrl, "", 185, 231)).Class("details-person__photo"),
+            new Div(MediaImage.Or(assets, credit.ImageUrl, "", 185, 231, NoCoverKind.Person)).Class("details-person__photo"),
             new Strong(new Truncated(credit.Name)),
             credit.Credit is null ? new Span() : new Span(new Truncated(credit.Credit)).Class("details-person__role"))
             .Class("details-person").Attribute("href", PersonHref(credit.PersonId));

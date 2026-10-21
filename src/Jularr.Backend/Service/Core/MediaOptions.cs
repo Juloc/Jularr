@@ -2,7 +2,7 @@ namespace Jularr.Backend.Service.Core
 {
     public sealed class MediaOptions
     {
-        // Native tools (FfmpegPath, FfprobePath, FpcalcPath) are found on the PATH; see Executables.
+        // Native tools (FfmpegPath, FfprobePath, FpcalcPath, CjxlPath) are found on the PATH; see Executables.
 
         // Resource budget for conversions; the Owner's Transcoding page replaces the maximum and the encoding, these stay their defaults.
         public string TranscodeCachePath { get; set; } = Path.Combine(Path.GetTempPath(), "jularr-transcode");
