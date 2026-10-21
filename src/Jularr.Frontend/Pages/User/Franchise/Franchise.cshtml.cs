@@ -22,12 +22,12 @@ namespace Jularr.Frontend.Pages.User.Franchise
 
         protected override void Define(Page page)
         {
-            page.Title("franchise.title");
+            page.Title("franchise.title", _franchise?.Name);
+            page.Parent("nav.library", "/Library");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Franchise/Franchise.entry.scss");
             if (_franchise is { } franchise && _works is { } works)
             {
-                page.Content.Add(new H2(new ValueText(franchise.Name)));
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
                     item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))

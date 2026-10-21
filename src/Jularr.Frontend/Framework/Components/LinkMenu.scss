@@ -1,53 +1,56 @@
+// A disclosure with a list of links. The list is positioned against the nearest containing block (a container
+// element when used inside a scrolling row), so a scroller does not clip it.
 .link-menu {
-    position: relative;
-
-    &__button {
-        display: inline-flex;
+    &__summary {
+        display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        min-width: 140px;
-        min-height: 44px;
-        padding: 0 16px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-control);
-        background: var(--surface);
-        color: var(--text);
+        gap: 6px;
+        min-height: 40px;
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 700;
         list-style: none;
-        white-space: nowrap;
 
         &::-webkit-details-marker { display: none; }
-        &:hover { border-color: var(--accent); }
+
+        &::after {
+            content: "";
+            width: 6px;
+            height: 6px;
+            margin-top: -3px;
+            border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor;
+            transform: rotate(45deg);
+        }
     }
 
-    &[open] &__button { border-color: var(--accent); }
+    &[open] > &__summary::after { margin-top: 3px; transform: rotate(-135deg); }
 
     &__list {
         position: absolute;
-        z-index: 20;
-        top: calc(100% + 6px);
+        z-index: 30;
+        top: calc(100% + 10px);
         left: 0;
         display: grid;
         gap: 2px;
-        min-width: 210px;
+        min-width: 200px;
+        max-width: 80vw;
         padding: 6px;
-        border: 1px solid var(--accent-line);
-        border-radius: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-panel);
         background: var(--surface);
-        box-shadow: 0 14px 35px light-dark(rgb(32 19 58 / 14%), rgb(0 0 0 / 45%));
     }
 
-    &__item {
-        padding: 11px 12px;
-        border-radius: 10px;
-        color: var(--text);
-        font-size: 12px;
+    &__link {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        color: var(--muted);
         text-decoration: none;
+        font-weight: 550;
+        white-space: nowrap;
 
-        &:hover,
-        &--current { background: var(--accent-soft); color: var(--accent-text); }
+        &:hover { background: var(--surface-hover); color: var(--text); }
+        &.is-active { background: var(--accent-soft); color: var(--accent-text); }
     }
 }

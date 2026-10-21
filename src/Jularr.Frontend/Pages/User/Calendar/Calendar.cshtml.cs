@@ -89,7 +89,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
             page.Navigation("calendar.title");
             page.Asset("Pages/User/Calendar/Calendar.entry.scss");
             page.Asset("Framework/Components/FilterDialog.entry.ts");
-            page.Asset("Framework/Components/LinkMenu.entry.ts");
+            page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
 
             var query = Current;
             var visible = _entries.Where(entry => query.Types.Contains(LibraryScopes.Slug(entry.MediaTypeId, entry.MediaSubtypeId)) && (query.Status is null || Status(entry) == query.Status)
@@ -148,7 +148,7 @@ namespace Jularr.Frontend.Pages.User.Calendar
                 new A(new Icon("chevron-right", assets, 18)).Class("button button--icon").Attribute("href", Address(query with { Date = later, Day = null })).Attribute("aria-label", texts["calendar.later"]),
                 new A(new Text("calendar.today")).Class("button").Attribute("href", Address(query with { Date = null, Day = null }))).Class("calendar__navigation")
                 .Attribute("aria-label", texts["calendar.pages"]);
-            return new Div(new SearchBox("/Calendar", "calendar.search", query.Search, Kept(query, search: false)), new LinkMenu(assets, statuses, "calendar.status"),
+            return new Div(new SearchBox("/Calendar", "calendar.search", query.Search, Kept(query, search: false)), new SelectLinkMenu(assets, statuses, "calendar.status"),
                 new NavigationTabs(views, "calendar.views", "segmented"), navigation).Class("calendar__toolbar");
         }
 

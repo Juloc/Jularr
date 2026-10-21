@@ -133,6 +133,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Owner's decision 15 Oct: no grey surfaces. Panels and tables are white (dark surface in
   dark mode) with an accent-tinted outline (`--accent-line`); section titles and table heads
   are bold in the accent text colour on `--accent-soft`; labels use the text colour.
+  Owner's decision 20 Oct: the light page background is white too, and the shell (sidebar, header, search, floating bar)
+  separates with 1px lines in the quiet `--line` token instead of shadows or filled panels; the current place uses
+  `--accent-soft` with `--accent-text`.
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
@@ -160,6 +163,15 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   hero title, banner, card heading, or description at the top of the content.
   No automatic "page description" below the breadcrumb. Standalone unauthenticated
   pages without the shared Topbar (e.g. Login) may use a semantic `H1`.
+- Owner's decision 20 Oct: the breadcrumb sits top-left in the header on every page as Area > Group > Page > Title, every
+  part a link except the last. [Shell.cs](../src/Jularr.Frontend/Pages/Shared/Shell.cs) adds the area (Admin) and the sidebar
+  group itself; a page names only what lies between with `page.Parent(key, href)` / `page.ParentName(name, href)` and its
+  item as `page.Title(key, name)`. Narrow headers show only the last two parts; a longer trail scrolls, never wraps.
+  Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
+- Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration areas, all open; the user
+  entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
+  The Instance area exists in admin mode only. On a narrow header a breadcrumb part with sub-pages opens them as a menu.
+  The header is one row at every width: the search shrinks to its icon on a phone, the trail scrolls.
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations
   are shown only for meaningful tasks or failure/help states, never as filler.
@@ -387,9 +399,11 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   treatment. Both consume the same central tokens and components, never separate pages.
 - Original's default seed is Jularr red (`#c8102e`); Clean's is Jularr purple
   (`#7c3aed`). Derive light/dark surfaces, readable accent labels and artwork hue
-  from one selected seed through the shared Appearance palette. Theme artwork,
-  the mascot and Jularr marks follow the accent; media artwork, provider logos
-  and semantic status colors do not. Current choices are device-local; do not
+  from one selected seed through the shared Appearance palette. Theme artwork
+  and the mascot follow the accent; media artwork, provider logos
+  and semantic status colors do not. The Jularr mark is the owner's J in a broken ring, one
+  single-colour shape ([brand-mark.svg](../src/Jularr.Frontend/Pages/Shared/brand-mark.svg), the text colour in both skins and
+  brightnesses; the tab icon is [favicon.svg](../src/Jularr.Frontend/Assets/Shared/favicon.svg)). Current choices are device-local; do not
   imply implemented instance/profile policy or persistence.
 - Development-only design workshops may show explicitly labeled sample data and
   disabled component states. They must not start library playback or pretend to
