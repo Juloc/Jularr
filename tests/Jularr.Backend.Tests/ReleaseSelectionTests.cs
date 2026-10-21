@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 
@@ -13,6 +14,16 @@ namespace Jularr.Backend.Tests
                 IsBook = true,
                 LanguageOrder = ["DE"],
                 OriginalLanguage = "EN"
+            };
+
+        // The same request, but the profile names the fallback itself.
+        private static QualityProfile ProfileWithFallback(LanguageFallbackType fallback, string original = "EN") =>
+            new("profile", "Profile", ["EPUB"], ["EPUB"], false, null, null, null)
+            {
+                IsBook = true,
+                LanguageOrder = ["DE"],
+                OriginalLanguage = original,
+                LanguageFallback = fallback
             };
 
         private static SelectionCandidate Candidate(string title, bool isPart = false, int priority = 0, string connection = "Anna")
@@ -47,6 +58,50 @@ namespace Jularr.Backend.Tests
 
             Assert.IsNotNull(result.Winner);
             Assert.AreEqual("Héctor García - IKIGAI (EN) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_TheFallbackOfTheProfile_Comes_Before_Any_Other()
+        {
+            // Nothing is in the asked language; the profile names English as the fallback, so English wins over the Spanish original.
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.English, "ES"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)"), Candidate("Héctor García - IKIGAI (EN) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (EN) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_NoFallback_Leaves_TheOriginal_Without_Preference()
+        {
+            // Without a fallback the original language is not preferred; the other file wins the tie.
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.None, "IT"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)"), Candidate("Héctor García - IKIGAI (IT) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (ES) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_TheOriginalLanguage_Comes_Before_Any_Other_By_Default()
+        {
+            // The default fallback is the original language of the work.
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.Original, "IT"),
+                [Candidate("Héctor García - IKIGAI (ES) (epub)"), Candidate("Héctor García - IKIGAI (IT) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (IT) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
+        }
+
+        [TestMethod]
+        public void Selection_TheAskedLanguage_Comes_Before_TheFallback()
+        {
+            // A file in an asked language always wins over the fallback.
+            var result = ReleaseSelectionEngine.Select(ProfileWithFallback(LanguageFallbackType.English, "ES"),
+                [Candidate("Héctor García - IKIGAI (EN) (epub)"), Candidate("Héctor García - IKIGAI (DE) (epub)")]);
+
+            Assert.IsNotNull(result.Winner);
+            Assert.AreEqual("Héctor García - IKIGAI (DE) (epub)", result.Winner.Candidate.Parsed!.RawTitle);
         }
 
         [TestMethod]
