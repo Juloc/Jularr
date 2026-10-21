@@ -18,7 +18,8 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         private const long MaximumPageBytes = 4L * 1024 * 1024;
         private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
 
-        // The official mirrors of the source; all of them are tried, the one of the connection first.
+        // The official mirrors of the source (https://annas-archive.gl/faq#mirrors); all of them are tried, the one
+        // of the connection first. Others carry the name without permission and steal donations: never use them.
         private static readonly string[] OfficialMirrors =
         [
             "https://annas-archive.gl",

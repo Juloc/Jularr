@@ -167,6 +167,9 @@ CREATE TABLE "ProfilePlaybackPreferences" (
     "SubtitleModeTypeId" smallint NOT NULL DEFAULT 4 CHECK ("SubtitleModeTypeId" BETWEEN 1 AND 4),
     "Speed" numeric(3, 2) NOT NULL DEFAULT 1 CHECK ("Speed" BETWEEN 0.5 AND 2),
     "AutoplayNext" boolean NOT NULL DEFAULT TRUE,
+    -- What happens at an intro (or recap) and at credits (or preview): 1 nothing, 2 a Skip button, 3 skipped by itself.
+    "IntroSkipModeTypeId" smallint NOT NULL DEFAULT 2 CHECK ("IntroSkipModeTypeId" BETWEEN 1 AND 3),
+    "OutroSkipModeTypeId" smallint NOT NULL DEFAULT 2 CHECK ("OutroSkipModeTypeId" BETWEEN 1 AND 3),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now()
 );
 

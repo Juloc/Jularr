@@ -1,0 +1,34 @@
+// The skip markers of a title's episodes: one block per kind in the editor of an episode.
+
+.marker-back {
+    display: inline-block;
+    margin-bottom: 12px;
+}
+
+.marker-edit {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 10px 0;
+
+    & + & { border-top: 1px solid var(--accent-line); }
+
+    // Start and end sit side by side in their narrow form, the offset beside its button.
+    &__forms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 32px;
+        align-items: start;
+
+        .ui-form { grid-template-columns: repeat(2, 9rem); }
+        .ui-form--inline { flex-wrap: nowrap; align-items: end; }
+        .ui-form--inline > .ui-field { flex-basis: 9rem; }
+    }
+}
+
+@media (max-width: 600px) {
+    .marker-edit { grid-template-columns: 1fr; }
+}
+
+.marker-found .tag { margin-inline-start: 8px; }

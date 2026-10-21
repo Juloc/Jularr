@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Playback;
 
 namespace Jularr.Backend.Logic.Library
 {
@@ -288,6 +289,9 @@ namespace Jularr.Backend.Logic.Library
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            // Chapters and the markers they and a sidecar file give.
+            await ctx.SaveMediaFileMarkersAsync(data, ct);
         }
     }
 }
