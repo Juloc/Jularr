@@ -167,6 +167,51 @@ namespace Jularr.Backend.Logic.Acquisition
             return resumed;
         }
 
+        // Priority is search state, not an editorial change: the targets keep their version and their schedule.
+        public static async Task SetWantedPriorityAsync(this LogicContext ctx, WantedPriorityData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "WantedPriorityTypeId" = @WantedPriorityTypeId
+                WHERE
+                    wanted."Id" = ANY(@WantedItemIds);
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != data.WantedItemIds.Length)
+            {
+                throw new KeyNotFoundException("A wanted target does not exist.");
+            }
+        }
+
+        // The chosen targets that are not paused are due now, the highest priority first when the search runs; no choice leaves the due ones as they are.
+        public static async Task StartWantedSearchAsync(this LogicContext ctx, WantedSearchStartData data, CancellationToken ct)
+        {
+            if (data.WantedItemIds.Length == 0)
+            {
+                return;
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WantedItems" AS wanted
+                SET
+                    "NextSearchAt" = CASE WHEN wanted."IsPaused" THEN wanted."NextSearchAt" ELSE NULL END
+                WHERE
+                    wanted."Id" = ANY(@WantedItemIds);
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != data.WantedItemIds.Length)
+            {
+                throw new KeyNotFoundException("A wanted target does not exist.");
+            }
+        }
+
         // A season sets all its episodes; units of other Works and other unit types are not touched.
         public static async Task SetUnitMonitoringAsync(this LogicContext ctx, WantedUnitMonitoringData data, CancellationToken ct)
         {

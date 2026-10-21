@@ -1,3 +1,5 @@
+using System.Globalization;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Live.V1;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Operation;
@@ -34,11 +36,19 @@ namespace Jularr.Frontend.Modules.Live
             var says = operation.ReasonKey is not null && (operation.IsWaiting || operation.OperationStatusTypeId == OperationStatusType.Failed);
             var running = operation.OperationStatusTypeId is OperationStatusType.Queued or OperationStatusType.Running;
             var phase = operation.IsWaiting ? "waiting" : (running && operation.DownloadStateTypeId is { } state ? state.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
-            return new LiveEntity(phase, null, operation.ProgressPercent, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId)),
+            return new LiveEntity(phase, null, operation.ProgressPercent, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),
                 ("reason", says ? Reason(texts, operation.OperationTypeId, operation.ReasonKey) : null),
-                ("state", says ? null : OperationState(texts, operation.DownloadStateTypeId)),
-                ("facts", says ? null : LiveFacts.Join(LiveFacts.Progress(operation.ProgressPercent, operation.SizeBytes, operation.RemainingBytes), LiveFacts.Speed(operation.BytesPerSecond), LiveFacts.Eta(operation.EtaSeconds)))));
+                ("speed", says ? null : LiveFacts.Speed(operation.BytesPerSecond)),
+                ("detail", says ? null : OperationDetail(operation.ProgressPercent, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds))));
         }
+
+        // The queue's tiles: how many run, the pace, how many import and how many failed.
+        public static LiveEntity Queue(ActivitySummaryV1 queue) =>
+            new("queue", null, null, Texts(("active", Count(queue.ActiveCount)), ("speed", LiveFacts.Speed(queue.BytesPerSecond)), ("import", Count(queue.ImportCount)),
+                ("errors", Count(queue.ErrorCount))));
+
+        // Counts and the pace as the tiles first render them.
+        public static string Count(int count) => count.ToString(CultureInfo.CurrentCulture);
 
         public static LiveEntity Wanted(UiText texts, LiveWantedV1 wanted)
         {
@@ -50,10 +60,13 @@ namespace Jularr.Frontend.Modules.Live
                 ("release", wanted.ReleaseTitle), ("source", LiveFacts.Join(wanted.IndexerName, wanted.ClientName))));
         }
 
-        // The queue's Status column and the client's own state, as the page first renders them.
-        public static string OperationStatus(UiText texts, bool isWaiting, OperationStatusType status) => texts[isWaiting ? "activity.waiting" : "operation.status." + status];
+        // The queue's size and time left: "42 % · 3.1 GB / 7.4 GB · 12 min".
+        public static string OperationDetail(int? percent, long? sizeBytes, long? remainingBytes, int? etaSeconds) =>
+            LiveFacts.Join(LiveFacts.Progress(percent, sizeBytes, remainingBytes), LiveFacts.Eta(etaSeconds));
 
-        public static string OperationState(UiText texts, DownloadStateType? state) => state is { } known ? texts["activity.state." + known] : "";
+        // The queue's Status column as the page first renders it: waiting, else what the client does with a running download, else the job's status.
+        public static string OperationStatus(UiText texts, bool isWaiting, OperationStatusType status, DownloadStateType? state = null) =>
+            isWaiting ? texts["activity.waiting"] : state is { } known ? texts["activity.state." + known] : texts["operation.status." + status];
 
         // Downloads report acquisition outcomes; scans and backups report service errors.
         public static string Reason(UiText texts, OperationType type, string? key)

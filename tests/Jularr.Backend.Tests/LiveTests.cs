@@ -205,7 +205,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(Release, entities.GetProperty("admin-request:500").GetProperty("text").GetProperty("release").GetString());
             Assert.AreEqual("Indexer One · Client One", entities.GetProperty("wanted:600").GetProperty("text").GetProperty("source").GetString());
             Assert.AreEqual(40, entities.GetProperty("operation:800").GetProperty("percent").GetInt32());
-            StringAssert.Contains(entities.GetProperty("operation:800").GetProperty("text").GetProperty("facts").GetString()!, "40 %");
+            StringAssert.Contains(entities.GetProperty("operation:800").GetProperty("text").GetProperty("detail").GetString()!, "40 %");
+            Assert.AreEqual("2", entities.GetProperty("queue").GetProperty("text").GetProperty("active").GetString());
+            Assert.AreEqual("0", entities.GetProperty("queue").GetProperty("text").GetProperty("errors").GetString());
 
             // A quiet stream says it is alive.
             await ReadUntilAsync(reader, line => line == ": heartbeat", ending.Token);

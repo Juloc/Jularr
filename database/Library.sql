@@ -186,6 +186,20 @@ CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleas
 CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationTypeId", "OperationStatusTypeId", "CreatedAt", "Id");
 CREATE INDEX "IX_Operations_Recent" ON "Operations" ("CreatedAt" DESC, "Id" DESC);
 
+-- Where an operation stands in the queue; the values are those of ActivityFilterType:
+-- 2 active (a paused download stays here), 4 waiting for a person, 5 unpacking or importing, 6 failed and not yet dismissed, 3 finished.
+CREATE VIEW "OperationQueueStates" AS
+SELECT
+    operation."Id" AS "OperationId",
+    (CASE
+        WHEN operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL THEN 6
+        WHEN operation."OperationStatusTypeId" IN (1, 2) AND operation."AttentionKey" IS NOT NULL THEN 4
+        WHEN operation."OperationStatusTypeId" IN (1, 2) AND operation."DownloadStateTypeId" = 4 THEN 5
+        WHEN operation."OperationStatusTypeId" IN (1, 2) THEN 2
+        ELSE 3
+    END)::smallint AS "ActivityFilterTypeId"
+FROM "Operations" AS operation;
+
 CREATE TABLE "DownloadStorageSettings" (
     "DownloadStorageAreaId" smallint PRIMARY KEY CHECK ("DownloadStorageAreaId" IN (1, 2)),
     "WorkspaceId" uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),

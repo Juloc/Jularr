@@ -15,6 +15,9 @@ namespace Jularr.Frontend.Framework
         public static string AdminRequest(long id) => "admin-request:" + id.ToString(CultureInfo.InvariantCulture);
         public static string Operation(long id) => "operation:" + id.ToString(CultureInfo.InvariantCulture);
         public static string Wanted(long id) => "wanted:" + id.ToString(CultureInfo.InvariantCulture);
+
+        // The numbers of the queue's tiles.
+        public const string Queue = "queue";
     }
 
     // Phase names, percent, speed and time left as text, the same for a page's first rendering and for every stream event.

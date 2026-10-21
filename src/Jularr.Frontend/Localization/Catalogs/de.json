@@ -1157,8 +1157,8 @@
    "Importierte Medien und Dateiverfügbarkeit"
   ],
   "admin.activity.title": [
-   "Activity",
-   "Aktivität"
+   "Queue",
+   "Warteschlange"
   ],
   "admin.requests.title": [
    "Requests",
@@ -6260,13 +6260,9 @@
    "Queued at",
    "Eingereiht um"
   ],
-  "activity.tab.Queue": [
-   "Queue",
-   "Warteschlange"
-  ],
   "activity.empty.Queue": [
-   "Nothing is running or waiting.",
-   "Nichts läuft oder wartet."
+   "Nothing here.",
+   "Hier ist nichts."
   ],
   "activity.waiting": [
    "Waiting",
@@ -6315,10 +6311,6 @@
   "acquisition.outcome.download_removed": [
    "Removed from the queue",
    "Aus der Warteschlange entfernt"
-  ],
-  "activity.tab.History": [
-   "History",
-   "Verlauf"
   ],
   "activity.item": [
    "Item",
@@ -6979,6 +6971,106 @@
   "activity.importManually": [
    "Import by hand",
    "Von Hand importieren"
+  ],
+  "activity.filter.All": [
+   "All",
+   "Alle"
+  ],
+  "activity.filter.Active": [
+   "Active",
+   "Aktiv"
+  ],
+  "activity.filter.Waiting": [
+   "Waiting",
+   "Wartend"
+  ],
+  "activity.filter.Import": [
+   "Import",
+   "Import"
+  ],
+  "activity.filter.Errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "activity.filter.History": [
+   "History",
+   "Verlauf"
+  ],
+  "activity.kpi.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "activity.kpi.speed": [
+   "Speed",
+   "Tempo"
+  ],
+  "activity.kpi.import": [
+   "Import waiting",
+   "Import wartet"
+  ],
+  "activity.kpi.errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "activity.source": [
+   "Source",
+   "Quelle"
+  ],
+  "activity.transfer": [
+   "Speed and size",
+   "Tempo und Größe"
+  ],
+  "activity.release": [
+   "Release",
+   "Release"
+  ],
+  "activity.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "wanted.select": [
+   "Select",
+   "Auswählen"
+  ],
+  "wanted.selectAll": [
+   "Select all",
+   "Alle auswählen"
+  ],
+  "wanted.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "wanted.priority": [
+   "Priority",
+   "Priorität"
+  ],
+  "wanted.priority.Normal": [
+   "Normal",
+   "Normal"
+  ],
+  "wanted.priority.High": [
+   "High",
+   "Hoch"
+  ],
+  "wanted.priority.done": [
+   "The priority was set.",
+   "Die Priorität wurde gesetzt."
+  ],
+  "wanted.search.all": [
+   "Search all due",
+   "Alle fälligen suchen"
+  ],
+  "wanted.search.selected": [
+   "Search selected",
+   "Auswahl suchen"
+  ],
+  "wanted.search.started": [
+   "The search has started.",
+   "Die Suche wurde gestartet."
+  ],
+  "wanted.edit": [
+   "Edit target",
+   "Ziel bearbeiten"
   ],
   "work.tabs": [
    "Sections of this title",

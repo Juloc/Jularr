@@ -66,9 +66,45 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         public long[]? TagIds { get; }
     }
 
+    // Several targets at once get one priority.
+    public sealed class UpdateWantedPriorityParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class UpdateWantedPriorityDataV1 : BaseData
+    {
+        public UpdateWantedPriorityDataV1(long[] wantedItemIds, WantedPriorityType wantedPriorityTypeId)
+        {
+            WantedItemIds = wantedItemIds;
+            WantedPriorityTypeId = wantedPriorityTypeId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
+        public long[] WantedItemIds { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedPriorityTypeId))]
+        public WantedPriorityType WantedPriorityTypeId { get; }
+    }
+
+    // The chosen targets are searched as soon as the search runs; none chosen means every target that is due.
+    public sealed class StartWantedSearchParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class StartWantedSearchDataV1 : BaseData
+    {
+        public StartWantedSearchDataV1(long[] wantedItemIds)
+        {
+            WantedItemIds = wantedItemIds;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Ids))]
+        public long[] WantedItemIds { get; }
+    }
+
     public sealed class WantedDetailsV1 : BaseResponse
     {
-        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
+        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, WantedPriorityType wantedPriorityTypeId, long version, string[] requestedLanguages, bool hasMedia,
             bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits, long[]? tagIds = null)
         {
             TagIds = tagIds ?? [];
@@ -82,6 +118,7 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
             IsPaused = isPaused;
+            WantedPriorityTypeId = wantedPriorityTypeId;
             Version = version;
             RequestedLanguages = requestedLanguages;
             HasMedia = hasMedia;
@@ -113,6 +150,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
         public bool IsPaused { get; }
+
+        // High targets are searched first; it changes the order only.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedPriorityTypeId))]
+        public WantedPriorityType WantedPriorityTypeId { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
