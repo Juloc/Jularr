@@ -99,6 +99,16 @@
         > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
     }
     &--mini &__next { display: none; }
+    // Skip offers sit where the next episode waits; the viewer decides, so the chrome fading does not hide them.
+    &__skip { position: absolute; inset: auto 16px 96px auto; z-index: 3; }
+    &__skipped {
+        position: absolute; inset: auto 16px 96px auto; z-index: 3; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 10px 12px;
+        border: 1px solid var(--accent-line); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--text); box-shadow: var(--shadow);
+        > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    }
+    &--mini &__skip, &--mini &__skipped { display: none; }
+    &__chapter { justify-content: space-between; gap: 12px; }
+    &__chapter-time { flex: none; opacity: .75; font-variant-numeric: tabular-nums; font-size: .8rem; }
     &__status, &__save-error { position: absolute; z-index: 4; max-width: calc(100% - 24px); margin: 12px; padding: 12px; border-radius: var(--radius-panel); background: var(--surface); color: var(--text); }
     &__status { inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
     &__save-error { top: 64px; left: 0; }

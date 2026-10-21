@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using Jularr.Backend.Data.Enums.Account;
 
 namespace Jularr.Frontend.Framework
@@ -7,10 +8,16 @@ namespace Jularr.Frontend.Framework
     // Server-rendered player chrome; Modules/Player owns the client behavior.
     public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null,
         IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null, string? PreviousHref = null, string? NextHref = null,
-        string? TrickplayUrl = null, PlayerPreferences? Preferences = null);
+        string? TrickplayUrl = null, PlayerPreferences? Preferences = null, IReadOnlyList<PlayerMarker>? Markers = null, IReadOnlyList<PlayerChapter>? Chapters = null);
 
     // What the profile and the device chose before playing: the speed, whether the next episode follows (after a countdown of that many seconds, none for music), and the quality in use.
-    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl);
+    public sealed record PlayerPreferences(decimal Speed, bool AutoplayNext, int CountdownSeconds, string QualityKey, string SpeedUrl, string IntroSkip = "Button", string OutroSkip = "Button");
+
+    // A stretch of the video the viewer may skip (Intro, Credits, Recap or Preview), in seconds.
+    public sealed record PlayerMarker(string Kind, double Start, double End);
+
+    // A chapter of the video; without a title it is named by its number.
+    public sealed record PlayerChapter(string? Title, double Start);
 
     // One audio or subtitle choice; unsupported ones stay visible but disabled.
     public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsSelected, bool IsSupported);
@@ -18,6 +25,7 @@ namespace Jularr.Frontend.Framework
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
         private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
+        private static readonly string[] Kinds = ["Intro", "Credits", "Recap", "Preview"];
         private static readonly string[] Speeds = ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
         private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();
         private IUiComponent? _sidebar;
@@ -92,6 +100,12 @@ namespace Jularr.Frontend.Framework
                     ).Class("player__bottom"),
                     Settings()
                 ).Class("player__chrome"),
+                // Skip offers and the note after an automatic skip stay above the picture.
+                new Button(new Span().Attribute("data-role", "skip-text")).Class("button button--primary player__skip").Attribute("data-action", "skip").Attribute("hidden", "hidden"),
+                new Div(
+                    new Span().Attribute("data-role", "skipped-text"),
+                    new Button(new Text("player.skipped.undo")).Class("button").Attribute("data-action", "skip-undo")
+                ).Class("player__skipped").Attribute("role", "status").Attribute("data-role", "skipped").Attribute("hidden", "hidden"),
                 // The next episode follows after a countdown the viewer can end.
                 new Div(
                     new Span().Attribute("data-role", "next-text").Attribute("data-template", texts["player.next.countdown"]),
@@ -102,7 +116,10 @@ namespace Jularr.Frontend.Framework
                 new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
                 new Div([
                     .. Statuses.Select(status => new Span(new Text("player.status." + status)).Attribute("data-status", status)),
-                    .. new[] { "DirectPlay", "Remux", "Transcode" }.Select(mode => new Span(new Text("player.mode." + mode)).Attribute("data-mode", mode))
+                    .. new[] { "DirectPlay", "Remux", "Transcode" }.Select(mode => new Span(new Text("player.mode." + mode)).Attribute("data-mode", mode)),
+                    .. Kinds.Select(kind => new Span(new Text("player.skip." + kind)).Attribute("data-skip-label", kind)),
+                    .. Kinds.Select(kind => new Span(new Text("player.skipped." + kind)).Attribute("data-skipped-label", kind)),
+                    new Span(new Text("player.skipped.next")).Attribute("data-skipped-label", "Next")
                 ]).Attribute("hidden", "hidden")
             ).Class("player__stage");
 
@@ -124,6 +141,9 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-autoplay", source.Preferences is { AutoplayNext: true } ? "true" : "false")
                 .Attribute("data-countdown", (source.Preferences?.CountdownSeconds ?? 0).ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-speed-url", source.Preferences?.SpeedUrl ?? "")
+                .Attribute("data-skip-intro", source.Preferences?.IntroSkip ?? "Button")
+                .Attribute("data-skip-outro", source.Preferences?.OutroSkip ?? "Button")
+                .Attribute("data-markers", JsonSerializer.Serialize((source.Markers ?? []).Select(marker => new { kind = marker.Kind, start = marker.Start, end = marker.End })))
                 .WriteTo(writer, encoder, texts);
 
             // Without a neighbour the button stays visible but inactive.
@@ -150,7 +170,8 @@ namespace Jularr.Frontend.Framework
                     .Attribute("data-speed", value).Attribute("aria-pressed", value == Speed ? "true" : "false"))]).Class("player__speeds");
                 var quality = new Div([.. Qualities.Select(value => new Button(new Text("playback.quality." + value)).Class("button player__option")
                     .Attribute("data-quality", ((byte)value).ToString(CultureInfo.InvariantCulture)).Attribute("aria-pressed", value.ToString() == source.Preferences?.QualityKey ? "true" : "false"))]).Class("player__qualities");
-                var names = new[] { "basic", "audio", "subtitles", "playback", "info" };
+                var chapters = source.Chapters ?? [];
+                var names = chapters.Count > 0 ? new[] { "basic", "audio", "subtitles", "playback", "chapters", "info" } : new[] { "basic", "audio", "subtitles", "playback", "info" };
                 return new Div(
                     new Header(new Span(new Text("player.currentPlayback")),
                         new Button(new Icon("close", assets)).IconOnly(texts["common.close"]).Attribute("popovertarget", "player-settings").Attribute("popovertargetaction", "hide")),
@@ -162,6 +183,10 @@ namespace Jularr.Frontend.Framework
                             Jump("playback", "playback.quality", texts["playback.quality." + (source.Preferences?.QualityKey ?? "Automatic")], "quality"))),
                         Pane("audio", audio), Pane("subtitles", subtitles),
                         Pane("playback", new H2(new Text("player.speed")), speed, new H2(new Text("playback.quality")), quality),
+                        Pane("chapters", new Div([.. chapters.Select((chapter, index) => new Button(
+                            new Span(new ValueText(chapter.Title ?? string.Format(CultureInfo.CurrentCulture, texts["player.chapter"], index + 1))),
+                            new Span(new ValueText(Clock(chapter.Start))).Class("player__chapter-time")).Class("button player__option player__chapter")
+                            .Attribute("data-chapter", chapter.Start.ToString("0.###", CultureInfo.InvariantCulture)).Attribute("aria-pressed", "false"))])),
                         Pane("info", new P(new Text("player.delivery")), new P().Attribute("data-role", "mode"),
                             new P().Attribute("data-role", "resolution"))
                     ).Class("player__settings-body"),
@@ -188,6 +213,14 @@ namespace Jularr.Frontend.Framework
                 if (!isSupported) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
                 return option;
             }
+        }
+
+        // A position as the timeline shows it: m:ss, or h:mm:ss from an hour on.
+        private static string Clock(double seconds)
+        {
+            var total = (long)Math.Max(0, Math.Floor(seconds));
+            return total >= 3600 ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", total / 3600, total / 60 % 60, total % 60)
+                : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", total / 60, total % 60);
         }
 
         // The speed as the player writes it: 1, 1.25 and so on.
