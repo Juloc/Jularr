@@ -12,9 +12,13 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Player
 {
-    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes,
+    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, ReadPlaybackPreferencesV1 readPreferences, ReadWorkV1 readWork, ReadWorkEpisodesV1 readEpisodes,
         IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
+        // The next episode starts after this many seconds unless the viewer stops it; an album's next track follows at once.
+        private const int EpisodeCountdownSeconds = 10;
+
+        private PlaybackPreferencesV1? _preferences;
         private PlaybackItemV1? _item;
         private IReadOnlyList<PlaybackTrackV1> _tracks = [];
         private WorkDetailsV1? _work;
@@ -42,7 +46,9 @@ namespace Jularr.Frontend.Pages.User.Player
                     "/api/v1/playback/assets/" + asset + "/subtitles/",
                     item.PreviousMediaAssetId is { } previous ? "/Player/" + previous.ToString(CultureInfo.InvariantCulture) : null,
                     item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null,
-                    texts.CanPreviewSeeking() ? "/api/v1/playback/assets/" + asset + "/trickplay" : null);
+                    texts.CanPreviewSeeking() ? "/api/v1/playback/assets/" + asset + "/trickplay" : null,
+                    _preferences is { } preferences ? new PlayerPreferences(preferences.Speed, preferences.AutoplayNext,
+                        item.WorkUnitTypeId == WorkUnitType.Episode ? EpisodeCountdownSeconds : 0, preferences.DeviceQuality.ToString(), "/api/v1/playback/preferences/speed") : null);
                 var player = new UiPlayer(source, assets);
                 if (_work is { } work)
                 {
@@ -84,6 +90,7 @@ namespace Jularr.Frontend.Pages.User.Player
         {
             _item = await read.ExecuteAsync<PlaybackItemV1>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
             _tracks = await readTracks.ExecuteAsync<BaseDataList<PlaybackTrackV1>>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
+            _preferences = await readPreferences.ExecuteAsync<PlaybackPreferencesV1>(new PlaybackPreferencesParametersV1(), HttpContext.RequestAborted);
             if (_item is { } item && texts.Can("profile.media.read", "Library"))
             {
                 _work = await readWork.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(item.WorkId), HttpContext.RequestAborted);
@@ -109,7 +116,7 @@ namespace Jularr.Frontend.Pages.User.Player
             }
             if (track.IsForced) parts.Add(texts["player.subtitles.forced"]);
             var key = track.MediaTrackTypeId == MediaTrackType.Audio ? track.Key[1..] : track.Key;
-            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.Language, track.IsDefault, track.IsSupported);
+            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.Language, track.IsSelected, track.IsSupported);
         }
     }
 }

@@ -24,7 +24,7 @@ namespace Jularr.Frontend.Framework
             => Add(selector, labelKey, value => new DataValue(value));
 
         public Table<TData> Link<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, Func<TValue, string> href, string actionKey)
-            => Add(selector, labelKey, value => new A(new Text(actionKey)).Attribute("href", href(value)));
+            => Add(selector, labelKey, value => new A(new Text(actionKey)).Class("button button--compact").Attribute("href", href(value)));
 
         public Table<TData> Resource<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, Func<TValue, string> resourceKey)
             => Add(selector, labelKey, value => new Text(resourceKey(value)));
@@ -63,12 +63,13 @@ namespace Jularr.Frontend.Framework
                 .ToArray();
 
             var body = rows.Select(row => (IUiComponent)new Tr(
+                // The label travels with the cell: on a phone a row becomes a card of "label value" lines (Table.scss).
                 _columns.Select(column => (IUiComponent)new Cell(
-                    column.Value(row))).ToArray()
+                    column.Value(row)).Attribute("data-label", texts[column.LabelKey])).ToArray()
             )).ToArray();
 
             new Div(new TableElement(new Thead(new Tr(headings)), new Tbody(body))
-                .Class("page-table")).Class("page-table-wrap").WriteTo(writer, encoder, texts);
+                .Class("page-table")).Class("page-table-wrap page-table-wrap--stack").WriteTo(writer, encoder, texts);
         }
 
         private sealed class Column(string labelKey, Func<TData, IUiComponent> value)

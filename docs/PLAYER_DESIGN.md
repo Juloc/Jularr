@@ -20,7 +20,7 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 - A native settings popover has a stable size, fixed header/bottom tabs and one
   scrolling body. Basic links to Audio, Subtitles and Playback; Info uses actual
   delivery and decoded picture size. Current playback is the only settings scope.
-  Existing speed presets and one WebVTT subtitle track remain supported.
+  Existing speed presets and one WebVTT subtitle track remain supported. The Playback tab also lists this playback's Quality (Automatic, Original, High, Data saver).
 - The page composes a sidebar using authorized Work details and the current
   season's existing episode service. Compact rows reuse `EpisodeCard`; the current
   episode stays accent-colored. Wide/fullscreen/narrow views use the same sidebar
@@ -30,11 +30,13 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 
 ## Explicitly separate
 
-Profile/series/media-type/admin persistence, expanded settings/preview transfer,
-dual subtitles and advanced timing/styling, quality/version selection, chapter and
-skip markers, configurable autoplay, casting, audio waveform/processing, touch
+Series/media-type/admin persistence, expanded settings/preview transfer,
+dual subtitles and advanced timing/styling, version selection, chapter and
+skip markers, casting, audio waveform/processing, touch
 gestures and physical TV/Safari validation are not implemented by this appearance
-package. The full interview and #1228 retain that target; no inactive placeholder
+package. The profile's audio and subtitle choice, speed and autoplay of the next
+episode (with a countdown) and each device's quality are stored by their own
+package and read by the player. The full interview and #1228 retain that target; no inactive placeholder
 buttons imply those features exist.
 
 ## Focused verification

@@ -13,12 +13,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
     // Search results and member fast downloads; the member key only goes to Anna's Archive itself.
     internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates, ISourceBrowser browser)
     {
+        // The source answers on one of its mirrors; all of them are tried, the fast way first.
         private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
         private static readonly TimeSpan MaximumWait = TimeSpan.FromDays(1);
-
-        // Files enough to choose from; the other ways to find the work need not be asked.
-        private const int EnoughRecords = 20;
 
         // The official mirrors of the source (https://annas-archive.gl/faq#mirrors); all of them are tried, the one
         // of the connection first. Others carry the name without permission and steal donations: never use them.
@@ -36,69 +34,41 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static string? ReadMd5(Uri record) => Md5Path().Match(record.AbsolutePath) is { Success: true } match ? match.Groups[1].Value : null;
 
-        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct) =>
-            await SearchAsync(site, [query], ct);
-
-        // Every way to find the work is tried; the files of all of them are gathered.
-        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, IReadOnlyList<string> queries, CancellationToken ct)
+        public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct)
         {
             // The source answers on one of its mirrors; all of them are tried, the fast way first.
             var mirrors = Mirrors(site);
-            var records = new List<AnnasArchiveRecord>();
-            var checkedSite = false;
-            var answeredAny = false;
+            string? page = null;
             Uri? answered = null;
-            foreach (var query in queries)
+            foreach (var mirror in mirrors)
             {
-                string? page = null;
-                if (!checkedSite)
+                if (await ReadAsync(mirror, query, ct) is { } direct)
                 {
-                    foreach (var mirror in mirrors)
-                    {
-                        if (await ReadAsync(mirror, query, ct) is { } direct)
-                        {
-                            page = direct;
-                            answered = mirror;
-                            break;
-                        }
-                    }
-                }
-
-                if (page is null)
-                {
-                    // A check in front of the site: the browser reads the mirrors at the same time.
-                    var addresses = answered is null ? mirrors : [answered];
-                    var read = await browser.ReadPagesAsync([.. addresses.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
-                    if (read is null)
-                    {
-                        continue;
-                    }
-
-                    page = read.Html;
-                    answered = read.Address;
-                    checkedSite = true;
-                }
-
-                answeredAny = true;
-
-                foreach (var record in Records(page))
-                {
-                    if (records.All(known => known.Md5 != record.Md5))
-                    {
-                        records.Add(record);
-                    }
-                }
-
-                // Enough files to choose from; the other ways need not be asked.
-                if (records.Count >= EnoughRecords)
-                {
+                    page = direct;
+                    answered = mirror;
                     break;
                 }
             }
 
-            if (!answeredAny)
+            if (page is null)
             {
-                throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
+                // A check in front of the site: the browser reads the mirrors at the same time.
+                var read = await browser.ReadPagesAsync([.. mirrors.Select(mirror => new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)))], ct);
+                if (read is null)
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "Anna's Archive could not be searched.");
+                }
+
+                page = read.Html;
+            }
+
+            var records = new List<AnnasArchiveRecord>();
+            foreach (var record in Records(page))
+            {
+                if (records.All(known => known.Md5 != record.Md5))
+                {
+                    records.Add(record);
+                }
             }
 
             return records;
@@ -264,6 +234,14 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             try
             {
                 await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
+                // The site may answer with a page instead of the file; then the browser fetches it.
+                if (await IsDocumentAsync(destination, ct))
+                {
+                    return;
+                }
+
+                File.Delete(destination);
+                await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct);
             }
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
@@ -272,6 +250,24 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         }
 
         private static AnnasArchiveFailure Failure(DirectDownloadException exception) => exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable;
+
+        // A book is a ZIP, a PDF, a MOBI or an AZW3; a page in place of it means the site answered with its site.
+        private static async Task<bool> IsDocumentAsync(string path, CancellationToken ct)
+        {
+            try
+            {
+                await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 16, useAsync: true);
+                var head = new byte[4];
+                var read = await file.ReadAsync(head, ct);
+                return read >= 2 && (head[0] == 0x50 && head[1] == 0x4B && head[2] == 0x03 && head[3] == 0x04
+                    || head[0] == 0x25 && head[1] == 0x50 && head[2] == 0x44 && head[3] == 0x46
+                    || head[0] == 0x42 && head[1] == 0x4F && head[2] == 0x4F && head[3] == 0x4B);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
 
         private static bool IsSitePage(Uri site, Uri uri) => string.Equals(site.Host, uri.Host, StringComparison.OrdinalIgnoreCase)
             && (uri.AbsolutePath.StartsWith("/md5/", StringComparison.Ordinal) || uri.AbsolutePath.StartsWith("/slow_download/", StringComparison.Ordinal)

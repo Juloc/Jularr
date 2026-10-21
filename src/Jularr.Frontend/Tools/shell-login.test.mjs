@@ -61,12 +61,37 @@ test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", (
     assert.match(shell, /AdministrationLinks\(texts, adminPath\)/);
     assert.match(styles, /breadcrumb__item--menu \.link-menu \{ display: block/);
     assert.match(shell, /Add\(new Text\("nav\.admin"\)/);
-    assert.match(styles, /\.app-header\s*\{[^}]*height: 64px/);
+    assert.match(styles, /\.app-header\s*\{[^}]*height: 78px/);
     assert.match(styles, /container: crumbs/);
     assert.match(styles, /nth-last-child\(n \+ 3\)/);
-    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow/);
-    assert.ok(!existsSync(resolve(root, "Pages/Shared/brand-clean.svg")) && !existsSync(resolve(root, "Pages/Shared/brand-original.svg")));
-    assert.match(load("Pages/Shared/brand-mark.svg"), /fill="currentColor"/);
+    assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow: (?!var\()/);
+});
+
+test("Clean shows the single-path parrot mark, Original keeps its own mark, and the J in a ring is gone", () => {
+    const clean = load("Pages/Shared/brand-clean.svg");
+    assert.equal(clean.match(/<path\b/g)?.length, 1);
+    assert.match(clean, /fill="currentColor"/);
+    assert.doesNotMatch(clean, /\bstyle=|<g\b|transform=/);
+    const [, side] = /viewBox="0 0 ([\d.]+) \1"/.exec(clean) ?? [];
+    assert.ok(side, "the mark has a square viewBox starting at the origin");
+    assert.match(load("Pages/Shared/brand-original.svg"), /--jularr-ring/);
+    assert.ok(!existsSync(resolve(root, "Pages/Shared/brand-mark.svg")), "the J in a ring must not exist");
+
+    const brand = load("Pages/Shared/Brand.cs");
+    assert.match(brand, /Mark\("brand-clean", "brand-symbol__clean"\)/);
+    assert.match(brand, /Mark\("brand-original", "brand-symbol__original"\)/);
+    assert.match(load("Pages/Shared/Brand.scss"), /html\[data-skin="original"\] \.brand-symbol \{\s*&__clean \{ display: none; \}\s*&__original \{ display: block; \}/);
+
+    const favicon = load("Assets/Shared/favicon.svg");
+    assert.equal(favicon.match(/<path\b[^>]*d=/g)?.length, 1);
+    assert.match(favicon, /prefers-color-scheme:dark/);
+    for (const icon of ["icon-32", "apple-touch-icon", "icon-192", "icon-512", "icon-maskable-512"]) {
+        const png = readFileSync(resolve(root, "Assets/Shared/" + icon + ".png"));
+        assert.equal(png.subarray(1, 4).toString(), "PNG");
+    }
+    const layout = load("Pages/Shared/_Layout.cshtml");
+    assert.match(layout, /rel="icon" type="image\/svg\+xml"/);
+    assert.match(layout, /rel="apple-touch-icon"/);
 });
 
 test("Shell does not invent optional media modules", () => {

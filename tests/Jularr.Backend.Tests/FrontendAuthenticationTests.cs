@@ -249,7 +249,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"tag tag--accent\"");
             StringAssert.Contains(html, "role=\"switch\"");
             StringAssert.Contains(html, "class=\"ui-field__label\"");
-            StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+            StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
             StringAssert.Contains(html, "class=\"navigation-tabs\"");
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
@@ -299,15 +299,20 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(loginHtml, "data-set-skin=\"original\"");
             StringAssert.Contains(loginHtml, "data-set-skin=\"clean\"");
 
-            // One mark for both skins, in an unshifted viewport; the browser tab shows it too.
-            Assert.AreEqual(1, Regex.Matches(loginHtml, "brand-symbol__mark").Count);
+            // Both skins' marks are rendered and the skin shows one; the browser tab and home screen show the Clean mark.
+            Assert.AreEqual(1, Regex.Matches(loginHtml, "brand-symbol__clean").Count);
+            Assert.AreEqual(1, Regex.Matches(loginHtml, "brand-symbol__original").Count);
             StringAssert.Contains(loginHtml, "rel=\"icon\"");
-            var markup = Regex.Match(loginHtml, "<svg[^>]*class=\"brand-symbol__mark\"[^>]*>.*?</svg>", RegexOptions.Singleline);
-            Assert.IsTrue(markup.Success);
-            var svg = XElement.Parse(markup.Value);
-            Assert.AreEqual("0 0 48 48", svg.Attribute("viewBox")?.Value);
-            Assert.AreEqual("48", svg.Element("use")?.Attribute("width")?.Value);
-            Assert.AreEqual("48", svg.Element("use")?.Attribute("height")?.Value);
+            StringAssert.Contains(loginHtml, "rel=\"apple-touch-icon\"");
+            foreach (var cssClass in new[] { "brand-symbol__clean", "brand-symbol__original" })
+            {
+                var markup = Regex.Match(loginHtml, "<svg[^>]*class=\"" + cssClass + "\"[^>]*>.*?</svg>", RegexOptions.Singleline);
+                Assert.IsTrue(markup.Success);
+                var svg = XElement.Parse(markup.Value);
+                Assert.AreEqual("0 0 48 48", svg.Attribute("viewBox")?.Value);
+                Assert.AreEqual("48", svg.Element("use")?.Attribute("width")?.Value);
+                Assert.AreEqual("48", svg.Element("use")?.Attribute("height")?.Value);
+            }
 
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(loginHtml, ("Email", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
@@ -554,7 +559,7 @@ namespace Jularr.Backend.Tests
                 if (path == "/Admin/Works" && mediaAllowed)
                 {
                     var html = await page.Content.ReadAsStringAsync();
-                    StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+                    StringAssert.Contains(html, "<div class=\"ui-field__top\"><label class=\"ui-field__label\"");
                     StringAssert.Contains(html, "class=\"page-table\"");
                     StringAssert.Contains(html, "/build/assets/Assets/Shared/shell.entry-");
                 }

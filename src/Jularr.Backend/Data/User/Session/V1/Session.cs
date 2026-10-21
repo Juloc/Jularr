@@ -22,9 +22,9 @@ namespace Jularr.Backend.Data.User.Session.V1
 
     public sealed class SessionDetailsV1 : BaseResponse
     {
-        public SessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent, string? deviceName, string? devicePlatform, AudioQuality audioQuality)
+        public SessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent, string? deviceName, string? devicePlatform, PlaybackQuality playbackQuality)
         {
-            AudioQuality = audioQuality;
+            PlaybackQuality = playbackQuality;
             Id = id;
             CreatedAt = createdAt;
             ExpiresAt = expiresAt;
@@ -51,8 +51,8 @@ namespace Jularr.Backend.Data.User.Session.V1
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DevicePlatform))]
         public string? DevicePlatform { get; }
 
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AudioQuality))]
-        public AudioQuality AudioQuality { get; }
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality))]
+        public PlaybackQuality PlaybackQuality { get; }
     }
 
     public sealed class RevokeSessionParametersV1 : BaseParameters
@@ -106,14 +106,14 @@ namespace Jularr.Backend.Data.User.Session.V1
         public string? DeviceName { get; }
     }
 
-    public sealed class SessionAudioQualityDataV1 : BaseData
+    public sealed class SessionPlaybackQualityDataV1 : BaseData
     {
-        public SessionAudioQualityDataV1(AudioQuality audioQuality)
+        public SessionPlaybackQualityDataV1(PlaybackQuality playbackQuality)
         {
-            AudioQuality = audioQuality;
+            PlaybackQuality = playbackQuality;
         }
 
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AudioQuality))]
-        public AudioQuality AudioQuality { get; }
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality))]
+        public PlaybackQuality PlaybackQuality { get; }
     }
 }
