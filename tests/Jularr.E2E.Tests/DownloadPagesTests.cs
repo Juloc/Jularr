@@ -55,7 +55,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("dialog#connection-editor [name=Name]")).ToHaveValueAsync("Fake indexer");
                 await Assertions.Expect(page.Locator("dialog#connection-editor [name=ApiKey]")).ToHaveValueAsync("");
                 await page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
-                Assert.IsFalse(page.Url.Contains("AcquisitionConnectionId", StringComparison.Ordinal), page.Url);
+                await Assertions.Expect(page).Not.ToHaveURLAsync(new System.Text.RegularExpressions.Regex("AcquisitionConnectionId"));
 
                 // The download client has its own page, the same list and a dialog of its own fields.
                 await page.GotoAsync("/Admin/Acquisition/Downloads");
