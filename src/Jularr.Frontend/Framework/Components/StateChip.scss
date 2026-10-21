@@ -26,6 +26,9 @@
         background: currentColor;
     }
 
+    // With an icon of its own instead of the pip.
+    &--icon { gap: 6px; &::before { display: none; } .ui-icon { flex: none; } }
+
     &--available,
     &--known,
     &--watched,
