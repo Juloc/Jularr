@@ -20,7 +20,8 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         // Files enough to choose from; the other ways to find the work need not be asked.
         private const int EnoughRecords = 20;
 
-        // The official mirrors of the source; all of them are tried, the one of the connection first.
+        // The official mirrors of the source (https://annas-archive.gl/faq#mirrors); all of them are tried, the one
+        // of the connection first. Others carry the name without permission and steal donations: never use them.
         private static readonly string[] OfficialMirrors =
         [
             "https://annas-archive.gl",
