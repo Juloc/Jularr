@@ -152,10 +152,10 @@ namespace Jularr.E2E.Tests
             // A number steps with its own buttons, and the dock counts it.
             await page.GotoAsync("/Admin/Instance");
             // A unit sits quietly at the end of its field, inside the frame, and does not take part in the value.
-            var interval = page.Locator("input[name=BackupIntervalHours]");
-            await Assertions.Expect(interval.Locator("xpath=following-sibling::*[contains(@class,'ui-field__suffix')]")).ToHaveTextAsync("hours");
+            var interval = page.Locator("input[name=HistoryRetentionDays]");
+            await Assertions.Expect(interval.Locator("xpath=following-sibling::*[contains(@class,'ui-field__suffix')]")).ToHaveTextAsync("days");
             Assert.AreEqual(1, await interval.Locator("xpath=ancestor::div[contains(@class,'ui-field__control--affixed')]").CountAsync());
-            var keep = page.Locator("input[name=BackupKeep]");
+            var keep = page.Locator("input[name=HistoryMegabytes]");
             var value = int.Parse(await keep.InputValueAsync(), System.Globalization.CultureInfo.InvariantCulture);
             await keep.Locator("xpath=following-sibling::*[contains(@class,'ui-field__stepper')]").GetByRole(AriaRole.Button, new() { Name = "Increase value" }).ClickAsync();
             await Assertions.Expect(keep).ToHaveValueAsync((value + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
