@@ -287,6 +287,7 @@ namespace Jularr.E2E.Tests
             await page.SetViewportSizeAsync(390, 844);
             Assert.IsTrue(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= window.innerWidth"));
             await Evidence.SaveAsync(page, "favorites-mobile");
+            await page.SetViewportSizeAsync(1280, 720);
         }
 
         // The row of an episode in the unit table of a title's page.
