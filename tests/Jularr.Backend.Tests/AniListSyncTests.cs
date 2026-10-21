@@ -169,7 +169,9 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default)).Success);
                 var episodes = anilist.Mutations.Single(mutation => mutation.Id == 900);
                 Assert.AreEqual(4, episodes.Progress, "Episode 6 sits behind a gap in the row; the finished ones before it count.");
-                Assert.IsFalse(episodes.Query.Contains("progressVolumes", StringComparison.Ordinal) || episodes.Query.Contains("score", StringComparison.Ordinal) || episodes.Query.Contains("status", StringComparison.Ordinal));
+                // What is written is the arguments of the mutation; the selection after it only names what AniList answers with.
+                var written = episodes.Query[(episodes.Query.IndexOf("SaveMediaListEntry(", StringComparison.Ordinal))..].Split(')')[0];
+                Assert.IsFalse(written.Contains("progressVolumes", StringComparison.Ordinal) || written.Contains("score", StringComparison.Ordinal) || written.Contains("status", StringComparison.Ordinal), written);
                 var volumes = anilist.Mutations.Single(mutation => mutation.Id == 903);
                 Assert.IsTrue(volumes.Query.Contains("progressVolumes: $progress", StringComparison.Ordinal));
                 Assert.AreEqual(2, volumes.Progress);
