@@ -34,6 +34,8 @@ namespace Jularr.Frontend.Modules.Reader
         public bool Hyphenation { get; } = true;
         [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Enabled))]
         public bool Illustrations { get; } = true;
+        [DataField(typeof(ReaderSettingsFields), nameof(ReaderSettingsFields.Choice))]
+        public string Fit { get; } = "page";
     }
 
     public static class ReaderSettingsFields

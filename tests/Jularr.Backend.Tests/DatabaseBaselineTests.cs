@@ -20,7 +20,7 @@ namespace Jularr.Backend.Tests
             var baseline = new DatabaseBaseline(connectionString);
             await baseline.StartAsync(CancellationToken.None);
             var tables = await TablesAsync(connectionString);
-            CollectionAssert.IsSubsetOf(new[] { "Accounts", "InstanceSettings", "Works", "WantedItems", "StorageMounts", "StoredFiles", "ReadingLanguages", "ReadingRecognitions" }, tables);
+            CollectionAssert.IsSubsetOf(new[] { "Accounts", "InstanceSettings", "Works", "WantedItems", "StorageMounts", "StoredFiles", "ReadingPreferences", "ReadingRecognitions" }, tables);
 
             await using (var connection = new NpgsqlConnection(connectionString))
             {

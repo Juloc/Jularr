@@ -49,5 +49,17 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly IntField Chapters = new() { Minimum = 0, Required = false };
         public static readonly IntField Figures = new() { Minimum = 0, Required = false };
         public static readonly IntField Attempts = new() { Minimum = 0 };
+
+        // The view a profile chose for a book (none is automatic), pages of a PDF and where a page lies in the Smart Book.
+        public static readonly EnumField ReadingViewTypeId = new(typeof(ReadingView));
+        public static readonly IntField PageNumber = new() { Minimum = 1, Maximum = 100_000 };
+        public static readonly IntField BlockIndex = new() { Minimum = 0 };
+        public static readonly StringField RecognizedReason = new(NpgsqlDbType.Varchar) { MaximumLength = 24, AllowBlank = false };
+        public static readonly DecimalField Quality = new() { Minimum = 0, Maximum = 1, Scale = 3 };
+        public static readonly StringField RecognizedLines = new() { AllowBlank = false };
+        public static readonly StringField PageNote = new() { MaximumLength = 4000, AllowBlank = false, Trim = true };
+        public static readonly StringField PageAnchor = new(NpgsqlDbType.Varchar) { MaximumLength = 200, AllowBlank = false, Trim = true };
+        public static readonly BoolField IsRecommended = new();
+        public static readonly LongField PageNoteId = new() { Minimum = 1 };
     }
 }

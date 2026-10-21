@@ -18,7 +18,8 @@ revision ??= declared;
 const source = revision && /^[a-f0-9]{40}$/.test(revision) ? 'https://github.com/Juloc/Jularr/tree/' + revision : 'https://github.com/Juloc/Jularr';
 const files = [join(root, 'BROWSER-LICENSE.md'), join(runtime, 'NOTICE.md'), join(runtime, 'seek-bzip/LICENSE'),
     ...((await readdir(join(runtime, 'licenses'))).sort().map(file => join(runtime, 'licenses', file))),
-    join(root, 'node_modules/hls.js/LICENSE'), join(root, 'node_modules/htmx.org/LICENSE'), join(root, 'Modules/Reader/Translation/LICENSE')];
+    join(root, 'node_modules/hls.js/LICENSE'), join(root, 'node_modules/htmx.org/LICENSE'), join(root, 'Modules/Reader/Translation/LICENSE'),
+    ...['LICENSE', 'wasm/LICENSE_OPENJPEG', 'wasm/LICENSE_JBIG2', 'wasm/LICENSE_QCMS'].map(file => join(root, 'node_modules/pdfjs-dist', file))];
 const sections = await Promise.all(files.map(async file => file.slice(root.length + 1).replaceAll('\\', '/') + '\n\n' + await readFile(file, 'utf8')));
 await writeFile(join(runtime, 'NOTICE.generated.txt'), 'Jularr browser-client source and third-party notices\n\n'
     + (development ? 'DEVELOPMENT BUILD: uncommitted/unversioned changes are not covered by the source snapshot below. Do not publish this as a matching-source release.\n' : 'Matching public browser-client source snapshot:\n')
