@@ -158,6 +158,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   67px with icons only up to 1120px, the selected area tinted), on a phone (up to 640px) an off-canvas drawer over a dimmed page opened from the header's menu
   button. The admin sidebar has an ADMINISTRATION eyebrow; the header has the trail, the one search with its `/` key hint and shortcut, a light/dark switch,
   the inbox and the avatar (profile initials, linking to the settings). The bottom pill is gone.
+- Owner's decision 21 Oct: the instance settings are five pages below `/Admin/Instance` (Instance, Modules, Media types, Languages, Naming) with one chip row ([SettingsPages](../src/Jularr.Frontend/Framework/SettingsPages.cs)), sections inside a page instead of more tabs, one save pill for all of it. A switch that is a setting is a form field (`Form.Switch`, shown as a [SettingCard](../src/Jularr.Frontend/Framework/Components/SettingCard.cs)), so toggling reloads nothing and saves with the pill; settings of a module appear only while it is on; a module that needs another shows it and cannot be switched on while that is off, and one that others need names them and stays on.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.

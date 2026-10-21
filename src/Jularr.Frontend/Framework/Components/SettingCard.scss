@@ -1,0 +1,61 @@
+// The mockups' feature card: 17px padding on the quiet line, the panel radius and shadow; a 34px icon tile, the name at 12px/810 with the state
+// at 10px under it, the switch at the end; the tags below. Cards sit on a grid of as many columns as fit.
+.setting-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 13px;
+    min-width: 0;
+
+    // The form that saves them lays out its own cards.
+    & > .ui-form,
+    & > .ui-form > .ui-form__row,
+    & > .ui-form > .ui-form__section { display: contents; }
+    & > .ui-form > .ui-form__section > legend { display: none; }
+
+    // Without script each form keeps its own save button, as one more cell; with the pill it has none.
+    & > .ui-form > .ui-form__actions { grid-column: auto; }
+    [data-save-ready] & > .ui-form > .ui-form__actions { display: none; }
+}
+
+.setting-card {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    min-width: 0;
+    padding: 17px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    transition: border-color var(--transition);
+
+    &:hover { border-color: var(--accent-outline); }
+
+    .icon-tile { width: 34px; height: 34px; border-radius: var(--radius-small); }
+
+    &__head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    &__text { display: grid; flex: 1; gap: 4px; min-width: 0; }
+    &__name { min-width: 0; color: var(--text); font-size: 12px; font-weight: 810; line-height: 1.3; }
+    &__state { color: var(--muted); font-size: var(--text-small); line-height: 1.3; }
+    &__state-off, &:has(input:checked) &__state-on { display: inline; }
+    &__state-on, &:has(input:checked) &__state-off { display: none; }
+    &__switch { flex: none; }
+    &__switch .toggle { min-height: 0; }
+    &__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+    &__tags .tag { min-width: 0; max-width: 100%; }
+    &__tags [hidden] { display: none; }
+    // The word before a group of tags: what the module needs, who needs it.
+    &__tags-label { flex: none; color: var(--muted); font-size: var(--text-small); font-weight: 760; white-space: nowrap; }
+
+    // A switch that cannot move for now: dimmed like any disabled control, the tags say why.
+    &--blocked &__switch { opacity: .4; }
+    &--blocked &__switch .toggle { cursor: not-allowed; }
+
+    // A refused click draws the eye to the tags that name the reason.
+    &--refused { animation: setting-card-refused .5s; }
+    @media (prefers-reduced-motion: reduce) { &--refused { animation: none; border-color: var(--warning); } }
+}
+
+@keyframes setting-card-refused {
+    30% { border-color: var(--warning); box-shadow: 0 0 0 4px var(--warning-soft); }
+}

@@ -165,6 +165,42 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         public long Version { get; }
     }
 
+    // The pattern as typed, before it is saved.
+    public sealed class NamingPreviewParametersV1 : BaseParameters
+    {
+        public NamingPreviewParametersV1(MediaType mediaTypeId, string? folder, string file)
+        {
+            MediaTypeId = mediaTypeId;
+            Folder = folder;
+            File = file;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Folder))]
+        public string? Folder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
+        public string File { get; }
+    }
+
+    // A sample title in the typed pattern, or why it cannot be used.
+    public sealed class NamingPreviewV1 : BaseResponse
+    {
+        public NamingPreviewV1(string? example, string? problem)
+        {
+            Example = example;
+            Problem = problem;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
+        public string? Example { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Problem))]
+        public string? Problem { get; }
+    }
+
     public sealed class UpdateNamingPatternDataV1 : BaseData
     {
         public UpdateNamingPatternDataV1(string? folder, string file, long version)
