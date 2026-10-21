@@ -90,7 +90,7 @@ namespace Jularr.Backend.Tests
             await CreateWantedAsync(host, work.Id);
 
             // The direct source waits for the indexer's search (not while the host is set up, where nothing asks the indexer); it only comes when both are asked at the same time.
-            sources.WaitForIndexer = true;
+            sources.StartCounting();
             await RunAsync<SearchDueWantedV1>(host);
             var order = sources.Order.ToArray();
             var direct = Array.LastIndexOf(order, "direct");
@@ -425,6 +425,14 @@ namespace Jularr.Backend.Tests
             public int SabGrabs { get; private set; }
             public int IndexerSearches { get; private set; }
             public bool WaitForIndexer { get; set; }
+
+            // Forgets what the set-up asked, so that only the next search is observed, and makes the direct source wait for the indexer from now on.
+            public void StartCounting()
+            {
+                Order.Clear();
+                IndexerSearches = 0;
+                WaitForIndexer = true;
+            }
             public ConcurrentQueue<string> Order { get; } = new();
             public List<string> HardcoverRequests { get; } = [];
             public byte[] EpubBytes { get; set; } = ReadingTests.BuildEpub("Pride and Prejudice");
