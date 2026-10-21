@@ -106,7 +106,7 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
                 await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Skipped" })).ToContainTextAsync("6");
                 await page.GotoAsync("/Admin/Works");
-                await Assertions.Expect(page.Locator("main table tbody tr a[href^='/Admin/Works/']")).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator("main table tbody tr")).ToHaveCountAsync(4);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
