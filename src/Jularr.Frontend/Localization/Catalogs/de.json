@@ -7428,10 +7428,6 @@
    "Move",
    "Verschieben"
   ],
-  "manualImport.import": [
-   "Import",
-   "Importieren"
-  ],
   "manualImport.season": [
    "Season",
    "Staffel"
@@ -7440,13 +7436,141 @@
    "Episode",
    "Episode"
   ],
-  "manualImport.run": [
-   "Import",
-   "Importieren"
-  ],
   "manualImport.done": [
    "Imported files: {0}",
    "Importierte Dateien: {0}"
+  ],
+  "manualImport.list.works": [
+   "Films and series",
+   "Filme und Serien"
+  ],
+  "manualImport.list.target": [
+   "Import target",
+   "Importziel"
+  ],
+  "manualImport.list.files": [
+   "Files",
+   "Dateien"
+  ],
+  "manualImport.list.report": [
+   "Result",
+   "Ergebnis"
+  ],
+  "manualImport.col.file": [
+   "File",
+   "Datei"
+  ],
+  "manualImport.col.series": [
+   "Film or series",
+   "Film oder Serie"
+  ],
+  "manualImport.col.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "manualImport.col.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "manualImport.col.language": [
+   "Language",
+   "Sprache"
+  ],
+  "manualImport.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "manualImport.col.reason": [
+   "Reason",
+   "Grund"
+  ],
+  "manualImport.select": [
+   "Choose this file",
+   "Diese Datei wählen"
+  ],
+  "manualImport.selectAll": [
+   "All files",
+   "Alle Dateien"
+  ],
+  "manualImport.state.ready": [
+   "Ready",
+   "Bereit"
+  ],
+  "manualImport.state.needs": [
+   "Needs episode",
+   "Episode fehlt"
+  ],
+  "manualImport.state.left": [
+   "Left out",
+   "Ausgelassen"
+  ],
+  "manualImport.state.imported": [
+   "Imported",
+   "Importiert"
+  ],
+  "manualImport.state.failed": [
+   "Not imported",
+   "Nicht importiert"
+  ],
+  "manualImport.match": [
+   "Match",
+   "Zuordnen"
+  ],
+  "manualImport.matchTitle": [
+   "Match file",
+   "Datei zuordnen"
+  ],
+  "manualImport.matchQuery": [
+   "Search the library",
+   "Bibliothek durchsuchen"
+  ],
+  "manualImport.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "manualImport.qualityFromName": [
+   "From the file name",
+   "Aus dem Dateinamen"
+  ],
+  "manualImport.apply": [
+   "Apply",
+   "Übernehmen"
+  ],
+  "manualImport.runSelected": [
+   "Import selected",
+   "Auswahl importieren"
+  ],
+  "manualImport.changeFolder": [
+   "Another folder",
+   "Anderer Ordner"
+  ],
+  "manualImport.backToQueue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "manualImport.more": [
+   "Import more",
+   "Weiter importieren"
+  ],
+  "manualImport.actions": [
+   "Manual import actions",
+   "Aktionen des manuellen Imports"
+  ],
+  "manualImport.incomplete": [
+   "Every chosen episode needs its season and episode.",
+   "Jede gewählte Episode braucht ihre Staffel und Episode."
+  ],
+  "manualImport.kpi.imported": [
+   "Imported",
+   "Importiert"
+  ],
+  "manualImport.kpi.failed": [
+   "Not imported",
+   "Nicht importiert"
+  ],
+  "manualImport.kpi.left": [
+   "Left out",
+   "Ausgelassen"
   ],
   "activity.importManually": [
    "Import by hand",

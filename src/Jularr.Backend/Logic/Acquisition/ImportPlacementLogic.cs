@@ -83,9 +83,9 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
-        // The videos a person chose, each as the film or as the episode they say; every file is named by its own release facts, and subtitles named like it follow.
+        // The videos a person chose, each as the film or as the episode they say; every file is named by its own release facts, with the quality the person gave instead of its name's, and subtitles named like it follow.
         public static IReadOnlyList<ImportPlacementData> PlanChosen(MediaType mediaType, MediaSubtype? subtype, string title, int? year, IReadOnlyList<StorageFile> files,
-            IReadOnlyList<(string Path, int? Season, int? Episode)> choices, NamingSet patterns, IReadOnlyList<TargetUnit> episodes)
+            IReadOnlyList<(string Path, int? Season, int? Episode)> choices, NamingSet patterns, IReadOnlyList<TargetUnit> episodes, IReadOnlyDictionary<string, string>? qualities = null)
         {
             var placements = new List<ImportPlacementData>();
             var isMovie = mediaType == MediaType.Movie;
@@ -96,7 +96,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     continue;
                 }
 
-                var facts = ReleaseFacts.OfPath(path, isMovie);
+                var facts = ReleaseFacts.WithQuality(ReleaseFacts.OfPath(path, isMovie), path, qualities?.GetValueOrDefault(path));
                 if (isMovie)
                 {
                     AddGroup(placements, files, video, NamingPattern.Apply(patterns.Pattern(MediaType.Movie, subtype),
