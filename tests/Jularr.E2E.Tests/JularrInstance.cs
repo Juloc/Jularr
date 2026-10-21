@@ -126,6 +126,14 @@ namespace Jularr.E2E.Tests
             await command.ExecuteNonQueryAsync();
         }
 
+        public async Task<object?> ScalarAsync(string sql)
+        {
+            await using var connection = new NpgsqlConnection(ConnectionString);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(sql, connection);
+            return await command.ExecuteScalarAsync();
+        }
+
         private async Task StopHostAsync()
         {
             if (_process is null)

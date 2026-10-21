@@ -120,5 +120,11 @@ namespace Jularr.Integrations.Data.AniList
 
         // The language of its country of origin: Japanese, Korean or Chinese.
         public string? OriginalLanguage { get; init; }
+
+        // Every title AniList relates it to, with the kind of relation.
+        public IReadOnlyList<AniListRelation> Relations { get; init; } = [];
     }
+
+    // A title related to an entry: AniList's relation type (SEQUEL, ADAPTATION, SIDE_STORY ...) and what the related entry is.
+    internal sealed record AniListRelation(string RelationType, int Id, string Type, string? Format, string Title, int? Year, string? CoverUrl);
 }
