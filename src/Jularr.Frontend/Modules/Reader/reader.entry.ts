@@ -8,6 +8,7 @@ import { initializeReaderChrome, initializeReaderSettings } from './Settings';
 import { initializePaperPages } from './PaperPages';
 import { initializeComicPages } from './ComicPages';
 import { initializeReadAloud } from './Speech';
+import { initializeFigures } from './Figures';
 import { initializeBookmarks } from './bookmarks';
 
 const reader = document.querySelector<HTMLElement>('.reader');
@@ -37,6 +38,7 @@ function initializeText(reader: HTMLElement): void {
     });
     highlights(reader, content, section);
     if (reader.dataset.query) findings(content, reader.dataset.query);
+    initializeFigures(reader, content);
     paging = initializePaperPages(reader, content, settings, () => report(false));
     paging.layout();
     marks = initializeBookmarks(reader, () => ({
