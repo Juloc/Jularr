@@ -15,6 +15,12 @@ CREATE TABLE "InstanceSettings" (
     "ReadingCacheWorks" integer NOT NULL DEFAULT 100 CHECK ("ReadingCacheWorks" BETWEEN 0 AND 10000),
     "UsersConfirmSources" boolean NOT NULL DEFAULT FALSE,
     "LibraryScanIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("LibraryScanIntervalHours" BETWEEN 0 AND 720),
+    -- Automatic backups every this many hours (0 switches them off); the newest ones are kept.
+    "BackupIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("BackupIntervalHours" BETWEEN 0 AND 720),
+    "BackupKeep" smallint NOT NULL DEFAULT 7 CHECK ("BackupKeep" BETWEEN 1 AND 365),
+    -- How often Plex, Jellyfin and Emby are read, and how often due wanted titles are searched.
+    "ProviderSyncIntervalMinutes" smallint NOT NULL DEFAULT 30 CHECK ("ProviderSyncIntervalMinutes" BETWEEN 5 AND 1440),
+    "WantedSearchIntervalMinutes" smallint NOT NULL DEFAULT 2 CHECK ("WantedSearchIntervalMinutes" BETWEEN 1 AND 1440),
     -- Finished activity leaves after this many days or once it takes more room than this.
     "HistoryRetentionDays" smallint NOT NULL DEFAULT 30 CHECK ("HistoryRetentionDays" BETWEEN 1 AND 3650),
     "HistoryMegabytes" integer NOT NULL DEFAULT 10 CHECK ("HistoryMegabytes" BETWEEN 1 AND 100000),
@@ -116,5 +122,21 @@ WHERE
             candidate."Id"
         LIMIT 1
     );
+
+-- What the Owner chose for each background job and how its last run went. The jobs themselves, their groups and timing live in code; a row appears with the first report or choice.
+-- The time a job last ran is kept at most once a minute; the running process holds the newest values.
+CREATE TABLE "WorkerJobs" (
+    "Key" varchar(32) PRIMARY KEY CHECK ("Key" ~ '^[a-z][A-Za-z]*$'),
+    "IsPaused" boolean NOT NULL DEFAULT FALSE,
+    -- Without a choice the job's own default counts.
+    "PausesWhileUsed" boolean NULL,
+    "LastStartedAt" timestamptz NULL,
+    "LastFinishedAt" timestamptz NULL,
+    -- 1 succeeded, 2 failed, 3 skipped (its module is off).
+    "LastResultTypeId" smallint NULL CHECK ("LastResultTypeId" BETWEEN 1 AND 3),
+    "LastErrorKey" varchar(64) NULL,
+    "NextRunAt" timestamptz NULL,
+    CHECK ("LastErrorKey" IS NULL OR "LastResultTypeId" = 2)
+);
 
 COMMIT;

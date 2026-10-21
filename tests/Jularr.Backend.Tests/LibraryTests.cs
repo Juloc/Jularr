@@ -310,7 +310,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 1 AND \"OperationStatusTypeId\" IN (1, 2)"));
             await using (var scope = host.Services.CreateAsyncScope())
             {
-                Assert.IsTrue(await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, CancellationToken.None));
+                Assert.IsTrue(await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.LibraryScan, CancellationToken.None));
             }
             using var library = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Unmatched");
             html = await library.Content.ReadAsStringAsync();
@@ -1097,7 +1097,7 @@ namespace Jularr.Backend.Tests
             using var queued = await host.SendAsync(HttpMethod.Post, Roots + "/" + rootId + "/scans");
             Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode, await queued.Content.ReadAsStringAsync());
             await using var scope = host.Services.CreateAsyncScope();
-            Assert.IsTrue(await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, CancellationToken.None));
+            Assert.IsTrue(await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, OperationType.LibraryScan, CancellationToken.None));
         }
 
         internal static async Task<long> CreateMountAsync(Host host)

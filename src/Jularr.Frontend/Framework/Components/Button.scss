@@ -58,5 +58,6 @@
         &:hover:not(:disabled) { border-color: var(--warning); color: var(--warning); }
     }
 
-    &:disabled { opacity: .4; cursor: default; }
+    // Opaque, quietly muted state.
+    &:disabled { opacity: 1; background: var(--field); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
 }

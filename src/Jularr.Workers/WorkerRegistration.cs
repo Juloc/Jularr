@@ -9,6 +9,8 @@ namespace Jularr.Workers
         {
             services.AddHostedService<OperationWorker>();
             services.AddHostedService<AcquisitionWorker>();
+            services.AddHostedService<DownloadWorker>();
+            services.AddHostedService<ProviderSyncWorker>();
             services.AddHostedService<LiveWorker>();
             services.AddHostedService<UsenetWorker>();
             services.AddHostedService<MediaWorker>();

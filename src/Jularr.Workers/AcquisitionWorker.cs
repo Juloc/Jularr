@@ -1,93 +1,50 @@
+using System.Runtime.ExceptionServices;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
-using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger, AcquisitionSearchSignal signal, LiveChanges live)
-        : PeriodicWorker(scopes, time, logger, TimeSpan.FromSeconds(15))
+    // Looks for the wanted titles that are due on the Owner's interval, or as soon as a request makes one due.
+    internal sealed class AcquisitionWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner, AcquisitionSearchSignal signal) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Acquisition)
     {
-        private static readonly TimeSpan SearchInterval = TimeSpan.FromMinutes(2);
-        private static readonly TimeSpan PlexInterval = TimeSpan.FromMinutes(30);
-        private DateTimeOffset _nextSearch = DateTimeOffset.MinValue;
-        private DateTimeOffset _nextPlexSync = DateTimeOffset.MinValue;
-
-        // A pass between two regular ones only reads what the download clients report.
-        private bool _isFullPass = true;
-
         protected override async Task RunOnceAsync(CancellationToken ct)
         {
-            // Downloads are tracked often; metadata and due targets are refreshed in small passes.
-            await RunAsync<MonitorDownloadsV1>(ct);
-            if (!_isFullPass)
+            // A new request or a resumed monitor makes the next search due.
+            if (signal.TakeRequest())
             {
-                return;
+                Jobs.RequestRun("wantedSearch");
             }
 
-            await RunAsync<RefreshStoredFileFormatsV1>(ct);
-            var periodicSearchDue = Time.GetUtcNow() >= _nextSearch;
-            if (signal.TakeRequest() || periodicSearchDue)
-            {
-                await RunAsync<RefreshWantedMetadataV1>(ct);
-                await RunAsync<SearchDueWantedV1>(ct);
-                if (periodicSearchDue) _nextSearch = Time.GetUtcNow() + SearchInterval;
-            }
-
-            // Plex availability follows the server every half hour.
-            if (Time.GetUtcNow() >= _nextPlexSync)
-            {
-                await RunAsync<SyncPlexLibraryV1>(ct);
-                _nextPlexSync = Time.GetUtcNow() + PlexInterval;
-            }
+            // Custom formats of the files, metadata of wanted titles and the searches in small passes.
+            await Runner.RunAsync("wantedSearch", (services, token) => RunAllAsync(token, Step<RefreshStoredFileFormatsV1>(services), Step<RefreshWantedMetadataV1>(services), Step<SearchDueWantedV1>(services)), ct);
         }
 
-        protected override async Task<bool> WaitForNextRunAsync(PeriodicTimer timer, CancellationToken ct)
+        protected override IEnumerable<Task<bool>> Wakeups(CancellationToken ct) => [signal.WaitForRequestAsync(ct).AsTask()];
+
+        private static Func<CancellationToken, Task> Step<TService>(IServiceProvider services) where TService : SystemService<AcquisitionCycleParametersV1, NoData> =>
+            token => services.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, token);
+
+        // Each step runs even when an earlier one failed; the first failure is then raised.
+        private static async Task RunAllAsync(CancellationToken ct, params Func<CancellationToken, Task>[] steps)
         {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var tick = timer.WaitForNextTickAsync(linked.Token).AsTask();
-            var request = signal.WaitForRequestAsync(linked.Token).AsTask();
-
-            // While someone watches a running download its progress is read every second.
-            Task completed;
-            Task second;
-            do
-            {
-                second = Task.Delay(LiveChanges.DownloadInterval, Time, linked.Token);
-                completed = await Task.WhenAny(tick, request, second);
-            }
-            while (completed == second && !ct.IsCancellationRequested && !live.WantsDownloadProgress);
-            _isFullPass = completed != second;
-            await linked.CancelAsync();
-            try
-            {
-                if (completed == second)
-                {
-                    return !ct.IsCancellationRequested;
-                }
-
-                return await (Task<bool>)completed;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                return false;
-            }
-            finally
+            ExceptionDispatchInfo? first = null;
+            foreach (var step in steps)
             {
                 try
                 {
-                    await Task.WhenAll(tick, request);
+                    await step(ct);
                 }
-                catch (OperationCanceledException)
+                catch (Exception exception) when (!ct.IsCancellationRequested)
                 {
+                    first ??= ExceptionDispatchInfo.Capture(exception);
                 }
             }
-        }
 
-        private Task RunAsync<TService>(CancellationToken ct) where TService : SystemService<AcquisitionCycleParametersV1, NoData> =>
-            RunAsync(typeof(TService).Name, (services, token) => services.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, token), ct);
+            first?.Throw();
+        }
     }
 }

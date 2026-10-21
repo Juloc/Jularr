@@ -3,9 +3,13 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using System.Security;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Logic.Provider;
+using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Logic.Provider;
+using Jularr.Backend.Service.System.Provider.V1;
 using Jularr.Integrations.Logic.MediaServer;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -131,6 +135,49 @@ namespace Jularr.Backend.Tests
             using var again = await host.SendAsync(HttpMethod.Post, route + "/sync");
             var quiet = (await again.Content.ReadFromJsonAsync<MediaServerSyncResultV1>())!;
             Assert.AreEqual((0, 0), (quiet.LocalCount, quiet.RemoteCount));
+        }
+
+        [TestMethod]
+        public async Task ProviderSync_ReadsOneServerPerPass_SkipsAnUnconnectedOne_AndFollowsTheModuleSwitch()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var emby = new FakeServer { IsEmby = true };
+            emby.Positions["m603"] = 100_000;
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path,
+                services: services => services.AddHttpClient<MediaServerClient>().ConfigurePrimaryHttpMessageHandler(() => emby));
+            emby.ProfileName = (string)(await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Profiles\" WHERE \"Id\" = 101"))!;
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'ProgressSync';
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 1, 'Example Film');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'tmdb_movie', '603');
+                """);
+            const string route = "/api/v1/admin/media-servers/Emby";
+            using var connected = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("https://media.example.test/emby", FakeServer.ApiKey));
+            Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+            using var linksResponse = await host.SendAsync(HttpMethod.Get, route + "/links");
+            var link = (await linksResponse.Content.ReadFromJsonAsync<MediaServerLinkV1[]>())!.Single(item => item.ExternalName == emby.ProfileName);
+            using var confirmed = await host.SendAsync(HttpMethod.Put, route + "/links/" + link.Id, new SaveMediaServerLinkDataV1(101));
+            Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
+
+            // The pass of the connected server shares progress; the servers that are not connected have nothing to do.
+            await using var scope = host.Services.CreateAsyncScope();
+            var sync = scope.ServiceProvider.GetRequiredService<SyncProviderV1>();
+            Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Emby), default)).Success);
+            Assert.AreEqual(100_000L, await host.ScalarAsync("SELECT \"PositionMs\" FROM \"MediaProgress\" WHERE \"WorkId\" = 10"));
+            Assert.IsFalse((await sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Jellyfin), default)).Success);
+            Assert.IsFalse((await sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Plex), default)).Success);
+
+            // An unreachable server fails its own pass alone.
+            emby.IsAvailable = false;
+            var failure = await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() => sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Emby), default));
+            Assert.AreEqual("media_server_unavailable", failure.Code);
+            Assert.IsFalse((await sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Plex), default)).Success, "Plex does not depend on the media servers.");
+
+            // The media servers follow the progress sync switch; Plex needs no module.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'ProgressSync'");
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Jellyfin), default));
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Emby), default));
+            Assert.IsFalse((await sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Plex), default)).Success);
         }
 
         [TestMethod]

@@ -980,6 +980,22 @@
    "Library scan interval (hours)",
    "Intervall der Bibliotheksscans (Stunden)"
   ],
+  "admin.instance.backupIntervalHours": [
+   "Automatic backup interval (hours)",
+   "Intervall der automatischen Backups (Stunden)"
+  ],
+  "admin.instance.backupKeep": [
+   "Backups to keep",
+   "Backups behalten"
+  ],
+  "admin.instance.providerSyncIntervalMinutes": [
+   "Plex, Jellyfin and Emby sync interval (minutes)",
+   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
+  ],
+  "admin.instance.wantedSearchIntervalMinutes": [
+   "Wanted search period (minutes)",
+   "Suchintervall für Gesuchtes (Minuten)"
+  ],
   "admin.instance.historyRetentionDays": [
    "Keep finished activity for days",
    "Abgeschlossene Aktivitäten behalten (Tage)"
@@ -2087,6 +2103,38 @@
   "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
    "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
    "Stunden zwischen automatischen Bibliotheksscans; 0 schaltet sie aus. Schlafende NAS werden nicht geweckt."
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.info": [
+   "Hours between automatic backups; 0 switches them off.",
+   "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.info": [
+   "The newest backups stay, older ones are removed.",
+   "Die neuesten Backups bleiben, ältere werden entfernt."
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.info": [
+   "Minutes between two reads of the connected Plex, Jellyfin and Emby servers.",
+   "Minuten zwischen zwei Abgleichen der verbundenen Plex-, Jellyfin- und Emby-Server."
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.info": [
+   "Minutes between two searches of the wanted titles that are due.",
+   "Minuten zwischen zwei Suchen nach fälligen gesuchten Titeln."
   ],
   "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
    "30",
@@ -7524,6 +7572,222 @@
    "Move column",
    "Spalte verschieben"
   ],
+  "works.add": [
+   "Add title",
+   "Titel hinzufügen"
+  ],
+  "works.col.cover": [
+   "Cover",
+   "Cover"
+  ],
+  "works.col.type": [
+   "Type",
+   "Typ"
+  ],
+  "works.col.year": [
+   "Year",
+   "Jahr"
+  ],
+  "works.col.monitored": [
+   "Monitoring",
+   "Überwachung"
+  ],
+  "works.col.status": [
+   "Status",
+   "Status"
+  ],
+  "works.col.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "works.col.library": [
+   "Library",
+   "Bibliothek"
+  ],
+  "works.col.files": [
+   "Files",
+   "Dateien"
+  ],
+  "works.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "works.col.added": [
+   "Added",
+   "Hinzugefügt"
+  ],
+  "works.select": [
+   "Select title",
+   "Titel auswählen"
+  ],
+  "works.selectAll": [
+   "Select all titles",
+   "Alle Titel auswählen"
+  ],
+  "works.status.Available": [
+   "Available",
+   "Vorhanden"
+  ],
+  "works.status.Missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "works.status.Downloading": [
+   "Downloading",
+   "Wird geladen"
+  ],
+  "works.status.Unmonitored": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "works.filter.type": [
+   "All types",
+   "Alle Typen"
+  ],
+  "works.filter.monitored": [
+   "Any monitoring",
+   "Jede Überwachung"
+  ],
+  "works.filter.monitored.yes": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "works.filter.monitored.no": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "works.filter.status": [
+   "Any status",
+   "Jeder Status"
+  ],
+  "works.filter.library": [
+   "All libraries",
+   "Alle Bibliotheken"
+  ],
+  "works.filter.profile": [
+   "All profiles",
+   "Alle Profile"
+  ],
+  "works.filter.apply": [
+   "Apply",
+   "Anwenden"
+  ],
+  "works.filter.clear": [
+   "Clear",
+   "Zurücksetzen"
+  ],
+  "works.emptyFiltered": [
+   "No title matches the filters.",
+   "Kein Titel passt zu den Filtern."
+  ],
+  "works.bar.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "works.bar.monitoring": [
+   "Monitoring",
+   "Überwachung"
+  ],
+  "works.bar.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "works.bar.library": [
+   "Library (new files)",
+   "Bibliothek (neue Dateien)"
+  ],
+  "works.bar.default": [
+   "Default",
+   "Standard"
+  ],
+  "works.bar.search": [
+   "Search",
+   "Suchen"
+  ],
+  "works.bar.refresh": [
+   "Refresh",
+   "Aktualisieren"
+  ],
+  "works.delete.title": [
+   "Delete titles",
+   "Titel löschen"
+  ],
+  "works.delete.confirm": [
+   "Delete",
+   "Löschen"
+  ],
+  "works.report": [
+   "{0}: {1} of {2} titles",
+   "{0}: {1} von {2} Titeln"
+  ],
+  "works.report.none": [
+   "Nothing was chosen to change.",
+   "Es wurde nichts zum Ändern gewählt."
+  ],
+  "works.action.monitor": [
+   "Monitoring on",
+   "Überwachung ein"
+  ],
+  "works.action.unmonitor": [
+   "Monitoring off",
+   "Überwachung aus"
+  ],
+  "works.action.search": [
+   "Search",
+   "Suche"
+  ],
+  "works.action.refresh": [
+   "Refresh metadata",
+   "Metadaten aktualisieren"
+  ],
+  "works.action.apply": [
+   "Changes",
+   "Änderungen"
+  ],
+  "works.action.delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "works.outcome.not_wanted": [
+   "Not wanted yet",
+   "Noch nicht gewünscht"
+  ],
+  "works.outcome.per_platform": [
+   "Set per platform on its page",
+   "Pro Plattform auf der Titelseite"
+  ],
+  "works.outcome.not_found": [
+   "Not found",
+   "Nicht gefunden"
+  ],
+  "works.outcome.profile_mismatch": [
+   "The profile does not suit the type",
+   "Das Profil passt nicht zum Typ"
+  ],
+  "works.outcome.library_mismatch": [
+   "The library does not suit the type",
+   "Die Bibliothek passt nicht zum Typ"
+  ],
+  "works.outcome.download_active": [
+   "A download is running",
+   "Ein Download läuft"
+  ],
+  "works.outcome.files_stay": [
+   "The files could not be removed",
+   "Die Dateien ließen sich nicht entfernen"
+  ],
+  "works.outcome.unknown_reference": [
+   "No provider to refresh from",
+   "Kein Anbieter zum Aktualisieren"
+  ],
+  "works.outcome.in_use": [
+   "A download is running",
+   "Ein Download läuft"
+  ],
+  "works.outcome.other": [
+   "Not possible",
+   "Nicht möglich"
+  ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
    "Das Speichergerät wacht auf. Bitte versuche es gleich erneut."
@@ -8384,7 +8648,7 @@
    "The request was searched by hand:",
    "Die Anfrage wurde von Hand gesucht:"
   ],
-"admin.browser.ran": [
+  "admin.browser.ran": [
    "The browser did what was asked.",
    "Der Browser hat getan, was verlangt war."
   ],
@@ -8395,6 +8659,418 @@
   "admin.browser.sourceFailed": [
    "The source does not answer:",
    "Die Quelle antwortet nicht:"
+  ],
+  "admin.jobs.title": [
+   "Jobs",
+   "Jobs"
+  ],
+  "nav.group.system": [
+   "System",
+   "System"
+  ],
+  "nav.system.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "operation.type.Job": [
+   "Background job",
+   "Hintergrundjob"
+  ],
+  "jobs.worker.Operation": [
+   "Operations",
+   "Vorgänge"
+  ],
+  "jobs.worker.Acquisition": [
+   "Acquisition",
+   "Beschaffung"
+  ],
+  "jobs.worker.Usenet": [
+   "Usenet",
+   "Usenet"
+  ],
+  "jobs.worker.Media": [
+   "Media",
+   "Medien"
+  ],
+  "jobs.worker.Storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "jobs.worker.Backup": [
+   "Backup",
+   "Backup"
+  ],
+  "jobs.worker.Maintenance": [
+   "Maintenance",
+   "Wartung"
+  ],
+  "jobs.worker.Trickplay": [
+   "Trickplay",
+   "Trickplay"
+  ],
+  "jobs.worker.Subtitle": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "jobs.worker.Recognition": [
+   "Recognition",
+   "Texterkennung"
+  ],
+  "jobs.worker.Catalog": [
+   "Catalog",
+   "Katalog"
+  ],
+  "jobs.worker.Sampler": [
+   "Sampler",
+   "Messung"
+  ],
+  "jobs.worker.Download": [
+   "Downloads",
+   "Downloads"
+  ],
+  "jobs.worker.Provider": [
+   "Providers",
+   "Anbieter"
+  ],
+  "jobs.job": [
+   "Job",
+   "Job"
+  ],
+  "jobs.job.operations": [
+   "Library scans",
+   "Bibliotheksscans"
+  ],
+  "jobs.job.backupQueue": [
+   "Backups",
+   "Backups"
+  ],
+  "jobs.job.downloads": [
+   "Download tracking",
+   "Download-Verfolgung"
+  ],
+  "jobs.job.wantedSearch": [
+   "Wanted search",
+   "Suche nach Gesuchtem"
+  ],
+  "jobs.job.providerSync": [
+   "Provider sync",
+   "Anbieter-Abgleich"
+  ],
+  "jobs.job.providerSyncPlex": [
+   "Plex sync",
+   "Plex-Abgleich"
+  ],
+  "jobs.job.providerSyncJellyfin": [
+   "Jellyfin sync",
+   "Jellyfin-Abgleich"
+  ],
+  "jobs.job.providerSyncEmby": [
+   "Emby sync",
+   "Emby-Abgleich"
+  ],
+  "jobs.job.usenet": [
+   "Usenet downloads",
+   "Usenet-Downloads"
+  ],
+  "jobs.job.aniListMatching": [
+   "AniList matching",
+   "AniList-Zuordnung"
+  ],
+  "jobs.job.storage": [
+   "Storage check",
+   "Speicherprüfung"
+  ],
+  "jobs.job.scanScheduling": [
+   "Scan scheduling",
+   "Scan-Planung"
+  ],
+  "jobs.job.backup": [
+   "Automatic backup",
+   "Automatisches Backup"
+  ],
+  "jobs.job.maintenance": [
+   "Housekeeping",
+   "Aufräumen"
+  ],
+  "jobs.job.trickplay": [
+   "Seek thumbnails",
+   "Vorschaubilder"
+  ],
+  "jobs.job.subtitles": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "jobs.job.recognition": [
+   "Text recognition",
+   "Texterkennung"
+  ],
+  "jobs.job.catalog": [
+   "Catalog sync",
+   "Katalog-Abgleich"
+  ],
+  "jobs.job.resources": [
+   "Resource sampling",
+   "Ressourcenmessung"
+  ],
+  "jobs.state.Running": [
+   "Running",
+   "Läuft"
+  ],
+  "jobs.state.Paused": [
+   "Paused",
+   "Pausiert"
+  ],
+  "jobs.state.WaitingForUse": [
+   "Waiting",
+   "Wartet"
+  ],
+  "jobs.state.Failed": [
+   "Failed",
+   "Fehlerhaft"
+  ],
+  "jobs.state.Off": [
+   "Off",
+   "Aus"
+  ],
+  "jobs.state.Idle": [
+   "Ready",
+   "Bereit"
+  ],
+  "jobs.state.Pending": [
+   "Pending",
+   "Ausstehend"
+  ],
+  "jobs.continuous": [
+   "On demand",
+   "Bei Bedarf"
+  ],
+  "jobs.off": [
+   "Off",
+   "Aus"
+  ],
+  "jobs.last": [
+   "Last run",
+   "Letzter Lauf"
+  ],
+  "jobs.next": [
+   "Next run",
+   "Nächster Lauf"
+  ],
+  "jobs.use": [
+   "While in use",
+   "Bei Nutzung"
+  ],
+  "jobs.use.waits": [
+   "Waits",
+   "Wartet"
+  ],
+  "jobs.use.runs": [
+   "Runs",
+   "Läuft"
+  ],
+  "jobs.pause": [
+   "Pause",
+   "Pausieren"
+  ],
+  "jobs.resume": [
+   "Resume",
+   "Fortsetzen"
+  ],
+  "jobs.run": [
+   "Run now",
+   "Jetzt ausführen"
+  ],
+  "jobs.open": [
+   "Open Jobs",
+   "Jobs öffnen"
+  ],
+  "jobs.history": [
+   "History",
+   "Verlauf"
+  ],
+  "jobs.when": [
+   "When",
+   "Zeit"
+  ],
+  "jobs.allActivity": [
+   "All activity",
+   "Gesamte Aktivität"
+  ],
+  "jobs.history.empty": [
+   "No finished operations yet.",
+   "Noch keine abgeschlossenen Vorgänge."
+  ],
+  "jobs.job.covers": [
+   "Provider covers",
+   "Titelbilder der Anbieter"
+  ],
+  "jobs.kpi.total": [
+   "Jobs",
+   "Jobs"
+  ],
+  "jobs.area": [
+   "Area",
+   "Bereich"
+  ],
+  "jobs.interval": [
+   "Interval",
+   "Intervall"
+  ],
+  "jobs.error": [
+   "Last error",
+   "Letzter Fehler"
+  ],
+  "jobs.about": [
+   "About this job",
+   "Über diesen Job"
+  ],
+  "jobs.enabled": [
+   "Enabled",
+   "Aktiviert"
+  ],
+  "jobs.use.setting": [
+   "Waits while Jularr is used",
+   "Wartet bei Nutzung"
+  ],
+  "jobs.detailsOf": [
+   "Details of {0}",
+   "Details zu {0}"
+  ],
+  "jobs.refresh": [
+   "Refresh",
+   "Aktualisieren"
+  ],
+  "jobs.pauseAll": [
+   "Pause all",
+   "Alle pausieren"
+  ],
+  "jobs.resumeAll": [
+   "Resume all",
+   "Alle fortsetzen"
+  ],
+  "jobs.filter": [
+   "Filter jobs",
+   "Jobs filtern"
+  ],
+  "jobs.filters": [
+   "Job states",
+   "Jobzustände"
+  ],
+  "jobs.count": [
+   "Jobs: {0}",
+   "Jobs: {0}"
+  ],
+  "jobs.empty": [
+   "No jobs match.",
+   "Keine passenden Jobs."
+  ],
+  "jobs.clear": [
+   "Clear filter",
+   "Filter zurücksetzen"
+  ],
+  "jobs.list": [
+   "Background jobs",
+   "Hintergrundjobs"
+  ],
+  "jobs.about.operations": [
+   "Scans the connected libraries for new and changed files when a scan is asked for.",
+   "Prüft die verbundenen Bibliotheken auf neue und geänderte Dateien, sobald ein Scan angefordert wird."
+  ],
+  "jobs.about.backupQueue": [
+   "Creates the backups that were asked for.",
+   "Erstellt die angeforderten Sicherungen."
+  ],
+  "jobs.about.downloads": [
+   "Follows the progress of external downloads and starts their import when they finish.",
+   "Verfolgt den Fortschritt externer Downloads und startet den Import, sobald sie fertig sind."
+  ],
+  "jobs.about.wantedSearch": [
+   "Looks for new releases of monitored titles, seasons and single episodes.",
+   "Sucht neue Releases für überwachte Titel, Staffeln und einzelne Folgen."
+  ],
+  "jobs.about.providerSync": [
+   "Reads the connected media servers and shares their progress. It saves resources while Jularr is used.",
+   "Liest die verbundenen Medienserver und gleicht ihren Fortschritt ab. Es spart Ressourcen, solange Jularr genutzt wird."
+  ],
+  "jobs.about.providerSyncPlex": [
+   "Syncs the connected Plex server on the schedule of the provider sync.",
+   "Gleicht den verbundenen Plex-Server nach dem Zeitplan des Anbieter-Abgleichs ab."
+  ],
+  "jobs.about.providerSyncJellyfin": [
+   "Syncs the connected Jellyfin server on the schedule of the provider sync.",
+   "Gleicht den verbundenen Jellyfin-Server nach dem Zeitplan des Anbieter-Abgleichs ab."
+  ],
+  "jobs.about.providerSyncEmby": [
+   "Syncs the connected Emby server on the schedule of the provider sync.",
+   "Gleicht den verbundenen Emby-Server nach dem Zeitplan des Anbieter-Abgleichs ab."
+  ],
+  "jobs.about.usenet": [
+   "Works through the download jobs of Jularr's own Usenet downloader.",
+   "Arbeitet die Download-Aufträge des eigenen Jularr-Usenet-Downloaders ab."
+  ],
+  "jobs.about.aniListMatching": [
+   "Checks open AniList matches of anime titles.",
+   "Prüft offene AniList-Zuordnungen von Anime-Titeln."
+  ],
+  "jobs.about.covers": [
+   "Fetches and renews the covers of titles from their providers.",
+   "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
+  ],
+  "jobs.about.storage": [
+   "Checks that the mounts and storage paths can be reached.",
+   "Prüft, ob die Mounts und Speicherpfade erreichbar sind."
+  ],
+  "jobs.about.scanScheduling": [
+   "Starts library scans that are due on their schedule.",
+   "Startet fällige Bibliotheksscans nach ihrem Zeitplan."
+  ],
+  "jobs.about.backup": [
+   "Creates a backup when the newest one is older than the interval set by the Owner.",
+   "Erstellt eine Sicherung, wenn die neueste älter ist als das vom Owner eingestellte Intervall."
+  ],
+  "jobs.about.maintenance": [
+   "Cleans up expired sessions, finished operations and old files.",
+   "Räumt abgelaufene Sitzungen, erledigte Vorgänge und alte Dateien auf."
+  ],
+  "jobs.about.trickplay": [
+   "Creates the thumbnails shown while seeking in videos.",
+   "Erstellt die Vorschaubilder, die beim Spulen in Videos erscheinen."
+  ],
+  "jobs.about.subtitles": [
+   "Searches subtitles for monitored titles in the wanted languages.",
+   "Sucht Untertitel für überwachte Titel in den gewünschten Sprachen."
+  ],
+  "jobs.about.recognition": [
+   "Recognizes the text of scanned pages so that it can be read and searched.",
+   "Erkennt den Text gescannter Seiten, damit er gelesen und durchsucht werden kann."
+  ],
+  "jobs.about.catalog": [
+   "Keeps the local Discover catalog up to date.",
+   "Hält den lokalen Discover-Katalog aktuell."
+  ],
+  "jobs.about.resources": [
+   "Samples the load of the process for the System page.",
+   "Misst die Auslastung des Prozesses für die Systemseite."
+  ],
+  "jobs.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "dock.page": [
+   "Page {0} / {1}",
+   "Seite {0} / {1}"
+  ],
+  "dock.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "dock.paging": [
+   "Pages",
+   "Seiten"
+  ],
+  "jobs.runAgain": [
+   "Run again",
+   "Erneut ausführen"
   ]
  }
 }

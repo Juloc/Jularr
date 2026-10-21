@@ -1,5 +1,4 @@
-// The mockups' status pill: a 6px pip and a short word, 10px/780, on a tint of its own colour. The default is the lavender tint
-// (waiting, requested, in progress); available is green; warning, danger and info take the amber, red and blue tints.
+// State as a badge with a dot (or an icon): available in the success tint, requested or in progress in the accent, anything else on the quiet line; the tone modifiers name a tint directly.
 .state-chip {
     display: inline-flex;
     align-items: center;
@@ -25,8 +24,67 @@
     }
 
     &--available,
-    &--known { background: var(--success-soft); color: var(--success); }
-    &--warning { background: var(--warning-soft); color: var(--warning); }
-    &--danger { background: var(--danger-soft); color: var(--danger); }
-    &--info { background: var(--info-soft); color: var(--info); }
+    &--known,
+    &--idle {
+        border-color: var(--success-soft);
+        background: var(--success-soft);
+        color: var(--success);
+    }
+
+    &--requested,
+    &--inprogress,
+    &--running {
+        border-color: var(--accent-soft);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+
+    &--failed,
+    &--danger {
+        border-color: var(--danger-soft);
+        background: var(--danger-soft);
+        color: var(--danger);
+    }
+
+    &--success {
+        border-color: var(--success-soft);
+        background: var(--success-soft);
+        color: var(--success);
+    }
+
+    &--accent {
+        border-color: var(--accent-soft);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+
+    &--info {
+        border-color: var(--info-soft);
+        background: var(--info-soft);
+        color: var(--info);
+    }
+
+    &--warning {
+        border-color: var(--warning-soft);
+        background: var(--warning-soft);
+        color: var(--warning);
+    }
+
+    // The icon takes the dot's place.
+    &--icon::before { display: none; }
+
+    &__icon {
+        display: inline-flex;
+        flex: none;
+
+        .ui-icon { width: 14px; height: 14px; }
+    }
+
+    &--spinning &__icon .ui-icon { animation: state-chip-spin 1.6s linear infinite; }
+}
+
+@keyframes state-chip-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .state-chip--spinning .state-chip__icon .ui-icon { animation: none; }
 }

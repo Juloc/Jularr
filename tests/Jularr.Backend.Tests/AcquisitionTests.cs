@@ -16,13 +16,16 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Backend.Service.System.Provider.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
@@ -1504,6 +1507,41 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ProviderSync_Plex_LinksThroughOnePass_AndUnlinksOnlyAfterACompleteOne()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await using var scope = host.Services.CreateAsyncScope();
+            var sync = scope.ServiceProvider.GetRequiredService<SyncProviderV1>();
+            var plex = new ProviderSyncParametersV1(ProviderSyncType.Plex);
+
+            // Without a connected server there is nothing to do.
+            Assert.IsFalse((await sync.ExecuteAsync<UpdateResult>(plex, default)).Success);
+            using var connected = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/providers/plex", new SavePlexServerDataV1("http://plex.example.test:32400", FakeUsenet.PlexToken));
+            Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+
+            // Titles are matched by their provider ids and unknown ones become Works; the media servers wait for the progress sync switch.
+            Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(plex, default)).Success);
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'plex'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'Plex Only'"));
+            await Assert.ThrowsExactlyAsync<System.Security.SecurityException>(() => sync.ExecuteAsync<UpdateResult>(new ProviderSyncParametersV1(ProviderSyncType.Jellyfin), default));
+
+            // A pass that could not read every library unlinks nothing, however little Plex now lists.
+            usenet.PlexMovies = """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"11","title":"Example Movie","year":2020,"Guid":[{"id":"tmdb://603"}]}]}}""";
+            usenet.PlexShowsFail = true;
+            await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() => sync.ExecuteAsync<UpdateResult>(plex, default));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'plex'"));
+
+            // The complete pass unlinks what Plex no longer has; the Work stays.
+            usenet.PlexShowsFail = false;
+            Assert.IsTrue((await sync.ExecuteAsync<UpdateResult>(plex, default)).Success);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'plex'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'Plex Only'"));
+        }
+
+        [TestMethod]
         public async Task Razor_WantedSearchAndConnections_RenderRealResults()
         {
             using var storage = new TemporaryDirectory();
@@ -2457,6 +2495,7 @@ namespace Jularr.Backend.Tests
 
             public const string PlexToken = "plex-server-token";
             public List<string> PlexRequests { get; } = [];
+            public bool PlexShowsFail { get; set; }
             public string PlexMovies { get; set; } = """{"MediaContainer":{"totalSize":3,"Metadata":[{"ratingKey":"11","title":"Example Movie","year":2020,"Guid":[{"id":"tmdb://603"}]},{"ratingKey":"12","title":"Plex Only","year":2021,"Guid":[{"id":"imdb://tt0000012"}]},{"ratingKey":"13","title":"Home Video"}]}}""";
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -2470,6 +2509,7 @@ namespace Jularr.Backend.Tests
                         "/identity" => Json("""{"MediaContainer":{"machineIdentifier":"plexmachine1","version":"1.41.0"}}"""),
                         "/library/sections" => Json("""{"MediaContainer":{"Directory":[{"key":"1","type":"movie","title":"Movies"},{"key":"2","type":"show","title":"Shows"},{"key":"3","type":"artist","title":"Music"}]}}"""),
                         "/library/sections/1/all" => Json(PlexMovies),
+                        "/library/sections/2/all" when PlexShowsFail => new HttpResponseMessage(HttpStatusCode.InternalServerError),
                         "/library/sections/2/all" => Json("""{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"21","title":"Example Show","year":2020,"Guid":[{"id":"tvdb://81189"},{"id":"tmdb://1399"}]}]}}"""),
                         _ => Json("{}")
                     };

@@ -71,37 +71,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         protected override ModuleRequirement GetInstanceModules(WantedItemParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition");
         protected override ServicePermission GetPermission(WantedItemParametersV1 parameters, Type resultType) => new("wanted.update");
 
-        protected override async Task<IServiceOutput> OnExecute()
-        {
-            // Now instead of on schedule: the profile chooses as the automatic search does and the best release is taken at once.
-            var (target, indexers, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct),
-                await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)), CancellationToken);
-            if (target.Definition is null)
-            {
-                return new AutomaticSearchResultV1("profile_missing", null);
-            }
-
-            if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
-            {
-                throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
-            }
-
-            var scope = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSearchScopeAsync(target, Data.ParentUnitNumber, Data.UnitNumber, ct), CancellationToken);
-            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope, Data.Language);
-            if (result.IndexersUnavailable)
-            {
-                throw new ServiceUnavailableException("acquisition_unavailable");
-            }
-
-            if (result.Selection.Winner is not { } winner)
-            {
-                return new AutomaticSearchResultV1(result.OutcomeKey, null);
-            }
-
-            var offer = result.Offers[winner.Candidate.Id];
-            await _acquisition.GrabAsync(Context, target, offer, winner.Score?.QualityKey, clients, CancellationToken, Auth.AccountId);
-            return new AutomaticSearchResultV1("grabbed", TextLimit.Cut(offer.Title, 1000));
-        }
+        protected override async Task<IServiceOutput> OnExecute() =>
+            await _acquisition.SearchAutomaticallyAsync(Context, Parameters.WantedItemId, Data.ParentUnitNumber, Data.UnitNumber, Data.Language, Auth.AccountId, CancellationToken);
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/wanted/{wantedItemId:long}/grab")]

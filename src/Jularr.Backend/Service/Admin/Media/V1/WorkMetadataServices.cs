@@ -80,9 +80,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Only Works mapped to TMDB, Open Library, AniList, MusicBrainz or IGDB can be refreshed.
-            var (work, identity) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct),
-                await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, Parameters.WorkId, ct)), CancellationToken);
+            await RefreshAsync(Context, _metadata, _books, _aniList, _music, _games, Parameters.WorkId, CancellationToken);
+            return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct), CancellationToken);
+        }
+
+        // Only Works mapped to TMDB, Open Library, AniList, MusicBrainz or IGDB can be refreshed; the mass editor does the same for each chosen title.
+        internal static async Task RefreshAsync(LogicContext context, WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, long workId, CancellationToken ct)
+        {
+            var (work, identity) = await context.ExecuteBatchAsync(async (ctx, token) => (await WorkMetadataQueries.ReadWorkAsync(ctx, workId, token),
+                await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, workId, token)), ct);
             if (identity is null)
             {
                 throw new DataValidationException(nameof(WorkParametersV1.WorkId), "unknown_reference");
@@ -90,26 +96,25 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             if (identity.Namespace == BookMetadata.Namespace)
             {
-                await _books.ImportAsync(Context, work.MediaSubtypeId, identity.Value, CancellationToken);
+                await books.ImportAsync(context, work.MediaSubtypeId, identity.Value, ct);
             }
             else if (identity.Namespace == AniListMetadata.Namespace)
             {
-                await _aniList.ImportAsync(Context, identity.Value, CancellationToken);
+                await aniList.ImportAsync(context, identity.Value, ct);
             }
             else if (identity.Namespace == MusicMetadata.Namespace)
             {
-                await _music.ImportAsync(Context, identity.Value, CancellationToken);
+                await music.ImportAsync(context, identity.Value, ct);
             }
             else if (identity.Namespace == GameMetadata.Namespace)
             {
-                await _games.ImportAsync(Context, await _games.ConnectAsync(Context, CancellationToken), identity.Value, CancellationToken);
+                await games.ImportAsync(context, await games.ConnectAsync(context, ct), identity.Value, ct);
             }
             else
             {
-                var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                await _metadata.ImportAsync(Context, connection, work.MediaTypeId, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                var connection = await metadata.ConnectAsync(context, ct);
+                await metadata.ImportAsync(context, connection, work.MediaTypeId, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), ct);
             }
-            return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct), CancellationToken);
         }
     }
 

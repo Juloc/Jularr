@@ -30,7 +30,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."Id",
                     operation."OperationTypeId",
                     operation."OperationStatusTypeId",
-                    coalesce(release."Title", root."Name", '') AS "Title",
+                    coalesce(release."Title", root."Name", operation."WorkerJobKey", '') AS "Title",
                     work."Id" AS "WorkId",
                     work."CanonicalTitle" AS "WorkTitle",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
@@ -127,6 +127,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/retry")]
     public sealed class RetryActivityV1 : AdminService<ActivityOperationParametersV1, NoData>
     {
+        private readonly WorkSignals _signals;
+
+        internal RetryActivityV1(WorkSignals signals)
+        {
+            _signals = signals;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.None;
@@ -140,6 +147,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 return true;
             }, CancellationToken);
             return new UpdateResult(true);
+        }
+
+        // A retried scan or backup is queued again.
+        protected override void OnCommitted()
+        {
+            _signals.Scans.Notify();
+            _signals.Backups.Notify();
         }
     }
 

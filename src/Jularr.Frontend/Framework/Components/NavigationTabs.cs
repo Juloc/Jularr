@@ -2,7 +2,8 @@ using System.Text.Encodings.Web;
 
 namespace Jularr.Frontend.Framework
 {
-    public sealed record NavigationTab(string LabelKey, string Href, bool Selected);
+    // A count shows after the label as a quiet number (a filter row of a list).
+    public sealed record NavigationTab(string LabelKey, string Href, bool Selected, int? Count = null);
 
     // A reusable component, not a page or its navigation policy.
     public sealed class NavigationTabs(IReadOnlyList<NavigationTab> tabs, string ariaLabelKey, string? modifier = null) : IUiComponent
@@ -13,7 +14,7 @@ namespace Jularr.Frontend.Framework
 
             var links = tabs.Select(tab =>
             {
-                var link = new A(new Text(tab.LabelKey)).Attribute("href", tab.Href)
+                var link = new A(tab.Count is { } count ? [new Text(tab.LabelKey), new Span(new ValueText(count.ToString(System.Globalization.CultureInfo.CurrentCulture))).Class("navigation-tabs__count")] : [new Text(tab.LabelKey)]).Attribute("href", tab.Href)
                     .Class(tab.Selected ? "navigation-tabs__link navigation-tabs__link--active"
                                         : "navigation-tabs__link");
                 if (tab.Selected) link.Attribute("aria-current", "page");

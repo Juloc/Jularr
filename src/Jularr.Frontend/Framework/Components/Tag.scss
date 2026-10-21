@@ -14,5 +14,6 @@
     overflow-wrap: anywhere;
 
     &--accent { border-color: var(--accent-edge); }
+    &--warning { border-color: var(--warning-soft); background: var(--warning-soft); color: var(--warning); }
     .ui-icon { width: 14px; height: 14px; }
 }

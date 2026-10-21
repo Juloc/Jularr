@@ -22,6 +22,7 @@ using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
+using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.System.Operation.V1
 {
@@ -41,6 +42,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
     public sealed class ScheduleLibraryScansV1 : SystemService<LibraryScanScheduleParametersV1, NoData>
     {
+        private readonly WorkSignals _signals;
+        private bool _isQueued;
+
+        internal ScheduleLibraryScansV1(WorkSignals signals)
+        {
+            _signals = signals;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(LibraryScanScheduleParametersV1 parameters) => ModuleRequirement.All("Library");
@@ -49,7 +58,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Changes made outside Jularr appear after the next scan.
-            return new UpdateResult(await Context.QueueDueLibraryScansAsync(CancellationToken) > 0);
+            _isQueued = await Context.QueueDueLibraryScansAsync(CancellationToken) > 0;
+            return new UpdateResult(_isQueued);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_isQueued) _signals.Scans.Notify();
         }
     }
 
@@ -69,16 +84,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
         }
     }
 
-    public sealed class ClaimOperationV1 : SystemService<OperationQueueParametersV1, NoData>
+    public sealed class ClaimOperationV1 : SystemService<ClaimOperationParametersV1, NoData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ClaimOperationResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(OperationQueueParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(OperationQueueParametersV1 parameters, Type resultType) => new("system.operations");
+        protected override ModuleRequirement GetInstanceModules(ClaimOperationParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ClaimOperationParametersV1 parameters, Type resultType) => new("system.operations");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var claimed = await Context.ClaimOperationAsync(CancellationToken);
+            // Only scans and backups are queued work.
+            if (Parameters.OperationTypeId is not (OperationKind.LibraryScan or OperationKind.Backup))
+            {
+                throw new DataValidationException(nameof(ClaimOperationParametersV1.OperationTypeId), "invalid_value");
+            }
+
+            var claimed = await Context.ClaimOperationAsync(new OperationClaimData(Parameters.OperationTypeId), CancellationToken);
             return new ClaimOperationResultV1(claimed?.Id, claimed?.OperationTypeId);
         }
     }

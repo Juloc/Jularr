@@ -23,10 +23,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     public sealed class UploadVolumeV1 : AdminService<WorkParametersV1, UploadVolumeDataV1>
     {
         private readonly StorageAccess _storage;
+        private readonly WorkSignals _signals;
 
-        internal UploadVolumeV1(StorageAccess storage)
+        internal UploadVolumeV1(StorageAccess storage, WorkSignals signals)
         {
             _storage = storage;
+            _signals = signals;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -92,6 +94,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }, CancellationToken);
             return new UpdateResult(true);
         }
+
+        protected override void OnCommitted() => _signals.Scans.Notify();
 
         // The Work and the first writable library of its type and effective subtype.
         private Task<UploadTargetData> ReadTargetAsync(LogicContext ctx, CancellationToken ct)

@@ -183,3 +183,5 @@ groups and transfers are outside this base-table slice.
 AccountSchemaTests verifies field/column coverage, nullability and PostgreSQL
 types, enum seeds, typed binding and representative auth constraints. Profile
 regression tests use this same baseline, never a second reduced schema.
+
+`Instance.sql` also holds `WorkerJobs`: the Owner's choices (paused, waits while Jularr is used) and the last pass of each background job; `Operations` of type Job (4, `WorkerJobKey`) are the notices of failed jobs, one open per job.
