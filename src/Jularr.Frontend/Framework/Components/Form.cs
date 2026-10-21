@@ -400,6 +400,13 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // A dialog whose fields lie inside a form around it: they are local, its buttons submit that form.
+        public Form<TData> Action(HtmlElement button)
+        {
+            _actions.Add(button.Attribute("type", "submit"));
+            return this;
+        }
+
         public Form<TData> Submit(Button button)
         {
             if (_local) throw new InvalidOperationException("Local fields cannot declare a submit action.");
