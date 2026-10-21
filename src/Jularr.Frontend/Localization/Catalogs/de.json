@@ -1548,6 +1548,154 @@
    "Cancel",
    "Abbrechen"
   ],
+  "playback.introSkipMode": [
+   "Intro and recap",
+   "Vorspann und Rückblick"
+  ],
+  "playback.outroSkipMode": [
+   "Credits and preview",
+   "Abspann und Vorschau"
+  ],
+  "playback.skipMode.Off": [
+   "Off",
+   "Aus"
+  ],
+  "playback.skipMode.Button": [
+   "Show button",
+   "Schaltfläche zeigen"
+  ],
+  "playback.skipMode.Automatic": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "player.skip.Intro": [
+   "Skip intro",
+   "Intro überspringen"
+  ],
+  "player.skip.Credits": [
+   "Skip credits",
+   "Abspann überspringen"
+  ],
+  "player.skip.Recap": [
+   "Skip recap",
+   "Rückblick überspringen"
+  ],
+  "player.skip.Preview": [
+   "Skip preview",
+   "Vorschau überspringen"
+  ],
+  "player.skipped.Intro": [
+   "Intro skipped",
+   "Intro übersprungen"
+  ],
+  "player.skipped.Credits": [
+   "Credits skipped",
+   "Abspann übersprungen"
+  ],
+  "player.skipped.Recap": [
+   "Recap skipped",
+   "Rückblick übersprungen"
+  ],
+  "player.skipped.Preview": [
+   "Preview skipped",
+   "Vorschau übersprungen"
+  ],
+  "player.skipped.next": [
+   "Next episode starts",
+   "Nächste Folge startet"
+  ],
+  "player.skipped.undo": [
+   "Undo",
+   "Rückgängig"
+  ],
+  "player.tab.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "player.chapter": [
+   "Chapter {0}",
+   "Kapitel {0}"
+  ],
+  "work.tab.markers": [
+   "Markers",
+   "Marker"
+  ],
+  "marker.title": [
+   "Skip markers",
+   "Überspring-Marker"
+  ],
+  "marker.empty": [
+   "No episode has a file yet.",
+   "Noch keine Folge hat eine Datei."
+  ],
+  "marker.seasons": [
+   "Seasons",
+   "Staffeln"
+  ],
+  "marker.copied": [
+   "Copied to {0} files.",
+   "Auf {0} Dateien kopiert."
+  ],
+  "marker.episode": [
+   "Episode",
+   "Folge"
+  ],
+  "marker.kind.Intro": [
+   "Intro",
+   "Intro"
+  ],
+  "marker.kind.Credits": [
+   "Credits",
+   "Abspann"
+  ],
+  "marker.kind.Recap": [
+   "Recap",
+   "Rückblick"
+  ],
+  "marker.kind.Preview": [
+   "Preview",
+   "Vorschau"
+  ],
+  "marker.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "marker.source.Manual": [
+   "By hand",
+   "Von Hand"
+  ],
+  "marker.source.Sidecar": [
+   "Sidecar file",
+   "Begleitdatei"
+  ],
+  "marker.source.Chapter": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "marker.source.Detected": [
+   "Detected",
+   "Erkannt"
+  ],
+  "marker.start": [
+   "Start (s)",
+   "Start (s)"
+  ],
+  "marker.end": [
+   "End (s)",
+   "Ende (s)"
+  ],
+  "marker.offset": [
+   "Offset (s)",
+   "Versatz (s)"
+  ],
+  "marker.copy": [
+   "Copy to season",
+   "In Staffel kopieren"
+  ],
+  "marker.delete": [
+   "Delete",
+   "Löschen"
+  ],
   "progress.watched": [
    "Watched",
    "Gesehen"

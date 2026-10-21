@@ -16,6 +16,7 @@ using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Storage;
@@ -346,6 +347,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     // Unreadable files are recorded without streams.
                     var probedAt = DateTime.UtcNow;
                     var tracks = "[]";
+                    var chapters = "[]";
+                    var sidecarMarkers = "[]";
                     string? container = null;
                     long? durationMs = null;
                     long? bitRate = null;
@@ -359,6 +362,10 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         tracks = JsonSerializer.Serialize(probe.Streams.Select(stream => new ProbedTrack(stream.Index,
                             stream.CodecType switch { "video" => MediaTrackType.Video, "audio" => MediaTrackType.Audio, _ => MediaTrackType.Subtitle },
                             TextLimit.Cut(stream.Codec, 64), TextLimit.Cut(stream.Language, 16), TextLimit.Cut(stream.Title, 256), stream.Width, stream.Height, stream.Channels, stream.IsDefault, stream.IsForced, stream.BitDepth, TextLimit.Cut(stream.DynamicRange, 16), stream.Is3D)));
+                        chapters = JsonSerializer.Serialize(probe.Chapters.Select((chapter, index) => new MediaChapterRow(index, chapter.StartMs, chapter.EndMs, TextLimit.Cut(chapter.Title, 256))));
+
+                        // A sidecar file beside the video names markers too.
+                        sidecarMarkers = await ReadSidecarMarkersAsync(storage, directory, file.RelativePath, durationMs);
                     }
                     catch (Exception exception) when (exception is InvalidDataException or Integrations.Data.Nas.NasMountException)
                     {
@@ -366,7 +373,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
-                        await ctx.SaveStoredFileProbeAsync(new StoredFileProbeData(file.Id, file.SizeBytes, file.ModifiedAt, probedAt, container, durationMs, bitRate, tracks), ct);
+                        await ctx.SaveStoredFileProbeAsync(new StoredFileProbeData(file.Id, file.SizeBytes, file.ModifiedAt, probedAt, container, durationMs, bitRate, tracks, chapters, sidecarMarkers), ct);
                         return true;
                     }, CancellationToken);
                     afterId = file.Id;
@@ -767,6 +774,25 @@ namespace Jularr.Backend.Service.System.Operation.V1
             return invalid
                 ? (new Dictionary<string, string>(), true)
                 : text is null ? (new Dictionary<string, string>(), false) : MediaPathParser.ParseNfo(text, mediaType);
+        }
+
+        // The markers of the video's .edl file; one that is missing, too large or unreadable names none.
+        private async Task<string> ReadSidecarMarkersAsync(StorageFiles storage, string directory, string relativePath, long? durationMs)
+        {
+            if (MediaMarkers.SidecarPath(relativePath) is not { } sidecar)
+            {
+                return "[]";
+            }
+
+            try
+            {
+                var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, sidecar), MediaMarkers.MaximumSidecarBytes);
+                return invalid || text is null ? "[]" : JsonSerializer.Serialize(MediaMarkers.ParseEdl(text, durationMs));
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or Integrations.Data.Nas.NasMountException)
+            {
+                return "[]";
+            }
         }
 
         private async Task<(string? Text, bool Invalid)> ReadHintTextAsync(StorageFiles storage, string path, int maxBytes)

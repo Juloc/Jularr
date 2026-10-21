@@ -9,6 +9,8 @@ namespace Jularr.Integrations.Logic.Media
 {
     internal sealed class MediaProbeClient
     {
+        private const int MaximumChapters = 500;
+
         public string? ExecutablePath { get; set; }
         public bool IsAvailable => !string.IsNullOrWhiteSpace(ExecutablePath);
 
@@ -27,7 +29,7 @@ namespace Jularr.Integrations.Logic.Media
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            foreach (var argument in new[] { "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "--", path })
+            foreach (var argument in new[] { "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters", "--", path })
             {
                 start.ArgumentList.Add(argument);
             }
@@ -115,8 +117,39 @@ namespace Jularr.Integrations.Logic.Media
                 }
             }
 
-            return new MediaProbe(container, durationMs, bitRate, streams);
+            return new MediaProbe(container, durationMs, bitRate, streams, Chapters(root));
         }
+
+        // The chapters in their order; a file with more than MaximumChapters is cut there.
+        private static List<MediaProbeChapter> Chapters(JsonElement root)
+        {
+            var chapters = new List<MediaProbeChapter>();
+            if (!root.TryGetProperty("chapters", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return chapters;
+            }
+
+            foreach (var chapter in items.EnumerateArray())
+            {
+                if (chapters.Count == MaximumChapters)
+                {
+                    break;
+                }
+
+                if (Seconds(chapter, "start_time") is not { } start || Seconds(chapter, "end_time") is not { } end || end < start)
+                {
+                    continue;
+                }
+
+                var tags = chapter.TryGetProperty("tags", out var tagValues) ? tagValues : default;
+                chapters.Add(new MediaProbeChapter(start, end, tags.ValueKind == JsonValueKind.Object ? Text(tags, "title") : null));
+            }
+
+            return chapters;
+        }
+
+        private static long? Seconds(JsonElement element, string name) =>
+            Text(element, name) is { } value && decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds is >= 0 and <= 86_400m ? (long)Math.Round(seconds * 1000m) : null;
 
         // Bits per colour: the raw sample size, else the pixel format's own (yuv420p10le is ten).
         private static int? BitDepth(JsonElement stream)
