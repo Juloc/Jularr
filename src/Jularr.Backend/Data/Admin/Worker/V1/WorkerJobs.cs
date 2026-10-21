@@ -45,8 +45,9 @@ namespace Jularr.Backend.Data.Admin.Worker.V1
     public sealed class WorkerJobV1 : BaseResponse
     {
         public WorkerJobV1(string key, WorkerGroupType workerGroupTypeId, WorkerJobStateType workerJobStateTypeId, int? intervalSeconds, bool isPaused, bool pausesWhileUsed, bool canPauseWhileUsed,
-            bool canRunNow, DateTime? lastStartedAt, DateTime? lastFinishedAt, DateTime? nextRunAt, string? lastErrorKey)
+            bool canRunNow, DateTime? lastStartedAt, DateTime? lastFinishedAt, DateTime? nextRunAt, string? lastErrorKey, string? parentKey)
         {
+            ParentKey = parentKey;
             Key = key;
             WorkerGroupTypeId = workerGroupTypeId;
             WorkerJobStateTypeId = workerJobStateTypeId;
@@ -70,7 +71,11 @@ namespace Jularr.Backend.Data.Admin.Worker.V1
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.WorkerJobStateTypeId))]
         public WorkerJobStateType WorkerJobStateTypeId { get; }
 
-        // Between two passes; none for a job that runs back to back while there is work.
+        // The job this one is a part of, such as the provider sync of one server; it shares that job's schedule.
+        [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.ParentKey))]
+        public string? ParentKey { get; }
+
+        // Between two passes, 0 when switched off; none for a job that runs when work arrives.
         [DataField(typeof(WorkerJobFields), nameof(WorkerJobFields.IntervalSeconds))]
         public int? IntervalSeconds { get; }
 

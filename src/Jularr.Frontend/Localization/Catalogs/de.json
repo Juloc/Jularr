@@ -828,6 +828,18 @@
    "Notes",
    "Notizen"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Lesezeichen"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Lesezeichen"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Lesezeichen löschen"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "In neuem Tab öffnen"
@@ -995,6 +1007,22 @@
   "admin.instance.libraryScanIntervalHours": [
    "Library scan interval (hours)",
    "Intervall der Bibliotheksscans (Stunden)"
+  ],
+  "admin.instance.backupIntervalHours": [
+   "Automatic backup interval (hours)",
+   "Intervall der automatischen Backups (Stunden)"
+  ],
+  "admin.instance.backupKeep": [
+   "Backups to keep",
+   "Backups behalten"
+  ],
+  "admin.instance.providerSyncIntervalMinutes": [
+   "Plex, Jellyfin and Emby sync interval (minutes)",
+   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
+  ],
+  "admin.instance.wantedSearchIntervalMinutes": [
+   "Wanted search period (minutes)",
+   "Suchintervall für Gesuchtes (Minuten)"
   ],
   "admin.instance.historyRetentionDays": [
    "Keep finished activity for days",
@@ -1173,8 +1201,8 @@
    "Importierte Medien und Dateiverfügbarkeit"
   ],
   "admin.activity.title": [
-   "Activity",
-   "Aktivität"
+   "Queue",
+   "Warteschlange"
   ],
   "admin.requests.title": [
    "Requests",
@@ -2235,6 +2263,38 @@
   "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
    "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
    "Stunden zwischen automatischen Bibliotheksscans; 0 schaltet sie aus. Schlafende NAS werden nicht geweckt."
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.info": [
+   "Hours between automatic backups; 0 switches them off.",
+   "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.info": [
+   "The newest backups stay, older ones are removed.",
+   "Die neuesten Backups bleiben, ältere werden entfernt."
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.info": [
+   "Minutes between two reads of the connected Plex, Jellyfin and Emby servers.",
+   "Minuten zwischen zwei Abgleichen der verbundenen Plex-, Jellyfin- und Emby-Server."
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.info": [
+   "Minutes between two searches of the wanted titles that are due.",
+   "Minuten zwischen zwei Suchen nach fälligen gesuchten Titeln."
   ],
   "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
    "30",
@@ -6440,13 +6500,9 @@
    "Queued at",
    "Eingereiht um"
   ],
-  "activity.tab.Queue": [
-   "Queue",
-   "Warteschlange"
-  ],
   "activity.empty.Queue": [
-   "Nothing is running or waiting.",
-   "Nichts läuft oder wartet."
+   "Nothing here.",
+   "Hier ist nichts."
   ],
   "activity.waiting": [
    "Waiting",
@@ -6495,10 +6551,6 @@
   "acquisition.outcome.download_removed": [
    "Removed from the queue",
    "Aus der Warteschlange entfernt"
-  ],
-  "activity.tab.History": [
-   "History",
-   "Verlauf"
   ],
   "activity.item": [
    "Item",
@@ -6787,6 +6839,62 @@
   "player.speed": [
    "Playback speed",
    "Wiedergabegeschwindigkeit"
+  ],
+  "player.speedValue": [
+   "Speed value",
+   "Geschwindigkeit"
+  ],
+  "player.picture": [
+   "Picture",
+   "Bild"
+  ],
+  "player.fit": [
+   "Picture fit",
+   "Bildanpassung"
+  ],
+  "player.fit.contain": [
+   "Fit",
+   "Einpassen"
+  ],
+  "player.fit.cover": [
+   "Fill",
+   "Füllen"
+  ],
+  "player.fit.original": [
+   "Original size",
+   "Originalgröße"
+  ],
+  "player.settings": [
+   "Player settings",
+   "Player-Einstellungen"
+  ],
+  "player.currentPlayback": [
+   "Current playback",
+   "Aktuelle Wiedergabe"
+  ],
+  "player.theater": [
+   "Wide view",
+   "Breite Ansicht"
+  ],
+  "player.tab.basic": [
+   "Basic",
+   "Basis"
+  ],
+  "player.tab.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "player.tab.subtitles": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "player.tab.playback": [
+   "Playback",
+   "Wiedergabe"
+  ],
+  "player.tab.info": [
+   "Info",
+   "Info"
   ],
   "player.audio": [
    "Audio",
@@ -7159,6 +7267,106 @@
   "activity.importManually": [
    "Import by hand",
    "Von Hand importieren"
+  ],
+  "activity.filter.All": [
+   "All",
+   "Alle"
+  ],
+  "activity.filter.Active": [
+   "Active",
+   "Aktiv"
+  ],
+  "activity.filter.Waiting": [
+   "Waiting",
+   "Wartend"
+  ],
+  "activity.filter.Import": [
+   "Import",
+   "Import"
+  ],
+  "activity.filter.Errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "activity.filter.History": [
+   "History",
+   "Verlauf"
+  ],
+  "activity.kpi.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "activity.kpi.speed": [
+   "Speed",
+   "Tempo"
+  ],
+  "activity.kpi.import": [
+   "Import waiting",
+   "Import wartet"
+  ],
+  "activity.kpi.errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "activity.source": [
+   "Source",
+   "Quelle"
+  ],
+  "activity.transfer": [
+   "Speed and size",
+   "Tempo und Größe"
+  ],
+  "activity.release": [
+   "Release",
+   "Release"
+  ],
+  "activity.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "wanted.select": [
+   "Select",
+   "Auswählen"
+  ],
+  "wanted.selectAll": [
+   "Select all",
+   "Alle auswählen"
+  ],
+  "wanted.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "wanted.priority": [
+   "Priority",
+   "Priorität"
+  ],
+  "wanted.priority.Normal": [
+   "Normal",
+   "Normal"
+  ],
+  "wanted.priority.High": [
+   "High",
+   "Hoch"
+  ],
+  "wanted.priority.done": [
+   "The priority was set.",
+   "Die Priorität wurde gesetzt."
+  ],
+  "wanted.search.all": [
+   "Search all due",
+   "Alle fälligen suchen"
+  ],
+  "wanted.search.selected": [
+   "Search selected",
+   "Auswahl suchen"
+  ],
+  "wanted.search.started": [
+   "The search has started.",
+   "Die Suche wurde gestartet."
+  ],
+  "wanted.edit": [
+   "Edit target",
+   "Ziel bearbeiten"
   ],
   "work.tabs": [
    "Sections of this title",
@@ -8016,6 +8224,10 @@
    "A profile keeps at most 1000 highlights per book.",
    "Ein Profil behält höchstens 1000 Markierungen pro Buch."
   ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Ein Profil behält höchstens 200 Lesezeichen pro Buch."
+  ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",
    "Diese Einheiten gehören bereits zu einem anderen Abschnitt."
@@ -8552,6 +8764,450 @@
    "The source does not answer:",
    "Die Quelle antwortet nicht:"
   ],
+  "admin.import.title": [
+   "Import",
+   "Import"
+  ],
+  "import.file": [
+   "JSON file",
+   "JSON-Datei"
+  ],
+  "import.json": [
+   "Or paste the list",
+   "Oder Liste einfügen"
+  ],
+  "import.action": [
+   "Add as",
+   "Hinzufügen als"
+  ],
+  "import.action.AddOnly": [
+   "Add only",
+   "Nur hinzufügen"
+  ],
+  "import.action.Monitor": [
+   "Monitor",
+   "Überwachen"
+  ],
+  "import.action.MonitorAndSearch": [
+   "Monitor + search",
+   "Überwachen + suchen"
+  ],
+  "import.preview": [
+   "Preview",
+   "Vorschau"
+  ],
+  "import.refresh": [
+   "Update preview",
+   "Vorschau aktualisieren"
+  ],
+  "import.searchMore": [
+   "Search more",
+   "Weitersuchen"
+  ],
+  "import.apply": [
+   "Import selected",
+   "Auswahl importieren"
+  ],
+  "import.example": [
+   "Example file",
+   "Beispieldatei"
+  ],
+  "import.restart": [
+   "Start over",
+   "Neu beginnen"
+  ],
+  "import.again": [
+   "New import",
+   "Neuer Import"
+  ],
+  "import.continue": [
+   "Continue with the rest",
+   "Mit dem Rest fortfahren"
+  ],
+  "import.defaults": [
+   "Defaults by type",
+   "Standard je Art"
+  ],
+  "import.profile": [
+   "Quality profile",
+   "Qualitätsprofil"
+  ],
+  "import.library": [
+   "Library",
+   "Bibliothek"
+  ],
+  "import.defaultProfile": [
+   "Default profile",
+   "Standardprofil"
+  ],
+  "import.defaultLibrary": [
+   "Default library",
+   "Standardbibliothek"
+  ],
+  "import.defaultAction": [
+   "Default: {0}",
+   "Standard: {0}"
+  ],
+  "import.col.include": [
+   "Import",
+   "Import"
+  ],
+  "import.col.match": [
+   "Match",
+   "Treffer"
+  ],
+  "import.col.options": [
+   "Action",
+   "Aktion"
+  ],
+  "import.row.include": [
+   "Import this title",
+   "Diesen Titel importieren"
+  ],
+  "import.search": [
+   "Search by title",
+   "Nach Titel suchen"
+  ],
+  "import.search.go": [
+   "Search",
+   "Suchen"
+  ],
+  "import.choose": [
+   "Choose a match",
+   "Treffer wählen"
+  ],
+  "import.unsearched": [
+   "not searched yet",
+   "noch nicht gesucht"
+  ],
+  "import.searches": [
+   "Searching",
+   "Suche läuft"
+  ],
+  "import.duplicateOf": [
+   "Same as row {0}",
+   "Wie Zeile {0}"
+  ],
+  "import.intent.Tracked": [
+   "Already monitored",
+   "Bereits überwacht"
+  ],
+  "import.status.New": [
+   "New",
+   "Neu"
+  ],
+  "import.status.InLibrary": [
+   "In library",
+   "In Bibliothek"
+  ],
+  "import.status.Duplicate": [
+   "Duplicate",
+   "Doppelt"
+  ],
+  "import.status.Open": [
+   "Open",
+   "Offen"
+  ],
+  "import.status.Invalid": [
+   "Invalid",
+   "Ungültig"
+  ],
+  "import.problem.not_object": [
+   "Not an object",
+   "Kein Objekt"
+  ],
+  "import.problem.unknown_key": [
+   "Unknown key",
+   "Unbekannter Schlüssel"
+  ],
+  "import.problem.unknown_id_key": [
+   "Unknown id name",
+   "Unbekannter ID-Name"
+  ],
+  "import.problem.duplicate_key": [
+   "Key given twice",
+   "Schlüssel doppelt"
+  ],
+  "import.problem.unknown_type": [
+   "Unknown type",
+   "Unbekannte Art"
+  ],
+  "import.problem.missing_type": [
+   "Type missing",
+   "Art fehlt"
+  ],
+  "import.problem.invalid_ids": [
+   "ids is not an object",
+   "ids ist kein Objekt"
+  ],
+  "import.problem.invalid_id": [
+   "Invalid id",
+   "Ungültige ID"
+  ],
+  "import.problem.id_not_for_type": [
+   "Id does not fit the type",
+   "ID passt nicht zur Art"
+  ],
+  "import.problem.invalid_year": [
+   "Year not in 1800 to 2200",
+   "Jahr nicht zwischen 1800 und 2200"
+  ],
+  "import.problem.invalid_text": [
+   "Invalid text",
+   "Ungültiger Text"
+  ],
+  "import.problem.too_long": [
+   "Text too long",
+   "Text zu lang"
+  ],
+  "import.problem.no_identity": [
+   "Neither id nor title",
+   "Weder ID noch Titel"
+  ],
+  "import.problem.ids_conflict": [
+   "Ids name different titles",
+   "IDs nennen verschiedene Titel"
+  ],
+  "import.problem.type_mismatch": [
+   "The library has another type",
+   "Die Bibliothek führt eine andere Art"
+  ],
+  "import.problem.excluded": [
+   "Deleted with an exclusion",
+   "Mit Ausschluss gelöscht"
+  ],
+  "import.problem.no_match": [
+   "No entry for these ids",
+   "Kein Eintrag für diese IDs"
+  ],
+  "import.outcome.Added": [
+   "Added",
+   "Hinzugefügt"
+  ],
+  "import.outcome.AddedAndMonitored": [
+   "Added, monitored",
+   "Hinzugefügt, überwacht"
+  ],
+  "import.outcome.Monitored": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "import.outcome.Unchanged": [
+   "Unchanged",
+   "Unverändert"
+  ],
+  "import.outcome.Skipped": [
+   "Skipped",
+   "Übersprungen"
+  ],
+  "import.outcome.NotFound": [
+   "Not found",
+   "Nicht gefunden"
+  ],
+  "import.outcome.Unavailable": [
+   "Provider unavailable",
+   "Anbieter nicht erreichbar"
+  ],
+  "import.outcome.Excluded": [
+   "Excluded",
+   "Ausgeschlossen"
+  ],
+  "import.outcome.Deferred": [
+   "Waiting for the next run",
+   "Wartet auf den nächsten Lauf"
+  ],
+  "import.outcome.Failed": [
+   "Failed",
+   "Fehlgeschlagen"
+  ],
+  "admin.works.source.isbn": [
+   "ISBN",
+   "ISBN"
+  ],
+  "admin.works.source.imdb": [
+   "IMDb",
+   "IMDb"
+  ],
+  "admin.works.source.tvdb": [
+   "TVDB",
+   "TVDB"
+  ],
+  "errors.validation.import_too_large": [
+   "The list is larger than 1 MiB.",
+   "Die Liste ist größer als 1 MiB."
+  ],
+  "errors.validation.import_invalid_json": [
+   "The list is not valid JSON.",
+   "Die Liste ist kein gültiges JSON."
+  ],
+  "errors.validation.import_invalid_structure": [
+   "The list needs an object with the keys version and items.",
+   "Die Liste braucht ein Objekt mit den Schlüsseln version und items."
+  ],
+  "errors.validation.import_unknown_key": [
+   "The list may only have the keys version and items, each once.",
+   "Die Liste darf nur die Schlüssel version und items haben, je einmal."
+  ],
+  "errors.validation.import_unsupported_version": [
+   "The list needs \"version\": 1.",
+   "Die Liste braucht \"version\": 1."
+  ],
+  "errors.validation.import_empty": [
+   "The list has no items.",
+   "Die Liste hat keine Einträge."
+  ],
+  "errors.validation.import_too_many_items": [
+   "The list has more than 2000 items.",
+   "Die Liste hat mehr als 2000 Einträge."
+  ],
+  "playback.introSkipMode": [
+   "Intro and recap",
+   "Vorspann und Rückblick"
+  ],
+  "playback.outroSkipMode": [
+   "Credits and preview",
+   "Abspann und Vorschau"
+  ],
+  "playback.skipMode.Off": [
+   "Off",
+   "Aus"
+  ],
+  "playback.skipMode.Button": [
+   "Show button",
+   "Schaltfläche zeigen"
+  ],
+  "playback.skipMode.Automatic": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "player.skip.Intro": [
+   "Skip intro",
+   "Intro überspringen"
+  ],
+  "player.skip.Credits": [
+   "Skip credits",
+   "Abspann überspringen"
+  ],
+  "player.skip.Recap": [
+   "Skip recap",
+   "Rückblick überspringen"
+  ],
+  "player.skip.Preview": [
+   "Skip preview",
+   "Vorschau überspringen"
+  ],
+  "player.skipped.Intro": [
+   "Intro skipped",
+   "Intro übersprungen"
+  ],
+  "player.skipped.Credits": [
+   "Credits skipped",
+   "Abspann übersprungen"
+  ],
+  "player.skipped.Recap": [
+   "Recap skipped",
+   "Rückblick übersprungen"
+  ],
+  "player.skipped.Preview": [
+   "Preview skipped",
+   "Vorschau übersprungen"
+  ],
+  "player.skipped.next": [
+   "Next episode starts",
+   "Nächste Folge startet"
+  ],
+  "player.skipped.undo": [
+   "Undo",
+   "Rückgängig"
+  ],
+  "player.tab.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "player.chapter": [
+   "Chapter {0}",
+   "Kapitel {0}"
+  ],
+  "work.tab.markers": [
+   "Markers",
+   "Marker"
+  ],
+  "marker.title": [
+   "Skip markers",
+   "Überspring-Marker"
+  ],
+  "marker.empty": [
+   "No episode has a file yet.",
+   "Noch keine Folge hat eine Datei."
+  ],
+  "marker.seasons": [
+   "Seasons",
+   "Staffeln"
+  ],
+  "marker.copied": [
+   "Copied to {0} files.",
+   "Auf {0} Dateien kopiert."
+  ],
+  "marker.episode": [
+   "Episode",
+   "Folge"
+  ],
+  "marker.kind.Intro": [
+   "Intro",
+   "Intro"
+  ],
+  "marker.kind.Credits": [
+   "Credits",
+   "Abspann"
+  ],
+  "marker.kind.Recap": [
+   "Recap",
+   "Rückblick"
+  ],
+  "marker.kind.Preview": [
+   "Preview",
+   "Vorschau"
+  ],
+  "marker.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "marker.source.Manual": [
+   "By hand",
+   "Von Hand"
+  ],
+  "marker.source.Sidecar": [
+   "Sidecar file",
+   "Begleitdatei"
+  ],
+  "marker.source.Chapter": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "marker.source.Detected": [
+   "Detected",
+   "Erkannt"
+  ],
+  "marker.start": [
+   "Start (s)",
+   "Start (s)"
+  ],
+  "marker.end": [
+   "End (s)",
+   "Ende (s)"
+  ],
+  "marker.offset": [
+   "Offset (s)",
+   "Versatz (s)"
+  ],
+  "marker.copy": [
+   "Copy to season",
+   "In Staffel kopieren"
+  ],
+  "marker.delete": [
+   "Delete",
+   "Löschen"
+  ],
   "admin.jobs.title": [
    "Jobs",
    "Jobs"
@@ -8616,13 +9272,25 @@
    "Sampler",
    "Messung"
   ],
+  "jobs.worker.Download": [
+   "Downloads",
+   "Downloads"
+  ],
+  "jobs.worker.Provider": [
+   "Providers",
+   "Anbieter"
+  ],
   "jobs.job": [
    "Job",
    "Job"
   ],
   "jobs.job.operations": [
-   "Scans and backups",
-   "Scans und Backups"
+   "Library scans",
+   "Bibliotheksscans"
+  ],
+  "jobs.job.backupQueue": [
+   "Backups",
+   "Backups"
   ],
   "jobs.job.downloads": [
    "Download tracking",
@@ -8632,9 +9300,21 @@
    "Wanted search",
    "Suche nach Gesuchtem"
   ],
-  "jobs.job.plexSync": [
+  "jobs.job.providerSync": [
+   "Provider sync",
+   "Anbieter-Abgleich"
+  ],
+  "jobs.job.providerSyncPlex": [
    "Plex sync",
    "Plex-Abgleich"
+  ],
+  "jobs.job.providerSyncJellyfin": [
+   "Jellyfin sync",
+   "Jellyfin-Abgleich"
+  ],
+  "jobs.job.providerSyncEmby": [
+   "Emby sync",
+   "Emby-Abgleich"
   ],
   "jobs.job.usenet": [
    "Usenet downloads",
@@ -8643,10 +9323,6 @@
   "jobs.job.aniListMatching": [
    "AniList matching",
    "AniList-Zuordnung"
-  ],
-  "jobs.job.mediaServerSync": [
-   "Jellyfin and Emby sync",
-   "Jellyfin- und Emby-Abgleich"
   ],
   "jobs.job.storage": [
    "Storage check",
@@ -8713,8 +9389,12 @@
    "Ausstehend"
   ],
   "jobs.continuous": [
-   "Continuous",
-   "Dauerhaft"
+   "On demand",
+   "Bei Bedarf"
+  ],
+  "jobs.off": [
+   "Off",
+   "Aus"
   ],
   "jobs.last": [
    "Last run",
@@ -8771,6 +9451,326 @@
   "jobs.job.covers": [
    "Provider covers",
    "Titelbilder der Anbieter"
+  ],
+  "errors.playback_evicted": [
+   "Playback ended because the server needed the capacity. Try again at a lower quality.",
+   "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
+  ],
+  "errors.benchmark_unavailable": [
+   "The benchmark needs FFmpeg, which this server does not have.",
+   "Der Benchmark braucht FFmpeg, das dieser Server nicht hat."
+  ],
+  "errors.benchmark_failed": [
+   "No encoder of this server ran the benchmark clips.",
+   "Kein Encoder dieses Servers konnte die Benchmark-Clips verarbeiten."
+  ],
+  "admin.transcoding.title": [
+   "Transcoding",
+   "Transcoding"
+  ],
+  "admin.transcoding.hardware": [
+   "Hardware",
+   "Hardware"
+  ],
+  "admin.transcoding.benchmark": [
+   "Benchmark",
+   "Benchmark"
+  ],
+  "admin.transcoding.settings": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "admin.transcoding.encoder": [
+   "Encoder",
+   "Encoder"
+  ],
+  "admin.transcoding.device": [
+   "Device",
+   "Gerät"
+  ],
+  "admin.transcoding.available": [
+   "Available",
+   "Verfügbar"
+  ],
+  "admin.transcoding.speed1080": [
+   "1080p speed",
+   "Tempo 1080p"
+  ],
+  "admin.transcoding.speed4k": [
+   "4K to 1080p speed",
+   "Tempo 4K auf 1080p"
+  ],
+  "admin.transcoding.notRun": [
+   "Not run",
+   "Nicht gelaufen"
+  ],
+  "admin.transcoding.run": [
+   "Run benchmark",
+   "Benchmark starten"
+  ],
+  "admin.transcoding.running": [
+   "The benchmark is running.",
+   "Der Benchmark läuft."
+  ],
+  "admin.transcoding.failed": [
+   "The last benchmark failed.",
+   "Der letzte Benchmark ist fehlgeschlagen."
+  ],
+  "admin.transcoding.ranAt": [
+   "Last run",
+   "Letzter Lauf"
+  ],
+  "admin.transcoding.never": [
+   "Never",
+   "Nie"
+  ],
+  "admin.transcoding.cores": [
+   "Processor cores",
+   "Prozessorkerne"
+  ],
+  "admin.transcoding.proposedAcceleration": [
+   "Proposed acceleration",
+   "Vorgeschlagene Beschleunigung"
+  ],
+  "admin.transcoding.proposedMaximum": [
+   "Proposed maximum",
+   "Vorgeschlagenes Maximum"
+  ],
+  "admin.transcoding.acceleration": [
+   "Acceleration",
+   "Beschleunigung"
+  ],
+  "admin.transcoding.maxTranscodes": [
+   "Conversions at once",
+   "Gleichzeitige Umwandlungen"
+  ],
+  "admin.transcoding.ladder": [
+   "Lower qualities offered",
+   "Angebotene niedrigere Qualitäten"
+  ],
+  "admin.transcoding.acceleration.Auto": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "admin.transcoding.acceleration.Software": [
+   "Software",
+   "Software"
+  ],
+  "admin.transcoding.acceleration.Vaapi": [
+   "VAAPI",
+   "VAAPI"
+  ],
+  "admin.transcoding.acceleration.Qsv": [
+   "Intel Quick Sync",
+   "Intel Quick Sync"
+  ],
+  "admin.transcoding.acceleration.Nvenc": [
+   "NVIDIA NVENC",
+   "NVIDIA NVENC"
+  ],
+  "admin.transcoding.acceleration.VideoToolbox": [
+   "Apple VideoToolbox",
+   "Apple VideoToolbox"
+  ],
+  "hint.TranscodeFields.TranscodeAccelerationTypeId.info": [
+   "Automatic uses the encoder the last benchmark found best, else the configured one.",
+   "Automatisch nutzt den Encoder, den der letzte Benchmark als besten fand, sonst den konfigurierten."
+  ],
+  "hint.TranscodeFields.MaxTranscodes.info": [
+   "Counted in 1080p conversions; a smaller picture counts less, copying the video counts nothing.",
+   "Gezählt in 1080p-Umwandlungen; ein kleineres Bild zählt weniger, das Kopieren des Videos zählt nichts."
+  ],
+  "hint.TranscodeFields.LadderHeights.info": [
+   "Offered, highest first, when the server has no room for the wanted conversion.",
+   "Angeboten, die höchste zuerst, wenn der Server für die gewünschte Umwandlung keinen Platz hat."
+  ],
+  "admin.accounts.transcodingPriority": [
+   "Transcoding priority",
+   "Transcoding-Vorrang"
+  ],
+  "hint.AccountFields.TranscodingPriority.info": [
+   "When the server is full, this account's conversion stops the newest one of an account without priority.",
+   "Ist der Server voll, beendet die Umwandlung dieses Kontos die neueste eines Kontos ohne Vorrang."
+  ],
+  "operation.type.TranscodeBenchmark": [
+   "Transcoding benchmark",
+   "Transcoding-Benchmark"
+  ],
+  "player.status.playback_capacity_exhausted": [
+   "Server busy: transcoding is unavailable right now.",
+   "Server ausgelastet: Umwandeln ist gerade nicht möglich."
+  ],
+  "player.status.playback_evicted": [
+   "Playback ended because the server needed the capacity. Choose a lower quality to continue.",
+   "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Wähle eine niedrigere Qualität, um fortzufahren."
+  ],
+  "player.status.playback_reduced": [
+   "The server is busy, so this plays in a lower quality.",
+   "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
+  ],
+  "jobs.job.benchmarkQueue": [
+   "Transcoding benchmark",
+   "Transcoding-Benchmark"
+  ],
+  "reader.smart.preparing": [
+   "A reading copy of this PDF is being prepared in the background.",
+   "Eine Lesekopie dieses PDFs wird im Hintergrund vorbereitet."
+  ],
+  "reader.smart.failed": [
+   "The reading copy of this PDF could not be created. Reading is not affected.",
+   "Die Lesekopie dieses PDFs konnte nicht erstellt werden. Das Lesen bleibt unberührt."
+  ],
+  "reader.smart.declined.scan": [
+   "No reading copy was made: this PDF consists of scanned pages.",
+   "Es wurde keine Lesekopie erstellt: Dieses PDF besteht aus gescannten Seiten."
+  ],
+  "reader.smart.declined.pictures": [
+   "No reading copy was made: this PDF is mostly pictures.",
+   "Es wurde keine Lesekopie erstellt: Dieses PDF besteht überwiegend aus Bildern."
+  ],
+  "reader.smart.declined.garbled": [
+   "No reading copy was made: the text of this PDF is unreliable.",
+   "Es wurde keine Lesekopie erstellt: Der Text dieses PDFs ist unzuverlässig."
+  ],
+  "reader.figure.open": [
+   "Open full screen",
+   "Im Vollbild öffnen"
+  ],
+  "reader.figure.view": [
+   "Figure",
+   "Abbildung"
+  ],
+  "reader.figure.zoomIn": [
+   "Zoom in",
+   "Vergrößern"
+  ],
+  "reader.figure.zoomOut": [
+   "Zoom out",
+   "Verkleinern"
+  ],
+  "reader.figure.fit": [
+   "Fit to screen",
+   "An den Bildschirm anpassen"
+  ],
+  "reader.figure.original": [
+   "Page {0} is only shown in the original PDF.",
+   "Seite {0} wird nur im Original-PDF angezeigt."
+  ],
+  "instance.module.SmartPdf": [
+   "Prepare EPUB reading copies of PDF books",
+   "EPUB-Lesekopien von PDF-Büchern vorbereiten"
+  ],
+  "activity.tab.Queue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "activity.tab.History": [
+   "History",
+   "Verlauf"
+  ],
+  "errors.reading_pdf_unfit": [
+   "This PDF is mostly pictures or its text is unreliable; it opens as a PDF.",
+   "Dieses PDF besteht überwiegend aus Bildern oder sein Text ist unzuverlässig; es wird als PDF geöffnet."
+  ],
+  "jobs.worker.Derivation": [
+   "Reading copies",
+   "Lesekopien"
+  ],
+  "jobs.job.readingCopies": [
+   "Reading copies",
+   "Lesekopien"
+  ],
+  "reader.settings.view": [
+   "View",
+   "Ansicht"
+  ],
+  "reader.settings.pages": [
+   "Pages",
+   "Seiten"
+  ],
+  "reader.view.auto": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "reader.view.smart": [
+   "Smart Book",
+   "Smart Book"
+  ],
+  "reader.view.original": [
+   "Original pages",
+   "Originalseiten"
+  ],
+  "reader.view.failed": [
+   "The view could not be saved.",
+   "Die Ansicht konnte nicht gespeichert werden."
+  ],
+  "reader.view.smartUnavailable": [
+   "The Smart Book is not ready yet; the original pages are shown.",
+   "Das Smart Book ist noch nicht fertig; die Originalseiten werden angezeigt."
+  ],
+  "reader.offer.smart": [
+   "The Smart Book of this book is ready.",
+   "Das Smart Book dieses Buchs ist fertig."
+  ],
+  "reader.offer.open": [
+   "Open",
+   "Öffnen"
+  ],
+  "reader.original.loading": [
+   "Loading the pages…",
+   "Seiten werden geladen …"
+  ],
+  "reader.original.failed": [
+   "The original pages could not be shown.",
+   "Die Originalseiten konnten nicht angezeigt werden."
+  ],
+  "reader.original.page": [
+   "Page",
+   "Seite"
+  ],
+  "reader.original.zoom": [
+   "Zoom",
+   "Zoom"
+  ],
+  "reader.original.fit": [
+   "Fit",
+   "Anpassung"
+  ],
+  "reader.original.fit.page": [
+   "Whole page",
+   "Ganze Seite"
+  ],
+  "reader.original.fit.width": [
+   "Page width",
+   "Seitenbreite"
+  ],
+  "reader.recognition.progress": [
+   "Reading the scanned pages: {0} of {1}",
+   "Gescannte Seiten werden gelesen: {0} von {1}"
+  ],
+  "reader.pageNote.label": [
+   "Note on this page",
+   "Notiz zu dieser Seite"
+  ],
+  "reader.pageNote.save": [
+   "Save note",
+   "Notiz speichern"
+  ],
+  "reader.pageNote.page": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "reader.figure.originalPages": [
+   "Open the original pages",
+   "Originalseiten öffnen"
+  ],
+  "reader.figure.originalAlt": [
+   "Original page {0}",
+   "Originalseite {0}"
+  ],
+  "reader.download.omitted": [
+   "{0} pages are only in the original and are not part of this EPUB.",
+   "{0} Seiten gibt es nur im Original; sie sind nicht Teil dieses EPUBs."
   ]
  }
 }

@@ -6,13 +6,13 @@ using System.Net;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
+using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
-using Jularr.Integrations.Logic.Ocr;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Usenet;
 
@@ -25,20 +25,18 @@ namespace Jularr.Backend.Service.User.Reading.V1
         private readonly StorageAccess _storage;
         private readonly ArchiveTools _archives;
         private readonly TimeProvider _time;
-        private readonly IPageRecognizer _recognizer;
 
-        public ReadingContent(StorageAccess storage, ArchiveTools archives, TimeProvider time, IPageRecognizer recognizer)
+        public ReadingContent(StorageAccess storage, ArchiveTools archives, TimeProvider time)
         {
             _storage = storage;
             _archives = archives;
             _time = time;
-            _recognizer = recognizer;
         }
 
         public static string SectionPath(int index) => ":section/" + index.ToString("D5", CultureInfo.InvariantCulture);
 
-        // With a recognizer, a scanned PDF's pages are read as text.
-        public async Task<long> OpenAsync(LogicContext context, ReadingSourceData source, CancellationToken ct, Func<byte[], OcrPage>? recognize = null)
+        // A scanned PDF's pages the recognizer has read go into the text.
+        public async Task<long> OpenAsync(LogicContext context, ReadingSourceData source, CancellationToken ct)
         {
             // A complete cache needs no storage.
             if (source is { DocumentId: { } cached, IsCached: true })
@@ -77,7 +75,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
                 if (source.RelativePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 {
-                    return await OpenPdfAsync(context, source, file, recognize, ct);
+                    return await OpenPdfAsync(context, source, file, ct);
                 }
 
                 var hash = await SHA256.HashDataAsync(file, ct);
@@ -122,10 +120,21 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var sections = new List<ReadingStructureSection>();
             var images = new HashSet<string>(StringComparer.Ordinal);
             var writer = new ResourceWriter(context, ct);
+            var sizes = new Dictionary<string, (int Width, int Height)?>(StringComparer.Ordinal);
+            (int Width, int Height)? SizeOf(string path)
+            {
+                if (!sizes.TryGetValue(path, out var size))
+                {
+                    sizes[path] = size = archive.GetEntry(path) is { } entry ? ImageSize.Read(EpubReader.ReadPrefix(entry, 256 * 1024)) : null;
+                }
+
+                return size;
+            }
+
             for (var index = 0; index < package.Spine.Count; index++)
             {
                 var item = package.Spine[index];
-                var prepared = ReadingHtml.Prepare(EpubReader.ReadText(archive.GetEntry(item.Path)!), item.Path, documentId, indexes, package.Manifest);
+                var prepared = ReadingHtml.Prepare(EpubReader.ReadText(archive.GetEntry(item.Path)!), item.Path, documentId, indexes, package.Manifest, SizeOf);
                 var title = package.Toc.FirstOrDefault(entry => entry.Path == item.Path)?.Title;
                 sections.Add(new ReadingStructureSection(item.Path, title, prepared.Characters, prepared.Blocks));
                 await writer.AddAsync(new ReadingResourceData(documentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
@@ -144,28 +153,33 @@ namespace Jularr.Backend.Service.User.Reading.V1
             await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, package.Title, package.Language, structure, sections.Sum(section => section.Characters)), ct);
         }
 
-        // A PDF reads like an EPUB once its text is reflowed; one without text stays for the browser's own viewer.
-        private async Task<long> OpenPdfAsync(LogicContext context, ReadingSourceData source, Stream file, Func<byte[], OcrPage>? recognize, CancellationToken ct)
+        // A PDF reads like an EPUB once its text is reflowed, with the pages that do not reflow as the original's; one without text stays for the original pages. The document says whether it is fit to open by itself.
+        private async Task<long> OpenPdfAsync(LogicContext context, ReadingSourceData source, Stream file, CancellationToken ct)
         {
             var hash = await SHA256.HashDataAsync(file, ct);
             file.Position = 0;
 
-            // Only a PDF with text becomes a document; a scan waits for recognition where the Ocr module reads it.
+            // Only a PDF with text becomes a document; a scan waits for recognition where the Ocr module reads it, a page at a time.
+            var recognized = await context.ExecuteBatchAsync((ctx, token) => ReadRecognizedAsync(ctx, source, token), ct);
             PdfBookContent book;
             try
             {
-                book = PdfBook.Read(file, recognize);
+                book = PdfBook.Read(file, recognized);
             }
             catch (PdfWithoutTextException)
             {
                 var recognition = new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt);
-                throw new ServiceUnavailableException(recognize is null
-                    && await context.ExecuteBatchAsync((ctx, token) => ctx.RequestReadingRecognitionAsync(recognition, token), ct)
+                throw new ServiceUnavailableException(await context.ExecuteBatchAsync((ctx, token) => ctx.RequestReadingRecognitionAsync(recognition, token), ct)
                     ? "reading_pdf_recognizing" : "reading_pdf_without_text");
             }
             catch (InvalidDataException)
             {
                 throw new ServiceUnavailableException("reading_invalid_file");
+            }
+
+            if (book.Reading.Reason == "no_text")
+            {
+                throw new ServiceUnavailableException("reading_pdf_without_text");
             }
 
             var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, PdfBook.AnalyzerVersion, ReadingFormatType.Pdf, null, null,
@@ -182,45 +196,51 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return true;
             }, ct);
 
-            // Each chapter becomes one section of plain paragraphs and its pictures, prepared like any book text.
-            var chapters = book.Chapters;
-            var sections = new List<ReadingStructureSection>();
-            var toc = new List<ReadingStructureEntry>();
+            // Each chapter becomes one section of plain paragraphs, pictures and figures, prepared like any book text.
+            var prepared = PdfBookHtml.Prepare(book, state.DocumentId);
             var writer = new ResourceWriter(context, ct);
-            var noSections = new Dictionary<string, int>(StringComparer.Ordinal);
-            var pictures = book.Images.ToDictionary(image => image.Path, image => image.MediaType, StringComparer.Ordinal);
             foreach (var image in book.Images)
             {
                 await writer.AddAsync(new ReadingResourceData(state.DocumentId, image.Path, image.MediaType, image.Bytes));
             }
 
-            for (var index = 0; index < chapters.Count; index++)
+            for (var index = 0; index < prepared.Sections.Count; index++)
             {
-                var chapter = chapters[index];
-                var html = new StringBuilder("<html><body>");
-                if (chapter.Title is { } heading)
-                {
-                    html.Append("<h2>").Append(WebUtility.HtmlEncode(heading)).Append("</h2>");
-                    toc.Add(new ReadingStructureEntry(heading, index, 1, null));
-                }
-
-                foreach (var block in chapter.Blocks)
-                {
-                    html.Append(block.Image is { } picture
-                        ? "<p><img alt=\"\" src=\"" + WebUtility.HtmlEncode(picture["pdf/".Length..]) + "\" /></p>"
-                        : "<p>" + WebUtility.HtmlEncode(block.Text) + "</p>");
-                }
-
-                var path = "pdf/" + index.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml";
-                var prepared = ReadingHtml.Prepare(html.Append("</body></html>").ToString(), path, state.DocumentId, noSections, pictures);
-                sections.Add(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks));
-                await writer.AddAsync(new ReadingResourceData(state.DocumentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
+                await writer.AddAsync(new ReadingResourceData(state.DocumentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Sections[index].Html)));
             }
 
             await writer.FlushAsync();
-            await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. sections], [.. toc])),
-                sections.Sum(section => section.Characters)), ct);
+            var structure = prepared.Sections.Select(section => section.Structure).ToArray();
+            var recommended = book.Reading.IsReadable;
+            await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, null,
+                JsonSerializer.Serialize(new ReadingStructure(structure, [.. prepared.Toc], recommended, recommended ? null : book.Reading.Reason, [.. prepared.OriginalPages])),
+                structure.Sum(section => section.Characters)), ct);
             return state.DocumentId;
+        }
+
+        // What the recognizer has read of this version of the PDF so far, by page.
+        private static async Task<IReadOnlyDictionary<int, RecognizedPage>> ReadRecognizedAsync(LogicContext ctx, ReadingSourceData source, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    page."StoredFileId",
+                    page."PageNumber",
+                    page."Reason",
+                    page."Quality",
+                    page."Lines"::text AS "Lines"
+                FROM
+                    "ReadingRecognizedPages" AS page
+                    JOIN "ReadingRecognitions" AS recognition ON recognition."StoredFileId" = page."StoredFileId"
+                        AND recognition."SourceSizeBytes" = @SizeBytes
+                        AND recognition."SourceModifiedAt" = @ModifiedAt
+                WHERE
+                    page."StoredFileId" = @StoredFileId;
+                """;
+            sql.Parameters.Add(new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt));
+            var pages = await ctx.ReadSql.ReadListAsync<ReadingRecognizedPageData>(sql, ct);
+            return pages.ToDictionary(page => page.PageNumber, page => new RecognizedPage(page.Reason, (double)page.Quality, RecognizedPage.Parse(page.Lines)));
         }
 
         private async Task<long> OpenComicAsync(LogicContext context, ReadingSourceData source, Stream file, CancellationToken ct)

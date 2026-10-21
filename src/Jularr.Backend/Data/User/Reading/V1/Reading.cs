@@ -105,8 +105,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null)
+            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null, string[]? translatedLanguages = null, bool isRecommended = true, int originalPages = 0)
         {
+            IsRecommended = isRecommended;
+            OriginalPages = originalPages;
             TranslatedLanguages = translatedLanguages ?? [];
             ReadingLanguage = readingLanguage;
             OriginalLanguage = originalLanguage;
@@ -165,6 +167,14 @@ namespace Jularr.Backend.Data.User.Reading.V1
         // Languages every section has a shared translation in, so the book downloads translated.
         [DataField(typeof(TranslationFields), nameof(TranslationFields.Languages))]
         public string[] TranslatedLanguages { get; }
+
+        // The reading text of a PDF passed its quality gate and opens by itself; false where the original pages read better. Every other book is.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsRecommended))]
+        public bool IsRecommended { get; }
+
+        // Pages of the PDF that stand in the text as the original page, and so are not in a downloaded EPUB.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Count))]
+        public int OriginalPages { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse
@@ -192,8 +202,9 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
     public sealed class ReadingSectionV1 : BaseResponse
     {
-        public ReadingSectionV1(int sectionIndex, string? title, string html, long characters, long charactersBefore, long totalCharacters, int blocks)
+        public ReadingSectionV1(int sectionIndex, string? title, string html, long characters, long charactersBefore, long totalCharacters, int blocks, int pageFrom = 0)
         {
+            PageFrom = pageFrom;
             SectionIndex = sectionIndex;
             Title = title;
             Html = html;
@@ -225,6 +236,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionCount))]
         public int Blocks { get; }
+
+        // The first page of the PDF the section covers; 0 for a book that is no PDF.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionCount))]
+        public int PageFrom { get; }
     }
 
     public sealed class ReadingEbookParametersV1 : BaseParameters
@@ -324,13 +339,18 @@ namespace Jularr.Backend.Data.User.Reading.V1
     // A section containing the words, with the text around the first match.
     public sealed class ReadingSearchHitV1 : BaseResponse
     {
-        public ReadingSearchHitV1(int sectionIndex, string? title, string snippet, int matches)
+        public ReadingSearchHitV1(int sectionIndex, string? title, string snippet, int matches, int? page = null)
         {
             SectionIndex = sectionIndex;
             Title = title;
             Snippet = snippet;
             Matches = matches;
+            Page = page;
         }
+
+        // The page of the PDF the first match stands on, for a converted PDF.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber), false)]
+        public int? Page { get; }
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
         public int SectionIndex { get; }
@@ -345,14 +365,19 @@ namespace Jularr.Backend.Data.User.Reading.V1
         public int Matches { get; }
     }
 
-    // How the book opens: prepared text or pages, else its PDF in the browser's own viewer.
+    // How the book opens: prepared text or pages, else the original pages of its PDF.
     public sealed class ReadingSourceV1 : BaseResponse
     {
-        public ReadingSourceV1(long workId, string title, ReadingFormatType readingFormatTypeId)
+        public ReadingSourceV1(long workId, string title, ReadingFormatType readingFormatTypeId, bool hasPdf, ReadingDerivationStatus? readingDerivationStatusTypeId, string? reason, ReadingView? readingViewTypeId = null, string? locator = null)
         {
+            Locator = locator;
+            ReadingViewTypeId = readingViewTypeId;
             WorkId = workId;
             Title = title;
             ReadingFormatTypeId = readingFormatTypeId;
+            HasPdf = hasPdf;
+            ReadingDerivationStatusTypeId = readingDerivationStatusTypeId;
+            Reason = reason;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -363,6 +388,179 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingFormatTypeId))]
         public ReadingFormatType ReadingFormatTypeId { get; }
+
+        // The book has a PDF file, whether it reads from it or from a reading copy.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsPdf))]
+        public bool HasPdf { get; }
+
+        // Where the PDF stands on its way to a reading copy; none when the module is off or the book has its own EPUB.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingDerivationStatusTypeIdOptional))]
+        public ReadingDerivationStatus? ReadingDerivationStatusTypeId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Reason))]
+        public string? Reason { get; }
+
+        // The view the profile chose for this book; none is automatic.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingViewTypeId), false)]
+        public ReadingView? ReadingViewTypeId { get; }
+
+        // Where the profile stopped in this book, whichever view it was in.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Locator))]
+        public string? Locator { get; }
+    }
+
+    // The view of a book's PDF a profile chose for all its devices; none is automatic again.
+    public sealed class SaveReadingViewDataV1 : BaseData
+    {
+        public SaveReadingViewDataV1(ReadingView? readingViewTypeId)
+        {
+            ReadingViewTypeId = readingViewTypeId;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingViewTypeId), false)]
+        public ReadingView? ReadingViewTypeId { get; }
+    }
+
+    // Where a book's reading text stands, without opening it: which view is recommended once its text is prepared, and how far the recognition of a scan has come.
+    public sealed class ReadingStateV1 : BaseResponse
+    {
+        public ReadingStateV1(bool hasPdf, ReadingView? recommendedView, int? recognitionPages, int recognizedPages, bool isRecognizing)
+        {
+            HasPdf = hasPdf;
+            RecommendedView = recommendedView;
+            RecognitionPages = recognitionPages;
+            RecognizedPages = recognizedPages;
+            IsRecognizing = isRecognizing;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsPdf))]
+        public bool HasPdf { get; }
+
+        // Smart once the prepared text passed its gate, Original where it did not; none while no text is prepared.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingViewTypeId), false)]
+        public ReadingView? RecommendedView { get; }
+
+        // Pages of a scan being read into text, once counted, and how many are read.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Pages))]
+        public int? RecognitionPages { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Count))]
+        public int RecognizedPages { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsPending))]
+        public bool IsRecognizing { get; }
+    }
+
+    // A place in the reading text given by the page of the PDF, or the page a place in the reading text starts on.
+    public sealed class ReadingPositionParametersV1 : BaseParameters
+    {
+        public ReadingPositionParametersV1(long mediaAssetId, int? page = null, int? sectionIndex = null, int? block = null)
+        {
+            MediaAssetId = mediaAssetId;
+            Page = page;
+            SectionIndex = sectionIndex;
+            Block = block;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber), false)]
+        public int? Page { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex), false)]
+        public int? SectionIndex { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex), false)]
+        public int? Block { get; }
+    }
+
+    public sealed class ReadingPositionV1 : BaseResponse
+    {
+        public ReadingPositionV1(int sectionIndex, int block, int page)
+        {
+            SectionIndex = sectionIndex;
+            Block = block;
+            Page = page;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.BlockIndex))]
+        public int Block { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber))]
+        public int Page { get; }
+    }
+
+    public sealed class ReadingPageNoteParametersV1 : BaseParameters
+    {
+        public ReadingPageNoteParametersV1(long mediaAssetId, long readingPageNoteId)
+        {
+            MediaAssetId = mediaAssetId;
+            ReadingPageNoteId = readingPageNoteId;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNoteId))]
+        public long ReadingPageNoteId { get; }
+    }
+
+    // A profile's note on a page of a book's PDF, with the first words of the page where it has text.
+    public sealed class ReadingPageNoteV1 : BaseResponse
+    {
+        public ReadingPageNoteV1(long id, int pageNumber, string? anchor, string note)
+        {
+            Id = id;
+            PageNumber = pageNumber;
+            Anchor = anchor;
+            Note = note;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNoteId))]
+        public long Id { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber))]
+        public int PageNumber { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageAnchor), false)]
+        public string? Anchor { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNote))]
+        public string Note { get; }
+    }
+
+    public sealed class CreateReadingPageNoteDataV1 : BaseData
+    {
+        public CreateReadingPageNoteDataV1(int pageNumber, string? anchor, string note)
+        {
+            PageNumber = pageNumber;
+            Anchor = anchor;
+            Note = note;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber))]
+        public int PageNumber { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageAnchor), false)]
+        public string? Anchor { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNote))]
+        public string Note { get; }
+    }
+
+    public sealed class CreateReadingPageNoteResultV1 : BaseResponse
+    {
+        public CreateReadingPageNoteResultV1(long id)
+        {
+            Id = id;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNoteId))]
+        public long Id { get; }
     }
 
     public sealed class ReadingFileV1 : BaseResponse, IFileOutput

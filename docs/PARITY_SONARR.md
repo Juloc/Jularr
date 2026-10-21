@@ -19,7 +19,7 @@ Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it
 | Monitoring | Scene numbering (TheXEM) | Episode offset for AniList only | Automatic from TheXEM, correctable by hand |
 | Monitoring | Unmonitor deleted episodes | – | A setting, off by default; only when the library is reachable and the file is really gone (an offline NAS never counts as deleted) |
 | Calendar | iCal feed | – | A link per profile with a token, last 7 and next 28 days |
-| Wanted | Missing, cutoff unmet | One wanted list | Like Sonarr: two lists, search selected/all, toggle monitoring, filters |
+| Wanted | Missing, cutoff unmet | One wanted list | Like Sonarr: two lists, search selected/all, toggle monitoring, filters; built: High/Normal priority per target (column and bulk bar; it only orders the automatic search, never delays it), start search for the chosen rows or every target that is due, manual search and edit target per row |
 | Activity | History | All media events | Like Sonarr: filter by event, details (indexer, age, size), mark as failed (remove, block, search again) |
 | Activity | Blocklist | Blocked releases per target | Its own list over everything (reason, date, title; unblock one or all); per target stays |
 | Activity | Manual import | Waiting imports, assigning unmatched library files | Like Sonarr: interactive import from any folder and from doubtful queue items, prefilled; series, season, episode, quality, language; move or hardlink |
@@ -35,7 +35,7 @@ Owner decisions of 19 October 2026, row by row. **Same**: Jularr already does it
 
 | Area | Sonarr | Jularr |
 | --- | --- | --- |
-| Activity | Queue that often asks for manual review | Downloads that are clearly the wanted episode import by themselves; only real doubts are shown, with the reason; actions remove, remove and block, assign by hand |
+| Activity | Queue that often asks for manual review | Downloads that are clearly the wanted episode import by themselves; only real doubts are shown, with the reason; actions remove, remove and block, assign by hand; the page has live tiles (active, speed, import waiting, errors) and one filter row (All, Active, Waiting, Import, Errors, History) |
 | Library | Library import of organised folders | Takeover and scan |
 | Download | SABnzbd with remote path mappings | SABnzbd with path detection and the native downloader |
 

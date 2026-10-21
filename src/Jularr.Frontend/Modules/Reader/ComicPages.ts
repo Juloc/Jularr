@@ -2,6 +2,7 @@ import { progressReporter } from '../Tracking/Progress';
 import { initializeReaderSettings } from './Settings';
 import type { BookGroup, initializeBookRenderer } from './BookRenderer';
 import { updateRangeValue } from '../../Framework/Components/Range';
+import { initializeBookmarks } from './bookmarks';
 
 export function comicSpread(page: number, count: number, two: boolean, wide: ReadonlySet<number>): number[] {
     return !two || page === 0 || wide.has(page) || page + 1 >= count || wide.has(page + 1) ? [page] : [page, page + 1];
@@ -30,6 +31,7 @@ export function initializeComicPages(reader: HTMLElement): void {
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         reader.querySelector<HTMLElement>('[data-role=save-error]')!.hidden = !failed;
     });
+    const marks = initializeBookmarks(reader, () => ({ section: page, block: 0, progression: Math.min(1, (page + 1) / count), title: null }));
     const two = () => settings.layout === 'spread' || settings.layout === 'auto' && canvas.clientWidth - 88 >= 640;
     const shown = (at: number): number[] => comicSpread(at, count, two(), wide);
     const target = (delta: number, from = page): number => {
@@ -94,6 +96,7 @@ export function initializeComicPages(reader: HTMLElement): void {
         seek.value = String(page + 1);
         seek.disabled = count <= 1;
         updateRangeValue(seek);
+        marks.refresh();
         previous.hidden = page === 0;
         next.hidden = current.at(-1)! + 1 >= count;
         reader.querySelectorAll<HTMLButtonElement>('[data-turn]').forEach(button => button.disabled = Number(button.dataset.turn) < 0 ? previous.hidden : next.hidden);

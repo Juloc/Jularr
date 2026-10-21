@@ -31,25 +31,29 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Eleven workers and the sampler. The queue and the downloads a restart interrupts start at once, every other job has its own offset.
-            Assert.AreEqual(12, Enum.GetValues<WorkerGroupType>().Length);
-            foreach (var key in new[] { "operations", "downloads", "resources" })
+            // Fourteen workers and the sampler. The queues and the downloads a restart interrupts start at once, every other job has its own offset;
+            // a provider of the provider sync has no schedule of its own.
+            Assert.AreEqual(15, Enum.GetValues<WorkerGroupType>().Length);
+            foreach (var key in new[] { "operations", "backupQueue", "benchmarkQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);
             }
 
+            var parts = jobs.Where(job => job.ParentKey is not null).ToArray();
+            CollectionAssert.AreEquivalent(new[] { "providerSyncPlex", "providerSyncJellyfin", "providerSyncEmby" }, parts.Select(job => job.Key).ToArray());
+            Assert.IsTrue(parts.All(job => job.Group == WorkerGroupType.Provider && job.Interval is null && !job.CanRunNow));
             var delayed = jobs.Where(job => job.StartDelay > TimeSpan.Zero).ToArray();
-            Assert.AreEqual(jobs.Count - 3, delayed.Length);
+            Assert.AreEqual(jobs.Count - 5 - parts.Length, delayed.Length);
             Assert.AreEqual(delayed.Length, delayed.Select(job => job.StartDelay).Distinct().Count(), "Every delayed job has its own offset.");
             Assert.IsTrue(delayed.All(job => job.StartDelay < TimeSpan.FromMinutes(5)));
 
             // Heavy jobs wait while Jularr is used, downloads never do.
-            foreach (var key in new[] { "trickplay", "recognition", "scanScheduling", "plexSync", "mediaServerSync", "aniListMatching" })
+            foreach (var key in new[] { "trickplay", "recognition", "readingCopies", "scanScheduling", "providerSync", "aniListMatching" })
             {
                 Assert.IsTrue(WorkerJobs.Definition(key).PausesWhileUsedByDefault, key);
             }
 
-            foreach (var key in new[] { "downloads", "usenet", "operations", "backup", "wantedSearch" })
+            foreach (var key in new[] { "downloads", "usenet", "operations", "backupQueue", "backup", "wantedSearch" })
             {
                 Assert.IsFalse(WorkerJobs.Definition(key).CanPauseWhileUsed, key);
             }
@@ -121,13 +125,18 @@ namespace Jularr.Backend.Tests
             time.Now = Start.AddMinutes(1);
             Assert.AreEqual(WorkerJobGate.Run, jobs.Begin("downloads"));
             Assert.IsNotNull(jobs.Finish("downloads", WorkerJobResultType.Succeeded, null), "The first pass is kept.");
+
+            // Tracking looks every minute, and again after 15 seconds while a download runs.
+            jobs.RunAgainWithin("downloads", TimeSpan.FromSeconds(15));
             time.Now = time.Now.AddSeconds(15);
             Assert.AreEqual(WorkerJobGate.Run, jobs.Begin("downloads"));
             Assert.IsNull(jobs.Finish("downloads", WorkerJobResultType.Succeeded, null), "A quiet success is not written every 15 seconds.");
+            jobs.RunAgainWithin("downloads", TimeSpan.FromSeconds(15));
             time.Now = time.Now.AddSeconds(15);
             Assert.AreEqual(WorkerJobGate.Run, jobs.Begin("downloads"));
             var failure = jobs.Finish("downloads", WorkerJobResultType.Failed, "provider_unavailable");
             Assert.AreEqual(WorkerJobResultType.Failed, failure?.ResultTypeId, "A failure is kept at once.");
+            jobs.RunAgainWithin("downloads", TimeSpan.FromSeconds(15));
             time.Now = time.Now.AddSeconds(15);
             jobs.Begin("downloads");
             Assert.IsNull(jobs.Finish("downloads", WorkerJobResultType.Failed, "provider_unavailable"), "The same failure again is not written again.");
@@ -268,7 +277,7 @@ namespace Jularr.Backend.Tests
             using var useDownloads = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/jobs/downloads/use", new WorkerJobUseDataV1(true));
             Assert.AreEqual(HttpStatusCode.BadRequest, useDownloads.StatusCode);
 
-            // A failure shows on the page, in Activity and as a notice that links to the page.
+            // A failure shows on the page, in Activity (its panel links to the page) and as a notice.
             var runner = host.Services.GetRequiredService<WorkerJobRunner>();
             time.Now = Start.AddHours(2);
             Assert.AreEqual(WorkerJobResultType.Failed, await runner.RunAsync("subtitles", (_, _) => throw new InvalidOperationException("No provider."), default));
@@ -283,7 +292,7 @@ namespace Jularr.Backend.Tests
             var notice = items.Single(item => item.OperationTypeId == OperationType.Job);
             Assert.AreEqual("subtitles", notice.Title);
             Assert.AreEqual("internal_error", notice.ReasonKey);
-            using var activityPage = await host.SendAsync(HttpMethod.Get, "/Admin/Activity");
+            using var activityPage = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?operation=" + notice.Id);
             var activityHtml = await activityPage.Content.ReadAsStringAsync();
             StringAssert.Contains(activityHtml, "Open Jobs");
 

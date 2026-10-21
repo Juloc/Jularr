@@ -176,6 +176,7 @@ namespace Jularr.Backend.Service.Core
             // Recent warnings and errors for the Owner's system page.
             services.TryAddSingleton<AcquisitionSearchSignal>();
             services.TryAddSingleton<LiveChanges>();
+            services.TryAddSingleton<WorkSignals>();
             services.TryAddSingleton<UserActivity>();
             services.TryAddSingleton<WorkerJobs>();
             services.TryAddSingleton<WorkerJobRunner>();
@@ -199,11 +200,14 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<StorageAccess>();
             services.TryAddSingleton<DownloadStorage>();
             services.TryAddSingleton<MediaTranscoder>();
+            services.TryAddSingleton<TranscodeBenchmarkClient>();
+            services.TryAddSingleton<TranscodeHardware>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<PlaybackSubtitles>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
+            services.TryAddTransient<MediaImportPlanner>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
             services.TryAddTransient<PlexServer>();
@@ -227,6 +231,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.AddSingleton<ISourceBrowser>(provider => new SourceBrowser(provider.GetRequiredService<IOptions<BrowserOptions>>().Value));
             services.TryAddTransient<ReadingContent>();
+            services.TryAddTransient<ReadingDerivation>();
+            services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<SpeechFiles>();
             services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(http => http.Timeout = TimeSpan.FromMinutes(5));
@@ -538,6 +544,13 @@ namespace Jularr.Backend.Service.Core
                 {
                     http.Response.Headers.CacheControl = "private,max-age=3600";
                     http.Response.Headers.XContentTypeOptions = "nosniff";
+
+                    // A vector picture shown on its own runs no script.
+                    if (binary.ContentType.StartsWith("image/svg", StringComparison.OrdinalIgnoreCase))
+                    {
+                        http.Response.Headers.ContentSecurityPolicy = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+                    }
+
                     return Results.Bytes(binary.Bytes, binary.ContentType);
                 }
 

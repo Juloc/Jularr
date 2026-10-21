@@ -312,12 +312,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
         private readonly StorageAccess _storage;
         private readonly WakeOnLanClient _wake;
         private readonly PlaybackTranscodes _transcodes;
+        private readonly TranscodeHardware _hardware;
+        private readonly MediaOptions _options;
 
-        internal StartPlaybackV1(StorageAccess storage, WakeOnLanClient wake, PlaybackTranscodes transcodes)
+        internal StartPlaybackV1(StorageAccess storage, WakeOnLanClient wake, PlaybackTranscodes transcodes, TranscodeHardware hardware, IOptions<MediaOptions> options)
         {
             _storage = storage;
             _wake = wake;
             _transcodes = transcodes;
+            _hardware = hardware;
+            _options = options.Value;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -329,7 +333,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         {
             // Stored source, streams and resume point.
             var lookup = new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value, Auth.SessionPublicId);
-            var (source, tracks, preference) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            var (source, tracks, preference, limits) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -413,7 +417,27 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         profile."Id" = @ProfileId;
                     """;
                 sql.Parameters.Add(new ProfileParameters(lookup.ProfileId));
-                return (source, fileTracks, await ctx.ReadSql.ReadRequiredAsync<PlaybackChoiceData>(sql, ct));
+                var choices = await ctx.ReadSql.ReadRequiredAsync<PlaybackChoiceData>(sql, ct);
+
+                // What the server may convert and the account's priority.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        settings."TranscodeAccelerationTypeId",
+                        settings."MaxTranscodes"::integer AS "MaxTranscodes",
+                        settings."LadderHeights",
+                        benchmark."BestTranscodeAccelerationTypeId",
+                        account."TranscodingPriority"
+                    FROM
+                        "TranscodeSettings" AS settings
+                        LEFT JOIN "TranscodeBenchmarks" AS benchmark ON benchmark."Id" = 1
+                        JOIN "Accounts" AS account ON account."Id" = @Id
+                    WHERE
+                        settings."Id" = 1;
+                    """;
+                sql.Parameters.Add(new TranscodeAccountData(Auth.AccountId!.Value));
+                return (source, fileTracks, choices, await ctx.ReadSql.ReadRequiredAsync<TranscodeLimitsData>(sql, ct));
             }, CancellationToken);
 
             // Delivery follows the client's actual capabilities and the chosen audio track.
@@ -469,21 +493,41 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 throw new ServiceUnavailableException("storage_waking");
             }
 
+            // The server's budget holds the conversion before the session exists: the wanted one, else a lighter one the Owner's ladder offers, else the server is busy.
             var resume = source.ResumePositionMs ?? 0;
+            var sessionId = Guid.NewGuid();
+            var reduced = false;
+            if (conversion is { } wanted)
+            {
+                var candidates = TranscodeLogic.Candidates(wanted, tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, quality, source.BitRate, limits.LadderHeights);
+                var detected = limits.TranscodeAccelerationTypeId == TranscodeAcceleration.Software || candidates.All(candidate => candidate.Weight == 0) ? [] : await _hardware.GetAsync(CancellationToken);
+                var encoding = TranscodeLogic.ResolveEncoding(limits.TranscodeAccelerationTypeId, limits.BestTranscodeAccelerationTypeId, detected, _options.HardwareAccelerationArguments, _options.VideoEncoderArguments);
+                var chosen = _transcodes.Admit([.. candidates.Select(candidate => candidate.Weight)], limits.TranscodingPriority, limits.MaxTranscodes ?? _options.MaxTranscodes, index =>
+                {
+                    var (plan, weight, _) = candidates[index];
+                    return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
+                        source.DurationMs!.Value, plan.AudioKilobits, plan.MaxHeight, plan.VideoKilobits) { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding };
+                });
+                conversion = candidates[chosen].Plan;
+                reduced = candidates[chosen].IsReduced;
+            }
+
             var mode = conversion?.PlaybackModeTypeId ?? PlaybackModeType.DirectPlay;
-            var sessionId = await Context.ExecuteBatchAsync((ctx, ct) =>
-                ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume), ct), CancellationToken);
+            try
+            {
+                await Context.ExecuteBatchAsync((ctx, ct) =>
+                    ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(sessionId, lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume), ct), CancellationToken);
+            }
+            catch
+            {
+                // Without a session nothing plays, so its conversion gives the room back.
+                _transcodes.Stop(sessionId);
+                throw;
+            }
 
             // Conversions stream on-demand HLS segments.
             var url = "/api/v1/playback/sessions/" + sessionId.ToString("D");
-            if (conversion is { } plan)
-            {
-                _transcodes.Register(new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
-                    source.DurationMs!.Value, plan.AudioKilobits, plan.MaxHeight, plan.VideoKilobits));
-                return new PlaybackPlanV1(sessionId, mode, url + "/playlist.m3u8", resume, source.DurationMs, audioStreamIndex, quality);
-            }
-
-            return new PlaybackPlanV1(sessionId, mode, url + "/stream", resume, source.DurationMs, audioStreamIndex, quality);
+            return new PlaybackPlanV1(sessionId, mode, url + (conversion is null ? "/stream" : "/playlist.m3u8"), resume, source.DurationMs, audioStreamIndex, quality, reduced);
         }
     }
 

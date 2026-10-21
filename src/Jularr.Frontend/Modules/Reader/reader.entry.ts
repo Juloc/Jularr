@@ -8,12 +8,27 @@ import { initializeReaderChrome, initializeReaderSettings } from './Settings';
 import { initializePaperPages } from './PaperPages';
 import { initializeComicPages } from './ComicPages';
 import { initializeReadAloud } from './Speech';
+import { initializeFigures } from './Figures';
+import { initializeBookmarks } from './bookmarks';
+import { initializeOriginalPages } from './OriginalPages';
+import { initializeViewChoice } from './ViewChoice';
 
 const reader = document.querySelector<HTMLElement>('.reader');
 if (reader) {
     if (reader.dataset.format === 'pdf') initializeReaderChrome(reader);
+    else if (reader.dataset.format === 'pages') initializeOriginalPages(reader);
     else if (reader.dataset.format === 'comic') initializeComicPages(reader);
     else if (reader.querySelector('[data-role=content]')) initializeText(reader);
+}
+
+// The page of the PDF a block stands on: its own anchor, the nearest one before it, or where its section begins; none for a book that is no PDF.
+function pdfPageOf(block: HTMLElement | undefined, reader: HTMLElement): number | null {
+    for (let element: Element | null = block ?? null; element; element = element.previousElementSibling) {
+        const page = Number((element as HTMLElement).dataset.pdfPage ?? (element as HTMLElement).dataset.page);
+        if (Number.isInteger(page) && page >= 1) return page;
+    }
+    const from = Number(reader.dataset.pdfFrom);
+    return Number.isInteger(from) && from >= 1 ? from : null;
 }
 
 function initializeText(reader: HTMLElement): void {
@@ -27,6 +42,8 @@ function initializeText(reader: HTMLElement): void {
     const sections = Number(reader.dataset.sections);
     let timer = 0;
     let paging: ReturnType<typeof initializePaperPages> | undefined;
+    let progress = before / total;
+    let marks: ReturnType<typeof initializeBookmarks> | undefined;
     const settings = initializeReaderSettings(reader, () => paging?.layout());
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         const feedback = reader.querySelector<HTMLElement>('[data-role=save-error]');
@@ -34,11 +51,17 @@ function initializeText(reader: HTMLElement): void {
     });
     highlights(reader, content, section);
     if (reader.dataset.query) findings(content, reader.dataset.query);
+    initializeFigures(reader, content);
     paging = initializePaperPages(reader, content, settings, () => report(false));
     paging.layout();
+    marks = initializeBookmarks(reader, () => ({
+        section, block: Number(paging!.current()?.dataset.b ?? 0), progression: progress,
+        title: reader.querySelector('.reader__chapter')?.textContent?.trim() || null
+    }));
     initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
-    const requested = new URLSearchParams(location.search).get('b');
+    initializeViewChoice(reader, () => pdfPageOf(paging!.current(), reader));
+    const requested = new URLSearchParams(location.search).get('b') ?? reader.dataset.startBlock ?? null;
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
     const block = requested && /^\d+$/.test(requested) ? requested : match && Number(match[1]) === section ? match[2] : null;
     requestAnimationFrame(() => {
@@ -85,6 +108,8 @@ function initializeText(reader: HTMLElement): void {
         const atEnd = settings.mode === 'paged' ? paging?.end() : content.scrollTop + content.clientHeight >= content.scrollHeight - 4;
         const completed = section === sections - 1 && Boolean(atEnd);
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
+        progress = progression;
+        marks?.refresh();
         if (position) position.textContent = `${Math.round(progression * 100)} %`;
         save({ locator: `s${section}/b${block}`, progression: Number(progression.toFixed(4)), isCompleted: completed }, leaving);
     }

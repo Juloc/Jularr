@@ -812,6 +812,18 @@
    "Notes",
    "Note"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Segnalibro"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Segnalibri"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Elimina segnalibro"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Apri in una nuova scheda"
@@ -6359,6 +6371,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Un profilo conserva al massimo 1000 evidenziazioni per libro."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Un profilo conserva al massimo 200 segnalibri per libro."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

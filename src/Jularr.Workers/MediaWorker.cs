@@ -1,15 +1,13 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.System.Media.V1;
-using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Media.V1;
-using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Secondary provider matching, progress shared with media servers and the provider images of titles run in slow passes beside the library.
+    // Secondary provider matching and the provider images of titles run in slow passes beside the library.
     internal sealed class MediaWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Media)
     {
         protected override async Task RunOnceAsync(CancellationToken ct)
@@ -20,10 +18,6 @@ namespace Jularr.Workers
             // Covers still named by a provider, a pass of twenty at a time with a short pause.
             await Runner.RunWhileBusyAsync("covers", async (services, token) =>
                 (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);
-
-            // Each pass reads the servers' whole film and episode lists.
-            await Runner.RunAsync("mediaServerSync", (services, token) =>
-                services.GetRequiredService<SyncMediaServersV1>().ExecuteAsync<UpdateResult>(new MediaServerSyncParametersV1(), default, token), ct);
         }
     }
 }

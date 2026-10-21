@@ -83,6 +83,7 @@ namespace Jularr.Backend.Service.Core
             PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new(StatusCodes.Status409Conflict, "concurrent_change"),
             IOException => new(StatusCodes.Status503ServiceUnavailable, "storage_unavailable"),
             ServiceUnavailableException unavailable => new(StatusCodes.Status503ServiceUnavailable, unavailable.Code),
+            ServiceGoneException gone => new(StatusCodes.Status410Gone, gone.Code),
             ArgumentException => new(StatusCodes.Status400BadRequest, "invalid_request"),
             _ => new(StatusCodes.Status500InternalServerError, "internal_error")
         };

@@ -16,12 +16,14 @@ using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Playback;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
+using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 
 namespace Jularr.Backend.Service.System.Operation.V1
 {
@@ -41,6 +43,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
     public sealed class ScheduleLibraryScansV1 : SystemService<LibraryScanScheduleParametersV1, NoData>
     {
+        private readonly WorkSignals _signals;
+        private bool _isQueued;
+
+        internal ScheduleLibraryScansV1(WorkSignals signals)
+        {
+            _signals = signals;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(LibraryScanScheduleParametersV1 parameters) => ModuleRequirement.All("Library");
@@ -49,7 +59,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Changes made outside Jularr appear after the next scan.
-            return new UpdateResult(await Context.QueueDueLibraryScansAsync(CancellationToken) > 0);
+            _isQueued = await Context.QueueDueLibraryScansAsync(CancellationToken) > 0;
+            return new UpdateResult(_isQueued);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_isQueued) _signals.Scans.Notify();
         }
     }
 
@@ -69,16 +85,22 @@ namespace Jularr.Backend.Service.System.Operation.V1
         }
     }
 
-    public sealed class ClaimOperationV1 : SystemService<OperationQueueParametersV1, NoData>
+    public sealed class ClaimOperationV1 : SystemService<ClaimOperationParametersV1, NoData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ClaimOperationResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(OperationQueueParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(OperationQueueParametersV1 parameters, Type resultType) => new("system.operations");
+        protected override ModuleRequirement GetInstanceModules(ClaimOperationParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ClaimOperationParametersV1 parameters, Type resultType) => new("system.operations");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var claimed = await Context.ClaimOperationAsync(CancellationToken);
+            // Only scans, backups and benchmarks are queued work.
+            if (Parameters.OperationTypeId is not (OperationKind.LibraryScan or OperationKind.Backup or OperationKind.TranscodeBenchmark))
+            {
+                throw new DataValidationException(nameof(ClaimOperationParametersV1.OperationTypeId), "invalid_value");
+            }
+
+            var claimed = await Context.ClaimOperationAsync(new OperationClaimData(Parameters.OperationTypeId), CancellationToken);
             return new ClaimOperationResultV1(claimed?.Id, claimed?.OperationTypeId);
         }
     }
@@ -346,6 +368,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     // Unreadable files are recorded without streams.
                     var probedAt = DateTime.UtcNow;
                     var tracks = "[]";
+                    var chapters = "[]";
+                    var sidecarMarkers = "[]";
                     string? container = null;
                     long? durationMs = null;
                     long? bitRate = null;
@@ -359,6 +383,10 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         tracks = JsonSerializer.Serialize(probe.Streams.Select(stream => new ProbedTrack(stream.Index,
                             stream.CodecType switch { "video" => MediaTrackType.Video, "audio" => MediaTrackType.Audio, _ => MediaTrackType.Subtitle },
                             TextLimit.Cut(stream.Codec, 64), TextLimit.Cut(stream.Language, 16), TextLimit.Cut(stream.Title, 256), stream.Width, stream.Height, stream.Channels, stream.IsDefault, stream.IsForced, stream.BitDepth, TextLimit.Cut(stream.DynamicRange, 16), stream.Is3D)));
+                        chapters = JsonSerializer.Serialize(probe.Chapters.Select((chapter, index) => new MediaChapterRow(index, chapter.StartMs, chapter.EndMs, TextLimit.Cut(chapter.Title, 256))));
+
+                        // A sidecar file beside the video names markers too.
+                        sidecarMarkers = await ReadSidecarMarkersAsync(storage, directory, file.RelativePath, durationMs);
                     }
                     catch (Exception exception) when (exception is InvalidDataException or Integrations.Data.Nas.NasMountException)
                     {
@@ -366,7 +394,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
-                        await ctx.SaveStoredFileProbeAsync(new StoredFileProbeData(file.Id, file.SizeBytes, file.ModifiedAt, probedAt, container, durationMs, bitRate, tracks), ct);
+                        await ctx.SaveStoredFileProbeAsync(new StoredFileProbeData(file.Id, file.SizeBytes, file.ModifiedAt, probedAt, container, durationMs, bitRate, tracks, chapters, sidecarMarkers), ct);
                         return true;
                     }, CancellationToken);
                     afterId = file.Id;
@@ -767,6 +795,25 @@ namespace Jularr.Backend.Service.System.Operation.V1
             return invalid
                 ? (new Dictionary<string, string>(), true)
                 : text is null ? (new Dictionary<string, string>(), false) : MediaPathParser.ParseNfo(text, mediaType);
+        }
+
+        // The markers of the video's .edl file; one that is missing, too large or unreadable names none.
+        private async Task<string> ReadSidecarMarkersAsync(StorageFiles storage, string directory, string relativePath, long? durationMs)
+        {
+            if (MediaMarkers.SidecarPath(relativePath) is not { } sidecar)
+            {
+                return "[]";
+            }
+
+            try
+            {
+                var (text, invalid) = await ReadHintTextAsync(storage, StoragePath.Combine(directory, sidecar), MediaMarkers.MaximumSidecarBytes);
+                return invalid || text is null ? "[]" : JsonSerializer.Serialize(MediaMarkers.ParseEdl(text, durationMs));
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or Integrations.Data.Nas.NasMountException)
+            {
+                return "[]";
+            }
         }
 
         private async Task<(string? Text, bool Invalid)> ReadHintTextAsync(StorageFiles storage, string path, int maxBytes)

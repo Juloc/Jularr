@@ -22,10 +22,12 @@ namespace Jularr.Backend.Service.User.Reading.V1
     public sealed class OpenReadingV1 : UserService<ReadingAssetParametersV1, NoData>
     {
         private readonly ReadingContent _content;
+        private readonly ReadingActivity _activity;
 
-        internal OpenReadingV1(ReadingContent content)
+        internal OpenReadingV1(ReadingContent content, ReadingActivity activity)
         {
             _content = content;
+            _activity = activity;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -61,13 +63,14 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             SELECT
                                 candidate.*
                             FROM
-                                "StoredFiles" AS candidate
+                                "ReadableStoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
                                 AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                                AND (NOT candidate."IsDerived" OR candidate."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
-                                candidate."RelativePath" ~* '\.pdf$',
+                                CASE WHEN candidate."RelativePath" ~* '\.pdf$' THEN 2 WHEN candidate."IsDerived" THEN 1 ELSE 0 END,
                                 candidate."ModifiedAt" DESC,
                                 candidate."Id"
                             LIMIT 1
@@ -99,7 +102,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 return ctx.ReadSql.ReadOptionalAsync<ReadingSourceData>(sql, ct);
             }, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
 
-            var documentId = await _content.OpenAsync(Context, source, CancellationToken);
+            // Background conversion waits while a person opens a book.
+            long documentId;
+            using (_activity.Begin())
+            {
+                documentId = await _content.OpenAsync(Context, source, CancellationToken);
+            }
+
             return await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -118,6 +127,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         document."Language",
                         chosen."Language" AS "ReadingLanguage",
                         work."OriginalLanguage",
+                        coalesce((document."Structure" ->> 'Recommended')::boolean, TRUE) AS "IsRecommended",
+                        coalesce(jsonb_array_length(document."Structure" -> 'OriginalPages'), 0) AS "OriginalPages",
                         ARRAY(
                             SELECT
                                 split_part(translation."Path", '/', 2)
@@ -142,7 +153,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             AND progress."WorkId" = asset."WorkId"
                             AND progress."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                             AND progress."ProgressPositionTypeId" = 2
-                        LEFT JOIN "ReadingLanguages" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
+                        LEFT JOIN "ReadingPreferences" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
                     WHERE
                         document."Id" = @DocumentId;
                     """;
@@ -161,7 +172,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // EPUB and comics are prepared; a book whose only present file is a PDF opens as one.
+            // EPUB and comics are prepared; a book whose only present file is a PDF opens as one. A reading copy counts while it is ready and its PDF unchanged.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -173,20 +184,71 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$' AND file."MissingSince" IS NULL) THEN 2
                         WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') AND NOT bool_or(file."RelativePath" ~* '\.epub$') THEN 4
                         ELSE 1
-                    END::smallint AS "ReadingFormatTypeId"
+                    END::smallint AS "ReadingFormatTypeId",
+                    bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL) AS "HasPdf",
+                    progress."Status" AS "ReadingDerivationStatusTypeId",
+                    progress."Reason",
+                    chosen."ReadingViewTypeId",
+                    stopped."Locator"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
-                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                    LEFT JOIN "ReadingPreferences" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
+                    LEFT JOIN "MediaProgress" AS stopped ON stopped."ProfileId" = @ProfileId
+                        AND stopped."WorkId" = asset."WorkId"
+                        AND stopped."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
+                        AND stopped."ProgressPositionTypeId" = 2
+                    JOIN "ReadableStoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                        AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                        AND (NOT file."IsDerived" OR file."DerivedAnalyzerVersion" = @PdfAnalyzerVersion)
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            CASE
+                                WHEN derivation."SourceSizeBytes" = pdf."SizeBytes" AND derivation."SourceModifiedAt" = pdf."ModifiedAt" AND derivation."AnalyzerVersion" = @PdfAnalyzerVersion
+                                    THEN derivation."ReadingDerivationStatusTypeId"
+                                ELSE 1
+                            END::smallint AS "Status",
+                            CASE
+                                WHEN derivation."SourceSizeBytes" = pdf."SizeBytes" AND derivation."SourceModifiedAt" = pdf."ModifiedAt" AND derivation."AnalyzerVersion" = @PdfAnalyzerVersion
+                                    THEN derivation."Reason"
+                            END AS "Reason"
+                        FROM
+                            "StoredFiles" AS pdf
+                            LEFT JOIN "ReadingDerivations" AS derivation ON derivation."StoredFileId" = pdf."Id"
+                        WHERE
+                            pdf."MediaAssetId" = asset."Id"
+                            AND pdf."RelativePath" ~* '\.pdf$'
+                            AND pdf."MissingSince" IS NULL
+                            AND EXISTS (SELECT 1 FROM "InstanceModules" AS module WHERE module."Key" = 'SmartPdf' AND module."IsEnabled")
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "StoredFiles" AS other
+                                WHERE
+                                    other."MediaAssetId" = asset."Id"
+                                    AND other."RelativePath" ~* '\.epub$'
+                                    AND other."MissingSince" IS NULL
+                                    AND NOT EXISTS (SELECT 1 FROM "ReadingDerivations" AS derived WHERE derived."EbookStoredFileId" = other."Id")
+                            )
+                        ORDER BY
+                            pdf."ModifiedAt" DESC,
+                            pdf."Id"
+                        LIMIT 1
+                    ) AS progress ON TRUE
                 WHERE
                     asset."Id" = @MediaAssetId
                     AND asset."MediaAssetTypeId" IN (3, 4)
                 GROUP BY
                     work."Id",
-                    visible."Title";
+                    visible."Title",
+                    progress."Status",
+                    progress."Reason",
+                    chosen."ReadingViewTypeId",
+                    stopped."Locator";
                 """;
-            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion, PdfBook.AnalyzerVersion));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingSourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
         }
@@ -318,7 +380,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             section.position <= @SectionIndex
                     )::bigint AS "CharactersBefore",
                     document."TotalCharacters",
-                    (document."Structure" -> 'Sections' -> @SectionIndex ->> 'Blocks')::integer AS "Blocks"
+                    (document."Structure" -> 'Sections' -> @SectionIndex ->> 'Blocks')::integer AS "Blocks",
+                    coalesce((document."Structure" -> 'Sections' -> @SectionIndex ->> 'PageFrom')::integer, 0) AS "PageFrom"
                 FROM
                     "ReadingDocuments" AS document
                     JOIN "ReadingResources" AS resource ON resource."ReadingDocumentId" = document."Id"
@@ -400,8 +463,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     matches++;
                 }
 
+                // A converted PDF's hit names the page the match stands on.
+                var page = section.Html.Contains(ReadingHtml.PdfPageAttribute, StringComparison.Ordinal) ? ReadingHtml.PageOfText(section.Html, query) : null;
                 var from = Math.Max(0, first - 120);
-                hits.Add(new ReadingSearchHitV1(section.SectionIndex, section.Title, text.Substring(from, Math.Min(300, text.Length - from)).Trim(), matches));
+                hits.Add(new ReadingSearchHitV1(section.SectionIndex, section.Title, text.Substring(from, Math.Min(300, text.Length - from)).Trim(), matches, page));
                 if (hits.Count == 50)
                 {
                     break;

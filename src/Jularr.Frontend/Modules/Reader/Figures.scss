@@ -1,0 +1,56 @@
+// The full-screen view of a figure: the picture fits the screen, zooming and dragging happen on the stage.
+.reader-figure {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: var(--surface);
+    color: var(--text);
+    overflow: hidden;
+
+    &::backdrop { background: var(--surface); }
+    &[open] { display: block; }
+
+    &__tools {
+        position: absolute;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        z-index: 2;
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius-panel, 24px);
+        background: var(--surface);
+    }
+
+    &__stage {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        touch-action: none;
+        cursor: zoom-in;
+        user-select: none;
+        &[data-zoomed=true] { cursor: grab; }
+        &[data-zoomed=true]:active { cursor: grabbing; }
+    }
+
+    &__image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transform: translate(var(--figure-x, 0), var(--figure-y, 0)) scale(var(--figure-scale, 1));
+        transform-origin: center;
+        -webkit-user-drag: none;
+    }
+}
+
+// The printed pages of the book view show the figure cursor where a figure lies.
+.reader[data-figure-hover=true] .reader-book__print { cursor: zoom-in; }

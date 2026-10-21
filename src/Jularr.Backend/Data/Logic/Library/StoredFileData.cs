@@ -52,7 +52,8 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class StoredFileProbeData : BaseData
     {
-        public StoredFileProbeData(long id, long sizeBytes, DateTime modifiedAt, DateTime probedAt, string? container, long? durationMs, long? bitRate, string tracks)
+        public StoredFileProbeData(long id, long sizeBytes, DateTime modifiedAt, DateTime probedAt, string? container, long? durationMs, long? bitRate, string tracks,
+            string chapters, string sidecarMarkers)
         {
             Id = id;
             SizeBytes = sizeBytes;
@@ -62,6 +63,8 @@ namespace Jularr.Backend.Data.Logic.Library
             DurationMs = durationMs;
             BitRate = bitRate;
             Tracks = tracks;
+            Chapters = chapters;
+            SidecarMarkers = sidecarMarkers;
         }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
@@ -87,6 +90,13 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
         public string Tracks { get; }
+
+        // The file's chapters and the markers a sidecar file named, as JSON.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string Chapters { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
+        public string SidecarMarkers { get; }
     }
 
     internal sealed class StoredFileCandidateData : BaseData

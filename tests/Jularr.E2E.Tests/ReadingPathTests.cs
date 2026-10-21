@@ -78,6 +78,30 @@ namespace Jularr.E2E.Tests
                 await viewSeek.FocusAsync();
                 await page.Keyboard.PressAsync("Home");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '1'");
+                // A bookmark marks the first block of this page, shows in the notes with its chapter, leads back to it and goes again.
+                var bookmark = page.Locator(".reader__tools [data-reader-bookmark]");
+                var bookmarked = page.Locator("[data-role=bookmark-list] li[data-bookmark-id]");
+                await bookmark.ClickAsync();
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
+                await Assertions.Expect(bookmarked).ToHaveCountAsync(1);
+                await Assertions.Expect(bookmarked.Locator("a")).ToHaveTextAsync("Chapter One");
+                await Evidence.SaveAsync(page, "reader-bookmark-list");
+                await page.Keyboard.PressAsync("Escape");
+                await viewSeek.FocusAsync();
+                await page.Keyboard.PressAsync("End");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return Number(r.dataset.page) + Number(r.dataset.columns) > Number(r.dataset.pageCount); }");
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
+                await bookmarked.Locator("a").ClickAsync();
+                await page.WaitForURLAsync("**/Read/1?s=0&b=*");
+                await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookReady === 'true' && r.dataset.page === '1'; }");
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator(".reader__tools [data-action=notes]").ClickAsync();
+                await bookmarked.Locator("[data-bookmark-delete]").ClickAsync();
+                await Assertions.Expect(bookmarked).ToHaveCountAsync(0);
+                await Assertions.Expect(bookmark).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.Keyboard.PressAsync("Escape");
                 var canvasBeforePopover = (await page.Locator(".reader__canvas").BoundingBoxAsync())!;
                 var appearance = page.Locator(".reader__tools [data-reader-open-settings=text]");
                 await appearance.ClickAsync();
@@ -258,6 +282,17 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(2, sources.Length);
                 Assert.AreNotEqual(sources[0], sources[1]);
                 await Evidence.SaveAsync(page, "reader-image-spread");
+                // The same button marks the spread's page; the list sits in the page panel.
+                var imageMark = page.Locator(".reader__tools [data-reader-bookmark]");
+                await imageMark.ClickAsync();
+                await Assertions.Expect(imageMark).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator("[data-action=contents]").ClickAsync();
+                var imageEntry = page.Locator("[data-role=bookmark-list] li[data-bookmark-id]");
+                await Assertions.Expect(imageEntry.Locator("a")).ToHaveTextAsync("Page 2");
+                await imageEntry.Locator("[data-bookmark-delete]").ClickAsync();
+                await Assertions.Expect(imageEntry).ToHaveCountAsync(0);
+                await Assertions.Expect(imageMark).ToHaveAttributeAsync("aria-pressed", "false");
+                await page.Locator("[data-reader-close=contents]").ClickAsync();
                 await page.SetViewportSizeAsync(390, 844);
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
                 Assert.AreEqual(1, await page.Locator(".reader-book__print img").CountAsync());
@@ -716,6 +751,167 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "reader-comic-seek");
                 await page.Keyboard.PressAsync("Home");
                 await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.page === '0'");
+            }
+        }
+
+        [TestMethod]
+        [Timeout(180_000)]
+        public async Task LocalPdf_PageOfItsOwnPicture_ReadsAsFigureAndOpensFullScreenWithZoom()
+        {
+            using var folders = new Folders("Books");
+            string[] Text(int paragraphs) => [.. Enumerable.Range(1, paragraphs).SelectMany(number => new[] { "Paragraph " + number + " runs across the page like the text of any printed book",
+                "does, line after line, until it ends here.", "" })];
+            Directory.CreateDirectory(Path.Combine(folders.Library, "Books"));
+            Steps.WritePdfWithPlate(Path.Combine(folders.Library, "Books", "plate-book.pdf"), 1, ["Chapter One", "", "", "It is a truth universally acknowledged, that a single man in possession", "of a good fortune.", "", .. Text(14)],
+                [], [.. Text(16)], [.. Text(16)]);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await page.GotoAsync("/Admin/Library");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (true)
+                {
+                    await page.GotoAsync("/Admin/Library/Unmatched");
+                    if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                    Assert.IsTrue(DateTime.UtcNow < deadline, "The local test PDF was not scanned.");
+                    await Task.Delay(500);
+                }
+
+                await page.Locator("form [name=Title]").FillAsync("Plate book");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+
+                // The plate is a figure of its own page, between the chapter's text.
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=content]")).ToContainTextAsync("of a good fortune", new() { Timeout = 30_000 });
+                Assert.AreEqual("page", await page.Locator("[data-role=content] figure[data-figure]").First.GetAttributeAsync("data-figure"));
+                await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookReady === 'true'");
+
+                // Reading on, the printed figure page opens full screen; it zooms, fits again and closes.
+                const string Visible = "() => { const box = document.querySelector('.reader__page-print img[data-figure]')?.getBoundingClientRect(); return !!box && box.width > 0 && box.left >= 0 && box.right <= innerWidth; }";
+                var turns = 0;
+                while (!await page.EvaluateAsync<bool>(Visible))
+                {
+                    Assert.IsTrue(++turns < 200, "The figure page was not reached.");
+                    await page.Locator("[data-turn='1']").First.ClickAsync();
+                    await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle'");
+                }
+
+                var box = (await page.Locator(".reader__page-print img[data-figure]").First.BoundingBoxAsync())!;
+                await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                var view = page.Locator("dialog.reader-figure");
+                await Assertions.Expect(view).ToBeVisibleAsync();
+                Assert.IsTrue(await view.Locator(".reader-figure__image").EvaluateAsync<bool>("image => image.naturalWidth > 0 && image.getBoundingClientRect().width > innerWidth * 0.2"));
+                await view.Locator("[data-figure-zoom=in]").ClickAsync();
+                Assert.AreEqual("true", await view.Locator(".reader-figure__stage").GetAttributeAsync("data-zoomed"));
+                await view.Locator("[data-figure-zoom=fit]").ClickAsync();
+                Assert.AreEqual("false", await view.Locator(".reader-figure__stage").GetAttributeAsync("data-zoomed"));
+                await Evidence.SaveAsync(page, "reader-figure-fullscreen");
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(view).ToBeHiddenAsync();
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "reader-figure-fullscreen");
+                throw;
+            }
+        }
+
+        // A scan without any text opens as its original pages, drawn by the browser: they turn, zoom and keep the place; the view of the book is the profile's to choose.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task LocalPdf_Scan_OpensAsOriginalPages_TurnsZoomsAndKeepsTheChosenView()
+        {
+            using var folders = new Folders("Books");
+            Steps.WriteScannedPdf(Path.Combine(folders.Library, "Books", "scan-book.pdf"), 3);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await page.GotoAsync("/Admin/Library");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (true)
+                {
+                    await page.GotoAsync("/Admin/Library/Unmatched");
+                    if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                    Assert.IsTrue(DateTime.UtcNow < deadline, "The local test PDF was not scanned.");
+                    await Task.Delay(500);
+                }
+
+                await page.Locator("form [name=Title]").FillAsync("Scan book");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+
+                // No text to reflow: the original pages show at once, the first page drawn in its own colour.
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                var canvas = page.Locator("[data-role=page]");
+                await Assertions.Expect(canvas).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("1 / 3");
+                const string Centre = "canvas => Array.from(canvas.getContext('2d').getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data)";
+                var first = await canvas.EvaluateAsync<int[]>(Centre);
+                Assert.IsTrue(first[0] is > 20 and < 80 && first[2] > 150, string.Join(',', first));
+                await Evidence.SaveAsync(page, "reader-original-pages");
+
+                // A turn by button, by key and by swipe-sized drag draws the next page; the last page cannot be turned past.
+                await page.Locator("[data-turn='1']").First.ClickAsync();
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3");
+                await page.Keyboard.PressAsync("ArrowRight");
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("3 / 3");
+                await Assertions.Expect(page.Locator("[data-turn='1']").First).ToBeDisabledAsync();
+                await page.WaitForFunctionAsync("() => { const c = document.querySelector('[data-role=page]'); const data = c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data; return data[0] > 150; }");
+
+                // Zoom grows the sheet beyond the stage and fit brings the whole page back.
+                var sheet = page.Locator("[data-role=sheet]");
+                var whole = (await sheet.BoundingBoxAsync())!.Width;
+                await page.Locator("[data-page-zoom=in]").ClickAsync();
+                await page.Locator("[data-page-zoom=in]").ClickAsync();
+                var zoomed = (await sheet.BoundingBoxAsync())!.Width;
+                Assert.IsTrue(zoomed > whole * 1.4, whole + " -> " + zoomed);
+                await page.Locator("[data-page-zoom=fit]").ClickAsync();
+                Assert.IsTrue(Math.Abs((await sheet.BoundingBoxAsync())!.Width - whole) < 2);
+
+                // The place is kept: a new visit opens at the third page; the page of the address wins.
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("3 / 3", new() { Timeout = 30_000 });
+                await page.GotoAsync("/Read/1?pg=2", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3", new() { Timeout = 30_000 });
+
+                // The view is the profile's to choose: the Smart Book of a scan without text is not there, and the pages say so; automatic is chosen again.
+                await page.Locator("button[data-reader-open-settings]").First.ClickAsync();
+                await Assertions.Expect(page.Locator("[data-view-choice=smart]")).ToBeVisibleAsync();
+                await page.Locator("[data-view-choice=smart]").ClickAsync();
+                await page.WaitForURLAsync(url => url.Contains("view=smart", StringComparison.Ordinal));
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator(".reader__notice:not([hidden])")).ToContainTextAsync("Smart Book is not ready");
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-view-choice=smart]")).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator("button[data-reader-open-settings]").First.ClickAsync();
+                await page.Locator("[data-view-choice=auto]").ClickAsync();
+                await page.WaitForURLAsync(url => !url.Contains("view=", StringComparison.Ordinal));
+                await Assertions.Expect(page.Locator("[data-view-choice=auto]")).ToHaveAttributeAsync("aria-pressed", "true");
+                await Assertions.Expect(page.Locator(".reader__notice:not([hidden])")).ToHaveCountAsync(0);
+
+                // The same pages on a phone: the page fits the narrow screen, and dark or light the backdrop is the theme's.
+                await page.SetViewportSizeAsync(390, 844);
+                await page.GotoAsync("/Read/1?pg=1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=page]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                var small = (await page.Locator("[data-role=sheet]").BoundingBoxAsync())!;
+                Assert.IsTrue(small.Width <= 390 && small.X >= 0, small.Width + " at " + small.X);
+                await Evidence.SaveAsync(page, "reader-original-pages-mobile");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "reader-original-pages");
+                throw;
             }
         }
 

@@ -1,4 +1,5 @@
 @use './Book';
+@use './Figures';
 
 // Reuse the regular app navigation, with the document header as the only top bar.
 .reader-page {
@@ -76,7 +77,7 @@
     &__bottom > :is(a,span:first-child:empty) { flex: 0 0 44px; }
     &__bottom > a[hidden] { display: inline-flex; visibility: hidden; pointer-events: none; }
     &__view-tools { display: flex; gap: 2px; flex-shrink: 0; margin-left: auto; }
-    &__view-tools [aria-pressed=true], [data-speech-toggle][aria-pressed=true], [data-speech-pause][aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    &__view-tools [aria-pressed=true], [data-reader-bookmark][aria-pressed=true], [data-speech-toggle][aria-pressed=true], [data-speech-pause][aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
     &__heading { flex: 1; min-width: 0; }
     &__identity { display: flex; align-items: center; flex: 1; min-width: 0; gap: 12px; }
     &__cover { flex: none; display: grid; place-items: center; width: 28px; height: 40px; border-radius: 3px; overflow: hidden; background: var(--surface-hover); color: var(--muted); }
@@ -90,7 +91,7 @@
     &[data-contents=true] &__sidebar { display: block; }
     &__sidebar > .reader__panel-heading { margin: 0 4px 8px; }
     &__sidebar &__panel { position: static; width: auto; max-height: none; padding: 0; border: 0; box-shadow: none; }
-    &--pdf &__sidebar, &--pdf [data-action=contents], &--pdf [data-action=settings] { display: none; }
+    &--pages &__sidebar, &--pages [data-action=contents] { display: none; }
     &__toc-entry { display: block; padding: 10px 14px; color: inherit; text-decoration: none; border-radius: var(--radius-control); overflow-wrap: anywhere; }
     &__toc-entry.is-current { color: var(--accent-text); background: var(--accent-soft); font-weight: 650; }
     &__toc-entry[data-level="1"] { padding-left: 28px; }
@@ -103,9 +104,28 @@
     &__content :is(p,h1,h2,h3,h4,h5,h6,blockquote,pre,table,figure,ul,ol,dl) { max-width: min(var(--reader-text-width, 68ch), calc(100% - 48px)); margin-inline: auto; }
     &[data-indent=true] &__content p + p { text-indent: 1.25em; }
     &[data-hyphenation=false] &__content { hyphens: none; }
-    &[data-illustrations=false] &__content:not(.reader__images) :is(img, picture, figure) { display: none; }
+    &[data-illustrations=false] &__content:not(.reader__images) :is(img, picture, figure:not([data-figure=original])) { display: none; }
     &__content h1, &__content h2, &__content h3 { line-height: 1.25; }
     &__content img { display: block; max-width: 100%; max-height: 100%; height: auto; object-fit: contain; break-inside: avoid; }
+    // Figures: a picture with room of its own. A page figure fills a page, a wide one the width of the text; both open full screen.
+    &__content :is(figure[data-figure], img[data-figure]) { cursor: zoom-in; }
+    &__content figure[data-figure] { display: grid; justify-items: center; align-content: center; margin-block: 1.2em; break-inside: avoid; }
+    &__content figure[data-figure] img { width: auto; max-width: 100%; max-height: 100%; margin-inline: auto; }
+    &__content figure[data-figure] figcaption { max-width: 100%; margin-top: .6em; font-size: .85em; line-height: 1.4; text-align: center; color: var(--muted); }
+    &__content figure[data-figure=page] { max-width: 100%; margin-block: 0; padding-block: 8px; }
+    &[data-mode=paged] &__content figure[data-figure=page] { height: 100%; break-before: column; break-after: column; box-sizing: border-box; }
+    &[data-mode=paged] &__content figure[data-figure=page] img { max-height: calc(100% - 1.8em); }
+    &[data-mode=paged] &__content figure[data-figure=wide] img, &[data-mode=paged] &__content img[data-figure=wide] { max-height: 80cqh; }
+    &[data-mode=scroll] &__content figure[data-figure=page] img { max-height: 90dvh; }
+    &__content img[data-figure] { margin-inline: auto; }
+    &__content figure[data-figure=original] { margin-block: 1.2em; padding: 14px 18px; border: 1px solid var(--accent-line); border-radius: var(--radius-control); background: var(--accent-soft); text-align: center; cursor: default; }
+    &__content figure[data-figure=original] p { margin: 0; max-width: none; font-size: .9em; }
+    &__content figure[data-figure=original] a { color: var(--accent-text); }
+    &__content figure[data-figure=original][data-state=ready] { padding: 0; border: 0; background: none; cursor: zoom-in; }
+    &[data-mode=paged] &__content figure[data-figure=original][data-state=ready] { height: 100%; break-before: column; break-after: column; box-sizing: border-box; padding-block: 8px; }
+    &[data-mode=paged] &__content figure[data-figure=original][data-state=ready] img { max-height: calc(100% - 1.8em); }
+    &[data-mode=scroll] &__content figure[data-figure=original][data-state=ready] img { max-height: 90dvh; }
+    &__content figure[data-figure=original][data-state=ready] figcaption a { color: var(--muted); }
     &__content a { color: inherit; }
     &__content table { border-collapse: collapse; }
     &__content td, &__content th { border: 1px solid var(--border); padding: 4px 8px; }
@@ -128,7 +148,21 @@
     &[data-direction=rtl] &__page-controls .ui-icon { transform: rotate(180deg); }
     &[data-direction=rtl] &__page-controls .reader__turn-next .ui-icon { transform: none; }
     &[data-format=comic][data-mode=paged] &__bottom > :is([data-role=previous],[data-role=next],[data-role=position]) { display: none; }
+    &[data-format=pages] &__bottom > [data-role=position] { display: none; }
     &__panels { display: contents; }
+    // The original pages: one page of the PDF, drawn by the browser, on the theme's surface; it fits the screen or its width and zooms.
+    &[data-format=pages] &__canvas { padding: 0; background: var(--surface); }
+    &[data-format=pages] &__paper { width: 100%; height: 100%; background: none; }
+    &__original { position: relative; display: flex; padding: 0; overflow: auto; touch-action: pan-x pan-y; user-select: none; }
+    &__original[data-zoomed=true] { cursor: grab; }
+    &__sheet { flex: none; margin: auto; width: var(--sheet-width, 0); height: var(--sheet-height, 0); }
+    &__sheet canvas { display: block; width: 100%; height: 100%; background: #fff; }
+    &__original-status { position: absolute; inset: 0; display: grid; place-items: center; max-width: none; margin: 0; color: var(--muted); pointer-events: none; &[hidden] { display: none; } }
+    &__zoom { position: absolute; right: 12px; bottom: 12px; z-index: 3; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel, 24px); background: var(--surface); }
+    &__notices { position: absolute; z-index: 5; top: calc(var(--reader-header-height, 72px) + 8px); left: 50%; display: grid; justify-items: center; gap: 8px; max-width: calc(100% - 24px); transform: translateX(-50%); pointer-events: none; }
+    &__notices > * { pointer-events: auto; }
+    &__notice, &__offer { margin: 0; padding: 6px 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-panel, 24px); background: var(--surface); color: var(--muted); font-size: 12px; &[hidden] { display: none; } }
+    &__offer { display: flex; align-items: center; gap: 8px; color: var(--text); p { margin: 0; } }
     &__panel:is([data-current-group=text],[data-current-group=paper]) { width: min(340px, calc(100% - 24px)); }
     & &__more, &__panel[data-panel=language] { width: min(260px, calc(100% - 24px)); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(10px); }
     &__panel { position: absolute; z-index: 4; top: calc(var(--reader-header-height, 72px) + 8px); right: 12px; display: grid; gap: 8px; width: min(440px, calc(100% - 24px)); max-height: calc(100% - var(--reader-header-height, 72px) - 100px); overflow: auto; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-panel, 24px); background: var(--surface); color: var(--text); box-shadow: var(--shadow); &[hidden] { display: none; } }
@@ -140,15 +174,15 @@
     &__panel p { margin: 0; font-size: 12px; }
     &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
     &__choices [aria-pressed=true] { background: var(--accent-soft); color: var(--accent-text); }
+    &__bookmarks { display: grid; gap: 10px; &[hidden] { display: none; } h3 { margin: 0; font-size: 13px; } }
     &__notes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-    &__note { display: grid; gap: 4px; }
+    &__note { display: grid; gap: 4px; > .button { justify-self: start; } }
     &__note-text { margin: 0; color: var(--muted); font-size: 14px; white-space: pre-wrap; }
     &__note-quote { color: inherit; }
     &__toolbar, &__popover { position: fixed; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; max-width: min(22rem, calc(100vw - 16px)); padding: 8px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); &[hidden] { display: none; } }
     &__popover { flex-direction: column; textarea { width: 100%; font: inherit; } }
     &__mark { color: inherit; border-radius: 2px; cursor: pointer; &[data-color="1"] { background: rgb(250 204 21 / 40%); } &[data-color="2"] { background: rgb(74 222 128 / 35%); } &[data-color="3"] { background: rgb(96 165 250 / 35%); } &[data-color="4"] { background: rgb(244 114 182 / 35%); } &.has-note { text-decoration: underline dotted; } }
     &__found { color: inherit; background: none; outline: 2px solid var(--reader-ink); }
-    &__pdf { width: 100%; height: 100%; border: 0; }
     > [role=status]:not([hidden]) { grid-column: 1 / -1; margin: 0; padding: 8px 16px; }
     &__status { padding: 32px 16px; }
     &:fullscreen { height: 100dvh; width: 100%; }
@@ -213,9 +247,7 @@
         &__page-controls > [data-role=pages] { grid-area: 3 / 1 / 4 / -1; justify-self: center; align-self: end; z-index: 2; padding-bottom: 4px; font-size: 10px; white-space: nowrap; }
         &__mobile-item { display: flex !important; }
         &__panel { grid-area: 2 / 1 / 3 / -1; top: auto; bottom: 8px; max-height: calc(100% - 16px); padding: 16px; }
-        &--pdf &__tools > .button { grid-column: 1; padding-inline: 8px; }
-        &--pdf &__view-tools { display: flex; grid-area: 4 / 2 / 5 / -1; justify-content: center; }
-        &:not([data-mode]):not([data-format=pdf]) &__chapter-navigation { display: flex; grid-area: 3 / 1 / 4 / -1; justify-content: center; z-index: 3; }
+        &:not([data-mode]):not([data-format=pdf]):not([data-format=pages]) &__chapter-navigation { display: flex; grid-area: 3 / 1 / 4 / -1; justify-content: center; z-index: 3; }
         &:not([data-mode]):has(.reader__chapter-navigation) &__bottom { visibility: hidden; }
         &[data-view=fullscreen] {
             grid-template: auto minmax(0, 1fr) auto auto / repeat(var(--reader-dock-count), minmax(0, 1fr));

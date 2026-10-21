@@ -6,9 +6,10 @@ namespace Jularr.Backend.Data.Logic.Account
 {
     internal sealed class AccountUpdateData : BaseData
     {
-        public AccountUpdateData(long id, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, bool? mayConfirmSources = null)
+        public AccountUpdateData(long id, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, bool? mayConfirmSources = null, bool? transcodingPriority = null)
         {
             MayConfirmSources = mayConfirmSources;
+            TranscodingPriority = transcodingPriority;
             Id = id;
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
@@ -29,5 +30,8 @@ namespace Jularr.Backend.Data.Logic.Account
 
         [DataField(typeof(AccountFields), nameof(AccountFields.MayConfirmSources), false)]
         public bool? MayConfirmSources { get; set; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.TranscodingPriority), false)]
+        public bool? TranscodingPriority { get; set; }
     }
 }

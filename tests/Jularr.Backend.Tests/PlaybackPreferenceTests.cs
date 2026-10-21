@@ -36,6 +36,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(SubtitleMode.WhenForeign, preferences.SubtitleModeTypeId);
             Assert.AreEqual(1.00m, preferences.Speed);
             Assert.IsTrue(preferences.AutoplayNext);
+            Assert.AreEqual((SkipMode.Button, SkipMode.Button), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
             Assert.AreEqual(PlaybackQuality.Automatic, preferences.DeviceQuality);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
@@ -48,20 +49,21 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((1.50m, SubtitleMode.WhenForeign, true), (preferences.Speed, preferences.SubtitleModeTypeId, preferences.AutoplayNext));
 
             // A full save replaces them; the speed alone then leaves the languages as they are. Languages are lower-cased codes.
-            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false));
+            using var saved = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("DE", "fr", SubtitleMode.ForcedOnly, 0.75m, false, SkipMode.Automatic, SkipMode.Off));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var faster = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(2m));
             Assert.AreEqual(HttpStatusCode.OK, faster.StatusCode, await faster.Content.ReadAsStringAsync());
             preferences = await ReadAsync(host);
             Assert.AreEqual(("de", "fr", SubtitleMode.ForcedOnly, 2.00m, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext));
+            Assert.AreEqual((SkipMode.Automatic, SkipMode.Off), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ProfilePlaybackPreferences\""));
 
             // Unknown languages and speeds outside the player's range are refused; no language is allowed.
-            using var language = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("deu", null, SubtitleMode.Off, 1m, true));
+            using var language = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("deu", null, SubtitleMode.Off, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.BadRequest, language.StatusCode);
             using var tooFast = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(3m));
             Assert.AreEqual(HttpStatusCode.BadRequest, tooFast.StatusCode);
-            using var cleared = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1(null, null, SubtitleMode.Always, 1m, true));
+            using var cleared = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1(null, null, SubtitleMode.Always, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"AudioLanguage\" IS NULL AND \"SubtitleLanguage\" IS NULL FROM \"ProfilePlaybackPreferences\""));
 
@@ -71,7 +73,7 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") SELECT "OwnerAccountId", 77 FROM "Profiles" WHERE "Id" = 77;
                 INSERT INTO "ProfilePlaybackPreferences" ("ProfileId", "AudioLanguage", "Speed") VALUES (77, 'ja', 1.75);
                 """);
-            using var again = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("it", null, SubtitleMode.Off, 1.25m, true));
+            using var again = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("it", null, SubtitleMode.Off, 1.25m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
             Assert.AreEqual("ja", await host.ScalarAsync("SELECT \"AudioLanguage\" FROM \"ProfilePlaybackPreferences\" WHERE \"ProfileId\" = 77"));
 
@@ -95,6 +97,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "name=\"AudioLanguage\"");
             StringAssert.Contains(html, "name=\"AutoplayNext\"");
+            StringAssert.Contains(html, "name=\"IntroSkipModeTypeId\"");
+            StringAssert.Contains(html, "name=\"OutroSkipModeTypeId\"");
 
             using var saved = await host.SendAsync(HttpMethod.Post, "/Settings?handler=Playback", new Dictionary<string, string>
             {
@@ -104,11 +108,14 @@ namespace Jularr.Backend.Tests
                 ["subtitleModeTypeId"] = "3",
                 ["__Invariant"] = "Speed",
                 ["speed"] = "1.25",
-                ["autoplayNext"] = "false"
+                ["autoplayNext"] = "false",
+                ["introSkipModeTypeId"] = "3",
+                ["outroSkipModeTypeId"] = "1"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             var preferences = await ReadAsync(host);
             Assert.AreEqual(("ja", (string?)null, SubtitleMode.Always, 1.25m, false), (preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed, preferences.AutoplayNext));
+            Assert.AreEqual((SkipMode.Automatic, SkipMode.Off), (preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId));
 
             // The page shows what was saved.
             using var again = await host.SendAsync(HttpMethod.Get, "/Settings");
@@ -177,7 +184,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((PlaybackModeType.DirectPlay, 1), (plan.PlaybackModeTypeId, plan.AudioStreamIndex));
 
             // German audio with full German subtitles: the audio plays through a conversion, the subtitle is picked for the player.
-            using var german = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("de", "de", SubtitleMode.Always, 1m, true));
+            using var german = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("de", "de", SubtitleMode.Always, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, german.StatusCode, await german.Content.ReadAsStringAsync());
             CollectionAssert.AreEqual(new[] { "s2", "s5" }, Selected(await ReadTracksAsync(host, assetId)));
             plan = await StartAsync(host, assetId, Hls);
@@ -190,15 +197,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((PlaybackModeType.DirectPlay, 1), (plan.PlaybackModeTypeId, plan.AudioStreamIndex));
 
             // Only forced ones, a language the film lacks, and off.
-            using var forced = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("de", "de", SubtitleMode.ForcedOnly, 1m, true));
+            using var forced = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("de", "de", SubtitleMode.ForcedOnly, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, forced.StatusCode);
             CollectionAssert.AreEqual(new[] { "s2", "s4" }, Selected(await ReadTracksAsync(host, assetId)));
-            using var french = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("fr", "fr", SubtitleMode.Always, 1m, true));
+            using var french = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("fr", "fr", SubtitleMode.Always, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, french.StatusCode);
             CollectionAssert.AreEqual(new[] { "s1" }, Selected(await ReadTracksAsync(host, assetId)));
 
             // English audio with German subtitles only while the audio is foreign.
-            using var foreign = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("en", "de", SubtitleMode.WhenForeign, 1.5m, true));
+            using var foreign = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("en", "de", SubtitleMode.WhenForeign, 1.5m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, foreign.StatusCode);
             CollectionAssert.AreEqual(new[] { "s1", "s5" }, Selected(await ReadTracksAsync(host, assetId)));
 
@@ -206,15 +213,14 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            Assert.IsTrue(Regex.IsMatch(html, "data-audio=\"1\"[^>]*aria-pressed=\"true\""), html);
-            Assert.IsTrue(Regex.IsMatch(html, "data-subtitle=\"s5\"[^>]*aria-pressed=\"true\""), html);
+            Assert.IsTrue(Regex.IsMatch(html, "<select id=\"player-audio-basic\"[^>]*>(<option[^>]*>[^<]*</option>)*?<option value=\"1\" selected=\"selected\" data-chosen=\"true\""), html);
+            Assert.IsTrue(Regex.IsMatch(html, "<select id=\"player-subtitle-basic\"[^>]*>(<option[^>]*>[^<]*</option>)*?<option value=\"s5\" selected=\"selected\" data-chosen=\"true\""), html);
             StringAssert.Contains(html, "data-preferred-speed=\"1.5\"");
             StringAssert.Contains(html, "data-autoplay=\"true\"");
-            Assert.IsTrue(Regex.IsMatch(html, "data-quality=\"1\"[^>]*aria-pressed=\"true\""), html);
-            foreach (var quality in new[] { "2", "3", "4" })
-            {
-                Assert.IsTrue(Regex.IsMatch(html, "data-quality=\"" + quality + "\"[^>]*aria-pressed=\"false\""), html);
-            }
+            var quality = Regex.Match(html, "<select id=\"player-quality-basic\".*?</select>", RegexOptions.Singleline).Value;
+            Assert.AreEqual(1, Regex.Matches(quality, "<option value=\"1\" selected=\"selected\" data-chosen=\"true\"").Count, html);
+            Assert.AreEqual(4, Regex.Matches(quality, "<option\\b").Count);
+            Assert.AreEqual(1, Regex.Matches(quality, "selected=\"selected\"").Count);
         }
 
         [TestMethod]
@@ -252,8 +258,9 @@ namespace Jularr.Backend.Tests
             // The player's menu offers all four.
             using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
             var html = await page.Content.ReadAsStringAsync();
-            Assert.IsTrue(Regex.IsMatch(html, "data-quality=\"4\"[^>]*aria-pressed=\"true\""), html);
-            Assert.AreEqual(4, Regex.Matches(html, "data-quality=\"").Count);
+            var saverField = Regex.Match(html, "<select id=\"player-quality-basic\".*?</select>", RegexOptions.Singleline).Value;
+            Assert.IsTrue(Regex.IsMatch(saverField, "<option value=\"4\" selected=\"selected\" data-chosen=\"true\""), html);
+            Assert.AreEqual(4, Regex.Matches(saverField, "<option\\b").Count);
 
             // Without a converter nothing can be capped; the player says so instead of playing something too large.
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", Browser);
