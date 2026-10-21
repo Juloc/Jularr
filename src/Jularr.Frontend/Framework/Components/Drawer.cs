@@ -8,13 +8,24 @@ namespace Jularr.Frontend.Framework
 
     // A modal panel from the right edge (full screen on phones). Several panes show a tab row that switches between them.
     // A button with data-drawer-open="id" (and data-drawer-pane="pane") opens it; those buttons show once the script has run, since the panel needs it.
-    public sealed class Drawer(FrontendAssets assets, string id, IReadOnlyList<DrawerPane> panes) : IUiComponent
+    // The sheet modifier makes it a bottom sheet on a phone (the details of one list row) instead of a full screen.
+    public sealed class Drawer(FrontendAssets assets, string id, IReadOnlyList<DrawerPane> panes, bool sheet = false) : IUiComponent
     {
         public static HtmlElement Opener(HtmlElement button, string id, string? pane = null)
         {
             button.Attribute("data-drawer-open", id).Attribute("aria-haspopup", "dialog").Attribute("aria-controls", id);
             return pane is null ? button : button.Attribute("data-drawer-pane", pane);
         }
+
+        // The pieces of a details pane: its state line, a grid of labelled values, a titled text block and a labelled control.
+        public static IUiComponent State(string labelKey, IUiComponent state) => new Div(new Span(new Text(labelKey)), state).Class("drawer__state");
+
+        public static IUiComponent Facts(params (string LabelKey, IUiComponent Value)[] facts) =>
+            new Div([.. facts.Select(fact => (IUiComponent)new Div(new Span(new Text(fact.LabelKey)), new Div(fact.Value).Class("drawer__fact-value")).Class("drawer__fact"))]).Class("drawer__facts");
+
+        public static IUiComponent Block(string headingKey, params IUiComponent[] content) => new Section([new H3(new Text(headingKey)), .. content]).Class("drawer__block");
+
+        public static IUiComponent Setting(string labelKey, IUiComponent control) => new Div(new Span(new Text(labelKey)), control).Class("drawer__setting");
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -47,7 +58,7 @@ namespace Jularr.Frontend.Framework
                 parts.Add(element);
             }
 
-            new Dialog([.. parts]).Class("drawer").Attribute("id", id).Attribute("aria-labelledby", id + "-title").WriteTo(writer, encoder, texts);
+            new Dialog([.. parts]).Class(sheet ? "drawer drawer--sheet" : "drawer").Attribute("id", id).Attribute("aria-labelledby", id + "-title").WriteTo(writer, encoder, texts);
         }
 
         private sealed class Dialog(params IUiComponent[] content) : HtmlElement("dialog", content);

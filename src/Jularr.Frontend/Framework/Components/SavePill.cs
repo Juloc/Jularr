@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Framework
                     .TextAttribute("data-failed", "savePill.failed").TextAttribute("data-leave", "savePill.leave"),
                 new Button(new Text("savePill.discard")).Attribute("data-save-discard", ""),
                 new Button(new Text("common.save")).Primary().Attribute("data-save-submit", "").TextAttribute("data-saved", "savePill.saved"))
-            .Class("save-pill").Attribute("data-save-pill", "").TextAttribute("aria-label", "savePill.region").Attribute("role", "region").Attribute("hidden", "hidden")
+            .Class("floating-pill save-pill").Attribute("data-save-pill", "").TextAttribute("aria-label", "savePill.region").Attribute("role", "region").Attribute("hidden", "hidden")
             .WriteTo(writer, encoder, texts);
     }
 }

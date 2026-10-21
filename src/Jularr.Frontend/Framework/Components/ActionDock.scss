@@ -1,0 +1,34 @@
+// The zones of the dock: actions, bulk and paging in one pill, divided by the quiet line. The pill itself is the shared floating pill.
+.action-dock {
+    max-width: calc(100% - 16px);
+
+    &__zone { display: flex; align-items: center; gap: 6px; min-width: 0; }
+
+    &__divider { flex: none; align-self: center; width: 1px; height: 22px; margin: 0 4px; background: var(--border); }
+
+    &__count { padding: 0 8px; color: var(--muted); font-size: var(--text-body); white-space: nowrap; }
+
+    &__label { padding: 0 6px; color: var(--muted); font-size: var(--text-control); font-weight: 650; white-space: nowrap; }
+
+    // Chosen rows: the bulk zone takes the place of the page's actions.
+    &[data-selecting] &__actions { display: none; }
+    &__bulk[hidden] { display: none; }
+
+    .button { flex: none; white-space: nowrap; }
+    .button--icon { width: var(--control-height-compact); min-height: var(--control-height-compact); border-color: transparent; }
+    select { min-height: var(--control-height-compact); padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font: inherit; font-size: var(--text-small); }
+
+    // A phone keeps the icons of the actions; their names stay for assistive technology.
+    @media (max-width: 520px) {
+        gap: 2px;
+        &__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+        .button:not(.button--icon) { padding: 4px 11px; }
+    }
+}
+
+// A page that also has a save pill: the dock stacks above it, they never overlap.
+.page-screen:has(.save-pill:not([hidden])) .action-dock {
+    bottom: calc(40px + 64px + env(safe-area-inset-bottom));
+
+    @media (max-width: 780px) { bottom: calc(96px + 64px + env(safe-area-inset-bottom)); }
+}
