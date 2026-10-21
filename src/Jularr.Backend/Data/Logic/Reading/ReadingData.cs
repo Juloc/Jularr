@@ -305,13 +305,15 @@ namespace Jularr.Backend.Data.Logic.Reading
         public bool IsPending { get; }
     }
 
-    // The next queued scan and the language its book was written in.
+    // The next queued scan, the language its book was written in, how many pages it has once known, and the page a reader has open.
     internal sealed class ReadingRecognitionQueueData : BaseData
     {
-        public ReadingRecognitionQueueData(long storedFileId, string? language)
+        public ReadingRecognitionQueueData(long storedFileId, string? language, int? pages, int? wantedPage)
         {
             StoredFileId = storedFileId;
             Language = language;
+            Pages = pages;
+            WantedPage = wantedPage;
         }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
@@ -319,6 +321,83 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
         public string? Language { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Pages))]
+        public int? Pages { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber), false)]
+        public int? WantedPage { get; }
+    }
+
+    // What one page of a scan was found to hold: recognized lines as fractions of the page, and how plausible their text is.
+    internal sealed class ReadingRecognizedPageData : BaseData
+    {
+        public ReadingRecognizedPageData(long storedFileId, int pageNumber, string reason, decimal quality, string lines)
+        {
+            StoredFileId = storedFileId;
+            PageNumber = pageNumber;
+            Reason = reason;
+            Quality = quality;
+            Lines = lines;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber))]
+        public int PageNumber { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.RecognizedReason))]
+        public string Reason { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Quality))]
+        public decimal Quality { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.RecognizedLines))]
+        public string Lines { get; }
+    }
+
+    internal sealed class ReadingRecognizedPageNumberData : BaseData
+    {
+        public ReadingRecognizedPageNumberData(int pageNumber)
+        {
+            PageNumber = pageNumber;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber))]
+        public int PageNumber { get; }
+    }
+
+    // The pages a scan has, once its first pass has counted them.
+    internal sealed class ReadingRecognitionPagesData : BaseData
+    {
+        public ReadingRecognitionPagesData(long storedFileId, int pages)
+        {
+            StoredFileId = storedFileId;
+            Pages = pages;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Pages), true)]
+        public int Pages { get; }
+    }
+
+    // The page a profile has open in a book's PDF; its recognition reads that region first.
+    internal sealed class ReadingWantedPageData : BaseData
+    {
+        public ReadingWantedPageData(long mediaAssetId, int pageNumber)
+        {
+            MediaAssetId = mediaAssetId;
+            PageNumber = pageNumber;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.PageNumber))]
+        public int PageNumber { get; }
     }
 
     internal sealed class ReadingRecognitionResultData : BaseData
@@ -432,30 +511,46 @@ namespace Jularr.Backend.Data.Logic.Reading
     // Spine sections and table of contents, stored as JSON.
     internal sealed class ReadingStructure
     {
-        public ReadingStructure(ReadingStructureSection[] sections, ReadingStructureEntry[] toc)
+        public ReadingStructure(ReadingStructureSection[] sections, ReadingStructureEntry[] toc, bool recommended = true, string? reason = null, int[]? originalPages = null)
         {
             Sections = sections;
             Toc = toc;
+            Recommended = recommended;
+            Reason = reason;
+            OriginalPages = originalPages ?? [];
         }
 
         public ReadingStructureSection[] Sections { get; }
         public ReadingStructureEntry[] Toc { get; }
+
+        // Whether the reading text is good enough to open by itself (a converted PDF's quality gate), and if not, why; always for other books.
+        public bool Recommended { get; }
+        public string? Reason { get; }
+
+        // The pages of a converted PDF that stand in the text as the original page and are not part of a downloaded EPUB.
+        public int[] OriginalPages { get; }
     }
 
     internal sealed class ReadingStructureSection
     {
-        public ReadingStructureSection(string path, string? title, long characters, int blocks)
+        public ReadingStructureSection(string path, string? title, long characters, int blocks, int pageFrom = 0, int pageTo = 0)
         {
             Path = path;
             Title = title;
             Characters = characters;
             Blocks = blocks;
+            PageFrom = pageFrom;
+            PageTo = pageTo;
         }
 
         public string Path { get; }
         public string? Title { get; }
         public long Characters { get; }
         public int Blocks { get; }
+
+        // The first and last page of the PDF the section covers; 0 for books that are no PDF.
+        public int PageFrom { get; }
+        public int PageTo { get; }
     }
 
     internal sealed class ReadingStructureEntry
@@ -559,6 +654,41 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.Html))]
         public string Html { get; }
+    }
+
+    // The prepared document a book's PDF pages map into: its identity and its structure.
+    internal sealed class ReadingStructureTextData : BaseData
+    {
+        public ReadingStructureTextData(long documentId, string structure)
+        {
+            DocumentId = documentId;
+            Structure = structure;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Structure))]
+        public string Structure { get; }
+    }
+
+    internal sealed class ReadingViewData : BaseData
+    {
+        public ReadingViewData(long profileId, long mediaAssetId, ReadingView? readingViewTypeId)
+        {
+            ProfileId = profileId;
+            MediaAssetId = mediaAssetId;
+            ReadingViewTypeId = readingViewTypeId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingViewTypeId), false)]
+        public ReadingView? ReadingViewTypeId { get; }
     }
 
     internal sealed class ReadingLanguageData : BaseData

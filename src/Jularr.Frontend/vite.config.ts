@@ -39,6 +39,8 @@ export default defineConfig({
         emptyOutDir: true,
         manifest: true,
         assetsDir: "assets",
+        // Browser and home-screen icons are linked by the layout, so they must stay files, never data URIs.
+        assetsInlineLimit: (file) => (/Assets\/Shared\/(?:favicon|icon-|apple-touch)/.test(file.replaceAll("\\", "/")) ? false : undefined),
         rollupOptions: { input },
         cssCodeSplit: true
     }

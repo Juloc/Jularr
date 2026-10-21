@@ -43,6 +43,8 @@ buttons no longer float over the paper. The control strips are borderless; the
 shared Range owns its thin accent-coloured track, thumb and keyboard focus, with
 no surrounding seek-field outline. Clean uses the canonical purple accent.
 
+A header button marks or clears a bookmark at the current place (per profile and book file, at most 200); the list with chapter title and position is in the notes panel, in the page panel of an image book. A prose page print draws a hyphenated line break with its hyphen and the remainder at the line start.
+
 Read-aloud is required. The [Speech integration](SPEECH.md) now connects browser
 device voices with canonical server profile preferences, selection/visible-text
 reading, word paint on the existing book, following and Pause/Resume/Stop.
@@ -92,7 +94,40 @@ Prose retains authorized server chapter routes and `s<section>/b<block>` progres
 Images retain `p<page>`, solitary covers/wide pages, bounded preloading and a
 12-image vertical window. Completion in scroll mode requires the loaded final
 image's bottom, not merely entering that image. Scanned PDFs without prepared text
-retain the native browser viewer, without fabricated progress.
+open as original pages (below), with real page progress.
+
+## Figures
+
+A picture worth its own room is a figure, in the reader and in the EPUB download alike
+(`<figure data-figure>`, `epub:type="figure"`, the caption as `figcaption` and the
+alternative text): `page` fills a page of its own (paged views break before and after
+it; scroll views show it up to 90 % of the screen height), `wide` takes the width of
+the text; small decoration stays in the line. A PDF page that is mainly a large picture,
+a vector drawing (as an SVG that keeps its labels), a table or an irregular multi-column
+layout becomes such a figure instead of a tiny inline picture; EPUB pictures become
+figures by their declared kind or their size. A tap or click, Enter or Space on a figure
+opens the full-screen view (`dialog.reader-figure`): the picture fits the screen; wheel,
+pinch, double tap and the three buttons zoom, dragging moves a zoomed picture, Escape or
+a tap on the empty stage closes it. On the printed pages of the book view the figure is
+found by position, because those pages take no pointer events. A page only the original
+PDF can show stands in the text as a one-line note with a link to its page and is left
+out of the EPUB. The figure's look follows the global tokens; the cursor is `zoom-in`.
+
+## Original pages and views
+
+A book with a PDF can be read in two views, Automatic, Smart Book or Original pages, chosen per book and
+profile in the `View` group of the Reader settings and kept on every device (`ReadingPreferences`). Automatic
+shows the Smart Book while its text passed the quality gate and the original pages otherwise; a choice always
+wins, and a better view that becomes ready while a book is open is only offered quietly, never switched to.
+The original pages are drawn by the browser (Mozilla's pdf.js, scans with JPEG 2000 and JBIG2 included) in the
+same frame: one page at a time on the theme's surface, fitting the page or its width, zoom by buttons, wheel with
+Control and pinch, turns by buttons, keys, swipe and the seek range, the position `p<page>` in the one progress
+store. They open from the file alone, without any analysis. A scan's text, from its own recognition layer or from
+the local recognizer, is shown only on pages where it holds together; any other page stays whole as a picture or
+as a stand-in that the reader draws from the PDF, and links to its page in the original pages. Paragraphs carry
+the page they start on, so the other view opens at the same page, search names pages and page notes keep their
+page and the first words of it. An EPUB download leaves the pages out that only the original shows and says how
+many. Deskew and perspective correction are not done; the page's own rotation is applied before recognition.
 
 ## Bounded whole-book measurement
 

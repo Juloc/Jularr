@@ -10,6 +10,8 @@ namespace Jularr.Workers
             services.AddHostedService<OperationWorker>();
             services.AddHostedService<AcquisitionWorker>();
             services.AddHostedService<LiveWorker>();
+            services.AddHostedService<DownloadWorker>();
+            services.AddHostedService<ProviderSyncWorker>();
             services.AddHostedService<UsenetWorker>();
             services.AddHostedService<MediaWorker>();
             services.AddHostedService<StorageWorker>();
@@ -18,6 +20,7 @@ namespace Jularr.Workers
             services.AddHostedService<TrickplayWorker>();
             services.AddHostedService<SubtitleWorker>();
             services.AddHostedService<RecognitionWorker>();
+            services.AddHostedService<DerivationWorker>();
             services.AddHostedService<CatalogWorker>();
             return services;
         }

@@ -7,8 +7,12 @@ namespace Jularr.Backend.Data.Logic.Instance
     {
         public InstanceSettingsUpdateData(string name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks, bool? usersConfirmSources, int? libraryScanIntervalHours,
             int? historyRetentionDays, int? historyMegabytes, int? collectionLimit, int? unitGroupLimit, string[]? subtitleLanguages, string? publicUrl,
-            string[]? trustedProxies)
+            string[]? trustedProxies, int? backupIntervalHours = null, int? backupKeep = null, int? providerSyncIntervalMinutes = null, int? wantedSearchIntervalMinutes = null)
         {
+            WantedSearchIntervalMinutes = wantedSearchIntervalMinutes;
+            ProviderSyncIntervalMinutes = providerSyncIntervalMinutes;
+            BackupKeep = backupKeep;
+            BackupIntervalHours = backupIntervalHours;
             TrustedProxies = trustedProxies;
             PublicUrl = publicUrl;
             SubtitleLanguages = subtitleLanguages;
@@ -36,6 +40,18 @@ namespace Jularr.Backend.Data.Logic.Instance
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.LibraryScanIntervalHours), false)]
         public int? LibraryScanIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupIntervalHours), false)]
+        public int? BackupIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.BackupKeep), false)]
+        public int? BackupKeep { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ProviderSyncIntervalMinutes), false)]
+        public int? ProviderSyncIntervalMinutes { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.WantedSearchIntervalMinutes), false)]
+        public int? WantedSearchIntervalMinutes { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryRetentionDays), false)]
         public int? HistoryRetentionDays { get; }

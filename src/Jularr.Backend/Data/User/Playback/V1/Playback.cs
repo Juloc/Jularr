@@ -1,8 +1,10 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Playback;
@@ -49,8 +51,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
     // An audio or subtitle choice; image subtitles are listed but not yet supported.
     public sealed class PlaybackTrackV1 : BaseResponse
     {
-        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported)
+        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported, bool isSelected)
         {
+            IsSelected = isSelected;
             Key = key;
             MediaTrackTypeId = mediaTrackTypeId;
             Language = language;
@@ -84,6 +87,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSupported))]
         public bool IsSupported { get; }
+
+        // The track the profile's preferences pick; one audio and at most one subtitle track.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSelected))]
+        public bool IsSelected { get; }
     }
 
     public sealed class PlaybackSubtitleParametersV1 : BaseParameters
@@ -184,8 +191,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class StartPlaybackDataV1 : BaseData
     {
-        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null)
+        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null, PlaybackQuality? quality = null)
         {
+            Quality = quality;
             Containers = containers;
             VideoCodecs = videoCodecs;
             AudioCodecs = audioCodecs;
@@ -205,6 +213,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
         public int? AudioStreamIndex { get; }
 
+        // This playback's own quality; the device's applies without one.
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality), false)]
+        public PlaybackQuality? Quality { get; }
+
         public override void Validate()
         {
             base.Validate();
@@ -219,8 +231,12 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class PlaybackPlanV1 : BaseResponse
     {
-        public PlaybackPlanV1(Guid playbackSessionId, PlaybackModeType playbackModeTypeId, string streamUrl, long resumePositionMs, long? durationMs)
+        public PlaybackPlanV1(Guid playbackSessionId, PlaybackModeType playbackModeTypeId, string streamUrl, long resumePositionMs, long? durationMs, int? audioStreamIndex,
+            PlaybackQuality quality, bool isReduced = false)
         {
+            IsReduced = isReduced;
+            AudioStreamIndex = audioStreamIndex;
+            Quality = quality;
             PlaybackSessionId = playbackSessionId;
             PlaybackModeTypeId = playbackModeTypeId;
             StreamUrl = streamUrl;
@@ -242,6 +258,17 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.DurationMs))]
         public long? DurationMs { get; }
+
+        // The audio stream that plays; the quality that applies after the device's and the request's choice.
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
+        public int? AudioStreamIndex { get; }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality))]
+        public PlaybackQuality Quality { get; }
+
+        // The server had no room for the wanted conversion and plays a lighter one.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsReduced))]
+        public bool IsReduced { get; }
     }
 
     public sealed class UpdatePlaybackDataV1 : BaseData

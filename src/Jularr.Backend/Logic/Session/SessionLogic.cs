@@ -337,7 +337,7 @@ namespace Jularr.Backend.Logic.Session
             }
         }
 
-        public static async Task SetSessionAudioQualityAsync(this LogicContext ctx, SessionRevocationData session, SessionAudioQualityDataV1 quality, CancellationToken ct)
+        public static async Task SetSessionPlaybackQualityAsync(this LogicContext ctx, SessionRevocationData session, SessionPlaybackQualityDataV1 quality, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -345,7 +345,7 @@ namespace Jularr.Backend.Logic.Session
                 UPDATE
                     "AccountSessions" AS session
                 SET
-                    "AudioQuality" = @AudioQuality
+                    "PlaybackQuality" = @PlaybackQuality
                 WHERE
                     session."PublicId" = @SessionPublicId
                     AND session."AccountId" = @AccountId

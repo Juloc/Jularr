@@ -30,9 +30,10 @@ namespace Jularr.Backend.Data.Admin.Account.V1
     public sealed class AccountDetailsV1 : BaseResponse
     {
         public AccountDetailsV1(long id, string email, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime? emailVerifiedAt, DateTime updatedAt,
-            bool mayConfirmSources = false)
+            bool mayConfirmSources = false, bool transcodingPriority = false)
         {
             MayConfirmSources = mayConfirmSources;
+            TranscodingPriority = transcodingPriority;
             Id = id;
             Email = email;
             DisplayName = displayName;
@@ -66,13 +67,18 @@ namespace Jularr.Backend.Data.Admin.Account.V1
         // May confirm source checks for own requests when the instance allows it.
         [DataField(typeof(AccountFields), nameof(AccountFields.MayConfirmSources))]
         public bool MayConfirmSources { get; }
+
+        // A conversion of this account may stop the newest one of an account without priority when the server is full.
+        [DataField(typeof(AccountFields), nameof(AccountFields.TranscodingPriority))]
+        public bool TranscodingPriority { get; }
     }
 
     public sealed class UpdateAccountDataV1 : BaseData
     {
-        public UpdateAccountDataV1(string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, bool? mayConfirmSources = null)
+        public UpdateAccountDataV1(string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, bool? mayConfirmSources = null, bool? transcodingPriority = null)
         {
             MayConfirmSources = mayConfirmSources;
+            TranscodingPriority = transcodingPriority;
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
             IsEnabled = isEnabled;
@@ -90,5 +96,8 @@ namespace Jularr.Backend.Data.Admin.Account.V1
         // Empty keeps the current switch.
         [DataField(typeof(AccountFields), nameof(AccountFields.MayConfirmSources), false)]
         public bool? MayConfirmSources { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.TranscodingPriority), false)]
+        public bool? TranscodingPriority { get; }
     }
 }

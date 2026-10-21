@@ -33,6 +33,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Sources/Sources", ServiceApi.AcquisitionManagePolicyName);
             conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
+            conventions.AuthorizePage("/Admin/WorkMarkers/WorkMarkers", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Matches/Matches", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.MediaReadPolicyName);
             conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
@@ -46,6 +47,8 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Catalog/Catalog", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Backup/Backup", ServiceApi.BackupReadPolicyName);
             conventions.AuthorizePage("/Admin/System/System", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Jobs/Jobs", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Transcoding/Transcoding", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AllowAnonymousToPage("/Account/Login/Login");
             conventions.AllowAnonymousToPage("/Setup/Start/Start");
             conventions.AllowAnonymousToPage("/Account/DeviceLink/DeviceLink");

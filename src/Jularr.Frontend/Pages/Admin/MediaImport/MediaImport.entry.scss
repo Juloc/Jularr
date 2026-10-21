@@ -1,0 +1,88 @@
+.media-import {
+    .tag { white-space: nowrap; }
+
+    &__summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-block-end: 12px;
+    }
+
+    // What a row names, then what kind of title it is.
+    &__title {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 160px;
+        max-width: 340px;
+        overflow-wrap: anywhere;
+
+        span { color: var(--muted); font-size: 0.85em; }
+    }
+
+    &__stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 190px;
+    }
+
+    &__search {
+        display: flex;
+        gap: 6px;
+    }
+
+    &__select,
+    &__input {
+        width: 100%;
+        min-width: 0;
+        min-height: 32px;
+        padding: 4px 10px;
+        border: 1px solid var(--accent-line);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 13px;
+
+        &:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    }
+
+    &__check {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+    }
+
+    &__detail {
+        display: block;
+        margin-block-start: 4px;
+        color: var(--muted);
+        font-size: 0.85em;
+        overflow-wrap: anywhere;
+    }
+}
+
+// A narrow screen stacks the cells of each row beside their box instead of scrolling the table sideways.
+@media (max-width: 700px) {
+    .media-import__rows {
+        .page-table thead { display: none; }
+        .page-table,
+        .page-table tbody { display: block; }
+
+        .page-table tr {
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr);
+            gap: 8px 10px;
+            padding: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .page-table tr:first-child { border-top: 0; }
+        .page-table td { display: block; min-width: 0; padding: 0; border: 0; }
+        .page-table td:first-child { grid-column: 1; grid-row: 1; }
+        .page-table td:not(:first-child) { grid-column: 2; }
+    }
+
+    .media-import__title,
+    .media-import__stack { min-width: 0; max-width: none; }
+}

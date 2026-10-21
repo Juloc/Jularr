@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Playback;
+using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
@@ -190,20 +191,48 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
             var rows = await Context.ReadSql.ReadListAsync<PlaybackTrackRowData>(sql, CancellationToken);
-            return new BaseDataList<PlaybackTrackV1>([.. rows.Select(row =>
+            var described = rows.Select(row =>
             {
                 if (row.StoredFileId is { } fileId)
                 {
                     var (language, isForced) = PlaybackTracks.Describe(row.RelativePath!);
                     var supported = PlaybackTracks.IsTextFile(row.RelativePath!) && (_subtitles.CanConvert || row.RelativePath!.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
                         || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase));
-                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported);
+                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported, false);
                 }
 
                 // Another audio track and embedded text subtitles need FFmpeg.
                 var playable = row.MediaTrackTypeId == MediaTrackType.Audio ? row.IsDefault || _subtitles.CanConvert : PlaybackTracks.IsText(row.Codec) && _subtitles.CanConvert;
-                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable);
-            })]);
+                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable, false);
+            }).ToList();
+
+            // The profile's preferences pick one audio and at most one subtitle track among the playable ones.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    preference."AudioLanguage",
+                    preference."SubtitleLanguage",
+                    coalesce(preference."SubtitleModeTypeId", 4)::smallint AS "SubtitleModeTypeId",
+                    CASE
+                        WHEN lower(split_part(locale."Locale", '-', 1)) ~ '^[a-z]{2}$' THEN lower(split_part(locale."Locale", '-', 1))
+                        ELSE 'en'
+                    END AS "ProfileLanguage"
+                FROM
+                    "Profiles" AS profile
+                    JOIN "UiLocales" AS locale ON locale."Id" = profile."UiLocaleId"
+                    LEFT JOIN "ProfilePlaybackPreferences" AS preference ON preference."ProfileId" = profile."Id"
+                WHERE
+                    profile."Id" = @ProfileId;
+                """;
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            var preference = await Context.ReadSql.ReadRequiredAsync<PlaybackChoiceData>(sql, CancellationToken);
+            var choices = described.Where(track => track.IsSupported)
+                .Select(track => new PlaybackChoiceTrack(track.Key, track.MediaTrackTypeId, track.Language, track.IsDefault, track.IsForced)).ToList();
+            var audio = PlaybackTracks.ChooseAudio(choices, preference.AudioLanguage);
+            var subtitle = PlaybackTracks.ChooseSubtitle(choices, preference, audio);
+            return new BaseDataList<PlaybackTrackV1>([.. described.Select(track => new PlaybackTrackV1(track.Key, track.MediaTrackTypeId, track.Language, track.Title, track.Channels,
+                track.IsDefault, track.IsForced, track.IsSupported, track.Key == audio?.Key || track.Key == subtitle?.Key))]);
         }
     }
 
@@ -283,12 +312,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
         private readonly StorageAccess _storage;
         private readonly WakeOnLanClient _wake;
         private readonly PlaybackTranscodes _transcodes;
+        private readonly TranscodeHardware _hardware;
+        private readonly MediaOptions _options;
 
-        internal StartPlaybackV1(StorageAccess storage, WakeOnLanClient wake, PlaybackTranscodes transcodes)
+        internal StartPlaybackV1(StorageAccess storage, WakeOnLanClient wake, PlaybackTranscodes transcodes, TranscodeHardware hardware, IOptions<MediaOptions> options)
         {
             _storage = storage;
             _wake = wake;
             _transcodes = transcodes;
+            _hardware = hardware;
+            _options = options.Value;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -300,7 +333,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         {
             // Stored source, streams and resume point.
             var lookup = new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value, Auth.SessionPublicId);
-            var (source, tracks) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            var (source, tracks, preference, limits) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -318,12 +351,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         file."BitRate",
                         COALESCE((
                             SELECT
-                                session."AudioQuality"
+                                session."PlaybackQuality"
                             FROM
                                 "AccountSessions" AS session
                             WHERE
                                 session."PublicId" = @SessionPublicId
-                        ), 1) AS "AudioQuality"
+                        ), 1) AS "PlaybackQuality"
                     FROM
                         "MediaAssets" AS asset
                         JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
@@ -351,7 +384,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         track."StreamIndex",
                         track."MediaTrackTypeId",
                         track."Codec",
-                        track."IsDefault"
+                        track."IsDefault",
+                        track."Language",
+                        track."Height"
                     FROM
                         "MediaTracks" AS track
                     WHERE
@@ -360,11 +395,53 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         track."StreamIndex";
                     """;
                 sql.Parameters.Add(new StoredFileIdData(source.StoredFileId));
-                return (source, await ctx.ReadSql.ReadListAsync<PlaybackTrackData>(sql, ct));
+                var fileTracks = await ctx.ReadSql.ReadListAsync<PlaybackTrackData>(sql, ct);
+
+                // The profile's language choices.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        preference."AudioLanguage",
+                        preference."SubtitleLanguage",
+                        coalesce(preference."SubtitleModeTypeId", 4)::smallint AS "SubtitleModeTypeId",
+                        CASE
+                            WHEN lower(split_part(locale."Locale", '-', 1)) ~ '^[a-z]{2}$' THEN lower(split_part(locale."Locale", '-', 1))
+                            ELSE 'en'
+                        END AS "ProfileLanguage"
+                    FROM
+                        "Profiles" AS profile
+                        JOIN "UiLocales" AS locale ON locale."Id" = profile."UiLocaleId"
+                        LEFT JOIN "ProfilePlaybackPreferences" AS preference ON preference."ProfileId" = profile."Id"
+                    WHERE
+                        profile."Id" = @ProfileId;
+                    """;
+                sql.Parameters.Add(new ProfileParameters(lookup.ProfileId));
+                var choices = await ctx.ReadSql.ReadRequiredAsync<PlaybackChoiceData>(sql, ct);
+
+                // What the server may convert and the account's priority.
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        settings."TranscodeAccelerationTypeId",
+                        settings."MaxTranscodes"::integer AS "MaxTranscodes",
+                        settings."LadderHeights",
+                        benchmark."BestTranscodeAccelerationTypeId",
+                        account."TranscodingPriority"
+                    FROM
+                        "TranscodeSettings" AS settings
+                        LEFT JOIN "TranscodeBenchmarks" AS benchmark ON benchmark."Id" = 1
+                        JOIN "Accounts" AS account ON account."Id" = @Id
+                    WHERE
+                        settings."Id" = 1;
+                    """;
+                sql.Parameters.Add(new TranscodeAccountData(Auth.AccountId!.Value));
+                return (source, fileTracks, choices, await ctx.ReadSql.ReadRequiredAsync<TranscodeLimitsData>(sql, ct));
             }, CancellationToken);
 
             // Delivery follows the client's actual capabilities and the chosen audio track.
-            if (Data.AudioStreamIndex is { } chosen && !tracks.Any(track => track.StreamIndex == chosen && track.MediaTrackTypeId == MediaTrackType.Audio))
+            if (Data.AudioStreamIndex is { } requested && !tracks.Any(track => track.StreamIndex == requested && track.MediaTrackTypeId == MediaTrackType.Audio))
             {
                 throw new DataValidationException(nameof(Data.AudioStreamIndex), "unknown_reference");
             }
@@ -372,13 +449,27 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var containers = Data.Containers.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var videoCodecs = Data.VideoCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var audioCodecs = Data.AudioCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var direct = PlaybackLogic.CanPlayDirectly(LibraryFileTypes.GetStream(source.RelativePath).Container, tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
+
+            // Another audio track than the file's default needs a conversion; without a request the profile's language decides among the playable ones.
+            var canConvert = _transcodes.IsAvailable && source.DurationMs is not null && containers.Contains("hls");
+            var audioStreamIndex = Data.AudioStreamIndex;
+            if (audioStreamIndex is null)
+            {
+                var playable = tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Audio && (track.IsDefault || canConvert))
+                    .Select(track => new PlaybackChoiceTrack(PlaybackTracks.StreamKey(track.StreamIndex), track.MediaTrackTypeId, track.Language, track.IsDefault, false)).ToList();
+                audioStreamIndex = PlaybackTracks.ChooseAudio(playable, preference.AudioLanguage) is { } preferred ? PlaybackTracks.ParseKey(preferred.Key).StreamIndex : null;
+            }
+
+            // The device's quality, or this playback's own, caps what is converted.
+            var quality = Data.Quality ?? source.PlaybackQuality;
+            var target = PlaybackLogic.QualityTarget(quality);
+            var direct = PlaybackLogic.CanPlayDirectly(LibraryFileTypes.GetStream(source.RelativePath).Container, tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, target, source.BitRate);
 
             // A device asking for smaller music converts it when it can; otherwise the original plays.
-            var kilobits = _transcodes.IsAvailable && source.DurationMs is not null ? PlaybackLogic.AudioKilobits(source.AudioQuality, tracks, source.BitRate) : null;
-            var smaller = kilobits is null ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex, kilobits);
+            var kilobits = _transcodes.IsAvailable && source.DurationMs is not null ? PlaybackLogic.AudioKilobits(target, tracks, source.BitRate) : null;
+            var smaller = kilobits is null ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, kilobits, target, source.BitRate);
             direct &= smaller is null;
-            var conversion = direct ? null : smaller ?? PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
+            var conversion = direct ? null : smaller ?? PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, null, target, source.BitRate);
             if (!direct && (conversion is null || source.DurationMs is null || !_transcodes.IsAvailable))
             {
                 throw new ServiceUnavailableException("playback_conversion_unavailable");
@@ -402,21 +493,41 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 throw new ServiceUnavailableException("storage_waking");
             }
 
+            // The server's budget holds the conversion before the session exists: the wanted one, else a lighter one the Owner's ladder offers, else the server is busy.
             var resume = source.ResumePositionMs ?? 0;
+            var sessionId = Guid.NewGuid();
+            var reduced = false;
+            if (conversion is { } wanted)
+            {
+                var candidates = TranscodeLogic.Candidates(wanted, tracks, containers, videoCodecs, audioCodecs, audioStreamIndex, quality, source.BitRate, limits.LadderHeights);
+                var detected = limits.TranscodeAccelerationTypeId == TranscodeAcceleration.Software || candidates.All(candidate => candidate.Weight == 0) ? [] : await _hardware.GetAsync(CancellationToken);
+                var encoding = TranscodeLogic.ResolveEncoding(limits.TranscodeAccelerationTypeId, limits.BestTranscodeAccelerationTypeId, detected, _options.HardwareAccelerationArguments, _options.VideoEncoderArguments);
+                var chosen = _transcodes.Admit([.. candidates.Select(candidate => candidate.Weight)], limits.TranscodingPriority, limits.MaxTranscodes ?? _options.MaxTranscodes, index =>
+                {
+                    var (plan, weight, _) = candidates[index];
+                    return new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
+                        source.DurationMs!.Value, plan.AudioKilobits, plan.MaxHeight, plan.VideoKilobits) { Weight = weight, HasPriority = limits.TranscodingPriority, Encoding = encoding };
+                });
+                conversion = candidates[chosen].Plan;
+                reduced = candidates[chosen].IsReduced;
+            }
+
             var mode = conversion?.PlaybackModeTypeId ?? PlaybackModeType.DirectPlay;
-            var sessionId = await Context.ExecuteBatchAsync((ctx, ct) =>
-                ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume), ct), CancellationToken);
+            try
+            {
+                await Context.ExecuteBatchAsync((ctx, ct) =>
+                    ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(sessionId, lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume), ct), CancellationToken);
+            }
+            catch
+            {
+                // Without a session nothing plays, so its conversion gives the room back.
+                _transcodes.Stop(sessionId);
+                throw;
+            }
 
             // Conversions stream on-demand HLS segments.
             var url = "/api/v1/playback/sessions/" + sessionId.ToString("D");
-            if (conversion is { } plan)
-            {
-                _transcodes.Register(new PlaybackTranscodeSource(sessionId, lookup.ProfileId, _storage.Input(files, path), plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
-                    source.DurationMs!.Value, plan.AudioKilobits));
-                return new PlaybackPlanV1(sessionId, mode, url + "/playlist.m3u8", resume, source.DurationMs);
-            }
-
-            return new PlaybackPlanV1(sessionId, mode, url + "/stream", resume, source.DurationMs);
+            return new PlaybackPlanV1(sessionId, mode, url + (conversion is null ? "/stream" : "/playlist.m3u8"), resume, source.DurationMs, audioStreamIndex, quality, reduced);
         }
     }
 

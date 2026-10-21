@@ -18,6 +18,7 @@ namespace Jularr.Backend.Data.Fields.Account
         public static readonly EnumField AccountRoleTypeId = new(typeof(AccountRoleType));
         public static readonly BoolField IsEnabled = new();
         public static readonly BoolField MayConfirmSources = new();
+        public static readonly BoolField TranscodingPriority = new();
         public static readonly DateTimeField EmailVerifiedAt = new() { Required = false };
         public static readonly LongField CredentialRevision = new() { Minimum = 1 };
 

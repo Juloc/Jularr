@@ -18,6 +18,7 @@ using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Integrations.Data.Browser;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Browser;
@@ -352,7 +353,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task AnnasArchive_SearchGathersTheFilesOfEveryWay()
         {
-            // The first way finds one file, the second another; the files of both are gathered.
+            // One way finds one file, the next another; the caller asks for them one after the other.
             var sources = new FakeSources { RealRows = true };
             sources.SearchPages["zweiterWeg"] = """
                 <html><body>
@@ -360,31 +361,81 @@ namespace Jularr.Backend.Tests
                 </body></html>
                 """;
             var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
-            var records = await client.SearchAsync(new Uri("https://annas.example.test/"), ["Pride and Prejudice Austen", "zweiterWeg"], CancellationToken.None);
+            var first = await client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None);
+            var second = await client.SearchAsync(new Uri("https://annas.example.test/"), "zweiterWeg", CancellationToken.None);
 
-            Assert.AreEqual(2, records.Count);
-            Assert.AreEqual("0123456789abcdef0123456789abcdef", records[0].Md5);
-            Assert.AreEqual("11111111111111111111111111111111", records[1].Md5);
+            Assert.AreEqual(1, first.Count);
+            Assert.AreEqual("0123456789abcdef0123456789abcdef", first[0].Md5);
+            Assert.AreEqual(1, second.Count);
+            Assert.AreEqual("11111111111111111111111111111111", second[0].Md5);
         }
 
         [TestMethod]
-        public void AnnaQueries_NameTheWorkInEveryWay()
+        public void AnnaWays_NameTheWorkInEveryWay_TheIsbnFirst()
         {
-            // The work knows the ways: the title with the author, the titles of its editions and its ISBNs.
+            // The work knows the ways: the ISBN names the edition exactly, then the title with the author,
+            // the title alone and the titles of the editions in the other languages.
             var target = new WantedTargetData(1, 2, MediaType.Book, null, "Rich Dad, Poor Dad", null, ["Rich Dad, Poor Dad"], null, null, null, [], false, false, false, 0, [],
                 ["de"], "Robert Kiyosaki", null, null, editionTitles: ["Rich Dad Poor Dad", "Padre Rico, Padre Pobre"], isbns: ["3959720106", "9781612681139"]);
 
-            var queries = DirectSources.AnnaQueries(target);
+            var ways = DirectSources.AnnaWays(target);
 
             CollectionAssert.AreEqual(new[]
             {
+                "3959720106",
+                "9781612681139",
                 "Rich Dad, Poor Dad Robert Kiyosaki",
                 "Rich Dad, Poor Dad",
                 "Rich Dad Poor Dad",
-                "Padre Rico, Padre Pobre",
-                "3959720106",
-                "9781612681139"
-            }, queries.ToArray());
+                "Padre Rico, Padre Pobre"
+            }, ways.ToArray());
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_APageInsteadOfTheFile_IsFetchedByTheBrowser()
+        {
+            // The site may answer with a page in place of the file; the browser fetches the file then.
+            var sources = new FakeSources { RealRows = true };
+            var browser = new FakeBrowser();
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), browser);
+            var destination = Path.Combine(Path.GetTempPath(), "anna-browser-" + Guid.NewGuid().ToString("N")[..6] + ".epub");
+            try
+            {
+                await client.DownloadFileAsync(new Uri("https://annas.example.test/book.epub"), destination, CancellationToken.None, null, _ => new MemoryStream());
+                Assert.AreEqual(1, browser.Saved);
+                Assert.IsTrue(File.Exists(destination));
+            }
+            finally
+            {
+                File.Delete(destination);
+            }
+        }
+
+        // A browser that writes the file it is asked for.
+        private sealed class FakeBrowser : ISourceBrowser
+        {
+            public int Saved { get; private set; }
+
+            public bool IsAvailable => true;
+            public SourceBrowserStatus Status => new(null, null, "", false, null, null, null, null, null, 0);
+            public IReadOnlyList<SourceBrowserEvent> Events => [];
+
+            public Task<string?> ReadPageAsync(Uri uri, CancellationToken ct) => Task.FromResult<string?>(null);
+
+            public Task<SourceBrowserStatus> StartAsync(CancellationToken ct) => Task.FromResult(Status);
+
+            public Task StopAsync() => Task.CompletedTask;
+
+            public Task ResetAsync() => Task.CompletedTask;
+
+            public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct) => Task.FromResult<BrowserPage?>(null);
+
+            public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
+            {
+                Saved++;
+                File.WriteAllBytes(destination, [0x50, 0x4B, 0x03, 0x04, 0x00]);
+                return Task.CompletedTask;
+            }
         }
 
         [TestMethod]
@@ -712,6 +763,7 @@ namespace Jularr.Backend.Tests
 
                 return uri.AbsolutePath switch
                 {
+                    "/book.epub" => Text("<html><body>the site's page in place of the file</body></html>", "text/html"),
                     "/search" => Text(SearchPages.Where(entry => uri.Query.Contains(entry.Key, StringComparison.OrdinalIgnoreCase))
                         .Select(entry => entry.Value).FirstOrDefault() ?? """
                         <html><body>

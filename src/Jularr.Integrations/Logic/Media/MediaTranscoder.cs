@@ -244,6 +244,19 @@ namespace Jularr.Integrations.Logic.Media
             else
             {
                 arguments.AddRange(request.VideoEncoderArguments);
+
+                // A cap scales the picture down (never up) and limits the rate; pictures in hardware memory need their own scaler.
+                var scale = request.ScaleFilter ?? (request.HardwareAccelerationArguments.Count == 0 ? TranscodePipelines.SoftwareScale : null);
+                if (request.MaxHeight is { } height && scale is not null)
+                {
+                    arguments.AddRange(["-vf", scale.Replace("{height}", height.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)]);
+                }
+
+                if (request.VideoKilobits is { } kilobits)
+                {
+                    arguments.AddRange(["-maxrate", kilobits.ToString(CultureInfo.InvariantCulture) + "k", "-bufsize", (kilobits * 2).ToString(CultureInfo.InvariantCulture) + "k"]);
+                }
+
                 arguments.AddRange(["-force_key_frames", "expr:gte(t,n_forced*" + segment + ")"]);
             }
 

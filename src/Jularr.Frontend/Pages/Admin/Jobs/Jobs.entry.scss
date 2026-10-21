@@ -1,0 +1,21 @@
+// The job first, the worker and interval below; a state with its error.
+.jobs-job > span,
+.jobs-status > span:not(.state-chip) {
+    display: block;
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
+.jobs-status > span:not(.state-chip) { margin-top: 4px; }
+
+// A provider of the provider sync sits indented below it.
+.jobs-job--part { padding-left: 16px; }
+
+.jobs-state { white-space: nowrap; }
+
+// A job's controls next to each other, wrapping on a narrow screen.
+.jobs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

@@ -812,6 +812,18 @@
    "Notes",
    "Catatan"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Penanda"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Penanda"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Hapus penanda"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Buka di tab baru"
@@ -1231,22 +1243,6 @@
   "takeover.kind.RootFolder": [
    "Root folder",
    "Folder root"
-  ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Musik di perangkat ini"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Asli"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Tinggi (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Kecil (128 kbit/s)"
   ],
   "takeover.rootFolders": [
    "Root folders",
@@ -1675,10 +1671,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Jika kosong, platform perangkat ditampilkan sebagai namanya."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Asli memutar file apa adanya. Tinggi dan Kecil mengonversi file musik yang lebih besar secara langsung, sehingga menghemat data saat bepergian."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
@@ -6379,6 +6371,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Satu profil menyimpan paling banyak 1000 sorotan per buku."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Satu profil menyimpan paling banyak 200 penanda per buku."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

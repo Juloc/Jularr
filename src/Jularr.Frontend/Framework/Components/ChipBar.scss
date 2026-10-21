@@ -6,7 +6,7 @@
     gap: 8px;
     min-width: 0;
     padding: 8px;
-    border: 1px solid var(--accent-line);
+    border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: var(--surface);
     box-shadow: var(--shadow);
@@ -34,8 +34,8 @@
         align-items: center;
         gap: 7px;
         color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
+        font-size: var(--text-control);
+        font-weight: 760;
         text-decoration: none;
         white-space: nowrap;
 
@@ -84,7 +84,7 @@
         min-height: 30px;
         padding: 0 9px;
         border-radius: var(--radius-control);
-        font-size: 11px;
+        font-size: var(--text-small);
 
         &--selected { background: var(--surface); color: var(--text); }
     }

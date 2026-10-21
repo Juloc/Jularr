@@ -812,6 +812,18 @@
    "Notes",
    "Notas"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Marcador"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Marcadores"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Eliminar marcador"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Abrir en una pestaña nueva"
@@ -1231,22 +1243,6 @@
   "takeover.kind.RootFolder": [
    "Root folder",
    "Carpeta raíz"
-  ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Música en este dispositivo"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Original"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Alta (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Reducida (128 kbit/s)"
   ],
   "takeover.rootFolders": [
    "Root folders",
@@ -1675,10 +1671,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Si lo dejas vacío, se usa la plataforma del dispositivo como nombre."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Original reproduce el archivo tal cual. Alta y Reducida convierten al vuelo los archivos de música más grandes, lo que ahorra datos en movimiento."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
@@ -6379,6 +6371,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Un perfil guarda como máximo 1000 resaltados por libro."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Un perfil guarda como máximo 200 marcadores por libro."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

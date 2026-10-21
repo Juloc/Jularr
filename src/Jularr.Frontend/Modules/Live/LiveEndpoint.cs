@@ -2,9 +2,11 @@ using System.Globalization;
 using System.Security;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Live.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Live.V1;
+using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Admin.Live.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Live.V1;
@@ -25,7 +27,7 @@ namespace Jularr.Frontend.Modules.Live
             return endpoints;
         }
 
-        private static async Task StreamAsync(HttpContext http, LiveChanges changes, UiText texts, ReadLiveV1 own, ReadLiveAdminV1 admin, IHostApplicationLifetime lifetime)
+        private static async Task StreamAsync(HttpContext http, LiveChanges changes, UiText texts, ReadLiveV1 own, ReadLiveAdminV1 admin, ReadActivitySummaryV1 queue, IHostApplicationLifetime lifetime)
         {
             // A stopping host ends its streams instead of waiting for them.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted, lifetime.ApplicationStopping);
@@ -67,7 +69,7 @@ namespace Jularr.Frontend.Modules.Live
                 {
                     // The version is taken before reading, so a change during the read is not lost.
                     var seen = changes.Sequence;
-                    var payload = await ReadAsync(http, texts, reads, own, admin, cancellationToken);
+                    var payload = await ReadAsync(http, texts, reads, own, admin, queue, cancellationToken);
                     if (payload != last)
                     {
                         await WriteAsync(http, "event: " + (last is null ? "snapshot" : "update") + "\ndata: " + payload + "\n\n", cancellationToken);
@@ -91,7 +93,7 @@ namespace Jularr.Frontend.Modules.Live
             }
         }
 
-        private static async Task<string> ReadAsync(HttpContext http, UiText texts, Reads reads, ReadLiveV1 own, ReadLiveAdminV1 admin, CancellationToken cancellationToken)
+        private static async Task<string> ReadAsync(HttpContext http, UiText texts, Reads reads, ReadLiveV1 own, ReadLiveAdminV1 admin, ReadActivitySummaryV1 queue, CancellationToken cancellationToken)
         {
             var entities = new Dictionary<string, LiveEntity>(StringComparer.Ordinal);
 
@@ -115,6 +117,7 @@ namespace Jularr.Frontend.Modules.Live
                 foreach (var request in all.Requests) entities[LiveKeys.AdminRequest(request.Id)] = LiveEntities.AdminRequest(texts, request);
                 foreach (var operation in all.Operations) entities[LiveKeys.Operation(operation.Id)] = LiveEntities.Operation(texts, operation);
                 foreach (var wanted in all.Wanted) entities[LiveKeys.Wanted(wanted.Id)] = LiveEntities.Wanted(texts, wanted);
+                entities[LiveKeys.Queue] = LiveEntities.Queue(await queue.ExecuteAsync<ActivitySummaryV1>(new ReadActivitySummaryParametersV1(), cancellationToken));
             }
 
             return JsonSerializer.Serialize(new { entities }, Json);

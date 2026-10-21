@@ -1,13 +1,16 @@
 using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Home.V1;
+using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Backend.Service.User.Home.V1;
+using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Appearance;
@@ -31,8 +34,15 @@ namespace Jularr.Frontend.Pages.User.Settings
 
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
-        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadPlaybackPreferencesV1 readPlayback, SavePlaybackPreferencesV1 savePlayback,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        // Speeds the player offers; languages a person is likely to choose, each by its own name.
+        private static readonly decimal[] Speeds = [0.5m, 0.75m, 1m, 1.25m, 1.5m, 1.75m, 2m];
+        private static readonly string[] Languages = ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "sv", "da", "no", "fi", "cs", "hu", "ro", "tr", "el", "ru", "uk", "ar", "he", "hi", "th", "id", "ja", "ko", "zh"];
+
+        private PlaybackPreferencesV1? _playback;
+        private SavePlaybackPreferencesDataV1? _playbackInput;
         private IReadOnlyList<HomeShelfV1> _layout = [];
         private AuthenticationResultV1? _authentication;
         private ReadProfileResultV1? _profile;
@@ -67,7 +77,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Save();
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _speechInput is not null ? null : FormError));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin || _speechInput is not null || _playbackInput is not null ? null : FormError));
 
                     // Hidden types leave the profile's lists; they stay reachable.
                     if (_media.Count > 0)
@@ -117,6 +127,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 }
 
                 page.Content.Add(new UiSection("profile.settings.title", content));
+                if (_playback is not null && texts.CanPlay()) page.Content.Add(new UiSection("playback.settings.title", [PlaybackForm(_playback)]));
                 if (_speech is not null && texts.Can("profile.self.update"))
                 {
                     page.Content.Add(new UiSection("speech.title", [new SpeechSettings(_speech, texts.Locale, "/Settings?handler=Speech",
@@ -222,6 +233,36 @@ namespace Jularr.Frontend.Pages.User.Settings
             return RedirectToPage("/User/Settings/Settings");
         }
 
+        // One form for the profile's audio, subtitles, speed and autoplay.
+        private IUiComponent PlaybackForm(PlaybackPreferencesV1 preferences)
+        {
+            var input = _playbackInput ?? new SavePlaybackPreferencesDataV1(preferences.AudioLanguage, preferences.SubtitleLanguage, preferences.SubtitleModeTypeId, preferences.Speed,
+                preferences.AutoplayNext, preferences.IntroSkipModeTypeId, preferences.OutroSkipModeTypeId);
+            IEnumerable<SelectOption> LanguageOptions(string? chosen, string emptyKey) => [new SelectOption("", texts[emptyKey]),
+                .. Languages.Concat(chosen is null || Languages.Contains(chosen) ? [] : [chosen]).Select(code => new SelectOption(code, LanguageLabel.Name(code) ?? code))];
+            return new Form<SavePlaybackPreferencesDataV1>(form =>
+            {
+                form.Select(item => item.AudioLanguage, "playback.audioLanguage", LanguageOptions(input.AudioLanguage, "playback.language.file"));
+                form.Select(item => item.SubtitleModeTypeId, "playback.subtitleMode", Enum.GetValues<SubtitleMode>()
+                    .Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["playback.subtitleMode." + mode])));
+                form.Select(item => item.SubtitleLanguage, "playback.subtitleLanguage", LanguageOptions(input.SubtitleLanguage, "playback.language.profile"));
+                form.Select(item => item.Speed, "playback.speed", Speeds.Select(speed => new SelectOption(speed.ToString("0.00", CultureInfo.InvariantCulture),
+                    speed.ToString("0.##", CultureInfo.CurrentCulture) + "×")));
+                form.Toggle(item => item.AutoplayNext, "playback.autoplayNext");
+                var skipModes = Enum.GetValues<SkipMode>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["playback.skipMode." + mode])).ToArray();
+                form.Select(item => item.IntroSkipModeTypeId, "playback.introSkipMode", skipModes);
+                form.Select(item => item.OutroSkipModeTypeId, "playback.outroSkipMode", skipModes);
+                form.Save();
+            }, Url.Page("/User/Settings/Settings", "Playback"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, input, _playbackInput is not null ? FormError : null);
+        }
+
+        public async Task<IActionResult> OnPostPlaybackAsync(string? audioLanguage, string? subtitleLanguage, [BindRequired] SubtitleMode subtitleModeTypeId, [BindRequired] decimal speed, bool autoplayNext, [BindRequired] SkipMode introSkipModeTypeId, [BindRequired] SkipMode outroSkipModeTypeId)
+        {
+            _playbackInput = new SavePlaybackPreferencesDataV1(audioLanguage, subtitleLanguage, subtitleModeTypeId, speed, autoplayNext, introSkipModeTypeId, outroSkipModeTypeId);
+            await savePlayback.ExecuteAsync<UpdateResult>(new PlaybackPreferencesParametersV1(), _playbackInput, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
         public async Task<IActionResult> OnPostMediaAsync(string[]? hiddenKeys)
         {
             _savingMedia = true;
@@ -294,6 +335,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                     _speechModels = await readSpeechModels.ExecuteAsync<BaseDataList<SpeechModelV1>>(new SpeechModelsParametersV1(), token);
                 }
                 _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
+                if (texts.CanPlay()) _playback = await readPlayback.ExecuteAsync<PlaybackPreferencesV1>(new PlaybackPreferencesParametersV1(), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
                 if (texts.CanArrangeHome())
                 {

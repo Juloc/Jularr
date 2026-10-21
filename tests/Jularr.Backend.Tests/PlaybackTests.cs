@@ -238,11 +238,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "data-action=\"settings\"");
             StringAssert.Contains(html, "data-panel=\"audio\"");
-            StringAssert.Contains(html, "data-audio=\"1\"");
-            StringAssert.Contains(html, "data-audio=\"2\"");
+            StringAssert.Contains(html, "data-setting=\"audio\"");
+            StringAssert.Contains(html, "<option value=\"1\"");
+            StringAssert.Contains(html, "<option value=\"2\"");
             StringAssert.Contains(html, "data-action=\"minimize\" aria-label=\"Minimize\" hidden=\"hidden\"");
             StringAssert.Contains(html, "Deutsch &#xB7; Kommentar &#xB7; Stereo");
-            StringAssert.Contains(html, "data-subtitle=\"" + sidecar.Key + "\"");
+            StringAssert.Contains(html, "<option value=\"" + sidecar.Key + "\"");
         }
 
         [TestMethod]
@@ -266,11 +267,12 @@ namespace Jularr.Backend.Tests
         {
             // A lossless album track on a device asking for small music becomes 128 kbit/s AAC; a small MP3, the original setting and video stay as they are.
             var flac = new[] { new PlaybackTrackData(0, MediaTrackType.Audio, "flac", true) };
-            Assert.AreEqual(128, PlaybackLogic.AudioKilobits(AudioQuality.Small, flac, 900_000));
-            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.Small, [new PlaybackTrackData(0, MediaTrackType.Audio, "mp3", true)], 128_000));
-            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.Original, flac, 900_000));
-            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.High, flac, null));
-            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.High, [new PlaybackTrackData(0, MediaTrackType.Video, "h264", true), .. flac], 9_000_000));
+            Assert.AreEqual(128, PlaybackLogic.AudioKilobits(PlaybackLogic.QualityTarget(PlaybackQuality.Saver), flac, 900_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(PlaybackLogic.QualityTarget(PlaybackQuality.Saver), [new PlaybackTrackData(0, MediaTrackType.Audio, "mp3", true)], 128_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(PlaybackLogic.QualityTarget(PlaybackQuality.Original), flac, 900_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(PlaybackLogic.QualityTarget(PlaybackQuality.Automatic), flac, 900_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(PlaybackLogic.QualityTarget(PlaybackQuality.High), flac, null));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(PlaybackLogic.QualityTarget(PlaybackQuality.High), [new PlaybackTrackData(0, MediaTrackType.Video, "h264", true), .. flac], 9_000_000));
             var conversion = PlaybackLogic.PlanConversion([new PlaybackTrackData(0, MediaTrackType.Audio, "aac", true)], Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(),
                 Hls.AudioCodecs.ToHashSet(), audioKilobits: 256)!;
             Assert.AreEqual((PlaybackModeType.Transcode, false, 256), (conversion.PlaybackModeTypeId, conversion.CopyAudio, conversion.AudioKilobits));
@@ -435,7 +437,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"TrickplayCheckedAt\" IS NULL FROM \"StoredFiles\""));
         }
 
-        private static async Task<(long AssetId, long WorkId)> CreatePlayableAsync(Host host, string storagePath, bool wakeOnDemand, string fileName = "Film.mp4")
+        internal static async Task<(long AssetId, long WorkId)> CreatePlayableAsync(Host host, string storagePath, bool wakeOnDemand, string fileName = "Film.mp4")
         {
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"WakeOnDemand\" = " + (wakeOnDemand ? "TRUE" : "FALSE"));
@@ -451,7 +453,7 @@ namespace Jularr.Backend.Tests
             return ((await assigned.Content.ReadFromJsonAsync<AssignLibraryFileResultV1>())!.MediaAssetId, (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!);
         }
 
-        private static async Task<PlaybackPlanV1> StartAsync(Host host, long assetId)
+        internal static async Task<PlaybackPlanV1> StartAsync(Host host, long assetId)
         {
             using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", Browser);
             Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());

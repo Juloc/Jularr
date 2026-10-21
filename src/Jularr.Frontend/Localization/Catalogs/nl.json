@@ -812,6 +812,18 @@
    "Notes",
    "Notities"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Bladwijzer"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Bladwijzers"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Bladwijzer verwijderen"
+  ],
   "reader.openPdf": [
    "Open in a new tab",
    "Openen in een nieuw tabblad"
@@ -1231,22 +1243,6 @@
   "takeover.kind.RootFolder": [
    "Root folder",
    "Hoofdmap"
-  ],
-  "session.audioQuality": [
-   "Music on this device",
-   "Muziek op dit apparaat"
-  ],
-  "session.audioQuality.Original": [
-   "Original",
-   "Origineel"
-  ],
-  "session.audioQuality.High": [
-   "High (256 kbit/s)",
-   "Hoog (256 kbit/s)"
-  ],
-  "session.audioQuality.Small": [
-   "Small (128 kbit/s)",
-   "Klein (128 kbit/s)"
   ],
   "takeover.rootFolders": [
    "Root folders",
@@ -1675,10 +1671,6 @@
   "hint.AccountSessionFields.DeviceName.info": [
    "Empty shows the device's platform as its name.",
    "Leeg toont het platform van het apparaat als naam."
-  ],
-  "hint.AccountSessionFields.AudioQuality.info": [
-   "Original plays the file as it is. High and Small convert larger music files on the fly, which saves data on the go.",
-   "Origineel speelt het bestand af zoals het is. Hoog en Klein converteren grotere muziekbestanden direct, wat onderweg data bespaart."
   ],
   "hint.ProfileFields.DisplayName.info": [
    "The name shown when choosing a profile.",
@@ -6379,6 +6371,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Een profiel bewaart maximaal 1000 markeringen per boek."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Een profiel bewaart maximaal 200 bladwijzers per boek."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",

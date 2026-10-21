@@ -17,5 +17,7 @@ namespace Jularr.Backend.Data.Fields.Playback
         public static readonly StringField StreamUrl = new(NpgsqlDbType.Text) { MaximumLength = 256, Required = false };
         public static readonly StringField TrackKey = new(NpgsqlDbType.Varchar) { MaximumLength = 24, AllowBlank = false };
         public static readonly BoolField IsSupported = new();
+        public static readonly BoolField IsSelected = new();
+        public static readonly BoolField IsReduced = new();
     }
 }

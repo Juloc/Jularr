@@ -89,8 +89,7 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await Evidence.SaveAsync(page, "player-series-settings-light");
                 await page.EvaluateAsync("document.documentElement.dataset.mode = 'dark'");
-                await Assertions.Expect(page.Locator("[data-setting-pane=audio]")).ToHaveCSSAsync("background-color",
-                    await page.Locator(".player__sidebar").EvaluateAsync<string>("sidebar => getComputedStyle(sidebar).backgroundColor"));
+                await Assertions.Expect(page.Locator("#player-settings .ui-field__control").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "player-series-settings-dark");
                 await page.EvaluateAsync("document.documentElement.dataset.mode = 'light'");
                 await page.Keyboard.PressAsync("Escape");
@@ -103,6 +102,22 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync(seriesDetails);
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The episode started at " + resumed + " s instead of continuing.");
+
+                // The profile marks what it watched on the details page, for the film and for an episode, and starts the film over from its beginning.
+                await page.GotoAsync(filmDetails);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark watched", Exact = true }));
+                await Assertions.Expect(page.Locator(".details-progress .state-chip--watched")).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "details-film-watched");
+                var restarted = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Start over", Exact = true }));
+                Assert.IsTrue(restarted < 1, "The film started at " + restarted + " s instead of at its beginning.");
+                await page.GotoAsync(filmDetails);
+                await Assertions.Expect(page.Locator(".state-chip--watched")).ToHaveCountAsync(0);
+                await page.GotoAsync(seriesDetails);
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark watched", Exact = true }).First);
+                await Assertions.Expect(page.Locator(".episode-card .state-chip--watched")).ToHaveCountAsync(1);
+                await Evidence.SaveAsync(page, "details-series-watched");
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Mark unwatched", Exact = true }).First);
+                await Assertions.Expect(page.Locator(".state-chip--watched")).ToHaveCountAsync(0);
 
                 // On a narrow screen every unit is two lines: the facts of all units of the season slide together while the first line stays, and the columns are a sheet from the bottom.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
@@ -194,14 +209,49 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.paused"));
             }
             await settings.GetByRole(AriaRole.Tab, new() { Name = "Playback", Exact = true }).ClickAsync();
-            await settings.Locator("[data-speed='1.25']").ClickAsync();
+            var speeds = settings.Locator("[data-panel=playback]");
+            await speeds.Locator("[data-speed='1.25']").ClickAsync();
             Assert.AreEqual(1.25, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
-            await settings.Locator("[data-speed='1']").ClickAsync();
+            await Assertions.Expect(speeds.Locator("[data-setting=speed-number]")).ToHaveValueAsync("1.25");
+
+            // The slider reaches beyond the presets, the number follows it, and the Basic pane shows the same speed.
+            await speeds.Locator("[data-setting=speed-number]").FillAsync("3");
+            await speeds.Locator("[data-setting=speed-number]").PressAsync("Enter");
+            await speeds.Locator("[data-setting=speed-number]").BlurAsync();
+            Assert.AreEqual(3, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
+            Assert.AreEqual("3", await settings.Locator("[data-panel=basic] [data-setting=speed-range]").InputValueAsync());
+            await speeds.Locator("[data-speed='1']").ClickAsync();
+            Assert.AreEqual(1, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
+
+            // The quality of this playback: the device's choice is current, and another one plans the same video again at the same place.
+            var quality = speeds.Locator("select[data-setting=quality]");
+            Assert.AreEqual(4, await quality.Locator("option").CountAsync());
+            await Assertions.Expect(quality).ToHaveValueAsync("1");
+            await page.RunAndWaitForResponseAsync(() => quality.SelectOptionAsync("2"),
+                response => response.Request.Method == "POST" && response.Url.EndsWith("/sessions", StringComparison.Ordinal) && response.Ok);
+            await Assertions.Expect(quality).ToHaveValueAsync("2");
+            await Assertions.Expect(settings.Locator("[data-panel=basic] select[data-setting=quality]")).ToHaveValueAsync("2");
+            await settings.GetByRole(AriaRole.Tab, new() { Name = "Info", Exact = true }).ClickAsync();
+            await Assertions.Expect(settings.Locator("[data-role=fact-quality]")).ToHaveTextAsync("Original");
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(settings).ToBeHiddenAsync();
 
             // The native range moves while the current playback continues; only release seeks.
-            await video.EvaluateAsync("video => { video.currentTime = 1; return video.play(); }");
+            // The new source of the quality change pauses a player that does not autoplay when its metadata arrives; play again until that is over.
+            for (var attempt = 0; attempt < 6; attempt++)
+            {
+                try
+                {
+                    await video.EvaluateAsync("video => { video.currentTime = 1; return video.play(); }");
+                    await Task.Delay(600);
+                    if (!await video.EvaluateAsync<bool>("video => video.paused")) break;
+                }
+                catch (PlaywrightException exception) when (exception.Message.Contains("AbortError", StringComparison.Ordinal))
+                {
+                    await Task.Delay(400);
+                }
+            }
+
             var timeline = page.Locator("[data-role=timeline]");
             var track = (await timeline.BoundingBoxAsync())!;
             await page.Mouse.MoveAsync(track.X + track.Width * .1f, track.Y + track.Height / 2);
