@@ -7,10 +7,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
 {
-    // Tracks the downloads of external clients: every 15 seconds while one runs, otherwise on a slow safety tick or as soon as a new one is grabbed.
-    internal sealed class DownloadWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner, WorkSignals signals) : PeriodicWorker(time, jobs, runner, WorkerGroupType.Download, ActiveInterval)
+    // Tracks the downloads of external clients: every second while someone watches one, every 15 seconds while one runs, otherwise on a slow safety tick or as soon as a new one is grabbed.
+    internal sealed class DownloadWorker(TimeProvider time, WorkerJobs jobs, WorkerJobRunner runner, WorkSignals signals, LiveChanges live)
+        : PeriodicWorker(time, jobs, runner, WorkerGroupType.Download, LiveChanges.DownloadInterval)
     {
         private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(15);
+
+        // How soon a running download is looked at again.
+        internal static TimeSpan LookAgainIn(bool isWatched) => isWatched ? LiveChanges.DownloadInterval : ActiveInterval;
 
         protected override async Task RunOnceAsync(CancellationToken ct)
         {
@@ -24,7 +28,7 @@ namespace Jularr.Workers
             if (await Runner.RunAsync("downloads", async (services, token) =>
                 isActive = (await services.GetRequiredService<MonitorDownloadsV1>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, token)).Success, ct) is not null && isActive)
             {
-                Jobs.RunAgainWithin("downloads", ActiveInterval);
+                Jobs.RunAgainWithin("downloads", LookAgainIn(live.WantsDownloadProgress));
             }
         }
 

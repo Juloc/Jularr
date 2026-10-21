@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Modules.Live;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -12,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Activity
 {
     public sealed class ActivityModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, RemoveActivityDownloadV1 remove, PauseActivityDownloadV1 pause,
-        RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, IAntiforgery antiforgery) : JularrPage
+        RetryActivityImportV1 retryImport, PauseActivityQueueV1 pauseQueue, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
 
@@ -27,6 +28,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             page.Title("admin.activity.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Activity/Activity.entry.scss");
+            if (Tab == ActivityTabType.Queue) page.Asset("Framework/Components/LiveProgress.entry.ts");
             page.Content.Add(new NavigationTabs(Enum.GetValues<ActivityTabType>()
                 .Select(tab => new NavigationTab("activity.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.activity.title"));
 
@@ -39,10 +41,10 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                         : item.WorkId is { } workId
                         ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), new Span(new ValueText(item.Title))).Class("activity-item")
                         : new ValueText(item.Title))
-                    .Content("table.status", item => new Text(item.IsWaiting ? "activity.waiting" : "operation.status." + item.OperationStatusTypeId));
+                    .Content("table.status", Status);
                 table = Tab == ActivityTabType.Queue
                     ? table.Content("activity.details", Details)
-                    : table.Content("activity.reason", item => item.ReasonKey is { } key ? new Text(Reason(item.OperationTypeId, key)) : new Span())
+                    : table.Content("activity.reason", item => item.ReasonKey is { } key ? new ValueText(LiveEntities.Reason(texts, item.OperationTypeId, key)) : new Span())
                         .Content("activity.size", item => new ValueText(Size(item.SizeBytes)));
                 table = table.Text(item => item.CreatedAt, "operation.created");
                 if (Tab == ActivityTabType.Queue)
@@ -65,17 +67,37 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
-        // A waiting or failed entry says why; a running one how far it is.
+        // A waiting or failed entry says why; a running one how far it is. The stream keeps both current.
         private IUiComponent Details(ActivityItemV1 item)
         {
-            if (item.ReasonKey is { } key && (item.IsWaiting || item.OperationStatusTypeId == OperationStatusType.Failed))
-            {
-                return new Text(Reason(item.OperationTypeId, key));
-            }
+            var says = item.ReasonKey is not null && (item.IsWaiting || item.OperationStatusTypeId == OperationStatusType.Failed);
+            var facts = says ? "" : LiveFacts.Join(LiveFacts.Progress(item.ProgressPercent, item.SizeBytes, item.RemainingBytes), LiveFacts.Eta(item.EtaSeconds));
+            return new Div(
+                LivePart("state", says ? "" : LiveEntities.OperationState(texts, item.DownloadStateTypeId), "live-progress__phase"),
+                new Span(new ValueText(item.ConnectionName ?? "")).Class("live-progress__facts"),
+                LiveBar(item.ProgressPercent),
+                LivePart("facts", facts, "live-progress__facts"),
+                LivePart("reason", says ? LiveEntities.Reason(texts, item.OperationTypeId, item.ReasonKey) : "", "live-progress__facts"))
+                .Class("live-progress").Attribute("data-live", LiveKeys.Operation(item.Id));
+        }
 
-            var state = item.DownloadStateTypeId is { } downloadState ? new Text("activity.state." + downloadState) : null;
-            var facts = string.Join(" · ", new[] { item.ConnectionName, Progress(item), Eta(item.EtaSeconds) }.Where(text => !string.IsNullOrEmpty(text)));
-            return new Span(state is null ? new ValueText(facts) : state, new ValueText(state is null || facts.Length == 0 ? "" : " · " + facts));
+        // The status column follows the same entity.
+        private IUiComponent Status(ActivityItemV1 item)
+        {
+            var text = new Span(new Text(item.IsWaiting ? "activity.waiting" : "operation.status." + item.OperationStatusTypeId));
+            return Tab == ActivityTabType.Queue ? text.Attribute("data-live", LiveKeys.Operation(item.Id)).Attribute("data-live-text", "status") : text;
+        }
+
+        private static IUiComponent LivePart(string name, string text, string className)
+        {
+            var part = new Span(new ValueText(text)).Class(className).Attribute("data-live-text", name);
+            return text.Length == 0 ? part.Attribute("hidden", "hidden") : part;
+        }
+
+        private static IUiComponent LiveBar(int? percent)
+        {
+            var bar = new Progress().Attribute("max", "100").TextAttribute("aria-label", "live.progress").Class("live-progress__bar").Attribute("data-live-value", "percent");
+            return percent is { } value ? bar.Attribute("value", value.ToString(CultureInfo.InvariantCulture)) : bar.Attribute("hidden", "hidden");
         }
 
         private IUiComponent Actions(ActivityItemV1 item, string? csrf)
@@ -126,32 +148,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
                 FormError?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? FormError : null));
 
-        // Downloads report acquisition outcomes; scans and backups report service errors.
-        private static string Reason(OperationType type, string key) => type == OperationType.Download ? "acquisition.outcome." + key : "errors." + key;
-
-        // "42 % · 3.1 of 7.4 GB"; sizes only where the client reports them.
-        private static string Progress(ActivityItemV1 item)
-        {
-            var percent = item.ProgressPercent is { } value ? value.ToString(CultureInfo.InvariantCulture) + " %" : "";
-            if (item.SizeBytes is not { } size)
-            {
-                return percent;
-            }
-
-            var done = item.RemainingBytes is { } remaining ? Math.Max(0, size - remaining) : (long?)null;
-            var amount = done is { } bytes ? Size(bytes) + " / " + Size(size) : Size(size);
-            return percent.Length == 0 ? amount : percent + " · " + amount;
-        }
-
         private static string Size(long? bytes) => bytes is { } size ? ByteSize.Format(size) : "";
-
-        private static string Eta(int? seconds) => seconds switch
-        {
-            null => "",
-            >= 3600 => (seconds.Value / 3600).ToString(CultureInfo.InvariantCulture) + " h " + (seconds.Value % 3600 / 60).ToString(CultureInfo.InvariantCulture) + " min",
-            >= 60 => (seconds.Value / 60).ToString(CultureInfo.InvariantCulture) + " min",
-            _ => "< 1 min"
-        };
 
         public async Task<IActionResult> OnGetAsync()
         {

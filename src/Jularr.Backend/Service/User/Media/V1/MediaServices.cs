@@ -388,20 +388,54 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
-                    AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
-                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
+                    AND (
+                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
+                    )
+                    AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
+                    AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
+                    AND (@ProgressStateId::smallint IS NULL OR workProgress."ProgressStateId" = @ProgressStateId)
                 ORDER BY
                     CASE WHEN @LibrarySortTypeId = 1 THEN entry."CreatedAt" END DESC NULLS LAST,
                     CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 4 THEN workProgress."ProgressPercent" END DESC NULLS LAST,
                     visible."Title",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, null, Parameters.LibrarySortTypeId));
+            sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/watchlist/count")]
+    public sealed class ReadWatchlistCountV1 : UserService<ReadWatchlistCountParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WatchlistCountV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWatchlistCountParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadWatchlistCountParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The favorites the profile can open.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    count(*)::integer AS "Total"
+                FROM
+                    "WatchlistEntries" AS entry
+                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
+                WHERE
+                    entry."ProfileId" = @ProfileId
+                    AND NOT visible."IsHidden";
+                """;
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return await Context.ReadSql.ReadRequiredAsync<WatchlistCountV1>(sql, CancellationToken);
         }
     }
 

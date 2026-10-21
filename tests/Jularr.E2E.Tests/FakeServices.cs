@@ -81,9 +81,13 @@ namespace Jularr.E2E.Tests
 
         private volatile bool _holdDownloads;
         private volatile bool _failDownloads;
+        private volatile int _heldPercent = 40;
 
         // Grabbed jobs wait in the queue until finished.
         public bool HoldDownloads { get => _holdDownloads; set => _holdDownloads = value; }
+
+        // How far held jobs say they are, of a size of 1000 MB.
+        public int HeldPercent { get => _heldPercent; set => _heldPercent = value; }
 
         // Finished jobs report a broken download.
         public bool FailDownloads { get => _failDownloads; set => _failDownloads = value; }
@@ -303,8 +307,10 @@ namespace Jularr.E2E.Tests
 
                     return Json("""{"status":true}""");
                 case "queue":
+                    var percent = HeldPercent;
                     var queued = _held.Values.Select(waiting =>
-                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
+                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"" + percent + "\",\"mb\":\"1000\",\"mbleft\":\"" + (1000 - 10 * percent)
+                        + "\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
                     return Json("{\"queue\":{\"paused\":false,\"slots\":[" + string.Join(',', queued) + "]}}");
                 case "status":
                     return Json("""{"status":{"completedir":"/downloads"}}""");

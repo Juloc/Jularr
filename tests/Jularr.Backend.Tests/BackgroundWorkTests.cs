@@ -214,13 +214,17 @@ namespace Jularr.Backend.Tests
                 Assert.IsFalse((await scope.ServiceProvider.GetRequiredService<MonitorDownloadsV1>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default)).Success);
             }
 
-            using var worker = new DownloadWorker(TimeProvider.System, jobs, host.Services.GetRequiredService<WorkerJobRunner>(), signals);
+            using var worker = new DownloadWorker(TimeProvider.System, jobs, host.Services.GetRequiredService<WorkerJobRunner>(), signals, host.Services.GetRequiredService<LiveChanges>());
             await worker.StartAsync(CancellationToken.None);
             try
             {
                 await WaitForAsync(() => Task.FromResult(jobs.Describe("downloads", null).LastFinishedAt is not null));
                 var first = jobs.Describe("downloads", null);
                 Assert.IsTrue(first.NextRunAt - first.LastFinishedAt >= TimeSpan.FromSeconds(55), "Without a download the next look is a minute away.");
+
+                // A running download is looked at every 15 seconds, every second while someone watches it.
+                Assert.AreEqual(TimeSpan.FromSeconds(15), DownloadWorker.LookAgainIn(false));
+                Assert.AreEqual(TimeSpan.FromSeconds(1), DownloadWorker.LookAgainIn(true));
 
                 // A grabbed download wakes the worker without waiting for its tick.
                 signals.Downloads.Notify();

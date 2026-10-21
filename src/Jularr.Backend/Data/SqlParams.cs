@@ -133,6 +133,11 @@ namespace Jularr.Backend.Data
 
                 value = value is null ? null : Convert.ToInt16(value);
             }
+            else if (actualType.IsArray && actualType.GetElementType()!.IsEnum)
+            {
+                // Persisted byte-backed enums travel as smallint values.
+                value = value is Array values ? values.Cast<object>().Select(Convert.ToInt16).ToArray() : null;
+            }
             else if (actualType == typeof(byte))
             {
                 if (resolvedType == NpgsqlDbType.Smallint && value is not null)
@@ -165,7 +170,8 @@ namespace Jularr.Backend.Data
             {
                 var elementType = type.GetElementType()!;
                 if (type.GetArrayRank() != 1 || (elementType != typeof(string) && elementType != typeof(int)
-                    && elementType != typeof(long) && elementType != typeof(bool) && elementType != typeof(Guid)))
+                    && elementType != typeof(long) && elementType != typeof(bool) && elementType != typeof(Guid)
+                    && !(elementType.IsEnum && Enum.GetUnderlyingType(elementType) == typeof(byte))))
                 {
                     throw new NotSupportedException("The PostgreSQL array element type is unsupported.");
                 }

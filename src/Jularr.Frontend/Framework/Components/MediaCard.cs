@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Framework
             IUiComponent? action = _actions.FirstOrDefault();
             if (action is null && actionKey is not null && actionHref is not null)
             {
-                var icon = actionKey is "request.create" or "media.request" ? "requests"
+                var icon = actionKey is "request.create" or "media.request" or "discover.action.request" ? "requests"
                     : actionHref.StartsWith("/Read/", StringComparison.Ordinal) ? "reading" : "player-play";
                 action = new A(new Icon(icon, assets), new Text(actionKey)).Class("button button--primary button--compact").Attribute("href", actionHref);
             }

@@ -4,6 +4,7 @@ namespace Jularr.Backend.Data.Enums.Media
     {
         RecentlyAdded = 1,
         Title = 2,
-        Year = 3
+        Year = 3,
+        Progress = 4
     }
 }

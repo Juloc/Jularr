@@ -1,9 +1,11 @@
 @use "../../../Framework/Components/MediaShelf";
 @use "../../../Framework/Components/MediaCard";
-@use "../../../Framework/Components/MediaHero";
+@use "../../../Framework/Components/CapsuleBar";
+@use "../../../Framework/Components/HeroCarousel";
+@use "../../../Framework/Components/ChoiceGroup";
 
 .discover-media-heading {
-    margin: 20px 0 0;
+    margin: 4px 0 0;
     color: var(--accent-text);
     font-size: 22px;
     font-weight: 750;
@@ -22,6 +24,120 @@
     justify-content: center;
     gap: 12px;
     padding: 24px 0;
+}
+
+.capsule-bar__tool.button {
+    position: relative;
+    flex: none;
+    width: 39px;
+    min-height: 39px;
+    border-color: var(--border);
+    background: var(--capsule-fill);
+    color: var(--muted);
+
+    .ui-icon { width: 16px; height: 16px; }
+    &:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
+}
+
+.capsule-bar__badge {
+    position: absolute;
+    top: -4px;
+    right: -2px;
+    display: grid;
+    place-items: center;
+    min-width: 17px;
+    height: 17px;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 10px;
+    line-height: 1;
+}
+
+@container capsule-bar (max-width: 929px) {
+    .capsule-bar__tool.button { width: 32px; min-height: 32px; }
+}
+
+// Lists of one feed, their order and the layout of the shelves; always one row, the lists scroll sideways.
+.discover-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 9px 0 24px;
+    padding: 0 4px;
+
+    .navigation-tabs { flex: 1 1 auto; min-width: 0; }
+
+    &__settings { display: flex; flex: none; align-items: center; gap: 7px; }
+
+    // Rows scroll sideways; the grid wraps every shelf. The icon shows the layout a click leads to.
+    &__layout.button { width: 38px; min-height: 38px; .ui-icon:last-child { display: none; } }
+}
+
+// Shelves: the rhythm of the mockup.
+.discover-results {
+    .media-shelf { margin-bottom: 0; }
+
+    .media-shelf__heading {
+        gap: 12px;
+        margin: 26px 0 18px;
+
+        h2 { font-size: 21px; letter-spacing: -.5px; line-height: normal; }
+    }
+
+    .media-shelf__items { gap: 16px; padding: 3px 1px 14px; }
+}
+
+@media (max-width: 760px) {
+    .discover-results .media-shelf__heading { margin: 27px 0 14px; h2 { font-size: 18px; } }
+}
+
+html:not(.discover-scripted) [data-discover-layout] { display: none; }
+
+html[data-discover-layout="grid"] {
+    .discover-toolbar__layout .ui-icon { &:first-child { display: none; } &:last-child { display: block; } }
+
+    .discover-results .media-shelf__items {
+        flex-wrap: wrap;
+        overflow: visible;
+        scroll-snap-type: none;
+    }
+
+    .discover-results .media-shelf__controls { display: none; }
+}
+
+html:not(.discover-scripted) .discover-pick, html:not(.discover-scripted) .discover-all { display: none; }
+
+// All media types and the choice of a whole area, as on a phone's chooser.
+.discover-all.button {
+    min-height: 40px;
+    margin: 8px 0 2px;
+    padding: 0 15px;
+    font-size: 12px;
+    font-weight: 720;
+
+    &:not([aria-pressed="true"]) { background: var(--tint); }
+}
+
+.discover-pick.button {
+    min-height: 0;
+    padding: 8px 11px;
+    border: 0;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 11px;
+    font-weight: 750;
+}
+
+// The label on the left, the switch on the right.
+.discover-switches {
+    display: grid;
+    margin-top: 13px;
+
+    .toggle { flex-direction: row-reverse; justify-content: space-between; width: 100%; }
+    .toggle__label { font-size: 13px; font-weight: 770; }
 }
 
 // Suggestions under the header search, as wide as the field like the combobox popup.
@@ -64,11 +180,14 @@
 
     &__text {
         display: grid;
+        flex: 1;
         min-width: 0;
 
         strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
         span { color: var(--muted); font-size: 12px; }
     }
+
+    &__arrow { display: grid; flex: none; color: var(--muted); .ui-icon { transform: rotate(180deg); } }
 }
 
 .discover-feedback {

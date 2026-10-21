@@ -21,6 +21,7 @@ namespace Jularr.Frontend.Pages.User.Requests
         {
             page.Title("requests.title");
             page.Navigation("nav.home");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
 
             // Active-profile requests only.
             if (_requests is { } requests)
@@ -29,7 +30,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                     .Content("table.work", item => new A(new ValueText(item.CanonicalTitle)).Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture)))
                     .Content("request.language", item => new Div(new ValueText(item.RequestedLanguage),
                         item.ReadsTranslated && texts.CanTranslate() ? new Span(new Text("request.readsTranslated")).Class("request-step") : new Span()))
-                    .Content("table.status", item => new Div(new Text("request.state." + item.AcquisitionRequestStatusTypeId),
+                    .Content("table.status", item => new Div(new LiveProgress(LiveKeys.Request(item.Id)).Request(item.AcquisitionRequestStatusTypeId).Steps(),
                         item is { LatestStepTypeId: { } step, LatestStepAt: { } at }
                             ? new Span(new Text("request.step." + step), new ValueText(" · " + at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("request-step")
                             : new Span()))

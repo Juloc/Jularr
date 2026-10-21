@@ -12,7 +12,7 @@ using Jularr.Frontend.Pages.User.Discover;
 using Jularr.Frontend.Pages.User.Details;
 using Jularr.Frontend.Pages.User.Player;
 using Jularr.Frontend.Pages.User.Settings;
-using Jularr.Frontend.Pages.User.Watchlist;
+using Jularr.Frontend.Pages.User.Favorites;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -32,7 +32,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
             new("discover", "preview.discover"),
             new("details", "preview.details"),
             new("player", "preview.player"),
-            new("watchlist", "preview.watchlist"),
+            new("favorites", "preview.favorites"),
             new("settings", "preview.settings"),
             new("admin-requests", "preview.admin-requests"),
             new("admin-rules", "preview.admin-rules"),
@@ -51,7 +51,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
                 "discover" => ActivatorUtilities.CreateInstance<IndexModel>(HttpContext.RequestServices),
                 "details" => ActivatorUtilities.CreateInstance<DetailsModel>(HttpContext.RequestServices),
                 "player" => ActivatorUtilities.CreateInstance<PlayerModel>(HttpContext.RequestServices),
-                "watchlist" => ActivatorUtilities.CreateInstance<WatchlistModel>(HttpContext.RequestServices),
+                "favorites" => ActivatorUtilities.CreateInstance<FavoritesModel>(HttpContext.RequestServices),
                 "settings" => ActivatorUtilities.CreateInstance<SettingsModel>(HttpContext.RequestServices),
                 "admin-requests" => ActivatorUtilities.CreateInstance<RequestsModel>(HttpContext.RequestServices),
                 "admin-rules" => ActivatorUtilities.CreateInstance<RulesModel>(HttpContext.RequestServices),
