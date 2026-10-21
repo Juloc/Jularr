@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger, AcquisitionSearchSignal signal)
+    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger, AcquisitionSearchSignal signal, LiveChanges live)
         : PeriodicWorker(scopes, time, logger, TimeSpan.FromSeconds(15))
     {
         private static readonly TimeSpan SearchInterval = TimeSpan.FromMinutes(2);
@@ -16,10 +16,18 @@ namespace Jularr.Workers
         private DateTimeOffset _nextSearch = DateTimeOffset.MinValue;
         private DateTimeOffset _nextPlexSync = DateTimeOffset.MinValue;
 
+        // A pass between two regular ones only reads what the download clients report.
+        private bool _isFullPass = true;
+
         protected override async Task RunOnceAsync(CancellationToken ct)
         {
             // Downloads are tracked often; metadata and due targets are refreshed in small passes.
             await RunAsync<MonitorDownloadsV1>(ct);
+            if (!_isFullPass)
+            {
+                return;
+            }
+
             await RunAsync<RefreshStoredFileFormatsV1>(ct);
             var periodicSearchDue = Time.GetUtcNow() >= _nextSearch;
             if (signal.TakeRequest() || periodicSearchDue)
@@ -42,11 +50,26 @@ namespace Jularr.Workers
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var tick = timer.WaitForNextTickAsync(linked.Token).AsTask();
             var request = signal.WaitForRequestAsync(linked.Token).AsTask();
-            var completed = await Task.WhenAny(tick, request);
+
+            // While someone watches a running download its progress is read every second.
+            Task completed;
+            Task second;
+            do
+            {
+                second = Task.Delay(LiveChanges.DownloadInterval, Time, linked.Token);
+                completed = await Task.WhenAny(tick, request, second);
+            }
+            while (completed == second && !ct.IsCancellationRequested && !live.WantsDownloadProgress);
+            _isFullPass = completed != second;
             await linked.CancelAsync();
             try
             {
-                return await completed;
+                if (completed == second)
+                {
+                    return !ct.IsCancellationRequested;
+                }
+
+                return await (Task<bool>)completed;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -48,6 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         protected override void Define(Page page)
         {
             page.Title("admin.profiles.title", _profile?.Name);
+            if (_profile is not null) page.Parent("admin.profiles.title", "/Admin/Acquisition/Profiles");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));

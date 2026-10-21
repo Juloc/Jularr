@@ -3,39 +3,53 @@ type Rgb = [number, number, number];
 type Tokens = Record<string, string>;
 
 export const OriginalAccent = "#c8102e";
-export const CleanAccent = "#7c3aed";
+export const CleanAccent = "#813eff";
+
+// The reference palette of the owner's mockups (20 Oct), used verbatim for the default accent; muted text and accent text are
+// the mockups' tones moved until they pass AA (4.5:1) on every surface. Any other accent derives its palette in mode().
+const Reference: { light: Tokens; dark: Tokens } = {
+    light: {
+        background: "#faf9ff", surface: "#ffffff", "surface-hover": "#f5f2ff", field: "#f8f7ff", border: "#ebe8f5",
+        text: "#242039", muted: "#6c6882", accent: "#813eff", "accent-contrast": "#ffffff", "accent-text": "#6e34d2",
+        "accent-soft": "#f0eaff", "accent-hover": "#7427ed", focus: "#6e34d2"
+    },
+    dark: {
+        background: "#11111a", surface: "#1c1b29", "surface-hover": "#2b2640", field: "#252233", border: "#363247",
+        text: "#f4f1fd", muted: "#aaa3bf", accent: "#a980ff", "accent-contrast": "#11101a", "accent-text": "#baa0ff",
+        "accent-soft": "#33284e", "accent-hover": "#b794ff", focus: "#baa0ff"
+    }
+};
 
 // One seed, two accessible palettes.
 export function buildPalette(seed: string): { light: Tokens; dark: Tokens; rotation: string; saturation: string } {
     if (!/^#[a-f\d]{6}$/i.test(seed)) throw new RangeError("Expected a six-digit hex accent.");
     const color = fromHex(seed);
     const monochrome = color.c < 0.025;
-    const rotation = ((hue(seed) - hue(OriginalAccent)) % 360 + 540) % 360 - 180;
-    return {
-        light: mode(color, monochrome, false), dark: mode(color, monochrome, true),
-        rotation: (monochrome ? 0 : rotation).toFixed(1) + "deg", saturation: monochrome ? "0" : "1"
-    };
+    const rotation = (monochrome ? 0 : ((hue(seed) - hue(OriginalAccent)) % 360 + 540) % 360 - 180).toFixed(1) + "deg";
+    if (seed.toLowerCase() === CleanAccent) return { light: Reference.light, dark: Reference.dark, rotation, saturation: "1" };
+    return { light: mode(color, monochrome, false), dark: mode(color, monochrome, true), rotation, saturation: monochrome ? "0" : "1" };
 }
 
 function mode(seed: Color, monochrome: boolean, dark: boolean): Tokens {
-    // Tint neutral surfaces gently.
-    const chroma = monochrome ? 0 : Math.min(0.25, Math.max(0.09, seed.c));
-    const neutral = monochrome ? 0 : Math.min(0.007, chroma * 0.035);
-    const color = (l: number, c = neutral) => toHex({ l, c, h: seed.h });
-    const background = color(dark ? 0.165 : 0.962);
-    const surface = color(dark ? 0.205 : 0.992);
-    const hover = color(dark ? 0.235 : 0.952);
-    const field = color(dark ? 0.18 : 0.995);
-    const grounds = [background, surface, hover, field];
+    // Owner's decision 20 Oct: the tokens of the owner's mockups. Neutrals are very light (or deep) tints of the accent hue,
+    // lines are the quiet 1px colour, the page is white with a lavender breath. A monochrome seed has no tint at all.
+    const chroma = monochrome ? 0 : Math.min(0.3, Math.max(0.09, seed.c));
+    const tint = monochrome ? 0 : Math.min(1, seed.c / 0.2);
+    const color = (l: number, c: number) => toHex({ l, c: c * tint, h: seed.h });
+    const background = color(dark ? 0.182 : 0.985, dark ? 0.018 : 0.008);
+    const surface = color(dark ? 0.230 : 1, dark ? 0.027 : 0);
+    const field = color(dark ? 0.263 : 0.979, dark ? 0.032 : 0.011);
+    const hover = color(dark ? 0.285 : 0.968, dark ? 0.045 : 0.018);
+    const soft = color(dark ? 0.309 : 0.948, dark ? 0.067 : 0.029);
+    const grounds = [background, surface, hover, field, soft];
     const direction = dark ? 0.01 : -0.01;
-    const readable = (l: number, c: number, target: number, backgrounds = grounds) => ensureContrast({ l, c, h: seed.h }, backgrounds, target, direction);
+    const readable = (l: number, c: number, target: number, backgrounds = grounds) => ensureContrast({ l, c: c * tint, h: seed.h }, backgrounds, target, direction);
 
-    // Keep actions and labels readable.
-    let solid: Color = {
-        l: monochrome ? (dark ? 0.93 : 0.22) : Math.min(dark ? 0.80 : 0.82, Math.max(dark ? 0.50 : 0.40, seed.l)),
-        c: chroma, h: seed.h
-    };
-    const ink = color(0.18, Math.min(chroma * 0.2, 0.02));
+    // Keep actions and labels readable: the dark accent is the lighter, calmer tone of the same colour.
+    let solid: Color = dark
+        ? { l: monochrome ? 0.93 : Math.min(0.80, Math.max(0.62, seed.l + 0.13)), c: chroma * 0.7, h: seed.h }
+        : { l: monochrome ? 0.22 : Math.min(0.82, Math.max(0.40, seed.l)), c: chroma, h: seed.h };
+    const ink = toHex({ l: 0.18, c: Math.min(chroma * 0.2, 0.02), h: seed.h });
     let accent = toHex(solid);
     let label = "#ffffff";
     for (let step = 0; step < 60; step++) {
@@ -44,15 +58,16 @@ function mode(seed: Color, monochrome: boolean, dark: boolean): Tokens {
         if (contrast(accent, ink) >= 4.5) { label = ink; break; }
         solid = { ...solid, l: solid.l + (solid.l >= 0.62 ? 0.01 : -0.01) };
     }
-    const soft = color(dark ? 0.285 : 0.935, Math.min(chroma * (dark ? 0.35 : 0.22), dark ? 0.06 : 0.04));
-    const accentText = readable(monochrome ? (dark ? 0.90 : 0.25) : (dark ? Math.max(solid.l, 0.74) : Math.min(solid.l, 0.50)), chroma * 0.85, 4.5, [...grounds, soft]);
+    const accentText = ensureContrast(
+        { l: monochrome ? (dark ? 0.90 : 0.25) : (dark ? Math.max(solid.l, 0.765) : Math.min(solid.l, 0.50)), c: chroma * (dark ? 0.55 : 0.85), h: seed.h },
+        [...grounds], 4.5, direction);
     const accentHover = toHex({ ...solid, l: solid.l + (label === "#ffffff" ? -0.05 : 0.05) });
 
     return {
         background, surface, "surface-hover": hover, field,
-        border: color(dark ? 0.40 : 0.80),
-        text: readable(dark ? 0.955 : 0.21, neutral * 1.2, 12),
-        muted: readable(dark ? 0.71 : 0.50, neutral, 4.5),
+        border: color(dark ? 0.330 : 0.937, dark ? 0.037 : 0.018),
+        text: readable(dark ? 0.964 : 0.261, dark ? 0.016 : 0.046, 12),
+        muted: readable(dark ? 0.731 : 0.56, dark ? 0.041 : 0.04, 4.5),
         accent, "accent-contrast": label, "accent-text": accentText, "accent-soft": soft,
         "accent-hover": contrast(accentHover, label) >= 4.5 ? accentHover : accent,
         focus: accentText

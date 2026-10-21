@@ -3,7 +3,9 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // Featured title with backdrop artwork; the page decides which title is featured.
-    public sealed class MediaHero(string title, string? backdropUrl, string? meta, string? overview, string? actionKey = null, string? actionHref = null, string? detailsHref = null) : IUiComponent
+    // A page whose breadcrumb already ends with this title keeps the heading for assistive technology only.
+    public sealed class MediaHero(string title, string? backdropUrl, string? meta, string? overview, string? actionKey = null, string? actionHref = null, string? detailsHref = null,
+        bool titleInBreadcrumb = false) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -18,7 +20,7 @@ namespace Jularr.Frontend.Framework
                 actions.Add(new A(new Text("media.details")).Class("button").Attribute("href", detailsHref));
             }
 
-            var body = new List<IUiComponent> { new H2(new ValueText(title)).Class("media-hero__title") };
+            var body = new List<IUiComponent> { new H2(new ValueText(title)).Class(titleInBreadcrumb ? "media-hero__title visually-hidden" : "media-hero__title") };
             if (meta is not null) body.Add(new P(new ValueText(meta)).Class("media-hero__meta"));
             if (overview is not null) body.Add(new P(new ValueText(overview)).Class("media-hero__overview"));
             if (actions.Count > 0) body.Add(new Div([.. actions]).Class("media-hero__actions"));

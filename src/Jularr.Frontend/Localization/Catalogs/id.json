@@ -2960,38 +2960,6 @@
    "Requested",
    "Diminta"
   ],
-  "media.availability.badge.Available": [
-   "Available locally",
-   "Tersedia secara lokal"
-  ],
-  "media.availability.badge.ProfileAudio": [
-   "Profile audio available",
-   "Audio profil tersedia"
-  ],
-  "media.availability.badge.OtherAudio": [
-   "Other audio languages",
-   "Bahasa audio lain"
-  ],
-  "media.availability.badge.PartialOtherAudio": [
-   "{0}/{1} · Other audio",
-   "{0}/{1} · Audio lain"
-  ],
-  "media.availability.badge.Partial": [
-   "{0}/{1} available",
-   "{0}/{1} tersedia"
-  ],
-  "media.availability.badge.Downloading": [
-   "Downloading",
-   "Mengunduh"
-  ],
-  "media.availability.badge.Searching": [
-   "Searching",
-   "Mencari"
-  ],
-  "media.availability.badge.Requested": [
-   "Requested",
-   "Diminta"
-  ],
   "media.availability.Partial": [
    "{0} of {1} monitored episodes or units are available.",
    "{0} dari {1} episode atau unit yang dipantau tersedia."

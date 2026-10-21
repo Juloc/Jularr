@@ -1,16 +1,17 @@
+// The mockups' neutral badge: a soft accent pill, 11px bold; the accent modifier adds the outline.
 .tag {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 12px;
-    border: 1px solid color-mix(in srgb, var(--accent-text) 28%, var(--border));
+    padding: 4px 11px;
+    border: 1px solid var(--accent-soft);
     border-radius: var(--radius-control);
     background: var(--accent-soft);
     color: var(--accent-text);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--text-small);
+    font-weight: 700;
     overflow-wrap: anywhere;
 
-    &--accent { border-color: color-mix(in srgb, var(--accent-text) 55%, var(--border)); }
+    &--accent { border-color: var(--accent-outline); }
     .ui-icon { width: 16px; height: 16px; }
 }

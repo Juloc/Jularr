@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await book.Content.ReadAsStringAsync(), "href=\"/People/3\">Bo Ray<");
             using var credited = await host.SendAsync(HttpMethod.Get, "/api/v1/people/1/works");
             Assert.AreEqual(HttpStatusCode.OK, credited.StatusCode, await credited.Content.ReadAsStringAsync());
-            CollectionAssert.AreEquivalent(new[] { 10L, 20L }, (await credited.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
+            CollectionAssert.AreEquivalent(new[] { 10L, 20L }, (await credited.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items.Select(item => item.Id).ToArray());
             using var personPage = await host.SendAsync(HttpMethod.Get, "/People/1");
             var personHtml = await personPage.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, personPage.StatusCode, personHtml);

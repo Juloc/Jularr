@@ -38,6 +38,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             page.Asset("Pages/Admin/Work/Work.entry.scss");
             page.Asset("Pages/Admin/Work/Work.entry.ts");
             page.Asset("Framework/Components/Form.entry.ts");
+            page.Asset("Framework/Components/LiveProgress.entry.ts");
             var isSeries = work.MediaTypeId == MediaType.Series;
             var hasVolumes = work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is not null;
             var hasGroups = work.MediaTypeId == MediaType.Game || work.MediaTypeId == MediaType.Book && work.MediaSubtypeId is null;
@@ -128,6 +129,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
             if (texts.CanManageMedia()) actions.Add(new Button(Icon("trash"), new Text("work.delete")).Attribute("data-dialog-open", "work-delete").Attribute("type", "button").Class("button work-delete"));
 
             var status = new List<IUiComponent>();
+
+            // What its downloads do right now, shown only while there are some.
+            if (CanAcquire && work.MediaTypeId != MediaType.Game && _wanted is { } target) status.Add(new LiveProgress(LiveKeys.Wanted(target.Id)).Details().Optional());
+            if (CanAcquire && work.MediaTypeId == MediaType.Game) status.AddRange(_platformTargets.Values.Select(platform => new LiveProgress(LiveKeys.Wanted(platform.Id)).Details().Optional()));
             if (TempData["WorkFilesDeleted"] is int deleted)
             {
                 var kept = TempData["WorkFilesKept"] as int? ?? 0;
@@ -156,7 +161,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 new Div(
                     new Div(cover).Class("work-cover"),
                     new Div(
-                        new Div(new H1(new ValueText(work.CanonicalTitle)), new Div([.. pills]).Class("work-pills")).Class("work-title"),
+                        // The breadcrumb ends with the title: the heading stays for assistive technology only.
+                        new Div(new H1(new ValueText(work.CanonicalTitle)).Class("visually-hidden"), new Div([.. pills]).Class("work-pills")).Class("work-title"),
                         facts.Length == 0 ? new Span() : new P(new ValueText(facts)).Class("work-facts"),
                         string.IsNullOrWhiteSpace(work.Overview) ? new Span() : new P(new ValueText(work.Overview)).Class("work-overview"),
                         new Div([.. status, new Div([.. figures]).Class("work-figures"), new Div([.. actions]).Class("work-actions")]).Class("work-hero__bottom")).Class("work-hero__body")).Class("work-hero__content")).Class("work-hero");

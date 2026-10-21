@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         UiText texts, FrontendAssets assets) : JularrPage
     {
         private CollectionV1? _collection;
-        private PageResult<WorkCardV1>? _works;
+        private PageResult<LibraryItemV1>? _works;
         private UpdateCollectionDataV1? _input;
         private IReadOnlyList<LibraryItemV1>? _found;
 
@@ -43,8 +43,10 @@ namespace Jularr.Frontend.Pages.User.Collection
         protected override void Define(Page page)
         {
             page.Title("collections.title", _collection?.Name);
-            page.Navigation("collections.title");
+            page.Navigation("favorites.title");
+            page.Parent("favorites.title", "/Favorites");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_collection is not { } collection)
             {
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -58,10 +60,9 @@ namespace Jularr.Frontend.Pages.User.Collection
                 var removeToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(new Div([.. works.Items.Select(item =>
                 {
-                    var card = new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))
+                    var card = MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, removeToken));
-                    return collection.IsSmart ? (IUiComponent)card : new Div(card, new Form<CollectionWorkParametersV1>(form => form.Submit("media.remove", item.CanonicalTitle, valueHidden: true),
+                    return collection.IsSmart ? (IUiComponent)card : new Div(card, new Form<CollectionWorkParametersV1>(form => form.Submit("media.remove", item.Title, valueHidden: true),
                         Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry");
                 })]).Class("media-grid"));
                 if (works.Items.Count == 0) page.Content.Add(new P(new Text(collection.IsSmart ? "collections.noMatch" : "collections.noWorks")));
@@ -125,7 +126,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         {
             var token = HttpContext.RequestAborted;
             _collection = await read.ExecuteAsync<CollectionV1>(new CollectionParametersV1(Id), token);
-            _works = await readWorks.ExecuteAsync<PageResult<WorkCardV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber)), token);
+            _works = await readWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber)), token);
             if (!_collection.IsSmart && !string.IsNullOrWhiteSpace(Query))
             {
                 _found = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(query: Query, pageSize: 12), token)).Items;
@@ -155,7 +156,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         public async Task<IActionResult> OnPostDeleteAsync()
         {
             await delete.ExecuteAsync<UpdateResult>(new CollectionParametersV1(Id), default, HttpContext.RequestAborted);
-            return LocalRedirect("/Collections");
+            return LocalRedirect("/Favorites");
         }
     }
 }

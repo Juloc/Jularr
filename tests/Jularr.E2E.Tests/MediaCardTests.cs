@@ -42,12 +42,18 @@ namespace Jularr.E2E.Tests
                 Assert.IsNotNull(textBox);
                 Assert.AreEqual(before.Width, image.Width, .5f);
                 Assert.AreEqual(before.Height, image.Height, .5f);
-                Assert.AreEqual(before.Y + before.Height, progress.Y + progress.Height, .5f);
+
+                // A small cover, its progress a thin capsule inside the cover's foot, the text below it in single lines.
+                Assert.IsTrue(before.Width is >= 133 and <= 150, "cover width " + before.Width);
+                Assert.IsTrue(progress.Y + progress.Height <= before.Y + before.Height - 4 && progress.Y >= before.Y + before.Height - 14);
                 Assert.IsTrue(textBox.Y >= before.Y + before.Height - .5f);
+                Assert.IsTrue(textBox.Height <= 48, "details height " + textBox.Height);
+                await Assertions.Expect(title).ToHaveCSSAsync("white-space", "nowrap");
+                await Assertions.Expect(card.Locator(".media-card__info")).ToContainTextAsync("2016");
 
                 await poster.FocusAsync();
                 await Assertions.Expect(action).ToBeVisibleAsync();
-                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", "152px");
+                await Assertions.Expect(badge.Locator(".media-availability-badge__body")).ToHaveCSSAsync("max-width", "96px");
                 var after = await poster.BoundingBoxAsync();
                 Assert.IsNotNull(after);
                 Assert.AreEqual(before.Width, after.Width, .5f);

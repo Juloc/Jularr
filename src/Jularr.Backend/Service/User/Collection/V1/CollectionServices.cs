@@ -4,6 +4,8 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Collection.V1;
+using Jularr.Backend.Data.User.Library.V1;
+using Jularr.Backend.Service.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
@@ -34,6 +36,30 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     collection."OnlyAvailable",
                     collection."OnlyUnfinished",
                     CASE WHEN NOT collection."IsSmart" THEN (SELECT count(*)::integer FROM "CollectionWorks" AS item WHERE item."CollectionId" = collection."Id") END AS "WorkCount",
+                    ARRAY(
+                        SELECT
+                            poster."Value"
+                        FROM
+                            "CollectionWorks" AS item
+                            JOIN "ProfileWorks" AS visible ON visible."ProfileId" = collection."ProfileId" AND visible."WorkId" = item."WorkId" AND NOT visible."IsHidden"
+                            CROSS JOIN LATERAL (
+                                SELECT
+                                    fact."Value"
+                                FROM
+                                    "WorkMetadataFacts" AS fact
+                                WHERE
+                                    fact."WorkId" = item."WorkId"
+                                    AND fact."FactKey" = 'Poster'
+                                ORDER BY
+                                    fact."IsManual" DESC
+                                LIMIT 1
+                            ) AS poster
+                        WHERE
+                            item."CollectionId" = collection."Id"
+                        ORDER BY
+                            item."Position" DESC
+                        LIMIT 4
+                    ) AS "PosterUrls",
                     collection."Version"
                 FROM
                     "Collections" AS collection
@@ -72,6 +98,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     collection."OnlyAvailable",
                     collection."OnlyUnfinished",
                     NULL::integer AS "WorkCount",
+                    ARRAY[]::text[] AS "PosterUrls",
                     collection."Version"
                 FROM
                     "Collections" AS collection
@@ -88,7 +115,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
     [ServiceEndpoint("GET", "/api/v1/collections/{collectionId:long}/works")]
     public sealed class ReadCollectionWorksV1 : UserService<CollectionWorksParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<LibraryItemV1>>()];
         protected override ModuleRequirement GetInstanceModules(CollectionWorksParametersV1 parameters) => ModuleRequirement.All("Library", "Collections");
         protected override ServicePermission GetPermission(CollectionWorksParametersV1 parameters, Type resultType) => new("profile.collections");
         protected override PageRequest GetPageRequest(CollectionWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
@@ -98,30 +125,15 @@ namespace Jularr.Backend.Service.User.Collection.V1
             // Hand-picked Works in their order, or everything visible that passes the saved filter.
             var sql = new SqlStatement();
             sql.Statement =
-                """
+                $$"""
                 SELECT
-                    work."Id",
-                    work."MediaTypeId",
-                    visible."MediaSubtypeId",
-                    visible."Title" AS "CanonicalTitle",
-                    EXISTS (SELECT 1 FROM "WatchlistEntries" AS entry WHERE entry."ProfileId" = collection."ProfileId" AND entry."WorkId" = work."Id") AS "IsWatchlisted",
-                    work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl"
+                    {{WorkCardProjection.Columns}},
+                    EXISTS (SELECT 1 FROM "WatchlistEntries" AS entry WHERE entry."ProfileId" = collection."ProfileId" AND entry."WorkId" = work."Id") AS "IsWatchlisted"
                 FROM
                     "Collections" AS collection
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = collection."ProfileId" AND NOT visible."IsHidden"
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    {{WorkCardProjection.Joins}}
                     LEFT JOIN "CollectionWorks" AS item ON item."CollectionId" = collection."Id" AND item."WorkId" = work."Id"
                 WHERE
                     collection."Id" = @CollectionId
@@ -129,6 +141,14 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     AND (collection."IsSmart" OR item."WorkId" IS NOT NULL)
                     AND (collection."MediaTypeId" IS NULL OR visible."MediaTypeId" = collection."MediaTypeId")
                     AND (collection."MediaSubtypeId" IS NULL OR visible."MediaSubtypeId" = collection."MediaSubtypeId")
+                    AND (
+                        cardinality(@MediaTypeIds::smallint[]) + cardinality(@MediaSubtypeIds::smallint[]) = 0
+                        OR visible."MediaSubtypeId" IS NULL AND visible."MediaTypeId" = ANY(@MediaTypeIds::smallint[])
+                        OR visible."MediaSubtypeId" = ANY(@MediaSubtypeIds::smallint[])
+                    )
+                    AND (@ReleaseYearFrom::integer IS NULL OR work."ReleaseYear" >= @ReleaseYearFrom)
+                    AND (@ReleaseYearTo::integer IS NULL OR work."ReleaseYear" <= @ReleaseYearTo)
+                    AND (@ProgressStateId::smallint IS NULL OR workProgress."ProgressStateId" = @ProgressStateId)
                     AND (collection."ReleaseYearFrom" IS NULL OR work."ReleaseYear" >= collection."ReleaseYearFrom")
                     AND (collection."ReleaseYearTo" IS NULL OR work."ReleaseYear" <= collection."ReleaseYearTo")
                     AND (
@@ -180,6 +200,10 @@ namespace Jularr.Backend.Service.User.Collection.V1
                         )
                     )
                 ORDER BY
+                    CASE WHEN @LibrarySortTypeId = 1 THEN item."Position" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 4 THEN workProgress."ProgressPercent" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 2 THEN visible."Title" END,
                     item."Position" NULLS LAST,
                     visible."Title",
                     work."Id"
@@ -187,8 +211,9 @@ namespace Jularr.Backend.Service.User.Collection.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new CollectionOwnerData(Auth.ProfileId!.Value, Parameters.CollectionId));
+            sql.Parameters.Add(new WorkListFilterData(Parameters.MediaTypeIds, Parameters.MediaSubtypeIds, Parameters.ReleaseYearFrom, Parameters.ReleaseYearTo, Parameters.ProgressStateId, Parameters.LibrarySortTypeId));
             sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
+            return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
     }
 
@@ -222,6 +247,39 @@ namespace Jularr.Backend.Service.User.Collection.V1
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return new BaseDataList<WorkCollectionV1>(await Context.ReadSql.ReadListAsync<WorkCollectionV1>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/collections/membership")]
+    public sealed class ReadCollectionMembershipV1 : UserService<CollectionMembershipParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<CollectionMemberV1>>()];
+        protected override ModuleRequirement GetInstanceModules(CollectionMembershipParametersV1 parameters) => ModuleRequirement.All("Library", "Collections");
+        protected override ServicePermission GetPermission(CollectionMembershipParametersV1 parameters, Type resultType) => new("profile.collections");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The hand-picked collections of the profile that hold any of the given titles, in one read.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    item."WorkId",
+                    item."CollectionId"
+                FROM
+                    "CollectionWorks" AS item
+                    JOIN "Collections" AS collection ON collection."Id" = item."CollectionId"
+                WHERE
+                    collection."ProfileId" = @ProfileId
+                    AND NOT collection."IsSmart"
+                    AND item."WorkId" = ANY(@WorkIds)
+                ORDER BY
+                    item."WorkId",
+                    item."CollectionId";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<CollectionMemberV1>(await Context.ReadSql.ReadListAsync<CollectionMemberV1>(sql, CancellationToken));
         }
     }
 
