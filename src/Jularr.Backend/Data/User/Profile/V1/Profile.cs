@@ -69,8 +69,9 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin)
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin, bool autoplayPreviews = true)
         {
+            AutoplayPreviews = autoplayPreviews;
             Id = id;
             DisplayName = displayName;
             UiLocaleId = uiLocaleId;
@@ -87,5 +88,8 @@ namespace Jularr.Backend.Data.User.Profile.V1
         public long UiLocaleId { get; }
 
         public bool HasPin { get; }
+
+        // Whether a card that lingers on a touch device plays its preview by itself; the profile's playback preference.
+        public bool AutoplayPreviews { get; }
     }
 }

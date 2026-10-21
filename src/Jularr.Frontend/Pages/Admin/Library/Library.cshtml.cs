@@ -109,11 +109,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
             if (_renames is { } renames)
             {
-                if (TempData["RenamedCount"] is int renamed && TempData["SkippedCount"] is int skipped)
-                {
-                    page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["library.renamed"], renamed, skipped))).Attribute("role", "status"));
-                }
-
                 if (renames.Items.Count == 0)
                 {
                     page.Content.Add(new P(new Text("library.renameEmpty")));
@@ -348,8 +343,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         public async Task<IActionResult> OnPostRenameAsync([BindRequired] string fingerprint)
         {
             var result = await applyRenames.ExecuteAsync<ApplyLibraryRenamesResultV1>(new LibraryRenamesParametersV1(), new ApplyLibraryRenamesDataV1(fingerprint), HttpContext.RequestAborted);
-            TempData["RenamedCount"] = result.RenamedCount;
-            TempData["SkippedCount"] = result.SkippedCount;
+            Hint("library.renamed", result.RenamedCount, result.SkippedCount);
             return LocalRedirect(Address());
         }
 

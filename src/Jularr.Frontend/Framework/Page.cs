@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -10,6 +12,25 @@ namespace Jularr.Frontend.Framework
         public Page Definition { get; private set; } = new();
         private ServiceError? _error;
         protected ServiceError? FormError => _error is not null && HttpMethods.IsPost(Request.Method) ? _error : null;
+
+        // The quiet hint of an action lives in TempData until the response that shows it; the layout shows it for a page without script.
+        public const string HintKey = "JularrHint";
+        private const int HintLength = 200;
+
+        // The result of an action as the short hint at the bottom of the page (a resource key, with the values it formats), never as content of the page.
+        protected void Hint(string key, params object[] values)
+        {
+            var texts = HttpContext.RequestServices.GetRequiredService<UiText>();
+            HintText(values.Length == 0 ? texts[key] : string.Format(CultureInfo.CurrentCulture, texts[key], values));
+        }
+
+        protected void HintText(string text) => TempData[HintKey] = text.Length > HintLength ? text[..HintLength] : text;
+
+        // An action that leaves for a page without the shell (a deleted profile) says nothing.
+        protected void NoHint() => TempData[HintKey] = "";
+
+        // Account and Setup pages leave the shell, which shows the hint.
+        private bool HintsOnSuccess => !Request.Path.StartsWithSegments("/Account") && !Request.Path.StartsWithSegments("/Setup");
 
         // Shared service failure feedback.
         public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
@@ -27,6 +48,7 @@ namespace Jularr.Frontend.Framework
             var executed = await next();
             if (executed.Exception is null || executed.ExceptionHandled || executed.Exception is OperationCanceledException)
             {
+                if (executed.Exception is null) AnswerHint(executed.Result);
                 return;
             }
 
@@ -43,6 +65,18 @@ namespace Jularr.Frontend.Framework
             {
                 logger.LogError(exception, "The error page of {Path} failed.", Request.Path);
             }
+        }
+
+        // An action that went through says so: a handler's own hint, else "Saved" for every successful POST that leads on to a page. A script's request
+        // gets the hint with the page it swaps (HX-Trigger); a page without script shows it itself (ActionToast).
+        private void AnswerHint(IActionResult? result)
+        {
+            if (result is null) return;
+            var leads = result is RedirectResult or LocalRedirectResult or RedirectToPageResult or RedirectToRouteResult or RedirectToActionResult;
+            if (leads && HttpMethods.IsPost(Request.Method) && HintsOnSuccess && TempData.Peek(HintKey) is null) Hint("actionToast.saved");
+            if (result is not PageResult || !Request.Headers.ContainsKey("HX-Request") || TempData[HintKey] is not string { Length: > 0 } text) return;
+            Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(new Dictionary<string, object> { ["jularr:hint"] = new { text } });
+            TempData.Remove(HintKey);
         }
 
         private async Task<IActionResult> PrepareFailureAsync(ServiceError error)

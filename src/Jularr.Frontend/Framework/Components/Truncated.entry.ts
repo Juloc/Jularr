@@ -9,4 +9,4 @@ addEventListener("resize", () => {
     resizing = setTimeout(() => markTruncated(document), 150);
 });
 
-onPage(import.meta.url, () => markTruncated(document));
+onPage(import.meta.url, () => markTruncated(document), { partial: true });

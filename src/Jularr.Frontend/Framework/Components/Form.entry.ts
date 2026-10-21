@@ -48,7 +48,7 @@ function enhance(form: HTMLFormElement): void {
 onPage(import.meta.url, () => {
     document.querySelectorAll<HTMLFormElement>('form').forEach(enhance);
     document.querySelectorAll<HTMLElement>('[data-form-local]').forEach(local => { initializeRanges(local); initializeSteppers(local); });
-});
+}, { partial: true });
 
 // Unit changes affect presentation only; the typed field is always submitted in bytes.
 function enhanceSizes(form: HTMLFormElement): void {

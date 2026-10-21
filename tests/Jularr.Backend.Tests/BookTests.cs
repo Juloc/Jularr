@@ -89,14 +89,17 @@ namespace Jularr.Backend.Tests
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             await CreateWantedAsync(host, work.Id);
 
-            // The direct source waits for the indexer's search (not while the host is set up, where nothing asks the indexer); it only comes when both are asked at the same time.
+            // Each source waits for the other (not while the host is set up, where nothing asks the indexer); both only answer when they are asked at the same time.
             sources.StartCounting();
             await RunAsync<SearchDueWantedV1>(host);
             var order = sources.Order.ToArray();
-            var direct = Array.LastIndexOf(order, "direct");
+            var direct = Array.IndexOf(order, "direct");
             var indexer = Array.IndexOf(order, "indexer");
-            var end = Array.LastIndexOf(order, "direct-end");
-            Assert.IsTrue(direct >= 0 && indexer > direct && indexer < end, "the indexer was not asked while the direct source was waiting: " + string.Join(",", order));
+            var directEnd = Array.IndexOf(order, "direct-end");
+            var indexerEnd = Array.IndexOf(order, "indexer-end");
+
+            // Each of them was asked before the other had answered, whichever of the two arrived first.
+            Assert.IsTrue(direct >= 0 && indexer >= 0 && indexer < directEnd && direct < indexerEnd, "the indexer and the direct source were not asked at the same time: " + string.Join(",", order));
         }
 
         [TestMethod]
@@ -426,11 +429,14 @@ namespace Jularr.Backend.Tests
             public int IndexerSearches { get; private set; }
             public bool WaitForIndexer { get; set; }
 
-            // Forgets what the set-up asked, so that only the next search is observed, and makes the direct source wait for the indexer from now on.
+            public int DirectSearches { get; private set; }
+
+            // Forgets what the set-up asked, so that only the next search is observed, and makes each source wait for the other from now on.
             public void StartCounting()
             {
                 Order.Clear();
                 IndexerSearches = 0;
+                DirectSearches = 0;
                 WaitForIndexer = true;
             }
             public ConcurrentQueue<string> Order { get; } = new();
@@ -465,6 +471,7 @@ namespace Jularr.Backend.Tests
                         return Json("""{"data":{"editions":[{"book":{"id":5,"book_series":[{"position":2,"series":{"id":77,"name":"Jane Austen's Novels"}}]}}]}}""");
                     case "gutendex.example.test":
                         Order.Enqueue("direct");
+                        DirectSearches++;
                         if (WaitForIndexer)
                         {
                             // The direct source waits for the indexer's search; it only comes when both are asked at the same time.
@@ -484,6 +491,15 @@ namespace Jularr.Backend.Tests
                     case "indexer.example.test":
                         Order.Enqueue("indexer");
                         IndexerSearches++;
+                        if (WaitForIndexer)
+                        {
+                            for (var attempt = 0; attempt < 100 && DirectSearches == 0; attempt++)
+                            {
+                                await Task.Delay(100, cancellationToken);
+                            }
+                        }
+
+                        Order.Enqueue("indexer-end");
                         return Xml("""
                             <rss><channel>
                               <item><title>Seth Grahame-Smith - Pride and Prejudice and Zombies (epub)</title><guid>zombies</guid><link>https://indexer.example.test/getnzb/zombies</link><size>1000000</size></item>

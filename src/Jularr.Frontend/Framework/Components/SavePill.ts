@@ -1,4 +1,4 @@
-import { inserted, isRefreshing, refresh, visit } from "../../Modules/Navigation/PageSwap";
+import { inserted, isPartialSwap, isRefreshing, refresh, visit } from "../../Modules/Navigation/PageSwap";
 
 // Forms declared with Form.Save are saved together by the page's pill. A form differs from the loaded page by the values it
 // would send; saving posts every changed form in turn, and a failing one keeps its answer with the error while the others save.
@@ -35,12 +35,14 @@ function changedNames(form: HTMLFormElement): string[] {
 }
 
 export function initializeSavePill(): void {
-    for (const form of forms()) loaded.set(form, valuesOf(form));
+    // After an action swapped a region only its new forms get their baseline; what a person typed elsewhere stays unsaved.
+    const partial = isPartialSwap();
+    for (const form of forms()) if (!partial || !loaded.has(form)) loaded.set(form, valuesOf(form));
     const draft = draftIndex === undefined ? undefined : forms()[draftIndex];
     if (draft) drafts.add(draft);
     draftIndex = undefined;
     document.documentElement.toggleAttribute("data-save-ready", true);
-    changes = 0;
+    if (!partial) changes = 0;
     update();
 }
 
