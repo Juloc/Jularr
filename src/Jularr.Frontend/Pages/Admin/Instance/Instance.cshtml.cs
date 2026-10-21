@@ -47,6 +47,10 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
+                    form.Number(item => item.BackupIntervalHours, "admin.instance.backupIntervalHours");
+                    form.Number(item => item.BackupKeep, "admin.instance.backupKeep");
+                    form.Number(item => item.ProviderSyncIntervalMinutes, "admin.instance.providerSyncIntervalMinutes");
+                    form.Number(item => item.WantedSearchIntervalMinutes, "admin.instance.wantedSearchIntervalMinutes");
                     form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
                     form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
                     if (texts.Can(null, "Collections")) form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
@@ -59,7 +63,8 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
                         settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes, settings.CollectionLimit,
-                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl, settings.TrustedProxies), _moduleId is null && _mediaInput is null ? FormError : null));
+                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl, settings.TrustedProxies, settings.BackupIntervalHours, settings.BackupKeep,
+                        settings.ProviderSyncIntervalMinutes, settings.WantedSearchIntervalMinutes), _moduleId is null && _mediaInput is null ? FormError : null));
             }
             else if (FormError is not null)
             {
@@ -113,12 +118,13 @@ namespace Jularr.Frontend.Pages.Admin.Instance
 
         public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks,
             bool? usersConfirmSources, int? libraryScanIntervalHours, int? historyRetentionDays, int? historyMegabytes,
-            int? collectionLimit, int? unitGroupLimit, string? subtitleLanguages, string? publicUrl)
+            int? collectionLimit, int? unitGroupLimit, string? subtitleLanguages, string? publicUrl, int? backupIntervalHours, int? backupKeep, int? providerSyncIntervalMinutes,
+            int? wantedSearchIntervalMinutes)
         {
             // Save through the service.
             _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours,
                 historyRetentionDays, historyMegabytes, collectionLimit, unitGroupLimit,
-                subtitleLanguages is null ? null : [subtitleLanguages], publicUrl);
+                subtitleLanguages is null ? null : [subtitleLanguages], publicUrl, null, backupIntervalHours, backupKeep, providerSyncIntervalMinutes, wantedSearchIntervalMinutes);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             return LocalRedirect(Home);
         }

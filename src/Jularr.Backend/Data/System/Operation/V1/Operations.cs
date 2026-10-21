@@ -8,6 +8,18 @@ namespace Jularr.Backend.Data.System.Operation.V1
     {
     }
 
+    // The queue of one kind of work: scans and backups are claimed apart, so a long scan never holds up a backup.
+    public sealed class ClaimOperationParametersV1 : BaseParameters
+    {
+        public ClaimOperationParametersV1(OperationType operationTypeId)
+        {
+            OperationTypeId = operationTypeId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.OperationTypeId))]
+        public OperationType OperationTypeId { get; }
+    }
+
     public sealed class LibraryScanScheduleParametersV1 : BaseParameters
     {
     }
