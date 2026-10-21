@@ -4,7 +4,7 @@ namespace Jularr.Backend.Service.Core
     {
         // Native tools (FfmpegPath, FfprobePath, FpcalcPath) are found on the PATH; see Executables.
 
-        // Resource budget for conversions.
+        // Resource budget for conversions; the Owner's Transcoding page replaces the maximum and the encoding, these stay their defaults.
         public string TranscodeCachePath { get; set; } = Path.Combine(Path.GetTempPath(), "jularr-transcode");
         public int MaxTranscodes { get; set; } = 2;
 
@@ -26,7 +26,5 @@ namespace Jularr.Backend.Service.Core
         // Optional hardware encoding; software stays the fallback.
         public string[] HardwareAccelerationArguments { get; set; } = [];
         public string[] VideoEncoderArguments { get; set; } = [];
-
-        internal static IReadOnlyList<string> SoftwareEncoderArguments { get; } = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p"];
     }
 }

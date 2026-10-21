@@ -116,14 +116,19 @@ namespace Jularr.Backend.Data.Logic.Playback
 
     internal sealed class PlaybackSessionCreationData : BaseData
     {
-        public PlaybackSessionCreationData(long profileId, long mediaAssetId, long storedFileId, PlaybackModeType playbackModeTypeId, long positionMs)
+        public PlaybackSessionCreationData(Guid publicId, long profileId, long mediaAssetId, long storedFileId, PlaybackModeType playbackModeTypeId, long positionMs)
         {
+            PublicId = publicId;
             ProfileId = profileId;
             MediaAssetId = mediaAssetId;
             StoredFileId = storedFileId;
             PlaybackModeTypeId = playbackModeTypeId;
             PositionMs = positionMs;
         }
+
+        // Chosen before the session exists, so the server's budget can hold its conversion first.
+        [DataField(typeof(Fields.Account.AccountSessionFields), nameof(Fields.Account.AccountSessionFields.PublicId))]
+        public Guid PublicId { get; }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
         public long ProfileId { get; }

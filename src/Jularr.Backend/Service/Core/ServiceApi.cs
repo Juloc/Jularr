@@ -199,6 +199,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<StorageAccess>();
             services.TryAddSingleton<DownloadStorage>();
             services.TryAddSingleton<MediaTranscoder>();
+            services.TryAddSingleton<TranscodeBenchmarkClient>();
+            services.TryAddSingleton<TranscodeHardware>();
             services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<PlaybackSubtitles>();

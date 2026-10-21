@@ -245,10 +245,11 @@ namespace Jularr.Integrations.Logic.Media
             {
                 arguments.AddRange(request.VideoEncoderArguments);
 
-                // A cap scales the picture down (never up) and limits the rate; a hardware pipeline brings its own scaling.
-                if (request.MaxHeight is { } height && request.HardwareAccelerationArguments.Count == 0)
+                // A cap scales the picture down (never up) and limits the rate; pictures in hardware memory need their own scaler.
+                var scale = request.ScaleFilter ?? (request.HardwareAccelerationArguments.Count == 0 ? TranscodePipelines.SoftwareScale : null);
+                if (request.MaxHeight is { } height && scale is not null)
                 {
-                    arguments.AddRange(["-vf", "scale=-2:min(ih\\," + height.ToString(CultureInfo.InvariantCulture) + ")"]);
+                    arguments.AddRange(["-vf", scale.Replace("{height}", height.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)]);
                 }
 
                 if (request.VideoKilobits is { } kilobits)

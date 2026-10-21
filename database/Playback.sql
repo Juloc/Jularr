@@ -182,4 +182,40 @@ CREATE TABLE "ReadingRecognitions" (
     "FailedAt" timestamptz
 );
 
+-- How the server converts video: Auto follows the last benchmark's proposal (else the configured arguments), the others fix it.
+CREATE TABLE "TranscodeAccelerationTypes" (
+    "Id" smallint PRIMARY KEY,
+    "Key" varchar(32) NOT NULL UNIQUE
+);
+INSERT INTO "TranscodeAccelerationTypes" ("Id", "Key") VALUES (1, 'Auto'), (2, 'Software'), (3, 'Vaapi'), (4, 'Qsv'), (5, 'Nvenc'), (6, 'VideoToolbox');
+
+CREATE TABLE "TranscodeSettings" (
+    "Id" bigint PRIMARY KEY CHECK ("Id" = 1),
+    "TranscodeAccelerationTypeId" smallint NOT NULL DEFAULT 1 REFERENCES "TranscodeAccelerationTypes" ("Id"),
+    -- Conversions at once, counted in 1080p streams; none follows the configuration.
+    "MaxTranscodes" smallint NULL CHECK ("MaxTranscodes" BETWEEN 1 AND 64),
+    -- Picture heights offered when the server has no room for the wanted conversion.
+    "LadderHeights" integer[] NOT NULL DEFAULT '{1080,720,480}' CHECK (cardinality("LadderHeights") <= 6),
+    "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
+);
+INSERT INTO "TranscodeSettings" ("Id") VALUES (1);
+
+-- The last hardware benchmark and what it proposes; a new run replaces it.
+CREATE TABLE "TranscodeBenchmarks" (
+    "Id" bigint PRIMARY KEY CHECK ("Id" = 1),
+    "RanAt" timestamptz NOT NULL,
+    "CpuCores" smallint NOT NULL CHECK ("CpuCores" > 0),
+    "BestTranscodeAccelerationTypeId" smallint NOT NULL REFERENCES "TranscodeAccelerationTypes" ("Id") CHECK ("BestTranscodeAccelerationTypeId" > 1),
+    "RecommendedMaxTranscodes" smallint NOT NULL CHECK ("RecommendedMaxTranscodes" BETWEEN 1 AND 64)
+);
+
+-- Seconds of picture converted per second of work; none: the pipeline did not run.
+CREATE TABLE "TranscodeBenchmarkResults" (
+    "TranscodeBenchmarkId" bigint NOT NULL DEFAULT 1 REFERENCES "TranscodeBenchmarks" ("Id") ON DELETE CASCADE,
+    "TranscodeAccelerationTypeId" smallint NOT NULL REFERENCES "TranscodeAccelerationTypes" ("Id") CHECK ("TranscodeAccelerationTypeId" > 1),
+    "Height" integer NOT NULL CHECK ("Height" > 0),
+    "SpeedFactor" numeric(8, 2) NULL CHECK ("SpeedFactor" >= 0),
+    PRIMARY KEY ("TranscodeBenchmarkId", "TranscodeAccelerationTypeId", "Height")
+);
+
 COMMIT;
