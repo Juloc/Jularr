@@ -326,7 +326,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync();
             await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
             using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
-            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner@example.test", "Owner", "owner-password-123", "owner-password-123", 1));
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner_one", "Owner", "owner-password-123", "owner-password-123", 1));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             var accountId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Accounts\" WHERE \"AccountRoleTypeId\" = 1"))!;
 
