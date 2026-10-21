@@ -76,8 +76,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // A video of the folder with what its name says it is and the name it would be given in the library.
     public sealed class ManualImportFileV1 : BaseResponse
     {
-        public ManualImportFileV1(string path, long sizeBytes, int? season, int? episode, string? qualityKey, string? targetName)
+        public ManualImportFileV1(string path, long sizeBytes, int? season, int? episode, string? qualityKey, string? targetName, string? languages = null)
         {
+            Languages = languages;
             Path = path;
             SizeBytes = sizeBytes;
             Season = season;
@@ -103,6 +104,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.TargetName))]
         public string? TargetName { get; }
+
+        // The audio languages its name states, such as "DE+EN"; a name that states none leaves it empty.
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.Languages))]
+        public string? Languages { get; }
     }
 
     public sealed class ManualImportFolderV1 : BaseResponse
@@ -118,12 +123,14 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // What a person decided for one file.
     public sealed class ManualImportChoiceV1 : BaseData
     {
-        public ManualImportChoiceV1(string path, bool imports, int? season, int? episode)
+        public ManualImportChoiceV1(string path, bool imports, int? season, int? episode, long? wantedItemId = null, string? qualityKey = null)
         {
             Path = path;
             Imports = imports;
             Season = season;
             Episode = episode;
+            WantedItemId = wantedItemId;
+            QualityKey = qualityKey;
         }
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FilePath))]
@@ -138,6 +145,80 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
         public int? Episode { get; }
+
+        // Another film or series than the one the import is for; a download keeps its own.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
+
+        // The quality the person says the file has; without one its name decides.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey), false)]
+        public string? QualityKey { get; }
+    }
+
+    // The names the library would give files as their owners decided, to show before anything is placed.
+    public sealed class PreviewManualImportDataV1 : BaseData
+    {
+        public PreviewManualImportDataV1(BaseDataList<ManualImportChoiceV1> files)
+        {
+            Files = files;
+        }
+
+        public BaseDataList<ManualImportChoiceV1> Files { get; }
+    }
+
+    public sealed class ManualImportNameV1 : BaseResponse
+    {
+        public ManualImportNameV1(string path, long wantedItemId, MediaType mediaTypeId, string workTitle, string? targetName)
+        {
+            Path = path;
+            WantedItemId = wantedItemId;
+            MediaTypeId = mediaTypeId;
+            WorkTitle = workTitle;
+            TargetName = targetName;
+        }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FilePath))]
+        public string Path { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string WorkTitle { get; }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.TargetName))]
+        public string? TargetName { get; }
+    }
+
+    // The fields of the match dialog: the film or series, the numbers and the quality a person sets for one file, and the words to search them by.
+    public sealed class ManualImportMatchV1 : BaseData
+    {
+        public ManualImportMatchV1(string? matchQuery, long? matchedWantedItemId, int? matchedSeason, int? matchedEpisode, string? matchedQualityKey)
+        {
+            MatchQuery = matchQuery;
+            MatchedWantedItemId = matchedWantedItemId;
+            MatchedSeason = matchedSeason;
+            MatchedEpisode = matchedEpisode;
+            MatchedQualityKey = matchedQualityKey;
+        }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.Query), false)]
+        public string? MatchQuery { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? MatchedWantedItemId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber))]
+        public int? MatchedSeason { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? MatchedEpisode { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey), false)]
+        public string? MatchedQualityKey { get; }
     }
 
     public sealed class RunManualImportDataV1 : BaseData
@@ -191,12 +272,35 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public BaseDataList<ManualImportChoiceV1> Files { get; }
     }
 
+    // What became of one chosen file: the name it has in the library, or the reason a person must settle.
+    public sealed class ManualImportOutcomeV1 : BaseResponse
+    {
+        public ManualImportOutcomeV1(string path, string workTitle, string? failureKey)
+        {
+            Path = path;
+            WorkTitle = workTitle;
+            FailureKey = failureKey;
+        }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FilePath))]
+        public string Path { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string WorkTitle { get; }
+
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FailureKey))]
+        public string? FailureKey { get; }
+    }
+
     public sealed class ManualImportResultV1 : BaseResponse
     {
-        public ManualImportResultV1(int imported)
+        public ManualImportResultV1(int imported, BaseDataList<ManualImportOutcomeV1>? files = null)
         {
             Imported = imported;
+            Files = files ?? new([]);
         }
+
+        public BaseDataList<ManualImportOutcomeV1> Files { get; }
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.ImportedCount))]
         public int Imported { get; }

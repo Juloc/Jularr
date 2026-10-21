@@ -51,18 +51,40 @@ namespace Jularr.E2E.Tests
                 await picker.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Show files"));
 
-                // Its name, quality and the name the library would give it show; the film is ticked.
-                var row = page.Locator(".ui-form__row").First;
+                // Its name, quality, language and the name the library would give it show; the film is chosen.
+                var row = page.Locator(".manual-import-files .list-row").First;
                 await Assertions.Expect(row).ToContainTextAsync("Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR.webm");
                 await Assertions.Expect(row).ToContainTextAsync("→ Big Buck Bunny (2008)");
+                await Assertions.Expect(row).ToContainTextAsync("WEBDL-1080p");
+                await Assertions.Expect(row).ToContainTextAsync("EN");
                 await Assertions.Expect(row.Locator("input[type=checkbox]")).ToBeCheckedAsync();
                 await Evidence.SaveAsync(page, "manual-import-files");
 
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import"));
+                // The match dialog gives it another quality; the name the library would give follows.
+                await Steps.FollowAsync(page, row.GetByRole(AriaRole.Button, new() { Name = "Match", Exact = true }));
+                var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Match file", Exact = true });
+                await Assertions.Expect(dialog).ToBeVisibleAsync();
+                await dialog.GetByLabel("Quality").SelectOptionAsync("Bluray-1080p");
+                await Evidence.SaveAsync(page, "manual-import-match");
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
+                await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".manual-import-files .list-row").First).ToContainTextAsync("Bluray-1080p");
+
+                // Importing the chosen file reports what became of it and puts it in the library.
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Import selected", Exact = true }));
                 await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("Imported files: 1");
-                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film was not placed once.");
+                var report = page.Locator(".manual-import-report .list-row").First;
+                await Assertions.Expect(report).ToContainTextAsync("Imported");
+                await Evidence.SaveAsync(page, "manual-import-report");
+                var placed = Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).ToArray();
+                Assert.AreEqual(1, placed.Length, "The film was not placed once.");
+                StringAssert.Contains(Path.GetFileName(placed[0]), "Bluray-1080p", "The quality a person gave names the file.");
                 Assert.IsTrue(File.Exists(source), "A hardlinked import leaves the original.");
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
+
+                // The history keeps who assigned it.
+                await page.GotoAsync("/Admin/History");
+                await Assertions.Expect(page.Locator("main")).ToContainTextAsync("Assigned by hand");
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
@@ -118,13 +140,15 @@ namespace Jularr.E2E.Tests
                 }
 
                 await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import by hand", Exact = true }));
-                var file = page.Locator(".ui-form__row").First;
+                var file = page.Locator(".manual-import-files .list-row").First;
                 await Assertions.Expect(file).ToContainTextAsync("Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm");
                 await Assertions.Expect(file.Locator("input[type=checkbox]")).ToBeCheckedAsync();
                 await Evidence.SaveAsync(page, "manual-import-queue");
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Import"));
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Import selected", Exact = true }));
+                await Assertions.Expect(page.Locator(".manual-import-report .list-row").First).ToContainTextAsync("Imported");
 
                 // It leaves the queue's waiting entries and the film is in the library.
+                await page.GotoAsync("/Admin/Activity");
                 await Assertions.Expect(page.Locator("tr", new() { HasText = "does not clearly match the film" })).ToHaveCountAsync(0);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
