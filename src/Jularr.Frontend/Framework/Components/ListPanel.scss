@@ -1,0 +1,188 @@
+// The admin list kit: rows on a grid inside one panel. The grid belongs to the page (--list-columns, -medium, -narrow); the panel answers to its own
+// width: the less important columns leave first (hide 1, then hide 2), and on a phone every row is a card with its name and state on one line.
+.list {
+    container: list / inline-size;
+    min-width: 0;
+}
+
+.list-panel {
+    --list-columns: minmax(0, 2.4fr) repeat(5, minmax(0, 1.2fr));
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.list-head,
+.list-row {
+    display: grid;
+    grid-template-columns: var(--list-columns);
+    gap: 12px;
+    align-items: center;
+    padding: 12px 22px;
+}
+
+.list-head {
+    padding-block: 14px 13px;
+    border-bottom: 1px solid var(--border);
+    background: var(--field);
+    color: var(--muted);
+    font-size: var(--text-small);
+    font-weight: 780;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+
+    .list-cell { color: inherit; font-size: inherit; font-weight: inherit; }
+}
+
+.list-row {
+    min-height: 76px;
+    border-bottom: 1px solid var(--border);
+    transition: background-color var(--transition);
+
+    &:last-child { border-bottom: 0; }
+    &:hover { background: var(--field); }
+    &[hidden] { display: none; }
+
+    &--warning { background: color-mix(in srgb, var(--warning-soft) 18%, var(--surface)); }
+    &--danger { background: color-mix(in srgb, var(--danger-soft) 18%, var(--surface)); }
+    &--child .list-cell--main { padding-left: 23px; }
+
+    &__caption { display: none; }
+}
+
+.list-cell {
+    min-width: 0;
+    font-size: var(--text-small);
+
+    &--data { color: var(--text); font-weight: 650; }
+    &--actions .list-actions { justify-content: flex-start; }
+}
+
+.list-value { white-space: nowrap; }
+.list-value--dim { color: var(--muted); font-weight: 520; }
+
+.list-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+
+    &__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    &__name { font-size: var(--text-control); font-weight: 800; line-height: 1.25; }
+
+    &__title {
+        max-width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        cursor: pointer;
+        text-align: start;
+
+        &:hover { color: var(--accent-text); }
+    }
+
+    &__note { min-width: 0; color: var(--danger); font-size: var(--text-small); }
+
+    &__sub { color: var(--muted); font-size: var(--text-small); font-weight: 400; overflow-wrap: anywhere; }
+}
+
+.list-row--child .list-identity { gap: 10px; }
+
+// Row controls side by side; a PostForm is only a wrapper.
+.list-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    form { display: inline-flex; margin: 0; }
+    .button { white-space: nowrap; }
+    // Row actions are quiet: the soft one (run) and the details stay the only accents.
+    .button:not(.button--soft):not(.button--icon):not(:hover) { color: var(--muted); }
+    .button--icon { width: var(--control-height-compact); min-height: var(--control-height-compact); border-color: transparent; background: transparent; color: var(--muted); }
+    .button--icon:hover:not(:disabled) { border-color: var(--border); background: transparent; color: var(--accent-text); }
+}
+
+.list-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 55px 24px;
+    color: var(--muted);
+    font-size: var(--text-control);
+    text-align: center;
+
+    &[hidden] { display: none; }
+}
+
+// Medium: the least important columns leave.
+@container list (max-width: 1000px) {
+    .list-cell--hide-1 { display: none; }
+
+    .list-head,
+    .list-row { grid-template-columns: var(--list-columns-medium, var(--list-columns)); padding-inline: 15px; }
+}
+
+@container list (max-width: 850px) {
+    .list-cell--hide-2 { display: none; }
+
+    .list-head,
+    .list-row { grid-template-columns: var(--list-columns-narrow, var(--list-columns-medium, var(--list-columns))); }
+}
+
+// Phone: one card per row; the head goes, the caption carries the facts of the dropped columns.
+@container list (max-width: 690px) {
+    .list-panel {
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .list-head { display: none; }
+    .list-body { display: grid; gap: 9px; }
+
+    .list-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "name status" "details details" "actions actions";
+        gap: 10px;
+        min-height: 0;
+        padding: 13px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+
+        &:last-child { border-bottom: 1px solid var(--border); }
+        &--warning { background: color-mix(in srgb, var(--warning-soft) 18%, var(--surface)); }
+        &--danger { background: color-mix(in srgb, var(--danger-soft) 18%, var(--surface)); }
+        &--child .list-cell--main { padding-left: 0; }
+        &__caption {
+            display: flex;
+            grid-area: details;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 10px;
+            color: var(--muted);
+            font-size: var(--text-small);
+
+            .ui-icon { vertical-align: -2px; margin-right: 5px; }
+            .list-row__fact { color: var(--text); font-weight: 650; }
+        }
+    }
+
+    .list-cell--main { grid-area: name; }
+    .list-cell--status { grid-area: status; }
+    .list-cell--data { display: none; }
+    .list-cell--actions { grid-area: actions; }
+
+    .list-cell--actions .list-actions {
+        justify-content: flex-end;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+    }
+
+    .list-empty { border: 1px solid var(--border); border-radius: var(--radius-inner); background: var(--surface); }
+}

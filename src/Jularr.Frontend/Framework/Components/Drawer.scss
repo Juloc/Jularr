@@ -93,6 +93,46 @@
         & > * { flex: 1; }
     }
 
+    // The details of one list row: the state, a grid of values, text blocks and settings.
+    &__state { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 24px; color: var(--muted); font-size: var(--text-small); }
+
+    &__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
+
+    &__fact {
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--field);
+        color: var(--muted);
+        font-size: var(--text-small);
+    }
+
+    &__fact-value { margin-top: 6px; color: var(--text); font-size: var(--text-body); font-weight: 780; overflow-wrap: anywhere; }
+
+    &__block {
+        margin-top: 24px;
+
+        h3 { margin: 0 0 9px; }
+        p { margin: 0; color: var(--muted); font-size: var(--text-control); line-height: 1.7; }
+    }
+
+    &__setting {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: var(--text-control);
+
+        form { margin: 0; }
+    }
+
+    // A footer of forms: each one fills its share like a plain button does.
+    &__footer:empty { display: none; }
+    &__footer form { display: flex; margin: 0; & > .button { flex: 1; } }
+
     // On a phone the drawer is a bottom sheet, as in the mockups: 82% of the screen, at most 740px, rounded at the top.
     @media (max-width: 640px) {
         inset: auto 0 0 0;
@@ -104,6 +144,18 @@
         &__tabs { margin: 16px 19px 4px; }
         &__body { padding: 0 19px 22px; }
         &__footer { padding: 13px 19px max(18px, env(safe-area-inset-bottom)); }
+    }
+}
+
+// A sheet slides up from the bottom edge on a phone: rounded at the top, never taller than most of the screen.
+.drawer--sheet {
+    @media (max-width: 760px) {
+        inset: auto 0 0;
+        width: 100vw;
+        height: min(82dvh, 740px);
+        border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+
+        .drawer__heading { min-height: 0; padding-top: 19px; padding-bottom: 16px; }
     }
 }
 
