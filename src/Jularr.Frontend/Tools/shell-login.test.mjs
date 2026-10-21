@@ -92,7 +92,7 @@ test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", (
     assert.doesNotMatch(styles, /flex-wrap: wrap|box-shadow: (?!var\()/);
 });
 
-test("Clean shows the single-path parrot mark, Original keeps its own mark, and the J in a ring is gone", () => {
+test("Clean shows the single-path parrot mark in the accent colour, Original keeps its own mark, and the J in a ring is gone", () => {
     const clean = load("Pages/Shared/brand-clean.svg");
     assert.equal(clean.match(/<path\b/g)?.length, 1);
     assert.match(clean, /fill="currentColor"/);
@@ -107,9 +107,12 @@ test("Clean shows the single-path parrot mark, Original keeps its own mark, and 
     assert.match(brand, /Mark\("brand-original", "brand-symbol__original"\)/);
     assert.match(load("Pages/Shared/Brand.scss"), /html\[data-skin="original"\] \.brand-symbol \{\s*&__clean \{ display: none; \}\s*&__original \{ display: block; \}/);
 
+    assert.match(load("Pages/Shared/Brand.scss"), /\.brand-symbol \{[^}]*color: var\(--accent\);/);
+    assert.doesNotMatch(load("Pages/Shared/Brand.scss"), /color: var\(--text\);/);
+
     const favicon = load("Assets/Shared/favicon.svg");
     assert.equal(favicon.match(/<path\b[^>]*d=/g)?.length, 1);
-    assert.match(favicon, /prefers-color-scheme:dark/);
+    assert.match(favicon, /path\{fill:#8040f7\}@media \(prefers-color-scheme:dark\)\{path\{fill:#9a70ff\}\}/);
     for (const icon of ["icon-32", "apple-touch-icon", "icon-192", "icon-512", "icon-maskable-512"]) {
         const png = readFileSync(resolve(root, "Assets/Shared/" + icon + ".png"));
         assert.equal(png.subarray(1, 4).toString(), "PNG");
