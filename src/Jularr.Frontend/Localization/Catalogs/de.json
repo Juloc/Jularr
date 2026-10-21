@@ -6912,6 +6912,62 @@
    "Playback speed",
    "Wiedergabegeschwindigkeit"
   ],
+  "player.speedValue": [
+   "Speed value",
+   "Geschwindigkeit"
+  ],
+  "player.picture": [
+   "Picture",
+   "Bild"
+  ],
+  "player.fit": [
+   "Picture fit",
+   "Bildanpassung"
+  ],
+  "player.fit.contain": [
+   "Fit",
+   "Einpassen"
+  ],
+  "player.fit.cover": [
+   "Fill",
+   "Füllen"
+  ],
+  "player.fit.original": [
+   "Original size",
+   "Originalgröße"
+  ],
+  "player.settings": [
+   "Player settings",
+   "Player-Einstellungen"
+  ],
+  "player.currentPlayback": [
+   "Current playback",
+   "Aktuelle Wiedergabe"
+  ],
+  "player.theater": [
+   "Wide view",
+   "Breite Ansicht"
+  ],
+  "player.tab.basic": [
+   "Basic",
+   "Basis"
+  ],
+  "player.tab.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "player.tab.subtitles": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "player.tab.playback": [
+   "Playback",
+   "Wiedergabe"
+  ],
+  "player.tab.info": [
+   "Info",
+   "Info"
+  ],
   "player.audio": [
    "Audio",
    "Audio"

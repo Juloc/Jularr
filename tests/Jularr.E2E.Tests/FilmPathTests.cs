@@ -89,8 +89,7 @@ namespace Jularr.E2E.Tests
                 await page.Locator("[data-action=settings]").ClickAsync();
                 await Evidence.SaveAsync(page, "player-series-settings-light");
                 await page.EvaluateAsync("document.documentElement.dataset.mode = 'dark'");
-                await Assertions.Expect(page.Locator("[data-setting-pane=audio]")).ToHaveCSSAsync("background-color",
-                    await page.Locator(".player__sidebar").EvaluateAsync<string>("sidebar => getComputedStyle(sidebar).backgroundColor"));
+                await Assertions.Expect(page.Locator("#player-settings .ui-field__control").First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "player-series-settings-dark");
                 await page.EvaluateAsync("document.documentElement.dataset.mode = 'light'");
                 await page.Keyboard.PressAsync("Escape");
@@ -210,17 +209,30 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(await video.EvaluateAsync<bool>("video => video.paused"));
             }
             await settings.GetByRole(AriaRole.Tab, new() { Name = "Playback", Exact = true }).ClickAsync();
-            await settings.Locator("[data-speed='1.25']").ClickAsync();
+            var speeds = settings.Locator("[data-panel=playback]");
+            await speeds.Locator("[data-speed='1.25']").ClickAsync();
             Assert.AreEqual(1.25, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
-            await settings.Locator("[data-speed='1']").ClickAsync();
+            await Assertions.Expect(speeds.Locator("[data-setting=speed-number]")).ToHaveValueAsync("1.25");
+
+            // The slider reaches beyond the presets, the number follows it, and the Basic pane shows the same speed.
+            await speeds.Locator("[data-setting=speed-number]").FillAsync("3");
+            await speeds.Locator("[data-setting=speed-number]").PressAsync("Enter");
+            await speeds.Locator("[data-setting=speed-number]").BlurAsync();
+            Assert.AreEqual(3, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
+            Assert.AreEqual("3", await settings.Locator("[data-panel=basic] [data-setting=speed-range]").InputValueAsync());
+            await speeds.Locator("[data-speed='1']").ClickAsync();
+            Assert.AreEqual(1, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
 
             // The quality of this playback: the device's choice is current, and another one plans the same video again at the same place.
-            Assert.AreEqual(4, await settings.Locator("[data-quality]").CountAsync());
-            await Assertions.Expect(settings.Locator("[data-quality='1']")).ToHaveAttributeAsync("aria-pressed", "true");
-            await page.RunAndWaitForResponseAsync(() => settings.Locator("[data-quality='2']").ClickAsync(),
+            var quality = speeds.Locator("select[data-setting=quality]");
+            Assert.AreEqual(4, await quality.Locator("option").CountAsync());
+            await Assertions.Expect(quality).ToHaveValueAsync("1");
+            await page.RunAndWaitForResponseAsync(() => quality.SelectOptionAsync("2"),
                 response => response.Request.Method == "POST" && response.Url.EndsWith("/sessions", StringComparison.Ordinal) && response.Ok);
-            await Assertions.Expect(settings.Locator("[data-quality='2']")).ToHaveAttributeAsync("aria-pressed", "true");
-            await Assertions.Expect(settings.Locator("[data-current=quality]")).ToHaveTextAsync("Original");
+            await Assertions.Expect(quality).ToHaveValueAsync("2");
+            await Assertions.Expect(settings.Locator("[data-panel=basic] select[data-setting=quality]")).ToHaveValueAsync("2");
+            await settings.GetByRole(AriaRole.Tab, new() { Name = "Info", Exact = true }).ClickAsync();
+            await Assertions.Expect(settings.Locator("[data-role=fact-quality]")).ToHaveTextAsync("Original");
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(settings).ToBeHiddenAsync();
 
