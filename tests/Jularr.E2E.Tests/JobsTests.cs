@@ -45,7 +45,7 @@ namespace Jularr.E2E.Tests
                 var trickplay = Row(page, "Seek thumbnails");
                 await Steps.FollowAsync(page, trickplay.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true }));
                 await Assertions.Expect(trickplay).ToContainTextAsync("Paused");
-                await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Paused" }).Locator(".kpi-tile__value")).ToHaveTextAsync("1");
+                await Assertions.Expect(page.GetByRole(AriaRole.Navigation, new() { Name = "Job states" }).GetByRole(AriaRole.Link, new() { Name = "Paused" })).ToContainTextAsync("1");
                 await Assertions.Expect(trickplay.GetByRole(AriaRole.Button, new() { Name = "Run now", Exact = true })).ToBeDisabledAsync();
                 await Steps.FollowAsync(page, trickplay.GetByRole(AriaRole.Button, new() { Name = "Resume", Exact = true }));
                 await Assertions.Expect(trickplay).Not.ToContainTextAsync("Paused");

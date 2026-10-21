@@ -171,11 +171,22 @@ tokens, never literals; a page adds none of its own colours, radii, shadows or f
 | Type | Inter, then Segoe UI/system; body `--text-body` 13px, controls `--text-control` 12px/700, captions and table heads `--text-small` 11px; h1 27px/780 -0.9px, h2 `--text-heading` 16px/800 -0.3px |
 | Controls | `--control-height` 38px (44px for a coarse pointer), compact 30px, `--icon-size` 18px, 1px borders, 3px focus ring offset 2px, `--transition` .13s, press scales to .985 |
 
-- Owner's decision 21 Oct: admin lists are built from the list kit, never from their own grids or tables. A page composes `KpiTiles(...).Strip()`, one
-  `NavigationTabs` row of filter chips with counts (modifier `filters`), at most one filter field (`SearchBox` with `listFilter`; the header search is the
-  global one) and a `ListPanel` of `ListRow`s (name cell `ListIdentity` with an `IconTile`, `StateChip` with an icon per state, the row's actions, a caption for phones);
-  details open in a `Drawer` (`sheet`). The panel drops its `HideLevel` columns and becomes cards by its own width; the page's stylesheet sets only the column grid.
-  No page heading above it: the breadcrumb is the title.
+- Owner's decision 21 Oct: admin lists are built from the list kit, never from their own grids or tables. A page composes one `ListToolbar` (a
+  `NavigationTabs` row of filter chips, modifier `filters`: icon of the state, name and count; at most one filter field (`SearchBox` with `listFilter`; the header
+  search is the global one), the list's own tools) and a `ListPanel` of `ListRow`s (name cell `ListIdentity` with an `IconTile`, `StateChip` with an icon per state,
+  the row's actions, a caption for phones); details open in a `Drawer` (`sheet`). The panel drops its `HideLevel` columns and becomes cards by its own width; the
+  page's stylesheet sets only the column grid. No page heading above it: the breadcrumb is the title. Figures above the list (`KpiTiles(...).Strip()`) only where
+  they are live and not already a chip's count (the Queue's tiles); the state chips carry the other pages' counts.
+- Owner's decision 21 Oct: every row of a list looks alike. Value columns (`ListRole.Data`) and the actions stand at the right edge of their column, head included;
+  what a row does not always have (a pill such as "while in use" or "High", an error line, a monitoring switch) is shown only when it is there, never as a different
+  shape or a placeholder; a state that replaces a value (a paused download says "Paused" where the speed stands) uses the value's own style, so nothing shifts.
+  Rows have one minimum height that holds the longest usual content (title, line, note).
+- Owner's decision 21 Oct: a list that has several views (the library: posters, overview, table) switches them with the one `ViewSwitch` in its `ListToolbar`
+  (links with `view=` in the address; the page keeps the choice in a cookie of this browser, so the next visit starts in it). Posters are `MediaCard`s in
+  `media-grid` (box top left, monitoring top right, state over the foot), the overview is a `ListPanel` whose name cell carries a large `ListPoster`, the type and year,
+  the start of the synopsis and the facts, the table is the `ListPanel` with the column picker. Boxes of all views belong to the page's one bulk form.
+- Owner's decision 21 Oct: one icon set. Icons come from [Assets/Icons](../src/Jularr.Frontend/Assets/Icons) and are stroke-only (24 box, round caps and joins; no filled
+  glyphs, no fills that depend on the surface behind them); a missing icon is drawn in that style and added there, never taken from another set.
 - Owner's decision 21 Oct: admin list pages keep their page actions, bulk actions and paging in the one floating
   [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
   floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with three optional zones as slots: actions (icon and short

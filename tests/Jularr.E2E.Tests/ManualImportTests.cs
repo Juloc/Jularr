@@ -112,7 +112,7 @@ namespace Jularr.E2E.Tests
                 {
                     Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
                     await page.GotoAsync("/Admin/Activity");
-                    var row = page.Locator("tr", new() { HasText = "does not clearly match the film" });
+                    var row = Steps.ListRow(page, "does not clearly match the film");
                     if (await row.CountAsync() > 0) waiting = row.First;
                     else await page.WaitForTimeoutAsync(3000);
                 }
@@ -125,7 +125,7 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import"));
 
                 // It leaves the queue's waiting entries and the film is in the library.
-                await Assertions.Expect(page.Locator("tr", new() { HasText = "does not clearly match the film" })).ToHaveCountAsync(0);
+                await Assertions.Expect(Steps.ListRow(page, "does not clearly match the film")).ToHaveCountAsync(0);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());

@@ -18,13 +18,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
     // The library as a list: filters, columns kept in this browser, in-row monitoring and search, and the mass editor.
     public sealed partial class WorksModel(ReadWorksV1 read, ReadWorkExclusionsV1 readExclusions, DeleteWorkExclusionV1 deleteExclusion, CreateWorkV1 create, SearchMetadataV1 search, ImportMetadataWorkV1 import,
         ReadLibraryOverviewV1 readLibraries, ReadAcquisitionProfilesV1 readProfiles, UpdateWorksMonitoringV1 updateMonitoring, UpdateWorksProfileV1 updateProfile, UpdateWorksLibraryV1 updateLibrary,
-        SearchWorksV1 searchWorks, RefreshWorksMetadataV1 refreshWorks, DeleteWorksV1 deleteWorks, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        SearchWorksV1 searchWorks, RefreshWorksMetadataV1 refreshWorks, DeleteWorksV1 deleteWorks, ReadWorksSummaryV1 readSummary, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // What one request may change: the mass editor's batch; searches and file removals take fewer.
         private const int PageSize = 50;
         private const int ListedFailures = 12;
+        private const string ViewCookie = "jularr-works-view";
 
         private PageResult<WorkListItemV1>? _works;
+        private WorksSummaryV1? _summary;
         private PageResult<WorkExclusionV1>? _exclusions;
         private IReadOnlyList<LibraryOverviewV1> _libraries = [];
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
@@ -32,6 +34,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         private SearchMetadataDataV1? _search;
         private BaseDataList<MetadataSearchResultV1>? _results;
         private bool _bulkFailed;
+        private WorksViewType _view;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -56,6 +59,10 @@ namespace Jularr.Frontend.Pages.Admin.Works
         [BindProperty(SupportsGet = true, Name = "q")]
         public string? QueryFilter { get; set; }
 
+        // The view is chosen by its address and then kept in a cookie of this browser, so the next visit starts in it.
+        [BindProperty(SupportsGet = true, Name = "view")]
+        public WorksViewType? ViewChoice { get; set; }
+
         [BindProperty(SupportsGet = true, Name = "sort")]
         public WorkSortType Sort { get; set; }
 
@@ -76,32 +83,31 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.Asset("Pages/Admin/Work/Work.entry.ts");
             page.Asset("Pages/Admin/Works/Works.entry.scss");
             page.Asset("Pages/Admin/Works/Works.entry.ts");
+            page.Asset("Framework/Components/Drawer.entry.ts");
+            page.Asset("Framework/Components/ActionDock.entry.ts");
+            page.Asset("Framework/Components/Truncated.entry.ts");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             if (FormError is not null && _bulkFailed) page.Content.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
             if (TempData["WorksReport"] is string report) page.Content.Add(Report(report));
 
-            // The filters, and in their place the mass editor while titles are chosen, so the list does not move.
-            page.Content.Add(new Div(Filters(), _works is { Items.Count: > 0 } && (CanManageWanted || CanManageMedia) ? Editor(csrf) : new Span()).Class("works-bars"));
+            // One row of filter chips with the title field and the view switch, then the titles in the chosen view; the chosen titles belong to one form that the dock's bulk zone and the change drawer post.
+            page.Content.Add(Toolbar());
             if (_works is { } works)
             {
-                if (works.Items.Count > 0)
+                page.Content.Add(Titles(works.Items, csrf));
+                if (_view == WorksViewType.Table) page.Content.Add(new ColumnPicker());
+                if (works.Items.Count > 0 && CanManageMedia) page.Content.Add(DeleteDialog(csrf));
+                if (works.Items.Count > 0 && Selectable)
                 {
-                    page.Content.Add(ListTable(works.Items, csrf));
-                    if (CanManageMedia) page.Content.Add(DeleteDialog(csrf));
-                }
-                else
-                {
-                    page.Content.Add(new P(new Text(Filtered ? "works.emptyFiltered" : "media.empty")).Attribute("role", "status"));
-                }
-
-                if (works.Page > 1 || works.Items.Count == works.PageSize)
-                {
-                    page.Content.Add(new Div(
-                        works.Page > 1 ? new A(new Text("common.previous")).Class("button").Attribute("href", Address(pageNumber: works.Page - 1)) : new Span(),
-                        works.Items.Count == works.PageSize ? new A(new Text("common.next")).Class("button").Attribute("href", Address(pageNumber: works.Page + 1)) : new Span()).Class("works-paging"));
+                    page.Content.Add(new FormElement(new Input().Attribute("type", "hidden").Attribute("name", "__RequestVerificationToken").Attribute("value", csrf ?? ""))
+                        .Attribute("id", BulkForm).Attribute("method", "post").Attribute("action", Address("Bulk")));
+                    if (CanManageWanted) page.Content.Add(ChangeDrawer());
                 }
             }
+
+            page.Content.Add(FilterDrawer());
 
             // Titles deleted with an exclusion stay out of requests until the exclusion is removed.
             if (_exclusions is { Items.Count: > 0 } exclusions)
@@ -114,6 +120,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             }
 
             page.Content.Add(AddDialog(csrf));
+            page.Content.Add(Dock(_works));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -214,12 +221,26 @@ namespace Jularr.Frontend.Pages.Admin.Works
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
+            _view = ResolveView();
             _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(), ct);
             _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, Descending), ct);
+            _summary = await readSummary.ExecuteAsync<WorksSummaryV1>(new ReadWorksParametersV1(1, PageSize, TypeFilter, null, null, LibraryFilter, ProfileFilter, QueryFilter), ct);
             _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
 
             // Profiles belong to Arr+.
             if (CanAcquire) _profiles = await readProfiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), ct);
+        }
+
+        // The address names a view and the cookie remembers it; a first visit shows the table.
+        private WorksViewType ResolveView()
+        {
+            if (ViewChoice is { } chosen && Enum.IsDefined(chosen))
+            {
+                Response.Cookies.Append(ViewCookie, chosen.ToString(), new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1), HttpOnly = true, SameSite = SameSiteMode.Lax, Secure = Request.IsHttps, Path = "/" });
+                return chosen;
+            }
+
+            return Enum.TryParse<WorksViewType>(Request.Cookies[ViewCookie], out var saved) && Enum.IsDefined(saved) ? saved : WorksViewType.Table;
         }
 
         // What happened to each chosen title is shown once, after the list is shown again; the counts say how many, the titles that stayed say why.

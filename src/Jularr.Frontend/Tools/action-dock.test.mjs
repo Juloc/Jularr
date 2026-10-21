@@ -27,3 +27,14 @@ test('the bulk zone shows with the count while rows are chosen and gives way to 
     assert.ok(!attributes.has('data-selecting'));
     assert.equal(bulk.hidden, true);
 });
+
+test('the select-all box follows the rows: all, some or none chosen', () => {
+    assert.deepEqual({ ...exports.allState([{ checked: true }, { checked: true }]) }, { checked: true, indeterminate: false });
+    assert.deepEqual({ ...exports.allState([{ checked: true }, { checked: false }]) }, { checked: false, indeterminate: true });
+    assert.deepEqual({ ...exports.allState([{ checked: false }]) }, { checked: false, indeterminate: false });
+    assert.deepEqual({ ...exports.allState([]) }, { checked: false, indeterminate: false });
+
+    const all = { checked: false, indeterminate: false };
+    exports.update(null, [{ checked: true }, { checked: false }], all);
+    assert.deepEqual([all.checked, all.indeterminate], [false, true]);
+});
