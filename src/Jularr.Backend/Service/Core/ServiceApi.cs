@@ -181,6 +181,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<WorkerJobRunner>();
             services.TryAddSingleton<RecentLogs>();
             services.TryAddSingleton<ServiceTimings>();
+            services.TryAddSingleton<ProviderObservations>();
+            services.TryAddSingleton<HealthChecks>();
             services.TryAddSingleton<ResourceHistory>();
             services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());
             services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, RecentLogs>(provider => provider.GetRequiredService<RecentLogs>()));
@@ -221,6 +223,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
             services.TryAddTransient<SubtitleProviders>();
+            services.TryAddTransient<Jularr.Backend.Service.Admin.Acquisition.V1.AcquisitionConnectionProbe>();
+            services.TryAddTransient<HealthProbes>();
             services.TryAddTransient<SubtitleFiles>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
@@ -312,20 +316,20 @@ namespace Jularr.Backend.Service.Core
                 handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
-            AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);
-            AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover);
-            AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId);
-            AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList);
-            AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz);
-            AddClient<IgdbClient>(services, 20, 8, agent: true);
+            AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
+            AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");
+            AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
+            AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList, provider: "anilist");
+            AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
+            AddClient<IgdbClient>(services, 20, 8, agent: true, provider: "igdb");
             AddClient<LibretroClient>(services, 60, 16, agent: true);
             AddClient<SynologyClient>(services, 30, 4, handler: SynologyClient.CreateHandler);
             AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<MediaServerClient>(services, 30, 32);
             AddClient<NewznabClient>(services, 30, 16);
-            AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb);
-            AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb);
+            AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb, provider: "tmdb");
+            AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb, provider: "tvdb");
             AddClient<SabnzbdClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
@@ -489,9 +493,11 @@ namespace Jularr.Backend.Service.Core
         }
 
         // No automatic redirects, cookies or request logs.
+        // A metadata provider's client also reports how its requests ended, for the health check.
         private static void AddClient<TClient>(IServiceCollection services, int timeoutSeconds, int? bufferMegabytes, bool agent = false, Func<HttpMessageHandler>? handler = null,
-            Uri? baseAddress = null) where TClient : class =>
-            services.AddHttpClient<TClient>(http =>
+            Uri? baseAddress = null, string? provider = null) where TClient : class
+        {
+            var client = services.AddHttpClient<TClient>(http =>
             {
                 http.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
                 http.BaseAddress = baseAddress;
@@ -505,6 +511,11 @@ namespace Jularr.Backend.Service.Core
                     http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
                 }
             }).ConfigurePrimaryHttpMessageHandler(handler ?? (() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })).RemoveAllLoggers();
+            if (provider is not null)
+            {
+                client.AddHttpMessageHandler(services => new ProviderObservationHandler(services.GetRequiredService<ProviderObservations>(), provider));
+            }
+        }
 
         private static Delegate CreateParameterHandler<TService, TParameters, TData>() where TService : Service<TParameters, TData> =>
             async ([AsParameters] TParameters parameters, [FromServices] TService service, HttpContext http,

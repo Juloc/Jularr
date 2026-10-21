@@ -32,7 +32,7 @@ namespace Jularr.Backend.Tests
             }
 
             // Twelve workers and the sampler. The queue and the downloads a restart interrupts start at once, every other job has its own offset.
-            Assert.AreEqual(13, Enum.GetValues<WorkerGroupType>().Length);
+            Assert.AreEqual(14, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);

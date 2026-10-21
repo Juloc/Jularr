@@ -72,7 +72,10 @@ namespace Jularr.Backend.Service.Core
 
             // Each catalog decides for itself whether it waits while Jularr is used.
             new("catalog", WorkerGroupType.Catalog, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(8)),
-            new("resources", WorkerGroupType.Sampler, TimeSpan.FromMinutes(1), TimeSpan.Zero, canRunNow: false)
+            new("resources", WorkerGroupType.Sampler, TimeSpan.FromMinutes(1), TimeSpan.Zero, canRunNow: false),
+
+            // Asks every configured service whether it answers; a service that does not makes the pass fail, which tells the Owner in Activity.
+            new("health", WorkerGroupType.Health, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(12))
         ];
 
         public static WorkerJobDefinition Definition(string key) =>

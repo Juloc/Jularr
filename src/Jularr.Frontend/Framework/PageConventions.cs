@@ -15,6 +15,7 @@ namespace Jularr.Frontend.Framework
                 conventions.AddPageRoute("/Admin/Library/Library", "/Admin/Library/" + view);
             }
 
+            conventions.AddPageRoute("/Admin/Dashboard/Dashboard", "/Admin");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Downloads");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Subtitles");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Indexers");
@@ -46,6 +47,9 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Speech/Speech", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Catalog/Catalog", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Backup/Backup", ServiceApi.BackupReadPolicyName);
+            conventions.AuthorizePage("/Admin/Dashboard/Dashboard", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Performance/Performance", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Logs/Logs", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/System/System", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Jobs/Jobs", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AuthorizePage("/Admin/Transcoding/Transcoding", ServiceApi.InstanceSettingsReadPolicyName);

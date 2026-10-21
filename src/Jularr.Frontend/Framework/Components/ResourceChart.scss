@@ -1,0 +1,40 @@
+// The processor and memory chart of the Dashboard and the Performance page.
+.resource-chart {
+    &__graph { display: block; width: 100%; height: auto; max-height: 172px; }
+
+    &__grid { stroke: var(--border); stroke-dasharray: 3 5; }
+    &__stop { stop-color: var(--accent); &--from { stop-opacity: .17; } &--to { stop-opacity: 0; } }
+
+    &__line {
+        stroke-linecap: round;
+        stroke-linejoin: round;
+
+        &--processor { stroke: var(--accent); stroke-width: 3; }
+        &--memory { stroke: var(--info); stroke-width: 2.5; }
+    }
+
+    &__now { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+    &__label { fill: var(--muted); font-size: 11px; }
+
+    &__legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: var(--text-small);
+
+        > span { display: flex; align-items: center; gap: 5px; }
+    }
+
+    &__swatch {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+
+        &--processor { background: var(--accent); }
+        &--memory { background: var(--info); }
+    }
+}

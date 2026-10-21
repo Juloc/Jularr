@@ -13,6 +13,14 @@ namespace Jularr.Frontend.Framework
     {
         private static readonly ConcurrentDictionary<(PropertyInfo Property, Type Value), Delegate> Getters = new();
         private readonly List<Column> _columns = [];
+        private bool _dense;
+
+        // A table of figures that sits inside a card: the mockups' data table with rows of about 46px and no card of its own, instead of the 76px list row.
+        public Table<TData> Dense()
+        {
+            _dense = true;
+            return this;
+        }
 
         public Table<TData> Content(string labelKey, Func<TData, IUiComponent> render)
         {
@@ -69,7 +77,7 @@ namespace Jularr.Frontend.Framework
             )).ToArray();
 
             new Div(new TableElement(new Thead(new Tr(headings)), new Tbody(body))
-                .Class("page-table")).Class("page-table-wrap page-table-wrap--stack").WriteTo(writer, encoder, texts);
+                .Class(_dense ? "page-table page-table--dense" : "page-table")).Class(_dense ? "page-table-wrap page-table-wrap--stack page-table-wrap--embedded" : "page-table-wrap page-table-wrap--stack").WriteTo(writer, encoder, texts);
         }
 
         private sealed class Column(string labelKey, Func<TData, IUiComponent> value)

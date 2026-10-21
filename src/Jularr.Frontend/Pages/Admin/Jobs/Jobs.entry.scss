@@ -16,3 +16,15 @@
     flex-wrap: wrap;
     gap: 8px;
 }
+
+// The health check's answer above the jobs: the state, how many services answer and when it last looked.
+.jobs-health {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: var(--text-control);
+
+    .button { margin-left: auto; }
+}

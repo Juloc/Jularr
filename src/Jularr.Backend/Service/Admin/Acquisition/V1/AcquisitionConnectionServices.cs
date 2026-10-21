@@ -224,21 +224,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/connections/{acquisitionConnectionId:long}/test")]
     public sealed class TestAcquisitionConnectionV1 : AdminService<AcquisitionConnectionParametersV1, NoData>
     {
-        private readonly NewznabClient _newznab;
-        private readonly SabnzbdClient _sabnzbd;
-        private readonly DirectSources _direct;
-        private readonly UsenetJob _usenet;
-        private readonly SubtitleProviders _subtitles;
-        private readonly IDataProtector _protector;
+        private readonly AcquisitionConnectionProbe _probe;
 
-        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, UsenetJob usenet, SubtitleProviders subtitles, IDataProtectionProvider protection)
+        internal TestAcquisitionConnectionV1(AcquisitionConnectionProbe probe)
         {
-            _subtitles = subtitles;
-            _usenet = usenet;
-            _newznab = newznab;
-            _sabnzbd = sabnzbd;
-            _direct = direct;
-            _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+            _probe = probe;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -249,67 +239,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
-            var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)
-                || connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl
-                ? ""
-                : connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab
-                    ? AcquisitionConnectionInput.IndexerKey(_protector, connection.ProtectedApiKey)
-                    : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
 
             // Keep remote I/O outside transactions.
-            AcquisitionConnectionTestV1 result;
-            string? capabilities = null;
-            if (DirectSources.IsDirect(connection.AcquisitionConnectionTypeId))
-            {
-                var error = await _direct.TestAsync(connection, CancellationToken);
-                result = new AcquisitionConnectionTestV1(error is null, error, null, error is null ? ["Book"] : []);
-            }
-            else if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
-            {
-                // A login and one command prove the news server.
-                try
-                {
-                    await _usenet.TestAsync(connection, CancellationToken);
-                    result = new AcquisitionConnectionTestV1(true, null, null, []);
-                }
-                catch (UsenetException exception)
-                {
-                    result = new AcquisitionConnectionTestV1(false, exception.Failure == UsenetFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable", null, []);
-                }
-            }
-            else if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl)
-            {
-                // A login or one search proves the subtitle provider.
-                try
-                {
-                    await _subtitles.TestAsync(connection, CancellationToken);
-                    result = new AcquisitionConnectionTestV1(true, null, null, []);
-                }
-                catch (SubtitleException exception)
-                {
-                    result = new AcquisitionConnectionTestV1(false, exception.Code, null, []);
-                }
-            }
-            else if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
-            {
-                try
-                {
-                    var caps = await _newznab.ReadCapabilitiesAsync(new NewznabConnection(connection.HttpAddress, apiKey), CancellationToken);
-                    capabilities = JsonSerializer.Serialize(caps);
-                    result = new AcquisitionConnectionTestV1(true, null, caps.Version, caps.Modes.Keys.Order().Select(mode => mode.ToString()).ToArray());
-                }
-                catch (NewznabException exception)
-                {
-                    result = new AcquisitionConnectionTestV1(false, AcquisitionConnectionInput.ErrorKey(exception.Failure), null, []);
-                }
-            }
-            else
-            {
-                var test = await _sabnzbd.TestAsync(new SabnzbdConnection(connection.HttpAddress, apiKey), CancellationToken);
-                var errorKey = test.IsAvailable ? null : test.Version is null ? "acquisition_unavailable" : "acquisition_authentication_failed";
-                result = new AcquisitionConnectionTestV1(test.IsAvailable, errorKey, test.Version, []);
-            }
-
+            var (result, capabilities) = await _probe.TestAsync(connection, CancellationToken);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveAcquisitionConnectionCheckAsync(new AcquisitionConnectionCheckData(connection.Id, connection.Version, capabilities, result.ErrorKey), ct);

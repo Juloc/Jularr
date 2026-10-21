@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Enums.Worker
         Recognition = 10,
         Catalog = 11,
         Sampler = 12,
-        Derivation = 13
+        Derivation = 13,
+        Health = 14
     }
 }

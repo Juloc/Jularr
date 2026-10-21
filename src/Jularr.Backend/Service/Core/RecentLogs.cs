@@ -7,7 +7,7 @@ namespace Jularr.Backend.Service.Core
     // The last warnings and errors of this process for the Owner; exceptions keep their type and message, never a stack trace.
     internal sealed class RecentLogs(TimeProvider time) : ILoggerProvider
     {
-        private const int Capacity = 500;
+        private const int Capacity = 1000;
         private readonly ConcurrentQueue<RecentLogEntry> _entries = new();
 
         // Follows the Diagnostics module.

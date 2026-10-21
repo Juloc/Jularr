@@ -109,7 +109,9 @@ namespace Jularr.Frontend.Pages.Shared
             var links = new List<ShellLink>();
             if (texts.CanAdminister())
             {
-                links.Add(Group("nav.group.system", "server", new("nav.system.overview", "/Admin/System", ""), new("admin.jobs.title", "/Admin/Jobs", ""), new("admin.transcoding.title", "/Admin/Transcoding", "")));
+                links.Add(Group("nav.group.overview", "status", new ShellLink("admin.dashboard.title", "/Admin/Dashboard", "")));
+                links.Add(Group("nav.group.system", "server", [new("nav.system.server", "/Admin/System", ""), .. texts.CanDiagnose() ? new ShellLink[] { new("admin.performance.title", "/Admin/Performance", "") } : [],
+                    new("admin.logs.title", "/Admin/Logs", ""), new("admin.jobs.title", "/Admin/Jobs", ""), new("admin.transcoding.title", "/Admin/Transcoding", "")]));
             }
 
             if (texts.CanManageMedia())

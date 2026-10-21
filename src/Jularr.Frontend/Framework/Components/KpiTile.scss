@@ -1,0 +1,68 @@
+// The mockups' figures: a white panel on the quiet line, the name with its tinted icon tile on top, a large figure, one muted line below.
+.kpi-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: 14px;
+}
+
+.kpi-tile {
+    min-width: 0;
+    padding: 17px 19px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: var(--text-control);
+        font-weight: 720;
+    }
+
+    &__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    &__icon {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-tile);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+
+        &--good { background: var(--success-soft); color: var(--success); }
+        &--warn { background: var(--warning-soft); color: var(--warning); }
+        &--info { background: var(--info-soft); color: var(--info); }
+    }
+
+    &__value {
+        margin: 12px 0 3px;
+        overflow: hidden;
+        font-size: 29px;
+        font-weight: 850;
+        letter-spacing: -1.2px;
+        line-height: 1.15;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__foot {
+        color: var(--muted);
+        font-size: var(--text-small);
+
+        &--good { color: var(--success); }
+        &--warn { color: var(--warning); }
+    }
+}
+
+@media (max-width: 640px) {
+    .kpi-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .kpi-tile { padding: 12px 13px; border-radius: 15px; }
+    .kpi-tile__icon { width: 28px; height: 28px; }
+    .kpi-tile__value { margin: 10px 0 4px; font-size: 24px; }
+}

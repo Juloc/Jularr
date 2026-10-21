@@ -1,11 +1,14 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Data.Admin.Worker.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Service.Admin.Activity.V1;
+using Jularr.Backend.Service.Admin.System.V1;
 using Jularr.Backend.Service.Admin.Worker.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -15,11 +18,12 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Jobs
 {
     // Every background job with its state and the Owner's controls, and below it what the operations did.
-    public sealed class JobsModel(ReadWorkerJobsV1 read, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class JobsModel(ReadWorkerJobsV1 read, PauseWorkerJobV1 pause, RunWorkerJobV1 run, SetWorkerJobUseV1 use, ReadActivityV1 readHistory, ReadHealthV1 readHealth, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Jobs";
         private IReadOnlyList<WorkerJobV1> _jobs = [];
         private PageResult<ActivityItemV1>? _history;
+        private HealthV1? _health;
 
         protected override void Define(Page page)
         {
@@ -28,6 +32,9 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             page.Asset("Pages/Admin/Jobs/Jobs.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var canControl = texts.Can("instance.settings.update");
+
+            // What the last health check found; the job below runs it again.
+            if (_health is { Services.Count: > 0 } health) page.Content.Add(Health(health));
             var table = new Table<WorkerJobV1>(_jobs)
                 .Content("jobs.job", item => new Div(new Text("jobs.job." + item.Key),
                     new Span(new Text("jobs.worker." + item.WorkerGroupTypeId), new ValueText(" · "), item.IntervalSeconds is { } seconds ? new ValueText(Interval(seconds)) : new Text("jobs.continuous"))).Class("jobs-job"))
@@ -59,6 +66,21 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+        }
+
+        // Whether every service answered, how many, and when the health job last looked.
+        private IUiComponent Health(HealthV1 health)
+        {
+            var asked = health.Services.Count(service => service.HealthStateTypeId != HealthStateType.Unknown);
+            var reachable = health.Services.Count(service => service.HealthStateTypeId == HealthStateType.Available);
+            var parts = new List<IUiComponent>
+            {
+                new Span(new Text(health.IsStable ? "dashboard.status.stable" : "dashboard.status.warning")).Class(health.IsStable ? "state-chip state-chip--available" : "state-chip state-chip--warning"),
+                new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["jobs.health.summary"], reachable, asked) + (health.CheckedAt is { } at
+                    ? " · " + string.Format(CultureInfo.CurrentCulture, texts["dashboard.services.checked"], at.ToLocalTime().ToString("t", CultureInfo.CurrentCulture)) : ""))),
+                new A(new Text("admin.dashboard.title")).Class("button button--soft button--compact").Attribute("href", "/Admin/Dashboard")
+            };
+            return new Div([.. parts]).Class("jobs-health");
         }
 
         // Pausing and resuming come first, running at once follows.
@@ -126,6 +148,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
         {
             var ct = HttpContext.RequestAborted;
             _jobs = await read.ExecuteAsync<BaseDataList<WorkerJobV1>>(new ReadWorkerJobsParametersV1(), ct);
+            _health = await readHealth.ExecuteAsync<HealthV1>(new ReadHealthParametersV1(), ct);
             if (texts.Can("media.read"))
             {
                 _history = await readHistory.ExecuteAsync<PageResult<ActivityItemV1>>(new ReadActivityParametersV1(ActivityFilterType.History, 1, 10), ct);
