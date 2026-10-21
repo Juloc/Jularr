@@ -516,6 +516,12 @@ namespace Jularr.Backend.Tests
                     }
                 }
 
+                if (!library)
+                {
+                    // The profile read also reports the playback choice that belongs to the shell; the rest of the playback schema is not needed here.
+                    await fixture.RunSqlAsync("CREATE TABLE \"ProfilePlaybackPreferences\" (\"ProfileId\" bigint PRIMARY KEY, \"AutoplayPreviews\" boolean NOT NULL DEFAULT TRUE)");
+                }
+
                 // Release migrations follow the baselines, as in a fresh installation.
                 if (library)
                 {
