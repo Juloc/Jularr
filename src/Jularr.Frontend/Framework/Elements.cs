@@ -138,6 +138,12 @@ namespace Jularr.Frontend.Framework
     public sealed class Tbody(params IUiComponent[] children) : HtmlElement("tbody", children);
     public sealed class Tr(params IUiComponent[] children) : HtmlElement("tr", children);
     public sealed class Th(params IUiComponent[] children) : HtmlElement("th", children);
+    public sealed class Td(params IUiComponent[] children) : HtmlElement("td", children);
+    public sealed class Label(params IUiComponent[] children) : HtmlElement("label", children);
+    public sealed class Select(params IUiComponent[] children) : HtmlElement("select", children);
+    public sealed class Option(params IUiComponent[] children) : HtmlElement("option", children);
+    public sealed class Dialog(params IUiComponent[] children) : HtmlElement("dialog", children);
+    public sealed class FormElement(params IUiComponent[] children) : HtmlElement("form", children);
     public sealed class Video(params IUiComponent[] children) : HtmlElement("video", children);
     public sealed class Progress() : HtmlElement("progress");
     public sealed class Strong(params IUiComponent[] children) : HtmlElement("strong", children);

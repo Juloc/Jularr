@@ -262,6 +262,7 @@ namespace Jularr.E2E.Tests
         public static async Task<string> ImportAndRequestAsync(IPage page, string type, string? subtype, string title, string? provider = null)
         {
             await page.GotoAsync("/Admin/Works");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add title", Exact = true }).ClickAsync();
             var search = page.Locator("main form", new() { Has = page.Locator("[name=Query]") });
             await search.Locator("[name=MediaTypeId]").SelectOptionAsync(new SelectOptionValue { Label = type });
             if (subtype is not null)

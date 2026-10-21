@@ -7548,6 +7548,222 @@
    "Move column",
    "Spalte verschieben"
   ],
+  "works.add": [
+   "Add title",
+   "Titel hinzufügen"
+  ],
+  "works.col.cover": [
+   "Cover",
+   "Cover"
+  ],
+  "works.col.type": [
+   "Type",
+   "Typ"
+  ],
+  "works.col.year": [
+   "Year",
+   "Jahr"
+  ],
+  "works.col.monitored": [
+   "Monitoring",
+   "Überwachung"
+  ],
+  "works.col.status": [
+   "Status",
+   "Status"
+  ],
+  "works.col.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "works.col.library": [
+   "Library",
+   "Bibliothek"
+  ],
+  "works.col.files": [
+   "Files",
+   "Dateien"
+  ],
+  "works.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "works.col.added": [
+   "Added",
+   "Hinzugefügt"
+  ],
+  "works.select": [
+   "Select title",
+   "Titel auswählen"
+  ],
+  "works.selectAll": [
+   "Select all titles",
+   "Alle Titel auswählen"
+  ],
+  "works.status.Available": [
+   "Available",
+   "Vorhanden"
+  ],
+  "works.status.Missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "works.status.Downloading": [
+   "Downloading",
+   "Wird geladen"
+  ],
+  "works.status.Unmonitored": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "works.filter.type": [
+   "All types",
+   "Alle Typen"
+  ],
+  "works.filter.monitored": [
+   "Any monitoring",
+   "Jede Überwachung"
+  ],
+  "works.filter.monitored.yes": [
+   "Monitored",
+   "Überwacht"
+  ],
+  "works.filter.monitored.no": [
+   "Not monitored",
+   "Nicht überwacht"
+  ],
+  "works.filter.status": [
+   "Any status",
+   "Jeder Status"
+  ],
+  "works.filter.library": [
+   "All libraries",
+   "Alle Bibliotheken"
+  ],
+  "works.filter.profile": [
+   "All profiles",
+   "Alle Profile"
+  ],
+  "works.filter.apply": [
+   "Apply",
+   "Anwenden"
+  ],
+  "works.filter.clear": [
+   "Clear",
+   "Zurücksetzen"
+  ],
+  "works.emptyFiltered": [
+   "No title matches the filters.",
+   "Kein Titel passt zu den Filtern."
+  ],
+  "works.bar.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "works.bar.monitoring": [
+   "Monitoring",
+   "Überwachung"
+  ],
+  "works.bar.profile": [
+   "Profile",
+   "Profil"
+  ],
+  "works.bar.library": [
+   "Library (new files)",
+   "Bibliothek (neue Dateien)"
+  ],
+  "works.bar.default": [
+   "Default",
+   "Standard"
+  ],
+  "works.bar.search": [
+   "Search",
+   "Suchen"
+  ],
+  "works.bar.refresh": [
+   "Refresh",
+   "Aktualisieren"
+  ],
+  "works.delete.title": [
+   "Delete titles",
+   "Titel löschen"
+  ],
+  "works.delete.confirm": [
+   "Delete",
+   "Löschen"
+  ],
+  "works.report": [
+   "{0}: {1} of {2} titles",
+   "{0}: {1} von {2} Titeln"
+  ],
+  "works.report.none": [
+   "Nothing was chosen to change.",
+   "Es wurde nichts zum Ändern gewählt."
+  ],
+  "works.action.monitor": [
+   "Monitoring on",
+   "Überwachung ein"
+  ],
+  "works.action.unmonitor": [
+   "Monitoring off",
+   "Überwachung aus"
+  ],
+  "works.action.search": [
+   "Search",
+   "Suche"
+  ],
+  "works.action.refresh": [
+   "Refresh metadata",
+   "Metadaten aktualisieren"
+  ],
+  "works.action.apply": [
+   "Changes",
+   "Änderungen"
+  ],
+  "works.action.delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "works.outcome.not_wanted": [
+   "Not wanted yet",
+   "Noch nicht gewünscht"
+  ],
+  "works.outcome.per_platform": [
+   "Set per platform on its page",
+   "Pro Plattform auf der Titelseite"
+  ],
+  "works.outcome.not_found": [
+   "Not found",
+   "Nicht gefunden"
+  ],
+  "works.outcome.profile_mismatch": [
+   "The profile does not suit the type",
+   "Das Profil passt nicht zum Typ"
+  ],
+  "works.outcome.library_mismatch": [
+   "The library does not suit the type",
+   "Die Bibliothek passt nicht zum Typ"
+  ],
+  "works.outcome.download_active": [
+   "A download is running",
+   "Ein Download läuft"
+  ],
+  "works.outcome.files_stay": [
+   "The files could not be removed",
+   "Die Dateien ließen sich nicht entfernen"
+  ],
+  "works.outcome.unknown_reference": [
+   "No provider to refresh from",
+   "Kein Anbieter zum Aktualisieren"
+  ],
+  "works.outcome.in_use": [
+   "A download is running",
+   "Ein Download läuft"
+  ],
+  "works.outcome.other": [
+   "Not possible",
+   "Nicht möglich"
+  ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
    "Das Speichergerät wacht auf. Bitte versuche es gleich erneut."

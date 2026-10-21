@@ -1,8 +1,12 @@
 using System.Globalization;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Library.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -11,66 +15,93 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Works
 {
-    public sealed class WorksModel(ReadWorksV1 read, ReadWorkExclusionsV1 readExclusions, DeleteWorkExclusionV1 deleteExclusion, CreateWorkV1 create, SearchMetadataV1 search, ImportMetadataWorkV1 import, IAntiforgery antiforgery, UiText texts) : JularrPage
+    // The library as a list: filters, columns kept in this browser, in-row monitoring and search, and the mass editor.
+    public sealed partial class WorksModel(ReadWorksV1 read, ReadWorkExclusionsV1 readExclusions, DeleteWorkExclusionV1 deleteExclusion, CreateWorkV1 create, SearchMetadataV1 search, ImportMetadataWorkV1 import,
+        ReadLibraryOverviewV1 readLibraries, ReadAcquisitionProfilesV1 readProfiles, UpdateWorksMonitoringV1 updateMonitoring, UpdateWorksProfileV1 updateProfile, UpdateWorksLibraryV1 updateLibrary,
+        SearchWorksV1 searchWorks, RefreshWorksMetadataV1 refreshWorks, DeleteWorksV1 deleteWorks, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
-        private PageResult<WorkDetailsV1>? _works;
+        // What one request may change: the mass editor's batch; searches and file removals take fewer.
+        private const int PageSize = 50;
+        private const int ListedFailures = 12;
+
+        private PageResult<WorkListItemV1>? _works;
         private PageResult<WorkExclusionV1>? _exclusions;
+        private IReadOnlyList<LibraryOverviewV1> _libraries = [];
+        private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private CreateWorkDataV1? _input;
         private SearchMetadataDataV1? _search;
         private BaseDataList<MetadataSearchResultV1>? _results;
+        private bool _bulkFailed;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
+
+        // Filters and order live in the address, so a list can be shared, reloaded and paged.
+        [BindProperty(SupportsGet = true, Name = "type")]
+        public MediaType? TypeFilter { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "monitored")]
+        public bool? MonitoredFilter { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "status")]
+        public WorkListStatus? StatusFilter { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "library")]
+        public long? LibraryFilter { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "profile")]
+        public long? ProfileFilter { get; set; }
+
+        // The header search leads here with a part of the title.
+        [BindProperty(SupportsGet = true, Name = "q")]
+        public string? QueryFilter { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "sort")]
+        public WorkSortType Sort { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "desc")]
+        public bool Descending { get; set; }
+
+        private bool CanManageWanted => texts.CanManageWanted();
+
+        private bool CanAcquire => texts.CanAcquire();
+
+        private bool CanManageMedia => texts.CanManageMedia();
 
         protected override void Define(Page page)
         {
             page.Title("admin.works.title");
             page.Navigation("nav.admin");
-
+            page.Asset("Pages/Admin/Work/Work.entry.scss");
+            page.Asset("Pages/Admin/Work/Work.entry.ts");
+            page.Asset("Pages/Admin/Works/Works.entry.scss");
+            page.Asset("Pages/Admin/Works/Works.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
-            SelectOption[] subtypes = [new SelectOption("", texts["media.subtype.none"]), .. Enum.GetValues<MediaSubtype>()
-                .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype]))];
 
-            // Each type's provider creates Works with their identity and units.
-            page.Content.Add(new Form<SearchMetadataDataV1>(form =>
+            if (FormError is not null && _bulkFailed) page.Content.Add(new P(ErrorText.Of(FormError)).Class("ui-page-error").Attribute("role", "alert"));
+            if (TempData["WorksReport"] is string report) page.Content.Add(Report(report));
+
+            // The filters, and in their place the mass editor while titles are chosen, so the list does not move.
+            page.Content.Add(new Div(Filters(), _works is { Items.Count: > 0 } && (CanManageWanted || CanManageMedia) ? Editor(csrf) : new Span()).Class("works-bars"));
+            if (_works is { } works)
             {
-                form.Select(item => item.MediaTypeId, "media.type", mediaTypes);
-                form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
-                form.Text(item => item.Query, "media.title");
-                form.Number(item => item.ReleaseYear, "media.year");
-                form.Submit("admin.works.searchMetadata");
-            }, "/Admin/Works?handler=Search", csrf, _search, _search is null ? null : FormError));
-            if (_results is { } results && _search is { } searched)
-            {
-                if (results.Count == 0) page.Content.Add(new P(new Text("admin.works.noMetadata")).Attribute("role", "status"));
-                else page.Content.Add(new Table<MetadataSearchResultV1>(results)
-                    .Text(item => item.Title, "media.title")
-                    .Resource(item => item.Namespace, "admin.works.source", source => "admin.works.source." + source)
-                    .Text(item => item.OriginalTitle, "admin.works.originalTitle")
-                    .Text(item => item.Author, "media.author")
-                    .Text(item => item.ReleaseYear, "media.year")
-                    .Content("common.actions", item => item.WorkId is { } workId
-                        ? new A(new Text("common.open")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture))
-                        : new Form<ImportMetadataWorkDataV1>(form =>
-                        {
-                            form.Hidden(data => data.MediaTypeId);
-                            form.Hidden(data => data.MediaSubtypeId);
-                            form.Hidden(data => data.Namespace);
-                            form.Hidden(data => data.ExternalId);
-                            form.Submit("admin.works.import");
-                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId, searched.MediaSubtypeId, item.Namespace))));
+                if (works.Items.Count > 0)
+                {
+                    page.Content.Add(ListTable(works.Items, csrf));
+                    if (CanManageMedia) page.Content.Add(DeleteDialog(csrf));
+                }
+                else
+                {
+                    page.Content.Add(new P(new Text(Filtered ? "works.emptyFiltered" : "media.empty")).Attribute("role", "status"));
+                }
+
+                if (works.Page > 1 || works.Items.Count == works.PageSize)
+                {
+                    page.Content.Add(new Div(
+                        works.Page > 1 ? new A(new Text("common.previous")).Class("button").Attribute("href", Address(pageNumber: works.Page - 1)) : new Span(),
+                        works.Items.Count == works.PageSize ? new A(new Text("common.next")).Class("button").Attribute("href", Address(pageNumber: works.Page + 1)) : new Span()).Class("works-paging"));
+                }
             }
-
-            // Manual canonical creation.
-            page.Content.Add(new Form<CreateWorkDataV1>(form =>
-            {
-                form.Select(item => item.MediaTypeId, "media.type", mediaTypes);
-                form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
-                form.Text(item => item.CanonicalTitle, "media.title");
-                form.Number(item => item.ReleaseYear, "media.year");
-                form.Submit("media.create");
-            }, "/Admin/Works", csrf, _input, _search is null ? FormError : null));
 
             // Titles deleted with an exclusion stay out of requests until the exclusion is removed.
             if (_exclusions is { Items.Count: > 0 } exclusions)
@@ -78,22 +109,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 page.Content.Add(new UiSection("admin.works.exclusions", [new Table<WorkExclusionV1>(exclusions.Items)
                     .Text(item => item.Title, "media.title")
                     .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, null)))
-                    .Content("common.actions", item => new PostForm("/Admin/Works?handler=RemoveExclusion", csrf, [("workExclusionId", item.Id.ToString(CultureInfo.InvariantCulture))],
+                    .Content("common.actions", item => new PostForm(Address("RemoveExclusion"), csrf, [("workExclusionId", item.Id.ToString(CultureInfo.InvariantCulture))],
                         new Button(new Text("admin.works.exclusion.remove")).Submit()))]));
             }
 
-            // Real catalog rows.
-            if (_works is { } works)
-            {
-                page.Content.Add(new Table<WorkDetailsV1>(works.Items)
-                    .Text(item => item.CanonicalTitle, "media.title")
-                    .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
-                    .Link(item => item.Id, "common.open", id => "/Admin/Works/" + id.ToString(CultureInfo.InvariantCulture), "common.open"));
-
-                if (works.Items.Count == 0) page.Content.Add(new P(new Text("media.empty")));
-                if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", "/Admin/Works?pageNumber=" + (works.Page - 1)));
-                if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Admin/Works?pageNumber=" + (works.Page + 1)));
-            }
+            page.Content.Add(AddDialog(csrf));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -129,13 +149,87 @@ namespace Jularr.Frontend.Pages.Admin.Works
         public async Task<IActionResult> OnPostRemoveExclusionAsync([BindRequired] long workExclusionId)
         {
             await deleteExclusion.ExecuteAsync<UpdateResult>(new WorkExclusionParametersV1(workExclusionId), default, HttpContext.RequestAborted);
-            return LocalRedirect("/Admin/Works");
+            return LocalRedirect(Address());
+        }
+
+        // The switch of one row: the same rule as on the title's own page.
+        public async Task<IActionResult> OnPostMonitorAsync([BindRequired] long workId, [BindRequired] bool isMonitored)
+        {
+            _bulkFailed = true;
+            var outcomes = await updateMonitoring.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new UpdateWorksMonitoringDataV1([workId], isMonitored), HttpContext.RequestAborted);
+            return Reported(isMonitored ? "monitor" : "unmonitor", outcomes);
+        }
+
+        // The search of one row, as the title's own page searches.
+        public async Task<IActionResult> OnPostSearchWorkAsync([BindRequired] long workId)
+        {
+            _bulkFailed = true;
+            var outcomes = await searchWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new HeavyWorksDataV1([workId]), HttpContext.RequestAborted);
+            return Reported("search", outcomes);
+        }
+
+        // The mass editor: the chosen titles take what was set, or are searched or refreshed.
+        public async Task<IActionResult> OnPostBulkAsync(string? action, long[]? workIds, string? monitoring, string? profileId, string? libraryId)
+        {
+            _bulkFailed = true;
+            var ids = workIds ?? [];
+            var token = HttpContext.RequestAborted;
+            if (ids.Length == 0) return Reported(action ?? "apply", new BaseDataList<WorkBulkOutcomeV1>([]));
+            switch (action)
+            {
+                case "search":
+                    return Reported("search", await searchWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new HeavyWorksDataV1(ids), token));
+                case "refresh":
+                    return Reported("refresh", await refreshWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new HeavyWorksDataV1(ids), token));
+            }
+
+            // Each setting that was chosen is applied in turn; the report holds the titles that could not take one.
+            var outcomes = new List<WorkBulkOutcomeV1>();
+            if (monitoring is "on" or "off")
+            {
+                outcomes.AddRange(await updateMonitoring.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new UpdateWorksMonitoringDataV1(ids, monitoring == "on"), token));
+            }
+
+            if (long.TryParse(profileId, NumberStyles.None, CultureInfo.InvariantCulture, out var profile))
+            {
+                outcomes.AddRange(await updateProfile.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new UpdateWorksProfileDataV1(ids, profile == 0 ? null : profile), token));
+            }
+
+            if (long.TryParse(libraryId, NumberStyles.None, CultureInfo.InvariantCulture, out var library))
+            {
+                outcomes.AddRange(await updateLibrary.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new UpdateWorksLibraryDataV1(ids, library == 0 ? null : library), token));
+            }
+
+            return Reported("apply", new BaseDataList<WorkBulkOutcomeV1>(outcomes), outcomes.Count == 0 ? 0 : ids.Length);
+        }
+
+        public async Task<IActionResult> OnPostDeleteAsync(long[]? workIds, bool deletesFiles, bool addsExclusion)
+        {
+            _bulkFailed = true;
+            var ids = workIds ?? [];
+            if (ids.Length == 0) return Reported("delete", new BaseDataList<WorkBulkOutcomeV1>([]));
+            return Reported("delete", await deleteWorks.ExecuteAsync<BaseDataList<WorkBulkOutcomeV1>>(new WorksBulkParametersV1(), new DeleteWorksDataV1(ids, deletesFiles, addsExclusion), HttpContext.RequestAborted));
         }
 
         protected override async Task LoadDataAsync()
         {
-            _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(), HttpContext.RequestAborted);
-            _works = await read.ExecuteAsync<PageResult<WorkDetailsV1>>(new ReadWorksParametersV1(PageNumber), HttpContext.RequestAborted);
+            var ct = HttpContext.RequestAborted;
+            _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(), ct);
+            _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, Descending), ct);
+            _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
+
+            // Profiles belong to Arr+.
+            if (CanAcquire) _profiles = await readProfiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), ct);
+        }
+
+        // What happened to each chosen title is shown once, after the list is shown again; the counts say how many, the titles that stayed say why.
+        private IActionResult Reported(string action, BaseDataList<WorkBulkOutcomeV1> outcomes, int? total = null)
+        {
+            var failed = outcomes.Where(outcome => outcome.OutcomeKey is not ("done" or "grabbed" or "unchanged")).ToArray();
+            var done = outcomes.Count(outcome => outcome.OutcomeKey is "done" or "grabbed");
+            TempData["WorksReport"] = string.Join('\n', [action, done.ToString(CultureInfo.InvariantCulture), (total ?? outcomes.Count).ToString(CultureInfo.InvariantCulture),
+                .. failed.Take(ListedFailures).Select(outcome => outcome.OutcomeKey + "\t" + (outcome.CanonicalTitle.Length > 60 ? outcome.CanonicalTitle[..60] : outcome.CanonicalTitle))]);
+            return LocalRedirect(Address());
         }
     }
 }
