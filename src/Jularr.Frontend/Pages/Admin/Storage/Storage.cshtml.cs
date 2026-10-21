@@ -100,8 +100,6 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                     content.Secondary.Add(Health(mount));
                     if (_volume is { } volume) content.Secondary.Add(Volume(volume));
 
-                    if (TempData["StorageWoken"] is true) content.Secondary.Add(new P(new Text("storage.wake.sent")).Attribute("role", "status"));
-                    if (TempData["StorageScanQueued"] is true) content.Secondary.Add(new P(new Text("storage.paths.scanQueued")).Attribute("role", "status"));
                     if (FormError is not null && _failedSection is not ("Save" or "Root" or "Synology")) content.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                     content.Secondary.Add(new UiSection("storage.paths", Paths(mount, csrf)));
                     if (mount.IsNetwork) content.Secondary.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
@@ -238,7 +236,6 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                     .Attribute("href", Address(mount.Id) + "&power=" + type))]).Class("storage__actions");
             }
 
-            if (TempData["SynologySent"] is true) yield return new P(new Text("storage.synology.sent")).Attribute("role", "status");
             if (TempData["SynologyStatus"] is string json && JsonSerializer.Deserialize<SynologyStatusV1>(json) is { } status)
             {
                 var lines = new List<IUiComponent>();
@@ -422,6 +419,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         {
             var status = await synologyStatus.ExecuteAsync<SynologyStatusV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
             TempData["SynologyStatus"] = JsonSerializer.Serialize(status);
+            NoHint();
             return LocalRedirect(Address(storageMountId));
         }
 
@@ -429,6 +427,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         {
             var certificate = await synologyCertificate.ExecuteAsync<SynologyCertificateV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
             TempData["SynologyCertificate"] = JsonSerializer.Serialize(certificate);
+            NoHint();
             return LocalRedirect(Address(storageMountId));
         }
 
@@ -442,14 +441,14 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         public async Task<IActionResult> OnPostSynologyPowerAsync([BindRequired] long storageMountId, [BindRequired] SynologyPowerType synologyPowerTypeId)
         {
             await synologyPower.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(storageMountId), new PowerStorageSynologyDataV1(synologyPowerTypeId), HttpContext.RequestAborted);
-            TempData["SynologySent"] = true;
+            Hint("storage.synology.sent");
             return LocalRedirect(Address(storageMountId));
         }
 
         public async Task<IActionResult> OnPostWakeAsync([BindRequired] long storageMountId)
         {
             await wake.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
-            TempData["StorageWoken"] = true;
+            Hint("storage.wake.sent");
             return LocalRedirect(Address(storageMountId));
         }
 
@@ -483,7 +482,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         public async Task<IActionResult> OnPostScanAsync([BindRequired] long storageMountId, [BindRequired] long libraryRootId)
         {
             await queueScan.ExecuteAsync<QueueLibraryScanResultV1>(new LibraryRootParametersV1(libraryRootId), default, HttpContext.RequestAborted);
-            TempData["StorageScanQueued"] = true;
+            Hint("storage.paths.scanQueued");
             return LocalRedirect(Address(storageMountId));
         }
 

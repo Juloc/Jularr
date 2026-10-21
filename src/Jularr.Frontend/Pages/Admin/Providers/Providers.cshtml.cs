@@ -103,7 +103,6 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 ? new Text("admin.plex.notConnected")
                 : new ValueText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.connected"], plex.LinkedCount,
                     plex.SyncedAt?.ToString("u", CultureInfo.InvariantCulture) ?? texts["admin.plex.notSynced"]))));
-            if (TempData["PlexResult"] is string result) page.Content.Add(new P(new ValueText(result)).Attribute("role", "status"));
             page.Content.Add(new Form<SavePlexServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
@@ -160,7 +159,6 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 ? new Text("admin.mediaServer.notConnected")
                 : new ValueText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.connected"],
                     server.SyncedAt?.ToString("u", CultureInfo.InvariantCulture) ?? texts["admin.plex.notSynced"]))));
-            if (TempData["MediaServerResult" + type] is string result) page.Content.Add(new P(new ValueText(result)).Attribute("role", "status"));
             page.Content.Add(new Form<SaveMediaServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.mediaServer.baseUrl", help: new FieldHelp(Placeholder: "hint.mediaServer.baseUrl.placeholder"));
@@ -225,6 +223,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             _pin = await startPin.ExecuteAsync<StartPlexResultV1>(new PlexServerParametersV1(), _plexInput, HttpContext.RequestAborted);
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, _pin, antiforgery);
             TempData["PlexServerPin"] = JsonSerializer.Serialize(_pin);
+            NoHint();
             return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
         }
 
@@ -243,7 +242,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         {
             _plexInput = new SavePlexServerDataV1(baseUrl ?? "", string.IsNullOrWhiteSpace(token) ? null : token);
             var test = await savePlex.ExecuteAsync<PlexServerTestV1>(new PlexServerParametersV1(), _plexInput, HttpContext.RequestAborted);
-            TempData["PlexResult"] = string.Format(CultureInfo.InvariantCulture, texts["admin.plex.tested"], test.Version ?? "?", string.Join(", ", test.Sections));
+            HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.tested"], test.Version ?? "?", string.Join(", ", test.Sections)));
             return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
         }
 
@@ -257,7 +256,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         public async Task<IActionResult> OnPostPlexSyncAsync()
         {
             var sync = await syncPlex.ExecuteAsync<PlexSyncResultV1>(new PlexServerParametersV1(), default, HttpContext.RequestAborted);
-            TempData["PlexResult"] = string.Format(CultureInfo.InvariantCulture, texts["admin.plex.synced"], sync.LinkedCount, sync.CreatedCount);
+            HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.synced"], sync.LinkedCount, sync.CreatedCount));
             return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
         }
 
@@ -272,14 +271,14 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             _serverInput = mediaServerTypeId;
             _serverData = new SaveMediaServerDataV1(baseUrl ?? "", apiKey);
             var test = await saveServer.ExecuteAsync<MediaServerTestV1>(new MediaServerParametersV1(mediaServerTypeId), _serverData, HttpContext.RequestAborted);
-            TempData["MediaServerResult" + mediaServerTypeId] = string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.tested"], test.Name, test.Version ?? "", test.UserCount);
+            HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.tested"], test.Name, test.Version ?? "", test.UserCount));
             return LocalRedirect(Home);
         }
 
         public async Task<IActionResult> OnPostMediaServerSyncAsync(MediaServerType mediaServerTypeId)
         {
             var sync = await syncServer.ExecuteAsync<MediaServerSyncResultV1>(new MediaServerParametersV1(mediaServerTypeId), default, HttpContext.RequestAborted);
-            TempData["MediaServerResult" + mediaServerTypeId] = string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.synced"], sync.LocalCount, sync.RemoteCount);
+            HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.synced"], sync.LocalCount, sync.RemoteCount));
             return LocalRedirect(Home);
         }
 

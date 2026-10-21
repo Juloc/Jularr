@@ -48,7 +48,7 @@ namespace Jularr.E2E.Tests
         public static async Task FollowAsync(IPage page, ILocator element)
         {
             // A search asks every indexer rung in turn and may take its time.
-            // The page counts as arrived when its content was swapped and stopped changing for a moment: scripts of the new page still rearrange it right after the swap.
+            // The page counts as arrived when its content (or the region an action swapped) was replaced and stopped changing for a moment: scripts of the new page still rearrange it right after the swap.
             await page.EvaluateAsync("""
                 () => {
                     window.jularrFollowing = true;
@@ -56,11 +56,14 @@ namespace Jularr.E2E.Tests
                     window.jularrWatcher ??= new MutationObserver(() => { window.jularrChangedAt = performance.now(); });
                     window.jularrWatcher.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
                     document.getElementById('app-content')?.setAttribute('data-followed', '');
+                    document.querySelectorAll('[data-region]').forEach(region => region.setAttribute('data-followed', ''));
+                    window.jularrRegions = document.querySelectorAll('[data-region]').length;
                 }
                 """);
             await element.ClickAsync();
             await page.WaitForFunctionAsync("""
-                () => (!window.jularrFollowing || !!document.getElementById('app-content') && !document.querySelector('#app-content[data-followed]'))
+                () => (!window.jularrFollowing || !!document.getElementById('app-content') && (!document.querySelector('#app-content[data-followed]')
+                        || document.querySelectorAll('[data-region][data-followed]').length < window.jularrRegions))
                     && document.readyState !== 'loading' && !document.querySelector('.htmx-request, .htmx-swapping')
                     && (!window.jularrWatcher || performance.now() - window.jularrChangedAt > 150 || performance.now() - window.jularrStartedAt > 5000)
                 """, null, new() { Timeout = 120_000 });

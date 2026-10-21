@@ -3,6 +3,19 @@ import { compareValues, moveItem, normalizeColumns, type ColumnState } from './W
 
 const storagePrefix = 'jularr.work.columns.';
 
+// What a person opened or closed stays when an action swaps the page's region: the open sections are theirs, not the server's.
+const sectionState = new Map<string, boolean>();
+
+// One control collapses all sections while any is open and expands them all while none is.
+function syncCollapseAll(): void {
+    const anyOpen = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-season-toggle]')).some(toggle => toggle.getAttribute('aria-expanded') === 'true');
+    document.querySelectorAll<HTMLButtonElement>('[data-collapse-all]').forEach(button => {
+        const label = button.querySelector<HTMLElement>('[data-collapse-label]');
+        if (label) label.textContent = (anyOpen ? button.dataset.collapseText : button.dataset.expandText) ?? '';
+        button.dataset.state = anyOpen ? 'open' : 'closed';
+    });
+}
+
 function initializeSeasons(): void {
     document.querySelectorAll<HTMLButtonElement>('[data-season-toggle]').forEach(button => {
         if (button.dataset.workReady) return;
@@ -13,8 +26,10 @@ function initializeSeasons(): void {
             panel.hidden = !open;
             button.setAttribute('aria-expanded', String(open));
             button.closest('.work-season')?.classList.toggle('work-season--open', open);
+            sectionState.set(panel.id, open);
+            syncCollapseAll();
         };
-        set(panel.dataset.open === 'true');
+        set(sectionState.get(panel.id) ?? panel.dataset.open === 'true');
         button.addEventListener('click', () => set(panel.hidden));
     });
 
@@ -27,6 +42,7 @@ function initializeSeasons(): void {
             toggles.forEach(toggle => { if ((toggle.getAttribute('aria-expanded') === 'true') === anyOpen) toggle.click(); });
         });
     });
+    syncCollapseAll();
 }
 
 function initializeVersions(): void {
@@ -39,20 +55,6 @@ function initializeVersions(): void {
             button.closest('tbody, .work-strip-group')?.querySelectorAll<HTMLElement>('tr.work-file, .work-strip--file').forEach(row => { row.hidden = !open; });
         });
     });
-}
-
-function initializeDialogs(): void {
-    document.querySelectorAll<HTMLElement>('[data-dialog-open]').forEach(opener => {
-        if (opener.dataset.workReady) return;
-        opener.dataset.workReady = 'true';
-        opener.addEventListener('click', () => (document.getElementById(opener.dataset.dialogOpen ?? '') as HTMLDialogElement | null)?.showModal());
-    });
-    document.querySelectorAll<HTMLElement>('[data-dialog-close]').forEach(closer => {
-        if (closer.dataset.workReady) return;
-        closer.dataset.workReady = 'true';
-        closer.addEventListener('click', () => closer.closest('dialog')?.close());
-    });
-    document.querySelectorAll<HTMLDialogElement>('dialog.work-dialog[data-open="true"]').forEach(dialog => { if (!dialog.open) dialog.showModal(); });
 }
 
 function tablesOfKind(kind: string): HTMLTableElement[] {
@@ -327,11 +329,10 @@ let pickerReady = false;
 onPage(import.meta.url, () => {
     initializeSeasons();
     initializeVersions();
-    initializeDialogs();
     initializeSelection();
     initializeFileEdit();
     initializeStrips();
     initializeNumbering();
     document.querySelectorAll<HTMLTableElement>('[data-work-table]').forEach(initializeTable);
     if (!pickerReady) { pickerReady = true; initializePicker(); }
-});
+}, { partial: true });

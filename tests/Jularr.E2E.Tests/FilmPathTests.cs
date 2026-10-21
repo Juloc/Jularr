@@ -165,10 +165,10 @@ namespace Jularr.E2E.Tests
                 await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
                 await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
                 await Steps.SubmitAsync(page, editor.Locator("form"));
-                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 updated" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("1 updated");
                 await Assertions.Expect(page.Locator("tr.work-file")).ToContainTextAsync("HDTV-720p");
                 await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete file" }) }));
-                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("1 deleted");
                 await Assertions.Expect(page.GetByText("This film has no file yet.")).ToBeVisibleAsync();
                 Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film's file is still there.");
 
@@ -180,7 +180,7 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "work-manage-files");
                 await managed.GetByRole(AriaRole.Checkbox).CheckAsync();
                 await Steps.SubmitAsync(page, page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Delete selected files" }) }));
-                await Assertions.Expect(page.GetByRole(AriaRole.Status).Filter(new() { HasText = "1 deleted" })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("1 deleted");
                 Assert.AreEqual(0, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode's file is still there.");
                 await page.GotoAsync(page.Url.Split('?')[0]);
                 await Assertions.Expect(EpisodeRow(page, "1")).ToContainTextAsync("Missing");

@@ -117,7 +117,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             var titles = (workIds ?? []).Distinct().ToArray();
             if (titles.Length > 0 && texts.CanCollect() && (await readMembership.ExecuteAsync<BaseDataList<CollectionMemberV1>>(new CollectionMembershipParametersV1(titles), token)).Count > 0)
             {
-                TempData["FavoritesNotice"] = "favorites.removedFromCollections";
+                Hint("favorites.removedFromCollections");
             }
 
             foreach (var workId in titles)

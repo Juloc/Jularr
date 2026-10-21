@@ -15,9 +15,9 @@ namespace Jularr.Backend.Logic.Playback
             sql.Statement =
                 """
                 INSERT INTO
-                    "ProfilePlaybackPreferences" ("ProfileId", "AudioLanguage", "SubtitleLanguage", "SubtitleModeTypeId", "Speed", "AutoplayNext", "IntroSkipModeTypeId", "OutroSkipModeTypeId")
+                    "ProfilePlaybackPreferences" ("ProfileId", "AudioLanguage", "SubtitleLanguage", "SubtitleModeTypeId", "Speed", "AutoplayNext", "IntroSkipModeTypeId", "OutroSkipModeTypeId", "AutoplayPreviews")
                 VALUES
-                    (@ProfileId, @AudioLanguage, @SubtitleLanguage, @SubtitleModeTypeId, @Speed, @AutoplayNext, @IntroSkipModeTypeId, @OutroSkipModeTypeId)
+                    (@ProfileId, @AudioLanguage, @SubtitleLanguage, @SubtitleModeTypeId, @Speed, @AutoplayNext, @IntroSkipModeTypeId, @OutroSkipModeTypeId, @AutoplayPreviews)
                 ON CONFLICT ("ProfileId") DO UPDATE
                 SET
                     "AudioLanguage" = EXCLUDED."AudioLanguage",
@@ -27,6 +27,7 @@ namespace Jularr.Backend.Logic.Playback
                     "AutoplayNext" = EXCLUDED."AutoplayNext",
                     "IntroSkipModeTypeId" = EXCLUDED."IntroSkipModeTypeId",
                     "OutroSkipModeTypeId" = EXCLUDED."OutroSkipModeTypeId",
+                    "AutoplayPreviews" = EXCLUDED."AutoplayPreviews",
                     "UpdatedAt" = now();
                 """;
             sql.Parameters.Add(data);

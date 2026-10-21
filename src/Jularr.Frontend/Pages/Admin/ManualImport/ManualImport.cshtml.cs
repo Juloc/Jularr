@@ -38,9 +38,6 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
         [BindProperty(SupportsGet = true)]
         public string? RelativePath { get; set; }
 
-        [BindProperty(SupportsGet = true)]
-        public int? Imported { get; set; }
-
         // A waiting download of the queue: its folder and film or series are known.
         [BindProperty(SupportsGet = true)]
         public long? OperationId { get; set; }
@@ -53,11 +50,6 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             page.Asset("Framework/Components/Form.entry.ts");
             page.Asset("Pages/Admin/ManualImport/ManualImport.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (Imported is { } count)
-            {
-                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["manualImport.done"], count))).Attribute("role", "status"));
-            }
-
             if (_work is null)
             {
                 page.Content.Add(new Form<ManualImportWorksParametersV1>(form =>
@@ -166,9 +158,17 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             return Page();
         }
 
-        public IActionResult OnPostFind() => LocalRedirect(Address(query: Query));
+        public IActionResult OnPostFind()
+        {
+            NoHint();
+            return LocalRedirect(Address(query: Query));
+        }
 
-        public IActionResult OnPostRead() => LocalRedirect(Address(wantedItemId: WantedItemId, storageMountId: StorageMountId is > 0 ? StorageMountId : null, relativePath: StorageMountId is > 0 ? RelativePath : null));
+        public IActionResult OnPostRead()
+        {
+            NoHint();
+            return LocalRedirect(Address(wantedItemId: WantedItemId, storageMountId: StorageMountId is > 0 ? StorageMountId : null, relativePath: StorageMountId is > 0 ? RelativePath : null));
+        }
 
         public async Task<IActionResult> OnPostRunAsync(long storageMountId, string? relativePath, ImportTransferMode importTransferModeId, List<FileRow>? files)
         {
@@ -176,7 +176,8 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var choices = new BaseDataList<ManualImportChoiceV1>((files ?? []).Where(row => row.Path is not null).Select(row => new ManualImportChoiceV1(row.Path!, row.Imports, row.Season, row.Episode)));
             var result = await run.ExecuteAsync<ManualImportResultV1>(new ManualImportParametersV1(wantedItemId),
                 new RunManualImportDataV1(storageMountId, relativePath ?? "", importTransferModeId, choices), HttpContext.RequestAborted);
-            return LocalRedirect(Address(wantedItemId: wantedItemId, imported: result.Imported));
+            Hint("manualImport.done", result.Imported);
+            return LocalRedirect(Address(wantedItemId: wantedItemId));
         }
 
         public async Task<IActionResult> OnPostRunDownloadAsync(ImportTransferMode importTransferModeId, List<FileRow>? files)
@@ -248,7 +249,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             }
         }
 
-        private string Address(string? handler = null, long? wantedItemId = null, long? storageMountId = null, string? relativePath = null, string? query = null, int? imported = null, long? operationId = null) =>
+        private string Address(string? handler = null, long? wantedItemId = null, long? storageMountId = null, string? relativePath = null, string? query = null, long? operationId = null) =>
             QueryHelpers.AddQueryString("/Admin/ManualImport", new Dictionary<string, string?>
             {
                 ["handler"] = handler,
@@ -256,7 +257,6 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 ["storageMountId"] = storageMountId?.ToString(CultureInfo.InvariantCulture),
                 ["relativePath"] = relativePath,
                 ["query"] = query,
-                ["imported"] = imported?.ToString(CultureInfo.InvariantCulture),
                 ["operationId"] = operationId?.ToString(CultureInfo.InvariantCulture)
             });
 
