@@ -812,10 +812,6 @@
    "Notes",
    "Notizen"
   ],
-  "reader.openPdf": [
-   "Open in a new tab",
-   "In neuem Tab öffnen"
-  ],
   "reader.originalPdf": [
    "Original PDF",
    "Original-PDF"
@@ -827,18 +823,6 @@
   "reader.smart.failed": [
    "The reading copy of this PDF could not be created. Reading is not affected.",
    "Die Lesekopie dieses PDFs konnte nicht erstellt werden. Das Lesen bleibt unberührt."
-  ],
-  "reader.smart.declined.scan": [
-   "No reading copy was made: this PDF consists of scanned pages.",
-   "Es wurde keine Lesekopie erstellt: Dieses PDF besteht aus gescannten Seiten."
-  ],
-  "reader.smart.declined.pictures": [
-   "No reading copy was made: this PDF is mostly pictures.",
-   "Es wurde keine Lesekopie erstellt: Dieses PDF besteht überwiegend aus Bildern."
-  ],
-  "reader.smart.declined.garbled": [
-   "No reading copy was made: the text of this PDF is unreliable.",
-   "Es wurde keine Lesekopie erstellt: Der Text dieses PDFs ist unzuverlässig."
   ],
   "reader.figure.open": [
    "Open full screen",
@@ -861,8 +845,100 @@
    "An den Bildschirm anpassen"
   ],
   "reader.figure.original": [
-   "Page {0} is only shown in the original PDF.",
-   "Seite {0} wird nur im Original-PDF angezeigt."
+   "Page {0} is only shown in the original pages.",
+   "Seite {0} wird nur in den Originalseiten angezeigt."
+  ],
+  "reader.settings.view": [
+   "View",
+   "Ansicht"
+  ],
+  "reader.settings.pages": [
+   "Pages",
+   "Seiten"
+  ],
+  "reader.view.auto": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "reader.view.smart": [
+   "Smart Book",
+   "Smart Book"
+  ],
+  "reader.view.original": [
+   "Original pages",
+   "Originalseiten"
+  ],
+  "reader.view.failed": [
+   "The view could not be saved.",
+   "Die Ansicht konnte nicht gespeichert werden."
+  ],
+  "reader.view.smartUnavailable": [
+   "The Smart Book is not ready yet; the original pages are shown.",
+   "Das Smart Book ist noch nicht fertig; die Originalseiten werden angezeigt."
+  ],
+  "reader.offer.smart": [
+   "The Smart Book of this book is ready.",
+   "Das Smart Book dieses Buchs ist fertig."
+  ],
+  "reader.offer.open": [
+   "Open",
+   "Öffnen"
+  ],
+  "reader.original.loading": [
+   "Loading the pages…",
+   "Seiten werden geladen …"
+  ],
+  "reader.original.failed": [
+   "The original pages could not be shown.",
+   "Die Originalseiten konnten nicht angezeigt werden."
+  ],
+  "reader.original.page": [
+   "Page",
+   "Seite"
+  ],
+  "reader.original.zoom": [
+   "Zoom",
+   "Zoom"
+  ],
+  "reader.original.fit": [
+   "Fit",
+   "Anpassung"
+  ],
+  "reader.original.fit.page": [
+   "Whole page",
+   "Ganze Seite"
+  ],
+  "reader.original.fit.width": [
+   "Page width",
+   "Seitenbreite"
+  ],
+  "reader.recognition.progress": [
+   "Reading the scanned pages: {0} of {1}",
+   "Gescannte Seiten werden gelesen: {0} von {1}"
+  ],
+  "reader.pageNote.label": [
+   "Note on this page",
+   "Notiz zu dieser Seite"
+  ],
+  "reader.pageNote.save": [
+   "Save note",
+   "Notiz speichern"
+  ],
+  "reader.pageNote.page": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "reader.figure.originalPages": [
+   "Open the original pages",
+   "Originalseiten öffnen"
+  ],
+  "reader.figure.originalAlt": [
+   "Original page {0}",
+   "Originalseite {0}"
+  ],
+  "reader.download.omitted": [
+   "{0} pages are only in the original and are not part of this EPUB.",
+   "{0} Seiten gibt es nur im Original; sie sind nicht Teil dieses EPUBs."
   ],
   "reader.download": [
    "Download",
@@ -7813,20 +7889,16 @@
    "Übersetzungsdateien lassen sich gerade nicht abrufen; das Buch bleibt in seiner Sprache."
   ],
   "errors.reading_pdf_without_text": [
-   "This PDF holds scanned pages without text; it opens as a PDF.",
-   "Dieses PDF enthält gescannte Seiten ohne Text; es wird als PDF geöffnet."
-  ],
-  "errors.reading_pdf_unfit": [
-   "This PDF is mostly pictures or its text is unreliable; it opens as a PDF.",
-   "Dieses PDF besteht überwiegend aus Bildern oder sein Text ist unzuverlässig; es wird als PDF geöffnet."
+   "This PDF holds scanned pages without text; it opens as its original pages.",
+   "Dieses PDF enthält gescannte Seiten ohne Text; es öffnet sich als seine Originalseiten."
   ],
   "errors.reading_translation_incomplete": [
    "This book is not translated into that language in every section yet.",
    "Dieses Buch ist noch nicht in jedem Abschnitt in diese Sprache übersetzt."
   ],
   "errors.reading_pdf_recognizing": [
-   "The scanned pages are being turned into text; until then the book opens as a PDF.",
-   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als PDF."
+   "The scanned pages are being turned into text; until then the book opens as its original pages.",
+   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als seine Originalseiten."
   ],
   "errors.ocr_unavailable": [
    "The text recognition models cannot be fetched right now.",

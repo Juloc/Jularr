@@ -82,6 +82,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 }
                 catch (PdfWithoutTextException)
                 {
+                    // A scan waits for the recognizer, where the Ocr module is on, without anybody opening it first.
+                    var recognition = new ReadingRecognitionData(source.StoredFileId, source.SizeBytes, source.ModifiedAt);
+                    await context.ExecuteBatchAsync((ctx, token) => ctx.RequestReadingRecognitionAsync(recognition, token), ct);
                     return new ReadingDerivationOutcome(ReadingDerivationStatus.Declined, "no_text");
                 }
                 catch (InvalidDataException)

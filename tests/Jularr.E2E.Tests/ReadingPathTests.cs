@@ -787,6 +787,99 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // A scan without any text opens as its original pages, drawn by the browser: they turn, zoom and keep the place; the view of the book is the profile's to choose.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task LocalPdf_Scan_OpensAsOriginalPages_TurnsZoomsAndKeepsTheChosenView()
+        {
+            using var folders = new Folders("Books");
+            Steps.WriteScannedPdf(Path.Combine(folders.Library, "Books", "scan-book.pdf"), 3);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await page.GotoAsync("/Admin/Library");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Scan Books"));
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (true)
+                {
+                    await page.GotoAsync("/Admin/Library/Unmatched");
+                    if (await page.Locator("form [name=Title]").CountAsync() > 0) break;
+                    Assert.IsTrue(DateTime.UtcNow < deadline, "The local test PDF was not scanned.");
+                    await Task.Delay(500);
+                }
+
+                await page.Locator("form [name=Title]").FillAsync("Scan book");
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Create work and identify"));
+
+                // No text to reflow: the original pages show at once, the first page drawn in its own colour.
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                var canvas = page.Locator("[data-role=page]");
+                await Assertions.Expect(canvas).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("1 / 3");
+                const string Centre = "canvas => Array.from(canvas.getContext('2d').getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data)";
+                var first = await canvas.EvaluateAsync<int[]>(Centre);
+                Assert.IsTrue(first[0] is > 20 and < 80 && first[2] > 150, string.Join(',', first));
+                await Evidence.SaveAsync(page, "reader-original-pages");
+
+                // A turn by button, by key and by swipe-sized drag draws the next page; the last page cannot be turned past.
+                await page.Locator("[data-turn='1']").First.ClickAsync();
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3");
+                await page.Keyboard.PressAsync("ArrowRight");
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("3 / 3");
+                await Assertions.Expect(page.Locator("[data-turn='1']").First).ToBeDisabledAsync();
+                await page.WaitForFunctionAsync("() => { const c = document.querySelector('[data-role=page]'); const data = c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data; return data[0] > 150; }");
+
+                // Zoom grows the sheet beyond the stage and fit brings the whole page back.
+                var sheet = page.Locator("[data-role=sheet]");
+                var whole = (await sheet.BoundingBoxAsync())!.Width;
+                await page.Locator("[data-page-zoom=in]").ClickAsync();
+                await page.Locator("[data-page-zoom=in]").ClickAsync();
+                var zoomed = (await sheet.BoundingBoxAsync())!.Width;
+                Assert.IsTrue(zoomed > whole * 1.4, whole + " -> " + zoomed);
+                await page.Locator("[data-page-zoom=fit]").ClickAsync();
+                Assert.IsTrue(Math.Abs((await sheet.BoundingBoxAsync())!.Width - whole) < 2);
+
+                // The place is kept: a new visit opens at the third page; the page of the address wins.
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("3 / 3", new() { Timeout = 30_000 });
+                await page.GotoAsync("/Read/1?pg=2", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3", new() { Timeout = 30_000 });
+
+                // The view is the profile's to choose: the Smart Book of a scan without text is not there, and the pages say so; automatic is chosen again.
+                await page.Locator("button[data-reader-open-settings]").First.ClickAsync();
+                await Assertions.Expect(page.Locator("[data-view-choice=smart]")).ToBeVisibleAsync();
+                await page.Locator("[data-view-choice=smart]").ClickAsync();
+                await page.WaitForURLAsync(url => url.Contains("view=smart", StringComparison.Ordinal));
+                await Assertions.Expect(page.Locator("[data-role=position]")).ToHaveTextAsync("2 / 3", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator(".reader__notice:not([hidden])")).ToContainTextAsync("Smart Book is not ready");
+                await page.GotoAsync("/Read/1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-view-choice=smart]")).ToHaveAttributeAsync("aria-pressed", "true");
+                await page.Locator("button[data-reader-open-settings]").First.ClickAsync();
+                await page.Locator("[data-view-choice=auto]").ClickAsync();
+                await page.WaitForURLAsync(url => !url.Contains("view=", StringComparison.Ordinal));
+                await Assertions.Expect(page.Locator("[data-view-choice=auto]")).ToHaveAttributeAsync("aria-pressed", "true");
+                await Assertions.Expect(page.Locator(".reader__notice:not([hidden])")).ToHaveCountAsync(0);
+
+                // The same pages on a phone: the page fits the narrow screen, and dark or light the backdrop is the theme's.
+                await page.SetViewportSizeAsync(390, 844);
+                await page.GotoAsync("/Read/1?pg=1", new() { Timeout = 30_000 });
+                await Assertions.Expect(page.Locator("[data-role=page]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                var small = (await page.Locator("[data-role=sheet]").BoundingBoxAsync())!;
+                Assert.IsTrue(small.Width <= 390 && small.X >= 0, small.Width + " at " + small.X);
+                await Evidence.SaveAsync(page, "reader-original-pages-mobile");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "reader-original-pages");
+                throw;
+            }
+        }
+
         [TestMethod]
         [Timeout(600_000)]
         public async Task PdfBook_FromRequestDownloadAndImportReadsReflowedAndContinues()

@@ -119,6 +119,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(ReadingDerivationStatus.Declined, kept.ReadingDerivationStatusTypeId);
             Assert.AreEqual("no_text", kept.Reason);
             CollectionAssert.AreEqual(scanned, File.ReadAllBytes(Path.Combine(storage.Path, "1", "Books", "Second Book", "Second Book.pdf")));
+
+            // With the Ocr module on, the same job queues the scan for the recognizer without anybody opening it.
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingRecognitions\""));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Ocr'");
+            await host.Fixture.RunSqlAsync("DELETE FROM \"ReadingDerivations\"");
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue(await Derive(scope));
+            }
+
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingRecognitions\" WHERE \"FinishedAt\" IS NULL AND \"FailedAt\" IS NULL"));
         }
 
         private static async Task<bool> Derive(AsyncServiceScope scope) =>

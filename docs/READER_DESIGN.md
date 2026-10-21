@@ -92,7 +92,7 @@ Prose retains authorized server chapter routes and `s<section>/b<block>` progres
 Images retain `p<page>`, solitary covers/wide pages, bounded preloading and a
 12-image vertical window. Completion in scroll mode requires the loaded final
 image's bottom, not merely entering that image. Scanned PDFs without prepared text
-retain the native browser viewer, without fabricated progress.
+open as original pages (below), with real page progress.
 
 ## Figures
 
@@ -110,6 +110,22 @@ a tap on the empty stage closes it. On the printed pages of the book view the fi
 found by position, because those pages take no pointer events. A page only the original
 PDF can show stands in the text as a one-line note with a link to its page and is left
 out of the EPUB. The figure's look follows the global tokens; the cursor is `zoom-in`.
+
+## Original pages and views
+
+A book with a PDF can be read in two views, Automatic, Smart Book or Original pages, chosen per book and
+profile in the `View` group of the Reader settings and kept on every device (`ReadingPreferences`). Automatic
+shows the Smart Book while its text passed the quality gate and the original pages otherwise; a choice always
+wins, and a better view that becomes ready while a book is open is only offered quietly, never switched to.
+The original pages are drawn by the browser (Mozilla's pdf.js, scans with JPEG 2000 and JBIG2 included) in the
+same frame: one page at a time on the theme's surface, fitting the page or its width, zoom by buttons, wheel with
+Control and pinch, turns by buttons, keys, swipe and the seek range, the position `p<page>` in the one progress
+store. They open from the file alone, without any analysis. A scan's text, from its own recognition layer or from
+the local recognizer, is shown only on pages where it holds together; any other page stays whole as a picture or
+as a stand-in that the reader draws from the PDF, and links to its page in the original pages. Paragraphs carry
+the page they start on, so the other view opens at the same page, search names pages and page notes keep their
+page and the first words of it. An EPUB download leaves the pages out that only the original shows and says how
+many. Deskew and perspective correction are not done; the page's own rotation is applied before recognition.
 
 ## Bounded whole-book measurement
 

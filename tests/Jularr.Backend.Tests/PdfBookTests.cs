@@ -277,6 +277,120 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ScanLayerInTwoColumns_ReadsOneColumnAfterTheOther_ButRunningThroughEachOtherStaysThePage()
+        {
+            var png = ReadingTests.Picture(60, 80);
+            var left = "the left column goes on and on about one thing";
+            var right = "the right column tells another story in turn";
+            var book = PdfBook.Read(new MemoryStream(Build(builder =>
+            {
+                var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+                foreach (var kind in new[] { "columns", "jumbled", "columns" })
+                {
+                    var page = builder.AddPage(PageSize.A4);
+                    page.AddPng(png, new PdfRectangle(0, 0, 595, 842));
+                    page.SetTextRenderingMode(TextRenderingMode.Neither);
+                    for (var row = 0; row < 24; row++)
+                    {
+                        var y = 780 - row * 14;
+                        if (kind == "columns")
+                        {
+                            // The recognizer wrote each row across both columns.
+                            page.AddText(left + " " + row, 9, new PdfPoint(54, y), font);
+                            page.AddText(right + " " + row, 9, new PdfPoint(320, y), font);
+                        }
+                        else
+                        {
+                            // Lines jump from one side of the page to the other.
+                            page.AddText(left + " " + row, 9, new PdfPoint(row % 2 == 0 ? 54 : 330, y), font);
+                        }
+                    }
+                }
+            })));
+
+            Assert.AreEqual(PdfPageKind.Text, book.Pages[0].Kind);
+            Assert.AreEqual(2, book.Pages[0].Columns);
+            Assert.AreEqual("unreliable-columns", book.Pages[1].Reason);
+            Assert.AreEqual(PdfPageKind.Figure, book.Pages[1].Kind);
+            var text = string.Concat(book.Chapters.SelectMany(chapter => chapter.Blocks).Select(block => block.Text));
+            Assert.IsTrue(text.IndexOf("the left column goes on and on about one thing 23", StringComparison.Ordinal) < text.IndexOf("the right column tells another story in turn 5", StringComparison.Ordinal), text[..Math.Min(text.Length, 1500)]);
+        }
+
+        [TestMethod]
+        public void RecognizedPages_ReadAsText_WhereTheyHoldTogether_AndKeepTheirPageNumber()
+        {
+            var png = ReadingTests.Picture(60, 80);
+            var pdf = Build(builder =>
+            {
+                foreach (var _ in Enumerable.Range(0, 4))
+                {
+                    builder.AddPage(PageSize.A4).AddPng(png, new PdfRectangle(0, 0, 595, 842));
+                }
+            });
+            RecognizedPage Page(params string[] lines) => new(RecognizedPage.Recognized, 1, [.. lines.Select((text, index) => new RecognizedLine(0.1, 0.1 + index * 0.03, 0.9, 0.12 + index * 0.03, text, 0.95))]);
+            var prose = Enumerable.Range(0, 20).Select(index => "a plain line of prose for the page number " + index + " and some more words").ToArray();
+            var noise = Enumerable.Range(0, 12).Select(_ => "zq ~ x_ | zqk").ToArray();
+            var uncertain = new RecognizedPage(RecognizedPage.Recognized, 1, [new RecognizedLine(0.1, 0.1, 0.2, 0.12, "X", 0.94), new RecognizedLine(0.1, 0.2, 0.2, 0.22, "n", 0.25), new RecognizedLine(0.1, 0.3, 0.2, 0.32, "a", 0.12),
+                new RecognizedLine(0.1, 0.4, 0.2, 0.42, ".", 0.36)]);
+            var recognized = new Dictionary<int, RecognizedPage>
+            {
+                [1] = Page(prose), [2] = Page(noise), [3] = Page(prose), [4] = uncertain
+            };
+
+            var book = PdfBook.Read(new MemoryStream(pdf), recognized);
+
+            Assert.AreEqual(PdfPageKind.Text, book.Pages[0].Kind);
+            Assert.AreEqual("recognized", book.Pages[0].Reason);
+            Assert.AreEqual(PdfPageKind.Figure, book.Pages[1].Kind);
+            Assert.AreEqual("unreliable-noise", book.Pages[1].Reason);
+            Assert.AreEqual(PdfPageKind.Figure, book.Pages[3].Kind, "a recognizer unsure of most lines found no text");
+            Assert.AreEqual("unreliable-uncertain", book.Pages[3].Reason);
+            var blocks = book.Chapters.SelectMany(chapter => chapter.Blocks).ToArray();
+            Assert.IsFalse(blocks.Any(block => block.Text?.Contains("zq") == true));
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4 }, blocks.Select(block => block.Page).Distinct().ToArray());
+        }
+
+        [TestMethod]
+        public void Paragraphs_KnowTheirPage_AndTheirSectionsThePagesTheyCover()
+        {
+            var book = PdfBook.Read(new MemoryStream(Build(builder =>
+            {
+                Body(builder, builder.AddPage(PageSize.A4), "Chapter 1", 30);
+                Pages(builder, 2, page => BodyLines(builder, page, 40));
+            })));
+
+            var prepared = PdfBookHtml.Prepare(book, 3);
+
+            var html = string.Concat(prepared.Sections.Select(section => section.Html));
+            StringAssert.Contains(html, "data-pdf-page=\"1\" data-pdf-end=\"3\"");
+            Assert.AreEqual(1, prepared.Sections.Min(section => section.Structure.PageFrom));
+            Assert.AreEqual(3, prepared.Sections.Max(section => section.Structure.PageTo));
+            Assert.AreEqual(0, prepared.OriginalPages.Count);
+        }
+
+        [TestMethod]
+        public void PageAnchors_AreNumbersOrNothing_AndMapBothWays()
+        {
+            string Prepare(string body) => ReadingHtml.Prepare("<html><body>" + body + "</body></html>", "a.xhtml", 1, new Dictionary<string, int>(), new Dictionary<string, string>()).Html;
+
+            // An anchor that is no number is dropped; a block without one stands on the page before it.
+            var plain = Prepare("<p data-pdf-page=\"3\">a</p><p data-pdf-page=\"x\">b</p><p>c</p>");
+            Assert.IsFalse(plain.Contains("=\"x\"", StringComparison.Ordinal), plain);
+            Assert.AreEqual(3, ReadingHtml.PageOfBlock(plain, 0));
+            Assert.AreEqual(3, ReadingHtml.PageOfBlock(plain, 2));
+            Assert.AreEqual(0, ReadingHtml.BlockOfPage(plain, 3));
+            Assert.AreEqual(3, ReadingHtml.PageOfText(plain, "a"));
+            Assert.IsNull(ReadingHtml.BlockOfPage(plain, 4));
+
+            // A page inside a paragraph that runs over several pages is in that paragraph; the next one starts after it.
+            var running = Prepare("<p data-pdf-page=\"2\" data-pdf-end=\"5\">a</p><p data-pdf-page=\"6\">b</p>");
+            Assert.AreEqual(0, ReadingHtml.BlockOfPage(running, 4));
+            Assert.AreEqual(1, ReadingHtml.BlockOfPage(running, 6));
+            Assert.AreEqual(2, ReadingHtml.PageOfBlock(running, 0));
+            Assert.IsNull(ReadingHtml.BlockOfPage(running, 7));
+        }
+
+        [TestMethod]
         public void PagesWithoutAnyText_AreNoBook()
         {
             var png = ReadingTests.Picture(60, 80);
