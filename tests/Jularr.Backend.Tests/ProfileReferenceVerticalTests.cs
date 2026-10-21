@@ -241,6 +241,8 @@ namespace Jularr.Backend.Tests
                     await fixture.RunBootstrapAsync(
                         """
                         BEGIN;
+                        -- The profile read also reports the playback choice that belongs to the shell; a host that installs the playback schema drops this stand-in first.
+                        CREATE TABLE "ProfileReference"."ProfilePlaybackPreferences" ("ProfileId" bigint PRIMARY KEY, "AutoplayPreviews" boolean NOT NULL DEFAULT TRUE);
                         INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch'), (2, 'en-GB', 'English');
                         SELECT setval(pg_get_serial_sequence('"UiLocales"', 'Id'), 2);
                         INSERT INTO "Accounts" ("Id", "Username", "Email", "DisplayName", "AccountRoleTypeId")

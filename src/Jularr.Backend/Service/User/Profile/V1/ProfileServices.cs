@@ -40,9 +40,11 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."Id",
                     profile."DisplayName",
                     profile."UiLocaleId",
-                    (profile."PinHash" IS NOT NULL) AS "HasPin"
+                    (profile."PinHash" IS NOT NULL) AS "HasPin",
+                    coalesce(preference."AutoplayPreviews", TRUE) AS "AutoplayPreviews"
                 FROM
                     "Profiles" AS profile
+                    LEFT JOIN "ProfilePlaybackPreferences" AS preference ON preference."ProfileId" = profile."Id"
                 WHERE
                     profile."Id" = @ProfileId;
                 """;

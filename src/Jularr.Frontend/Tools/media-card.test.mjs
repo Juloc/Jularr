@@ -15,6 +15,8 @@ function mounted(desktop = false) {
 
     const document = {
         activeElement: null,
+        body: {},
+        querySelectorAll: () => ({ forEach() {} }),
         addEventListener(name, action) {
             registrations.push(name);
             events.set(name, action);
@@ -28,7 +30,10 @@ function mounted(desktop = false) {
         Element,
         HTMLElement: Element,
         Node: Element,
-        matchMedia: () => ({ matches: desktop })
+        matchMedia: () => ({ matches: desktop }),
+        IntersectionObserver: class { observe() {} unobserve() {} },
+        MutationObserver: class { observe() {} },
+        navigator: { onLine: true }
     });
     exports.initializeCards();
 

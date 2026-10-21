@@ -380,6 +380,13 @@ namespace Jularr.Frontend.Framework
             return Submit(button);
         }
 
+        // A dialog's form closes with its own Cancel beside the primary action.
+        public Form<TData> Cancel()
+        {
+            _actions.Add(new Button(new Text("common.cancel")).Attribute("data-dialog-close", ""));
+            return this;
+        }
+
         public Form<TData> Submit(Button button)
         {
             if (_local) throw new InvalidOperationException("Local fields cannot declare a submit action.");

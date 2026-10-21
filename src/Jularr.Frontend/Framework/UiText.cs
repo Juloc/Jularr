@@ -33,6 +33,9 @@ namespace Jularr.Frontend.Framework
         public bool IsAuthenticated { get; private set; }
         public string? ProfileName { get; private set; }
 
+        // Whether the profile lets a card that lingers on a touch device play its preview by itself.
+        public bool AutoplayPreviews { get; private set; } = true;
+
         // A permission inside enabled modules, as the capability service reports them; nothing for a visitor.
         public bool Can(string? permission, params string[] modules) => _capabilities is { } capabilities
             && (permission is null || capabilities.Permissions.Contains(permission, StringComparer.Ordinal))
@@ -64,7 +67,9 @@ namespace Jularr.Frontend.Framework
                 _capabilities = await capabilitiesService.ExecuteAsync<InstanceCapabilitiesDetailsV1>(new ReadInstanceCapabilitiesParametersV1(), token);
                 if (authentication.ProfileId is { } profileId && this.CanReadOwnProfile())
                 {
-                    ProfileName = (await profileService.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token)).DisplayName;
+                    var profile = await profileService.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
+                    ProfileName = profile.DisplayName;
+                    AutoplayPreviews = profile.AutoplayPreviews;
                 }
 
                 if (this.CanNotify())

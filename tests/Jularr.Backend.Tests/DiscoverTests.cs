@@ -126,9 +126,9 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await CreateHostAsync(fake: new FakeTmdb());
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "Overview", "ImageUrl", "BackdropUrl", "IsAdult") VALUES
-                    ('openlibrary', 'OL1W', 3, 'A Book', 'A long description of the book.', 'https://img.test/book.jpg', NULL, FALSE),
-                    ('openlibrary', 'OL2W', 3, 'Adult Book', 'Not for the preview.', NULL, NULL, TRUE);
+                INSERT INTO "ExternalWorks" ("Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "Overview", "ImageUrl", "BackdropUrl", "IsAdult") VALUES
+                    ('openlibrary', 'OL1W', 3, 'A Book', 1965, 'A long description of the book.', 'https://img.test/book.jpg', NULL, FALSE),
+                    ('openlibrary', 'OL2W', 3, 'Adult Book', NULL, 'Not for the preview.', NULL, NULL, TRUE);
                 """);
 
             // No provider is asked: the description is what the catalog keeps; unknown and adult titles have none.
@@ -136,6 +136,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, local.StatusCode, await local.Content.ReadAsStringAsync());
             var preview = (await local.Content.ReadFromJsonAsync<DiscoverPreviewV1>())!;
             Assert.AreEqual("A Book", preview.Title);
+            Assert.AreEqual(1965, preview.ReleaseYear);
             Assert.AreEqual("A long description of the book.", preview.Overview);
             Assert.AreEqual("https://img.test/book.jpg", preview.PosterUrl);
             using var unknown = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/preview?namespace=openlibrary&externalId=missing");

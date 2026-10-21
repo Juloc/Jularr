@@ -76,15 +76,60 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("th[data-col=status]").First).ToBeHiddenAsync();
                 await Assertions.Expect(page.Locator("th[data-col=aired]").First).ToBeVisibleAsync();
 
-                // Monitoring is the switch of the hero; the dialog edits the title.
+                // The hero shows the title and its description from the metadata.
+                var hero = page.Locator(".work-hero");
+                await Assertions.Expect(hero.GetByRole(AriaRole.Heading, new() { Name = FakeServices.SeriesTitle, Level = 1 })).ToBeVisibleAsync();
+                await Assertions.Expect(hero.Locator(".work-overview")).ToContainTextAsync("Two test episodes.");
+
+                // One control collapses all sections and, once none is open, expands them again.
+                var collapseAll = page.Locator("[data-collapse-all]");
+                await Assertions.Expect(collapseAll).ToContainTextAsync("Collapse all");
+                await collapseAll.ClickAsync();
+                await Assertions.Expect(collapseAll).ToContainTextAsync("Expand all");
+                await Assertions.Expect(season.Locator("tr.work-row").First).ToBeHiddenAsync();
+
+                // Monitoring is the switch of the hero. The action swaps only the page's region: the page content stays, the collapsed season stays collapsed,
+                // the hero does not change its size and the hint says what happened.
+                await page.EvaluateAsync("() => { window.keptContent = document.getElementById('app-content'); window.heroHeight = document.querySelector('.work-hero').getBoundingClientRect().height; }");
                 var monitor = page.Locator(".work-actions .work-switch").First;
                 await Assertions.Expect(monitor).ToHaveAttributeAsync("aria-label", "Stop monitoring");
                 await Steps.SubmitAsync(page, page.Locator(".work-actions form").Filter(new() { Has = page.GetByRole(AriaRole.Switch) }));
                 await Assertions.Expect(page.Locator(".work-actions .work-switch").First).ToHaveAttributeAsync("aria-label", "Start monitoring");
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("Monitoring off");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => window.keptContent === document.getElementById('app-content')"), "The action swapped the whole page content.");
+                Assert.IsTrue(await page.EvaluateAsync<bool>("() => window.heroHeight === document.querySelector('.work-hero').getBoundingClientRect().height"), "The hero changed its size.");
+                await Assertions.Expect(season.Locator("tr.work-row").First).ToBeHiddenAsync();
+                await Assertions.Expect(collapseAll).ToContainTextAsync("Expand all");
+                await collapseAll.ClickAsync();
+                await Assertions.Expect(collapseAll).ToContainTextAsync("Collapse all");
+                await Assertions.Expect(season.Locator("tr.work-row").First).ToBeVisibleAsync();
+
+                // A result such as "nothing found" is the hint, never a message inside the hero.
+                Assert.AreEqual(0, await hero.Locator("[role=status]").CountAsync());
+
+                // The edit dialog: title row with the X, the fields, and Cancel and the save button in its footer, at the bottom.
+                var editor = page.Locator("#work-edit");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
-                await Assertions.Expect(page.Locator("#work-edit")).ToBeVisibleAsync();
+                await Assertions.Expect(editor).ToBeVisibleAsync();
+                await Assertions.Expect(editor.Locator(".modal__head [data-dialog-close]")).ToBeVisibleAsync();
+                await Assertions.Expect(editor.GetByText("Close folder browser")).ToHaveCountAsync(0);
+                var save = editor.GetByRole(AriaRole.Button, new() { Name = "Save changes" });
+                await Assertions.Expect(save).ToBeVisibleAsync();
+                var lastField = (await editor.Locator(".ui-field").Last.BoundingBoxAsync())!;
+                var saveBox = (await save.BoundingBoxAsync())!;
+                Assert.IsTrue(saveBox.Y > lastField.Y + lastField.Height, "The save button is not below the fields of the dialog.");
+                await editor.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+                await Assertions.Expect(editor).ToBeHiddenAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
+                await editor.Locator(".modal__head [data-dialog-close]").ClickAsync();
+                await Assertions.Expect(editor).ToBeHiddenAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
                 await page.Keyboard.PressAsync("Escape");
-                await Assertions.Expect(page.Locator("#work-edit")).ToBeHiddenAsync();
+                await Assertions.Expect(editor).ToBeHiddenAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
+                await Steps.SubmitAsync(page, editor.Locator("form"));
+                await Assertions.Expect(editor).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("Saved");
                 await Evidence.SaveAsync(page, "work-page-series");
 
                 // A narrow screen keeps the page itself in its width.

@@ -102,9 +102,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
                 if (type is { } selectedType)
                 {
-                    // A test just run replaces the stored state.
-                    if (TempData["AcquisitionTested"] is string tested) split.Secondary.Add(new Strong(new ValueText(tested)).Attribute("role", "status"));
-                    else if (_selected is { } selected) split.Secondary.Add(new Strong(Health(selected)).Attribute("role", "status"));
+                    if (_selected is { } selected) split.Secondary.Add(new Strong(Health(selected)).Attribute("role", "status"));
                     split.Secondary.Add(ConnectionForm(selectedType, csrf));
                     if (_selected is { } current)
                     {
@@ -223,10 +221,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             // A successful test also ends a pause after failures.
             var result = await test.ExecuteAsync<AcquisitionConnectionTestV1>(new AcquisitionConnectionParametersV1(SelectedId()), default, HttpContext.RequestAborted);
-            TempData["AcquisitionTested"] = result.IsAvailable
+            HintText(result.IsAvailable
                 ? string.Join(" · ", new[] { texts["acquisition.connection.healthy"], result.ServerVersion is { } version ? texts["table.version"] + " " + version : null,
                     result.SearchModes.Length > 0 ? texts["acquisition.connection.searchModes"] + " " + string.Join(", ", result.SearchModes) : null }.OfType<string>())
-                : texts["errors." + (result.ErrorKey ?? "acquisition_unavailable")];
+                : texts["errors." + (result.ErrorKey ?? "acquisition_unavailable")]);
             return LocalRedirect(Address(AcquisitionConnectionId));
         }
 
