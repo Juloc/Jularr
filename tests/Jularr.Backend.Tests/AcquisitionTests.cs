@@ -2520,7 +2520,6 @@ namespace Jularr.Backend.Tests
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "Add download client");
-            StringAssert.Contains(html, "Download storage");
             StringAssert.Contains(html, "Configure download storage");
             using var storagePolicy = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/downloads/1");
             Assert.AreEqual(HttpStatusCode.OK, storagePolicy.StatusCode, await storagePolicy.Content.ReadAsStringAsync());

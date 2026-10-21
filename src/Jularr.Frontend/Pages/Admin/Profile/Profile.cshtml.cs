@@ -14,12 +14,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.Profile
 {
     public sealed class ProfileModel(ReadAcquisitionProfileV1 read, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
-        ReadCustomFormatsV1 formats, ReadCustomFormatV1 readFormat, IAntiforgery antiforgery) : JularrPage
+        ReadCustomFormatsV1 formats, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private const string NewId = "New";
         private AcquisitionProfileDetailsV1? _profile;
         private SaveAcquisitionProfileDataV1? _input;
-        private PageResult<CustomFormatDetailsV1>? _formats;
+        private List<CustomFormatDetailsV1> _formats = [];
 
         [BindProperty(SupportsGet = true)] public string Id { get; set; } = "";
         [BindProperty(SupportsGet = true, Name = "type")] public MediaType? NewType { get; set; }
@@ -40,22 +40,20 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         [BindProperty] public int MinimumFormatScore { get; set; }
         [BindProperty] public int CutoffFormatScore { get; set; }
         [BindProperty] public int MinimumUpgradeFormatScore { get; set; } = 1;
-        [BindProperty(SupportsGet = true)] public int FormatPage { get; set; } = 1;
 
         private long? ProfileId => long.TryParse(Id, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
         private MediaType Scope => _profile?.MediaTypeId ?? NewType ?? MediaType.Movie;
 
         protected override void Define(Page page)
         {
-            page.Title("admin.profiles.title", _profile?.Name);
-            if (_profile is not null) page.Parent("admin.profiles.title", "/Admin/Acquisition/Profiles");
+            page.Title(_profile is null ? "profile.new" : "admin.profiles.title", _profile?.Name);
+            page.Parent("admin.profiles.title", BackAddress());
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
+            page.Asset("Framework/Components/Modal.entry.ts");
+            page.Asset("Framework/Components/ActionDock.entry.ts");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
-            page.Content.Add(AcquisitionSettingsNavigation.Frame(Request, "profiles", Scope));
-            page.Content.Add(new A(new Text("common.back")).Class("button").Attribute("href", AcquisitionSettingsNavigation.Address(Request, "profiles", Scope)));
-            if (_formats is null || _profile is null && Id != NewId) return;
-            var input = _input ?? (_profile is { } profile ? FromProfile(profile) : NewProfile(NewType!.Value, NewSubtype));
+            if (_profile is null && Id != NewId) return;
+            var input = WithMatrix(_input ?? (_profile is { } profile ? FromProfile(profile) : NewProfile(NewType!.Value, NewSubtype)));
             var order = DisplayOrder(input);
             var choices = order.Select(quality => new SelectOption(quality, input.QualityGroups.FirstOrDefault(group => group.Key == quality)?.Name ?? quality)).ToArray();
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
@@ -89,30 +87,23 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     section.Content(Draft("collections.add", "addGroup", "true"));
                     section.Content(Draft("arr.refreshGroups", "refreshGroups", "true"));
                 });
-                fields.Section("arr.formats", section =>
+                fields.Section("arr.scores", section =>
                 {
                     section.Number(item => item.MinimumFormatScore, "arr.minimumScore");
                     section.Number(item => item.CutoffFormatScore, "arr.cutoffScore");
                     section.Number(item => item.MinimumUpgradeFormatScore, "arr.upgradeScore");
+
+                    // The matrix: every custom format of the media type with this profile's score (0 leaves it out).
                     section.Rows(item => item.FormatScores, (row, score) =>
                     {
                         row.Hidden(item => item.FormatId);
-                        if (_formats?.Items.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
+                        if (_formats.FirstOrDefault(format => format.Id == score.FormatId) is { } named)
                         {
                             row.Content(new P(new ValueText(named.Name)));
                             row.Number(item => item.Score, "wanted.search.score");
-                            row.Content(Draft("common.remove", "removeFormatId", score.FormatId.ToString(CultureInfo.InvariantCulture)));
                         }
                         else row.Hidden(item => item.Score);
                     });
-                    if (_formats is { } pageOfFormats)
-                    {
-                        section.Content(new Table<CustomFormatDetailsV1>(pageOfFormats.Items.Where(format => !input.FormatScores.Any(score => score.FormatId == format.Id)).ToArray())
-                            .Text(format => format.Name, "profile.name")
-                            .Content("common.actions", format => Draft("collections.add", "addFormatId", format.Id.ToString(CultureInfo.InvariantCulture))));
-                        if (pageOfFormats.Page > 1) section.Content(Draft("common.previous", "formatPage", (pageOfFormats.Page - 1).ToString(CultureInfo.InvariantCulture)));
-                        if (pageOfFormats.Items.Count == pageOfFormats.PageSize) section.Content(Draft("common.next", "formatPage", (pageOfFormats.Page + 1).ToString(CultureInfo.InvariantCulture)));
-                    }
                 });
                 fields.Section("profile.section.size", section =>
                 {
@@ -131,14 +122,35 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 fields.Save();
             }, Address(), token, input, FormError);
             page.Content.Add(form);
+
+            // Back to the list, and the deletion of an unused profile behind a dialog.
+            var actions = new List<IUiComponent> { new A(Glyph("chevron-left", 16), new Span(new Text("common.back")).Class("action-dock__text")).Class("button").Attribute("href", BackAddress()) };
             if (_profile is { } saved && !saved.IsDefault)
             {
-                page.Content.Add(new Details(new Summary(new Text("profile.deleteConfirm")), new Form<DeleteAcquisitionProfileParametersV1>(fields =>
+                actions.Add(Modal.Opener(new Button(Glyph("trash", 16), new Span(new Text("profile.delete")).Class("action-dock__text")).Warn(), "profile-delete"));
+                page.Content.Add(new Modal(assets, "profile-delete", "profile.deleteConfirm", [new Form<DeleteAcquisitionProfileParametersV1>(fields =>
                 {
                     fields.Hidden(item => item.Version);
+                    fields.Cancel();
                     fields.Submit("profile.delete");
-                }, Address("Delete"), token, new DeleteAcquisitionProfileParametersV1(saved.Id, saved.Version), _input is null ? FormError : null)));
+                }, Address("Delete"), token, new DeleteAcquisitionProfileParametersV1(saved.Id, saved.Version), _input is null ? FormError : null)]));
             }
+
+            page.Content.Add(new ActionDock(assets, "arr.actions", actions));
+        }
+
+        // The list this profile belongs to.
+        private string BackAddress() => DownloadPages.PaneAddress(DownloadPages.Profiles, Scope, ProfilesModel.Home(Request));
+
+        private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
+
+        // The profile's scores next to every format of the media type, so each can be scored in place.
+        private SaveAcquisitionProfileDataV1 WithMatrix(SaveAcquisitionProfileDataV1 input)
+        {
+            var rows = _formats.Select(format => new CustomFormatScoreV1(format.Id, input.FormatScores.FirstOrDefault(score => score.FormatId == format.Id)?.Score ?? 0)).ToList();
+            rows.AddRange(input.FormatScores.Where(score => _formats.All(format => format.Id != score.FormatId)));
+            return new(input.Name, input.MediaTypeId, input.IsDefault, input.AllowedQualities, input.UpgradeAllowed, input.UpgradeCutoffQuality, input.MinimumSizeMb, input.MaximumSizeMb, input.Version,
+                input.MediaSubtypeId, input.QualityOrder, input.QualityGroups, new(rows), input.MinimumFormatScore, input.CutoffFormatScore, input.MinimumUpgradeFormatScore);
         }
 
         private IUiComponent Draft(string key, string command, string value) => new Button(new Text(key)).Attribute("type", "submit").Attribute("formaction", Address("Draft"))
@@ -153,7 +165,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
 
         private SaveAcquisitionProfileDataV1 Posted() => new(Name ?? "", MediaTypeId, IsDefault, AllowedQualities ?? [], UpgradeAllowed, UpgradeCutoffQuality, MinimumSizeMb,
             MaximumSizeMb, Version, MediaSubtypeId, Terms(QualityOrder), new(QualityGroups.Select(group => new QualityGroupV1(group.Id, group.Name ?? "", Terms(group.Qualities)))),
-            new(FormatScores.Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore);
+            new(FormatScores.Where(score => score.Score != 0).Select(score => new CustomFormatScoreV1(score.FormatId, score.Score))), MinimumFormatScore, CutoffFormatScore, MinimumUpgradeFormatScore);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -175,19 +187,12 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostDraftAsync(bool addGroup, long? addFormatId, long? removeFormatId, long? removeGroupId, bool refreshGroups, string? moveUp, string? moveDown)
+        public async Task<IActionResult> OnPostDraftAsync(bool addGroup, long? removeGroupId, bool refreshGroups, string? moveUp, string? moveDown)
         {
             if (addGroup && QualityGroups.Count < 32) QualityGroups.Add(new GroupRow(Enumerable.Range(1, 33).Select(value => (long)value).First(id => !QualityGroups.Any(group => group.Id == id)), null, null));
             if (removeGroupId is { } removedGroup) QualityGroups.RemoveAll(group => group.Id == removedGroup);
-            if (removeFormatId is { } removed) FormatScores.RemoveAll(score => score.FormatId == removed);
             _input = Posted();
             await LoadDataAsync();
-            if (addFormatId is { } added && !FormatScores.Any(score => score.FormatId == added))
-            {
-                var format = await readFormat.ExecuteAsync<CustomFormatDetailsV1>(new CustomFormatParametersV1(added), HttpContext.RequestAborted);
-                if (format.MediaTypeId != Scope) throw new KeyNotFoundException("The format does not belong to this media type.");
-                FormatScores.Add(new ScoreRow(added, 0));
-            }
 
             var order = DisplayOrder(_input).ToList();
             var moved = moveUp ?? moveDown;
@@ -207,14 +212,22 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         {
             await LoadDataAsync();
             await delete.ExecuteAsync<UpdateResult>(new DeleteAcquisitionProfileParametersV1(ProfileId ?? throw new KeyNotFoundException(), version), default, HttpContext.RequestAborted);
-            return LocalRedirect(AcquisitionSettingsNavigation.Address(Request, "profiles", Scope));
+            return LocalRedirect(BackAddress());
         }
 
         protected override async Task LoadDataAsync()
         {
             if (ProfileId is { } id) _profile = await read.ExecuteAsync<AcquisitionProfileDetailsV1>(new AcquisitionProfileParametersV1(id), HttpContext.RequestAborted);
             else if (Id != NewId || NewType is not { } type || !ProfilesModel.Kinds.Contains((type, NewSubtype))) throw new KeyNotFoundException("The profile was not found.");
-            _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(Scope, FormatPage, 25), HttpContext.RequestAborted);
+
+            // Every format of the media type, page by page.
+            _formats = [];
+            for (var formatPage = 1; ; formatPage++)
+            {
+                var read = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(Scope, formatPage, 100), HttpContext.RequestAborted);
+                _formats.AddRange(read.Items);
+                if (read.Items.Count < read.PageSize) break;
+            }
         }
 
         private string Address(string? handler = null)

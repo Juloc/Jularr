@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
+    // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles and tags. Lists are the list kit, editors are dialogs, sizes is one form with the page's save pill.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
@@ -19,7 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         ReadReleaseProfilesV1 releases, ReadReleaseProfileV1 release, SaveReleaseProfileV1 saveRelease, DeleteReleaseProfileV1 deleteRelease,
         ReadAcquisitionTagsV1 tags, ReadAcquisitionTagV1 tag, SaveAcquisitionTagV1 saveTag, DeleteAcquisitionTagV1 deleteTag,
         ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         internal static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds =
         [
@@ -29,9 +30,10 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         ];
 
         [BindProperty(SupportsGet = true, Name = "tab")] public string? SelectedTab { get; set; }
-        private string Tab { get => SelectedTab ?? "profiles"; set => SelectedTab = value; }
+        private string Tab { get => SelectedTab ?? DownloadPages.Profiles; set => SelectedTab = value; }
         [BindProperty(SupportsGet = true)] public MediaType MediaTypeId { get; set; } = MediaType.Movie;
         [BindProperty(SupportsGet = true)] public long? Edit { get; set; }
+        [BindProperty(SupportsGet = true, Name = "new")] public bool IsNew { get; set; }
         [BindProperty(SupportsGet = true)] public int PageNumber { get; set; } = 1;
         [BindProperty(SupportsGet = true)] public int TagPage { get; set; } = 1;
         [BindProperty(SupportsGet = true)] public int IndexerPage { get; set; } = 1;
@@ -51,50 +53,104 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         protected override void Define(Page page)
         {
-            page.Title("arr.settings");
+            page.Title(Tab switch
+            {
+                DownloadPages.Formats => "arr.formats",
+                DownloadPages.Sizes => "arr.sizes",
+                DownloadPages.Release => "arr.releaseProfiles",
+                DownloadPages.Tags => "arr.tags",
+                _ => "admin.profiles.title"
+            });
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
             page.Asset("Framework/Components/Form.entry.ts");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
-            page.Content.Add(AcquisitionSettingsNavigation.Frame(Request, Tab, MediaTypeId));
+            page.Asset("Framework/Components/Modal.entry.ts");
+            page.Asset("Framework/Components/ActionDock.entry.ts");
+            page.Asset("Framework/Components/Truncated.entry.ts");
+            page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
+            var isSetup = SetupWizard.IsActive(Request);
+            if (isSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
+            if (Tab == DownloadPages.Profiles) page.Content.Add(ProfileFigures());
+
+            // One row of navigation; the quality rules are scoped by a media type (tags belong to every type).
+            var chips = DownloadPages.Tabs(Tab, MediaTypeId, Home(Request), isSetup);
+            page.Content.Add(Tab == DownloadPages.Tags ? new ListToolbar(chips) : new ListToolbar(chips, ScopeMenu()));
             switch (Tab)
             {
-                case "profiles": DefineProfiles(page); break;
-                case "formats": DefineFormats(page); break;
-                case "sizes": DefineSizes(page); break;
-                case "release": DefineRelease(page); break;
-                case "tags": DefineTags(page); break;
+                case DownloadPages.Profiles: DefineProfiles(page); break;
+                case DownloadPages.Formats: DefineFormats(page); break;
+                case DownloadPages.Sizes: DefineSizes(page); break;
+                case DownloadPages.Release: DefineRelease(page); break;
+                case DownloadPages.Tags: DefineTags(page); break;
             }
-
         }
+
+        // The media type the lists and editors are about; the other panes keep the choice.
+        private IUiComponent ScopeMenu() => new SelectLinkMenu(assets, [.. Enum.GetValues<MediaType>().Select(type =>
+            new NavigationTab(MediaTypeLabel.Key(type, null), DownloadPages.PaneAddress(Tab, type, Home(Request)), type == MediaTypeId))], "arr.scope");
+
+        private IUiComponent ProfileFigures() => new KpiTiles(
+            new KpiTile("profile.kpi.total", Count(_profiles.Count), Glyph("layers"), UiTone.Accent),
+            new KpiTile("profile.kpi.inUse", Count(_profiles.Count(item => item.WantedCount > 0)), Glyph("check"), UiTone.Success),
+            new KpiTile("profile.kpi.scored", Count(_profiles.Count(item => item.FormatScores.Any(score => score.Score != 0))), Glyph("sliders"), UiTone.Info),
+            new KpiTile("profile.kpi.upgrading", Count(_profiles.Count(item => item.UpgradeAllowed)), Glyph("sync"), UiTone.Warning)).Strip();
 
         private void DefineProfiles(Page page)
         {
-            page.Content.Add(new Table<AcquisitionProfileDetailsV1>(_profiles)
-                .Text(item => item.Name, "profile.name")
-                .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
-                .Content("profile.qualities", item => new ValueText(string.Join(", ", item.AllowedQualities
-                    .Select(quality => item.QualityGroups.FirstOrDefault(group => group.Key == quality)?.Name ?? quality))))
-                .Content("profile.usage", item => item.IsDefault ? new Text("profile.default") : new ValueText(item.WantedCount.ToString(CultureInfo.InvariantCulture)))
-                .Link(item => item.Id, "common.actions", id => Home(Request) + "/" + Number(id), "common.edit"));
-            page.Content.Add(new Div(Kinds.Where(kind => kind.Type == MediaTypeId).Select(kind => (IUiComponent)new A(new Text("collections.add"), new ValueText(" "), new Text(MediaTypeLabel.Key(kind.Type, kind.Subtype)))
-                .Class("button").Attribute("href", Home(Request) + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : ""))
-                .Attribute("aria-label", texts[MediaTypeLabel.Key(kind.Type, kind.Subtype)])).ToArray()).Class("page-actions"));
+            var empty = new Div(new IconTile(Glyph("layers", 22), UiTone.Neutral), new P(new Text("profile.none")).Attribute("role", "status"));
+            var columns = new List<ListColumn>
+            {
+                new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("profile.cutoff", ListRole.Data, 1), new("arr.minimumScore", ListRole.Data, 2),
+                new("profile.scores", ListRole.Data, 2), new("common.actions", ListRole.Actions)
+            };
+            var rows = _profiles.Select(item =>
+            {
+                var qualities = string.Join(", ", item.AllowedQualities.Select(quality => QualityName(item, quality)));
+                var editor = Home(Request) + "/" + Number(item.Id);
+                var identity = new ListIdentity(new IconTile(Glyph("layers", 18), UiTone.Accent), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", editor),
+                    new Truncated(qualities));
+                var cutoff = item.UpgradeAllowed && item.UpgradeCutoffQuality is { } stop ? new Span(new ValueText(QualityName(item, stop))).Class("list-value") : new Span(new Text("profile.noCutoff")).Class("list-value list-value--dim");
+                var scored = item.FormatScores.Count(score => score.Score != 0);
+                var state = item.IsDefault ? new StateChip(new Text("profile.default"), UiTone.Success, Glyph("check", 14))
+                    : item.WantedCount > 0 ? new StateChip(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["profile.usedBy"], item.WantedCount)), UiTone.Info, Glyph("requests", 14))
+                    : new StateChip(new Text("profile.unused"), UiTone.Neutral, Glyph("clock", 14));
+                var caption = new List<IUiComponent> { ListPanel.Fact("profile.cutoff", cutoff), ListPanel.Fact("profile.scores", Count(scored)) };
+                return new ListRow([identity, state, cutoff, new Span(new ValueText(item.MinimumFormatScore.ToString(CultureInfo.CurrentCulture))).Class("list-value"), new Span(Count(scored)).Class("list-value"),
+                    new Div(EditLink(editor)).Class("list-actions")], caption);
+            }).ToList();
+            page.Content.Add(new ListPanel("admin.profiles.title", columns, rows, empty).Modifier("profiles-list"));
+
+            // One add action for every kind of the media type (books also have manga and light novels).
+            var actions = Kinds.Where(kind => kind.Type == MediaTypeId).Select(kind => (IUiComponent)new A(Glyph("plus", 16), new Span(new Text("profile.add." + (kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("action-dock__text"))
+                .Class("button").Attribute("href", Home(Request) + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : ""))).ToList();
+            page.Content.Add(new ActionDock(assets, "arr.actions", actions));
         }
 
-        private string Address(string? handler = null, long? edit = null, int? page = null) =>
-            AcquisitionSettingsNavigation.Address(Request, Tab, MediaTypeId) + "&PageNumber=" + Number(page ?? PageNumber)
-            + (edit is { } id ? "&edit=" + Number(id) : "") + (handler is null ? "" : "&handler=" + handler);
+        // The name of a quality or of a quality group.
+        private static string QualityName(AcquisitionProfileDetailsV1 item, string quality) => item.QualityGroups.FirstOrDefault(group => group.Key == quality)?.Name ?? quality;
+
+        private IUiComponent EditLink(string href) => new A(Glyph("pencil", 16)).Class("button button--icon").TextAttribute("aria-label", "common.edit").TextAttribute("title", "common.edit").Attribute("href", href);
+
+        private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
+
+        private static IUiComponent Count(int value) => new ValueText(value.ToString("N0", CultureInfo.CurrentCulture));
+
+        private string Address(string? handler = null, long? edit = null, int? page = null, bool isNew = false) =>
+            DownloadPages.PaneAddress(Tab, MediaTypeId, Home(Request)) + "&PageNumber=" + Number(page ?? PageNumber)
+            + (edit is { } id ? "&edit=" + Number(id) : "") + (isNew ? "&new=true" : "") + (handler is null ? "" : "&handler=" + handler);
+
         private string? Token => antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
         private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
-        private IUiComponent EditLink(long id) => new A(new Text("common.edit")).Attribute("href", Address(edit: id));
-        private void Paging<T>(Page page, PageResult<T> result) where T : BaseData
+
+        // The paging zone of a paged pane's dock.
+        private DockPaging? Paging<T>(PageResult<T> result) where T : BaseData
         {
-            var links = new List<IUiComponent>();
-            if (result.Page > 1) links.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(page: result.Page - 1)));
-            if (result.Items.Count == result.PageSize) links.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(page: result.Page + 1)));
-            page.Content.Add(new Div(links.ToArray()).Class("page-actions"));
+            if (result.Page <= 1 && result.Items.Count != result.PageSize) return null;
+            return new DockPaging(result.Page > 1 ? Address(page: result.Page - 1) : null, result.Items.Count == result.PageSize ? Address(page: result.Page + 1) : null,
+                new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page.single"], result.Page)));
         }
+
+        private IUiComponent AddAction(string labelKey) => new A(Glyph("plus", 16), new Span(new Text(labelKey)).Class("action-dock__text")).Class("button").Attribute("href", Address(isNew: true));
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -105,15 +161,16 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         protected override async Task LoadDataAsync()
         {
-            if (!Enum.IsDefined(MediaTypeId) || !AcquisitionSettingsNavigation.Panes.Any(pane => pane.Id == Tab)) throw new KeyNotFoundException();
+            if (!Enum.IsDefined(MediaTypeId) || !DownloadPages.Panes.Contains(Tab)) throw new KeyNotFoundException();
             var cancellation = HttpContext.RequestAborted;
             switch (Tab)
             {
-                case "profiles":
+                case DownloadPages.Profiles:
                     _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(mediaTypeId: MediaTypeId), cancellation);
                     break;
-                case "formats":
+                case DownloadPages.Formats:
                     _formats = await formats.ExecuteAsync<PageResult<CustomFormatDetailsV1>>(new ReadCustomFormatsParametersV1(MediaTypeId, PageNumber), cancellation);
+                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(mediaTypeId: MediaTypeId), cancellation);
                     if (_format is null && Edit is { } formatId)
                     {
                         var item = await format.ExecuteAsync<CustomFormatDetailsV1>(new CustomFormatParametersV1(formatId), cancellation);
@@ -121,10 +178,10 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                         _format = new(item.Id, item.MediaTypeId, item.Name, item.IncludeWhenRenaming, item.Conditions, item.Version);
                     }
                     break;
-                case "sizes":
+                case DownloadPages.Sizes:
                     _sizes ??= new(await sizes.ExecuteAsync<BaseDataList<QualityDefinitionV1>>(new QualityDefinitionsParametersV1(MediaTypeId), cancellation));
                     break;
-                case "release":
+                case DownloadPages.Release:
                     _releases = await releases.ExecuteAsync<PageResult<ReleaseProfileDetailsV1>>(new ReadAcquisitionPolicyParametersV1(MediaTypeId, PageNumber), cancellation);
                     if (_release is null && Edit is { } releaseId)
                     {
@@ -133,7 +190,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                         _release = new(item.Id, item.MediaTypeId, item.Name, item.IsEnabled, item.Required, item.Ignored, item.AcquisitionConnectionId, item.TagIds, item.Version);
                     }
                     break;
-                case "tags":
+                case DownloadPages.Tags:
                     _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageNumber), cancellation);
                     if (_tag is null && Edit is { } tagId)
                     {
@@ -142,26 +199,24 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     }
                     break;
             }
-            if (Tab == "release")
+            if (Tab == DownloadPages.Release)
             {
                 _tagPage = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(TagPage), cancellation);
                 var choices = _tagPage.Items.ToList();
                 foreach (var id in (_release?.TagIds ?? []).Where(id => !choices.Any(choice => choice.Id == id)).Take(100))
                     choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), cancellation));
                 _tagChoices = choices.Select(item => new SelectOption(Number(item.Id), item.Label)).ToArray();
-            }
-            if (Tab == "release")
-            {
                 _indexerPage = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(
                     new ReadAcquisitionConnectionsParametersV1(IndexerPage, acquisitionConnectionRoleId: AcquisitionConnectionRole.Search), cancellation);
-                var choices = _indexerPage.Items.ToList();
-                if (_release?.AcquisitionConnectionId is { } id && !choices.Any(item => item.Id == id))
-                    choices.Add(await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(id), cancellation));
+                var indexers = _indexerPage.Items.ToList();
+                foreach (var id in new[] { _release?.AcquisitionConnectionId }.Concat((_releases?.Items ?? []).Select(item => item.AcquisitionConnectionId)).OfType<long>().Distinct()
+                    .Where(id => !indexers.Any(item => item.Id == id)).Take(100))
+                    indexers.Add(await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(id), cancellation));
                 _indexerChoices = new[] { new SelectOption("", texts["arr.anyIndexer"]) }
-                    .Concat(choices.Select(item => new SelectOption(Number(item.Id), item.Name))).ToArray();
+                    .Concat(indexers.Select(item => new SelectOption(Number(item.Id), item.Name))).ToArray();
             }
         }
 
-        internal static string Home(Microsoft.AspNetCore.Http.HttpRequest request) => SetupWizard.Address(request, Backend.Data.Enums.Instance.SetupStepType.Profiles, "/Admin/Acquisition/Profiles");
+        internal static string Home(Microsoft.AspNetCore.Http.HttpRequest request) => SetupWizard.Address(request, SetupStepType.Profiles, DownloadPages.ProfilesAddress);
     }
 }

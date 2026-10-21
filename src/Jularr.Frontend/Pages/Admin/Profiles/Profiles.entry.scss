@@ -1,18 +1,29 @@
-.acquisition-settings {
-    display: grid;
-    gap: 1rem;
-    margin-block-end: 1rem;
+@use "../../../Framework/Components/SelectLinkMenu";
 
-    &__scope {
-        width: fit-content;
-
-        summary { cursor: pointer; }
-
-        > div {
-            display: flex;
-            flex-wrap: wrap;
-            gap: .5rem;
-            padding-block: .75rem;
-        }
-    }
+// The list kit's grid of the quality rule panes, at three widths.
+.profiles-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(120px, 1.1fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
 }
+
+.formats-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(95px, .8fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(95px, .8fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
+}
+
+.release-list {
+    --list-columns: minmax(220px, 2.6fr) minmax(112px, 1fr) minmax(80px, .7fr) minmax(80px, .7fr) minmax(120px, 1fr) minmax(60px, .5fr);
+    --list-columns-medium: minmax(200px, 2.2fr) minmax(112px, 1fr) minmax(80px, .7fr) minmax(80px, .7fr) minmax(60px, .5fr);
+    --list-columns-narrow: minmax(180px, 2fr) minmax(112px, 1fr) minmax(60px, .5fr);
+}
+
+.tags-list {
+    --list-columns: minmax(0, 1fr) minmax(60px, .2fr);
+    --list-columns-medium: minmax(0, 1fr) minmax(60px, .2fr);
+    --list-columns-narrow: minmax(0, 1fr) minmax(60px, .2fr);
+}
+
+// The editor of conditions needs room.
+#format-editor { width: min(760px, calc(100vw - 32px)); }

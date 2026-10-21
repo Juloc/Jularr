@@ -73,7 +73,12 @@
     &__name { font-size: var(--text-control); font-weight: 800; line-height: 1.25; }
 
     &__title {
+        display: block;
         max-width: 100%;
+        overflow: hidden;
+        text-decoration: none;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         padding: 0;
         border: 0;
         background: transparent;

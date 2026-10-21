@@ -10331,6 +10331,186 @@
   "errors.validation.username_taken": [
    "This username is already taken.",
    "Dieser Benutzername ist schon vergeben."
+  ],
+  "downloads.sections": [
+   "Acquisition pages",
+   "Seiten der Beschaffung"
+  ],
+  "acquisition.kpi.total": [
+   "Total",
+   "Gesamt"
+  ],
+  "acquisition.kpi.reachable": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "acquisition.kpi.failing": [
+   "Failing",
+   "Fehlerhaft"
+  ],
+  "acquisition.kpi.disabled": [
+   "Disabled",
+   "Ausgeschaltet"
+  ],
+  "acquisition.connection.lastTest": [
+   "Last test",
+   "Letzter Test"
+  ],
+  "acquisition.connection.state.backoff": [
+   "Paused",
+   "Pausiert"
+  ],
+  "acquisition.connection.state.error": [
+   "Failing",
+   "Fehlerhaft"
+  ],
+  "acquisition.connection.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "acquisition.actions": [
+   "Page actions",
+   "Aktionen der Seite"
+  ],
+  "dock.page.single": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "arr.scope": [
+   "Media type",
+   "Medientyp"
+  ],
+  "arr.actions": [
+   "Page actions",
+   "Aktionen der Seite"
+  ],
+  "profile.kpi.total": [
+   "Profiles",
+   "Profile"
+  ],
+  "profile.kpi.inUse": [
+   "In use",
+   "In Benutzung"
+  ],
+  "profile.kpi.scored": [
+   "With format scores",
+   "Mit Format-Scores"
+  ],
+  "profile.kpi.upgrading": [
+   "Upgrading",
+   "Mit Upgrades"
+  ],
+  "profile.none": [
+   "No profiles for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Profile."
+  ],
+  "profile.scores": [
+   "Scores",
+   "Scores"
+  ],
+  "profile.usedBy": [
+   "In use: {0}",
+   "In Benutzung: {0}"
+  ],
+  "profile.unused": [
+   "Unused",
+   "Unbenutzt"
+  ],
+  "profile.new": [
+   "New profile",
+   "Neues Profil"
+  ],
+  "arr.col.conditions": [
+   "Conditions",
+   "Bedingungen"
+  ],
+  "arr.col.renaming": [
+   "Renaming",
+   "Umbenennen"
+  ],
+  "arr.col.renaming.yes": [
+   "Yes",
+   "Ja"
+  ],
+  "arr.col.profiles": [
+   "Profiles",
+   "Profile"
+  ],
+  "arr.col.required": [
+   "Required",
+   "Erforderlich"
+  ],
+  "arr.col.ignored": [
+   "Ignored",
+   "Ignoriert"
+  ],
+  "arr.col.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "arr.formats.none": [
+   "No custom formats for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Custom Formats."
+  ],
+  "arr.format.used": [
+   "Used",
+   "Benutzt"
+  ],
+  "arr.format.unused": [
+   "Unused",
+   "Unbenutzt"
+  ],
+  "arr.format.title": [
+   "Custom format",
+   "Custom Format"
+  ],
+  "arr.format.add": [
+   "New format",
+   "Neues Format"
+  ],
+  "arr.release.none": [
+   "No release profiles for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Release-Profile."
+  ],
+  "arr.release.title": [
+   "Release profile",
+   "Release-Profil"
+  ],
+  "arr.release.add": [
+   "New release profile",
+   "Neues Release-Profil"
+  ],
+  "arr.tags.none": [
+   "No tags yet.",
+   "Es gibt noch keine Tags."
+  ],
+  "arr.tag": [
+   "Tag",
+   "Tag"
+  ],
+  "arr.tag.title": [
+   "Tag",
+   "Tag"
+  ],
+  "arr.tag.add": [
+   "New tag",
+   "Neuer Tag"
+  ],
+  "arr.scores": [
+   "Format scores",
+   "Format-Scores"
+  ],
+  "profile.add.Manga": [
+   "Add manga profile",
+   "Manga-Profil hinzufügen"
+  ],
+  "profile.add.Music": [
+   "Add music profile",
+   "Musik-Profil hinzufügen"
+  ],
+  "profile.add.Game": [
+   "Add game profile",
+   "Spiele-Profil hinzufügen"
   ]
  }
 }
