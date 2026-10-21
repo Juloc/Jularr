@@ -1,6 +1,6 @@
 namespace Jularr.Backend.Logic.Reading
 {
-    // How the recognition of a scan is spread over time and pages: a bounded slice, the open page first, and rests that grow while Jularr is in use.
+    // How the recognition of a scan is spread over time and pages: a bounded slice, the open page first, and a rest as long as the work. Whether it runs while Jularr is used is the job registry's to decide.
     internal static class ReadingRecognitionPlan
     {
         // A slice reads at most this many pages, or stops when this much time has gone, whichever comes first.
@@ -17,11 +17,7 @@ namespace Jularr.Backend.Logic.Reading
             return Enumerable.Range(start, Math.Max(0, pages - start + 1)).Concat(Enumerable.Range(1, start - 1)).Where(page => !done.Contains(page));
         }
 
-        // A slice of work is followed by as much rest, four times as much while somebody uses Jularr.
-        public static TimeSpan Rest(TimeSpan worked, bool isUsed)
-        {
-            var rest = isUsed ? worked * 4 : worked;
-            return rest > LongestRest ? LongestRest : rest;
-        }
+        // A slice of work is followed by as much rest, so a scan takes at most half of the cores it uses.
+        public static TimeSpan Rest(TimeSpan worked) => worked > LongestRest ? LongestRest : worked;
     }
 }

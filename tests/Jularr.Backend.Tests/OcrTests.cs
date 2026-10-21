@@ -195,12 +195,12 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow(2, false, 2)]
-        [DataRow(2, true, 8)]
-        [DataRow(30, true, 60)]
-        public void Plan_RestsAsLongAsItWorkedAndLongerWhileInUse(int seconds, bool used, int expected)
+        [DataRow(2, 2)]
+        [DataRow(30, 30)]
+        [DataRow(300, 60)]
+        public void Plan_RestsAsLongAsItWorkedButNeverMoreThanAMinute(int seconds, int expected)
         {
-            Assert.AreEqual(TimeSpan.FromSeconds(expected), ReadingRecognitionPlan.Rest(TimeSpan.FromSeconds(seconds), used));
+            Assert.AreEqual(TimeSpan.FromSeconds(expected), ReadingRecognitionPlan.Rest(TimeSpan.FromSeconds(seconds)));
         }
 
         private static async Task<long> AddScanAsync(Host host, string storage, byte[] pdf)

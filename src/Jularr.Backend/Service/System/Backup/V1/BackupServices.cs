@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.System.Backup.V1
         }
     }
 
-    // Queues a backup when neither a backup nor an attempt is newer than the interval.
+    // Queues a backup when neither a backup nor an attempt is newer than the interval, or at once when the Owner ran the job.
     public sealed class ScheduleBackupV1 : SystemService<BackupScheduleParametersV1, NoData>
     {
         private readonly BackupOptions _options;
@@ -79,6 +79,12 @@ namespace Jularr.Backend.Service.System.Backup.V1
         {
             var since = _time.GetUtcNow().UtcDateTime - TimeSpan.FromHours(Math.Max(1, _options.IntervalHours));
             var root = _options.Path;
+            if (Parameters.IsForced)
+            {
+                // The Owner asked for one: it is queued unless one is already waiting or running.
+                return new UpdateResult(_tools.CanBackUp && await Context.QueueBackupAsync(new OperationCreationData(OperationKind.Backup, null, null), CancellationToken));
+            }
+
             if (!_tools.CanBackUp || _options.IntervalHours <= 0 || BackupFiles.Newest(root) > since)
             {
                 return new UpdateResult(false);

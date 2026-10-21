@@ -134,7 +134,7 @@ CREATE TABLE "OperationTypes" (
     "Id" smallint PRIMARY KEY,
     "Key" varchar(32) NOT NULL UNIQUE
 );
-INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download'), (3, 'Backup');
+INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download'), (3, 'Backup'), (4, 'Job');
 
 CREATE TABLE "OperationStatusTypes" (
     "Id" smallint PRIMARY KEY,
@@ -158,6 +158,8 @@ CREATE TABLE "Operations" (
     "DownloadWaitUntil" timestamptz NULL,
     "RequestedByAccountId" bigint NULL REFERENCES "Accounts" ("Id") ON DELETE SET NULL,
     "ProcessedCount" bigint NOT NULL DEFAULT 0 CHECK ("ProcessedCount" >= 0),
+    -- A failed background job is told here until it runs well again or a person dismisses it.
+    "WorkerJobKey" varchar(32) NULL REFERENCES "WorkerJobs" ("Key") ON DELETE CASCADE,
     "ErrorKey" varchar(64) NULL,
     "AttentionKey" varchar(64) NULL,
     "AttentionUrl" varchar(2048) NULL CHECK ("AttentionUrl" ~ '^https://'),
@@ -170,6 +172,8 @@ CREATE TABLE "Operations" (
     "FinishedAt" timestamptz NULL,
     CHECK ("OperationTypeId" <> 1 OR "LibraryRootId" IS NOT NULL),
     CHECK ("OperationTypeId" <> 2 OR "AcquisitionReleaseId" IS NOT NULL),
+    CHECK (("OperationTypeId" = 4) = ("WorkerJobKey" IS NOT NULL)),
+    CHECK ("OperationTypeId" <> 4 OR "OperationStatusTypeId" = 4),
     CHECK (("OperationStatusTypeId" IN (3, 4)) = ("FinishedAt" IS NOT NULL)),
     CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL),
     CHECK ("OperationStatusTypeId" IN (1, 2) OR "AttentionKey" IS NULL),
@@ -183,6 +187,7 @@ CREATE TABLE "Operations" (
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_ActiveBackup" ON "Operations" ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;
+CREATE UNIQUE INDEX "UX_Operations_OpenJobNotice" ON "Operations" ("WorkerJobKey") WHERE "OperationTypeId" = 4 AND "DismissedAt" IS NULL;
 CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationTypeId", "OperationStatusTypeId", "CreatedAt", "Id");
 CREATE INDEX "IX_Operations_Recent" ON "Operations" ("CreatedAt" DESC, "Id" DESC);
 

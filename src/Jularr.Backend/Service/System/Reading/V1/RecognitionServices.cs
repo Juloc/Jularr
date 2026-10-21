@@ -14,7 +14,7 @@ using UglyToad.PdfPig;
 
 namespace Jularr.Backend.Service.System.Reading.V1
 {
-    // Reads a few pages of one queued scanned PDF per call, the page a reader has open first, and rests as long as it worked (longer while Jularr is in use) so the server stays free.
+    // Reads a few pages of one queued scanned PDF per call, the page a reader has open first, and rests as long as it worked so the server stays free; the job registry pauses it while Jularr is in use.
     // Pages already read are kept, so an interrupted scan goes on where it stopped; the last slice prepares the reading text. Answers whether it worked.
     public sealed class RecognizeReadingV1 : SystemService<ReadingRecognitionParametersV1, NoData>
     {
@@ -22,16 +22,14 @@ namespace Jularr.Backend.Service.System.Reading.V1
         private readonly ReadingActivity _activity;
         private readonly IPageRecognizer _recognizer;
         private readonly StorageAccess _storage;
-        private readonly UserActivity _use;
         private readonly TimeProvider _time;
 
-        internal RecognizeReadingV1(ReadingContent content, ReadingActivity activity, IPageRecognizer recognizer, StorageAccess storage, UserActivity use, TimeProvider time)
+        internal RecognizeReadingV1(ReadingContent content, ReadingActivity activity, IPageRecognizer recognizer, StorageAccess storage, TimeProvider time)
         {
             _content = content;
             _activity = activity;
             _recognizer = recognizer;
             _storage = storage;
-            _use = use;
             _time = time;
         }
 
@@ -153,8 +151,8 @@ namespace Jularr.Backend.Service.System.Reading.V1
                 return new UpdateResult(true);
             }
 
-            // Rest before the next slice: as long as this one took, longer while somebody uses Jularr.
-            await Task.Delay(ReadingRecognitionPlan.Rest(_time.GetElapsedTime(started), _use.IsUsedWithin(TimeSpan.FromSeconds(30))), _time, CancellationToken);
+            // Rest before the next slice, as long as this one took.
+            await Task.Delay(ReadingRecognitionPlan.Rest(_time.GetElapsedTime(started)), _time, CancellationToken);
             return new UpdateResult(true);
         }
 
