@@ -10907,10 +10907,6 @@
   "library.naming.actions": [
    "Naming actions",
    "Aktionen für die Benennung"
-  ],
-  "dock.pageOnly": [
-   "Page {0}",
-   "Seite {0}"
   ]
  }
 }
