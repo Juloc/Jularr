@@ -38,6 +38,9 @@ namespace Jularr.Frontend.Framework
         // File types a file field accepts.
         public string? Accept { get; init; }
 
+        // The largest file a file field takes.
+        public long? MaximumBytes { get; init; }
+
         // An address is typed with the address keyboard, without spelling or capitals.
         public bool IsAddress { get; init; }
         public bool IsUsername { get; init; }
@@ -95,6 +98,7 @@ namespace Jularr.Frontend.Framework
                 MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null,
                 Scale = field.Field is DecimalField fraction ? fraction.Scale : null,
                 Accept = field.Field is FileField file ? string.Join(',', file.Extensions) : null,
+                MaximumBytes = field.Field is FileField sized ? sized.MaximumBytes : null,
                 IsAddress = field.Field is StringField { Format: StringFormat.HttpUrl or StringFormat.ServiceUrl },
                 IsUsername = field.Field is StringField { Format: StringFormat.Username },
                 PlaceholderKey = "hint." + field.Key + ".placeholder",
