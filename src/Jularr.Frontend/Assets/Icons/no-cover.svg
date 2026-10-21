@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+<use href="#icon-brand-clean" x="5" y="9" width="30" height="30" />
+<path d="M32.4 12.2a4.6 4.6 0 1 1 6.4 4.2c-1.4.7-2 1.5-2 3.1" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+<circle cx="36.8" cy="25.2" r="1.7" fill="currentColor" />
+</svg>

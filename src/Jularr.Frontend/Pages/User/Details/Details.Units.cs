@@ -88,7 +88,7 @@ namespace Jularr.Frontend.Pages.User.Details
             var resume = episode.ResumePositionMs is > 0 and { } position && !episode.IsCompleted ? Clock(position) : null;
             var facts = string.Join(" · ", new[] { episode.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null,
                 episode.ReleasedOn?.ToString("d", CultureInfo.CurrentCulture) }.OfType<string>());
-            var card = new EpisodeCard("S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
+            var card = new EpisodeCard(assets, "S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
                     episode.Title, episode.ImageUrl, episode.RuntimeMinutes, "media.state." + episode.MediaStateTypeId,
                     canPlay && episode.MediaAssetId is { } asset ? "/Player/" + asset.ToString(CultureInfo.InvariantCulture) : null, resume)
                 .Progress(episode.IsCompleted ? null : episode.ResumePositionMs, episode.DurationMs)
