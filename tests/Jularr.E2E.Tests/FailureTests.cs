@@ -319,9 +319,8 @@ namespace Jularr.E2E.Tests
         private static async Task<string> CheckLibraryAsync(IPage page)
         {
             await page.GotoAsync("/Admin/Storage");
-            await Steps.FollowAsync(page, page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }));
-            await Steps.SubmitAsync(page, Steps.FormWith(page, "Check now"));
-            return await page.Locator(".storage__health").InnerTextAsync();
+            await Steps.FollowAsync(page, page.Locator(".feature-card", new() { HasText = "Library" }).GetByRole(AriaRole.Button, new() { Name = "Check now", Exact = true }));
+            return await page.Locator(".feature-card", new() { HasText = "Library" }).InnerTextAsync();
         }
     }
 }

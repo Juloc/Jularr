@@ -188,6 +188,10 @@ adds none of its own colours, radii, shadows or font sizes. The mockup values ar
   global one) and a `ListPanel` of `ListRow`s (name cell `ListIdentity` with an `IconTile`, `StateChip` with an icon per state, the row's actions, a caption for phones);
   details open in a `Drawer` (`sheet`). The panel drops its `HideLevel` columns and becomes cards by its own width; the page's stylesheet sets only the column grid.
   No page heading above it: the breadcrumb is the title.
+- Owner's decision 21 Oct: things that are few and carry a state (storage connections, providers, media servers) are a `CardGrid` of `FeatureCard`s: icon tile, name and one line, `StateChip` with
+  an icon, rows (a `SpaceBar` for a volume's free space), the actions at the foot (first group at the start, second at the end). A card with an id is a Region: its switch or test swaps just that card.
+  Settings of a card open in the shared `Modal`; a thing with many parts (a storage connection with its library paths) has its own page. One chip row joins the pages of an area (Storage: connections, download storage;
+  Integrations: providers, media servers, catalogs); keys are entered in a masked field and never shown again, only whether one is stored.
 - Owner's decision 21 Oct: admin list pages keep their page actions, bulk actions and paging in the one floating
   [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
   floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with three optional zones as slots: actions (icon and short

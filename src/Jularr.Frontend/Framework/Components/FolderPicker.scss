@@ -2,6 +2,21 @@
     min-width: 0;
     [data-folder-selection] { overflow-wrap: anywhere; }
 
+    &__row { display: flex; align-items: center; gap: 7px; }
+
+    // The chosen folder: a path on the field tint in the monospace of the mockups' file path.
+    &__path {
+        flex: 1;
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-small);
+        background: var(--field);
+        color: var(--muted);
+        font-family: ui-monospace, monospace;
+        font-size: var(--text-small);
+    }
+
     &__dialog {
         width: min(640px, calc(100% - 32px));
         max-height: calc(100dvh - 32px);

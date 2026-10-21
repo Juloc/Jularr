@@ -14,9 +14,9 @@ namespace Jularr.Frontend.Pages.Setup.Storage
         CreateStorageMountV1 create, UpdateStorageMountV1 update, CheckStorageMountV1 check, ReadStorageMountVolumeV1 readVolume, WakeStorageMountV1 wake, RemoveStorageMountV1 remove,
         UpdateStorageSynologyV1 synology, ReadStorageSynologyStatusV1 synologyStatus, PowerStorageSynologyV1 synologyPower, ReadStorageSynologyCertificateV1 synologyCertificate,
         TrustStorageSynologyCertificateV1 trustCertificate, ReadStorageDirectoriesV1 readDirectories, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, RenameLibraryRootV1 renameRoot, DeleteLibraryRootV1 deleteRoot,
-        QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts, ReadSetupProgressV1 readProgress, SaveSetupLibrariesV1 next)
+        QueueLibraryScanV1 queueScan, FrontendAssets assets, IAntiforgery antiforgery, UiText texts, ReadSetupProgressV1 readProgress, SaveSetupLibrariesV1 next)
         : Admin.Storage.StorageModel(read, readMount, readProtocols, readLocalPaths, create, update, check, readVolume, wake, remove, synology, synologyStatus, synologyPower, synologyCertificate, trustCertificate, readDirectories, readRoots, createRoot, renameRoot, deleteRoot,
-            queueScan, antiforgery, texts)
+            queueScan, assets, antiforgery, texts)
     {
         private SetupProgressV1? _progress;
 

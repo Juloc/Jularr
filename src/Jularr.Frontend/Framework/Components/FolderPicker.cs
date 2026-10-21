@@ -8,11 +8,12 @@ namespace Jularr.Frontend.Framework
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
+            // The chosen folder in a path box with the browse button beside it, as in the mockups.
             var picker = new Div(
-                new P(new Strong(new Text("storage.paths.selected")), new ValueText(": "),
-                    new Span(new ValueText(selectedLabel ?? "/" + selectedPath)).Attribute("data-folder-selection", "")),
-                new A(new Text("storage.paths.browse")).Class("button").Attribute("href", fallbackUrl)
-                    .Attribute("data-folder-open", "").Attribute("data-navigation", "full").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath)),
+                new Div(
+                    new Div(new Span(new Text("storage.paths.selected")).Class("visually-hidden"), new Span(new ValueText(selectedLabel ?? "/" + selectedPath)).Attribute("data-folder-selection", "")).Class("folder-picker__path"),
+                    new A(new Text("storage.paths.browse")).Class("button button--compact").Attribute("href", fallbackUrl)
+                        .Attribute("data-folder-open", "").Attribute("data-navigation", "full").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath))).Class("folder-picker__row"),
                 new NoScript(new Div([.. fallback ?? []])),
                 new Dialog(
                     new Div(new H2(new Text("storage.paths.browse")),

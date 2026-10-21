@@ -10331,6 +10331,290 @@
   "errors.validation.username_taken": [
    "This username is already taken.",
    "Dieser Benutzername ist schon vergeben."
+  ],
+  "storage.connections": [
+   "Connections",
+   "Verbindungen"
+  ],
+  "storage.sections": [
+   "Storage sections",
+   "Speicherbereiche"
+  ],
+  "storage.kpi.connections": [
+   "Connections",
+   "Verbindungen"
+  ],
+  "storage.kpi.online": [
+   "Online",
+   "Online"
+  ],
+  "storage.kpi.unreachable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "storage.kpi.free": [
+   "Free space",
+   "Freier Platz"
+  ],
+  "storage.add": [
+   "Add connection",
+   "Verbindung hinzufügen"
+  ],
+  "storage.used": [
+   "{0} % used",
+   "{0} % belegt"
+  ],
+  "storage.wake.active": [
+   "WOL active",
+   "WOL aktiv"
+  ],
+  "storage.wake.off": [
+   "WOL off",
+   "WOL aus"
+  ],
+  "storage.checked": [
+   "Checked: {0}",
+   "Geprüft: {0}"
+  ],
+  "storage.availability.Available": [
+   "Online",
+   "Online"
+  ],
+  "storage.availability.Offline": [
+   "Offline",
+   "Offline"
+  ],
+  "storage.availability.AccessDenied": [
+   "No access",
+   "Kein Zugriff"
+  ],
+  "storage.actions": [
+   "Storage actions",
+   "Speicheraktionen"
+  ],
+  "dock.pageNumber": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "downloadStorage.free": [
+   "{0} free",
+   "{0} frei"
+  ],
+  "admin.mediaServers.title": [
+   "Media servers",
+   "Medienserver"
+  ],
+  "admin.integrations": [
+   "Integrations",
+   "Integrationen"
+  ],
+  "admin.providers.actions": [
+   "Provider actions",
+   "Provider-Aktionen"
+  ],
+  "provider.name.tmdb": [
+   "TMDB",
+   "TMDB"
+  ],
+  "provider.name.tvdb": [
+   "TVDB",
+   "TVDB"
+  ],
+  "provider.name.openlibrary": [
+   "Open Library",
+   "Open Library"
+  ],
+  "provider.name.anilist": [
+   "AniList",
+   "AniList"
+  ],
+  "provider.name.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
+  ],
+  "provider.name.igdb": [
+   "IGDB",
+   "IGDB"
+  ],
+  "provider.name.hardcover": [
+   "Hardcover",
+   "Hardcover"
+  ],
+  "provider.name.acoustid": [
+   "AcoustID",
+   "AcoustID"
+  ],
+  "provider.name.plex": [
+   "Plex",
+   "Plex"
+  ],
+  "provider.name.jellyfin": [
+   "Jellyfin",
+   "Jellyfin"
+  ],
+  "provider.name.emby": [
+   "Emby",
+   "Emby"
+  ],
+  "provider.hint.tmdb": [
+   "Films · TV · posters",
+   "Filme · TV · Poster"
+  ],
+  "provider.hint.tvdb": [
+   "Series · episodes",
+   "Serien · Episoden"
+  ],
+  "provider.hint.openlibrary": [
+   "Books · covers",
+   "Bücher · Cover"
+  ],
+  "provider.hint.anilist": [
+   "Anime · manga",
+   "Anime · Manga"
+  ],
+  "provider.hint.musicbrainz": [
+   "Albums · artists",
+   "Alben · Künstler"
+  ],
+  "provider.hint.igdb": [
+   "Games · platforms · client ID",
+   "Games · Plattformen · Client-ID"
+  ],
+  "provider.hint.hardcover": [
+   "Book series · editions",
+   "Buchreihen · Editionen"
+  ],
+  "provider.hint.acoustid": [
+   "Untagged music",
+   "Musik ohne Tags"
+  ],
+  "provider.hint.plex": [
+   "Library · sign-in",
+   "Mediathek · Anmeldung"
+  ],
+  "provider.hint.jellyfin": [
+   "Progress sync · profile mapping",
+   "Synchronisierung · Profilzuordnung"
+  ],
+  "provider.hint.emby": [
+   "Progress sync · profile mapping",
+   "Synchronisierung · Profilzuordnung"
+  ],
+  "providers.state.connected": [
+   "Connected",
+   "Verbunden"
+  ],
+  "providers.state.setup": [
+   "Setup needed",
+   "Einrichtung nötig"
+  ],
+  "providers.key": [
+   "API key",
+   "API-Schlüssel"
+  ],
+  "providers.key.saved": [
+   "Saved",
+   "Gespeichert"
+  ],
+  "providers.key.missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "providers.syncedAt": [
+   "Last sync {0}",
+   "Letzter Abgleich {0}"
+  ],
+  "providers.settings": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "providers.test": [
+   "Test",
+   "Testen"
+  ],
+  "admin.mediaServer.user": [
+   "Server user",
+   "Servernutzer"
+  ],
+  "admin.mediaServer.links": [
+   "Server users and profiles",
+   "Servernutzer und Profile"
+  ],
+  "admin.mediaServer.state.linked": [
+   "Linked",
+   "Verknüpft"
+  ],
+  "admin.mediaServer.state.proposed": [
+   "Proposed",
+   "Vorgeschlagen"
+  ],
+  "admin.mediaServer.state.unlinked": [
+   "Not linked",
+   "Nicht verknüpft"
+  ],
+  "admin.catalog.kpi.catalogs": [
+   "Catalogs",
+   "Kataloge"
+  ],
+  "admin.catalog.catalog": [
+   "Catalog",
+   "Katalog"
+  ],
+  "admin.catalog.mode": [
+   "Mode",
+   "Modus"
+  ],
+  "admin.catalog.mode.live": [
+   "Live",
+   "Live"
+  ],
+  "admin.catalog.mode.kept": [
+   "Kept",
+   "Gemerkt"
+  ],
+  "admin.catalog.mode.whole": [
+   "Whole",
+   "Komplett"
+  ],
+  "admin.catalog.state.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "admin.catalog.state.off": [
+   "Off",
+   "Aus"
+  ],
+  "admin.catalog.configure": [
+   "Configure",
+   "Konfigurieren"
+  ],
+  "admin.catalog.syncNow": [
+   "Sync now",
+   "Jetzt abgleichen"
+  ],
+  "admin.catalog.syncStarted": [
+   "Catalog sync started.",
+   "Katalogabgleich gestartet."
+  ],
+  "admin.catalog.list": [
+   "Discover catalogs",
+   "Discover-Kataloge"
+  ],
+  "admin.catalog.allDay": [
+   "All day",
+   "Ganztägig"
+  ],
+  "admin.catalog.pace": [
+   "{0} requests/min",
+   "{0} Anfragen/Min."
+  ],
+  "admin.catalog.actions": [
+   "Catalog actions",
+   "Katalogaktionen"
+  ],
+  "downloadStorage.title": [
+   "Download storage",
+   "Download-Speicher"
   ]
  }
 }

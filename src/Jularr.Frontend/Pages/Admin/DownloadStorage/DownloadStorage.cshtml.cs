@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
         ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, UpdateSetupProgressV1 progress, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private readonly Dictionary<DownloadStorageArea, DownloadStorageSettingsV1> _settings = [];
-        private readonly Dictionary<long, string> _mountNames = [];
+        private readonly Dictionary<long, StorageMountDetailsV1> _mounts = [];
         private SaveDownloadStorageDataV1? _input;
         private DownloadStorageArea? _failedArea;
         private bool IsSetup => SetupWizard.IsActive(Request);
@@ -32,6 +32,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             page.Asset("Framework/Components/FolderPicker.entry.ts");
             page.Asset("Framework/Components/Form.entry.ts");
             if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.DownloadStorage));
+            else if (texts.Can("storage.read")) page.Content.Add(new NavigationTabs([new("storage.connections", "/Admin/Storage", false), new("downloadStorage.title", "/Admin/DownloadStorage", true)], "storage.sections"));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             page.Content.Add(new P(new Text("downloadStorage.purpose")));
             foreach (var area in Enum.GetValues<DownloadStorageArea>())
@@ -46,17 +47,16 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
                     {
                         form.Hidden(item => item.IncompleteStorageMountId);
                         form.Hidden(item => item.IncompletePath);
-                        form.Content(new Div(new H3(new Text("downloadStorage.incomplete")),
-                            Picker(input.IncompleteStorageMountId, input.IncompletePath ?? "", nameof(input.IncompletePath), nameof(input.IncompleteStorageMountId))));
+                        form.Content(new Div(new Span(new Text("downloadStorage.incomplete")).Class("ui-field__top"),
+                            Picker(input.IncompleteStorageMountId, input.IncompletePath ?? "", nameof(input.IncompletePath), nameof(input.IncompleteStorageMountId))).Class("ui-field"));
                         form.Hidden(item => item.CompleteStorageMountId);
                         form.Hidden(item => item.CompletePath);
-                        form.Content(new Div(new H3(new Text("downloadStorage.complete")),
-                            Picker(input.CompleteStorageMountId, input.CompletePath ?? "", nameof(input.CompletePath), nameof(input.CompleteStorageMountId))));
+                        form.Content(new Div(new Span(new Text("downloadStorage.complete")).Class("ui-field__top"),
+                            Picker(input.CompleteStorageMountId, input.CompletePath ?? "", nameof(input.CompletePath), nameof(input.CompleteStorageMountId))).Class("ui-field"));
                         form.ByteSize(item => item.FreeSpaceReserveBytes, "downloadStorage.reserve");
-                        form.ByteSize(item => item.MaxJobBytes, "downloadStorage.jobLimit");
-                        form.ByteSize(item => item.MaxWorkspaceBytes, "downloadStorage.workspaceLimit");
                         form.Number(item => item.MaxParallelJobs, "downloadStorage.parallel");
-                        form.Content(new P(new Text("downloadStorage.limitHint")));
+                        form.ByteSize(item => item.MaxJobBytes, "downloadStorage.jobLimit", new FieldHelp(Info: "downloadStorage.limitHint"));
+                        form.ByteSize(item => item.MaxWorkspaceBytes, "downloadStorage.workspaceLimit", new FieldHelp(Info: "downloadStorage.limitHint"));
                         form.Hidden(item => item.Version);
                         form.Hidden(item => item.Confirmed);
                         form.Content(new P(new Text("downloadStorage.confirmHint")));
@@ -73,12 +73,12 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
                     form.Submit("setup.next");
                 }, Address("Next"), csrf, new UpdateSetupProgressDataV1(SetupStepType.Providers), FormError));
             }
-            else
-            {
-                page.Content.Add(new A(new Text("common.back")).Class("button").Attribute("href", "/Admin/Acquisition/Downloads"));
-            }
             if (FormError is not null && _failedArea is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
+
+        // What Jularr last measured on the connection's volume; an unreachable one shows nothing.
+        private string Free(StorageMountDetailsV1 connection) => connection is { StorageHealthTypeId: StorageHealthType.Online, FreeBytes: { } free }
+            ? " · " + string.Format(CultureInfo.CurrentCulture, texts["downloadStorage.free"], ByteSize.Format(free)) : "";
 
         private FolderPicker Picker(long? storageMountId, string path, string field, string mountField)
         {
@@ -86,7 +86,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             {
                 ["storageMountId"] = storageMountId?.ToString(CultureInfo.InvariantCulture)
             });
-            var label = storageMountId is { } id && _mountNames.TryGetValue(id, out var name) ? name + " /" + path : texts["downloadStorage.unset"];
+            var label = storageMountId is { } id && _mounts.TryGetValue(id, out var connection) ? connection.Name + " /" + path + Free(connection) : texts["downloadStorage.unset"];
             return new FolderPicker(browse, path, field, browse, storageMountFieldName: mountField, choosesStorage: true, selectedLabel: label);
         }
 
@@ -160,9 +160,8 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
                 _settings[area] = settings;
                 foreach (var id in new[] { settings.IncompleteStorageMountId, settings.CompleteStorageMountId }.OfType<long>().Distinct())
                 {
-                    if (_mountNames.ContainsKey(id)) continue;
-                    var connection = await mount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), HttpContext.RequestAborted);
-                    _mountNames[id] = connection.Name;
+                    if (_mounts.ContainsKey(id)) continue;
+                    _mounts[id] = await mount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), HttpContext.RequestAborted);
                 }
             }
         }
