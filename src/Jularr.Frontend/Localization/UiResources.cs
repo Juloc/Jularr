@@ -2249,7 +2249,6 @@ namespace Jularr.Frontend.Localization
             new("admin.browser.sourceOk", "The source answers."),
             new("admin.browser.sourceFailed", "The source does not answer:"),
             new("admin.jobs.title", "Jobs"),
-            new("nav.group.system", "System"),
             new("nav.system.overview", "Overview"),
             new("operation.type.Job", "Background job"),
                         new("jobs.worker.Operation", "Operations"),
