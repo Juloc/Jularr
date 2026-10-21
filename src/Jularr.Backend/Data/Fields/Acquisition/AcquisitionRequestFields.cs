@@ -38,5 +38,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsCovered = new();
         public static readonly EnumField WantedViewTypeId = new(typeof(WantedViewType));
+        public static readonly EnumField WantedPriorityTypeId = new(typeof(WantedPriorityType));
+        public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 500, IsSet = true };
     }
 }

@@ -232,8 +232,9 @@ namespace Jularr.Backend.Data.User.Playback.V1
     public sealed class PlaybackPlanV1 : BaseResponse
     {
         public PlaybackPlanV1(Guid playbackSessionId, PlaybackModeType playbackModeTypeId, string streamUrl, long resumePositionMs, long? durationMs, int? audioStreamIndex,
-            PlaybackQuality quality)
+            PlaybackQuality quality, bool isReduced = false)
         {
+            IsReduced = isReduced;
             AudioStreamIndex = audioStreamIndex;
             Quality = quality;
             PlaybackSessionId = playbackSessionId;
@@ -264,6 +265,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PlaybackQuality))]
         public PlaybackQuality Quality { get; }
+
+        // The server had no room for the wanted conversion and plays a lighter one.
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsReduced))]
+        public bool IsReduced { get; }
     }
 
     public sealed class UpdatePlaybackDataV1 : BaseData

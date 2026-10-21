@@ -51,6 +51,12 @@ namespace Jularr.Backend.Data.Common
         public string Code { get; } = code;
     }
 
+    // A resource that existed is gone for good, such as a conversion that was stopped to make room.
+    public sealed class ServiceGoneException(string code) : Exception("The requested resource is gone.")
+    {
+        public string Code { get; } = code;
+    }
+
     public readonly record struct NoData;
 
     public sealed class UpdateResult : BaseResponse

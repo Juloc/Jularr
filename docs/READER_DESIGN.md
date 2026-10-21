@@ -43,6 +43,8 @@ buttons no longer float over the paper. The control strips are borderless; the
 shared Range owns its thin accent-coloured track, thumb and keyboard focus, with
 no surrounding seek-field outline. Clean uses the canonical purple accent.
 
+A header button marks or clears a bookmark at the current place (per profile and book file, at most 200); the list with chapter title and position is in the notes panel, in the page panel of an image book. A prose page print draws a hyphenated line break with its hyphen and the remainder at the line start.
+
 Read-aloud is required. The [Speech integration](SPEECH.md) now connects browser
 device voices with canonical server profile preferences, selection/visible-text
 reading, word paint on the existing book, following and Pause/Resume/Stop.

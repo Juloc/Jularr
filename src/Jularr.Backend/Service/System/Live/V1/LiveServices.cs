@@ -32,6 +32,7 @@ namespace Jularr.Backend.Service.System.Live.V1
                                 operation."OperationStatusTypeId" IN (1, 2)
                         ), '')
                         || '|' || coalesce((SELECT max(operation."Id") FROM "Operations" AS operation)::text, '')
+                        || '|' || (SELECT count(*) FROM "Operations" AS operation WHERE operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NULL)::text
                         || '|' || coalesce((SELECT max(request."UpdatedAt") FROM "AcquisitionRequests" AS request)::text, '') || ':' || (SELECT count(*) FROM "AcquisitionRequests")::text
                         || '|' || coalesce((SELECT max(event."Id") FROM "ActivityEvents" AS event)::text, '')
                     ) AS "Version",

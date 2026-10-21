@@ -83,6 +83,67 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // Priority only decides who is searched first: the bulk bar marks the series High, and one search of both takes its episode before the film.
+        [TestMethod]
+        [Timeout(900_000)]
+        public async Task WantedPriority_TheBulkBarMarksATitleHigh_AndTheSearchTakesItFirst()
+        {
+            using var folders = new Folders("Movies", "Series");
+            var video = await Steps.WriteVideoAsync(null, Path.Combine(folders.Fixtures, "video.webm"));
+            var film = new FakeRelease("Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR", "bunny", 2040, video);
+            var episode = new FakeRelease("Jularr.Test.Series.S01E01.1080p.WEB-DL.H264-JLR", "s01e01", 5040, video);
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.SetTmdbKeyAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"), new LibraryPath("Series", "Series"));
+                await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5040", searchesAutomatically: true);
+
+                // Nothing is on offer yet: both searches find nothing and the titles wait for their next time.
+                await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
+                await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
+                await page.GotoAsync("/Admin/Wanted");
+                var filmRow = page.Locator("main tr", new() { HasText = FakeServices.MovieTitle });
+                var seriesRow = page.Locator("main tr", new() { HasText = FakeServices.SeriesTitle });
+                await Assertions.Expect(filmRow).ToContainTextAsync("Normal");
+                await Assertions.Expect(seriesRow).ToContainTextAsync("Normal");
+
+                // Priorities are for chosen rows: the bar says how many are chosen.
+                var bar = page.Locator("#wanted-bulk");
+                await Assertions.Expect(bar.GetByRole(AriaRole.Button, new() { Name = "High", Exact = true })).ToBeDisabledAsync();
+                await seriesRow.GetByRole(AriaRole.Checkbox, new() { Name = "Select" }).CheckAsync();
+                await Assertions.Expect(bar).ToContainTextAsync("1 selected");
+                await Evidence.SaveAsync(page, "wanted-bulk");
+                await Steps.FollowAsync(page, bar.GetByRole(AriaRole.Button, new() { Name = "High", Exact = true }));
+                await Assertions.Expect(seriesRow).ToContainTextAsync("High");
+                await Assertions.Expect(filmRow).ToContainTextAsync("Normal");
+
+                // One search of both: the high title is searched first, so its release is taken first.
+                fakes.Offer(film, episode);
+                await page.Locator("#wanted-bulk").GetByRole(AriaRole.Checkbox, new() { Name = "Select all" }).CheckAsync();
+                await Steps.FollowAsync(page, bar.GetByRole(AriaRole.Button, new() { Name = "Search selected", Exact = true }));
+                await Assertions.Expect(page.Locator("main [role=status]")).ToContainTextAsync("The search has started.");
+                await WaitForGrabsAsync(fakes, episode, film);
+                CollectionAssert.AreEqual(new[] { fakes.NzbAddress(episode).ToString(), fakes.NzbAddress(film).ToString() }, fakes.Grabbed.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "automatic-priority");
+                throw;
+            }
+        }
+
         [TestMethod]
         [Timeout(900_000)]
         public async Task UserRequests_FilmByACustomProfileAndAnAnime_AreFoundAutomatically_AndPlay()

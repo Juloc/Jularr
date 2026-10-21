@@ -184,7 +184,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var operationId = OperationId ?? throw new KeyNotFoundException("The download is missing.");
             var choices = new BaseDataList<ManualImportChoiceV1>((files ?? []).Where(row => row.Path is not null).Select(row => new ManualImportChoiceV1(row.Path!, row.Imports, row.Season, row.Episode)));
             await runDownload.ExecuteAsync<ManualImportResultV1>(new ActivityOperationParametersV1(operationId), new RunManualImportDownloadDataV1(importTransferModeId, choices), HttpContext.RequestAborted);
-            return LocalRedirect("/Admin/Activity?Tab=Queue");
+            return LocalRedirect("/Admin/Activity");
         }
 
         public async Task<IActionResult> OnGetFoldersAsync(long? storageMountId, string? path, string? afterName, int mountPage = 1)

@@ -44,6 +44,10 @@ namespace Jularr.E2E.Tests
                 var slow = new LocatorAssertionsToContainTextOptions { Timeout = 30_000 };
                 await Assertions.Expect(queued).ToContainTextAsync("70 %", slow);
                 await Assertions.Expect(queued.Locator("progress")).ToHaveAttributeAsync("value", "70");
+
+                // The tiles count the running download and follow it too.
+                await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=active]")).ToContainTextAsync("1", slow);
+                await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToContainTextAsync("0", slow);
                 Assert.AreEqual(1, await page.EvaluateAsync<int>("window.liveMarker ?? 0"), "The queue was reloaded instead of updated.");
                 await page.GotoAsync("/Requests");
                 var request = page.Locator(".request-row", new() { HasText = FakeServices.MovieTitle });
@@ -98,6 +102,12 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, Film);
                 var failed = await WaitForFailedDownloadAsync(page);
                 fakes.FailDownloads = false;
+
+                // The error tile counts it and the Errors filter lists it, next to the history.
+                await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToHaveTextAsync("1");
+                await Steps.FollowAsync(page, page.Locator(".activity-bar").GetByRole(AriaRole.Link, new() { Name = "Errors", Exact = true }));
+                await Assertions.Expect(page.Locator("tr", new() { HasText = "Download failed" })).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".activity-bar .navigation-tabs__link")).ToHaveCountAsync(6);
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
@@ -182,14 +192,17 @@ namespace Jularr.E2E.Tests
                 // The doubt shows with its reason and the actions that decide it; there is nothing to pause while it waits.
                 var waiting = await WaitForQueueRowAsync(page, "does not clearly match the film");
                 await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Retry import", Exact = true })).ToBeVisibleAsync();
-                // Removing asks first: the summary opens the button that deletes the partial files.
-                await Assertions.Expect(waiting.Locator("details.activity-confirm summary", new() { HasText = "Remove" }).First).ToBeVisibleAsync();
                 await Assertions.Expect(waiting.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = true })).ToHaveCountAsync(0);
                 await Evidence.SaveAsync(page, "queue-waiting");
 
+                // Removing is in the entry's panel and asks first: the summary opens the button that deletes the partial files.
+                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Details", Exact = true }));
+                var panel = page.Locator(".activity-drawer");
+                await Assertions.Expect(panel.Locator("details.activity-confirm summary", new() { HasText = "Remove" }).First).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "queue-panel");
                 fakes.Offer(LowerFilm with { File = video });
-                await waiting.Locator("details.activity-confirm summary", new() { HasText = "Remove and block" }).ClickAsync();
-                await Steps.SubmitAsync(page, waiting.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove, delete its partial files and block this release" }) }));
+                await panel.Locator("details.activity-confirm summary", new() { HasText = "Remove and block" }).ClickAsync();
+                await Steps.SubmitAsync(page, panel.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Remove, delete its partial files and block this release" }) }));
                 CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_bunny", "history:delete:SABnzbd_nzo_bunny" }, fakes.Commands.ToArray());
 
                 // The blocked release is never taken again; the next one is searched at once and imports.
@@ -202,7 +215,7 @@ namespace Jularr.E2E.Tests
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(Film).ToString(), fakes.NzbAddress(LowerFilm).ToString() }, fakes.Grabbed.ToArray());
-                await page.GotoAsync("/Admin/Activity?Tab=History");
+                await page.GotoAsync("/Admin/Activity?Filter=History");
                 await Assertions.Expect(page.Locator("tr", new() { HasText = "Removed from the queue" })).ToHaveCountAsync(1);
                 Assert.IsTrue(details.Length > 0);
             }
@@ -219,7 +232,7 @@ namespace Jularr.E2E.Tests
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
-                await page.GotoAsync("/Admin/Activity?Tab=Queue");
+                await page.GotoAsync("/Admin/Activity");
                 var row = page.Locator("tr", new() { HasText = reason });
                 if (await row.CountAsync() > 0)
                 {
@@ -271,7 +284,7 @@ namespace Jularr.E2E.Tests
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
-                await page.GotoAsync("/Admin/Activity?Tab=Queue");
+                await page.GotoAsync("/Admin/Activity");
                 var row = page.Locator("tr", new() { HasText = "Download failed" });
                 if (await row.CountAsync() > 0)
                 {

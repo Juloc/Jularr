@@ -24,7 +24,7 @@ namespace Jularr.Frontend.Framework
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
-        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "not_found", "failed"];
+        private static readonly string[] Statuses = ["storage_waking", "storage_unavailable", "playback_conversion_unavailable", "playback_capacity_exhausted", "playback_evicted", "playback_reduced", "not_found", "failed"];
         private static readonly string[] Kinds = ["Intro", "Credits", "Recap", "Preview"];
         private static readonly string[] Speeds = ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"];
         private static readonly PlaybackQuality[] Qualities = Enum.GetValues<PlaybackQuality>();

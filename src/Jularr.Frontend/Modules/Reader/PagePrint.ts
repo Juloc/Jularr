@@ -98,9 +98,15 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                     : box.left - bounds.left + source.scrollLeft) + .1) / pitch) * (height + 1) + box.top - bounds.top;
                 // Character flow is monotonic by column/line, including RTL text.
                 // Binary searches read only the requested line boundaries, not each glyph.
-                const at = (index: number) => {
+                // A character after an automatic hyphenation break reports the hyphen on the previous line as its first
+                // rectangle; its own glyph is the last one.
+                const glyphs = (index: number) => {
                     range.setStart(node, index); range.setEnd(node, index + 1);
-                    return flow(range.getBoundingClientRect());
+                    return Array.from(range.getClientRects());
+                };
+                const at = (index: number) => {
+                    const boxes = glyphs(index);
+                    return flow(boxes.length > 1 && !/\s/.test(node.data[index]) ? boxes[boxes.length - 1] : range.getBoundingClientRect());
                 };
                 const lower = (value: number) => {
                     let low = 0, high = node.length;
@@ -118,12 +124,19 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                     const start = lower(key), end = lower(key + line.height);
                     if (end <= start) continue;
                     range.setStart(node, start); range.setEnd(node, end);
-                    const box = range.getBoundingClientRect();
+                    // Only the rectangles on this line: the previous line's hyphen is not part of it.
+                    const parts = Array.from(range.getClientRects()).filter(part => Math.abs(flow(part) - key) < .5);
+                    const box = parts.length ? new DOMRect(Math.min(...parts.map(part => part.left)), Math.min(...parts.map(part => part.top)),
+                        Math.max(...parts.map(part => part.right)) - Math.min(...parts.map(part => part.left)), Math.max(...parts.map(part => part.bottom)) - Math.min(...parts.map(part => part.top)))
+                        : range.getBoundingClientRect();
                     const ink = document.createElement('span');
                     for (const property of FontProperties) ink.style.setProperty(property, style.getPropertyValue(property));
                     Object.assign(ink.style, { whiteSpace: 'pre', lineHeight: '1', margin: '0', padding: '0', border: '0' });
                     const preserved = ['pre', 'pre-wrap', 'break-spaces'].includes(style.whiteSpace);
-                    ink.textContent = preserved ? range.toString() : range.toString().replace(/\s+/g, ' ');
+                    const text = preserved ? range.toString() : range.toString().replace(/\s+/g, ' ');
+                    // The line's own break shows its hyphen: automatic, or a soft hyphen in the text.
+                    const broken = end < node.length && !/\s/.test(node.data[end]) && glyphs(end).length > 1;
+                    ink.textContent = broken ? text + '-' : text.endsWith('­') ? text.slice(0, -1) + '-' : text;
                     if (block) {
                         ink.dataset.printBlock = block.dataset.b;
                         ink.dataset.printStart = String(blockOffset + start);

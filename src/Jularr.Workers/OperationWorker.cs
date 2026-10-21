@@ -5,6 +5,7 @@ using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Backup.V1;
 using Jularr.Backend.Service.System.Operation.V1;
+using Jularr.Backend.Service.System.Transcoding.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -56,6 +57,10 @@ namespace Jularr.Workers
                 if (claimed.OperationTypeId == OperationType.Backup)
                 {
                     await services.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else if (claimed.OperationTypeId == OperationType.TranscodeBenchmark)
+                {
+                    await services.GetRequiredService<ExecuteTranscodeBenchmarkV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
                 }
                 else
                 {
