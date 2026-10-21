@@ -417,6 +417,8 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   (Request, Watch, Continue, Read), never Details; touch keeps it visible. A missing real primary action shows none; do not
   fabricate playback or requests. Series lifecycle, genres, descriptions and language capsules belong in Details, not the cover.
   Grids hold as many covers per row as fit (`media-grid`), no two-row wrapping of card text.
+- A missing poster, backdrop, cover or photo is always `NoCover` (the Jularr mark with a question mark, a silhouette for a person) through `MediaImage.Or`; a page never draws its own initials, numbers or gradient tile, and an image that fails to load is swapped for it by the layout script.
+- Error pages (owner 21 Oct): one `ErrorState` for every status of a browser request, server-rendered at `/Error/{code}`. Clean shows the Jularr mark large in the accent, a bold `404 Not Found`, one line and Home/Back/Retry/Sign in; Original shows its artwork over the whole page with exactly two buttons (Try again, Go to home page) and no other visible text. Failures of the service itself (5xx) and a visitor who is not signed in use the standalone layout; a 5xx page names a reference and the time, never the exception. `/api`, streams, assets and non-HTML clients keep their plain answers.
 - Progress is a thin capsule inside the foot of the cover (translucent white track, accent fill); no time text and it never moves
   other content. A page may add one short label over the cover, bottom left (Favorites shows where the profile stands).
 - Availability is green only when all monitored units have local profile-language

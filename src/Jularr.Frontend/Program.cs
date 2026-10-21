@@ -55,6 +55,7 @@ app.UseStaticFiles(new StaticFileOptions
             : "public,no-cache";
     }
 });
+app.UseJularrErrorPages();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -78,6 +79,13 @@ app.Use(async (context, next) =>
 
     await next(context);
 });
+
+if (app.Environment.IsDevelopment())
+{
+    // The end-to-end tests force an unhandled exception here to see the 500 page.
+    IResult Fail() => throw new InvalidOperationException("Forced failure with a secret detail.");
+    app.MapGet("/Development/Fail", Fail).AllowAnonymous();
+}
 
 app.MapJularrServices();
 app.MapJularrLive();

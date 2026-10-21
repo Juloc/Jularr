@@ -134,7 +134,7 @@ namespace Jularr.Frontend.Pages.User.Requests
 
         private IUiComponent Poster(RequestDetailsV1 item, string href)
         {
-            IUiComponent cover = item.PosterUrl is { } url && IsImageUrl(url) ? new MediaImage(url, "", 56, 80) : new Span(new ValueText(item.CanonicalTitle)).Class("request-row__initials");
+            var cover = MediaImage.Or(assets, item.PosterUrl is { } url && IsImageUrl(url) ? url : null, "", 56, 80);
             return new A(cover).Class("request-row__poster").Attribute("href", href).Attribute("tabindex", "-1").Attribute("aria-hidden", "true");
         }
 

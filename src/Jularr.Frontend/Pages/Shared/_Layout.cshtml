@@ -39,6 +39,7 @@
     }
     @Assets.Scripts("Modules/Appearance/theme.entry.ts")
     @Assets.Scripts("Modules/Pwa/pwa.entry.ts")
+    @Assets.Scripts("Framework/Components/MediaImage.entry.ts")
     @if (inPlace)
     {
         @Assets.Scripts("Modules/Navigation/navigation.entry.ts")
@@ -66,6 +67,7 @@
 <body class="@(isReader ? "app-page reader-page" : isPlayer ? "player-page" : showShell ? "app-page" : "auth-page")" hx-boost:inherited="@(inPlace ? "true" : null)"
     hx-target:inherited="@(inPlace ? "#app-content" : null)" hx-select:inherited="@(inPlace ? "#app-content" : null)" hx-swap:inherited="@(inPlace ? "outerHTML" : null)">
     <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
+    @(new UiHtml(new NoCoverTemplate(Assets), T))
     @if (showShell)
     {
         <div id="app-content" class="app-content" data-shell="app" data-autoplay-previews="@(T.AutoplayPreviews && !string.Equals(Context.Request.Headers["Save-Data"], "on", StringComparison.OrdinalIgnoreCase) ? "true" : "false")" hx-history-elt>

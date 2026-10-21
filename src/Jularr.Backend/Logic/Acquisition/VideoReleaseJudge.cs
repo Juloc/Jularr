@@ -46,7 +46,7 @@ namespace Jularr.Backend.Logic.Acquisition
             (kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, false) : JudgeSeriesTitle(title, parsed, false)).Match;
 
         // Scene names state non-English audio as words; untagged releases are English.
-        private static IReadOnlyList<string> Languages(ReleaseInfo parsed)
+        internal static IReadOnlyList<string> Languages(ReleaseInfo parsed)
         {
             if (parsed.AudioLanguages.Count > 0)
             {

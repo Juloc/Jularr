@@ -6,7 +6,7 @@ namespace Jularr.Frontend.Framework
     // One episode: its still with its number or length and progress, its title, and its state; a playable one opens the player.
     // A page lists episodes as cards or, with Row(), as lines (the still, the title with one line of facts, the state and the actions);
     // the player's list uses Compact().
-    public sealed class EpisodeCard(string label, string? title, string? imageUrl, int? runtimeMinutes, string stateKey, string? playHref, string? resumeAt = null) : IUiComponent
+    public sealed class EpisodeCard(FrontendAssets assets, string label, string? title, string? imageUrl, int? runtimeMinutes, string stateKey, string? playHref, string? resumeAt = null) : IUiComponent
     {
         private long? _positionMs;
         private long? _durationMs;
@@ -57,7 +57,7 @@ namespace Jularr.Frontend.Framework
         {
             var art = new List<IUiComponent>
             {
-                imageUrl is null ? new Div().Class("episode-card__placeholder") : new MediaImage(imageUrl, label, 400, 225)
+                MediaImage.Or(assets, imageUrl, label, 400, 225, placeholderClass: "episode-card__placeholder")
             };
 
             // The player's list shows the length over the still, a page's list the number.

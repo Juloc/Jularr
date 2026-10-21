@@ -190,6 +190,16 @@ jobs:
       # Test films are made and played with FFmpeg, as in a real installation.
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
+      # The cover cache encodes JPEG XL with libjxl's cjxl, as the image does.
+      - name: Install cjxl and test the JPEG XL cover cache
+        if: matrix.shard == 'rest'
+        run: |
+          sudo apt-get install --yes --no-install-recommends libjxl-tools
+          cjxl --version
+          dotnet test tests/Jularr.Backend.Tests --configuration Release --filter "FullyQualifiedName~JxlEncoder_WithCjxl|FullyQualifiedName~Cover_WithFfmpegAndCjxl" --logger "trx;LogFileName=cjxl.trx" --results-directory TestResults/ci/e2e
+        env:
+          JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
+          JULARR_TEST_CJXL: /usr/bin/cjxl
       - name: Direct SMB HLS regression (real FFmpeg)
         if: matrix.shard == 'rest'
         run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls --logger "trx;LogFileName=ffmpeg.trx" --results-directory TestResults/ci/e2e
