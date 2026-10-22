@@ -19,7 +19,7 @@ namespace Jularr.Backend.Service.System.Provider.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AniListSyncParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
+        protected override ModuleRequirement GetInstanceModules(AniListSyncParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library", "AniList");
         protected override ServicePermission GetPermission(AniListSyncParametersV1 parameters, Type resultType) => new("system.media");
 
         protected override async Task<IServiceOutput> OnExecute() => new UpdateResult(await _accounts.SyncAsync(Context, CancellationToken));

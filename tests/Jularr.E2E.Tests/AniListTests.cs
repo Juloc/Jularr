@@ -27,7 +27,7 @@ namespace Jularr.E2E.Tests
 
                 // An anime of one season; AniList's first entry covers it. The sync is a module, off until the Owner switches it on.
                 await jularr.RunSqlAsync($"""
-                    UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'ProgressSync';
+                    UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('ProgressSync', 'AniList');
                     INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES ({Work}, 2, 1, 'Example Anime');
                     INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (71000, {Work}, 1, 1);
                     INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "ReleasedOn")
@@ -93,6 +93,18 @@ namespace Jularr.E2E.Tests
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Disconnect", Exact = true }));
                 await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Connect AniList" })).ToBeVisibleAsync();
                 await WaitForWatchedAsync(page, expectedEpisodes: 2);
+
+                // AniList is a module of its own that needs the library and the progress sync; off, a profile has nothing to connect.
+                await page.GotoAsync("/Admin/Instance/Modules");
+                var module = page.Locator(".setting-card[data-module=AniList]");
+                await Assertions.Expect(module.Locator("[data-needs]")).ToHaveCountAsync(2);
+                await page.GotoAsync("/Settings");
+                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Open AniList" })).ToBeVisibleAsync();
+                await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'AniList'");
+                await page.GotoAsync("/Settings");
+                await Assertions.Expect(page.Locator(".anilist-card")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Open AniList" })).ToHaveCountAsync(0);
+
                 // The code AniList refused answered 503 on purpose (AniList is the unavailable party); nothing else may fail.
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.Where(problem => !problem.Contains("503", StringComparison.Ordinal)).ToArray());
             }

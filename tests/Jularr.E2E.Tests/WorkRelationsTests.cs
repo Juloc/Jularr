@@ -44,8 +44,8 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(catalog.Locator(".state-chip").First).ToHaveAttributeAsync("title", "Source: AniList");
             await Assertions.Expect(catalog.Locator(".state-chip", new() { HasText = "Not in library" }).First).ToBeVisibleAsync();
             await Assertions.Expect(catalog.Locator(".relation__title")).ToHaveAttributeAsync("href", "/Discover/movies/555");
-            await Assertions.Expect(catalog.Locator("a.button", new() { HasText = "Request" })).ToHaveAttributeAsync("href", "/Discover/movies/555");
-            await Assertions.Expect(work.Locator("a.button", new() { HasText = "Request" })).ToHaveCountAsync(0);
+            await Assertions.Expect(catalog.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToBeVisibleAsync();
+            await Assertions.Expect(work.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToHaveCountAsync(0);
             await Evidence.SaveAsync(page, "relations-list");
 
             // A click anywhere on the Work's row opens the Work.
@@ -113,6 +113,64 @@ namespace Jularr.E2E.Tests
             await page.Locator(".relation-results .list-row", new() { HasText = "Linked Sequel" }).GetByRole(AriaRole.Button, new() { Name = "Add" }).ClickAsync();
             await Assertions.Expect(page.Locator(".relation-list .list-row")).ToHaveCountAsync(1);
             await Assertions.Expect(page.Locator(".relation-list .relation__title")).ToHaveAttributeAsync("href", "/Details/8002");
+        }
+
+        // A related title that is no Work is requested from its row: the same request as Discover's, the page stays (no navigation), a hint says so and the row now leads to the Work.
+        // Without the Requests module the row has no button.
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task Relations_RequestFromTheRow_MakesTheRequestWithoutLeavingThePage()
+        {
+            using var folders = new Folders("Movies");
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await Steps.SetTmdbKeyAsync(page);
+            await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"));
+
+            await jularr.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (8201, 1, 'Source Film', 2001);
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear") VALUES (8301, 'tmdb_movie', '10378', 1, 'Big Buck Bunny', 2008);
+                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8201, 8301, 1, 'tmdb');
+                """);
+            await page.GotoAsync("/Details/8201?tab=related");
+            await page.EvaluateAsync("window.__kept = 'same page'");
+            var row = page.Locator(".relation-list .list-row").Filter(new() { HasText = "Big Buck Bunny" });
+            await Assertions.Expect(row.Locator(".state-chip", new() { HasText = "Not in library" }).First).ToBeVisibleAsync();
+            await Evidence.SaveAsync(page, "relation-request-before");
+            var url = page.Url;
+
+            await row.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true }).ClickAsync();
+
+            // The row swaps in place: no button, the title opens the new Work, and the quiet hint confirms it.
+            await Assertions.Expect(page.Locator("[data-action-toast] .action-toast__text")).ToHaveTextAsync("Requested");
+            await Assertions.Expect(row.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToHaveCountAsync(0);
+            await Assertions.Expect(row.Locator(".relation__title")).ToHaveAttributeAsync("href", new Regex("^/Details/\\d+$"));
+            await Assertions.Expect(row.Locator(".state-chip", new() { HasText = "Not in library" })).ToHaveCountAsync(0);
+            Assert.AreEqual(url, page.Url);
+            Assert.AreEqual("same page", await page.EvaluateAsync<string>("window.__kept"));
+            Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_movie' AND \"Value\" = '10378'"));
+            await Evidence.SaveAsync(page, "relation-request-after");
+
+            // Requests switched off: the row offers nothing to request.
+            await jularr.RunSqlAsync("""
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear") VALUES (8302, 'tmdb_movie', '556', 1, 'Third Film', 2010);
+                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (8201, 8302, 3, 'tmdb');
+                """);
+            await page.GotoAsync("/Details/8201?tab=related");
+            await Assertions.Expect(page.Locator(".relation-list .list-row").Filter(new() { HasText = "Third Film" }).GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToBeVisibleAsync();
+            await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests'");
+            await page.GotoAsync("/Details/8201?tab=related");
+            await Assertions.Expect(page.Locator(".relation-list .list-row")).ToHaveCountAsync(2);
+            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Request", Exact = true })).ToHaveCountAsync(0);
         }
     }
 }

@@ -29,9 +29,12 @@ namespace Jularr.Frontend.Pages.User.Details
         private const string RelationDialogId = "details-relation-add";
         private IReadOnlyList<WorkRelationV1> _relations = [];
         private WorkRelationSearchData? _relationSearch;
+
+        // The catalog title requested from its row in this answer: an anime season is requested as its series and found as a Work only when the matching has mapped it.
+        private (string Namespace, string ExternalId)? _requestedRelation;
         private IReadOnlyList<DiscoverSuggestionV1>? _relationResults;
 
-        // The series, then the typed relations as a list: a title the library has leads to its Work, any other to its Discover page and its request.
+        // The series, then the typed relations as a list: a title the library has leads to its Work, any other to its Discover page and is requested from its row.
         private IUiComponent Related(WorkDetailsV1 work, bool preview)
         {
             var canManage = texts.CanManageRelations();
@@ -66,12 +69,14 @@ namespace Jularr.Frontend.Pages.User.Details
             var kind = new StateChip(new Text("details.relation." + relation.WorkRelationTypeId), UiTone.Accent, new Icon(KindIcon(relation.WorkRelationTypeId), assets, 14))
                 .Attribute("title", string.Format(CultureInfo.CurrentCulture, texts["details.relation.source"], SourceName(relation.SourceKey)));
             var typeLabel = new Tag(new Text(MediaTypeLabel.Key(relation.MediaTypeId, relation.MediaSubtypeId)));
-            var state = Availability(relation);
+            var isRequested = relation.RelatedWorkId is null && _requestedRelation is { } asked && asked.Namespace == relation.Namespace && asked.ExternalId == relation.ExternalId;
+            var state = isRequested ? (IUiComponent)new StateChip(new Text("details.relation.requested"), UiTone.Accent, new Icon("requests", assets, 14)) : Availability(relation);
 
             var actions = new List<IUiComponent>();
-            if (relation.RelatedWorkId is null && address is not null && texts.CanRequest())
+            if (relation.RelatedWorkId is null && !isRequested && address is not null && texts.CanRequest())
             {
-                actions.Add(new A(new Text("details.relation.request")).Class("button button--soft button--compact").Attribute("href", address));
+                actions.Add(new PostForm(Address(query => query["handler"] = "RequestRelated"), _csrf, [("namespace", relation.Namespace ?? ""), ("externalId", relation.ExternalId ?? "")],
+                    new Button(new Text("details.relation.request")).Compact().Soft().Submit()));
             }
 
             if (canManage && relation.WorkRelationId is { } relationId)

@@ -36,6 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             ["providerSyncEmby"] = ("providers", UiTone.Warning),
             ["usenet"] = ("download", UiTone.Info),
             ["aniListMatching"] = ("layers", UiTone.Warning),
+            ["aniListRelations"] = ("link", UiTone.Warning),
             ["aniListSync"] = ("sync", UiTone.Warning),
             ["covers"] = ("grid", UiTone.Accent),
             ["storage"] = ("drive", UiTone.Success),

@@ -357,6 +357,8 @@ CREATE TABLE "WorkIdentityMatches" (
     "IdentityMatchStatusTypeId" smallint NOT NULL CHECK ("IdentityMatchStatusTypeId" BETWEEN 1 AND 4),
     "Candidates" jsonb NOT NULL DEFAULT '[]',
     "CheckedAt" timestamptz NOT NULL DEFAULT now(),
+    -- When the provider's relations of the matched entries were last read into WorkRelations (AniList module); none yet means due.
+    "RelationsCheckedAt" timestamptz NULL,
     UNIQUE ("WorkId", "Namespace")
 );
 CREATE INDEX "IX_WorkIdentityMatches_Review" ON "WorkIdentityMatches" ("CheckedAt") WHERE "IdentityMatchStatusTypeId" = 2;

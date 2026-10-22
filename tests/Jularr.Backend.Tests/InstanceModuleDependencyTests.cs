@@ -22,6 +22,36 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Library" }, modules.Single(module => module.Key == "Playback").Requires);
             CollectionAssert.AreEqual(new[] { "Playback" }, modules.Single(module => module.Key == "Trickplay").Requires);
             CollectionAssert.AreEqual(new[] { "DiscoverCache" }, modules.Single(module => module.Key == "LocalDiscovery").Requires);
+
+            // AniList is its own module on top of the library and the progress sync, and off until the Owner switches it on.
+            CollectionAssert.AreEquivalent(new[] { "Library", "ProgressSync" }, modules.Single(module => module.Key == "AniList").Requires);
+            Assert.IsFalse(modules.Single(module => module.Key == "AniList").IsEnabled);
+        }
+
+        [TestMethod]
+        public async Task AniList_SwitchedOnWithoutProgressSync_IsRefusedUntilItIsOn()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await SignInAsync(host);
+            var modules = await ReadAsync(host);
+            var aniList = modules.Single(module => module.Key == "AniList");
+            var progressSync = modules.Single(module => module.Key == "ProgressSync");
+            Assert.IsFalse(progressSync.IsEnabled);
+
+            using var refused = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + aniList.Id, new UpdateInstanceModuleDataV1(true, aniList.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "module_dependency");
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'AniList'"));
+
+            using var first = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + progressSync.Id, new UpdateInstanceModuleDataV1(true, progressSync.Version));
+            Assert.AreEqual(HttpStatusCode.OK, first.StatusCode, await first.Content.ReadAsStringAsync());
+            using var second = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + aniList.Id, new UpdateInstanceModuleDataV1(true, aniList.Version));
+            Assert.AreEqual(HttpStatusCode.OK, second.StatusCode, await second.Content.ReadAsStringAsync());
+
+            // The progress sync stays on while AniList builds on it.
+            using var blocked = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + progressSync.Id, new UpdateInstanceModuleDataV1(false, progressSync.Version + 1));
+            Assert.AreEqual(HttpStatusCode.BadRequest, blocked.StatusCode);
+            StringAssert.Contains(await blocked.Content.ReadAsStringAsync(), "module_dependency");
         }
 
         [TestMethod]

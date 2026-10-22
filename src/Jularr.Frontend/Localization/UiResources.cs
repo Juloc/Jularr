@@ -2452,6 +2452,7 @@ namespace Jularr.Frontend.Localization
             new("instance.module.Emulation", "Retro games in the browser"),
             new("instance.module.UnitGroups", "Named sections for episodes and volumes"),
             new("instance.module.ProgressSync", "Share watch progress with Jellyfin and Emby"),
+            new("instance.module.AniList", "Connect AniList accounts and keep AniList's relations of titles"),
             new("unitGroups.title", "Sections"),
             new("unitGroups.name", "Name"),
             new("unitGroups.delete", "Delete"),
@@ -2701,6 +2702,7 @@ namespace Jularr.Frontend.Localization
             new("jobs.job.usenet", "Usenet downloads"),
             new("jobs.job.aniListMatching", "AniList matching"),
             new("jobs.job.aniListSync", "AniList sync"),
+            new("jobs.job.aniListRelations", "AniList relations"),
             new("jobs.job.covers", "Provider covers"),
             new("jobs.job.storage", "Storage check"),
             new("jobs.job.scanScheduling", "Scan scheduling"),
@@ -3027,6 +3029,7 @@ namespace Jularr.Frontend.Localization
             new("details.relation.removed", "Relation removed"),
             new("details.relation.remove", "Remove relation"),
             new("details.relation.request", "Request"),
+            new("details.relation.requested", "Requested"),
         ];
     }
 }

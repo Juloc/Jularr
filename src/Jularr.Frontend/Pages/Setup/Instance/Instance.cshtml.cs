@@ -84,7 +84,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
         {
             "Library" or "Playback" or "Reading" or "Emulation" or "Subtitles" or "Trickplay" or "Translation" or "Ocr" or "SmartPdf" or "DiscoverCache" or "LocalDiscovery" => "media",
             "Requests" or "Acquisition" or "Uploads" => "requests",
-            "Profiles" or "Devices" or "ProgressSync" or "HomeLayout" or "Collections" or "Calendar" or "Notifications" or "Statistics" or "UnitGroups" or "Franchises" or "Registration" => "personal",
+            "Profiles" or "Devices" or "ProgressSync" or "AniList" or "HomeLayout" or "Collections" or "Calendar" or "Notifications" or "Statistics" or "UnitGroups" or "Franchises" or "Registration" => "personal",
             _ => "operations"
         };
 
