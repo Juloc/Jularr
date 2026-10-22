@@ -94,7 +94,8 @@ class TvV1ClientFlowMigrationTest {
 
     @Test fun workDetailsPreserveFractionalUnitAndRealPlaybackAssetOnly() = runBlocking {
         val backend = object : TvCatalogV1Client by fallback {
-            override suspend fun work(workId: Long) = work(workId)
+            override suspend fun work(workId: Long) =
+                this@TvV1ClientFlowMigrationTest.work(workId)
             override suspend fun seasons(workId: Long) = listOf(
                 TvWorkSeasonV1(11, 1, null, null, 2026, 2, 1, 0),
             )
