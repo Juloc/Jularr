@@ -178,8 +178,13 @@ namespace Jularr.E2E.Tests
             {
                 await Owner.SetUpAndSignInAsync(page);
                 await page.GotoAsync("/Admin/Instance/Speech");
-                await Steps.SubmitAsync(page, Steps.FormWith(page, "Download and activate"));
-                await Assertions.Expect(page.GetByText("Available to devices", new() { Exact = true })).ToBeVisibleAsync();
+
+                // Activation is the switch of the model's row, saved by the pill (saving downloads the package).
+                var model = page.Locator(".speech-models .list-row").First;
+                await model.GetByRole(AriaRole.Switch, new() { Name = "Available to devices" }).CheckAsync(new() { Force = true });
+                await Steps.SaveAsync(page);
+                await page.ReloadAsync();
+                await Assertions.Expect(page.Locator(".speech-models .list-row").First.GetByRole(AriaRole.Switch, new() { Name = "Available to devices" })).ToBeCheckedAsync();
                 await page.GotoAsync("/Settings");
                 Assert.AreEqual(0, modelRequests);
                 Assert.AreEqual(0, runtimeRequests);
@@ -257,8 +262,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(rows.Nth(0)).ToContainTextAsync("de-DE");
                 await Assertions.Expect(rows.Nth(1)).ToContainTextAsync("id-ID");
                 await Assertions.Expect(rows.Nth(2)).ToContainTextAsync("en-US");
-                await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Download and activate", Exact = true })).ToHaveCountAsync(3);
-                await Assertions.Expect(page.GetByText("Not activated", new() { Exact = true })).ToHaveCountAsync(3);
+                await Assertions.Expect(page.GetByRole(AriaRole.Switch, new() { Name = "Available to devices" })).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".speech-models input[name=IsEnabled]:checked")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Download and activate", Exact = true })).ToHaveCountAsync(0);
                 await rows.Nth(1).GetByRole(AriaRole.Link, new() { Name = "Package details", Exact = true }).ClickAsync();
                 var drawer = page.GetByRole(AriaRole.Dialog);
                 await Assertions.Expect(drawer).ToBeVisibleAsync();
@@ -364,17 +370,16 @@ namespace Jularr.E2E.Tests
                     await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=fixture+28", StringComparison.Ordinal));
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await Assertions.Expect(search).ToHaveValueAsync("fixture 28");
-                    await rows.GetByRole(AriaRole.Link, new() { Name = "Review model conditions", Exact = true }).Last.ClickAsync();
-                    var drawer = page.GetByRole(AriaRole.Dialog);
-                    await Assertions.Expect(drawer).ToBeVisibleAsync();
-                    await drawer.GetByRole(AriaRole.Button, new() { Name = "Download and activate", Exact = true }).ClickAsync();
-                    await Assertions.Expect(drawer).ToContainTextAsync("Review and confirm this model's conditions");
-                    Assert.IsTrue(await drawer.EvaluateAsync<bool>("dialog => dialog.matches(':modal')"), "The shared drawer must reopen as a modal after an action replaces its markup.");
-                    await Assertions.Expect(drawer.Locator("[name=AcceptLicense][type=checkbox]")).Not.ToBeCheckedAsync();
+
+                    // A model with conditions asks to accept them beside its switch in the row; saving without that keeps it off and says so in the row.
+                    await Assertions.Expect(rows.GetByRole(AriaRole.Link, new() { Name = "Review model conditions", Exact = true })).ToBeVisibleAsync();
+                    await rows.GetByRole(AriaRole.Switch, new() { Name = "Available to devices" }).CheckAsync(new() { Force = true });
+                    await Assertions.Expect(page.Locator("[data-save-pill]")).ToContainTextAsync("1 change");
+                    await Steps.FollowAsync(page, page.Locator("[data-save-pill] [data-save-submit]"));
+                    await Assertions.Expect(rows).ToContainTextAsync("Review and confirm this model's conditions");
+                    await Assertions.Expect(rows.Locator("[name=AcceptLicense][type=checkbox]")).Not.ToBeCheckedAsync();
                     await page.SetViewportSizeAsync(390, 844);
-                    await drawer.EvaluateAsync("el => Promise.all(el.getAnimations().map(animation => animation.finished))");
                     await Evidence.SaveAsync(page, "speech-catalog-license-phone");
-                    await drawer.GetByRole(AriaRole.Link, new() { Name = "Close", Exact = true }).ClickAsync();
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     Assert.IsFalse(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth > innerWidth + 1"), "The catalog must fit on a phone.");
                     await Evidence.SaveAsync(page, "speech-catalog-phone");

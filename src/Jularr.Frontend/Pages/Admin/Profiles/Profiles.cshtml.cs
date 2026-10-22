@@ -12,7 +12,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
-    // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles and tags. Lists are the list kit, editors are dialogs, sizes is one form with the page's save pill.
+    // The quality rules, one pane each: profiles, custom formats, quality sizes, release profiles and tags. Profiles and formats are lists (the profile has its own page, the format's
+    // conditions a dialog); release profiles and tags are cards with their settings inside and sizes is one form, all saved by the page's pill; adding opens a dialog.
     public sealed partial class ProfilesModel(
         ReadAcquisitionProfilesV1 profiles,
         ReadCustomFormatsV1 formats, ReadCustomFormatV1 format, SaveCustomFormatV1 saveFormat, DeleteCustomFormatV1 deleteFormat, ImportCustomFormatsV1 importFormats,
@@ -35,6 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         [BindProperty(SupportsGet = true)] public MediaType MediaTypeId { get; set; } = MediaType.Movie;
         [BindProperty(SupportsGet = true)] public long? Edit { get; set; }
         [BindProperty(SupportsGet = true, Name = "new")] public bool IsNew { get; set; }
+        [BindProperty(SupportsGet = true, Name = "delete")] public bool ConfirmDelete { get; set; }
         [BindProperty(SupportsGet = true)] public int PageNumber { get; set; } = 1;
         [BindProperty(SupportsGet = true)] public int TagPage { get; set; } = 1;
         [BindProperty(SupportsGet = true)] public int IndexerPage { get; set; } = 1;
@@ -176,27 +178,17 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     break;
                 case DownloadPages.Release:
                     _releases = await releases.ExecuteAsync<PageResult<ReleaseProfileDetailsV1>>(new ReadAcquisitionPolicyParametersV1(MediaTypeId, PageNumber), cancellation);
-                    if (_release is null && Edit is { } releaseId)
-                    {
-                        var item = await release.ExecuteAsync<ReleaseProfileDetailsV1>(new ReleaseProfileParametersV1(releaseId), cancellation);
-                        if (item.MediaTypeId is { } type && type != MediaTypeId) throw new KeyNotFoundException();
-                        _release = new(item.Id, item.MediaTypeId, item.Name, item.IsEnabled, item.Required, item.Ignored, item.AcquisitionConnectionId, item.TagIds, item.Version);
-                    }
                     break;
                 case DownloadPages.Tags:
                     _tags = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(PageNumber), cancellation);
-                    if (_tag is null && Edit is { } tagId)
-                    {
-                        var item = await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(tagId), cancellation);
-                        _tag = new(item.Id, item.Label, item.Version);
-                    }
                     break;
             }
             if (Tab == DownloadPages.Release)
             {
+                // Every card's chosen tags are offered besides the page of tags the pager shows.
                 _tagPage = await tags.ExecuteAsync<PageResult<AcquisitionTagDetailsV1>>(new ReadAcquisitionTagsParametersV1(TagPage), cancellation);
                 var choices = _tagPage.Items.ToList();
-                foreach (var id in (_release?.TagIds ?? []).Where(id => !choices.Any(choice => choice.Id == id)).Take(100))
+                foreach (var id in (_release?.TagIds ?? []).Concat((_releases?.Items ?? []).SelectMany(item => item.TagIds)).Distinct().Where(id => !choices.Any(choice => choice.Id == id)).Take(100).ToList())
                     choices.Add(await tag.ExecuteAsync<AcquisitionTagDetailsV1>(new AcquisitionTagParametersV1(id), cancellation));
                 _tagChoices = choices.Select(item => new SelectOption(Number(item.Id), item.Label)).ToArray();
                 _indexerPage = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(

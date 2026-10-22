@@ -524,10 +524,6 @@
    "Language name",
    "Taalnaam"
   ],
-  "admin.languages.state": [
-   "Language status",
-   "Taalstatus"
-  ],
   "admin.languages.enabled": [
    "Enabled",
    "Ingeschakeld"

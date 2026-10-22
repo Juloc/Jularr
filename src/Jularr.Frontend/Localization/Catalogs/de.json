@@ -528,10 +528,6 @@
    "Language name",
    "Sprachname"
   ],
-  "admin.languages.state": [
-   "Language status",
-   "Sprachstatus"
-  ],
   "admin.languages.enabled": [
    "Enabled",
    "Aktiviert"
@@ -732,6 +728,10 @@
    "Disconnect Plex server",
    "Plex-Server trennen"
   ],
+  "admin.plex.disconnectConfirm": [
+   "Disconnect Plex? Its key is deleted.",
+   "Plex trennen? Der Schlüssel wird gelöscht."
+  ],
   "admin.plex.tested": [
    "Plex {0} answered; libraries: {1}",
    "Plex {0} hat geantwortet; Bibliotheken: {1}"
@@ -771,6 +771,10 @@
   "admin.mediaServer.disconnect": [
    "Disconnect server",
    "Server trennen"
+  ],
+  "admin.mediaServer.disconnectConfirm": [
+   "Disconnect this server? Its key is deleted.",
+   "Server trennen? Der Schlüssel wird gelöscht."
   ],
   "admin.mediaServer.linked": [
    "{0} shares progress with {1}",
@@ -11296,14 +11300,6 @@
    "Access and security",
    "Zugriff und Sicherheit"
   ],
-  "admin.languages.list": [
-   "Interface languages",
-   "Oberflächensprachen"
-  ],
-  "admin.languages.edit": [
-   "Edit language",
-   "Sprache bearbeiten"
-  ],
   "admin.languages.actions": [
    "Language actions",
    "Aktionen für Sprachen"
@@ -12008,6 +12004,10 @@
    "Disconnect",
    "Trennen"
   ],
+  "settings.anilist.disconnectConfirm": [
+   "Disconnect AniList? Progress stops going out.",
+   "AniList trennen? Der Fortschritt wird nicht mehr gesendet."
+  ],
   "hint.AniListFields.Code.info": [
    "After you allow Jularr at AniList, its page shows a code. Paste it here once.",
    "Nachdem du Jularr bei AniList erlaubt hast, zeigt die Seite einen Code. Füge ihn hier einmal ein."
@@ -12199,6 +12199,10 @@
   "arr.tag.add": [
    "New tag",
    "Neuer Tag"
+  ],
+  "arr.removeConfirm": [
+   "Remove this? Searches stop using it.",
+   "Entfernen? Suchen nutzen es dann nicht mehr."
   ],
   "arr.scores": [
    "Format scores",

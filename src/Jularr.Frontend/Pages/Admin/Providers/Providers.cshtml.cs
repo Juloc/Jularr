@@ -61,6 +61,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             page.Asset("Pages/Admin/Providers/Providers.entry.scss");
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
+            page.Asset("Framework/Components/Modal.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // Render only real registry rows; the media servers of Jellyfin and Emby need their modules.
@@ -137,7 +138,12 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 var action = provider.Key == "plex" ? Home + "?handler=Plex" : Home + "?mediaServerTypeId=" + type + "&handler=MediaServer";
                 var isPlex = provider.Key == "plex";
                 start.Add(Post(action + "Sync", csrf, [], new Button(new Text(isPlex ? "admin.plex.sync" : "admin.mediaServer.sync")).Compact().Soft().Submit()));
-                start.Add(Post(action + "Disconnect", csrf, [], new Button(new Text(isPlex ? "admin.plex.disconnect" : "admin.mediaServer.disconnect")).Compact().Warn().Submit()));
+
+                // Disconnecting deletes the stored key, so it asks first.
+                var dialog = "disconnect-" + provider.Key;
+                start.Add(Modal.Opener(new Button(new Text(isPlex ? "admin.plex.disconnect" : "admin.mediaServer.disconnect")).Compact().Warn(), dialog));
+                body.Add(isPlex ? Modal.Confirm(assets, dialog, "admin.plex.disconnectConfirm", "admin.plex.disconnect", action + "Disconnect", csrf, new PlexServerParametersV1())
+                    : Modal.Confirm(assets, dialog, "admin.mediaServer.disconnectConfirm", "admin.mediaServer.disconnect", action + "Disconnect", csrf, new MediaServerParametersV1(type!.Value)));
                 if (provider.IsEnabled) end.Add(Post(action + "Test", csrf, [], new Button(Glyph("sync", 14), new Text("providers.test")).Compact().Soft().Submit()));
             }
 

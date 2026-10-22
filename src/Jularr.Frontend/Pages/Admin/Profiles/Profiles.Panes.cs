@@ -120,75 +120,110 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private void DefineRelease(Page page)
         {
             if (_releases is not { } result) return;
-            var empty = new Div(new IconTile(Glyph("shield", 22), UiTone.Neutral), new P(new Text("arr.release.none")).Attribute("role", "status"));
-            var columns = new List<ListColumn>
-            {
-                new("profile.name", ListRole.Main), new("table.status", ListRole.Status), new("arr.col.required", ListRole.Data, 1), new("arr.col.ignored", ListRole.Data, 1),
-                new("arr.col.indexer", ListRole.Data, 2), new("common.actions", ListRole.Actions)
-            };
-            var rows = result.Items.Select(item =>
-            {
-                var identity = new ListIdentity(new IconTile(Glyph("shield", 18), UiTone.Warning), new A(new ValueText(item.Name)).Class("list-identity__title").Attribute("href", Address(edit: item.Id)),
-                    new Truncated(string.Join(", ", item.Required.Concat(item.Ignored))));
-                var state = item.IsEnabled ? new StateChip(new Text("acquisition.connection.on"), UiTone.Success, Glyph("check", 14)) : new StateChip(new Text("acquisition.connection.off"), UiTone.Neutral, Glyph("power", 14));
-                var indexer = item.AcquisitionConnectionId is { } connectionId ? _indexerChoices.FirstOrDefault(choice => choice.Value == Number(connectionId))?.Label ?? "–" : texts["arr.anyIndexer"];
-                var caption = new List<IUiComponent> { ListPanel.Fact("arr.col.required", Count(item.Required.Length)), ListPanel.Fact("arr.col.ignored", Count(item.Ignored.Length)) };
-                return new ListRow([identity, state, new Span(Count(item.Required.Length)).Class("list-value"), new Span(Count(item.Ignored.Length)).Class("list-value"),
-                    new Span(new ValueText(indexer)).Class("list-value"), new Div(EditLink(Address(edit: item.Id))).Class("list-actions")], caption);
-            }).ToList();
-            page.Content.Add(new ListPanel("arr.releaseProfiles", columns, rows, empty).Modifier("release-list").Paged());
 
-            var input = _release ?? new SaveReleaseProfileDataV1(null, MediaTypeId, "", true, [], [], null, [], null);
-            var form = new Form<SaveReleaseProfileDataV1>(form =>
+            // Every release profile is a card with its settings inside; a new one is added in a dialog with Cancel.
+            if (result.Items.Count == 0)
             {
-                form.Hidden(item => item.Id);
-                form.Hidden(item => item.Version);
-                form.Text(item => item.Name, "profile.name");
-                form.Toggle(item => item.IsEnabled, "admin.providers.enabled");
-                form.Multiline(item => item.Required, "arr.requiredTerms", help: new FieldHelp(Info: "arr.terms.info"));
-                form.Multiline(item => item.Ignored, "arr.ignoredTerms", help: new FieldHelp(Info: "arr.terms.info"));
-                form.Select(item => item.AcquisitionConnectionId, "acquisition.role.Search", _indexerChoices);
-                PickerPaging(form, "Release", "IndexerPage", _indexerPage?.Page ?? 1, _indexerPage?.Items.Count == _indexerPage?.PageSize);
-                form.Choices(item => item.TagIds, "arr.tags", _tagChoices);
-                PickerPaging(form, "Release", "TagPage", _tagPage?.Page ?? 1, _tagPage?.Items.Count == _tagPage?.PageSize);
-                form.Cancel();
-                form.Submit("common.save");
-            }, Address("Release", Edit), Token, input, FormError);
-            var body = new List<IUiComponent> { form };
-            if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
-            if (Edit is not null || IsNew || _release is not null) page.Content.Add(new Modal(assets, "release-editor", "arr.release.title", body, open: true, returnTo: Address()));
+                page.Content.Add(new Div(new Div(new IconTile(Glyph("shield", 22), UiTone.Neutral), new P(new Text("arr.release.none")).Attribute("role", "status")).Class("list-empty")).Class("list"));
+            }
+            else
+            {
+                page.Content.Add(new CardGrid([.. result.Items.Select(ReleaseCard)]).Paged(result.Items.Count, result.PageSize));
+            }
+
+            if (IsNew || _release is { Id: null })
+            {
+                var input = _release ?? new SaveReleaseProfileDataV1(null, MediaTypeId, "", true, [], [], null, [], null);
+                page.Content.Add(new Modal(assets, "release-editor", "arr.release.title", [ReleaseForm(input, true, _release is not null)], open: true, returnTo: Address()));
+            }
+
+            if (ConfirmDelete && result.Items.FirstOrDefault(item => item.Id == Edit) is { } target) page.Content.Add(DeleteDialog(target.Id, target.Version));
             page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.release.add")]));
         }
+
+        private IUiComponent ReleaseCard(ReleaseProfileDetailsV1 item)
+        {
+            var submitted = _release is { } posted && posted.Id == item.Id;
+            var input = submitted ? _release! : new SaveReleaseProfileDataV1(item.Id, item.MediaTypeId, item.Name, item.IsEnabled, item.Required, item.Ignored, item.AcquisitionConnectionId, item.TagIds, item.Version);
+            var remove = new A(Glyph("trash", 14), new Text("common.remove")).Class("button button--compact button--warn").Attribute("href", Address(edit: item.Id) + "&delete=true");
+            return new FeatureCard(new IconTile(Glyph("shield", 18), UiTone.Warning), item.Name, null, null, [ReleaseForm(input, false, submitted)], [remove], null, "release-" + Number(item.Id)).Wide();
+        }
+
+        private Form<SaveReleaseProfileDataV1> ReleaseForm(SaveReleaseProfileDataV1 input, bool inDialog, bool showError) => new(form =>
+        {
+            form.Hidden(item => item.Id);
+            form.Hidden(item => item.Version);
+            form.Text(item => item.Name, "profile.name");
+            form.Toggle(item => item.IsEnabled, "admin.providers.enabled");
+            form.Multiline(item => item.Required, "arr.requiredTerms", help: new FieldHelp(Info: "arr.terms.info"));
+            form.Multiline(item => item.Ignored, "arr.ignoredTerms", help: new FieldHelp(Info: "arr.terms.info"));
+            form.Select(item => item.AcquisitionConnectionId, "acquisition.role.Search", _indexerChoices);
+            PickerPaging(form, "Release", input.Id, "IndexerPage", _indexerPage?.Page ?? 1, _indexerPage?.Items.Count == _indexerPage?.PageSize);
+            form.Choices(item => item.TagIds, "arr.tags", _tagChoices);
+            PickerPaging(form, "Release", input.Id, "TagPage", _tagPage?.Page ?? 1, _tagPage?.Items.Count == _tagPage?.PageSize);
+            if (inDialog)
+            {
+                form.Cancel();
+                form.Submit("common.save");
+            }
+            else form.Save();
+        }, Address("Release", input.Id), Token, input, showError ? FormError : null);
 
         private void DefineTags(Page page)
         {
             if (_tags is not { } result) return;
-            var empty = new Div(new IconTile(Glyph("tag", 22), UiTone.Neutral), new P(new Text("arr.tags.none")).Attribute("role", "status"));
-            var columns = new List<ListColumn> { new("arr.tag", ListRole.Main), new("common.actions", ListRole.Actions) };
-            var rows = result.Items.Select(item => new ListRow([
-                new ListIdentity(new IconTile(Glyph("tag", 18), UiTone.Accent), new A(new ValueText(item.Label)).Class("list-identity__title").Attribute("href", Address(edit: item.Id)), new Span()),
-                new Div(EditLink(Address(edit: item.Id))).Class("list-actions")])).ToList();
-            page.Content.Add(new ListPanel("arr.tags", columns, rows, empty).Modifier("tags-list").Paged());
 
-            var input = _tag ?? new SaveAcquisitionTagDataV1(null, "", null);
-            var form = new Form<SaveAcquisitionTagDataV1>(form =>
+            // A tag is a card whose one input is its label; a new one is added in a dialog with Cancel.
+            if (result.Items.Count == 0)
             {
-                form.Hidden(item => item.Id);
-                form.Hidden(item => item.Version);
-                form.Text(item => item.Label, "arr.tag");
-                form.Cancel();
-                form.Submit("common.save");
-            }, Address("Tag", Edit), Token, input, FormError);
-            var body = new List<IUiComponent> { form };
-            if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
-            if (Edit is not null || IsNew || _tag is not null) page.Content.Add(new Modal(assets, "tag-editor", "arr.tag.title", body, open: true, returnTo: Address()));
+                page.Content.Add(new Div(new Div(new IconTile(Glyph("tag", 22), UiTone.Neutral), new P(new Text("arr.tags.none")).Attribute("role", "status")).Class("list-empty")).Class("list"));
+            }
+            else
+            {
+                page.Content.Add(new CardGrid([.. result.Items.Select(TagCard)]).Paged(result.Items.Count, result.PageSize));
+            }
+
+            if (IsNew || _tag is { Id: null })
+            {
+                var input = _tag ?? new SaveAcquisitionTagDataV1(null, "", null);
+                page.Content.Add(new Modal(assets, "tag-editor", "arr.tag.title", [TagForm(input, true, _tag is not null)], open: true, returnTo: Address()));
+            }
+
+            if (ConfirmDelete && result.Items.FirstOrDefault(item => item.Id == Edit) is { } target) page.Content.Add(DeleteDialog(target.Id, target.Version));
             page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.tag.add")]));
         }
 
-        // The deletion of the edited item behind one more click.
-        private IUiComponent DeleteForm(long id, long version)
+        private IUiComponent TagCard(AcquisitionTagDetailsV1 item)
         {
-            IUiComponent form = Tab switch
+            var submitted = _tag is { } posted && posted.Id == item.Id;
+            var remove = new A(Glyph("trash", 14)).Class("button button--icon").TextAttribute("aria-label", "common.remove").TextAttribute("title", "common.remove")
+                .Attribute("href", Address(edit: item.Id) + "&delete=true");
+            return new Div(new IconTile(Glyph("tag", 18), UiTone.Accent), TagForm(submitted ? _tag! : new SaveAcquisitionTagDataV1(item.Id, item.Label, item.Version), false, submitted), remove)
+                .Class("feature-card tag-card").Attribute("id", "tag-" + Number(item.Id)).Attribute("data-region", "");
+        }
+
+        private Form<SaveAcquisitionTagDataV1> TagForm(SaveAcquisitionTagDataV1 input, bool inDialog, bool showError) => new(form =>
+        {
+            form.Hidden(item => item.Id);
+            form.Hidden(item => item.Version);
+            form.Text(item => item.Label, "arr.tag");
+            if (inDialog)
+            {
+                form.Cancel();
+                form.Submit("common.save");
+            }
+            else form.Save();
+        }, Address("Tag", input.Id), Token, input, showError ? FormError : null);
+
+        // The deletion of an edited format behind one more click inside its dialog; a release profile or tag asks in a dialog of its own with Cancel.
+        private IUiComponent DeleteForm(long id, long version) => new Details(new Summary(new Text("common.remove")), DeleteConfirm(id, version, false));
+
+        private IUiComponent DeleteDialog(long id, long version) =>
+            new Modal(assets, "delete-confirm", "common.remove", [new P(new Text("arr.removeConfirm")), DeleteConfirm(id, version, true)], open: true, returnTo: Address());
+
+        private IUiComponent DeleteConfirm(long id, long version, bool withCancel)
+        {
+            return Tab switch
             {
                 DownloadPages.Formats => Confirm(new DeleteCustomFormatParametersV1(id, version), fields =>
                 {
@@ -207,11 +242,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 }),
                 _ => throw new KeyNotFoundException()
             };
-            return new Details(new Summary(new Text("common.remove")), form);
 
             Form<T> Confirm<T>(T input, Action<Form<T>> fields) where T : BaseData => new(form =>
             {
                 fields(form);
+                if (withCancel) form.Cancel();
                 form.Submit("common.remove");
             }, Address("Delete", id), Token, input, FormError);
         }
@@ -290,14 +325,14 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             return LocalRedirect(Address());
         }
 
-        private void PickerPaging<T>(Form<T> form, string handler, string parameter, int current, bool more) where T : BaseData
+        private void PickerPaging<T>(Form<T> form, string handler, long? id, string parameter, int current, bool more) where T : BaseData
         {
-            if (current > 1) form.Content(PickerButton("common.previous", handler, parameter, current - 1));
-            if (more) form.Content(PickerButton("common.next", handler, parameter, current + 1));
+            if (current > 1) form.Content(PickerButton("common.previous", handler, id, parameter, current - 1));
+            if (more) form.Content(PickerButton("common.next", handler, id, parameter, current + 1));
         }
 
-        private IUiComponent PickerButton(string key, string handler, string parameter, int target) =>
-            new Button(new Text(key)).Attribute("type", "submit").Attribute("formaction", Address(handler, Edit) + "&draft=true&" + parameter + "=" + Number(target))
+        private IUiComponent PickerButton(string key, string handler, long? id, string parameter, int target) =>
+            new Button(new Text(key)).Attribute("type", "submit").Attribute("formaction", Address(handler, id) + "&draft=true&" + parameter + "=" + Number(target))
                 .Attribute("formnovalidate", "formnovalidate");
 
         private static string[] Terms(string? value) => value?.Split(['\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) ?? [];

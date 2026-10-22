@@ -154,20 +154,20 @@ namespace Jularr.E2E.Tests
         {
             await page.GotoAsync("/Admin/Acquisition");
             await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer" }));
-            await page.FillAsync("form [name=Name]", "Indexer");
-            await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
-            await page.FillAsync("form [name=ApiKey]", FakeServices.IndexerKey);
-            await page.FillAsync("form [name=Categories]", categories);
+            await page.FillAsync("dialog#connection-editor form [name=Name]", "Indexer");
+            await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "newznab/").ToString());
+            await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.IndexerKey);
+            await page.FillAsync("dialog#connection-editor form [name=Categories]", categories);
             // Two short choices are a segmented control of radios.
-            await page.Locator("form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
-            await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
+            await page.Locator("dialog#connection-editor form").GetByLabel(searchesAutomatically ? "Automatic and manual" : "Manual only", new() { Exact = true }).CheckAsync();
+            await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
             await page.GotoAsync("/Admin/Acquisition/Downloads");
             await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }));
-            await page.FillAsync("form [name=Name]", "SABnzbd");
-            await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
-            await page.FillAsync("form [name=ApiKey]", FakeServices.ClientKey);
-            await page.FillAsync("form [name=LocalPath]", fakes.Downloads);
-            await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
+            await page.FillAsync("dialog#connection-editor form [name=Name]", "SABnzbd");
+            await page.FillAsync("dialog#connection-editor form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
+            await page.FillAsync("dialog#connection-editor form [name=ApiKey]", FakeServices.ClientKey);
+            await page.FillAsync("dialog#connection-editor form [name=LocalPath]", fakes.Downloads);
+            await SubmitAsync(page, page.Locator("dialog#connection-editor form"));
         }
 
         // Found in Discover and requested; the Owner's request is approved at once.
