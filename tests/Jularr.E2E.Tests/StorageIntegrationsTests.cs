@@ -106,14 +106,14 @@ namespace Jularr.E2E.Tests
                 // The switch swaps its card in place: no navigation, the state follows, and it stays after a reload.
                 var navigations = 0;
                 page.FrameNavigated += (_, frame) => { if (frame == page.MainFrame) navigations++; };
-                var aniList = page.Locator("#provider-anilist");
-                await Assertions.Expect(aniList).ToContainTextAsync("Enabled");
-                await Steps.FollowAsync(page, aniList.GetByRole(AriaRole.Switch, new() { Name = "Provider status", Exact = true }));
-                await Assertions.Expect(page.Locator("#provider-anilist")).ToContainTextAsync("Disabled");
+                var openLibrary = page.Locator("#provider-openlibrary");
+                await Assertions.Expect(openLibrary).ToContainTextAsync("Enabled");
+                await Steps.FollowAsync(page, openLibrary.GetByRole(AriaRole.Switch, new() { Name = "Provider status", Exact = true }));
+                await Assertions.Expect(page.Locator("#provider-openlibrary")).ToContainTextAsync("Disabled");
                 Assert.AreEqual(0, navigations);
                 await page.ReloadAsync();
-                await Assertions.Expect(page.Locator("#provider-anilist")).ToContainTextAsync("Disabled");
-                await Assertions.Expect(page.Locator("#provider-anilist").GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-checked", "false");
+                await Assertions.Expect(page.Locator("#provider-openlibrary")).ToContainTextAsync("Disabled");
+                await Assertions.Expect(page.Locator("#provider-openlibrary").GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-checked", "false");
 
                 // One chip row joins the integrations: providers, media servers and the catalogs.
                 var chips = page.GetByRole(AriaRole.Navigation, new() { Name = "Integrations" });
