@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,8 +17,6 @@ import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
-import de.juloc.jularr.core.api.catalog.TvWorkCardV1
-import de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientLibrary
 import de.juloc.jularr.core.model.InstanceCapabilities

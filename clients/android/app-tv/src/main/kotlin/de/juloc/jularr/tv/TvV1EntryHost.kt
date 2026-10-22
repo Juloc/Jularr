@@ -30,7 +30,7 @@ import kotlinx.coroutines.isActive
 fun TvV1EntryHost(
     settings: TvServerSettings,
     session: TvV1DeviceSession,
-    onAuthenticated: @Composable (String, InstanceCapabilities) -> Unit = { origin, _ ->
+    onAuthenticated: @Composable (String, InstanceCapabilities, () -> Unit) -> Unit = { origin, _, _ ->
         TvV1AuthenticatedPendingCatalog(origin)
     },
 ) {
@@ -153,7 +153,16 @@ fun TvV1EntryHost(
             }
         }
 
-        TvV1EntryPhase.Authenticated -> onAuthenticated(requireNotNull(origin), requireNotNull(capabilities))
+        TvV1EntryPhase.Authenticated -> onAuthenticated(
+            requireNotNull(origin),
+            requireNotNull(capabilities),
+            {
+                // A revoked bearer cannot reuse an authenticated catalog screen.
+                pairing = null
+                capabilities = null
+                phase = TvV1EntryPhase.Pairing
+            },
+        )
 
         TvV1EntryPhase.Failed -> TvCenteredPanel(
             title = "Verbindung fehlgeschlagen",
