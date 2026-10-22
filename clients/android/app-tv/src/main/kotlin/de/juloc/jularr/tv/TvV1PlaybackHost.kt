@@ -22,6 +22,7 @@ import de.juloc.jularr.core.api.playback.TvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Plan
 import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackExtrasClient
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackChapter
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackMarker
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackPreferences
 import de.juloc.jularr.core.model.ClientTrickplayDescriptor
@@ -66,6 +67,7 @@ internal fun TvV1PlaybackHost(
     var positionMs by remember(mediaAssetId) { mutableStateOf(0L) }
     var durationMs by remember(mediaAssetId) { mutableStateOf<Long?>(null) }
     var markers by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackMarker>>(emptyList()) }
+    var chapters by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackChapter>>(emptyList()) }
     var playbackPreferences by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackPreferences?>(null) }
     var seekPreview by remember(mediaAssetId) { mutableStateOf<ClientTrickplayDescriptor?>(null) }
 
@@ -122,6 +124,7 @@ internal fun TvV1PlaybackHost(
         }
         loadedOrUnauthorized { playbackPreferences = extras.preferences() }
         loadedOrUnauthorized { markers = extras.markers(mediaAssetId) }
+        loadedOrUnauthorized { chapters = extras.chapters(mediaAssetId) }
         loadedOrUnauthorized {
             seekPreview = TvV1PlayerUiMapping.trickplay(
                 mediaAssetId, extras.trickplay(mediaAssetId),
@@ -246,6 +249,7 @@ internal fun TvV1PlaybackHost(
             episodeTitle = title,
             currentCue = null,
             skipSegments = TvV1PlayerUiMapping.skipSegments(markers, playbackPreferences),
+            chapters = chapters,
             trickplay = seekPreview,
             defaultPlaybackSpeed = playbackPreferences?.speed?.toFloat() ?: 1f,
             preferredAudioLanguage = playbackPreferences?.audioLanguage,
