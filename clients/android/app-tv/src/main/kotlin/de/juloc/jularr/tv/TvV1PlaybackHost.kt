@@ -1,6 +1,10 @@
 package de.juloc.jularr.tv
 
 import android.net.Uri
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import java.io.File
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,6 +29,7 @@ import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackChapter
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackMarker
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackPreferences
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackTrack
 import de.juloc.jularr.core.model.ClientTrickplayDescriptor
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -70,11 +75,21 @@ internal fun TvV1PlaybackHost(
     var chapters by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackChapter>>(emptyList()) }
     var playbackPreferences by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackPreferences?>(null) }
     var seekPreview by remember(mediaAssetId) { mutableStateOf<ClientTrickplayDescriptor?>(null) }
+    var availableTracks by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackTrack>>(emptyList()) }
+    var selectedAudioKey by remember(mediaAssetId) { mutableStateOf<String?>(null) }
+    var audioStreamIndex by remember(mediaAssetId) { mutableStateOf<Int?>(null) }
+    var selectedSubtitleKey by remember(mediaAssetId) { mutableStateOf<String?>(null) }
+    var selectedSubtitleConfig by remember(mediaAssetId) {
+        mutableStateOf<MediaItem.SubtitleConfiguration?>(null)
+    }
+    val subtitleFiles = remember(mediaAssetId) { mutableListOf<File>() }
 
     DisposableEffect(player) {
         onDispose {
             player.player.stop()
             player.close()
+            subtitleFiles.forEach { it.delete() }
+            subtitleFiles.clear()
         }
     }
 
@@ -82,7 +97,23 @@ internal fun TvV1PlaybackHost(
         loading = true
         error = null
         try {
-            val current = api.start(mediaAssetId, TvV1PlaybackCapabilities.read())
+            val oldPlan = plan
+            if (oldPlan != null) {
+                val previousPosition = player.player.currentPosition.coerceAtLeast(0L)
+                val previousDuration = player.player.duration.takeIf { it > 0 } ?: oldPlan.durationMs
+                player.player.pause()
+                api.update(
+                    oldPlan.playbackSessionId,
+                    previousPosition,
+                    previousDuration,
+                    isEnded = true,
+                    isCompleted = false,
+                )
+                plan = null
+            }
+            val current = api.start(
+                mediaAssetId, TvV1PlaybackCapabilities.read(), audioStreamIndex,
+            )
             // The server may rotate credentials in the session-creation response.
             val credential = checkNotNull(tokenStore.current) { "The device token is no longer valid." }
             val uri = Uri.parse(current.streamUrl)
@@ -95,6 +126,7 @@ internal fun TvV1PlaybackHost(
                 startPositionMs = current.resumePositionMs,
                 requestHeaders = mapOf("Authorization" to "Bearer $credential"),
                 metadata = JularrPlaybackMetadata(mediaAssetId.toString(), title),
+                subtitleConfigurations = selectedSubtitleConfig?.let(::listOf).orEmpty(),
             )
         } catch (cancellation: CancellationException) {
             throw cancellation
@@ -125,6 +157,14 @@ internal fun TvV1PlaybackHost(
         loadedOrUnauthorized { playbackPreferences = extras.preferences() }
         loadedOrUnauthorized { markers = extras.markers(mediaAssetId) }
         loadedOrUnauthorized { chapters = extras.chapters(mediaAssetId) }
+        loadedOrUnauthorized {
+            val fetched = extras.tracks(mediaAssetId)
+            availableTracks = fetched
+            if (selectedAudioKey == null) selectedAudioKey =
+                fetched.firstOrNull { it.isAudio && it.isSelected }?.key
+            if (selectedSubtitleKey == null) selectedSubtitleKey =
+                fetched.firstOrNull { it.isSubtitle && it.isSelected }?.key
+        }
         loadedOrUnauthorized {
             seekPreview = TvV1PlayerUiMapping.trickplay(
                 mediaAssetId, extras.trickplay(mediaAssetId),
@@ -179,6 +219,66 @@ internal fun TvV1PlaybackHost(
                 return@LaunchedEffect
             }
         }
+    }
+
+    fun selectAudioTrack(key: String): Boolean {
+        val track = availableTracks.firstOrNull { it.key == key && it.isAudio && it.isSupported }
+            ?: return false
+        if (!key.startsWith("s")) return false
+        val index = key.drop(1).toIntOrNull() ?: return false
+        if (index < 0 || finishing) return false
+        if (key != selectedAudioKey) {
+            selectedAudioKey = key
+            audioStreamIndex = index
+            retry += 1 // Server chooses the audio stream when creating a new session.
+        }
+        return true
+    }
+
+    fun selectSubtitleTrack(key: String?): Boolean {
+        if (finishing) return false
+        val track = key?.let { requested ->
+            availableTracks.firstOrNull {
+                it.key == requested && it.isSubtitle && it.isSupported
+            } ?: return false
+        }
+        scope.launch {
+            try {
+                val configuration = if (track == null) null else {
+                    val vtt = extras.subtitleVtt(mediaAssetId, track.key)
+                    val file = File.createTempFile("jularr-tv-sub-$mediaAssetId-", ".vtt", context.cacheDir)
+                    file.writeText(vtt, Charsets.UTF_8)
+                    subtitleFiles.add(file)
+                    MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                        .setMimeType(MimeTypes.TEXT_VTT)
+                        .setLanguage(track.language)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                }
+                selectedSubtitleConfig = configuration
+                selectedSubtitleKey = key
+                val current = plan ?: return@launch
+                val position = player.player.currentPosition.coerceAtLeast(0L)
+                val wasPlaying = player.player.isPlaying
+                val credential = tokenStore.current ?: return@launch
+                player.open(
+                    uri = Uri.parse(current.streamUrl),
+                    startPositionMs = position,
+                    playWhenReady = wasPlaying,
+                    requestHeaders = mapOf("Authorization" to "Bearer $credential"),
+                    metadata = JularrPlaybackMetadata(mediaAssetId.toString(), title),
+                    subtitleConfigurations = configuration?.let(::listOf).orEmpty(),
+                )
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onUnauthorized()
+                else error = "Untertitel: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                error = failure.message ?: "Der Untertitel konnte nicht geladen werden."
+            }
+        }
+        return true
     }
 
     fun completePlayback(completed: Boolean) {
@@ -256,6 +356,14 @@ internal fun TvV1PlaybackHost(
             preferredSubtitleLanguage = playbackPreferences?.subtitleLanguage,
             serverOrigin = origin,
             requestHeaders = tokenStore.current?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty(),
+            audioTracks = availableTracks.filter { it.isAudio }
+                .map(TvV1PlayerUiMapping::trackForDisplay),
+            subtitleTracks = availableTracks.filter { it.isSubtitle }
+                .map(TvV1PlayerUiMapping::trackForDisplay),
+            selectedAudioTrackId = selectedAudioKey,
+            selectedSubtitleTrackId = selectedSubtitleKey,
+            onSelectAudioTrack = ::selectAudioTrack,
+            onSelectSubtitleTrack = ::selectSubtitleTrack,
             playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f),
             onPositionChanged = { position, duration, _ ->
                 positionMs = position
