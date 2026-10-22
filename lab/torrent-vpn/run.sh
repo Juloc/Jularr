@@ -76,6 +76,16 @@ for i in $(seq 1 18); do
 done
 say "   Dateien: $(ls -l "${DOWNLOAD_DIR}" 2>/dev/null | tail -n +2 | head -3)"
 
+say "5b) Der Tracker: erreichbar oder nicht"
+hash=$(qbit_status | grep -o '"hash":"[^"]*"' | head -1 | cut -d'"' -f4)
+if [ -n "$hash" ]; then
+    messages=$(curl -fsS --max-time 15 -b /tmp/cookie -H "Referer: ${QBITTORRENT_URL}" "${QBITTORRENT_URL}/api/v2/torrents/trackers?hash=${hash}" 2>/dev/null |
+        grep -o '"msg":"[^"]*"' | grep -v '"msg":""' | sort -u | head -4)
+    say "   ${messages:-keine Meldung}"
+else
+    say "   kein Torrent in der Liste"
+fi
+
 say "6) Der Kill-Switch: ohne Tunnel kein Download"
 if [ -n "${VPN_CONTROL_URL}" ]; then
     say "   Der Tunnel wird gestoppt (der Container laeuft weiter, die Firewall bleibt zu) ..."

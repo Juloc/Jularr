@@ -43,8 +43,24 @@ powershell -ExecutionPolicy Bypass -File lab/torrent-vpn/prepare-config.ps1 -Con
 `find-privado-config.ps1` sucht die Konfiguration, die die Privado-App auf diesem Rechner
 bereits erzeugt hat, und meldet nur den Pfad, das Verfahren und den Server – keine Schlüssel.
 `prepare-config.ps1` prüft die Datei, legt sie als `vpn/jularr.conf` ab und schreibt
-`vpn/vpn.env` mit dem Verfahren und, falls die Konfiguration danach fragt, den Zugangsdaten.
-Beide rufen keine Schnittstelle des Anbieters auf.
+`vpn/vpn.env` mit dem Verfahren, dem Nameserver des Anbieters und, falls die Konfiguration
+danach fragt, den Zugangsdaten. Beide rufen keine Schnittstelle des Anbieters auf.
+
+## Eine Messung, ein Befehl
+
+```
+powershell -ExecutionPolicy Bypass -File lab/torrent-vpn/run-measurement.ps1
+powershell -ExecutionPolicy Bypass -File lab/torrent-vpn/run-measurement.ps1 -Key <proton-schluessel>
+powershell -ExecutionPolicy Bypass -File lab/torrent-vpn/run-measurement.ps1 -Minutes 5
+```
+
+Das Skript trägt den Schlüssel ein (wenn einer angegeben ist), startet den Tunnel, übernimmt das
+temporäre Passwort des Torrent-Clients, misst und erklärt am Ende, was die Werte bedeuten. Am
+Ende der Messung stoppt es den Tunnel – das ist der Teil, der den Kill-Switch zeigt.
+
+**Für Proton:** aus dem Dashboard unter `https://account.proton.me/u/0/vpn/WireGuard` die
+Konfiguration herunterladen (ein Wert für alle Server) und sie mit `prepare-config.ps1`
+übergeben. Der Nameserver des Servers steht in der Datei und wandert automatisch mit.
 
 ## Was nicht ins Repository gehört
 

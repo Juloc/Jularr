@@ -58,6 +58,11 @@ if ($Credentials) {
 $configPath = Join-Path $target "jularr.conf"
 [IO.File]::WriteAllText($configPath, $text, (New-Object Text.UTF8Encoding($false)))
 
+# The name server of the provider stands in the configuration; the container needs it, because
+# the address range of the server changes with the server.
+$dns = ""
+if ($isWireGuard -and $text -match "(?im)^\s*DNS\s*=?\s*(\d+\.\d+\.\d+\.\d+)") { $dns = $Matches[1] }
+
 $type = "openvpn"
 if ($isWireGuard) { $type = "wireguard" }
 $envLines = @(
@@ -65,12 +70,14 @@ $envLines = @(
     "VPN_TYPE=$type",
     "VPN_CUSTOM_CONFIG_PATH=/vpn/jularr.conf"
 )
+if ($dns) { $envLines += "VPN_DNS=$dns`:53" }
 if ($user) { $envLines += "VPN_USER=$user" }
 if ($password) { $envLines += "VPN_PASSWORD=$password" }
 $envPath = Join-Path $target "vpn.env"
 [IO.File]::WriteAllLines($envPath, $envLines, (New-Object Text.UTF8Encoding($false)))
 
 Write-Host "Vorbereitet: $type"
+if ($dns) { Write-Host "  Nameserver des Anbieters: $dns" }
 Write-Host "  Konfiguration: $configPath"
 Write-Host "  Angaben:       $envPath"
 Write-Host ""
