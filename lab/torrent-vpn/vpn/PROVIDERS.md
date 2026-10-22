@@ -2,6 +2,21 @@
 
 Stand: 2026-10-22, nach den Angaben der Anbieter (geprüft, nicht selbst gemessen).
 
+## Die Übersicht
+
+| Anbieter | Gratis: Konfigurationsdatei für den Container | Gratis: P2P (Torrents) | Aus Deutschland erreichbar | Preis für beides |
+| --- | --- | --- | --- | --- |
+| **Proton** | **ja** – ein WireGuard-Schlüssel aus dem Dashboard, galt für alle Server | **nein** – „P2P-Unterstützung" steht bei Proton als Premium-Funktion | ja | **1,11 €/Monat** (Plus, im Aktionspreis) |
+| hide.me | **nein** – die KB sagt wörtlich: „Free users cannot use OpenVPN connections" und: „To set up OpenVPN on a Linux machine … you will need to upgrade to our Premium plan" | nein (Premium mit dynamischem Port-Forwarding) | ja (Konto und KB) | 4,23 €/Monat (12 Monate) |
+| Privado | **nein** – der Generator ist Premium; zusätzlich antwortet das Portal aus Deutschland nicht | nein (SOCKS5 ist Premium) | **das Portal nicht** | 1,11 €/Monat, aber der Weg dorthin führt von hier aus nicht |
+| Windscribe | ja | nein (im Gratis-Tarif abgeschaltet) | der Konto-Host nicht | - |
+| eigener Server | ja | nach eigener Entscheidung | - | ca. 3–5 €/Monat (VPS) |
+
+**Der einzige Gratisweg, der in den Container führt, ist Proton** – und der ist gemessen
+(siehe `../RESULT.md`). hide.me im Gratis-Tarif scheitert an derselben Stelle wie Privado: Ohne
+Konfigurationsdatei gibt es keinen Weg in den Container. Für Torrents braucht es in allen Fällen
+ein Abo oder einen eigenen Server.
+
 ## Was Privado wirklich gibt (geprüft am 2026-10-22)
 
 | Was | Free | Premium |
@@ -54,9 +69,9 @@ Anbieter) oder ein anderer Anbieter mit Konfiguration im Gratis-Tarif.
 | Anbieter | Kostenlos | Konfigurationsdatei | Linux-Client | P2P im Gratis-Tarif | Bemerkung |
 | --- | --- | --- | --- | --- | --- |
 | Privado | 10 GB/Monat | nur Premium | nein, nur manuell | nicht zugesagt | aus Deutschland ist das Portal nicht erreichbar |
-| hide.me | unbegrenzt | **ja** | App und manuell (OpenVPN, IKEv2, WireGuard) | im Lab messen | Konto und Anleitungen aus Deutschland erreichbar |
+| hide.me | unbegrenzt, 1 Verbindung, 8 Standorte | **nur Premium** (die KB sagt es wörtlich) | App und manuell (OpenVPN, IKEv2, WireGuard) | nein | Konto und Anleitungen aus Deutschland erreichbar |
 | Windscribe | begrenzt | **ja** | App und CLI | **nein** (im Gratis-Tarif deaktiviert) | der Konto-Host ist aus Deutschland blockiert |
-| Proton | unbegrenzt | **ja** | App und CLI | **nein** | Konto aus Deutschland erreichbar |
+| Proton | unbegrenzt | **ja** | App und CLI | **nein** | Konto aus Deutschland erreichbar, im Lab gemessen |
 | beliebiger Anbieter | je nach Anbieter | **ja** | – | je nach Anbieter | der tragfähige Weg für Gluetun |
 
 ## Erreichbarkeit aus Deutschland (gemessen am 2026-10-22, Vodafone BW)
