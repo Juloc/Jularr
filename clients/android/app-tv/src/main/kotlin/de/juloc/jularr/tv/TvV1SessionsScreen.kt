@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -21,6 +22,8 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.profile.TvAccountSessionV1
 import de.juloc.jularr.core.api.profile.TvV1ProfileClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * The V1 /sessions endpoint lists sessions of the current account. It is NOT the
@@ -29,6 +32,7 @@ import kotlinx.coroutines.CancellationException
 @Composable
 internal fun TvV1SessionsScreen(
     api: TvV1ProfileClient,
+    canManageSessions: Boolean,
     onUnauthorized: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -36,6 +40,34 @@ internal fun TvV1SessionsScreen(
     var loading by remember(api) { mutableStateOf(true) }
     var error by remember(api) { mutableStateOf<String?>(null) }
     var reload by remember(api) { mutableIntStateOf(0) }
+    var confirming by remember(api) { mutableStateOf<UUID?>(null) }
+    var changing by remember(api) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun revoke(sessionId: UUID) {
+        if (!canManageSessions || changing) return
+        val target = sessions.firstOrNull { it.id == sessionId && !it.isCurrent } ?: return
+        changing = true
+        scope.launch {
+            try {
+                check(!api.revokeSession(target.id)) {
+                    "Der Server meldete unerwartet, dass die aktuelle TV-Sitzung beendet wurde."
+                }
+                confirming = null
+                reload++
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onUnauthorized()
+                else error = "Sitzung beenden: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                error = failure.message ?: "Sitzung konnte nicht beendet werden."
+            } finally {
+                changing = false
+            }
+        }
+    }
+
 
     LaunchedEffect(api, reload) {
         loading = true
@@ -85,6 +117,24 @@ internal fun TvV1SessionsScreen(
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        if (canManageSessions && !session.isCurrent) {
+                            if (confirming == session.id) {
+                                Text("Diese Sitzung wirklich beenden?")
+                                Button(
+                                    enabled = !changing,
+                                    onClick = { revoke(session.id) },
+                                ) { Text("Ja, Sitzung beenden") }
+                                Button(
+                                    enabled = !changing,
+                                    onClick = { confirming = null },
+                                ) { Text("Abbrechen") }
+                            } else {
+                                Button(
+                                    enabled = !changing,
+                                    onClick = { confirming = session.id },
+                                ) { Text("Sitzung beenden") }
+                            }
+                        }
                     }
                 }
             }
