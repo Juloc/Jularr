@@ -13,6 +13,8 @@ on:
       - 'src/Jularr.Frontend/**'
       - 'src/Jularr.Backend/**'
       - '.github/workflows/frontend.yml'
+  # Started by hand on clean-start when the release commit changed no frontend path (see docs/RELEASE.md).
+  workflow_dispatch:
 
 permissions:
   contents: read

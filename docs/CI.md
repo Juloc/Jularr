@@ -12,6 +12,8 @@ not deleted. The current baseline timings are recorded in GitHub Actions'
 | `Image / minimal-compose` | Docker/Compose/packaging or database schema changed | Yes, including source changes | Build the shipped container and start the supplied Compose stack |
 | `Backend Full / test` and `e2e (...)` | Only when explicitly opted in | Every push | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
 
+The `Release` workflow runs only for a `v*` tag (or by hand as a dry run) and is described in [RELEASE.md](RELEASE.md).
+
 ## Full validation before a release
 
 The full tests are not replaced by smoke tests. A release needs the full
