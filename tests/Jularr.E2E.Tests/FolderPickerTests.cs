@@ -8,7 +8,6 @@ namespace Jularr.E2E.Tests
         [TestMethod]
         [DataRow("/Admin/Storage", 1440, 900)]
         [DataRow("/Admin/Storage", 390, 844)]
-        [DataRow("/Setup/Storage", 390, 844)]
         [Timeout(180_000)]
         public async Task FolderDialog_PreservesDraftAndSelectsWithoutPageNavigation(string address, int width, int height)
         {
@@ -25,8 +24,7 @@ namespace Jularr.E2E.Tests
             try
             {
                 await Owner.SetUpAndSignInAsync(page);
-                await page.GotoAsync(address);
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add local path", Exact = true }));
+                await page.GotoAsync(address + "?protocol=Local");
                 var mount = page.Locator("form").Filter(new() { Has = page.Locator("[name=SharePath]") });
                 await mount.Locator("[name=Name]").FillAsync("Library");
                 await mount.Locator("[name=SharePath]").SelectOptionAsync(folders.Library);

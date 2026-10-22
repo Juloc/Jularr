@@ -36,7 +36,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("name=\"DisplayName\"", StringComparison.Ordinal));
             Assert.AreEqual(2, Regex.Matches(html, "data-password-reveal").Count);
             Assert.AreEqual(1, Regex.Matches(html, "stepper__step--current").Count);
-            Assert.AreEqual(4, Regex.Matches(html, "stepper__step--upcoming").Count);
+            Assert.AreEqual(11, Regex.Matches(html, "stepper__step--upcoming").Count);
 
             // The owner's language starts as the instance's, however the shipped languages sort.
             var chosen = System.Text.RegularExpressions.Regex.Match(html, @"<option(?=[^>]*\bselected\b)[^>]*value=""(\d+)""").Groups[1].Value;
@@ -71,63 +71,73 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode);
             Assert.AreEqual("/Setup/Progress", created.Headers.Location!.OriginalString);
 
-            // The wizard resumes at its step and moves on through the real editors.
+            // The wizard resumes at its first step, where the way to start is chosen.
             using var resume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
-            Assert.AreEqual("/Setup/Instance", resume.Headers.Location!.OriginalString);
-            using var instance = await host.SendAsync(HttpMethod.Get, "/Setup/Instance");
-            var instanceHtml = await instance.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, instance.StatusCode, instanceHtml);
-            StringAssert.Contains(instanceHtml, "name=\"Modules[0].IsEnabled\"");
-            Assert.IsFalse(instanceHtml.Contains("UsersConfirmSources", StringComparison.Ordinal));
-            using var next = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "2")));
-            Assert.AreEqual("/Setup/Storage", next.Headers.Location!.OriginalString);
-            using var back = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "1")));
-            Assert.AreEqual(HttpStatusCode.Redirect, back.StatusCode);
-            using var resumed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
-            Assert.AreEqual("/Setup/Storage", resumed.Headers.Location!.OriginalString);
-            using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
-            Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, await storage.Content.ReadAsStringAsync());
-            var storageHtml = await storage.Content.ReadAsStringAsync();
-            using var downloadStep = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("SetupStepTypeId", "9")));
-            Assert.AreEqual("/Setup/DownloadStorage", downloadStep.Headers.Location!.OriginalString);
-            using var earlierStep = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("SetupStepTypeId", "2")));
-            using var downloadResume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
-            Assert.AreEqual("/Setup/DownloadStorage", downloadResume.Headers.Location!.OriginalString);
-            using var downloadPage = await host.SendAsync(HttpMethod.Get, "/Setup/DownloadStorage");
-            using var sourceStep = await host.SendAsync(HttpMethod.Post, "/Setup/DownloadStorage?handler=Next", Token(await downloadPage.Content.ReadAsStringAsync()));
-            Assert.AreEqual("/Setup/Sources", sourceStep.Headers.Location!.OriginalString);
-            using var sourceResume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
-            Assert.AreEqual("/Setup/Sources", sourceResume.Headers.Location!.OriginalString);
+            Assert.AreEqual("/Setup/Begin", resume.Headers.Location!.OriginalString);
+            using var begin = await host.SendAsync(HttpMethod.Get, "/Setup/Begin");
+            var beginHtml = await begin.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, begin.StatusCode, beginHtml);
+            Assert.AreEqual(2, Regex.Matches(beginHtml, "class=\"setup-choice\"").Count, beginHtml);
+            Assert.IsFalse(beginHtml.Contains("/Setup/Backup", StringComparison.Ordinal));
+            Assert.AreEqual(0, Regex.Matches(beginHtml, "<h1|<h2").Count);
+            Assert.AreEqual(0, Regex.Matches(beginHtml, "app-sidebar|data-shell=\"app\"").Count, "The setup has no application menu.");
+            using var started = await host.SendAsync(HttpMethod.Post, "/Setup/Begin?handler=Start", Token(beginHtml, ("start", "Takeover")));
+            Assert.AreEqual("/Setup/Progress", started.Headers.Location!.OriginalString);
+            Assert.AreEqual((byte)2, Convert.ToByte(await host.ScalarAsync("SELECT \"SetupStartTypeId\" FROM \"InstanceSetupState\"")));
+            using var storageResume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Storage", storageResume.Headers.Location!.OriginalString);
 
-            // Source editors remain inside the Sources step and keep their links inside the wizard.
+            // Taking over adds its step after the storage; the other start does not.
+            using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
+            var storageHtml = await storage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, storageHtml);
+            StringAssert.Contains(storageHtml, "id=\"storage-add-Smb\"");
+            using var takeover = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("place", "Storage")));
+            Assert.AreEqual("/Setup/Takeover", takeover.Headers.Location!.OriginalString);
+            using var takeoverPage = await host.SendAsync(HttpMethod.Get, "/Setup/Takeover");
+            Assert.AreEqual(HttpStatusCode.OK, takeoverPage.StatusCode, await takeoverPage.Content.ReadAsStringAsync());
+            using var back = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("place", "Begin")));
+            Assert.AreEqual("/Setup/Storage", back.Headers.Location!.OriginalString);
+            using var resumed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Takeover", resumed.Headers.Location!.OriginalString, "Going back does not take the furthest step away.");
+
+            // Every topic is a step of its own, in order; the editors keep their links inside the wizard.
+            var places = new[] { ("Takeover", "/Setup/Instance"), ("Modules", "/Setup/Profiles"), ("Profiles", "/Setup/Libraries"), ("Libraries", "/Setup/Requests"), ("Requests", "/Setup/DownloadStorage"),
+                ("DownloadStorage", "/Setup/Downloads"), ("Downloads", "/Setup/Indexers"), ("Indexers", "/Setup/Providers"), ("Providers", "/Setup/Overview") };
+            foreach (var (place, next) in places)
+            {
+                using var step = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(storageHtml, ("place", place)));
+                Assert.AreEqual(next, step.Headers.Location!.OriginalString, place + await step.Content.ReadAsStringAsync());
+                using var page = await host.SendAsync(HttpMethod.Get, next);
+                Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, next + await page.Content.ReadAsStringAsync());
+                var pageHtml = await page.Content.ReadAsStringAsync();
+                StringAssert.Contains(pageHtml, "setup-wizard");
+                Assert.AreEqual(1, Regex.Matches(pageHtml, "stepper__step--current").Count, next);
+                Assert.IsFalse(pageHtml.Contains("navigation-tabs", StringComparison.Ordinal), next + " has tabs.");
+            }
+
             using var profiles = await host.SendAsync(HttpMethod.Get, "/Setup/Profiles");
             var profilesHtml = await profiles.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, profiles.StatusCode, profilesHtml);
-            StringAssert.Contains(profilesHtml, "setup-wizard");
             StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles/New?type=Movie\"");
+            using var overview = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
+            var overviewHtml = await overview.Content.ReadAsStringAsync();
+            StringAssert.Contains(overviewHtml, "href=\"/Setup/Libraries\"");
+            StringAssert.Contains(overviewHtml, "href=\"/Setup/Providers\"");
 
-            // Missing essentials block the end; once nothing blocks, the wizard closes.
-            using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
-            var blockedHtml = await blocked.Content.ReadAsStringAsync();
-            StringAssert.Contains(blockedHtml, "Movies and series need a TMDB key.");
+            // Missing essentials block the end; once nothing blocks, Finish closes the wizard.
+            await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Movie'");
+            using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
+            StringAssert.Contains(await blocked.Content.ReadAsStringAsync(), "Movies and series need a TMDB key.");
             await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE; UPDATE \"MediaSubtypes\" SET \"IsEnabled\" = FALSE");
-            using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
+            using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
             var readyHtml = await ready.Content.ReadAsStringAsync();
             StringAssert.Contains(readyHtml, "has no indexer yet.");
-            var version = Regex.Match(readyHtml, "name=\"Version\" value=\"(\\d+)\"").Groups[1].Value;
-            using var savedKey = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(readyHtml, ("Version", version), ("TmdbKey", "setup-key"), ("CompleteSetup", "false")));
-            Assert.AreEqual("/Setup/Sources", savedKey.Headers.Location!.OriginalString, await savedKey.Content.ReadAsStringAsync());
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CompletedAt\" IS NULL FROM \"InstanceSetupState\""));
-            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
-            using var persisted = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
-            var persistedHtml = await persisted.Content.ReadAsStringAsync();
-            Assert.IsFalse(persistedHtml.Contains("setup-key", StringComparison.Ordinal));
-            StringAssert.Contains(persistedHtml, "aria-current=\"page\">Metadata");
-            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(readyHtml, ("Version", version)));
+            var version = Regex.Match(readyHtml, "name=\"version\" value=\"(\\d+)\"").Groups[1].Value;
+            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Overview?handler=Finish", Token(readyHtml, ("version", version)));
             Assert.AreEqual("/", finished.Headers.Location!.OriginalString);
             using var closed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
             Assert.AreEqual("/", closed.Headers.Location!.OriginalString);
-            using var late = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "3")));
+            using var late = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(readyHtml, ("place", "Storage")));
             Assert.AreEqual(HttpStatusCode.BadRequest, late.StatusCode);
             using var adminStill = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
             Assert.AreEqual(HttpStatusCode.OK, adminStill.StatusCode);
@@ -140,7 +150,7 @@ namespace Jularr.Backend.Tests
 
             // The public API cannot create another Owner.
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/setup");
-            StringAssert.Contains(await state.Content.ReadAsStringAsync(), "\"requiresOwner\":false");
+            StringAssert.Contains(await state.Content.ReadAsStringAsync(), "\"requiresOwner\":false,\"isCompleted\":true");
             using var replay = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner",
                 new CreateOwnerDataV1("second_owner", "Second", "owner-password-123", "owner-password-123", 1));
             Assert.AreEqual(HttpStatusCode.Forbidden, replay.StatusCode);
@@ -190,27 +200,48 @@ namespace Jularr.Backend.Tests
             form["Media[1].IsEnabled"] = "False";
             using var saved = await host.SendAsync(HttpMethod.Post, "/Setup/Instance", form);
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            Assert.AreEqual("/Setup/Storage", saved.Headers.Location!.OriginalString);
+            Assert.AreEqual("/Setup/Progress", saved.Headers.Location!.OriginalString);
+            using var afterModules = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Profiles", afterModules.Headers.Location!.OriginalString);
             Assert.AreEqual("My server", await host.ScalarAsync("SELECT \"Name\" FROM \"InstanceSettings\""));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Devices'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Registration'"));
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaTypes\" WHERE \"Key\" = 'Music'"));
             Assert.AreEqual(movieVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"MediaTypes\" WHERE \"Key\" = 'Movie'"));
 
-            using var nextPage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
+            using var nextPage = await host.SendAsync(HttpMethod.Get, "/Setup/Providers");
             var nextHtml = await nextPage.Content.ReadAsStringAsync();
-            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
-            using var next = await host.SendAsync(HttpMethod.Post, "/Setup/Storage?handler=Next", Token(nextHtml, ("Version", version.ToString())));
-            Assert.AreEqual("/Setup/DownloadStorage", next.Headers.Location!.OriginalString, await next.Content.ReadAsStringAsync());
-            using var downloadStorage = await host.SendAsync(HttpMethod.Get, "/Setup/DownloadStorage");
-            using var proceed = await host.SendAsync(HttpMethod.Post, "/Setup/DownloadStorage?handler=Next", Token(await downloadStorage.Content.ReadAsStringAsync()));
-            Assert.AreEqual("/Setup/Sources", proceed.Headers.Location!.OriginalString);
+            using var libraries = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(nextHtml, ("place", "Profiles")));
+            Assert.AreEqual("/Setup/Libraries", libraries.Headers.Location!.OriginalString, await libraries.Content.ReadAsStringAsync());
+
+            // Leaving the libraries step switches off the media without a folder; the providers step saves keys and switches together.
+            using var requests = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(nextHtml, ("place", "Libraries")));
+            Assert.AreEqual("/Setup/Requests", requests.Headers.Location!.OriginalString, await requests.Content.ReadAsStringAsync());
+            using var providersPage = await host.SendAsync(HttpMethod.Get, "/Setup/Providers");
+            var providersHtml = await providersPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, providersPage.StatusCode, providersHtml);
+            var setupVersion2 = Regex.Match(providersHtml, "name=\"Version\" value=\"(\\d+)\"").Groups[1].Value;
+            var tmdbIndex = Regex.Match(providersHtml, "name=\"Providers\\[(\\d+)\\]\\.Key\" value=\"tmdb\"").Groups[1].Value;
+            Assert.IsTrue(tmdbIndex.Length > 0, providersHtml);
+            var keyed = Token(providersHtml, ("Version", setupVersion2));
+            foreach (Match row in Regex.Matches(providersHtml, "name=\"Providers\\[(\\d+)\\]\\.Key\" value=\"([^\"]+)\""))
+            {
+                keyed["Providers[" + row.Groups[1].Value + "].Key"] = row.Groups[2].Value;
+                keyed["Providers[" + row.Groups[1].Value + "].IsEnabled"] = row.Groups[2].Value == "tmdb" ? "True" : "False";
+            }
+
+            keyed["Providers[" + tmdbIndex + "].Secret"] = "setup-key";
+            using var savedProviders = await host.SendAsync(HttpMethod.Post, "/Setup/Providers", keyed);
+            Assert.AreEqual("/Setup/Progress", savedProviders.Headers.Location!.OriginalString, await savedProviders.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
+            using var afterProviders = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Overview", afterProviders.Headers.Location!.OriginalString);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTypes\" WHERE \"IsEnabled\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaSubtypes\" WHERE \"IsEnabled\""));
-            using var sources = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
-            var sourcesHtml = await sources.Content.ReadAsStringAsync();
+            using var overviewPage = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
+            var overviewHtml = await overviewPage.Content.ReadAsStringAsync();
             var current = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
-            using var finish = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(sourcesHtml, ("Version", current.ToString()), ("TmdbKey", "")));
+            using var finish = await host.SendAsync(HttpMethod.Post, "/Setup/Overview?handler=Finish", Token(overviewHtml, ("version", current.ToString())));
             Assert.AreEqual("/", finish.Headers.Location!.OriginalString, await finish.Content.ReadAsStringAsync());
 
             // Local account requests remain available without a Plex connection and always await approval.
@@ -284,11 +315,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaTypes\" WHERE \"Key\" = 'Movie'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaSubtypes\" WHERE \"Key\" = 'Anime'"));
             version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
-            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/sources", new { version, tmdbKey = "test-tmdb-key" });
+            using var providers = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/providers", new { version, providers = new[] { new { key = "tmdb", isEnabled = true, secret = "test-tmdb-key", clientId = (string?)null } } });
+            Assert.AreEqual(HttpStatusCode.OK, providers.StatusCode, await providers.Content.ReadAsStringAsync());
+            version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
+            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new CompleteSetupDataV1(version));
             Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
-            using var replay = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/sources", new { version, tmdbKey = "replacement" });
+            using var replay = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new CompleteSetupDataV1(version));
             Assert.AreEqual(HttpStatusCode.BadRequest, replay.StatusCode);
         }
 

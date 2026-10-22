@@ -1448,10 +1448,6 @@
    "Setup steps",
    "Installatiestappen"
   ],
-  "setup.step.Instance": [
-   "Instance",
-   "Instantie"
-  ],
   "setup.step.Storage": [
    "Storage",
    "Opslag"
@@ -1472,14 +1468,6 @@
    "Profiles",
    "Profielen"
   ],
-  "setup.step.Media": [
-   "Existing media",
-   "Bestaande media"
-  ],
-  "setup.step.Finish": [
-   "Finish",
-   "Afronden"
-  ],
   "setup.next": [
    "Continue",
    "Doorgaan"
@@ -1487,14 +1475,6 @@
   "setup.finish": [
    "Finish setup",
    "Installatie afronden"
-  ],
-  "setup.blockers": [
-   "Before finishing",
-   "Voordat je afrondt"
-  ],
-  "setup.warnings": [
-   "Worth a look",
-   "Het bekijken waard"
   ],
   "setup.check.library": [
    "no library yet",
@@ -4184,10 +4164,6 @@
    "Delete",
    "Verwijderen"
   ],
-  "setup.restore": [
-   "Restore a backup instead",
-   "In plaats daarvan een back-up herstellen"
-  ],
   "storage.synology.title": [
    "Synology",
    "Synology"
@@ -6396,14 +6372,6 @@
    "Owner & language",
    "Eigenaar en taal"
   ],
-  "setup.step.Sources": [
-   "Sources",
-   "Bronnen"
-  ],
-  "setup.sources.back": [
-   "Back to sources",
-   "Terug naar bronnen"
-  ],
   "admin.plex.pin.start": [
    "Connect through plex.tv",
    "Verbinden via plex.tv"
@@ -6435,30 +6403,6 @@
   "setup.modules.operations": [
    "Administration",
    "Beheer"
-  ],
-  "setup.sources.metadata": [
-   "Metadata",
-   "Metadata"
-  ],
-  "setup.sources.tmdbKey": [
-   "TMDB API key",
-   "TMDB-API-sleutel"
-  ],
-  "setup.sources.tmdbAccount": [
-   "Get a TMDB API key",
-   "Een TMDB-API-sleutel aanvragen"
-  ],
-  "setup.sources.acquisition": [
-   "Search & downloads",
-   "Zoeken en downloaden"
-  ],
-  "setup.sources.providers": [
-   "Provider connections",
-   "Providerverbindingen"
-  ],
-  "setup.sources.plex": [
-   "Plex and other providers",
-   "Plex en andere providers"
   ],
   "arr.settings": [
    "Arr+ settings",

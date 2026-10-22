@@ -87,6 +87,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.indexer_removed", "The indexer of this release was removed; search again."),
             new("errors.validation.invalid_network", "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8."),
             new("errors.validation.pairing_expired", "This code has expired; show a new code on the device."),
+            new("errors.takeover_unreachable", "Nothing answered at that address. Check the address and that the app is running and reachable from Jularr."),
+            new("errors.takeover_authentication_failed", "The address answered but refused the API key. Copy the key from the app's Settings, General page."),
             new("errors.acquisition_unavailable", "The indexer or download client could not be reached."),
             new("errors.acquisition_authentication_failed", "The indexer or download client rejected the API key."),
             new("errors.acquisition_rate_limited", "The indexer limits requests right now. Please try again later."),

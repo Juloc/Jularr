@@ -28,6 +28,9 @@ namespace Jularr.E2E.Tests
 
         public Uri Address { get; }
 
+        // The instance started last; tests run one after the other.
+        public static JularrInstance? Latest { get; private set; }
+
         // Folders the test fills, removed with the instance.
         public string Storage => _storage;
 
@@ -50,6 +53,7 @@ namespace Jularr.E2E.Tests
                 await instance.CreateDatabaseAsync();
                 instance.StartHost();
                 await instance.WaitUntilReadyAsync();
+                Latest = instance;
                 return instance;
             }
             catch

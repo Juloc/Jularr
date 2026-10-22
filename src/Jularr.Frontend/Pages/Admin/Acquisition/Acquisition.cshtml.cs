@@ -80,13 +80,18 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (Role == AcquisitionConnectionRole.Download) page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var isSetup = SetupWizard.IsActive(Request);
-            if (isSetup) page.Content.Add(SetupWizard.Frame(HttpContext, Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             var type = _selected?.AcquisitionConnectionTypeId ?? Type;
             var items = _connections?.Items ?? [];
 
             // The page's one row of navigation, then the figures.
             page.NoPageRow();
-            if (!isSetup) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
+            if (isSetup)
+            {
+                DefineCards(page, csrf, items);
+                return;
+            }
+
+            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             page.Content.Add(new KpiTiles(
@@ -115,7 +120,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (Role == AcquisitionConnectionRole.Search)
             {
                 actions.Add(new A(Glyph("swap", 16), new Span(new Text("acquisition.connection.importProwlarr")).Class("action-dock__text")).Class("button button--soft")
-                    .Attribute("href", isSetup ? SetupWizard.Paths[SetupStepType.Media] : "/Admin/Acquisition/Takeover"));
+                    .Attribute("href", isSetup ? SetupWizard.Paths[SetupStepType.Takeover] : "/Admin/Acquisition/Takeover"));
             }
             else if (Role == AcquisitionConnectionRole.Subtitles)
             {
@@ -128,6 +133,36 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }
 
             page.Content.Add(new ActionDock(assets, "acquisition.actions", actions));
+        }
+
+        // In the setup every connection is a card with its settings right in it, saved on the card; a new one is added in a dialog.
+        private void DefineCards(Page page, string? csrf, IReadOnlyList<AcquisitionConnectionDetailsV1> items)
+        {
+            var cards = new List<IUiComponent>();
+            foreach (var item in items)
+            {
+                var state = State(item);
+                var line = texts["acquisition.connection.type." + item.AcquisitionConnectionTypeId] + Endpoint(item);
+                var body = new List<IUiComponent>();
+                if (state == "error") body.Add(new P(new Truncated(texts["errors." + item.ErrorKey])).Class("feature-card__note"));
+                else if (state == "backoff") body.Add(new P(new Truncated(texts["acquisition.connection.backoff"] + " " + item.RetryAt!.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("feature-card__note"));
+                body.Add(ConnectionForm(item.AcquisitionConnectionTypeId, csrf, item, true));
+                var start = new List<IUiComponent> { Post("Test", item.Id, csrf, [], new Button(Glyph("pulse", 14), new Text("acquisition.connection.test")).Compact().Soft().Submit()) };
+                var end = new List<IUiComponent> { new A(Glyph("trash", 16)).Class("button button--icon").TextAttribute("aria-label", "acquisition.connection.delete").TextAttribute("title", "acquisition.connection.delete")
+                    .Attribute("href", Address(item.Id) + "&delete=true") };
+                var icon = item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? "server" : Role == AcquisitionConnectionRole.Download ? "download" : "search";
+                cards.Add(new FeatureCard(new IconTile(Glyph(icon, 18), UiTone.Info), item.Name, line, StateChipOf(item, state), body, start, end).Class("feature-card setup-connection"));
+            }
+
+            // The card that adds one: each kind opens its dialog.
+            var adds = Additions[Role].Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
+            adds.Add(Role == AcquisitionConnectionRole.Search
+                ? new A(Glyph("swap", 14), new Text("acquisition.connection.importProwlarr")).Class("button button--compact").Attribute("href", SetupWizard.Paths[SetupStepType.Takeover])
+                : new A(Glyph("drive", 14), new Text("downloadStorage.configure")).Class("button button--compact").Attribute("href", SetupWizard.Paths[SetupStepType.DownloadStorage]));
+            cards.Add(new Div(new IconTile(Glyph("plus", 18), UiTone.Accent), new Div([.. adds]).Class("feature-card__group feature-card__group--wrap")).Class("feature-card feature-card--add"));
+            page.Content.Add(new CardGrid([.. cards]).Class("card-grid setup-connections"));
+            if (_selected is not null || Type is not null) page.Content.Add(Editor(_selected?.AcquisitionConnectionTypeId ?? Type!.Value, csrf));
+            if (FormError is not null && _searchInput is null && _input is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
 
         // The columns each kind shows: what decides its use.
@@ -208,7 +243,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var body = new List<IUiComponent>();
             if (_selected is { } current) body.Add(Actions(current, csrf));
-            body.Add(ConnectionForm(type, csrf));
+            body.Add(ConnectionForm(type, csrf, _selected, false));
             if (_selected is { AcquisitionConnectionTypeId: AcquisitionConnectionType.Newznab } indexer) body.Add(SearchSection(indexer, csrf));
             return new Modal(assets, "connection-editor", "acquisition.connection.type." + type, body, open: true, returnTo: Address());
         }
@@ -359,9 +394,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
                 selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit, selected.Host, selected.Port, selected.UseSsl, selected.DownloadStorageMountId, selected.RemovesCompleted);
 
-        private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf)
+        private Form<SaveAcquisitionConnectionDataV1> ConnectionForm(AcquisitionConnectionType type, string? csrf, AcquisitionConnectionDetailsV1? selected, bool inline)
         {
-            var input = _input ?? (_selected is { } selected ? InputOf(selected)
+            // What was typed in a form that failed comes back to that form only.
+            var typed = _input is not null && AcquisitionConnectionId == selected?.Id ? _input : null;
+            var input = typed ?? (selected is not null ? InputOf(selected)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, type == AcquisitionConnectionType.Usenet ? null : SuggestedUrl ?? "", null, true,
                     type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [], null, null, null, useSsl: type == AcquisitionConnectionType.Usenet ? true : null));
 
@@ -434,7 +471,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Text(item => item.DownloadCategory, "acquisition.connection.category");
                     form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
-                    if (_selected?.RemotePath is { } detected)
+                    if (selected?.RemotePath is { } detected)
                         form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));
                     if (texts.Can("storage.read"))
                     {
@@ -445,7 +482,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                     else form.Hidden(item => item.DownloadStorageMountId);
                     form.Text(item => item.LocalPath, "acquisition.connection.localPath");
-                    var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(AcquisitionConnectionId, type, "Folders"),
+                    var browse = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(Address(selected?.Id, type, "Folders"),
                         "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))
                     {
@@ -454,9 +491,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     }
                 }
 
-                form.Cancel();
+                if (!inline) form.Cancel();
                 form.Submit("common.save");
-            }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : FormError);
+            }, Address(selected?.Id, type), csrf, input, typed is null ? null : FormError);
         }
 
         // A form of one connection's action; posted through htmx, it swaps the page content.

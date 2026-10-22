@@ -7,6 +7,8 @@
         && (currentPage?.Definition.Shell ?? true);
     var isPlayer = currentPage?.Definition.IsPlayer ?? false;
     var isReader = currentPage?.Definition.IsReader ?? false;
+    // The first-run setup stands alone: the steps and the page, without the application's menus.
+    var isSetup = Context.Request.Path.StartsWithSegments("/Setup");
     var title = currentPage?.Definition.DocumentTitle ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey]
         : ViewData["Title"] as string ?? T["app.name"]);
     ViewData["Title"] = title;
@@ -71,7 +73,7 @@
     @await RenderSectionAsync("Head", required: false)
 </head>
 @* App pages swap #app-content in place (with their own assets); the player page keeps its player beside it. *@
-<body class="@(isReader ? "app-page reader-page" : isPlayer ? "player-page" : showShell ? "app-page" : "auth-page")" hx-boost:inherited="@(inPlace ? "true" : null)"
+<body class="@(isReader ? "app-page reader-page" : isPlayer ? "player-page" : showShell ? "app-page" : isSetup ? "auth-page setup-page" : "auth-page")" hx-boost:inherited="@(inPlace ? "true" : null)"
     hx-target:inherited="@(inPlace ? "#app-content" : null)" hx-select:inherited="@(inPlace ? "#app-content" : null)" hx-swap:inherited="@(inPlace ? "outerHTML" : null)">
     <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
     @(new UiHtml(new NoCoverTemplate(Assets), T))
@@ -97,7 +99,7 @@
     }
     else
     {
-        <main class="auth-main" id="main-content" tabindex="-1">@RenderBody()</main>
+        <main class="@(isSetup ? "setup-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
     }
     @await RenderSectionAsync("Scripts", required: false)
 </body>

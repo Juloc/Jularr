@@ -59,14 +59,14 @@ namespace Jularr.Backend.Service.Public.Setup.V1
                 """
                 SELECT
                     setup."OwnerCreatedAt" IS NULL
-                        AND NOT EXISTS (SELECT 1 FROM "Accounts")
+                        AND NOT EXISTS (SELECT 1 FROM "Accounts") AS "RequiresOwner",
+                    setup."CompletedAt" IS NOT NULL AS "IsCompleted"
                 FROM
                     "InstanceSetupState" AS setup
                 WHERE
                     setup."Id" = 1;
                 """;
-            var requiresOwner = (bool)(await Context.ReadSql.ExecuteScalarAsync(sql, CancellationToken))!;
-            return new ReadSetupResultV1(requiresOwner);
+            return await Context.ReadSql.ReadRequiredAsync<ReadSetupResultV1>(sql, CancellationToken);
         }
     }
 

@@ -104,11 +104,13 @@ CREATE TABLE "InstanceSetupState" (
     "Id" bigint NOT NULL,
     "OwnerCreatedAt" timestamptz,
     "SetupStepTypeId" smallint NOT NULL DEFAULT 1,
+    "SetupStartTypeId" smallint NOT NULL DEFAULT 1,
     "CompletedAt" timestamptz NULL,
     "Version" bigint NOT NULL DEFAULT 1,
     CONSTRAINT "PK_InstanceSetupState" PRIMARY KEY ("Id"),
     CONSTRAINT "CK_InstanceSetupState_Id" CHECK ("Id" = 1),
-    CONSTRAINT "CK_InstanceSetupState_Step" CHECK ("SetupStepTypeId" BETWEEN 1 AND 9),
+    CONSTRAINT "CK_InstanceSetupState_Step" CHECK ("SetupStepTypeId" BETWEEN 1 AND 12),
+    CONSTRAINT "CK_InstanceSetupState_Start" CHECK ("SetupStartTypeId" BETWEEN 1 AND 2),
     CONSTRAINT "CK_InstanceSetupState_Version" CHECK ("Version" > 0)
 );
 INSERT INTO "InstanceSetupState" ("Id") VALUES (1);

@@ -28,7 +28,6 @@ namespace Jularr.Frontend.Pages.Setup.Start
         protected override void Define(Page page)
         {
             page.Title("setup.start.title");
-            page.Asset("Pages/Setup/Start/Start.entry.scss");
             page.Asset("Framework/Components/PasswordReveal.entry.ts");
 
             // Render only available setup.
@@ -53,7 +52,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
                 form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                 form.Submit("setup.owner.create");
             }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError);
-            page.Content.Add(new Div(SetupWizard.Frame(HttpContext, null), new Div(form).Class("ui-section")).Class("setup-owner"));
+            page.Content.Add(new Div(form).Class("ui-section setup-owner"));
         }
 
         public async Task<IActionResult> OnGetAsync()

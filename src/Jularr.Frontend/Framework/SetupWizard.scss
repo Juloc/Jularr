@@ -1,12 +1,176 @@
-// Main steps and source tabs each keep their own horizontal row.
-.setup-wizard {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 24px;
+// The first-run setup stands alone: only the steps at the top, one column of the step's own content and Back and Next below.
+.setup-main {
+    display: block;
+    min-height: 100dvh;
+    padding: max(28px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
 
-    & > .stepper,
-    & > .navigation-tabs { flex: 1 1 100%; justify-content: flex-start; }
-    & > .ui-form { margin-left: auto; }
+    & > .page-screen {
+        display: grid;
+        gap: 22px;
+        width: min(100%, 1080px);
+        margin: 0 auto;
+        align-content: start;
+
+        & > * { min-width: 0; }
+    }
+}
+
+.setup-wizard { display: block; }
+
+// A group of cards the form of its step wraps spans the form's whole width.
+.setup-providers { grid-column: 1 / -1; }
+
+// Back at the start, Next (or Finish) at the end.
+.setup-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 6px;
+
+    &__next { margin-left: auto; }
+    &--finish { align-items: flex-start; flex-wrap: wrap; }
+}
+
+// The first choice: a tile for each way to start.
+.setup-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap: 14px;
+
+    & > form { display: flex; }
+}
+
+.setup-choice {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-heading);
+    font-weight: 805;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color var(--transition), background var(--transition), transform var(--transition);
+
+    &:hover { border-color: var(--accent-outline); background: var(--accent-soft); }
+    &:active { transform: scale(.99); }
+}
+
+.setup-owner { width: min(100%, 640px); margin: 0 auto; }
+
+.setup-waiting {
+    display: grid;
+    gap: 16px;
+    justify-items: center;
+    width: min(100%, 460px);
+    margin: 12vh auto 0;
+    padding: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+// Cards with their fields inside: wider than a connection's card.
+.setup-sources,
+.setup-providers,
+.setup-servers,
+.setup-connections { grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+
+.setup-source {
+    &--result { grid-column: 1 / -1; }
+
+    &__block { display: grid; gap: 8px; }
+    &__label { font-size: var(--text-body); font-weight: 810; }
+    &__none { color: var(--muted); }
+
+    &__fold {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--surface);
+
+        & > summary {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 12px;
+            font-weight: 780;
+            cursor: pointer;
+            list-style: none;
+        }
+        & > summary::-webkit-details-marker { display: none; }
+        &[open] > summary { border-bottom: 1px solid var(--border); }
+        & > :not(summary) { margin: 10px 12px 12px; }
+    }
+}
+
+// The folders of the library step: a media type with what it has, and the picker for another.
+.setup-libraries {
+    display: grid;
+    gap: 12px;
+
+    &__row {
+        display: grid;
+        grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+        align-items: start;
+        gap: 14px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
+
+    &__who { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 810; }
+    &__who .state-chip { flex: none; }
+    &__folders { display: grid; gap: 10px; min-width: 0; }
+    &__root { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    &__path {
+        flex: 1;
+        min-width: 0;
+        padding: 9px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-field);
+        background: var(--field);
+        font-size: var(--text-body);
+    }
+
+    .ui-form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .folder-picker { flex: 1 1 240px; min-width: 0; }
+
+    @media (max-width: 640px) { &__row { grid-template-columns: minmax(0, 1fr); } }
+}
+
+// The overview: a row for every step with what was chosen, its state and the way back.
+.setup-overview {
+    padding: 6px 18px;
+
+    &__row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 0;
+
+        & + & { border-top: 1px solid var(--border); }
+    }
+
+    &__text { display: grid; gap: 3px; min-width: 0; }
+    &__value { color: var(--muted); font-size: var(--text-body); }
+    &__checks { display: grid; flex: 1 1 320px; gap: 4px; color: var(--muted); font-size: var(--text-body); }
+
+    @media (max-width: 640px) {
+        &__row { grid-template-columns: auto minmax(0, 1fr) auto; }
+        &__row > .button { grid-column: 2 / -1; justify-self: start; }
+    }
 }

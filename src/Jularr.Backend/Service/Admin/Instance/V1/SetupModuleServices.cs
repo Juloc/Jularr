@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                 settings.PublicUrl, null), CancellationToken);
             await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(), CancellationToken);
             foreach (var media in Data.Media) await Context.UpdateMediaCategoryAsync(new MediaCategoryUpdateData(media.Key, media.IsEnabled, media.Version), CancellationToken);
-            await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Storage), CancellationToken);
+            await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Profiles), CancellationToken);
             return new UpdateResult(true);
         }
     }

@@ -1,71 +1,54 @@
 # Instance setup
 
-Owner decision of 16 October 2026 supersedes the older nine-page wizard and the
-separate acquisition-profile step. Setup uses the canonical configuration owners;
-it adds neither its own settings store nor database migrations.
+Owner decision of 22 October 2026 (the setup mockup with the Sonarr and Radarr takeover) supersedes the
+older flows. Setup uses the canonical configuration owners; it adds neither its own settings store nor
+database migrations (the persisted wizard step and the way of starting live in `InstanceSetupState`).
 
-## Flow and owners
+## Standalone flow
 
-| Step | Page | Saved behavior |
-| --- | --- | --- |
-| 1. Owner and language | /Setup | Fields User name, Profile name, password with confirmation (each with the eye) and language (its flag at the field's start). Public ReadSetupLocalesV1 lists all installed languages, marking generated translations. CreateOwnerV1 atomically enables the selected language, applies it to the instance and the first profile, creates the Owner (Accounts.DisplayName is the user name) with its first profile (Profiles.DisplayName is the profile name) and signs in. Bootstrap remains exactly once. |
-| 2. Instance and modules | /Setup/Instance | ReadSetupModulesV1 supplies the existing switches and preset membership; the modules show as the Modules page's cards in four groups, each naming the modules it needs (ReadInstanceModulesV1). SaveSetupModulesV1 saves the instance name, all shown module rows and progress in one transaction, with ID/version checks. |
-| 3. Libraries | /Setup/Storage | The shared Storage editor creates, checks and browses connections and library roots. Continue invokes SaveSetupLibrariesV1, disables types/subtypes without a library and advances to Download storage when Acquisition is enabled, otherwise Sources. A parent needed by a subtype root stays enabled. |
-| 4. Download storage (with Acquisition) | /Setup/DownloadStorage | The canonical download-storage editor selects Incomplete/Complete through the shared dialog and confirms writable targets, reserve and optional limits. Native Usenet and direct sources have separate settings. External-client-only installations can continue without configuring a native workspace. |
-| 5. Sources and finish | /Setup/Sources | Tabs for metadata, indexers, downloaders, native quality profiles, takeover and provider connections keep their canonical editors inside this step. SaveSetupSourcesV1 preserves an empty key and saves a supplied key. Save changes stays in Sources; Finish setup also completes setup after the canonical checks pass in the same transaction. Enabled native/direct connections require confirmed download storage. |
+Setup stands alone: no sidebar, header or other application menu. Every Setup page (also the Admin editors reused under
+`/Setup/...`) is framed by [SetupWizard](../src/Jularr.Frontend/Framework/SetupWizard.cs): the one [Stepper](../src/Jularr.Frontend/Framework/Components/Stepper.cs)
+at the top, Back and Next at the foot, and no heading, subtitle, help line or tab row of its own. Every topic is a step of its own; the last step is the
+overview with Finish.
 
-Every step has the same row of steps at the top (Framework Stepper: numbered, the current one marked, passed ones with a check) and no heading, subtitle or help line of its own.
+| # | Step | Page | What it does |
+| --- | --- | --- | --- |
+| 1 | Owner and language | /Setup | CreateOwnerV1: user name, profile name, password with confirmation (eye), language with its flag. Bootstrap happens exactly once and signs the Owner in. |
+| 2 | Start | /Setup/Begin | The first choice: **New setup**, **Take over from Sonarr, Radarr, Readarr or Lidarr** or **Restore a backup** (offered only where a restore can run: `Backup:PgRestorePath`; the restore needs the Owner's session, so it follows step 1). UpdateSetupStartV1 stores the start; taking over adds step 4. |
+| 3 | Storage | /Setup/Storage | The Admin connection cards, standalone. The folders the installation offers (`Storage:LocalPaths`, such as `/media`) are listed as tiles with one-click Connect; Add SMB, NFS or a local path opens a dialog with Cancel. A new connection is checked at once. |
+| 4 | Takeover (takeover start only) | /Setup/Takeover | One card for each system (Sonarr, Radarr, Readarr, Lidarr, Prowlarr) with address and API key right in it (and the TMDB key where titles need it). Preview (read-only: the source is only read, nothing is written to it, no download starts) shows counters per kind (quality profiles, custom formats, download clients, indexers, root folders, titles), what needs a look (conflicts, unsupported profiles, missing keys, missing libraries) and every found item in folds; root folders are assigned to libraries (or new libraries are created on a connection). Take over then writes the same items and shows what was added. A wrong address or key is answered in plain words in that card. The key is sealed for ten minutes between preview and takeover instead of being typed twice. |
+| 5 | Modules | /Setup/Instance | Starting sets, basic functions, media types with their modules, the other modules in groups (SaveSetupModulesV1, one transaction). After a takeover the media types start as what was taken over. |
+| 6 | Quality profiles (Arr+) | /Setup/Profiles | The Admin profile list for the chosen media type (custom formats, sizes, release profiles and tags stay in Administration). |
+| 7 | Libraries | /Setup/Libraries | One row for every media type that is switched on: its folders and the picker for another on any connection. Leaving the step switches off the media without a folder (SaveSetupLibrariesV1). |
+| 8 | Requests (Requests module) | /Setup/Requests | The default request rule: which media may be requested, approval, limit per period, selectable quality profiles. |
+| 9 | Download storage (Arr+) | /Setup/DownloadStorage | Incomplete and Complete folders, reserve and limits. |
+| 10 | Download clients (Arr+) | /Setup/Downloads | Every client is a card with its settings inline and Test; a new one is added in a dialog. |
+| 11 | Indexers (Arr+) | /Setup/Indexers | The same for indexers; Prowlarr import leads to the takeover step. |
+| 12 | Providers | /Setup/Providers | Every provider is a card with its switch and key inline, saved together by Continue (SaveSetupProvidersV1; a blank key keeps the stored one, a typed one switches the provider on); Plex, Jellyfin and Emby connect from their own cards. |
+| 13 | Overview | /Setup/Overview | A row for every step with what was chosen, its state and the way back, the blocking and optional checks with links, and Finish (CompleteSetupV1). |
 
-The three presets are Complete, Media server and Requests. Complete includes all
-implemented modules, including local Registration. Media server selects playback,
-reading, emulation and the associated personal/operational features; Requests
-selects Requests, Arr+, Notifications, Profiles, Devices, Diagnostics and Registration. The
-Owner may change the displayed switches before Continue; choosing a preset does
-not save anything. Preset membership is supplied by the Backend, not duplicated
-in browser code. Source-confirmation policy and advanced instance limits remain
-in Admin, outside setup.
+Not built because the backend lacks it: routing of download clients per media group or subtype with fallback chains, an audiobook type, an Anime-movies switch,
+Seerr and SABnzbd import (extension points only), instance-level requestable media types, an admin-only requests switch and a downloads-wanted switch.
 
-Local account-registration requests remain available in all presets and still
-require Owner approval. Media requests remain available to authorized Jularr
-profiles independently of Plex. Plex sign-in and its registration policy are
-separate: automatic Plex registration uses the existing access check against the
-connected server. Both kinds of registration remain configurable.
+## Persistence and gate
 
-## Connections, resume and validation
+`InstanceSetupState.SetupStepTypeId` is the furthest step reached (the steps are numbered in flow order, greatest wins) and `SetupStartTypeId` the way of starting.
+Every service that finishes a step moves it forward; steps without a form post Next to `/Setup/Progress`. Values entered stay where they belong
+(modules, providers, connections, libraries); keys are protected and never shown again.
 
-- New connections, library paths, tests and scans use their ordinary canonical
-  operations. Continue saves each main step; it is placed below the content.
-- Library folders are selected in the shared native dialog. Folder navigation fetches
-  authorized server-rendered lists without navigating the surrounding page or losing
-  its draft. Escape/Close preserves the prior selection; Use this folder updates the
-  existing form. Large lists have cursor navigation. Without JavaScript the ordinary
-  browse links remain available. The same directory service handles SMB, NFS and local paths.
-- Sources has a shared tab row on every editor, including an individual profile.
-  Indexer and downloader tabs open a creation form immediately and keep their
-  connection list visible on mobile. Saving returns to that setup editor.
-  Arr+ tabs are hidden when the Acquisition module is disabled. The profile tab
-  embeds the native Arr+ settings; it adds no separate profile wrapper.
-- Provider editors use native disclosure panels and retain the selected provider
-  after saving. A Plex token can be granted through plex.tv instead of copied by
-  hand. The existing challenge/flow tables hold an ExternalLink attempt bound to
-  the initiating account, browser nonce and inspected server address. It expires
-  after five minutes and is consumed with the server configuration, after external
-  I/O, in one authorized mutation batch. Login challenges cannot complete it.
-- Persisted progress resumes at Modules, Libraries or Sources; the earlier
-  indexer/downloader/profile/media progress values all resume at Sources. The
-  separate Finish page is removed. Configuration survives interruption; unsaved
-  edits remain ordinary form state.
-- Missing library roots do not require disabling each type by hand. Continuing
-  from Libraries disables unconfigured categories. A configured video type still
-  needs TMDB; missing optional indexers/downloaders and FFmpeg remain warnings.
-- Unknown, duplicate or stale module rows roll the entire step back. Completion
-  rechecks configuration in its transaction. Secrets remain write-only; a blank
-  setup TMDB key keeps the saved credential.
-- Restore remains available at /Setup/Backup for a compatible Jularr backup.
-  Existing-instance migration is tracked separately in [#433](https://github.com/Juloc/Jularr/issues/433). AI setup is a separate package.
-- Only an Owner configures the instance. Permissions, validation, transactions,
-  safe paths and provider access remain Backend-owned. NAS outages leave catalog
-  and administration browsing usable. No active database is installed or changed.
+[SetupGate](../src/Jularr.Frontend/Framework/SetupGate.cs) answers every page request until setup is finished: without an Owner every address leads to /Setup;
+afterwards only the Owner continues, always at the step last reached (`/Setup/Progress`), the Owner's sign-in and the error pages stay open, and any
+other account sees `/Setup/Waiting`. Assets, the live stream and the service API are not pages and stay as they are. After Finish
+the setup addresses redirect to the application (the finished state is remembered by the process).
+
+## Rules kept
+
+- The three presets are Complete, Media server and Requests; preset membership comes from the Backend (ReadSetupModulesV1).
+- New things (a connection, an indexer, a client) are added in a dialog with Cancel; existing providers, clients and indexers are edited inline in their card.
+- Library folders are selected in the shared native dialog (authorized server-rendered lists, cursor navigation, without JavaScript the browse links).
+- Takeover never starts downloads and never writes to the source; missing monitored titles become Wanted and stay paused until the Owner resumes them.
+- A configured video type needs TMDB; missing optional indexers/downloaders and FFmpeg remain warnings.
+- Only an Owner configures the instance; permissions, validation, transactions and safe paths remain Backend-owned. No active database is installed or changed.
 
 ## Playback cache safety
 
@@ -73,13 +56,10 @@ Video transcoding uses `Media:TranscodeCachePath` (by default `/data/jularr-tran
 
 ## Verification
 
-SetupTests cover bootstrap concurrency/closure, generated-language selection,
-atomic module edits and rollback, progress, empty libraries and completion.
-AdminProviderTests cover Plex PIN completion, expiry, browser/account/purpose
-binding and replay. AuthenticationTests retain Plex registration access checks.
-SetupWizardTests drive the conditional steps at desktop and mobile sizes, including
-presets, source tabs, credential and connection saves without finishing, and
-resume. Existing film/series path tests use the provider disclosure.
+SetupTests cover bootstrap concurrency/closure, generated-language selection, the first choice and the steps in order, atomic module edits and rollback, provider
+saves, empty libraries and completion. TakeoverTests cover the source reads. Browser tests: `SetupFlowTests` (the three branches, storage tiles and the add dialog,
+takeover against the fake Sonarr, the steps in order with the overview, leaving and resuming), `SetupOwnerTests` (owner and modules steps). The other browser tests
+create the Owner in the real setup and mark the wizard finished.
 
 The [original wizard specification](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/setup-wizard/SPEC.md)
 remains a reference for unchanged behavior; the newer owner decisions above take

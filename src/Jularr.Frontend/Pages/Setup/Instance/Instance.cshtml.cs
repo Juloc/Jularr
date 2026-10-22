@@ -1,6 +1,10 @@
 using System.Globalization;
 using System.Text.Json;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Instance.V1;
+using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Service.Admin.Instance.V1;
@@ -11,7 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Setup.Instance
 {
     public sealed class InstanceModel(ReadInstanceSettingsV1 readSettings, ReadSetupModulesV1 readModules, ReadInstanceModulesV1 readDetails, ReadInstanceMediaV1 readMedia,
-        ReadSetupProgressV1 readProgress, SaveSetupModulesV1 save, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadSetupProgressV1 readProgress, ReadWorksV1 readWorks, SaveSetupModulesV1 save, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // The basic functions, as tinted cards in a grid.
         private static readonly string[] Basics = ["Library", "Playback", "Reading", "Requests", "Acquisition"];
@@ -43,21 +47,22 @@ namespace Jularr.Frontend.Pages.Setup.Instance
         private IReadOnlyList<InstanceModuleDetailsV1> _details = [];
         private IReadOnlyList<InstanceMediaDetailsV1> _media = [];
         private SaveSetupModulesDataV1? _input;
+        private HashSet<string>? _taken;
 
         protected override void Define(Page page)
         {
-            page.Title("setup.step.Instance");
+            page.Title("setup.step.Modules");
             page.Asset("Pages/Setup/Instance/Instance.entry.ts");
             page.Asset("Pages/Setup/Instance/Instance.entry.scss");
             page.Asset("Framework/Components/OptionList.entry.scss");
             page.Asset("Framework/Components/Truncated.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Instance));
             if (_settings is not { } settings || _progress is not { } progress) return;
 
+            // After a takeover the media types start as what was taken over: the types that hold titles stay on, the others start off.
             var input = _input ?? new SaveSetupModulesDataV1(settings.Name, settings.Version, progress.Version,
                 new BaseDataList<InstanceModuleInputV1>(_modules.Select(module => new InstanceModuleInputV1(module.Id, module.IsEnabled, module.Version))),
-                new BaseDataList<UpdateInstanceMediaDataV1>(_media.Select(media => new UpdateInstanceMediaDataV1(media.Key, media.IsEnabled, media.Version))));
+                new BaseDataList<UpdateInstanceMediaDataV1>(_media.Select(media => new UpdateInstanceMediaDataV1(media.Key, _taken is null || media.IsSubtype ? media.IsEnabled : _taken.Contains(media.Key), media.Version))));
             var presets = new Div(
                 new OptionPreset(new Icon("spark", assets, 18), "setup.preset.complete", "setup.preset.complete.line", "complete"),
                 new OptionPreset(new Icon("film", assets, 18), "setup.preset.mediaServer", "setup.preset.mediaServer.line", "mediaServer"),
@@ -183,7 +188,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             _input = new SaveSetupModulesDataV1(name ?? "", version, setupVersion, moduleRows, new BaseDataList<UpdateInstanceMediaDataV1>(posted));
             var changed = new BaseDataList<UpdateInstanceMediaDataV1>(posted.Where(item => !current.TryGetValue(item.Key, out var now) || now.IsEnabled != item.IsEnabled));
             await save.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new SaveSetupModulesDataV1(name ?? "", version, setupVersion, moduleRows, changed), HttpContext.RequestAborted);
-            return LocalRedirect("/Setup/Storage");
+            return LocalRedirect("/Setup/Progress");
         }
 
         protected override async Task LoadDataAsync()
@@ -194,6 +199,16 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             _modules = await readModules.ExecuteAsync<BaseDataList<SetupModuleV1>>(cancellationToken: ct);
             _details = await readDetails.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), ct);
             if (_media.Count == 0) _media = await readMedia.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), ct);
+            if (_progress is { SetupStartTypeId: SetupStartType.Takeover } && _progress.SetupStepTypeId <= SetupStepType.Modules && _input is null)
+            {
+                var taken = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var type in Enum.GetValues<MediaType>())
+                {
+                    if ((await readWorks.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(1, 1, type), ct)).Items.Count > 0) taken.Add(type.ToString());
+                }
+
+                _taken = taken.Count > 0 ? taken : null;
+            }
         }
 
         public sealed record ModuleRow(long Id, bool IsEnabled, long Version);

@@ -60,6 +60,7 @@ app.UseJularrErrorPages();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
+app.UseJularrSetupGate();
 app.UseAuthorization();
 
 // Resolve the full DB-backed language pack once per Razor request, after authorization.

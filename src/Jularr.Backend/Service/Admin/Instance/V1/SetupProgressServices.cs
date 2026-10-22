@@ -23,9 +23,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         {
             await Context.RequireSetupVersionAsync(new SetupVersionData(Data.Version), CancellationToken);
             await Context.DisableUnconfiguredMediaAsync(CancellationToken);
-            var modules = await Context.ReadModuleStatesAsync(new InstanceModuleParameters(["Acquisition"]), CancellationToken);
-            var next = modules.Any(module => module.IsEnabled) ? SetupStepType.DownloadStorage : SetupStepType.Providers;
-            await Context.UpdateSetupStepAsync(new SetupStepData(next), CancellationToken);
+            await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Requests), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -58,7 +56,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                 warnings.Add("ffmpeg");
             }
 
-            return new SetupProgressV1(state.SetupStepTypeId, state.IsCompleted, state.Version, [.. checks.Where(check => check.IsBlocking).Select(check => check.CheckKey)], [.. warnings]);
+            return new SetupProgressV1(state.SetupStepTypeId, state.SetupStartTypeId, state.IsCompleted, state.Version, [.. checks.Where(check => check.IsBlocking).Select(check => check.CheckKey)], [.. warnings]);
         }
     }
 
@@ -73,6 +71,22 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.UpdateSetupStepAsync(new SetupStepData(Data.SetupStepTypeId), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/setup/start")]
+    public sealed class UpdateSetupStartV1 : AdminService<SetupProgressParametersV1, UpdateSetupStartDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(SetupProgressParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(SetupProgressParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.UpdateSetupStartAsync(new SetupStartData(Data.SetupStartTypeId), CancellationToken);
+            await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Storage), CancellationToken);
             return new UpdateResult(true);
         }
     }

@@ -1760,10 +1760,6 @@
    "Setup steps",
    "Einrichtungsschritte"
   ],
-  "setup.step.Instance": [
-   "Instance",
-   "Instanz"
-  ],
   "setup.step.Storage": [
    "Storage",
    "Speicher"
@@ -1781,16 +1777,8 @@
    "Anbieter"
   ],
   "setup.step.Profiles": [
-   "Profiles",
-   "Profile"
-  ],
-  "setup.step.Media": [
-   "Existing media",
-   "Vorhandene Medien"
-  ],
-  "setup.step.Finish": [
-   "Finish",
-   "Abschluss"
+   "Quality profiles",
+   "Qualitätsprofile"
   ],
   "setup.next": [
    "Continue",
@@ -1799,14 +1787,6 @@
   "setup.finish": [
    "Finish setup",
    "Einrichtung abschließen"
-  ],
-  "setup.blockers": [
-   "Before finishing",
-   "Vor dem Abschluss"
-  ],
-  "setup.warnings": [
-   "Worth a look",
-   "Einen Blick wert"
   ],
   "setup.check.library": [
    "no library yet",
@@ -4979,10 +4959,6 @@
   "admin.backup.delete": [
    "Delete",
    "Löschen"
-  ],
-  "setup.restore": [
-   "Restore a backup instead",
-   "Stattdessen ein Backup wiederherstellen"
   ],
   "storage.synology.title": [
    "Synology",
@@ -8788,14 +8764,6 @@
    "Owner & language",
    "Owner & Sprache"
   ],
-  "setup.step.Sources": [
-   "Sources",
-   "Quellen"
-  ],
-  "setup.sources.back": [
-   "Back to sources",
-   "Zurück zu Quellen"
-  ],
   "admin.plex.pin.start": [
    "Connect through plex.tv",
    "Über plex.tv verbinden"
@@ -8827,30 +8795,6 @@
   "setup.modules.operations": [
    "Administration",
    "Verwaltung"
-  ],
-  "setup.sources.metadata": [
-   "Metadata",
-   "Metadaten"
-  ],
-  "setup.sources.tmdbKey": [
-   "TMDB API key",
-   "TMDB-API-Schlüssel"
-  ],
-  "setup.sources.tmdbAccount": [
-   "Get a TMDB API key",
-   "TMDB-API-Schlüssel anfordern"
-  ],
-  "setup.sources.acquisition": [
-   "Search & downloads",
-   "Suche & Downloads"
-  ],
-  "setup.sources.providers": [
-   "Provider connections",
-   "Anbieterverbindungen"
-  ],
-  "setup.sources.plex": [
-   "Plex and other providers",
-   "Plex und weitere Anbieter"
   ],
   "arr.settings": [
    "Arr+ settings",
@@ -12463,6 +12407,230 @@
   "setup.type.name.Game": [
    "Games",
    "Games"
+  ],
+  "setup.step.Begin": [
+   "Start",
+   "Start"
+  ],
+  "setup.step.Takeover": [
+   "Takeover",
+   "Übernahme"
+  ],
+  "setup.step.Modules": [
+   "Modules",
+   "Module"
+  ],
+  "setup.step.Libraries": [
+   "Libraries",
+   "Bibliotheken"
+  ],
+  "setup.step.Requests": [
+   "Requests",
+   "Anfragen"
+  ],
+  "setup.step.DownloadStorage": [
+   "Download storage",
+   "Download-Speicher"
+  ],
+  "setup.step.Overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "setup.back": [
+   "Back",
+   "Zurück"
+  ],
+  "setup.begin.new": [
+   "New setup",
+   "Neu einrichten"
+  ],
+  "setup.begin.takeover": [
+   "Take over from Sonarr, Radarr, Readarr or Lidarr",
+   "Von Sonarr, Radarr, Readarr oder Lidarr übernehmen"
+  ],
+  "setup.begin.takeover.short": [
+   "Taken over from Sonarr, Radarr, Readarr or Lidarr",
+   "Übernahme von Sonarr, Radarr, Readarr oder Lidarr"
+  ],
+  "setup.begin.restore": [
+   "Restore a backup",
+   "Backup wiederherstellen"
+  ],
+  "setup.waiting.title": [
+   "Setting up",
+   "Einrichtung"
+  ],
+  "setup.waiting": [
+   "This instance is being set up by its owner. Please come back later.",
+   "Diese Instanz wird gerade vom Owner eingerichtet. Bitte komme später wieder."
+  ],
+  "storage.available": [
+   "Available",
+   "Verfügbar"
+  ],
+  "storage.connect": [
+   "Connect",
+   "Verbinden"
+  ],
+  "storage.add.confirm": [
+   "Add",
+   "Hinzufügen"
+  ],
+  "setup.takeover.state.idle": [
+   "Not connected",
+   "Nicht verbunden"
+  ],
+  "setup.takeover.state.preview": [
+   "Preview ready",
+   "Vorschau bereit"
+  ],
+  "setup.takeover.state.done": [
+   "Taken over",
+   "Übernommen"
+  ],
+  "setup.takeover.preview": [
+   "Preview",
+   "Vorschau"
+  ],
+  "setup.takeover.apply": [
+   "Take over",
+   "Übernehmen"
+  ],
+  "setup.takeover.warnings": [
+   "Needs a look",
+   "Bitte prüfen"
+  ],
+  "setup.takeover.added": [
+   "{0} added",
+   "{0} neu"
+  ],
+  "setup.takeover.holds.Sonarr": [
+   "Series",
+   "Serien"
+  ],
+  "setup.takeover.holds.Radarr": [
+   "Movies",
+   "Filme"
+  ],
+  "setup.takeover.holds.Readarr": [
+   "Books",
+   "Bücher"
+  ],
+  "setup.takeover.holds.Lidarr": [
+   "Music albums",
+   "Musikalben"
+  ],
+  "setup.takeover.holds.Prowlarr": [
+   "Indexers",
+   "Indexer"
+  ],
+  "setup.takeover.kind.Indexer": [
+   "Indexers",
+   "Indexer"
+  ],
+  "setup.takeover.kind.Client": [
+   "Download clients",
+   "Download-Clients"
+  ],
+  "setup.takeover.kind.Movie": [
+   "Movies",
+   "Filme"
+  ],
+  "setup.takeover.kind.Series": [
+   "Series",
+   "Serien"
+  ],
+  "setup.takeover.kind.Album": [
+   "Albums",
+   "Alben"
+  ],
+  "setup.takeover.kind.Book": [
+   "Books",
+   "Bücher"
+  ],
+  "setup.takeover.kind.Profile": [
+   "Quality profiles",
+   "Qualitätsprofile"
+  ],
+  "setup.takeover.kind.Format": [
+   "Custom formats",
+   "Eigene Formate"
+  ],
+  "setup.takeover.kind.RootFolder": [
+   "Root folders",
+   "Stammordner"
+  ],
+  "takeover.outcome.takeover_found": [
+   "Found; it comes along with the quality profiles that use it",
+   "Gefunden; kommt mit den Qualitätsprofilen, die es nutzen"
+  ],
+  "setup.libraries.ready": [
+   "Folder set",
+   "Ordner gesetzt"
+  ],
+  "setup.libraries.off": [
+   "Will be switched off",
+   "Wird abgeschaltet"
+  ],
+  "setup.libraries.add": [
+   "Add",
+   "Hinzufügen"
+  ],
+  "setup.providers.keySaved": [
+   "A key is saved; leave empty to keep it",
+   "Ein Schlüssel ist gespeichert; leer lassen, um ihn zu behalten"
+  ],
+  "setup.providers.reconnect": [
+   "Connect again",
+   "Erneut verbinden"
+  ],
+  "setup.overview.ready": [
+   "Ready",
+   "Bereit"
+  ],
+  "setup.overview.needed": [
+   "Needed",
+   "Erforderlich"
+  ],
+  "setup.overview.optional": [
+   "Optional",
+   "Optional"
+  ],
+  "setup.overview.connections": [
+   "{0} connections",
+   "{0} Verbindungen"
+  ],
+  "setup.overview.profiles": [
+   "{0} quality profiles",
+   "{0} Qualitätsprofile"
+  ],
+  "setup.overview.clients": [
+   "{0} download clients",
+   "{0} Download-Clients"
+  ],
+  "setup.overview.indexers": [
+   "{0} indexers",
+   "{0} Indexer"
+  ],
+  "setup.overview.modules": [
+   "{0} modules",
+   "{0} Module"
+  ],
+  "setup.overview.types": [
+   "{0} media types",
+   "{0} Medientypen"
+  ],
+  "setup.overview.areas": [
+   "{0} still to set",
+   "{0} noch zu setzen"
+  ],
+  "setup.overview.providers": [
+   "{0} providers on",
+   "{0} Anbieter aktiv"
+  ],
+  "setup.overview.set": [
+   "Set",
+   "Gesetzt"
   ]
  }
 }

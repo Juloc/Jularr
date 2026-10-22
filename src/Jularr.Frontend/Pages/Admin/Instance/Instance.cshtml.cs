@@ -19,14 +19,13 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
         private UpdateInstanceSettingsDataV1? _input;
 
-        private string Home => SetupWizard.Address(Request, SetupStepType.Instance, "/Admin/Instance");
+        private string Home => SetupWizard.Address(Request, SetupStepType.Modules, "/Admin/Instance");
 
         protected override void Define(Page page)
         {
             page.Title("admin.instance.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Form.entry.ts");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Instance));
 
             if (_settings is { } settings)
             {

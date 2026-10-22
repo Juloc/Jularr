@@ -66,11 +66,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             // Render only real registry rows; the media servers of Jellyfin and Emby need their modules.
             var visible = (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync", "Library"))
                 .OrderBy(provider => Rank(provider.Key)).ToList();
-            if (IsSetup)
-            {
-                page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Providers, acquisition: texts.Can(null, "Acquisition")));
-            }
-            else
+            if (!IsSetup)
             {
                 // The entry's one row, with how many providers and media servers there are; media servers show once one is set up.
                 page.NoPageRow();
