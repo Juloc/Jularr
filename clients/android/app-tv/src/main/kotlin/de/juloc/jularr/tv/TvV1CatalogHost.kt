@@ -59,6 +59,22 @@ fun TvV1CatalogHost(
     var selectedEpisodeId by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var selectedAssetId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
     var returnPage by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
+    var playbackReturnPage by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Details) }
+
+    fun playAsset(mediaAssetId: Long?, episodeId: String? = null) {
+        selectedEpisodeId = episodeId
+        selectedAssetId = mediaAssetId
+        if (mediaAssetId == null) {
+            page = TvV1CatalogPage.PlaybackPending
+            return
+        }
+        if (!capabilities.hasModule("Playback") || !capabilities.hasPermission("profile.playback")) {
+            error = "Dieses Profil hat keine Wiedergabeberechtigung."
+            return
+        }
+        playbackReturnPage = page
+        page = TvV1CatalogPage.Player
+    }
 
     fun openWork(rawId: String) {
         val workId = rawId.toLongOrNull()
@@ -85,7 +101,8 @@ fun TvV1CatalogHost(
         }
     }
 
-    BackHandler(enabled = page != TvV1CatalogPage.Home) { back() }
+    // TvPlayerScreen handles Back itself so it can end its /api/v1 session first.
+    BackHandler(enabled = page != TvV1CatalogPage.Home && page != TvV1CatalogPage.Player) { back() }
 
     LaunchedEffect(serverOrigin, page, searchQuery, detailWorkId, reload) {
         error = null
@@ -143,7 +160,7 @@ fun TvV1CatalogHost(
                         omittedFractionalEpisodes = 0
                     }
                 }
-                TvV1CatalogPage.PlaybackPending -> Unit
+                TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player -> Unit
             }
         } catch (cancel: CancellationException) {
             throw cancel
@@ -193,7 +210,10 @@ fun TvV1CatalogHost(
                             onAnime = { card -> openWork(card.id) },
                             onContinueWatching = { /* Legacy bootstrap is intentionally disconnected. */ },
                             v1ContinueWatching = continueWatching,
-                            onContinueWork = { item -> openWork(item.workId.toString()) },
+                            onContinueWork = { item ->
+                                detailedTitle = item.title
+                                playAsset(item.mediaAssetId)
+                            },
                         )
                         TvV1CatalogPage.Watchlist -> {
                             if (error != null) {
@@ -245,14 +265,10 @@ fun TvV1CatalogHost(
                             serverOrigin = serverOrigin,
                             requestHeaders = authorization,
                             onEpisode = { episode ->
-                                selectedEpisodeId = episode.id
-                                selectedAssetId = detailAssetByUnit[episode.id]
-                                page = TvV1CatalogPage.PlaybackPending
+                                playAsset(detailAssetByUnit[episode.id], episode.id)
                             },
                             onPlayEpisode = { episode ->
-                                selectedEpisodeId = episode.id
-                                selectedAssetId = detailAssetByUnit[episode.id]
-                                page = TvV1CatalogPage.PlaybackPending
+                                playAsset(detailAssetByUnit[episode.id], episode.id)
                             },
                             onBack = ::back,
                         )
@@ -273,6 +289,17 @@ fun TvV1CatalogHost(
                 else -> TvV1Waiting("Mediendetails werden geladen …")
             }
         }
+        TvV1CatalogPage.Player -> TvV1PlaybackHost(
+            origin = serverOrigin,
+            tokenStore = deviceSession.authenticatedTokenStore(),
+            mediaAssetId = requireNotNull(selectedAssetId),
+            title = detailedTitle,
+            onExit = {
+                page = playbackReturnPage
+                reload += 1
+            },
+            onUnauthorized = onAuthenticationExpired,
+        )
         TvV1CatalogPage.PlaybackPending -> TvV1ApiMessage(
             "Wiedergabe noch nicht verbunden",
             if (selectedAssetId != null)
@@ -285,7 +312,7 @@ fun TvV1CatalogHost(
     }
 }
 
-private enum class TvV1CatalogPage { Home, Search, Watchlist, Details, PlaybackPending }
+private enum class TvV1CatalogPage { Home, Search, Watchlist, Details, PlaybackPending, Player }
 
 /** PageResult<T> has no guaranteed total count: keep requesting until a short page. */
 private suspend fun <T> loadCatalogPages(
