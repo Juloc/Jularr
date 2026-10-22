@@ -41,7 +41,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18
@@ -61,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
@@ -83,10 +84,17 @@ jobs:
           npm run build
       - name: Compile the backend test project and its dependencies
         run: dotnet build tests/Jularr.Backend.Tests --configuration Release
-      - name: Smoke test API errors, registration, database bootstrap and module dependencies
+      - name: Verify change-aware test selection
+        run: python3 scripts/ci-select-backend-tests.py --self-test
+      - name: Smoke and focused tests for changed backend areas
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -euo pipefail
+          FILTER="$(python3 scripts/ci-select-backend-tests.py "$BASE_SHA" "$HEAD_SHA")"
           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
-            --filter "FullyQualifiedName~Jularr.Backend.Tests.ServiceApiTests.UnknownErrors_ReadAsUnknownAndShowTheirMessageToAdministratorsOnly|FullyQualifiedName~Jularr.Backend.Tests.ServiceApiTests.Registration_MissingDatabaseConfiguration_IsRejected|FullyQualifiedName~Jularr.Backend.Tests.ServiceApiTests.Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime|FullyQualifiedName~Jularr.Backend.Tests.AuthenticationTests.Session_ExpiredOrRevoked_IsNotRenewed|FullyQualifiedName~Jularr.Backend.Tests.InstanceModuleDependencyTests.Modules_Read_NameWhatEachNeeds" \
+            --filter "$FILTER" \
             --logger "trx;LogFileName=backend-pr.trx" \
             --results-directory TestResults/ci/fast
       - name: Keep smoke test results
