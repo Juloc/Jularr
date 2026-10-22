@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Providers
 {
-    // The registry's providers as cards (state, key, switch, test) whose settings open in a dialog; the media servers' users are mapped to profiles in a list below their cards.
+    // The registry's providers as cards (state, switch, test) whose settings are inputs inside the card, saved by the page's pill; the media servers' users are mapped to profiles in a list below their cards.
     public sealed class ProvidersModel(ReadProvidersV1 providers, UpdateProviderV1 update, SaveProviderSecretV1 saveSecret, ReadPlexServerV1 readPlex, SavePlexServerV1 savePlex,
         SyncPlexServerV1 syncPlex, DisconnectPlexServerV1 disconnectPlex, ReadPlexSignInV1 readSignIn, UpdatePlexSignInV1 updateSignIn, ReadMediaServerV1 readServer, SaveMediaServerV1 saveServer, SyncMediaServerV1 syncServer,
         DisconnectMediaServerV1 disconnectServer, ReadMediaServerLinksV1 readLinks, SaveMediaServerLinkV1 saveLink, ReadProfileChoicesV1 readProfiles, FrontendAssets assets, IAntiforgery antiforgery,
@@ -83,19 +83,9 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }
 
             var shown = IsSetup ? visible : visible.Where(provider => ServerKeys.Contains(provider.Key) == IsServers).ToList();
-            var cards = new List<IUiComponent>();
-            var dialogs = new List<IUiComponent>();
-            foreach (var provider in shown)
-            {
-                cards.Add(Card(provider, csrf));
-                if (Settings(provider, csrf) is { } dialog) dialogs.Add(dialog);
-            }
-
-            page.Content.Add(new CardGrid([.. cards]).Paged(_providers?.Items.Count ?? 0, _providers?.PageSize ?? 25));
+            page.Content.Add(new CardGrid([.. shown.Select(provider => Card(provider, csrf))]).Paged(_providers?.Items.Count ?? 0, _providers?.PageSize ?? 25));
             if ((IsServers || IsSetup) && Links(csrf) is { } links) page.Content.Add(links);
-            page.Content.AddRange(dialogs);
             if (FormError is not null && _secretFailedFor is null && _plexInput is null && _serverInput is null && _signInInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
-
         }
 
         private static int Rank(string key)
@@ -138,135 +128,86 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 body.Add(new Div(new Span(new ValueText(syncedAt is { } synced ? string.Format(CultureInfo.CurrentCulture, texts["providers.syncedAt"], synced.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : texts["admin.plex.notSynced"])).Class("feature-card__note")).Class("feature-card__row"));
             }
 
-            var start = new List<IUiComponent>();
-            if (HasSettings(provider.Key))
-            {
-                start.Add(Modal.Opener(new Button(Glyph("settings", 14), new Text("providers.settings")).Compact(), "provider-settings-" + provider.Key));
-            }
+            // The settings are inputs of the card itself: the protected key, the Plex server or the Jellyfin/Emby connection.
+            if (KeyProviders.Contains(provider.Key)) body.Add(SecretForm(provider, csrf));
+            if (provider.Key == "plex" && _plex is { } plex) DefinePlex(body, plex, csrf);
+            if (type is { } serverKind && _servers.TryGetValue(serverKind, out var connection)) DefineMediaServer(body, serverKind, connection.Server, csrf);
 
-            // Test reads the stored address again and keeps the stored key.
+            // A connected server is refreshed or disconnected here; Test reads the stored address again and keeps the stored key.
+            var start = new List<IUiComponent>();
             var end = new List<IUiComponent>();
-            if (provider.IsEnabled && State(provider).Key == "providers.state.connected")
+            if (State(provider).Key == "providers.state.connected")
             {
-                var handler = provider.Key == "plex" ? "PlexTest" : "MediaServerTest&mediaServerTypeId=" + type;
-                end.Add(Post(Home + "?handler=" + handler, csrf, [], new Button(Glyph("sync", 14), new Text("providers.test")).Compact().Soft().Submit()));
+                var action = provider.Key == "plex" ? Home + "?handler=Plex" : Home + "?mediaServerTypeId=" + type + "&handler=MediaServer";
+                var isPlex = provider.Key == "plex";
+                start.Add(Post(action + "Sync", csrf, [], new Button(new Text(isPlex ? "admin.plex.sync" : "admin.mediaServer.sync")).Compact().Soft().Submit()));
+                start.Add(Post(action + "Disconnect", csrf, [], new Button(new Text(isPlex ? "admin.plex.disconnect" : "admin.mediaServer.disconnect")).Compact().Warn().Submit()));
+                if (provider.IsEnabled) end.Add(Post(action + "Test", csrf, [], new Button(Glyph("sync", 14), new Text("providers.test")).Compact().Soft().Submit()));
             }
 
             var icon2 = provider.Key == "plex" ? "plex" : ServerKeys.Contains(provider.Key) ? "server" : "globe";
-            return new FeatureCard(new IconTile(Glyph(icon2, 18), UiTone.Accent), texts.Has("provider.name." + provider.Key) ? texts["provider.name." + provider.Key] : provider.Key, texts.Has("provider.hint." + provider.Key) ? texts["provider.hint." + provider.Key] : "", null, body, start, end, "provider-" + provider.Key);
+            var card = new FeatureCard(new IconTile(Glyph(icon2, 18), UiTone.Accent), texts.Has("provider.name." + provider.Key) ? texts["provider.name." + provider.Key] : provider.Key,
+                texts.Has("provider.hint." + provider.Key) ? texts["provider.hint." + provider.Key] : "", null, body, start, end, "provider-" + provider.Key);
+            return ServerKeys.Contains(provider.Key) ? card.Wide() : card;
         }
 
-        private bool HasSettings(string key) => KeyProviders.Contains(key) || key == "plex" && _plex is not null || MediaServerTypes.FromProviderKey(key) is { } type && _servers.ContainsKey(type);
-
-        // The provider's connection and protected credentials in one dialog; it opens again with the page when its form came back with an error.
-        private IUiComponent? Settings(ProviderDetailsV1 provider, string? csrf)
-        {
-            var body = new List<IUiComponent>();
-            var open = false;
-            if (KeyProviders.Contains(provider.Key))
+        // The protected key (IGDB adds the Twitch application id, AniList the application profiles sign in with); it is never written back.
+        private IUiComponent SecretForm(ProviderDetailsV1 provider, string? csrf) =>
+            new Form<SaveProviderSecretDataV1>(form =>
             {
-                body.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
-                body.Add(new Form<SaveProviderSecretDataV1>(form =>
-                {
-                    // IGDB adds the Twitch application id, AniList the application profiles sign in with.
-                    if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, "admin.providers.clientId");
-                    form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
-                    form.Cancel();
-                    form.Submit("common.save");
-                }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", csrf, new SaveProviderSecretDataV1(null), _secretFailedFor == provider.Id ? FormError : null));
-                open = _secretFailedFor == provider.Id;
-            }
+                if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, "admin.providers.clientId");
+                form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
+                form.Save();
+            }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", csrf, new SaveProviderSecretDataV1(null), _secretFailedFor == provider.Id ? FormError : null);
 
-            if (provider.Key == "plex" && _plex is { } plex)
-            {
-                // The owner's Plex server: availability, refresh after import and links.
-                DefinePlex(body, plex, csrf);
-                open = _plexInput is not null || _pin is not null || _signInInput is not null;
-            }
-
-            if (MediaServerTypes.FromProviderKey(provider.Key) is { } type && _servers.TryGetValue(type, out var server))
-            {
-                DefineMediaServer(body, type, server.Server, csrf);
-                open = _serverInput == type;
-            }
-
-            return body.Count == 0 ? null : new Modal(assets, "provider-settings-" + provider.Key, texts.Has("provider.name." + provider.Key) ? "provider.name." + provider.Key : "admin.providers.title", body, open);
-        }
-
+        // The Plex server: address and token side by side, the plex.tv connection beside them, then who signs in and registers with it.
         private void DefinePlex(List<IUiComponent> body, PlexServerDetailsV1 plex, string? csrf)
         {
-            body.Add(new P(plex.ExternalId is null
-                ? new Text("admin.plex.notConnected")
-                : new ValueText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.connected"], plex.LinkedCount,
-                    plex.SyncedAt?.ToString("u", CultureInfo.InvariantCulture) ?? texts["admin.plex.notSynced"]))));
-            body.Add(new Form<SavePlexServerDataV1>(form =>
-            {
-                form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
-                form.Submit("admin.plex.pin.start");
-            }, Home + "?handler=PlexPin", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
-            if (_pin is { } pin)
-            {
-                body.Add(new P(new Text("account.plex.pending")));
-                body.Add(new A(new Text("account.plex.authorize")).Attribute("href", pin.AuthorizationUrl).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
-                body.Add(new Form<CompletePlexParametersV1>(form =>
-                {
-                    form.Hidden(item => item.AuthChallengePublicId);
-                    form.Submit("account.plex.complete");
-                }, Home + "?handler=PlexPinComplete", csrf, new CompletePlexParametersV1(pin.AuthChallengePublicId), FormError));
-            }
-
             body.Add(new Form<SavePlexServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
                 form.Password(item => item.Token, "admin.plex.token", "new-password");
-                form.Submit(plex.ExternalId is null ? "admin.plex.connect" : "common.save");
+                form.Action(new Button(new Text("admin.plex.pin.start")).Compact().Soft().Attribute("formaction", Home + "?handler=PlexPin").Attribute("formnovalidate", "formnovalidate")
+                    .Attribute("data-no-draft", ""));
+                form.Save();
             }, Home + "?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
-            if (plex.ExternalId is not null)
+            if (_pin is { } pin)
             {
-                body.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), Home + "?handler=PlexSync", csrf, new PlexServerParametersV1()));
-                body.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.disconnect"), Home + "?handler=PlexDisconnect", csrf, new PlexServerParametersV1()));
-
-                // Who signs in and registers with Plex; the libraries come from the connected server.
-                if (_signIn is { } signIn)
-                {
-                    body.Add(new Form<SavePlexSignInDataV1>(form =>
+                body.Add(new Div(new A(new Text("account.plex.authorize")).Attribute("href", pin.AuthorizationUrl).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
+                    new Form<CompletePlexParametersV1>(form =>
                     {
-                        form.Toggle(item => item.SignIn, "admin.plex.signIn");
-                        form.Toggle(item => item.Registration, "admin.plex.registration");
-                        form.Toggle(item => item.RegistrationApproval, "admin.plex.registrationApproval");
-                        if (signIn.SectionKeys.Length > 0)
-                        {
-                            form.Choices(item => item.RegistrationSections, "admin.plex.registrationSections",
-                                signIn.SectionKeys.Zip(signIn.SectionTitles, (key, title) => new SelectOption(key, title)));
-                        }
+                        form.Hidden(item => item.AuthChallengePublicId);
+                        form.Submit("account.plex.complete");
+                    }, Home + "?handler=PlexPinComplete", csrf, new CompletePlexParametersV1(pin.AuthChallengePublicId), FormError)).Class("feature-card__row"));
+            }
 
-                        form.Submit("common.save");
-                    }, Home + "?handler=PlexSignIn", csrf, _signInInput ?? new SavePlexSignInDataV1(signIn.SignIn, signIn.Registration, signIn.RegistrationApproval, signIn.RegistrationSections),
-                        _signInInput is null ? null : FormError));
-                }
+            // The libraries come from the connected server.
+            if (plex.ExternalId is not null && _signIn is { } signIn)
+            {
+                body.Add(new Form<SavePlexSignInDataV1>(form =>
+                {
+                    form.Toggle(item => item.SignIn, "admin.plex.signIn");
+                    form.Toggle(item => item.Registration, "admin.plex.registration");
+                    form.Toggle(item => item.RegistrationApproval, "admin.plex.registrationApproval");
+                    if (signIn.SectionKeys.Length > 0)
+                    {
+                        form.Choices(item => item.RegistrationSections, "admin.plex.registrationSections", signIn.SectionKeys.Zip(signIn.SectionTitles, (key, title) => new SelectOption(key, title)));
+                    }
+
+                    form.Save();
+                }, Home + "?handler=PlexSignIn", csrf, _signInInput ?? new SavePlexSignInDataV1(signIn.SignIn, signIn.Registration, signIn.RegistrationApproval, signIn.RegistrationSections),
+                    _signInInput is null ? null : FormError));
             }
         }
 
         private void DefineMediaServer(List<IUiComponent> body, MediaServerType type, MediaServerDetailsV1 server, string? csrf)
         {
-            var action = Home + "?mediaServerTypeId=" + type + "&handler=";
-            body.Add(new P(server.ExternalId is null
-                ? new Text("admin.mediaServer.notConnected")
-                : new ValueText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.connected"],
-                    server.SyncedAt?.ToString("u", CultureInfo.InvariantCulture) ?? texts["admin.plex.notSynced"]))));
             body.Add(new Form<SaveMediaServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.mediaServer.baseUrl", help: new FieldHelp(Placeholder: "hint.mediaServer.baseUrl.placeholder"));
                 form.Password(item => item.ApiKey, "admin.mediaServer.apiKey", "new-password");
-                form.Submit(server.ExternalId is null ? "admin.plex.connect" : "common.save");
-            }, action + "MediaServer", csrf, _serverInput == type ? _serverData : new SaveMediaServerDataV1(server.BaseUrl ?? "", null), _serverInput == type ? FormError : null));
-            if (server.ExternalId is null)
-            {
-                return;
-            }
-
-            body.Add(new Form<MediaServerParametersV1>(form => form.Submit("admin.mediaServer.sync"), action + "MediaServerSync", csrf, new MediaServerParametersV1(type)));
-            body.Add(new Form<MediaServerParametersV1>(form => form.Submit("admin.mediaServer.disconnect"), action + "MediaServerDisconnect", csrf, new MediaServerParametersV1(type)));
+                form.Save();
+            }, Home + "?mediaServerTypeId=" + type + "&handler=MediaServer", csrf, _serverInput == type ? _serverData : new SaveMediaServerDataV1(server.BaseUrl ?? "", null), _serverInput == type ? FormError : null));
         }
 
         // Which Jularr profile each server user shares progress with: the user, the server, the state and the profile to confirm.

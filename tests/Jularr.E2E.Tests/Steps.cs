@@ -90,8 +90,7 @@ namespace Jularr.E2E.Tests
         public static async Task SetTmdbKeyAsync(IPage page)
         {
             await page.GotoAsync("/Admin/Providers");
-            await page.Locator("#provider-tmdb").GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
-            var tmdb = page.Locator("#provider-settings-tmdb form[action*='handler=Secret']");
+            var tmdb = page.Locator("#provider-tmdb form[action*='handler=Secret']");
             await tmdb.Locator("[name=Secret]").FillAsync(FakeServices.TmdbToken);
             await SubmitAsync(page, tmdb);
         }
