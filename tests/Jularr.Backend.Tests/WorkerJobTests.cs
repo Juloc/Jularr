@@ -31,9 +31,9 @@ namespace Jularr.Backend.Tests
                 Assert.IsTrue(WorkerJobs.Of(group).Count > 0, group.ToString());
             }
 
-            // Fourteen workers and the sampler. The queues and the downloads a restart interrupts start at once, every other job has its own offset;
+            // Fifteen workers and the sampler. The queues and the downloads a restart interrupts start at once, every other job has its own offset;
             // a provider of the provider sync has no schedule of its own.
-            Assert.AreEqual(15, Enum.GetValues<WorkerGroupType>().Length);
+            Assert.AreEqual(16, Enum.GetValues<WorkerGroupType>().Length);
             foreach (var key in new[] { "operations", "backupQueue", "benchmarkQueue", "downloads", "resources" })
             {
                 Assert.AreEqual(TimeSpan.Zero, WorkerJobs.Definition(key).StartDelay, key);

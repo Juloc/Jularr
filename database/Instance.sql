@@ -153,4 +153,22 @@ CREATE TABLE "WorkerJobs" (
     CHECK ("LastErrorKey" IS NULL OR "LastResultTypeId" = 2)
 );
 
+-- Processor and memory use of this process once a minute for the last 24 hours (Diagnostics module); the process batches them in every few minutes.
+CREATE TABLE "PerformanceSamples" (
+    "SampledAt" timestamptz PRIMARY KEY,
+    "ProcessorPercent" numeric(4, 1) NOT NULL CHECK ("ProcessorPercent" BETWEEN 0 AND 100),
+    "MemoryBytes" bigint NOT NULL CHECK ("MemoryBytes" >= 0)
+);
+
+-- What each service did per hour for the last 24 hours: calls, server faults, time in total and the longest call. The process holds the newest values and writes them in batches.
+CREATE TABLE "ServiceTimings" (
+    "Service" varchar(200) NOT NULL CHECK (length("Service") > 0),
+    "SliceStartedAt" timestamptz NOT NULL,
+    "Calls" bigint NOT NULL CHECK ("Calls" > 0),
+    "Errors" bigint NOT NULL CHECK ("Errors" BETWEEN 0 AND "Calls"),
+    "TotalMilliseconds" bigint NOT NULL CHECK ("TotalMilliseconds" >= 0),
+    "MaximumMilliseconds" bigint NOT NULL CHECK ("MaximumMilliseconds" >= 0),
+    PRIMARY KEY ("Service", "SliceStartedAt")
+);
+
 COMMIT;
