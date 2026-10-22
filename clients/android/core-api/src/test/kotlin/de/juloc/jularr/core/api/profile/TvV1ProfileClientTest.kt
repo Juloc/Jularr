@@ -63,6 +63,45 @@ class TvV1ProfileClientTest {
         } finally { server.stop(0) }
     }
 
+    @Test fun endingAnotherDeviceSessionKeepsCurrentDeviceBearer() = runBlocking {
+        val sessionId = java.util.UUID.fromString("f2e35c1e-e132-4d31-a2c9-a40e84bd68a1")
+        val observedAuth = AtomicReference<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/sessions/$sessionId") { exchange ->
+            assertEquals("DELETE", exchange.requestMethod)
+            observedAuth.set(exchange.requestHeaders.getFirst("Authorization"))
+            exchange.respond(200, """{"endsCurrentSession":false}""")
+        }
+        server.start()
+        try {
+            val tokens = DeviceTokenStore("current-tv-token")
+            val api = HttpTvV1ProfileClient("http://127.0.0.1:${server.address.port}", tokens)
+            assertFalse(api.revokeSession(sessionId))
+            assertEquals("Bearer current-tv-token", observedAuth.get())
+            assertEquals("current-tv-token", tokens.current)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test fun serverRevokingCurrentSessionClearsLocalBearerImmediately() = runBlocking {
+        val sessionId = java.util.UUID.fromString("f2e35c1e-e132-4d31-a2c9-a40e84bd68a1")
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/sessions/$sessionId") { exchange ->
+            assertEquals("DELETE", exchange.requestMethod)
+            exchange.respond(200, """{"endsCurrentSession":true}""")
+        }
+        server.start()
+        try {
+            val tokens = DeviceTokenStore("current-tv-token")
+            val api = HttpTvV1ProfileClient("http://127.0.0.1:${server.address.port}", tokens)
+            assertTrue(api.revokeSession(sessionId))
+            assertNull(tokens.current)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     private fun HttpExchange.respond(status: Int, body: String, token: String? = null) {
         val bytes = body.toByteArray()
         responseHeaders.add("Content-Type", "application/json")
