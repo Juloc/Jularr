@@ -1,6 +1,6 @@
 # Die Ergebnisse
 
-Gemessen am 2026-10-21 auf diesem Rechner (Windows, Docker Desktop, Spielplatz).
+Gemessen am 2026-10-21 und 2026-10-22 auf diesem Rechner (Windows, Docker Desktop, Spielplatz).
 
 ## Was gemessen wurde
 
@@ -10,25 +10,35 @@ Gemessen am 2026-10-21 auf diesem Rechner (Windows, Docker Desktop, Spielplatz).
 | Torrent hinzufügen | **läuft**: der Ubuntu-Server-Torrent (ein lawful Torrent) wird über die API angenommen |
 | Download | **läuft**: 4–6 MB/s, die Datei landet im gemounteten Verzeichnis, der Fortschritt steigt |
 | Ablage | das Volume des Containers ist der Ordner des Wirts – der Download ist von außen sichtbar |
-| Adresse ohne Tunnel | die eigene Adresse des Hosts – **ohne konfigurierten VPN läuft der Download weiter** (das ist der Fall, den der Kill-Switch verhindern soll) |
-| DNS | antwortet normal – ohne Tunnel kein Leck, weil gar kein Tunnel da ist |
-| IPv6 | der Host hat kein IPv6; im Tunnel ist das noch zu messen |
+| Anbieter im Container | **läuft**: Gluetun nimmt den eingebauten ProtonVPN-Anbieter, wählt einen Gratis-Server (Niederlande) und baut den Tunnel auf |
+| Kill-Switch, Tunnel kommt nicht hoch | **hält**: ohne Handshake gibt es **keine** Verbindung, **kein** DNS, **keinen** Download – nicht einmal das Paketmirror ist erreichbar. Es geht nichts unverschlüsselt hinaus. |
+| Anbieter aus Deutschland | Privado und Windscribe antworten auf ihrem Konto-Host nicht (siehe `vpn/PROVIDERS.md`), hide.me und Proton antworten |
 
-## Was noch offen ist (braucht ein Konto)
+## Der Weg zum echten Tunnel
 
-Der VPN-Teil des Labs ist **nicht** messbar, solange keine Anbieter-Konfiguration vorliegt: Privado
-und hide.me geben im kostenlosen Tarif keine reguläre `.ovpn`/WireGuard-Datei heraus. Mit einer
-Konfiguration (Gluetun) laufen die restlichen Messungen: Adresse im Tunnel, DNS- und IPv6-Leck im
-Tunnel, der Kill-Switch (Tunnel zu → keine Route → der Download steht) und die Geschwindigkeit im
-Tunnel.
-
-Der Ablauf dafür:
+Gluetun bringt ProtonVPN mit. Es braucht **einen** Wert aus dem Proton-Dashboard, keine
+Konfigurationsdatei und keine Schnittstelle von Proton:
 
 ```
-# Die Konfiguration des Anbieters nach lab/torrent-vpn/vpn/jularr.conf legen
+# 1) Kostenloses Proton-Konto: https://account.protonvpn.com/de/signup?plan=free
+# 2) https://account.proton.me/u/0/vpn/WireGuard  ->  die Zeile "PrivateKey" kopieren
+# 3) Den Wert in das Lab geben:
+powershell -ExecutionPolicy Bypass -File lab/torrent-vpn/prepare-proton.ps1 -Key <schluessel>
+
 docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml up -d
 docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml --profile probe run --rm probe
 ```
+
+Der Schlüssel gilt für alle Server des Kontos; `FREE_ONLY=on` hält die Messung im Gratis-Tarif,
+`SERVER_COUNTRIES` wählt den Ort.
+
+## Was der Gratis-Tarif nicht kann
+
+Proton weist „P2P-Unterstützung“ ausdrücklich als **Premium-Funktion** aus. Im Gratis-Tarif
+verbindet sich der Tracker, aber es kommen keine Peers: der Torrent bleibt bei 0 Byte. Das misst
+das Lab selbst, statt es zu vermuten. Für Torrents braucht es also einen Anbieter, der P2P im
+Gratis-Tarif erlaubt, oder einen eigenen Server – für **gesperrte Direktquellen** (die Light-Novel-Seiten)
+reicht der Gratis-Tarif, weil eine EPUB-Datei wenige Megabyte kostet.
 
 ## Was das für Jularr heißt
 
@@ -37,7 +47,8 @@ docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.ya
 2. **Der VPN gehört in den Container, nicht in Jularr** – so bleibt Jularr unabhängig vom Anbieter ✔.
    Die Regel „ohne VPN kein Download“ ist eine Eigenschaft des Containers (Kill-Switch) ✔, Jularr
    merkt nur „Quelle nicht erreichbar“ ✔.
-3. **Die kostenlosen Tarife sind für Torrents der Engpass** – kein P2P heißt: entweder ein Anbieter
-   mit P2P im Gratis-Tarif (muss geprüft werden) oder der Download läuft langsam.
+3. **Die Messung läuft im Tunnel-Netzraum** – die Probe teilt sich den Netzraum mit dem Tunnel.
+   Nur so ist der Kill-Switch beweisbar: ohne Tunnel scheitern die Anfragen, statt unverschlüsselt
+   durchzurutschen.
 4. **IPv6 muss im Tunnel mitgenommen oder abgeschaltet sein** – sonst läuft ein Teil des Verkehrs am
    VPN vorbei, und genau daran würde der Kill-Switch scheitern.

@@ -6,11 +6,26 @@ services:
   vpn:
     # The tunnel belongs to this file only, so it starts without naming a profile.
     profiles: !reset []
+    # The client shares this network space, so its web interface is published here.
+    ports: !reset
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8080:8080"
 
   qbittorrent:
     depends_on:
       vpn:
-        condition: service_healthy
+        condition: service_started
     network_mode: "service:vpn"
     # The client shares the tunnel's network; it may not have ports of its own then.
     ports: !reset []
+
+  probe:
+    # The measurement runs inside the tunnel's network space, so every request it makes goes
+    # through the tunnel. That is what shows the kill switch: without a tunnel the requests
+    # fail instead of slipping out unencrypted.
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        # Not "healthy": a tunnel that does not come up is one of the cases to measure.
+        condition: service_started

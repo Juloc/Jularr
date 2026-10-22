@@ -32,7 +32,8 @@ services:
       VPN_CUSTOM_CONFIG_PATH: /vpn/jularr.conf
       FIREWALL_INPUT_PORTS: ${VPN_INPUT_PORTS:-6881}
       FIREWALL_OUTBOUND_BLOCKED_PORTS: 6881
-      DOT: "off"
+      # The name server of Gluetun, whose queries travel through the tunnel, so nothing leaks.
+      DNS_SERVER: "on"
     volumes:
       - ./vpn:/vpn:ro
     ports:
@@ -58,8 +59,12 @@ services:
 
   # The measurements: the public address, the leaks, the torrent and the kill switch.
   probe:
-    image: alpine:3.20
+    # The image carries curl; nothing is installed at run time, because a tunnel that is down
+    # must not reach a package mirror either.
+    image: curlimages/curl:latest
     profiles: ["probe"]
+    entrypoint: ["sh"]
+    command: ["/app/run.sh"]
     depends_on:
       - qbittorrent
     environment:
@@ -73,7 +78,6 @@ services:
       - ./qbittorrent/downloads:/downloads
       - ./run.sh:/app/run.sh:ro
     working_dir: /app
-    command: ["sh", "-c", "apk add --no-cache curl >/dev/null && sh run.sh"]
 
 networks:
   default:
