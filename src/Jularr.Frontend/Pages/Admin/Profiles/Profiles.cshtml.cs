@@ -63,7 +63,6 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             });
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
-            page.Asset("Framework/Components/Form.entry.ts");
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");

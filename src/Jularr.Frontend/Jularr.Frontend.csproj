@@ -23,5 +23,6 @@
   </Target>
   <ItemGroup>
     <EmbeddedResource Include="Localization/Catalogs/*.json" />
+    <EmbeddedResource Include="Modules/Pwa/ServiceWorker.js" LogicalName="Jularr.Frontend.Modules.Pwa.ServiceWorker.js" />
   </ItemGroup>
 </Project>

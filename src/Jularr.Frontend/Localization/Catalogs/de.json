@@ -11084,6 +11084,66 @@
    "Mark unheard",
    "Als ungehört markieren"
   ],
+  "sortable.handle": [
+   "Reorder",
+   "Verschieben"
+  ],
+  "sortable.menu": [
+   "Row actions",
+   "Zeilenaktionen"
+  ],
+  "sortable.top": [
+   "Move to top",
+   "Ganz nach oben"
+  ],
+  "sortable.up": [
+   "Move up",
+   "Nach oben"
+  ],
+  "sortable.down": [
+   "Move down",
+   "Nach unten"
+  ],
+  "sortable.bottom": [
+   "Move to bottom",
+   "Ganz nach unten"
+  ],
+  "sortable.position": [
+   "Position {0} of {1}",
+   "Position {0} von {1}"
+  ],
+  "form.number.decrease": [
+   "Decrease value",
+   "Wert verringern"
+  ],
+  "form.number.increase": [
+   "Increase value",
+   "Wert erhöhen"
+  ],
+  "unit.megabytes": [
+   "MB",
+   "MB"
+  ],
+  "unit.hours": [
+   "hours",
+   "Stunden"
+  ],
+  "unit.minutes": [
+   "min",
+   "min"
+  ],
+  "unit.days": [
+   "days",
+   "Tage"
+  ],
+  "unit.perMinute": [
+   "per min",
+   "pro Min."
+  ],
+  "unit.times": [
+   "×",
+   "×"
+  ],
   "settings.tabs": [
    "Settings",
    "Einstellungen"

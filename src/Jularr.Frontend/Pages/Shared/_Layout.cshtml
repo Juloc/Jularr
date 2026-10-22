@@ -27,12 +27,18 @@
     <link rel="icon" type="image/svg+xml" sizes="any" href="@Assets.ImageUrl("Assets/Shared/favicon.svg")" />
     <link rel="icon" type="image/png" sizes="32x32" href="@Assets.ImageUrl("Assets/Shared/icon-32.png")" />
     <link rel="apple-touch-icon" href="@Assets.ImageUrl("Assets/Shared/apple-touch-icon.png")" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="@T.InstanceName" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     @Assets.Styles("Assets/Shared/shell.entry.scss")
     @if (!showShell)
     {
         @Assets.Styles(pageAssets)
     }
     @Assets.Scripts("Modules/Appearance/theme.entry.ts")
+    @Assets.Scripts("Modules/Pwa/pwa.entry.ts")
     @Assets.Scripts("Framework/Components/MediaImage.entry.ts")
     @if (inPlace)
     {
@@ -41,6 +47,11 @@
     @if (showShell && !isPreview && !isReader)
     {
         @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
+    }
+    @if (!isReader && !isPlayer)
+    {
+        @Assets.Scripts("Framework/Components/Form.entry.ts")
+        @Assets.Scripts("Framework/Components/Dropdown.entry.ts")
     }
     @if (showShell && !isReader)
     {

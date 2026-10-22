@@ -59,12 +59,12 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     {
                         if (texts.Can(null, "Reading"))
                         {
-                            history.Number(item => item.ReadingCacheMegabytes, "admin.instance.readingCacheMegabytes");
+                            history.Number(item => item.ReadingCacheMegabytes, "admin.instance.readingCacheMegabytes", affix: FieldAffix.Unit("unit.megabytes"));
                             history.Number(item => item.ReadingCacheWorks, "admin.instance.readingCacheWorks");
                         }
 
-                        history.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
-                        history.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
+                        history.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays", affix: FieldAffix.Unit("unit.days"));
+                        history.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes", affix: FieldAffix.Unit("unit.megabytes"));
                     });
 
                     form.Section("settings.instance.access", access =>
