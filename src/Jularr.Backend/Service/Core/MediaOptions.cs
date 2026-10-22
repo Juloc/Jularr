@@ -5,7 +5,10 @@ namespace Jularr.Backend.Service.Core
         // Native tools (FfmpegPath, FfprobePath, FpcalcPath, CjxlPath) are found on the PATH; see Executables.
 
         // Resource budget for conversions; the Owner's Transcoding page replaces the maximum and the encoding, these stay their defaults.
-        public string TranscodeCachePath { get; set; } = Path.Combine(Path.GetTempPath(), "jularr-transcode");
+        public string TranscodeCachePath { get; set; } = Path.Combine(Directory.Exists("/data") ? "/data" : Path.GetTempPath(), "jularr-transcode");
+        // The temporary cache stays bounded even when FFmpeg is left running by a player.
+        public long MaxTranscodeCacheBytes { get; set; } = 2L * 1024 * 1024 * 1024;
+        public long TranscodeCacheFreeSpaceReserveBytes { get; set; } = 1024L * 1024 * 1024;
         public int MaxTranscodes { get; set; } = 2;
 
         // Seek thumbnails; by default under the data folder.

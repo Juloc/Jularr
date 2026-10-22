@@ -9,6 +9,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
+using Jularr.Integrations.Data.Storage;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Playback.V1
@@ -49,6 +50,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         private readonly MediaOptions _options;
         private readonly Timer _sweep;
         private readonly Lock _capacity = new();
+        private readonly string? _cacheFilesystemIdentity;
         private long _order;
         private volatile int _maxTranscodes;
 
@@ -57,13 +59,15 @@ namespace Jularr.Backend.Service.User.Playback.V1
             _transcoder = transcoder;
             _options = options.Value;
             _maxTranscodes = _options.MaxTranscodes;
+            var parent = Path.GetDirectoryName(Path.GetFullPath(_options.TranscodeCachePath));
+            _cacheFilesystemIdentity = parent is not null ? StorageFileSystem.DownloadFilesystemIdentity(parent) : null;
 
-            // Abandoned segments of earlier processes are removed.
-            if (Directory.Exists(_options.TranscodeCachePath))
+            // No playback session survives a process restart; reclaim only our session directories.
+            if (CacheFilesystemMatches() && Directory.Exists(_options.TranscodeCachePath))
             {
                 foreach (var directory in new DirectoryInfo(_options.TranscodeCachePath).EnumerateDirectories())
                 {
-                    if (DateTime.UtcNow - directory.LastWriteTimeUtc > ExpiryTimeout) TryDelete(directory.FullName);
+                    if (Guid.TryParseExact(directory.Name, "N", out _)) TryDelete(directory.FullName);
                 }
             }
 
@@ -88,6 +92,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         {
             lock (_capacity)
             {
+                RequireCacheCapacity();
                 _maxTranscodes = maxTranscodes;
                 var admission = TranscodeAdmissionLogic.Decide(Loads(null), TranscodeAdmissionLogic.Capacity(maxTranscodes), hasPriority, weights);
                 if (admission.CandidateIndex is not { } index)
@@ -108,6 +113,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 return null;
             }
 
+            if (job.CacheUnavailable) throw new ServiceUnavailableException("playback_cache_unavailable");
             return job.Evicted ? throw new ServiceGoneException("playback_evicted") : job.Source;
         }
 
@@ -126,6 +132,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 {
                     throw new ServiceGoneException("playback_evicted");
                 }
+                if (job.CacheUnavailable) throw new ServiceUnavailableException("playback_cache_unavailable");
 
                 job.LastRequested = index;
                 job.LastAccess = Stopwatch.GetTimestamp();
@@ -145,6 +152,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     {
                         throw new ServiceGoneException("playback_evicted");
                     }
+                    if (job.CacheUnavailable) throw new ServiceUnavailableException("playback_cache_unavailable");
 
                     if (job.Process is { HasExited: true } process && !File.Exists(path))
                     {
@@ -175,6 +183,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 await Task.Delay(150, ct);
             }
 
+            RequireCacheCapacity();
             return path;
         }
 
@@ -211,6 +220,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         private void Restart(Job job, int index)
         {
             Kill(job);
+            RequireCacheCapacity();
 
             var encoding = job.SoftwareFallback ? TranscodePipelines.Software : EncodingOf(job);
             var request = new TranscodeRequest(job.Source.Input.Location, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
@@ -266,6 +276,23 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         private void Sweep()
         {
+            // An external FFmpeg process can grow its segments without an API request.
+            if (!CacheWithinBudget())
+            {
+                var canClean = CacheFilesystemMatches();
+                foreach (var job in _jobs.Values)
+                {
+                    lock (job)
+                    {
+                        job.CacheUnavailable = true;
+                        Kill(job);
+                    }
+
+                    // Never delete through a stale mount after the backing filesystem changed.
+                    if (canClean) TryDelete(job.Directory);
+                }
+            }
+
             foreach (var (sessionId, job) in _jobs)
             {
                 // A conversion stopped for room releases what it holds.
@@ -295,6 +322,38 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         Kill(job);
                     }
                 }
+            }
+        }
+
+        private void RequireCacheCapacity()
+        {
+            if (!CacheWithinBudget()) throw new ServiceUnavailableException("playback_cache_unavailable");
+        }
+
+        private bool CacheFilesystemMatches()
+        {
+            var parent = Path.GetDirectoryName(Path.GetFullPath(_options.TranscodeCachePath));
+            return parent is not null && Directory.Exists(parent)
+                && StorageFileSystem.DownloadFilesystemIdentity(parent) == _cacheFilesystemIdentity;
+        }
+
+        private bool CacheWithinBudget()
+        {
+            if (_options.MaxTranscodeCacheBytes <= 0 || _options.TranscodeCacheFreeSpaceReserveBytes < 0) return false;
+            try
+            {
+                if (!CacheFilesystemMatches()) return false;
+                Directory.CreateDirectory(_options.TranscodeCachePath);
+                var available = StorageFileSystem.AvailableFreeSpace(_options.TranscodeCachePath);
+                if (available is null || available <= _options.TranscodeCacheFreeSpaceReserveBytes) return false;
+                var state = new StorageScanState();
+                var used = StorageFileSystem.EnumerateFiles(_options.TranscodeCachePath, null, state, CancellationToken.None, includeHidden: true)
+                    .Sum(file => file.SizeBytes);
+                return state.IsComplete && used < _options.MaxTranscodeCacheBytes;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                return false;
             }
         }
 
@@ -348,6 +407,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             public long LastAccess { get; set; } = Stopwatch.GetTimestamp();
             public bool SoftwareFallback { get; set; }
             public volatile bool Evicted;
+            public volatile bool CacheUnavailable;
 
             public bool IsRunning
             {

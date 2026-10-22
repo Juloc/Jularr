@@ -20,6 +20,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         // The official mirrors of the source (https://annas-archive.gl/faq#mirrors); all of them are tried, the one
         // of the connection first. Others carry the name without permission and steal donations: never use them.
+        private const string LegacyDefaultHost = "annas-archive.org";
         private static readonly string[] OfficialMirrors =
         [
             "https://annas-archive.gl",
@@ -28,6 +29,29 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         ];
 
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
+
+        public static bool IsTrustedSource(Uri configured, Uri candidate)
+        {
+            if (configured.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(configured.UserInfo)
+                || candidate.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(candidate.UserInfo))
+            {
+                return false;
+            }
+
+            if (string.Equals(configured.Scheme, candidate.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(configured.Host, candidate.Host, StringComparison.OrdinalIgnoreCase) && configured.Port == candidate.Port)
+            {
+                return true;
+            }
+
+            return configured.IsDefaultPort && candidate.IsDefaultPort
+                && IsFallbackOrigin(configured)
+                && IsFallbackOrigin(candidate);
+        }
+
+        private static bool IsFallbackOrigin(Uri site) =>
+            string.Equals(site.Host, LegacyDefaultHost, StringComparison.OrdinalIgnoreCase)
+            || OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, site.Host, StringComparison.OrdinalIgnoreCase));
 
         // The public waiting page of one download server.
         public static Uri SlowPageUri(Uri site, string md5, int server = 0) => new(site, "slow_download/" + md5 + "/0/" + server.ToString(CultureInfo.InvariantCulture));
@@ -60,10 +84,15 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 }
 
                 page = read.Html;
+                answered = new Uri(read.Address.GetLeftPart(UriPartial.Authority) + "/");
+                if (!IsTrustedSource(site, answered))
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The browser returned an untrusted source.");
+                }
             }
 
             var records = new List<AnnasArchiveRecord>();
-            foreach (var record in Records(page))
+            foreach (var record in Records(page, answered!))
             {
                 if (records.All(known => known.Md5 != record.Md5))
                 {
@@ -75,7 +104,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         }
 
         // Each record is a row: the file's facts, the title link and the author.
-        private static IReadOnlyList<AnnasArchiveRecord> Records(string page)
+        private static IReadOnlyList<AnnasArchiveRecord> Records(string page, Uri site)
         {
             if (page.Length > MaximumPageBytes)
             {
@@ -91,7 +120,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                     continue;
                 }
 
-                if (ReadRecord(link, match.Groups[1].Value) is { } record)
+                if (ReadRecord(link, match.Groups[1].Value, site) is { } record)
                 {
                     records.Add(record);
                 }
@@ -110,7 +139,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         private static IReadOnlyList<Uri> Mirrors(Uri site)
         {
             var mirrors = new List<Uri> { site };
-            if (!OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, site.Host, StringComparison.OrdinalIgnoreCase)))
+            if (!site.IsDefaultPort || !IsFallbackOrigin(site))
             {
                 return mirrors;
             }
@@ -133,6 +162,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             try
             {
                 return await DirectDownload.ReadPageAsync(http, new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)), gates, browser, ct);
+            }
+            catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.TooLarge)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page exceeds its size limit.", exception);
             }
             catch (DirectDownloadException)
             {
@@ -231,21 +264,48 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         // A file link a person obtained after the site's own check; no key is sent.
         public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
+            var complete = false;
+            var destinationExisted = File.Exists(destination);
             try
             {
                 await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
                 // The site may answer with a page instead of the file; then the browser fetches it.
                 if (await IsDocumentAsync(destination, ct))
                 {
+                    complete = true;
                     return;
                 }
 
                 File.Delete(destination);
                 await browser.SaveFileAsync(file, destination, maximumBytes, reserveWrite, ct);
+                if (!await IsDocumentAsync(destination, ct))
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The browser did not download a supported book file.");
+                }
+
+                complete = true;
             }
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
                 throw new AnnasArchiveException(Failure(exception), "The file could not be downloaded.", exception);
+            }
+            catch (SourceBrowserException exception)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "The browser could not fetch the file.", exception);
+            }
+            finally
+            {
+                if (!complete && !destinationExisted)
+                {
+                    try
+                    {
+                        File.Delete(destination);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        // Preserve the download error; cleanup can be retried by the operation lifecycle.
+                    }
+                }
             }
         }
 
@@ -327,7 +387,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
 
         // Each record is a row: the file's facts, the title link and the author.
-        private static AnnasArchiveRecord? ReadRecord(IElement link, string md5)
+        private static AnnasArchiveRecord? ReadRecord(IElement link, string md5, Uri site)
         {
             var title = (link.QuerySelector("h3")?.TextContent ?? link.TextContent ?? "").Trim();
             if (title.Length == 0)
@@ -347,7 +407,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
             var author = link.QuerySelector(".italic")?.TextContent.Trim() ?? Author(row);
             var language = Language().Match(facts) is { Success: true } code ? code.Groups[1].Value : null;
-            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), IsPart(lines));
+            return new AnnasArchiveRecord(md5, Limit(title, 500), author is null ? null : Limit(author, 200), format, language, ReadSize(facts), site, IsPart(lines));
         }
 
         // A file that names a part of a work is only that part.

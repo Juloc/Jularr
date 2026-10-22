@@ -155,7 +155,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 var key = suppliedKeys.FirstOrDefault(item => item.TakeoverItemTypeId == TakeoverItemType.Client && SameAddress(item.BaseUrl, client.BaseUrl))?.ApiKey ?? client.ApiKey;
                 items.Add(await TakeConnectionAsync(TakeoverItemType.Client, client.Name, client.BaseUrl, key is null, existing,
-                    new SaveAcquisitionConnectionDataV1(Limit(client.Name, 128), AcquisitionConnectionType.Sabnzbd, client.BaseUrl, key, client.IsEnabled, client.Priority, [],
+                    new SaveAcquisitionConnectionDataV1(Limit(client.Name, 128), AcquisitionConnectionType.Sabnzbd, client.BaseUrl, key, false, client.Priority, [],
                         client.Category is { Length: <= 64 } category ? category : null, null, null)));
             }
 

@@ -73,7 +73,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         {
                             var records = await _annas.SearchAsync(site, way, ct);
                             found.AddRange(records.Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
-                                record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes, record.IsPart)));
+                                record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(record.Site, record.Md5), record.SizeBytes, record.IsPart)));
                             if (enough is not null && enough(found))
                             {
                                 break;
@@ -121,12 +121,26 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         await _opds.DownloadAsync(Opds(source), address, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                         break;
                     case AcquisitionConnectionType.AnnasArchive:
-                        var site = Catalog(source);
+                        var site = new Uri(address.GetLeftPart(UriPartial.Authority) + "/");
+                        var configured = Catalog(source);
+                        if (!AnnasArchiveClient.IsTrustedSource(configured, site))
+                        {
+                            throw new DirectSourceException("acquisition_grab_failed");
+                        }
+
                         var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
                         if (source.ProtectedApiKey is { } memberKey)
                         {
-                            await _annas.DownloadAsync(site, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
-                            break;
+                            try
+                            {
+                                await _annas.DownloadAsync(configured, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                                break;
+                            }
+                            catch (AnnasArchiveException exception) when (exception.Failure == AnnasArchiveFailure.Unavailable
+                                && !string.Equals(configured.Host, site.Host, StringComparison.OrdinalIgnoreCase))
+                            {
+                                // The configured member API is down. Retry via the public slow path of the responding mirror, never send the key there.
+                            }
                         }
 
                         // Without a key: the person's file link, else the slow download; a check or a dead link goes to a person.
