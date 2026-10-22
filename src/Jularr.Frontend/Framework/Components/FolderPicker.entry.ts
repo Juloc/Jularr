@@ -1,5 +1,12 @@
 import "./FolderPicker.scss";
 import { onPage } from "../../Modules/Navigation/PageSwap";
+import { markTruncated } from "./Truncated";
+
+// The chosen folder is one cut-off line; its full path shows in the tooltip of the shared Truncated text.
+function showSelection(selection: HTMLElement, text: string): void {
+    selection.querySelectorAll<HTMLElement>('.truncated__text, .truncated__tip').forEach(part => { part.textContent = text; });
+    markTruncated(selection);
+}
 
 onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-folder-picker]').forEach(picker => {
     if (picker.dataset.folderReady) return;
@@ -22,7 +29,7 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
             picker.hidden = !mount.value;
             field.value = '';
             const selection = picker.querySelector<HTMLElement>('[data-folder-selection]');
-            if (selection) selection.textContent = '/';
+            if (selection) showSelection(selection, '/');
             const url = new URL(opener.dataset.folderUrl ?? '', location.href);
             url.searchParams.set('storageMountId', mount.value);
             url.searchParams.set('path', '');
@@ -53,6 +60,7 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
             }
             if (controller.signal.aborted || !dialog!.open) return;
             content!.replaceChildren(replacement);
+            markTruncated(replacement);
             currentUrl = url.href;
             status!.hidden = true;
         } catch {
@@ -97,7 +105,7 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
             }
             field.dispatchEvent(new Event('change', { bubbles: true }));
             const selection = picker.querySelector<HTMLElement>('[data-folder-selection]');
-            if (selection) selection.textContent = choose.dataset.folderLabel ?? '/' + field.value;
+            if (selection) showSelection(selection, choose.dataset.folderLabel ?? '/' + field.value);
             dialog.close();
         }
     });

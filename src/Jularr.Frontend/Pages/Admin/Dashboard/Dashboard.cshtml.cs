@@ -40,19 +40,19 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
             var left = new List<IUiComponent>();
             if (_resources is { Samples.Count: > 0 } resources)
             {
-                left.Add(new UiSection("dashboard.performance", [new ResourceChart(resources.Samples, resources.AvailableMemoryBytes)], new Span(new Text("dashboard.performance.window"))));
+                left.Add(new UiSection("dashboard.performance", [new ResourceChart(resources.Samples, resources.AvailableMemoryBytes)], action: new Span(new Text("dashboard.performance.window"))));
             }
 
             if (_activity is { } activity)
             {
                 left.Add(new UiSection("dashboard.activity", [new Div(activity.Items.Count > 0 ? activity.Items.Select(Download).ToArray() : [new P(new Text("dashboard.activity.empty"))]).Class("dashboard-recent")],
-                    Link("dashboard.activity.open", "/Admin/Activity")));
+                    action: Link("dashboard.activity.open", "/Admin/Activity")));
             }
 
             var right = new List<IUiComponent> { Services(health) };
             if (dashboard.Storage.Count > 0)
             {
-                right.Add(new UiSection("dashboard.storage", [new Div([.. dashboard.Storage.Select(Storage)]).Class("dashboard-storage")], Link("dashboard.storage.open", "/Admin/Storage")));
+                right.Add(new UiSection("dashboard.storage", [new Div([.. dashboard.Storage.Select(Storage)]).Class("dashboard-storage")], action: Link("dashboard.storage.open", "/Admin/Storage")));
             }
 
             page.Content.Add(new Div(new Div([.. left]).Class("dashboard__stack"), new Div([.. right]).Class("dashboard__stack")).Class("dashboard"));
@@ -112,7 +112,7 @@ namespace Jularr.Frontend.Pages.Admin.Dashboard
                 : new Span();
             return new UiSection("dashboard.services", [health.Services.Count > 0
                 ? new Div([.. health.Services.Select(Service)]).Class("dashboard-services")
-                : new P(new Text("dashboard.services.empty"))], action);
+                : new P(new Text("dashboard.services.empty"))], action: action);
         }
 
         private IUiComponent Service(HealthServiceV1 service)

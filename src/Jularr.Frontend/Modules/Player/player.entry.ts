@@ -597,8 +597,8 @@ async function start(player: HTMLElement): Promise<void> {
             if (input.type === "range") updateRangeValue(input);
         });
         player.querySelectorAll("[data-speed]").forEach(item => item.setAttribute("aria-pressed", String(Number((item as HTMLElement).dataset.speed) === speed)));
-        // The profile keeps speeds from 0.5 to 2; others apply to this playback only.
-        if (remember && speed >= 0.5 && speed <= 2 && player.dataset.speedUrl) {
+        // The profile keeps every speed the player offers, 0.25 to 4.
+        if (remember && player.dataset.speedUrl) {
             void fetch(player.dataset.speedUrl, {
                 method: "PUT",
                 credentials: "same-origin",
