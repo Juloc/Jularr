@@ -524,10 +524,6 @@
    "Language name",
    "Nombre del idioma"
   ],
-  "admin.languages.state": [
-   "Language status",
-   "Estado del idioma"
-  ],
   "admin.languages.enabled": [
    "Enabled",
    "Activado"

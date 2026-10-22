@@ -1,6 +1,0 @@
-// The languages' part of the list kit: the grid of its columns at three widths.
-.languages-list {
-    --list-columns: minmax(220px, 3fr) minmax(130px, 1.2fr) minmax(130px, 1.2fr) minmax(120px, 1fr);
-    --list-columns-medium: minmax(200px, 3fr) minmax(130px, 1.2fr) minmax(120px, 1fr);
-    --list-columns-narrow: minmax(160px, 2fr) minmax(130px, 1fr) minmax(120px, 1fr);
-}
