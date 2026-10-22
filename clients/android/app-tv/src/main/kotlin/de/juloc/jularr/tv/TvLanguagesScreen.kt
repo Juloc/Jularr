@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,13 +51,30 @@ fun TvLanguagesScreen(controller: TvController) {
             var focused by remember { mutableStateOf(false) }
             val shape = RoundedCornerShape(TvLayout.RailItemRadius)
             val chosen = controller.language == locale.locale
+            val requester = rememberTvFocusEntry(controller, TvFocusArea.List, "locale-${locale.id}")
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(TvLayout.RailItemHeight)
                     .clip(shape)
                     .background(colors.surface, shape)
-                    .reportFocus { focused = it }
+                    .focusRequester(requester)
+                    .reportFocus {
+                        focused = it
+                        if (it) {
+                            controller.focusMovedTo(TvFocusArea.List)
+                            controller.focusMovedTo(requester)
+                        } else if (controller.focusedEntry == requester) {
+                            controller.focusMovedTo(null)
+                        }
+                    }
+                    .then(
+                        if (focused) {
+                            Modifier.tvFocusRing(true, colors.focus, shape)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

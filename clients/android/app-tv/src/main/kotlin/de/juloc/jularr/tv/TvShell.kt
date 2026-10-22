@@ -52,12 +52,16 @@ fun TvShell(controller: TvController) {
     ) {
         // The shell opens with the focus on the rail. A surface that is opened afterwards takes
         // the focus into the content; a surface without anything to focus leaves it where it
-        // is.
+        // is. The search takes the focus into its field.
         LaunchedEffect(controller.route) {
-            if (controller.shellOpened) {
-                controller.focusOrder.firstOf(TvFocusArea.Content)?.requestFocus()
-            } else {
-                controller.shellOpened = true
+            when {
+                !controller.shellOpened -> controller.shellOpened = true
+                controller.route == TvRoute.Search -> Unit
+                else -> {
+                    val content = controller.focusOrder.firstOf(TvFocusArea.Content)
+                    val list = controller.focusOrder.firstOf(TvFocusArea.List)
+                    (content ?: list)?.requestFocus()
+                }
             }
         }
         Row(

@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -52,20 +53,30 @@ fun TvProfilesScreen(controller: TvController) {
         items(controller.profiles, key = { it.id }) { profile ->
             var focused by remember { mutableStateOf(false) }
             val shape = RoundedCornerShape(TvLayout.RailItemRadius)
+            val requester = rememberTvFocusEntry(controller, TvFocusArea.List, "profile-${profile.id}")
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(TvLayout.RailItemHeight)
                     .clip(shape)
                     .background(colors.surface, shape)
-                    .reportFocus { focused = it }
+                    .focusRequester(requester)
+                    .reportFocus {
+                        focused = it
+                        if (it) {
+                            controller.focusMovedTo(TvFocusArea.List)
+                            controller.focusMovedTo(requester)
+                        } else if (controller.focusedEntry == requester) {
+                            controller.focusMovedTo(null)
+                        }
+                    }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) {
                         scope.launch { controller.switchProfile(profile.id) }
                     }
-                            .then(
+                    .then(
                         if (focused) {
                             Modifier.tvFocusRing(true, colors.focus, shape)
                         } else {

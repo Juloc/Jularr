@@ -334,23 +334,23 @@ class TvController(context: Context) {
     var filterOpen by mutableStateOf(false)
 
 
-    /** Der Viewer Ã¶ffnet den Filter des Discover. */
+    /** Der Viewer öffnet den Filter des Discover. */
     fun openFilter() {
         filterOpen = true
     }
 
-    /** Der Viewer wÃ¤hlt die Liste; ohne Wahl stehen alle Listen. */
+    /** Der Viewer wählt die Liste; ohne Wahl stehen alle Listen. */
     fun selectFeed(feedTypeId: Int?) {
         selectedFeed = feedTypeId
         loadRecommendations()
     }
 
-    /** Der Viewer wÃ¤hlt die Reihenfolge der Titel. */
+    /** Der Viewer wählt die Reihenfolge der Titel. */
     fun sortBy(sorting: TvSorting) {
         this.sorting = sorting
     }
 
-    /** Die Titel der Regale in der gewÃ¤hlten Reihenfolge. */
+    /** Die Titel der Regale in der gewählten Reihenfolge. */
     fun sorted(shelf: TvShelf): List<TvCard> = when (sorting) {
         TvSorting.Recommended -> shelf.cards
         TvSorting.Title -> shelf.cards.sortedBy { it.title.lowercase() }
@@ -488,6 +488,17 @@ class TvController(context: Context) {
         railEntries[route] ?: railEntries[TvRoute.Home]
 
     /**
+     * A surface asks for the focus when its list is there: the entries of a list that the
+     * instance loads come later than the surface itself.
+     */
+    fun focusFirstEntry(area: TvFocusArea) {
+        if (focusArea == area) {
+            return
+        }
+        focusOrder.firstOf(area)?.requestFocus()
+    }
+
+    /**
      * The D-pad moves the focus. Left and right walk the reading order of the area, up and down
      * move between the rows of the area. The edges of an area hand the focus over to the
      * neighbouring area: the content gives it back to the rail of the current surface.
@@ -498,6 +509,8 @@ class TvController(context: Context) {
             TvFocusDirection.Left -> when (focusArea) {
                 TvFocusArea.Rail -> null
                 TvFocusArea.TopRow -> railEntry()
+                TvFocusArea.Search -> null
+                TvFocusArea.List -> railEntry()
                 TvFocusArea.Content ->
                     focusOrder.previousOf(TvFocusArea.Content, entry) ?: railEntry()
             }
@@ -505,16 +518,20 @@ class TvController(context: Context) {
             TvFocusDirection.Right -> when (focusArea) {
                 TvFocusArea.Rail -> focusOrder.firstOf(TvFocusArea.Content)
                 TvFocusArea.TopRow -> null
+                TvFocusArea.Search -> null
+                TvFocusArea.List -> null
                 TvFocusArea.Content -> focusOrder.nextOf(TvFocusArea.Content, entry)
             }
 
             TvFocusDirection.Up -> when (focusArea) {
                 TvFocusArea.Rail -> focusOrder.previousOf(TvFocusArea.Rail, entry)
+                TvFocusArea.List -> focusOrder.previousOf(TvFocusArea.List, entry)
                 else -> null
             }
 
             TvFocusDirection.Down -> when (focusArea) {
                 TvFocusArea.Rail -> focusOrder.nextOf(TvFocusArea.Rail, entry)
+                TvFocusArea.List -> focusOrder.nextOf(TvFocusArea.List, entry)
                 else -> null
             }
         } ?: return false
@@ -554,21 +571,15 @@ class TvController(context: Context) {
         }
     }
 
-    /** A key of the keyboard of the television. */
-    fun type(key: String) {
-        val text = when (key) {
-            "â£" -> searchQuery + " "
-            "âŒ«" -> searchQuery.dropLast(1)
-            else -> searchQuery + key
-        }
+    /** The text of the field of the search changed; the instance searches for it. */
+    fun searchTextChanged(text: String) {
         searchQuery = text
         runSearch(text)
     }
 
     /** What the viewer said enters the field of the search. */
     fun heard(text: String) {
-        searchQuery = text
-        runSearch(text)
+        searchTextChanged(text)
     }
 
     /** Clears the text of the search. */

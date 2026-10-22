@@ -25,11 +25,15 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,18 +41,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.juloc.jularr.core.model.DiscoverItemV1
 import de.juloc.jularr.core.model.DiscoverSuggestionV1
 
 /**
- * The search of the television: the field and the keyboard of the television on the left, the
- * suggestions of the instance under the keyboard and the titles of the instance on the right.
- * With an empty search the right side shows the trending titles.
+ * The search of the television: the field with the text of the search on the left, the
+ * suggestions of the instance under it and the titles of the instance on the right. The
+ * standard keyboard of the television types into the field; with an empty search the right side
+ * shows the trending titles of the instance.
  */
 @Composable
 fun TvSearchScreen(controller: TvController) {
@@ -69,28 +79,11 @@ fun TvSearchScreen(controller: TvController) {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(context.packageManager) != null
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            // A hardware keyboard types into the field as well.
-            .onKeyEvent { event ->
-                val native = event.nativeKeyEvent
-                if (native.action == android.view.KeyEvent.ACTION_DOWN &&
-                    native.unicodeChar != 0 &&
-                    native.keyCode != android.view.KeyEvent.KEYCODE_ENTER &&
-                    native.keyCode != android.view.KeyEvent.KEYCODE_BACK
-                ) {
-                    controller.type(native.unicodeChar.toString())
-                    true
-                } else {
-                    false
-                }
-            },
-    ) {
-        // The field, the keyboard and the suggestions under it stand on the left.
+    Row(modifier = Modifier.fillMaxSize()) {
+        // The field and the suggestions of the instance stand on the left.
         Column(
             modifier = Modifier
-                .width(KeyboardWidth)
+                .width(SearchColumnWidth)
                 .fillMaxHeight()
                 .padding(end = TvLayout.Gap),
             verticalArrangement = Arrangement.spacedBy(TvLayout.Gap),
@@ -110,46 +103,7 @@ fun TvSearchScreen(controller: TvController) {
                 voiceAvailable = voiceAvailable,
             )
 
-            // The keyboard of the television: narrow like the keyboard of a telephone, its
-            // letters on the left and its actions on the right.
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                LetterKeys.chunked(LetterColumns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { key ->
-                            TvKey(
-                                controller = controller,
-                                label = key,
-                                onClick = { controller.type(key) },
-                                modifier = Modifier.width(KeyWidth),
-                            )
-                        }
-                    }
-                }
-                DigitKeys.chunked(LetterColumns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { key ->
-                            TvKey(
-                                controller = controller,
-                                label = key,
-                                onClick = { controller.type(key) },
-                                modifier = Modifier.width(KeyWidth),
-                            )
-                        }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ActionKeys.forEach { key ->
-                        TvKey(
-                            controller = controller,
-                            label = key,
-                            onClick = { controller.type(key) },
-                            modifier = Modifier.width(ActionKeyWidth),
-                        )
-                    }
-                }
-            }
-
-            // The suggestions of the instance stand under the keyboard.
+            // The suggestions of the instance stand under the field.
             if (controller.searchSuggestions.isNotEmpty()) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(controller.searchSuggestions, key = { it.externalId }) { suggestion ->
@@ -185,7 +139,12 @@ fun TvSearchScreen(controller: TvController) {
                     verticalArrangement = Arrangement.spacedBy(TvLayout.Gap),
                 ) {
                     items(titles, key = { "${it.workId ?: it.tmdbId}-${it.title}" }) { item ->
-                        TvCardView(item.toTvCard(controller.texts), controller, "trending")
+                        TvCardView(
+                            item.toTvCard(controller.texts),
+                            controller,
+                            "trending",
+                            TvFocusArea.Search,
+                        )
                     }
                 }
             } else if (controller.searchQuery.isNotEmpty()) {
@@ -199,7 +158,10 @@ fun TvSearchScreen(controller: TvController) {
     }
 }
 
-/** The field with the text of the search, the microphone and the clear button. */
+/**
+ * The field with the text of the search, the microphone and the clear button. The field takes
+ * the focus when the search opens, so the standard keyboard of the television types into it.
+ */
 @Composable
 private fun TvSearchField(
     controller: TvController,
@@ -208,40 +170,72 @@ private fun TvSearchField(
 ) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
+    val requester = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(TvLayout.ControlRadius)
+
+    // The field takes the focus when the search opens, so the keyboard of the television is
+    // there right away.
+    LaunchedEffect(Unit) {
+        runCatching { requester.requestFocus() }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(TvLayout.TopRowHeight)
-            .clip(RoundedCornerShape(TvLayout.TopRowRadius))
+            .clip(shape)
             .background(colors.surface)
-            .border(1.dp, colors.border, RoundedCornerShape(TvLayout.TopRowRadius))
-            .padding(horizontal = 18.dp),
+            .border(
+                width = if (focused) TvLayout.FocusRing * 2 else 1.dp,
+                color = if (focused) colors.accent else colors.border,
+                shape = shape,
+            )
+            .padding(start = 18.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = controller.searchQuery.ifEmpty { controller.texts["tv.search.placeholder"] },
-            fontSize = type.body,
-            fontWeight = FontWeight.Medium,
-            color = if (controller.searchQuery.isEmpty()) colors.muted else colors.text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        if (controller.searchQuery.isNotEmpty()) {
-            TvKey(
-                controller = controller,
-                label = "×",
-                onClick = { controller.clearSearch() },
-                modifier = Modifier.width(48.dp),
+        Box(modifier = Modifier.weight(1f)) {
+            if (controller.searchQuery.isEmpty()) {
+                Text(
+                    text = controller.texts["tv.search.placeholder"],
+                    fontSize = type.body,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            BasicTextField(
+                value = controller.searchQuery,
+                onValueChange = { controller.searchTextChanged(it) },
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = colors.text,
+                    fontSize = type.body,
+                    fontWeight = FontWeight.Medium,
+                ),
+                cursorBrush = SolidColor(colors.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { controller.back() },
+                    onDone = { controller.back() },
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(requester)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        if (it.isFocused) {
+                            controller.focusMovedTo(TvFocusArea.Search)
+                        }
+                    },
             )
         }
+        if (controller.searchQuery.isNotEmpty()) {
+            TvSmallButton(controller, "×", onClick = { controller.clearSearch() })
+        }
         if (voiceAvailable) {
-            TvKey(
-                controller = controller,
-                label = "",
-                onClick = onVoice,
-                modifier = Modifier.width(48.dp),
-            ) {
+            TvSmallButton(controller, "", onClick = onVoice) {
                 Icon(
                     imageVector = Icons.Filled.Mic,
                     contentDescription = controller.texts["tv.search.voice"],
@@ -270,7 +264,12 @@ private fun TvSuggestionView(controller: TvController, suggestion: DiscoverSugge
             .fillMaxWidth()
             .clip(shape)
             .background(colors.surface, shape)
-            .reportFocus { focused = it; if (focused) controller.focusMovedTo(TvFocusArea.Content) }
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.Search)
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -279,13 +278,12 @@ private fun TvSuggestionView(controller: TvController, suggestion: DiscoverSugge
     )
 }
 
-/** One key of the keyboard of the television. */
+/** A small button of the television: the clear button and the microphone of the search. */
 @Composable
-private fun TvKey(
+private fun TvSmallButton(
     controller: TvController,
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
     content: @Composable (() -> Unit)? = null,
 ) {
     val colors = LocalTvColors.current
@@ -293,12 +291,17 @@ private fun TvKey(
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
     Box(
-        modifier = modifier
-            .height(TvLayout.RailItemHeight)
+        modifier = Modifier
+            .size(TvLayout.AvailabilitySymbol + 12.dp)
             .clip(shape)
             .background(colors.surface, shape)
             .border(1.dp, colors.border, shape)
-            .reportFocus { focused = it; if (focused) controller.focusMovedTo(TvFocusArea.Content) }
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.Search)
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -318,28 +321,5 @@ private fun TvKey(
     }
 }
 
-/** The letters of the keyboard in the German layout. */
-private val LetterKeys = listOf(
-    "q", "w", "e", "r", "t", "z", "u", "i", "o", "p",
-    "a", "s", "d", "f", "g", "h", "j", "k", "l",
-    "y", "x", "c", "v", "b", "n", "m",
-)
-
-/** The digits of the keyboard. */
-private val DigitKeys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
-
-/** The actions of the keyboard: the space, the backspace and the enter. */
-private val ActionKeys = listOf("␣", "⌫", "↵")
-
-/** The width of the keyboard of the television. */
-private val KeyboardWidth = 260.dp
-
-/** The columns of the keyboard: narrow like the keyboard of a telephone. */
-private val LetterColumns = 5
-
-/** The width of one key. */
-private val KeyWidth = 48.dp
-
-/** The width of one action key; the space is wider. */
-private val ActionKeyWidth = 80.dp
-
+/** The width of the column with the field and the suggestions. */
+private val SearchColumnWidth = 260.dp

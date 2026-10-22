@@ -40,6 +40,9 @@ object TvLayout {
     /** The top row of the desktop is a panel with a radius of 24 pixels. */
     val TopRowRadius = 17.5.dp
 
+    /** A control of the desktop has the radius of a pill. */
+    val ControlRadius = 999.dp
+
     /** The distance between the shelves, the cards and the sections. */
     val Gap = 8.dp
     val ContentPadding = 17.5.dp

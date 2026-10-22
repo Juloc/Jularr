@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -46,6 +47,7 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                controller = controller,
                 title = controller.texts["tv.settings.skin"],
                 value = controller.skin,
                 onClick = {
@@ -55,6 +57,7 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                controller = controller,
                 title = controller.texts["tv.settings.brightness"],
                 value = controller.texts["common.yes"].takeIf { controller.dark } ?: controller.texts["common.no"],
                 onClick = { controller.useDark(!controller.dark) },
@@ -62,6 +65,7 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                controller = controller,
                 title = controller.texts["tv.settings.language"],
                 value = controller.language,
                 onClick = {
@@ -82,6 +86,7 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                controller = controller,
                 title = controller.texts["tv.player.autoplay"],
                 value = controller.texts[if (controller.autoplay) "common.yes" else "common.no"],
                 onClick = { controller.useAutoplay(!controller.autoplay) },
@@ -89,6 +94,7 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                controller = controller,
                 title = controller.texts["tv.player.speed"],
                 value = "${controller.speed}x",
                 onClick = {
@@ -105,6 +111,7 @@ fun TvSettingsScreen(controller: TvController) {
         }
         item {
             TvSettingRow(
+                controller = controller,
                 title = controller.texts["tv.settings.forget"],
                 value = "",
                 onClick = { controller.forget() },
@@ -115,18 +122,33 @@ fun TvSettingsScreen(controller: TvController) {
 
 /** One setting of the television: its name and its value. */
 @Composable
-private fun TvSettingRow(title: String, value: String, onClick: () -> Unit) {
+private fun TvSettingRow(
+    controller: TvController,
+    title: String,
+    value: String,
+    onClick: () -> Unit,
+) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
+    val requester = rememberTvFocusEntry(controller, TvFocusArea.List, "setting-$title")
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(TvLayout.RailItemHeight)
             .clip(shape)
             .background(colors.surface, shape)
-            .reportFocus { focused = it }
+            .focusRequester(requester)
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.List)
+                    controller.focusMovedTo(requester)
+                } else if (controller.focusedEntry == requester) {
+                    controller.focusMovedTo(null)
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

@@ -384,12 +384,17 @@ fun TvShelfRow(controller: TvController, shelf: TvShelf) {
  * shows its ring.
  */
 @Composable
-fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
+fun TvCardView(
+    card: TvCard,
+    controller: TvController,
+    rowKey: String,
+    area: TvFocusArea = TvFocusArea.Content,
+) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
     var focused by remember { mutableStateOf(false) }
     var actionFocused by remember { mutableStateOf(false) }
-    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "card-$rowKey-${card.id}")
+    val requester = rememberTvFocusEntry(controller, area, "card-$rowKey-${card.id}")
     val shape = RoundedCornerShape(TvLayout.CardRadius)
     val showActions = focused || actionFocused
 
@@ -400,7 +405,7 @@ fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
             .reportFocus {
                 focused = it
                 if (it) {
-                    controller.focusMovedTo(TvFocusArea.Content)
+                    controller.focusMovedTo(area)
                     controller.focusMovedTo(requester)
                 } else {
                     actionFocused = false
@@ -468,6 +473,7 @@ fun TvCardView(card: TvCard, controller: TvController, rowKey: String) {
                 rowKey = rowKey,
                 colors = colors,
                 type = type,
+                area = area,
             )
             // The progress of the desktop sits at the lower edge of the cover.
             card.progress?.let { progress ->
@@ -520,9 +526,10 @@ private fun BoxScope.TvCardAction(
     rowKey: String,
     colors: TvColors,
     type: TvType,
+    area: TvFocusArea,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "action-$rowKey-${card.id}")
+    val requester = rememberTvFocusEntry(controller, area, "action-$rowKey-${card.id}")
     val shape = RoundedCornerShape(999.dp)
     val playable = card.mediaAssetId != null
     Box(
@@ -536,7 +543,7 @@ private fun BoxScope.TvCardAction(
             .reportFocus {
                 focused = it
                 if (it) {
-                    controller.focusMovedTo(TvFocusArea.Content)
+                    controller.focusMovedTo(area)
                     controller.focusMovedTo(requester)
                 } else if (controller.focusedEntry == requester) {
                     controller.focusMovedTo(null)
@@ -557,38 +564,6 @@ private fun BoxScope.TvCardAction(
     }
 }
 
-/**
- * The actions of the focused card on the cover: the title continues or plays, and the details
- * open beside them.
- */
-@Composable
-private fun BoxScope.TvCardActions(
-    card: TvCard,
-    controller: TvController,
-    rowKey: String,
-    colors: TvColors,
-    type: TvType,
-) {
-    Row(
-        modifier = Modifier
-            .align(Alignment.BottomStart)
-            .fillMaxWidth()
-            .background(colors.background.copy(alpha = 0.82f))
-            .padding(horizontal = 6.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        val playable = card.mediaAssetId != null
-        TvCardAction(
-            controller = controller,
-            rowKey = rowKey,
-            title = controller.texts[if (playable) "media.continue" else "media.details"],
-            colors = colors,
-            type = type,
-            onClick = { controller.openCard(card) },
-        )
-    }
-}
-
 /** One action of the card. */
 @Composable
 private fun TvCardAction(
@@ -597,10 +572,11 @@ private fun TvCardAction(
     title: String,
     colors: TvColors,
     type: TvType,
+    area: TvFocusArea,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val requester = rememberTvFocusEntry(controller, TvFocusArea.Content, "label-$rowKey-$title")
+    val requester = rememberTvFocusEntry(controller, area, "label-$rowKey-$title")
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
     Text(
         text = title,
@@ -613,7 +589,7 @@ private fun TvCardAction(
             .reportFocus {
                 focused = it
                 if (it) {
-                    controller.focusMovedTo(TvFocusArea.Content)
+                    controller.focusMovedTo(area)
                     controller.focusMovedTo(requester)
                 } else if (controller.focusedEntry == requester) {
                     controller.focusMovedTo(null)
@@ -644,6 +620,12 @@ internal fun availabilityColor(controller: TvController, stateId: Int?): Color? 
 fun TvCardGrid(title: String, cards: List<TvCard>, empty: String, controller: TvController) {
     val colors = LocalTvColors.current
     val type = LocalTvType.current
+    // Die Titel kommen später als die Oberfläche; der Fokus wartet auf sie.
+    LaunchedEffect(cards) {
+        if (cards.isNotEmpty()) {
+            controller.focusFirstEntry(TvFocusArea.Content)
+        }
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(TvLayout.Gap),

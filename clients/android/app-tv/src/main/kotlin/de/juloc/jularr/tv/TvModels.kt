@@ -31,6 +31,12 @@ enum class TvFocusArea {
     Rail,
     TopRow,
     Content,
+
+    /** A list of the screen: the settings, the collections, the profiles. */
+    List,
+
+    /** The search of the television: the field, the suggestions and the titles of the instance. */
+    Search,
 }
 
 /** The directions of the D-pad. */

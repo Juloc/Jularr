@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -128,13 +129,30 @@ private fun TvCollectionCheck(controller: TvController, title: String, workId: L
     val shape = RoundedCornerShape(TvLayout.RailItemRadius)
     val collection = controller.collections.firstOrNull { it.name == title }
     val member = controller.collectionWorks.any { it.workId == workId }
+    val requester = rememberTvFocusEntry(controller, TvFocusArea.List, "collection-check-$title")
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(TvLayout.RailItemHeight)
             .clip(shape)
             .background(colors.surface, shape)
-            .reportFocus { focused = it }
+            .focusRequester(requester)
+            .reportFocus {
+                focused = it
+                if (it) {
+                    controller.focusMovedTo(TvFocusArea.List)
+                    controller.focusMovedTo(requester)
+                } else if (controller.focusedEntry == requester) {
+                    controller.focusMovedTo(null)
+                }
+            }
+            .then(
+                if (focused) {
+                    Modifier.tvFocusRing(true, colors.focus, shape)
+                } else {
+                    Modifier
+                },
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
