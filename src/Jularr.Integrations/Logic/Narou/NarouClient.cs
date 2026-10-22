@@ -17,7 +17,7 @@ namespace Jularr.Integrations.Logic.Narou
         private static readonly Regex Ncode = new(@"^n[0-9a-z]+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
         private static readonly Regex ChapterLink = new(@"<a\b[^>]*href\s*=\s*[""']/(?:novel/)?(?<key>n[0-9a-z]+)/(?<num>\d+)/?[""'][^>]*>(?<name>.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex NextPage = new(@"href\s*=\s*[""'][^""']*[?&](?:amp;)?p=(?<page>\d+)[^""']*[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex Body = new(@"<div\b(?=[^>]*(?:id\s*=\s*[""']novel_honbun[""']|class\s*=\s*[""'][^""']*p-novel__body[^""']*[""']))[^>]*>(?<value>.*?)</div>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly Regex Body = new(@"<div\b(?=[^>]*(?:id\s*=\s*[""']novel_honbun[""']|class\s*=\s*[""'][^""']*(?:p-novel__body|p-novel__text)[^""']*[""']))(?![^>]*p-novel__text--(?:preface|afterword))[^>]*>(?<value>.*?)</div>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex Title = new(@"<h1\b[^>]*class\s*=\s*[""'][^""']*p-novel__title[^""']*[""'][^>]*>(?<value>.*?)</h1>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex Author = new(@"<[^>]*class\s*=\s*[""'][^""']*p-novel__author[^""']*[""'][^>]*>(?<value>.*?)</[^>]+>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
         private static readonly Regex Tags = new(@"<[^>]+>", RegexOptions.Singleline | RegexOptions.Compiled);
