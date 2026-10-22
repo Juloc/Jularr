@@ -51,3 +51,10 @@ test('every page of an entry is an address of the application, and none is liste
 
     assert.ok(pages.length >= 30);
 });
+
+test('the user menu links one area per flagged entry, taken from the same definition', () => {
+    const shell = readFileSync(join(root, 'Pages', 'Shared', 'Shell.cs'), 'utf8');
+    assert.match(shell, /AdminMenu\.UserLinks\(texts\)/);
+    assert.doesNotMatch(shell, /ShellLink\("nav\.administration"/);
+    assert.equal([...source.matchAll(/UserMenu: true|OpenRequests, true/g)].length, 6);
+});

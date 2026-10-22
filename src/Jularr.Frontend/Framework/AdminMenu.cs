@@ -22,7 +22,8 @@ namespace Jularr.Frontend.Framework
     }
 
     // One entry of the sidebar with its sibling pages. The entry is shown while one of its pages is allowed, and links to the first of those.
-    public sealed record AdminMenuEntry(string Id, string LabelKey, string Icon, IReadOnlyList<AdminMenuPage> Pages, AdminCounter Counter = AdminCounter.None);
+    // An entry with UserMenu is also an area of the user menu, which links to it by one link of its own.
+    public sealed record AdminMenuEntry(string Id, string LabelKey, string Icon, IReadOnlyList<AdminMenuPage> Pages, AdminCounter Counter = AdminCounter.None, bool UserMenu = false);
 
     public sealed record AdminMenuGroup(string LabelKey, IReadOnlyList<AdminMenuEntry> Entries);
 
@@ -48,7 +49,7 @@ namespace Jularr.Frontend.Framework
         [
             new("admin.menu.group.operations",
             [
-                new("dashboard", "admin.dashboard.title", "dashboard", [new("admin.dashboard.title", "/Admin/Dashboard", Admin)]),
+                new("dashboard", "admin.dashboard.title", "dashboard", [new("admin.dashboard.title", "/Admin/Dashboard", Admin)], UserMenu: true),
                 new("activity", "admin.menu.activity", "activity",
                 [
                     new("admin.activity.title", "/Admin/Activity", Media, ["Library"]),
@@ -69,7 +70,7 @@ namespace Jularr.Frontend.Framework
                     new("admin.matches.title", "/Admin/Works/Matches", Media, ["Library"]),
                     new("admin.manualImport.title", "/Admin/ManualImport", Media, ["Library"]),
                     new("admin.import.title", "/Admin/Import", Media, ["Library", "Requests"])
-                ]),
+                ], UserMenu: true),
                 new("library", "nav.group.library", "library",
                 [
                     new("library.tab.Overview", "/Admin/Library", Media, ["Library"]),
@@ -77,7 +78,7 @@ namespace Jularr.Frontend.Framework
                     new("library.tab.Files", "/Admin/Library/Files", Media, ["Library"]),
                     new("library.tab.Rename", "/Admin/Library/Rename", Right("storage.update"), ["Library"]),
                     new("library.tab.Versions", "/Admin/Library/Versions", Right("storage.update"), ["Library"])
-                ])
+                ], UserMenu: true)
             ]),
             new("nav.group.acquisition",
             [
@@ -91,7 +92,7 @@ namespace Jularr.Frontend.Framework
                     new("arr.sizes", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "sizes"),
                     new("arr.releaseProfiles", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "release"),
                     new("arr.tags", "/Admin/Acquisition/Profiles", Acquisition, ["Acquisition"], "tags")
-                ]),
+                ], UserMenu: true),
                 new("sources", "admin.sources.title", "swap",
                 [
                     new("admin.sources.title", "/Admin/Acquisition/Sources", Acquisition, ["Acquisition"]),
@@ -121,7 +122,7 @@ namespace Jularr.Frontend.Framework
                     new("admin.requests.title", "/Admin/Requests", Right("requests.update"), ["Requests"]),
                     new("admin.rules.title", "/Admin/Rules", Right("rules.read"), ["Requests"]),
                     new("admin.users.title", "/Admin/Requests/Users", Right("rules.read"), ["Requests"])
-                ], AdminCounter.OpenRequests),
+                ], AdminCounter.OpenRequests, true),
                 new("settings", "admin.menu.settings", "settings",
                 [
                     new("settings.tab.instance", "/Admin/Instance", Admin),
@@ -139,7 +140,7 @@ namespace Jularr.Frontend.Framework
                     new("nav.system.server", "/Admin/System", Admin),
                     new("admin.performance.title", "/Admin/Performance", Admin, ["Diagnostics"]),
                     new("admin.logs.title", "/Admin/Logs", Admin)
-                ]),
+                ], UserMenu: true),
                 new("backups", "admin.backup.title", "shield", [new("admin.backup.title", "/Admin/Backup", Right("backup.read"))])
             ])
         ];
@@ -151,6 +152,10 @@ namespace Jularr.Frontend.Framework
                 .Select(entry => new AdminMenuEntryView(entry, [.. entry.Pages.Where(page => page.IsAllowed(texts))]))
                 .Where(entry => entry.Pages.Count > 0)])).Where(group => group.Entries.Count > 0)
         ];
+
+        // The areas of the user menu, one link each to the first page the account may open of its entry; an entry that is not visible has no link.
+        public static IReadOnlyList<AdminMenuEntryView> UserLinks(UiText texts) =>
+            [.. For(texts).SelectMany(group => group.Entries).Where(entry => entry.Entry.UserMenu)];
 
         // The entry and page an address belongs to: the most specific page, so /Admin/Works/Matches is not also the works, and a pane by what the query names.
         public static (AdminMenuEntryView Entry, AdminMenuPage Page)? Current(IEnumerable<AdminMenuGroupView> menu, string path, Func<string, string?> query)

@@ -41,11 +41,11 @@ namespace Jularr.Frontend.Pages.Shared
                 primary.Add(new ShellLink("requests.title", "/Requests", "home"));
             }
 
-            // Administration is its own sidebar mode: every group open, the user entries out of the way; the user menu has one way in.
+            // Administration is its own sidebar mode: every group open, the user entries out of the way; the user menu has one link per area, taken from the same menu.
             var adminPath = currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
             var menu = AdminMenu.For(texts);
             var current = AdminMenu.Current(menu, currentPath, key => query?[key].ToString());
-            if (menu.Count > 0) secondary.Add(new ShellLink("nav.administration", menu[0].Entries[0].Href, "admin"));
+            secondary.AddRange(AdminMenu.UserLinks(texts).Select(area => new ShellLink(area.Entry.LabelKey, area.Href, area.Entry.Icon)));
             var adminMode = menu.Count > 0 && adminPath;
 
             // The menu button of the phone, then the trail, the one global search, the theme switch, the inbox and the avatar.

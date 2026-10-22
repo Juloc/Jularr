@@ -126,6 +126,40 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(manager.Contains("data-live-text=\"jobs\"", StringComparison.Ordinal));
         }
 
+        [TestMethod]
+        public async Task UserMenu_HasOneLinkPerArea_FromTheSameMenu_ByModuleAndRight()
+        {
+            await using var host = await CreateAsync();
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('Acquisition', 'Requests')");
+
+            // The Owner has one link per area, each to the first page of its entry, and no single Administration link.
+            var html = await GetAsync(host, "/");
+            var links = UserMenu(html);
+            foreach (var address in new[] { "/Admin/Dashboard", "/Admin/Works", "/Admin/Library", "/Admin/Acquisition", "/Admin/Accounts", "/Admin/System" })
+            {
+                CollectionAssert.Contains(links, address);
+            }
+
+            Assert.AreEqual(6, links.Count(link => link.StartsWith("/Admin", StringComparison.Ordinal)));
+
+            // A module that is off takes its area with it; a media manager keeps the media areas only.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Acquisition'");
+            CollectionAssert.DoesNotContain(UserMenu(await GetAsync(host, "/")), "/Admin/Acquisition");
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            var manager = UserMenu(await GetAsync(host, "/"));
+            CollectionAssert.Contains(manager, "/Admin/Works");
+            CollectionAssert.DoesNotContain(manager, "/Admin/Dashboard");
+            CollectionAssert.DoesNotContain(manager, "/Admin/System");
+        }
+
+        // The links of the user menu's second block.
+        private static List<string> UserMenu(string html)
+        {
+            var start = html.IndexOf("sidebar-secondary", StringComparison.Ordinal);
+            Assert.IsTrue(start >= 0, "The page has no user menu.");
+            return [.. Regex.Matches(html[start..html.IndexOf("</nav>", start, StringComparison.Ordinal)], "href=\"([^\"]+)\"").Select(match => match.Groups[1].Value)];
+        }
+
         private static List<string> Entries(string html) => [.. Regex.Matches(html, "<a class=\"menu-entry[^\"]*\" href=\"([^\"]+)\"").Select(match => match.Groups[1].Value)];
 
         // The row of chips above the page.

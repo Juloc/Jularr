@@ -50,9 +50,9 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual("999px", await page.Locator(".nav-link").First.EvaluateAsync<string>("link => getComputedStyle(link).borderRadius"));
                 StringAssert.Contains(await page.Locator(".sidebar-brand .shell-brand__name").EvaluateAsync<string>("name => getComputedStyle(name).transitionProperty"), "color");
 
-                // The user menu has one way into the administration, which opens with its first entry; there an entry opens its first page at once.
-                await page.Locator(".sidebar-secondary .nav-link", new() { HasText = "Administration" }).ClickAsync();
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Dashboard$"));
+                // The user menu has one link per administration area, each opening its first page at once; there an entry does the same.
+                await page.Locator(".sidebar-secondary .nav-link", new() { HasText = "System" }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/System$"));
                 await page.Locator(".app-sidebar--admin .menu-entry", new() { HasText = "Media" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Works$"));
 
