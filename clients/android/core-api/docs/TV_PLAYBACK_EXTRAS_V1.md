@@ -67,6 +67,10 @@ val markers = extras.markers(realMediaAssetId)
 val chapterMenu = extras.chapters(realMediaAssetId)
 val tracks = extras.tracks(realMediaAssetId)
 val prefs = extras.preferences()
+// To choose an alternate, supported audio track, start a NEW real session:
+// val track = tracks.single { it.key == selectedAudioKey && it.isAudio && it.isSupported }
+// val newPlan = extras.startWithAudioTrack(mediaAssetId, deviceCapabilities, track)
+// Main agent closes old session, then passes newPlan to its existing Media3 host.
 ```
 
 - For the existing Skip button, map the server's start/end milliseconds and
@@ -80,12 +84,17 @@ val prefs = extras.preferences()
   If the Trickplay module or the file's extracted images are missing, disable
   the preview while retaining ordinary seeking.
 - For Audio selection, `tracks(assetId)` supplies real `sN` audio stream
-  keys, but **the session-start endpoint** in PR #1468 accepts
-  `audioStreamIndex` (not a track key). A non-default embedded audio track may
-  require a new playback session and FFmpeg conversion. The session-start
-  DTO supports optional audioStreamIndex, but the PR #1468 client currently
-  starts using only device codec capabilities. **Main agent must decide
-  whether/how to extend its playback session client; this PR does not touch it.**
+  keys. The backend's existing POST `/api/v1/playback/assets/{mediaAssetId}/sessions`
+  accepts `audioStreamIndex` (not the track key). This PR now provides the
+  independent `startWithAudioTrack(mediaAssetId, capabilities, audioTrack, quality?)`
+  operation. It only accepts a **supported embedded audio track from the server**,
+  sends the actual stream index, and validates the returned session URL, mode,
+  and chosen index before handing it to the existing player.
+  **The main agent must end/report progress for the previous session and
+  switch Media3 to the returned session plan.** A non-default audio track may
+  require FFmpeg conversion; the server can legitimately reject an unavailable
+  conversion. This PR does not modify the shared `HttpTvPlaybackV1Client` or
+  create an automatic mid-stream switch.
 - For subtitle selection, use the server-reported `isSupported` and
   `isSelected` flags. For keys `sN` or `fN`, fetch
   `subtitleVtt(assetId, key)` and attach the real `text/vtt` document
@@ -104,7 +113,7 @@ val prefs = extras.preferences()
 | Intro / recap / credits / preview skip intervals | Supported if stored markers exist | `GET /markers`; only those real intervals, no AI detection added |
 | Chapters | Supported if file chapters exist | `GET /chapters`; null titles retained |
 | Seek previews and sprite thumbnails | Supported if Trickplay module enabled and sprites generated | Metadata + authenticated JPEG sheets |
-| Audio choices | Enumerated and server can select streams when playback session begins | Live mid-session switch is **not** an extras endpoint; restart/replan may be needed |
+| Audio choices | Fully represented by tracks plus explicit audioStreamIndex session start | Server may require conversion; live in-place switch is **not** supported. Main agent must end old session, start new and replace Media3 media item |
 | Embedded and sidecar text subtitles | Supported subject to codec, FFmpeg and file availability | WebVTT conversion endpoint, real `isSupported` flag |
 | Image subtitles such as PGS | **Not supported** by current playback plan | Server lists tracks as unsupported; no image-subtitle rendering/burn-in |
 | Preferred audio/subtitle languages & subtitle modes | Supported | Profile preferences and server track selection |
