@@ -97,9 +97,10 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             // One row per server user: the user, the confirmed profile and the state, in the language of the page (English where no text of the language exists, else the German one).
-            var row = System.Text.RegularExpressions.Regex.Split(html, "class=\"list-row[\" ]").Skip(1).FirstOrDefault(item => item.Contains(WebUtility.HtmlEncode(jellyfin.ProfileName), StringComparison.Ordinal));
-            Assert.IsNotNull(row, "The page does not say who shares progress with whom.");
-            Assert.IsTrue(row.Contains("Linked", StringComparison.Ordinal) || row.Contains("Verknüpft", StringComparison.Ordinal), "The row of the confirmed user does not say it is linked.");
+            // Every row's profile list names every profile, so the row is the one that also carries the linked state's label.
+            var linked = System.Text.RegularExpressions.Regex.Split(html, "class=\"list-row[\" ]").Skip(1).Any(item => item.Contains(WebUtility.HtmlEncode(jellyfin.ProfileName), StringComparison.Ordinal)
+                && (item.Contains(">Linked<", StringComparison.Ordinal) || item.Contains(">Verknüpft<", StringComparison.Ordinal)));
+            Assert.IsTrue(linked, "The page does not say who shares progress with whom.");
             Assert.IsFalse(html.Contains(FakeServer.ApiKey, StringComparison.Ordinal));
         }
 
