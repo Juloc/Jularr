@@ -44,6 +44,23 @@ object TvCatalogV1Routes {
     fun watchlist(page: Int, pageSize: Int, sortTypeId: Int? = null): String =
         Watchlist + pageQuery(page, pageSize) + optionalNumber("librarySortTypeId", sortTypeId)
 
+    fun libraryFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters,
+        query: String? = null, sortTypeId: Int? = null,
+    ): String = library(page, pageSize, query, sortTypeId) + filterQuery(filters, includeProgress = false)
+
+    fun watchlistFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters, sortTypeId: Int? = null,
+    ): String = watchlist(page, pageSize, sortTypeId) + filterQuery(filters, includeProgress = true)
+
+    private fun filterQuery(filters: TvCatalogV1Filters, includeProgress: Boolean): String = buildString {
+        filters.mediaTypeIds.forEach { append("&mediaTypeIds=").append(it) }
+        filters.mediaSubtypeIds.forEach { append("&mediaSubtypeIds=").append(it) }
+        filters.releaseYearFrom?.let { append("&releaseYearFrom=").append(it) }
+        filters.releaseYearTo?.let { append("&releaseYearTo=").append(it) }
+        if (includeProgress) filters.progressStateId?.let { append("&progressStateId=").append(it) }
+    }
+
     private fun positiveId(id: Long): Long {
         require(id > 0) { "A server WorkId must be positive." }
         return id
