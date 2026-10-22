@@ -17,7 +17,7 @@ namespace Jularr.Frontend.Pages.Setup.Libraries
 {
     // The libraries step: a folder for every media type that is switched on, chosen on a connection of the storage step.
     public sealed class LibrariesModel(ReadInstanceMediaV1 readMedia, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, DeleteLibraryRootV1 deleteRoot,
-        ReadStorageMountsV1 mounts, ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadStorageMountsV1 mounts, ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // The type a subtype keeps its folder under.
         private static readonly Dictionary<string, MediaType> Parents = new() { ["Anime"] = MediaType.Series, ["Manga"] = MediaType.Book, ["LightNovel"] = MediaType.Book };
@@ -66,7 +66,7 @@ namespace Jularr.Frontend.Pages.Setup.Libraries
                 form.Hidden(data => data.MediaSubtypeId);
                 form.Hidden(data => data.StorageMountId);
                 form.Hidden(data => data.RelativePath);
-                form.Content(new FolderPicker("/Setup/Libraries?handler=Folders", "", nameof(CreateLibraryRootDataV1.RelativePath), "/Setup/Storage", storageMountFieldName: nameof(CreateLibraryRootDataV1.StorageMountId),
+                form.Content(new FolderPicker(assets, "/Setup/Libraries?handler=Folders", "", nameof(CreateLibraryRootDataV1.RelativePath), "/Setup/Storage", storageMountFieldName: nameof(CreateLibraryRootDataV1.StorageMountId),
                     choosesStorage: true, selectedLabel: texts["downloadStorage.unset"]));
                 form.Submit(new Button(new Icon("plus", assets, 14), new Text("setup.libraries.add")).Soft());
             }, "/Setup/Libraries?handler=Add", csrf, input, _input is not null && _input.MediaTypeId == type && _input.MediaSubtypeId == subtype ? FormError : null);
@@ -96,7 +96,7 @@ namespace Jularr.Frontend.Pages.Setup.Libraries
 
         public async Task<IActionResult> OnGetFoldersAsync(long? storageMountId, string? path, string? afterName, int mountPage = 1)
         {
-            var content = await StorageBrowser.FragmentAsync("/Setup/Libraries?handler=Folders", storageMountId, path, afterName, mountPage, false, mounts, mount, directories, texts, HttpContext.RequestAborted);
+            var content = await StorageBrowser.FragmentAsync("/Setup/Libraries?handler=Folders", storageMountId, path, afterName, mountPage, false, mounts, mount, directories, localPaths, texts, HttpContext.RequestAborted);
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
             content.WriteTo(writer, HtmlEncoder.Default, texts);
             Response.Headers.CacheControl = "no-store";

@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 {
     // A folder of any storage, or a download that waits for a person, imported by hand: choose the film or series, check what each file is, match the ones that are not clear, import the chosen.
     public sealed class ManualImportModel(FindManualImportWorksV1 find, ReadManualImportWorkV1 readWork, ReadManualImportFilesV1 readFiles, PreviewManualImportV1 preview, RunManualImportV1 run,
-        ReadManualImportDownloadV1 readDownload, RunManualImportDownloadV1 runDownload, ReadStorageMountsV1 mounts, ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories,
+        ReadManualImportDownloadV1 readDownload, RunManualImportDownloadV1 runDownload, ReadStorageMountsV1 mounts, ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths,
         IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private const string Route = "/Admin/ManualImport";
@@ -349,7 +349,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 ["storageMountId"] = StorageMountId?.ToString(CultureInfo.InvariantCulture)
             });
             var label = _mountName is not null ? _mountName + " /" + RelativePath : texts["downloadStorage.unset"];
-            return new FolderPicker(browse, RelativePath ?? "", nameof(ReadManualImportDataV1.RelativePath), browse, storageMountFieldName: nameof(ReadManualImportDataV1.StorageMountId),
+            return new FolderPicker(assets, browse, RelativePath ?? "", nameof(ReadManualImportDataV1.RelativePath), browse, storageMountFieldName: nameof(ReadManualImportDataV1.StorageMountId),
                 choosesStorage: true, selectedLabel: label);
         }
 
@@ -465,32 +465,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
         public async Task<IActionResult> OnGetFoldersAsync(long? storageMountId, string? path, string? afterName, int mountPage = 1)
         {
-            IUiComponent content;
-            var ct = HttpContext.RequestAborted;
-            var home = Address("Folders");
-            if (storageMountId is { } id)
-            {
-                var connection = await mount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), ct);
-                var items = await directories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(id), new ReadStorageDirectoriesDataV1(path ?? "", afterName), ct);
-                var browse = QueryHelpers.AddQueryString(home, "storageMountId", id.ToString(CultureInfo.InvariantCulture));
-                content = FolderPicker.Directories(browse, path ?? "", items.Select(item => item.Name).ToArray(), texts, afterName, items.Count == StorageDirectoryV1.PageSize,
-                    home, id, connection.Name + " /" + path);
-            }
-            else
-            {
-                var configured = await mounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(mountPage), ct);
-                var entries = configured.Items.Select(item => (IUiComponent)new Li(new A(new ValueText(item.Name + " · " + item.SharePath))
-                    .Attribute("href", QueryHelpers.AddQueryString(home, "storageMountId", item.Id.ToString(CultureInfo.InvariantCulture)))
-                    .Attribute("data-folder-navigate", ""))).ToArray();
-                var list = new List<IUiComponent> { new H3(new Text("folderPicker.storageConnections")) };
-                list.Add(entries.Length == 0 ? new P(new Text("downloadStorage.noStorage")) : new Ul(entries).Class("folder-picker__folders"));
-                if (mountPage > 1) list.Add(new A(new Text("common.previous")).Attribute("href", QueryHelpers.AddQueryString(home, "mountPage", (mountPage - 1).ToString(CultureInfo.InvariantCulture)))
-                    .Attribute("data-folder-navigate", ""));
-                if (configured.Items.Count == configured.PageSize) list.Add(new A(new Text("common.next")).Attribute("href", QueryHelpers.AddQueryString(home, "mountPage", (mountPage + 1).ToString(CultureInfo.InvariantCulture)))
-                    .Attribute("data-folder-navigate", ""));
-                content = new Div([.. list]).Attribute("data-folder-fragment", "");
-            }
-
+            var content = await StorageBrowser.FragmentAsync(Address("Folders"), storageMountId, path, afterName, mountPage, false, mounts, mount, directories, localPaths, texts, HttpContext.RequestAborted);
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
             content.WriteTo(writer, HtmlEncoder.Default, texts);
             Response.Headers.CacheControl = "no-store";
