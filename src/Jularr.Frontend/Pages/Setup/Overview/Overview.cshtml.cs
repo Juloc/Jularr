@@ -44,47 +44,48 @@ namespace Jularr.Frontend.Pages.Setup.Overview
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var places = SetupWizard.Active(progress, texts).Where(place => place.Step is not null && place.Key != "Overview").ToList();
 
-            // What still needs a look, by the step that fixes it.
-            var attention = progress.Blockers.Select(key => (Key: key, Blocks: true)).Concat(progress.Warnings.Select(key => (Key: key, Blocks: false)))
-                .Where(item => StepOf(item.Key) is not null).ToLookup(item => StepOf(item.Key)!);
+            // What each step lacks, by the step that fixes it; whatever concerns the whole instance has no step and is listed under the rows.
+            var checks = progress.Blockers.Select(key => (Key: key, Blocks: true)).Concat(progress.Warnings.Select(key => (Key: key, Blocks: false))).ToList();
+            var attention = checks.Where(item => SetupWizard.StepOf(item.Key) is not null).ToLookup(item => SetupWizard.StepOf(item.Key)!);
             var rows = places.Select(place =>
             {
                 var issues = attention[place.Key].ToArray();
-                var chip = issues.Length == 0 ? new StateChip(new Text("setup.overview.ready"), UiTone.Success, new Icon("check", assets, 14))
-                    : new StateChip(new Text(issues.Any(item => item.Blocks) ? "setup.overview.needed" : "setup.overview.optional"), issues.Any(item => item.Blocks) ? UiTone.Danger : UiTone.Warning, new Icon("alert", assets, 14));
-                return (IUiComponent)new Div(new IconTile(new Icon(Icon(place.Key), assets, 18), UiTone.Accent), new Div(new Strong(new Truncated(texts[place.LabelKey])), new Span(new Truncated(Value(place.Key, progress))).Class("setup-overview__value")).Class("setup-overview__text"),
-                    chip, new A(new Icon("pencil", assets, 14), new Text("common.edit")).Class("button button--compact button--soft").Attribute("href", place.Path)).Class("setup-overview__row");
+                var (state, tone, icon) = State(issues);
+                var line = issues.Length == 0 ? Value(place.Key, progress) : string.Join(" · ", issues.Select(item => Reason(item.Key)));
+                return (IUiComponent)new Div(new IconTile(new Icon(Icon(place.Key), assets, 18), UiTone.Accent), new Div(new Strong(new Truncated(texts[place.LabelKey])), new Span(new Truncated(line)).Class("setup-overview__value")).Class("setup-overview__text"),
+                    new StateChip(new Text(state), tone, new Icon(icon, assets, 14)), new A(new Icon("pencil", assets, 14), new Text("common.edit")).Class("button button--compact button--soft").Attribute("href", place.Path))
+                    .Class("setup-overview__row").Attribute("data-state", state.Split('.')[^1]);
             }).ToArray();
             page.Content.Add(new Div(new Div(rows).Class("setup-overview__list")).Class("ui-section setup-overview"));
 
-            var finish = new Button(new Icon("check", assets, 15), new Text("setup.finish")).Primary();
-            if (progress.Blockers.Length > 0) finish.Disabled();
-            var items = progress.Blockers.Concat(progress.Warnings).Select(Check).ToArray();
-            page.Content.Add(new Div(new Div(items).Class("setup-overview__checks"),
-                new PostForm("/Setup/Overview?handler=Finish", csrf, [("version", progress.Version.ToString(CultureInfo.InvariantCulture))], finish.Submit())).Class("setup-foot setup-foot--finish"));
+            // Finish stays possible; with something required missing it asks once more.
+            var version = progress.Version.ToString(CultureInfo.InvariantCulture);
+            var general = checks.Where(item => SetupWizard.StepOf(item.Key) is null).Select(item => (IUiComponent)new P(new Text("setup.check." + item.Key))).ToArray();
+            var finish = progress.Blockers.Length == 0
+                ? (IUiComponent)new PostForm("/Setup/Overview?handler=Finish", csrf, [("version", version)], new Button(new Icon("check", assets, 15), new Text("setup.finish")).Primary().Submit())
+                : new Div(Modal.Opener(new Button(new Icon("alert", assets, 15), new Text("setup.finish.anyway")).Warn(), "finish-anyway"),
+                    new Modal(assets, "finish-anyway", "setup.finish.confirm", [new Form<FinishSetupDataV1>(form =>
+                    {
+                        form.Hidden(item => item.Version);
+                        form.Hidden(item => item.AcceptMissing);
+                        form.Cancel().Submit(new Button(new Text("setup.finish.anyway")).Warn());
+                    }, "/Setup/Overview?handler=Finish", csrf, new FinishSetupDataV1(progress.Version, true), null)]));
+            page.Content.Add(new Div(new Div(general).Class("setup-overview__checks"), finish).Class("setup-foot setup-foot--finish"));
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
 
-        // A blocking or optional check, named with the step that fixes it.
-        private IUiComponent Check(string key)
+        // The state of a step from what it lacks: empty and required, empty and optional, or there but not working.
+        private static (string Text, UiTone Tone, string Icon) State((string Key, bool Blocks)[] issues)
         {
-            var place = StepOf(key);
-            var text = key.StartsWith("library.", StringComparison.Ordinal) ? new Span(new Text("media." + key["library.".Length..]), new ValueText(": "), new Text("setup.check.library")) : new Span(new Text("setup.check." + key));
-            return place is null ? new P(text) : new P(text, new ValueText(" "), new A(new Text("common.edit")).Attribute("href", Path(place)));
+            if (issues.Length == 0) return ("setup.overview.ready", UiTone.Success, "check");
+            if (issues.Any(item => item.Blocks && !SetupWizard.IsAttention(item.Key))) return ("setup.overview.missing", UiTone.Danger, "alert");
+            return issues.Any(item => !SetupWizard.IsAttention(item.Key)) ? ("setup.overview.skipped", UiTone.Warning, "minus") : ("setup.overview.attention", UiTone.Warning, "alert");
         }
 
-        private static string Path(string place) => "/Setup/" + (place == "Modules" ? "Instance" : place);
-
-        // The step a check belongs to.
-        private static string? StepOf(string key) => key switch
-        {
-            _ when key.StartsWith("library.", StringComparison.Ordinal) => "Libraries",
-            "tmdb" => "Providers",
-            "indexer" => "Indexers",
-            "downloader" => "Downloads",
-            _ when key.StartsWith("downloadStorage.", StringComparison.Ordinal) => "DownloadStorage",
-            _ => null
-        };
+        // The plain reason of a check.
+        private string Reason(string key) => key.StartsWith("library.", StringComparison.Ordinal) && !key.EndsWith(".none", StringComparison.Ordinal)
+            ? texts["media." + key["library.".Length..]] + ": " + texts["setup.check.library"]
+            : texts["setup.check." + key];
 
         private static string Icon(string place) => place switch
         {
@@ -129,9 +130,9 @@ namespace Jularr.Frontend.Pages.Setup.Overview
             return Page();
         }
 
-        public async Task<IActionResult> OnPostFinishAsync([BindRequired] long version)
+        public async Task<IActionResult> OnPostFinishAsync([BindRequired] long version, bool acceptMissing)
         {
-            await complete.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new CompleteSetupDataV1(version), HttpContext.RequestAborted);
+            await complete.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new FinishSetupDataV1(version, acceptMissing), HttpContext.RequestAborted);
             return LocalRedirect("/");
         }
 

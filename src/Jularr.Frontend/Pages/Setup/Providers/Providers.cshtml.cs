@@ -44,6 +44,8 @@ namespace Jularr.Frontend.Pages.Setup.Providers
             if (texts.Can(null, "ProgressSync", "Library")) servers.AddRange(_servers.Keys.Select(type => ServerCard(type, csrf)));
             page.Content.Add(new CardGrid([.. servers]).Class("card-grid setup-servers"));
 
+            // AniList's application belongs to the profiles' sign-in; the catalog itself needs no key, so its fields exist only with the AniList module.
+            var anilist = texts.Can(null, "AniList");
             var shown = _providers.Where(provider => Order.Contains(provider.Key)).OrderBy(provider => Array.IndexOf(Order, provider.Key)).ToList();
             var input = _input ?? new SaveSetupProvidersDataV1(progress.Version, new BaseDataList<SetupProviderInputV1>(shown.Select(provider => new SetupProviderInputV1(provider.Key, provider.IsEnabled, null, null))));
             var form = new Form<SaveSetupProvidersDataV1>(fields =>
@@ -57,10 +59,11 @@ namespace Jularr.Frontend.Pages.Setup.Providers
                         {
                             row.Hidden(data => data.Key);
                             row.Switch(data => data.IsEnabled, "admin.providers.state", control => new Div(control).Class("feature-card__row"));
-                            if (Pairs.Contains(provider.Key)) row.Text(data => data.ClientId, "admin.providers.clientId");
-                            if (KeyProviders.Contains(provider.Key))
+                            var keyed = provider.Key != "anilist" || anilist;
+                            if (Pairs.Contains(provider.Key) && keyed) row.Text(data => data.ClientId, ClientIdText(provider.Key));
+                            if (KeyProviders.Contains(provider.Key) && keyed)
                             {
-                                row.Password(data => data.Secret, Pairs.Contains(provider.Key) ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password",
+                                row.Password(data => data.Secret, Pairs.Contains(provider.Key) ? ClientSecretText(provider.Key) : "admin.providers.secret", "new-password",
                                     new FieldHelp(Placeholder: provider.HasSecret ? "setup.providers.keySaved" : null, Trailing: new PasswordReveal(assets)));
                             }
                         }, item => item.Key == provider.Key));
@@ -74,12 +77,17 @@ namespace Jularr.Frontend.Pages.Setup.Providers
         // A provider as a card: what it serves, whether a key is stored, and the fields of the form in its body.
         private IUiComponent ProviderCard(ProviderDetailsV1 provider, IReadOnlyList<IUiComponent> parts)
         {
-            var needsKey = KeyProviders.Contains(provider.Key);
+            var needsKey = KeyProviders.Contains(provider.Key) && (provider.Key != "anilist" || texts.Can(null, "AniList"));
             var chip = !needsKey ? null : provider.HasSecret ? new StateChip(new Text("providers.key.saved"), UiTone.Success, new Icon("check", assets, 14)) : new StateChip(new Text("providers.key.missing"), UiTone.Warning, new Icon("alert", assets, 14));
             var name = texts.Has("provider.name." + provider.Key) ? texts["provider.name." + provider.Key] : provider.Key;
             var line = texts.Has("provider.hint." + provider.Key) ? texts["provider.hint." + provider.Key] : null;
             return new FeatureCard(new IconTile(new Icon(provider.Key == "anilist" ? "anilist" : "globe", assets, 18), UiTone.Accent), name, line, chip, parts, []);
         }
+
+        // IGDB asks for the Twitch application's id and secret, AniList's pair is the one the profiles sign in with.
+        private static string ClientIdText(string key) => key == "anilist" ? "admin.providers.anilistClientId" : "admin.providers.clientId";
+
+        private static string ClientSecretText(string key) => key == "anilist" ? "admin.providers.anilistClientSecret" : "admin.providers.clientSecret";
 
         private IUiComponent PlexCard(string? csrf)
         {

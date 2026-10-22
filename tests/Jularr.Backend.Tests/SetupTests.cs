@@ -318,12 +318,122 @@ namespace Jularr.Backend.Tests
             using var providers = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/providers", new { version, providers = new[] { new { key = "tmdb", isEnabled = true, secret = "test-tmdb-key", clientId = (string?)null } } });
             Assert.AreEqual(HttpStatusCode.OK, providers.StatusCode, await providers.Content.ReadAsStringAsync());
             version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
-            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new CompleteSetupDataV1(version));
+
+            // Arr+ is on without an indexer or download client: finishing needs the Owner's word for it.
+            using var refused = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new FinishSetupDataV1(version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new FinishSetupDataV1(version, true));
             Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
-            using var replay = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new CompleteSetupDataV1(version));
+            using var replay = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new FinishSetupDataV1(version, true));
             Assert.AreEqual(HttpStatusCode.BadRequest, replay.StatusCode);
+        }
+
+        // The Owner's instance as setup leaves it: signed in, owner created, nothing else configured.
+        private static async Task<Host> OwnerHostAsync()
+        {
+            var host = await Host.CreateAsync(razor: true);
+            using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSetupState\" SET \"OwnerCreatedAt\" = now();");
+            return host;
+        }
+
+        private static async Task<SetupProgressV1> ProgressAsync(Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/setup");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<SetupProgressV1>())!;
+        }
+
+        [TestMethod]
+        public async Task Checks_EmptyInstance_NamesEverythingTheChosenModulesStillNeed()
+        {
+            await using var host = await OwnerHostAsync();
+
+            // Straight from the start: Arr+ and the library are on, so storage, an indexer, a client, folders and the TMDB key are missing.
+            var empty = await ProgressAsync(host);
+            foreach (var key in new[] { "storage", "indexer", "downloader", "tmdb", "library.type.Movie", "library.type.Series" })
+            {
+                CollectionAssert.Contains(empty.Blockers, key);
+            }
+
+            CollectionAssert.DoesNotContain(empty.Blockers, "modules");
+            CollectionAssert.Contains(empty.Warnings, "requests.default");
+
+            // Leaving the Libraries step switches the media without a folder off: the missing folder stays visible as the empty library.
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/libraries", new CompleteSetupDataV1(empty.Version));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            var clicked = await ProgressAsync(host);
+            CollectionAssert.IsSubsetOf(new[] { "storage", "indexer", "downloader" }, clicked.Blockers);
+            CollectionAssert.DoesNotContain(clicked.Blockers, "tmdb");
+            CollectionAssert.Contains(clicked.Warnings, "library.none");
+            Assert.IsFalse(clicked.Blockers.Any(key => key.StartsWith("library.type.", StringComparison.Ordinal)));
+
+            // No function at all and a takeover that brought nothing.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" IN ('Library', 'Playback', 'Reading', 'Requests', 'Acquisition');
+                UPDATE "InstanceSetupState" SET "SetupStartTypeId" = 2;
+                """);
+            var nothing = await ProgressAsync(host);
+            CollectionAssert.Contains(nothing.Blockers, "modules");
+            CollectionAssert.Contains(nothing.Blockers, "takeover");
+        }
+
+        [TestMethod]
+        public async Task Checks_WithoutArrPlus_NeitherClientNorIndexerNorDownloadStorageIsDemanded()
+        {
+            await using var host = await OwnerHostAsync();
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Acquisition';");
+            var progress = await ProgressAsync(host);
+            var all = progress.Blockers.Concat(progress.Warnings).ToArray();
+            Assert.IsFalse(all.Any(key => key is "indexer" or "downloader" || key.StartsWith("downloadStorage.", StringComparison.Ordinal)), string.Join(", ", all));
+            CollectionAssert.Contains(progress.Blockers, "storage");
+
+            // Requests alone need no storage either.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" IN ('Library', 'Playback', 'Reading');");
+            progress = await ProgressAsync(host);
+            CollectionAssert.DoesNotContain(progress.Blockers, "storage");
+            CollectionAssert.DoesNotContain(progress.Warnings, "library.none");
+        }
+
+        [TestMethod]
+        public async Task Checks_FullyConfiguredInstance_RaisesNothingAndFinishesWithoutConfirmation()
+        {
+            await using var host = await OwnerHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" IN ('Acquisition', 'Requests');
+                UPDATE "MediaTypes" SET "IsEnabled" = ("Key" = 'Series');
+                UPDATE "MediaSubtypes" SET "IsEnabled" = FALSE;
+                INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Test', 3, '/fixture', FALSE);
+                INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "MediaSubtypeId", "StorageMountId", "RelativePath")
+                SELECT 'Series', type."Id", NULL, mount."Id", 'Series'
+                FROM "MediaTypes" AS type CROSS JOIN "StorageMounts" AS mount
+                WHERE type."Key" = 'Series';
+                UPDATE "Providers" SET "ProtectedSecret" = '\x01'::bytea WHERE "Key" = 'tmdb';
+                """);
+            var progress = await ProgressAsync(host);
+
+            // Only the machine's FFmpeg is outside what the database knows.
+            Assert.AreEqual(0, progress.Blockers.Length, string.Join(", ", progress.Blockers));
+            Assert.IsTrue(progress.Warnings.All(key => key == "ffmpeg"), string.Join(", ", progress.Warnings));
+            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new FinishSetupDataV1(progress.Version));
+            Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
+        public async Task Finish_WithRequiredThingsMissing_NeedsTheOwnersConfirmation()
+        {
+            await using var host = await OwnerHostAsync();
+            var progress = await ProgressAsync(host);
+            Assert.IsTrue(progress.Blockers.Length > 0);
+            using var refused = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new FinishSetupDataV1(progress.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
+            using var accepted = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/completion", new FinishSetupDataV1(progress.Version, true));
+            Assert.AreEqual(HttpStatusCode.OK, accepted.StatusCode, await accepted.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
         }
 
         [TestMethod]

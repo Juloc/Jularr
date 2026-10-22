@@ -25,7 +25,7 @@ overview with Finish.
 | 10 | Download clients (Arr+) | /Setup/Downloads | Every client is a card with its settings inline and Test; a new one is added in a dialog. |
 | 11 | Indexers (Arr+) | /Setup/Indexers | The same for indexers; Prowlarr import leads to the takeover step. |
 | 12 | Providers | /Setup/Providers | Every provider is a card with its switch and key inline, saved together by Continue (SaveSetupProvidersV1; a blank key keeps the stored one, a typed one switches the provider on); Plex, Jellyfin and Emby connect from their own cards. |
-| 13 | Overview | /Setup/Overview | A row for every step with what was chosen, its state and the way back, the blocking and optional checks with links, and Finish (CompleteSetupV1). |
+| 13 | Overview | /Setup/Overview | A row for every step with its real state (set up, missing, skipped, check) from the backend checks, the plain reason where something lacks, the way back, and Finish (CompleteSetupV1): with something required missing it reads Finish anyway and asks once more. |
 
 Not built because the backend lacks it: routing of download clients per media group or subtype with fallback chains, an audiobook type, an Anime-movies switch,
 Seerr and SABnzbd import (extension points only), instance-level requestable media types, an admin-only requests switch and a downloads-wanted switch.
@@ -47,7 +47,8 @@ the setup addresses redirect to the application (the finished state is remembere
 - New things (a connection, an indexer, a client) are added in a dialog with Cancel; existing providers, clients and indexers are edited inline in their card.
 - Library folders are selected in the shared native dialog (authorized server-rendered lists, cursor navigation, without JavaScript the browse links).
 - Takeover never starts downloads and never writes to the source; missing monitored titles become Wanted and stay paused until the Owner resumes them.
-- A configured video type needs TMDB; missing optional indexers/downloaders and FFmpeg remain warnings.
+- What the overview demands follows the chosen modules ([SetupLogic](../src/Jularr.Backend/Logic/Instance/SetupLogic.cs), reusing the health check for storage and connection state). Required (finishing needs the Owner's confirmation, `FinishSetupDataV1.AcceptMissing`): a function chosen (`modules`), a storage connection while Library or Arr+ is on (`storage`), something taken over after a takeover start (`takeover`), a folder for every media type left on, TMDB for movies and series, IGDB for games, and with Arr+ an indexer, a download client and the download storage of a configured client. Warnings: an empty library (`library.none`), a request rule never saved, AniList without the application for the profiles' sign-in (AniList and ProgressSync on), a storage, indexer or client that fails its check, FFmpeg missing. Without Arr+ no client or indexer is asked for. A passed step with an empty required or optional check carries the dash in the stepper.
+- AniList's catalog needs no key: the id and secret inputs (the application profiles sign in with) exist only with the AniList module, in the providers step and in the administration; IGDB always asks for the Twitch pair.
 - Only an Owner configures the instance; permissions, validation, transactions and safe paths remain Backend-owned. No active database is installed or changed.
 
 ## Playback cache safety
@@ -57,8 +58,8 @@ Video transcoding uses `Media:TranscodeCachePath` (by default `/data/jularr-tran
 ## Verification
 
 SetupTests cover bootstrap concurrency/closure, generated-language selection, the first choice and the steps in order, atomic module edits and rollback, provider
-saves, empty libraries and completion. TakeoverTests cover the source reads. Browser tests: `SetupFlowTests` (the three branches, storage tiles and the add dialog,
-takeover against the fake Sonarr, the steps in order with the overview, leaving and resuming), `SetupOwnerTests` (owner and modules steps). The other browser tests
+saves, empty libraries, the checks per chosen modules (empty, Arr+ off, fully configured) and completion with and without confirmation. TakeoverTests cover the source reads. Browser tests: `SetupFlowTests` (the three branches, storage tiles and the add dialog,
+takeover against the fake Sonarr, the steps in order with the overview, clicking through with nothing entered, AniList fields only with the module, leaving and resuming), `SetupOwnerTests` (owner and modules steps). The other browser tests
 create the Owner in the real setup and mark the wizard finished.
 
 The [original wizard specification](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/setup-wizard/SPEC.md)

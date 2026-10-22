@@ -7,13 +7,14 @@ namespace Jularr.Frontend.Framework
     {
         Upcoming,
         Current,
-        Done
+        Done,
+        Skipped
     }
 
     // One step of a Stepper: its label, where it leads (none where it cannot be reached yet) and how far along it is.
     public sealed record StepperStep(string LabelKey, string? Href, StepState State);
 
-    // The steps of a flow in one row: a numbered bubble and a name each, a check on the bubbles already passed and the accent on the current one.
+    // The steps of a flow in one row: a numbered bubble and a name each, a check on the bubbles already passed (a dash where the step was left empty) and the accent on the current one.
     public sealed class Stepper(IReadOnlyList<StepperStep> steps, string ariaLabelKey, FrontendAssets assets) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
@@ -22,7 +23,7 @@ namespace Jularr.Frontend.Framework
 
             var items = steps.Select((step, index) =>
             {
-                var bubble = new Span(step.State == StepState.Done ? new Icon("check", assets, 15, "2.4") : new ValueText((index + 1).ToString(CultureInfo.CurrentCulture)))
+                var bubble = new Span(step.State == StepState.Done ? new Icon("check", assets, 15, "2.4") : step.State == StepState.Skipped ? new Icon("minus", assets, 15, "2.4") : new ValueText((index + 1).ToString(CultureInfo.CurrentCulture)))
                     .Class("stepper__bubble");
                 var content = new IUiComponent[] { bubble, new Span(new Text(step.LabelKey)).Class("stepper__label") };
                 var item = step.Href is null ? new Span(content).Class("stepper__item") : new A(content).Attribute("href", step.Href).Class("stepper__item");

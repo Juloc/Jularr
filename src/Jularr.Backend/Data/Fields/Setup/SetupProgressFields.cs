@@ -8,5 +8,6 @@ namespace Jularr.Backend.Data.Fields.Setup
         public static readonly StringArrayField Warnings = new() { ItemMaximumLength = 64 };
         public static readonly StringField CheckKey = new() { MaximumLength = 64 };
         public static readonly BoolField IsBlocking = new();
+        public static readonly BoolField AcceptMissing = new();
     }
 }

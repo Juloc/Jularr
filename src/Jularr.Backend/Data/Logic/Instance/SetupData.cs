@@ -60,6 +60,21 @@ namespace Jularr.Backend.Data.Logic.Instance
         public long Version { get; }
     }
 
+    internal sealed class SetupFinishData : BaseData
+    {
+        public SetupFinishData(long version, bool acceptMissing)
+        {
+            Version = version;
+            AcceptMissing = acceptMissing;
+        }
+
+        [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.Version))]
+        public long Version { get; }
+
+        [DataField(typeof(SetupProgressFields), nameof(SetupProgressFields.AcceptMissing))]
+        public bool AcceptMissing { get; }
+    }
+
     internal sealed class SetupCheckData : BaseData
     {
         public SetupCheckData(string checkKey, bool isBlocking)
