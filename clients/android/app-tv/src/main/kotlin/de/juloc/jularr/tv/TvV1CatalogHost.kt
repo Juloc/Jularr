@@ -21,6 +21,7 @@ import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
+import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.profile.HttpTvV1ProfileClient
 import de.juloc.jularr.core.api.profile.TvV1ProfileClient
 import de.juloc.jularr.core.model.AnimeDetail
@@ -53,6 +54,9 @@ fun TvV1CatalogHost(
         HttpTvV1ProfileClient(serverOrigin, deviceSession.authenticatedTokenStore())
     }
     val scope = rememberCoroutineScope()
+    val playbackExtras = remember(serverOrigin, deviceSession) {
+        HttpTvV1PlaybackExtrasClient(serverOrigin, deviceSession.authenticatedTokenStore())
+    }
     val focusMemory = remember(serverOrigin) { TvFocusMemory() }
     var page by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
     var searchQuery by remember(serverOrigin) { mutableStateOf("") }
@@ -319,6 +323,8 @@ fun TvV1CatalogHost(
                 TvV1SettingsHost(
                     serverOrigin = serverOrigin,
                     error = error,
+                    playbackExtras = playbackExtras,
+                    onUnauthorized = onAuthenticationExpired,
                     onSwitchProfile = { page = TvV1CatalogPage.ProfileSelect },
                     onSignOut = {
                         if (capabilities.hasPermission("session.self.logout")) {
