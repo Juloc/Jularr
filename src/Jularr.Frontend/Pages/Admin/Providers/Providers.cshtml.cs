@@ -56,18 +56,18 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? FormError : null));
 
-                // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id; Hardcover's token names book series, AcoustID's key untagged music.
-                if (provider.Key is "tmdb" or "igdb" or "hardcover" or "acoustid")
+                // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id, AniList the application profiles sign in with; Hardcover's token names book series, AcoustID's key untagged music.
+                if (provider.Key is "tmdb" or "igdb" or "anilist" or "hardcover" or "acoustid")
                 {
                     body.Content.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
                     body.Content.Add(new Form<SaveProviderSecretDataV1>(form =>
                     {
-                        if (provider.Key == "igdb")
+                        if (provider.Key is "igdb" or "anilist")
                         {
                             form.Text(item => item.ClientId, "admin.providers.clientId");
                         }
 
-                        form.Password(item => item.Secret, provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
+                        form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
                         form.Save();
                     }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         new SaveProviderSecretDataV1(null)));

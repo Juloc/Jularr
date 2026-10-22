@@ -7,7 +7,8 @@ namespace Jularr.Integrations.Data.AniList
         Unavailable,
         NotFound,
         RateLimited,
-        InvalidResponse
+        InvalidResponse,
+        Unauthorized
     }
 
     internal sealed class AniListException : Exception
@@ -123,6 +124,84 @@ namespace Jularr.Integrations.Data.AniList
 
         // Every title AniList relates it to, with the kind of relation.
         public IReadOnlyList<AniListRelation> Relations { get; init; } = [];
+    }
+
+    // What AniList hands out for an authorization code of a person's own account.
+    internal sealed class AniListToken
+    {
+        public AniListToken(string accessToken, DateTimeOffset? expiresAt)
+        {
+            AccessToken = accessToken;
+            ExpiresAt = expiresAt;
+        }
+
+        public string AccessToken { get; }
+        public DateTimeOffset? ExpiresAt { get; }
+    }
+
+    internal sealed class AniListViewer
+    {
+        public AniListViewer(int id, string name)
+        {
+            Id = id;
+            Name = name;
+        }
+
+        public int Id { get; }
+        public string Name { get; }
+    }
+
+    // One entry of a person's list; chapters and volumes of a title are read as its totals.
+    internal sealed class AniListListEntry
+    {
+        public AniListListEntry(int mediaId, long listEntryId, bool isManga, string title, string status, int progress, int progressVolumes, int score, int? totalCount, int? totalVolumes,
+            DateTimeOffset updatedAt)
+        {
+            MediaId = mediaId;
+            ListEntryId = listEntryId;
+            IsManga = isManga;
+            Title = title;
+            Status = status;
+            Progress = progress;
+            ProgressVolumes = progressVolumes;
+            Score = score;
+            TotalCount = totalCount;
+            TotalVolumes = totalVolumes;
+            UpdatedAt = updatedAt;
+        }
+
+        public int MediaId { get; }
+        public long ListEntryId { get; }
+        public bool IsManga { get; }
+        public string Title { get; }
+        public string Status { get; }
+
+        // Episodes or chapters, and volumes.
+        public int Progress { get; }
+        public int ProgressVolumes { get; }
+
+        // Points out of a hundred; 0 is unscored.
+        public int Score { get; }
+
+        // Episodes (anime) or chapters (manga), and volumes, when AniList knows them.
+        public int? TotalCount { get; }
+        public int? TotalVolumes { get; }
+        public DateTimeOffset UpdatedAt { get; }
+    }
+
+    // The part of an entry a progress write answers with.
+    internal sealed class AniListSavedEntry
+    {
+        public AniListSavedEntry(int progress, int progressVolumes, DateTimeOffset updatedAt)
+        {
+            Progress = progress;
+            ProgressVolumes = progressVolumes;
+            UpdatedAt = updatedAt;
+        }
+
+        public int Progress { get; }
+        public int ProgressVolumes { get; }
+        public DateTimeOffset UpdatedAt { get; }
     }
 
     // A title related to an entry: AniList's relation type (SEQUEL, ADAPTATION, SIDE_STORY ...) and what the related entry is.

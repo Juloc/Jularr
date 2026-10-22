@@ -91,7 +91,7 @@ INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('LocalDiscovery', FAL
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Subtitles', FALSE);
 -- Uploads lets administrators add manga volumes from their own device.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Uploads', FALSE);
--- ProgressSync shares watch progress with connected Jellyfin and Emby servers.
+-- ProgressSync shares watch progress with connected Jellyfin and Emby servers and, per profile, with its AniList account.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('ProgressSync', FALSE);
 -- Devices pairs TVs, phones and apps by a code a signed-in profile confirms.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Devices', FALSE);
