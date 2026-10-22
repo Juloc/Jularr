@@ -63,6 +63,7 @@ fun TvHomeScreen(
     onContinueWatching: (ContinueWatchingItem) -> Unit,
     v1ContinueWatching: List<TvContinueItemV1> = emptyList(),
     onContinueWork: (TvContinueItemV1) -> Unit = {},
+    showV1Continue: Boolean = true,
 ) {
     var filter by remember {
         mutableStateOf(
@@ -91,7 +92,7 @@ fun TvHomeScreen(
         add("filters")
         if (featured != null) add("hero")
         if (error != null) add("error")
-        if (v1ContinueWatching.isNotEmpty()) addAll(listOf("v1-continue-title", "v1-continue-row"))
+        if (showV1Continue && v1ContinueWatching.isNotEmpty()) addAll(listOf("v1-continue-title", "v1-continue-row"))
         if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
         if (series.isNotEmpty()) addAll(listOf("series-title", "series-row"))
         if (movies.isNotEmpty()) addAll(listOf("movies-title", "movies-row"))
@@ -221,7 +222,7 @@ fun TvHomeScreen(
                 item { Text(message, color = MaterialTheme.colorScheme.error) }
             }
 
-            if (v1ContinueWatching.isNotEmpty()) {
+            if (showV1Continue && v1ContinueWatching.isNotEmpty()) {
                 item(key = "v1-continue-title") {
                     Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
                 }

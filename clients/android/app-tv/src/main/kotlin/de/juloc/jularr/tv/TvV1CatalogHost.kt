@@ -19,6 +19,7 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
+import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.profile.HttpTvV1ProfileClient
 import de.juloc.jularr.core.api.profile.TvV1ProfileClient
@@ -63,6 +64,7 @@ fun TvV1CatalogHost(
     var library by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
     var searchResults by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
     var continueWatching by remember(serverOrigin) { mutableStateOf<List<TvContinueItemV1>>(emptyList()) }
+    var showContinueWatching by remember(serverOrigin) { mutableStateOf(true) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var details by remember(serverOrigin) { mutableStateOf<AnimeDetail?>(null) }
     var isWatchlisted by remember(serverOrigin) { mutableStateOf(false) }
@@ -150,9 +152,17 @@ fun TvV1CatalogHost(
                     require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
                         "Bibliothek ist für dieses Profil nicht freigegeben."
                     }
+                    // Filter at the source. Downloading the first 2000 Books/Games and then
+                    // hiding them can otherwise make real TV video works disappear.
                     library = TvV1LegacyUiModels.videoLibrary(loadCatalogPages { pageNumber ->
-                        catalog.library(page = pageNumber, pageSize = 100)
+                        catalog.libraryFiltered(
+                            page = pageNumber, pageSize = 100,
+                            filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
+                        )
                     })
+                    showContinueWatching = if (capabilities.hasModule("HomeLayout")) {
+                        catalog.homeLayout().none { it.homeShelfTypeId == 1 && it.isHidden }
+                    } else true
                     // The server supplies real MediaAssetId, WorkId and timecodes. Keep
                     // reading/ebook assets out of this TV-video-only Continue row.
                     continueWatching = catalog.continueWatching().filter { it.mediaAssetTypeId == 1 }
@@ -163,7 +173,11 @@ fun TvV1CatalogHost(
                     }
                     if (searchQuery.isNotBlank()) delay(300)
                     searchResults = TvV1LegacyUiModels.videoLibrary(loadCatalogPages { pageNumber ->
-                        catalog.library(page = pageNumber, pageSize = 100, query = searchQuery.trim().ifEmpty { null })
+                        catalog.libraryFiltered(
+                            page = pageNumber, pageSize = 100,
+                            filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
+                            query = searchQuery.trim().ifEmpty { null },
+                        )
                     })
                 }
                 TvV1CatalogPage.Watchlist -> {
@@ -255,6 +269,7 @@ fun TvV1CatalogHost(
                             onAnime = { card -> openWork(card.id) },
                             onContinueWatching = { /* Legacy bootstrap is intentionally disconnected. */ },
                             v1ContinueWatching = continueWatching,
+                            showV1Continue = showContinueWatching,
                             onContinueWork = { item ->
                                 detailedTitle = item.title
                                 playAsset(item.mediaAssetId)
