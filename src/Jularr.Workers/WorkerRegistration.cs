@@ -22,6 +22,7 @@ namespace Jularr.Workers
             services.AddHostedService<RecognitionWorker>();
             services.AddHostedService<DerivationWorker>();
             services.AddHostedService<CatalogWorker>();
+            services.AddHostedService<HealthWorker>();
             return services;
         }
     }

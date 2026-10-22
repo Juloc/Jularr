@@ -319,7 +319,7 @@ namespace Jularr.E2E.Tests
                       <limits max="100" default="100" />
                       <searching>
                         <search available="yes" supportedParams="q" />
-                        <movie-search available="yes" supportedParams="q,imdbid" />
+                        <movie-search available="yes" supportedParams="q" />
                         <book-search available="yes" supportedParams="q,author,title" />
                         <tv-search available="yes" supportedParams="q,season,ep" />
                       </searching>

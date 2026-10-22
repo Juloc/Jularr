@@ -85,33 +85,6 @@ namespace Jularr.Backend.Data.Admin.System.V1
         public long Bytes { get; }
     }
 
-    public sealed class ReadRecentLogsParametersV1 : BaseParameters
-    {
-    }
-
-    public sealed class RecentLogV1 : BaseResponse
-    {
-        public RecentLogV1(DateTime at, RecentLogLevel level, string category, string message)
-        {
-            At = at;
-            Level = level;
-            Category = category;
-            Message = message;
-        }
-
-        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.At))]
-        public DateTime At { get; }
-
-        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Level))]
-        public RecentLogLevel Level { get; }
-
-        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Category))]
-        public string Category { get; }
-
-        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Message))]
-        public string Message { get; }
-    }
-
     public sealed class ReadPerformanceParametersV1 : BaseParameters
     {
     }
@@ -133,6 +106,22 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(PerformanceFields), nameof(PerformanceFields.MemoryBytes))]
         public long MemoryBytes { get; }
+    }
+
+    // The last 24 hours of the process's load, and the memory it may use at most.
+    public sealed class ResourceHistoryV1 : BaseResponse
+    {
+        public ResourceHistoryV1(long availableMemoryBytes, BaseDataList<ResourceSampleV1> samples)
+        {
+            AvailableMemoryBytes = availableMemoryBytes;
+            Samples = samples;
+        }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.MemoryBytes))]
+        public long AvailableMemoryBytes { get; }
+
+        // Oldest first.
+        public BaseDataList<ResourceSampleV1> Samples { get; }
     }
 
     public sealed class ServiceTimingV1 : BaseResponse
@@ -160,5 +149,28 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Milliseconds))]
         public int MaximumMilliseconds { get; }
+    }
+
+    // The services that took the most time in the last 24 hours, and what all calls came to.
+    public sealed class ServiceTimingsV1 : BaseResponse
+    {
+        public ServiceTimingsV1(long calls, long errors, int averageMilliseconds, BaseDataList<ServiceTimingV1> services)
+        {
+            Calls = calls;
+            Errors = errors;
+            AverageMilliseconds = averageMilliseconds;
+            Services = services;
+        }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Count))]
+        public long Calls { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Count))]
+        public long Errors { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Milliseconds))]
+        public int AverageMilliseconds { get; }
+
+        public BaseDataList<ServiceTimingV1> Services { get; }
     }
 }

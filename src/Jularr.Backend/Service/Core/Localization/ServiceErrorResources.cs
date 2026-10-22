@@ -64,6 +64,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.reading_pdf_recognizing", "The scanned pages are being turned into text; until then the book opens as its original pages."),
             new("errors.ocr_unavailable", "The text recognition models cannot be fetched right now."),
             new("errors.reading_unsupported", "This comic needs 7-Zip, which is not configured on the server."),
+            new("errors.health_degraded", "A service did not answer the last health check. The Dashboard shows which one."),
             new("errors.plex_unavailable", "The Plex server could not be reached."),
             new("errors.plex_authentication_failed", "The Plex server rejected the token."),
             new("errors.plex_invalid_response", "The Plex server returned an invalid response."),

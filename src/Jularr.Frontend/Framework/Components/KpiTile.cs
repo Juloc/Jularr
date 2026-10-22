@@ -19,10 +19,18 @@ namespace Jularr.Frontend.Framework
     }
 
     // With a tone the icon sits on an IconTile before the figure (strip), otherwise it stands at the label's end.
-    public sealed class KpiTile(string labelKey, IUiComponent value, IUiComponent? icon = null, UiTone? tone = null) : IUiComponent
+    // With a foot line it is the Dashboard's card: the name with its tinted icon tile, a large figure and the line under it (in its own tone where it asks for a look).
+    public sealed class KpiTile(string labelKey, IUiComponent value, IUiComponent? icon = null, UiTone? tone = null, IUiComponent? foot = null, UiTone? footTone = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
+            if (foot is not null && icon is not null)
+            {
+                new Div(new Div(new Span(new Text(labelKey)).Class("kpi-tile__text"), new IconTile(icon, tone ?? UiTone.Accent, small: true)).Class("kpi-tile__label"), new Div(value).Class("kpi-tile__value"),
+                    new Div(foot).Class("kpi-tile__foot" + (footTone is { } warm ? " kpi-tile__foot--" + warm.ToString().ToLowerInvariant() : ""))).Class("kpi-tile kpi-tile--card").WriteTo(writer, encoder, texts);
+                return;
+            }
+
             if (tone is { } tint && icon is not null)
             {
                 new Div(new IconTile(icon, tint), new Div(new Div(value).Class("kpi-tile__value"), new Div(new Text(labelKey)).Class("kpi-tile__caption")).Class("kpi-tile__figure")).Class("kpi-tile kpi-tile--tinted").WriteTo(writer, encoder, texts);
