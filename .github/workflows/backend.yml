@@ -1,10 +1,22 @@
 name: Backend Full
 
-# Full integration + browser regression on clean-start merges or explicit runs.
-# This workflow must not block every incremental PR.
+# Full integration + browser regression after merges, manually, or on PRs
+# explicitly labeled ci/full. Ordinary PRs skip both expensive jobs.
 on:
   push:
     branches: [clean-start, codex/backend-clean-start]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'database/**'
+      - 'scripts/**'
+      - '*.sln'
+      - '**/*.props'
+      - '**/*.targets'
+      - 'NuGet.Config'
+      - '.github/workflows/backend.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,6 +29,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci/full')
     runs-on: ubuntu-latest
     # Full integration coverage currently takes nearly 30 minutes.
     timeout-minutes: 40
@@ -122,6 +135,7 @@ jobs:
 
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci/full')
     name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
