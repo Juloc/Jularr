@@ -20,6 +20,13 @@ import de.juloc.jularr.core.api.DeviceTokenStore
 import de.juloc.jularr.core.api.playback.HttpTvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Plan
+import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackExtrasClient
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackMarker
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackPreferences
+import de.juloc.jularr.core.model.ClientTrickplayDescriptor
+import java.math.BigDecimal
+import java.math.RoundingMode
 import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.player.JularrPlaybackMetadata
 import kotlinx.coroutines.CancellationException
@@ -47,6 +54,9 @@ internal fun TvV1PlaybackHost(
     val context = LocalContext.current
     val player = remember(context) { JularrMedia3Player(context.applicationContext) }
     val api = remember(origin, tokenStore) { createClient(origin, tokenStore) }
+    val extras: TvV1PlaybackExtrasClient = remember(origin, tokenStore) {
+        HttpTvV1PlaybackExtrasClient(origin, tokenStore)
+    }
     val scope = rememberCoroutineScope()
     var plan by remember(mediaAssetId) { mutableStateOf<TvPlaybackV1Plan?>(null) }
     var loading by remember(mediaAssetId) { mutableStateOf(true) }
@@ -55,6 +65,9 @@ internal fun TvV1PlaybackHost(
     var finishing by remember(mediaAssetId) { mutableStateOf(false) }
     var positionMs by remember(mediaAssetId) { mutableStateOf(0L) }
     var durationMs by remember(mediaAssetId) { mutableStateOf<Long?>(null) }
+    var markers by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackMarker>>(emptyList()) }
+    var playbackPreferences by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackPreferences?>(null) }
+    var seekPreview by remember(mediaAssetId) { mutableStateOf<ClientTrickplayDescriptor?>(null) }
 
     DisposableEffect(player) {
         onDispose {
@@ -90,6 +103,43 @@ internal fun TvV1PlaybackHost(
             error = failure.message ?: "Die Wiedergabe konnte nicht gestartet werden."
         } finally {
             loading = false
+        }
+    }
+
+    // Optional extra endpoints are independent. Missing metadata never prevents video playback.
+    LaunchedEffect(mediaAssetId, extras) {
+        suspend fun loadedOrUnauthorized(block: suspend () -> Unit) {
+            try {
+                block()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onUnauthorized()
+                // 403/404 are genuine unavailable feature states; no fake metadata.
+            } catch (_: Exception) {
+                // Optional UI metadata failure must not prevent the real stream.
+            }
+        }
+        loadedOrUnauthorized { playbackPreferences = extras.preferences() }
+        loadedOrUnauthorized { markers = extras.markers(mediaAssetId) }
+        loadedOrUnauthorized {
+            seekPreview = TvV1PlayerUiMapping.trickplay(
+                mediaAssetId, extras.trickplay(mediaAssetId),
+            )
+        }
+    }
+
+    LaunchedEffect(plan, markers, playbackPreferences) {
+        if (plan == null) return@LaunchedEffect
+        while (isActive) {
+            delay(600L)
+            if (player.player.isPlaying) {
+                val target = TvV1PlayerUiMapping.automaticSkipTarget(
+                    player.player.currentPosition.coerceAtLeast(0L),
+                    markers, playbackPreferences,
+                )
+                if (target != null) player.player.seekTo(target)
+            }
         }
     }
 
@@ -195,6 +245,11 @@ internal fun TvV1PlaybackHost(
             player = player,
             episodeTitle = title,
             currentCue = null,
+            skipSegments = TvV1PlayerUiMapping.skipSegments(markers, playbackPreferences),
+            trickplay = seekPreview,
+            defaultPlaybackSpeed = playbackPreferences?.speed?.toFloat() ?: 1f,
+            preferredAudioLanguage = playbackPreferences?.audioLanguage,
+            preferredSubtitleLanguage = playbackPreferences?.subtitleLanguage,
             serverOrigin = origin,
             requestHeaders = tokenStore.current?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty(),
             playbackSpeeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f),
@@ -214,6 +269,21 @@ internal fun TvV1PlaybackHost(
             onPlaybackFailure = { position ->
                 positionMs = position
                 error = "Media3 konnte diesen Stream nicht wiedergeben."
+            },
+            onPlaybackSpeedChanged = {
+                val speed = BigDecimal.valueOf(player.player.playbackParameters.speed.toDouble())
+                    .setScale(2, RoundingMode.HALF_UP)
+                scope.launch {
+                    try {
+                        if (extras.saveSpeed(speed)) {
+                            playbackPreferences = playbackPreferences?.copy(speed = speed)
+                        }
+                    } catch (failure: AppApiException) {
+                        if (failure.statusCode == 401) onUnauthorized()
+                    } catch (_: Exception) {
+                        // The local playback speed remains effective for this session.
+                    }
+                }
             },
             onRetryPlayback = { retry += 1 },
             onExit = { completePlayback(completed = false) },
