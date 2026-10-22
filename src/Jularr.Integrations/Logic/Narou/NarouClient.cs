@@ -102,6 +102,9 @@ namespace Jularr.Integrations.Logic.Narou
                 if (chapterMap.Count == oldCount) break;
                 current = next;
             }
+            // A short story has the chapter text directly on its work page.
+            if (chapterMap.Count == 0 && Body.IsMatch(first))
+                chapterMap[0] = new NarouChapter(0, title);
             if (chapterMap.Count == 0 || chapterMap.Count > MaximumChapters)
                 throw new NarouException("Narō has no chapters or exceeds the supported chapter limit.");
             return new NarouWork(ncode.ToLowerInvariant(), title, author, [.. chapterMap.Values]);
@@ -116,7 +119,8 @@ namespace Jularr.Integrations.Logic.Narou
             foreach (var chapter in work.Chapters)
             {
                 ct.ThrowIfCancellationRequested();
-                var html = await GetPageAsync(new Uri(WorkUri(work.Ncode), chapter.Number + "/"), ct);
+                var html = await GetPageAsync(chapter.Number == 0 ? WorkUri(work.Ncode)
+                    : new Uri(WorkUri(work.Ncode), chapter.Number + "/"), ct);
                 var body = Body.Match(html);
                 if (!body.Success) throw new NarouException("Narō returned no chapter content.");
                 var text = Plain(body.Groups["value"].Value);
