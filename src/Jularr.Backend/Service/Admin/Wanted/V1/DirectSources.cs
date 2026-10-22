@@ -1,3 +1,141 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.AnnasArchive;
+using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Data.Gutenberg;
+using Jularr.Integrations.Data.Opds;
+using Jularr.Integrations.Logic.AnnasArchive;
+using Jularr.Integrations.Logic.Gutenberg;
+using Jularr.Integrations.Logic.Narou;
+using Jularr.Integrations.Logic.Opds;
+using Microsoft.AspNetCore.DataProtection;
+
+namespace Jularr.Backend.Service.Admin.Wanted.V1
+{
+    // Sources that search and serve files themselves: Gutenberg, OPDS catalogs and Anna's Archive.
+    internal sealed class DirectSources
+    {
+        // The ways one work is looked for; more would only load the source for nothing.
+        private const int MaximumTitles = 3;
+        private const int MaximumIsbns = 2;
+
+        private readonly GutenbergClient _gutenberg;
+        private readonly OpdsClient _opds;
+        private readonly AnnasArchiveClient _annas;
+        private readonly NarouClient _narou;
+        private readonly IDataProtector _protector;
+
+        public DirectSources(GutenbergClient gutenberg, OpdsClient opds, AnnasArchiveClient annas, NarouClient narou, IDataProtectionProvider protection)
+        {
+            _gutenberg = gutenberg;
+            _opds = opds;
+            _annas = annas;
+            _narou = narou;
+            _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+        }
+
+        // The download waits for a person to pass the source's own check and paste the file link.
+        public const string ManualLinkKey = "source_manual_link";
+
+        public static bool IsDirect(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.Narou;
+
+        // Offer ids are "<source>:<key>:<format>"; the format names the stored file.
+        public static bool IsDirectOffer(string? guid) => guid is not null && (guid.StartsWith("gutenberg:", StringComparison.Ordinal) || guid.StartsWith("opds:", StringComparison.Ordinal)
+            || guid.StartsWith("annas:", StringComparison.Ordinal) || guid.StartsWith("narou:", StringComparison.Ordinal));
+
+        public static string Format(string externalId) => externalId.Split(':').Last() is { Length: > 0 and <= 5 } format && format.All(char.IsAsciiLetterOrDigit) ? format : "epub";
+
+        public async Task<IReadOnlyList<ReleaseOffer>?> SearchAsync(AcquisitionConnectionData source, WantedTargetData target, CancellationToken ct,
+            Func<IReadOnlyList<ReleaseOffer>, bool>? enough = null)
+        {
+            // Named like book releases so the shared judge decides; an edition in the requested language is asked for by its title, Anna's Archive by its ISBN.
+            var query = string.Join(' ', new[] { target.EditionTitles.FirstOrDefault() ?? target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
+                .Where(part => !string.IsNullOrWhiteSpace(part)));
+            try
+            {
+                switch (source.AcquisitionConnectionTypeId)
+                {
+                    case AcquisitionConnectionType.Gutenberg:
+                        return [.. (await _gutenberg.SearchAsync(Catalog(source), query, ct)).Select(book => Offer(source, "gutenberg:" + Text(book.Id) + ":epub", book.Authors, book.Title,
+                            book.Languages.FirstOrDefault(), "epub", GutenbergClient.EpubUri(book.Id), null))];
+                    case AcquisitionConnectionType.Opds:
+                        return [.. (await _opds.SearchAsync(Opds(source), query, ct)).SelectMany(book => book.Links.Select(link =>
+                            Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
+                    case AcquisitionConnectionType.Narou:
+                        // A Narō web novel is not a published Light Novel volume. Only a
+                        // Work explicitly linked to an ncode is eligible for this direct source.
+                        if (target.MediaSubtypeId != MediaSubtype.LightNovel) return [];
+                        var key = target.ExternalIdentities.Select(identity => identity.Split(':', 2))
+                            .Where(pair => pair.Length == 2 && pair[0] == "syosetu")
+                            .Select(pair => pair[1]).FirstOrDefault();
+                        if (!NarouClient.IsNcode(key)) return [];
+                        var novel = await _narou.ReadWorkAsync(key!, ct);
+                        var author = string.IsNullOrWhiteSpace(target.Author) ? [] : new[] { target.Author };
+                        return [Offer(source, "narou:" + novel.Ncode + ":epub", author, target.CanonicalTitle,
+                            "ja", "epub", new Uri("https://ncode.syosetu.com/" + novel.Ncode + "/"), null, identityBound: true)];
+                    case AcquisitionConnectionType.AnnasArchive:
+                        var site = Catalog(source);
+                        // Every way to find the work is asked in turn; the choice says when one way was enough.
+                        var found = new List<ReleaseOffer>();
+                        foreach (var way in AnnaWays(target))
+                        {
+                            var records = await _annas.SearchAsync(site, way, ct);
+                            found.AddRange(records.Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
+                                record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes, record.IsPart)));
+                            if (enough is not null && enough(found))
+                            {
+                                break;
+                            }
+                        }
+
+                        return found;
+                    default:
+                        return [];
+                }
+            }
+            catch (Exception exception) when (exception is GutenbergException or OpdsException or AnnasArchiveException or NarouException)
+            {
+                return null;
+            }
+        }
+
+        public async Task<string?> TestAsync(AcquisitionConnectionData source, CancellationToken ct)
+        {
+            // A search that answers proves the source; null means healthy.
+            var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, null, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null, null, null);
+            return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
+        }
+
+        public async Task DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, DownloadStoragePaths paths, CancellationToken ct)
+        {
+            var directory = Path.GetDirectoryName(destination)!;
+            IDisposable Reserve(long bytes) => paths.ReserveWrite(download.OperationId, directory, bytes);
+            if (!Uri.TryCreate(download.SourceUrl, UriKind.Absolute, out var address))
+            {
+                throw new DirectSourceException("acquisition_grab_failed");
+            }
+
+            try
+            {
+                switch (source.AcquisitionConnectionTypeId)
+                {
+                    case AcquisitionConnectionType.Gutenberg:
+                        var id = download.ExternalId?.Split(':') is [_, var key, ..] && int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var bookId)
+                            ? bookId
+                            : throw new DirectSourceException("acquisition_grab_failed");
+                        await _gutenberg.DownloadAsync(id, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                        break;
+                    case AcquisitionConnectionType.Opds:
+                        await _opds.DownloadAsync(Opds(source), address, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                        break;
                     case AcquisitionConnectionType.Narou:
                         var ncode = download.ExternalId?.Split(':') is ["narou", var sourceKey, ..] && NarouClient.IsNcode(sourceKey)
                             ? sourceKey : throw new DirectSourceException("acquisition_grab_failed");
@@ -8,15 +146,136 @@
                         }
 
                         await _narou.WriteEpubAsync(ncode, destination, paths.Settings.MaxJobBytes, Reserve, ct);
-                        break;                    case AcquisitionConnectionType.Narou:
-                        var ncode = download.ExternalId?.Split(':') is ["narou", var sourceKey, ..] && NarouClient.IsNcode(sourceKey)
-                            ? sourceKey : throw new DirectSourceException("acquisition_grab_failed");
-                        if (!address.Host.Equals("ncode.syosetu.com", StringComparison.OrdinalIgnoreCase)
-                            || !address.AbsolutePath.Equals("/" + ncode + "/", StringComparison.OrdinalIgnoreCase))
+                        break;
+                    case AcquisitionConnectionType.AnnasArchive:
+                        var site = Catalog(source);
+                        var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
+                        if (source.ProtectedApiKey is { } memberKey)
                         {
-                            throw new DirectSourceException("acquisition_grab_failed");
+                            await _annas.DownloadAsync(site, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                            break;
                         }
 
-                        await _narou.WriteEpubAsync(ncode, destination, paths.Settings.MaxJobBytes, Reserve, ct);
-                        break;
+                        // Without a key: the person's file link, else the slow download; a check or a dead link goes to a person.
+                        try
+                        {
+                            if (download.SourceLinkUrl is { } link)
+                            {
+                                await _annas.DownloadFileAsync(new Uri(link), destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                            }
+                            else
+                            {
+                                // The mirror that offered the file is the one that serves it.
+                                var mirror = new Uri($"{address.Scheme}://{address.Host}/");
+                                var page = await _annas.ReadSlowPageAsync(mirror, md5, ct);
 
+                                // The page's own countdown is served once per attempt; a repeated rendering does not restart it.
+                                if (page.Wait > TimeSpan.Zero && download.DownloadWaitUntil is null)
+                                {
+                                    throw new DirectSourceWaitException(page.Wait);
+                                }
+
+                                // The page counted down but names no file yet; the next attempt reads it again.
+                                if (page.File is null)
+                                {
+                                    throw new DirectSourceException("acquisition_grab_failed");
+                                }
+
+                                await _annas.DownloadFileAsync(page.File, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                            }
+                        }
+                        catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate)
+                        {
+                            throw new DirectSourceException(ManualLinkKey, AnnasArchiveClient.SlowPageUri(site, md5));
+                        }
+
+                        break;
+                    default:
+                        throw new DirectSourceException("acquisition_grab_failed");
+                }
+            }
+            catch (DirectDownloadException exception)
+            {
+                if (exception.Failure == DirectDownloadFailure.TooLarge) throw new ServiceUnavailableException("download_size_limit");
+                throw new DirectSourceException(exception.Failure switch
+                {
+                    DirectDownloadFailure.Gate => "source_gate",
+                    DirectDownloadFailure.Unauthorized => "acquisition_authentication_failed",
+                    _ => "acquisition_unavailable"
+                });
+            }
+            catch (AnnasArchiveException exception)
+            {
+                throw new DirectSourceException(exception.Failure switch
+                {
+                    AnnasArchiveFailure.Gate => "source_gate",
+                    AnnasArchiveFailure.Refused => "acquisition_authentication_failed",
+                    _ => "acquisition_unavailable"
+                });
+            }
+            catch (Exception exception) when (exception is GutenbergException or OpdsException or NarouException)
+            {
+                throw new DirectSourceException("acquisition_unavailable");
+            }
+        }
+
+        // Every way to find the work at Anna's Archive: the ISBNs name the edition exactly, then the title with
+        // the author, the title alone and the titles of the editions in the other languages.
+        internal static IReadOnlyList<string> AnnaWays(WantedTargetData target)
+        {
+            var ways = new List<string>();
+            void Add(string? value)
+            {
+                var way = value?.Trim();
+                if (!string.IsNullOrWhiteSpace(way) && !ways.Contains(way, StringComparer.OrdinalIgnoreCase))
+                {
+                    ways.Add(way);
+                }
+            }
+
+            foreach (var isbn in target.Isbns.Take(MaximumIsbns))
+            {
+                Add(isbn);
+            }
+
+            Add(string.Join(' ', new[] { target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
+                .Where(part => !string.IsNullOrWhiteSpace(part))));
+            Add(target.CanonicalTitle);
+            foreach (var title in target.EditionTitles.Take(MaximumTitles))
+            {
+                Add(title);
+            }
+
+            return ways;
+        }
+
+        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false, bool identityBound = false)
+        {
+            var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title + (language is { Length: > 0 } ? " (" + language.ToUpperInvariant() + ")" : "") + " (" + format + ")";
+            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, identityBound ? ["id"] : ["title"]) { IsPart = isPart };
+        }
+
+        private OpdsConnection Opds(AcquisitionConnectionData source) =>
+            new(new Uri(source.HttpAddress), source.Username, source.ProtectedApiKey is null ? null : AcquisitionConnectionInput.Unprotect(_protector, source.ProtectedApiKey));
+
+        private static Uri Catalog(AcquisitionConnectionData source) => new(source.HttpAddress.TrimEnd('/') + "/");
+
+        private static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..32];
+    }
+
+    internal sealed class DirectSourceException(string errorKey, Uri? manualUrl = null) : Exception("The direct source failed.")
+    {
+        public string ErrorKey { get; } = errorKey;
+
+        // The page a person opens to pass the source's check.
+        public Uri? ManualUrl { get; } = manualUrl;
+    }
+
+    // A source states its own countdown; the job returns and the monitor resumes it when the wait ends.
+    internal sealed class DirectSourceWaitException(TimeSpan wait) : Exception("The direct source asks to wait.")
+    {
+        public TimeSpan Wait { get; } = wait;
+    }
+}
