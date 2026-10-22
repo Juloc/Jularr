@@ -145,7 +145,8 @@ namespace Jularr.Backend.Tests
 
             // Its profile keeps Sonarr's qualities by their names, best first, stops at the best of the cutoff group and gets its custom formats as rules; the title uses it.
             Assert.AreEqual("takeover_added", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Profile).OutcomeKey);
-            Assert.IsFalse(sonarr.Any(item => item.TakeoverItemTypeId == TakeoverItemType.Format));
+            var foundFormats = sonarr.Where(item => item.TakeoverItemTypeId == TakeoverItemType.Format).ToArray();
+            Assert.IsTrue(foundFormats.Length > 0 && foundFormats.All(item => item.OutcomeKey == "takeover_found"));
             var profile = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
                 .Single(item => item.Name == "HD-1080p");
             CollectionAssert.AreEqual(new[] { "DVD", "Bluray-1080p", "group:1002", "HDTV-1080p" }, profile.AllowedQualities);

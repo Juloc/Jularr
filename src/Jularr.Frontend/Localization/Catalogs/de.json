@@ -1600,6 +1600,14 @@
    "No clear match",
    "Kein eindeutiger Treffer"
   ],
+  "takeover.outcome.takeover_suggested": [
+   "Library suggested",
+   "Bibliothek vorgeschlagen"
+  ],
+  "takeover.outcome.takeover_assigned": [
+   "Library assigned",
+   "Bibliothek zugewiesen"
+  ],
   "takeover.outcome.takeover_will_want": [
    "Will be wanted (paused)",
    "Wird überwacht (pausiert)"

@@ -81,7 +81,7 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
             }, fields =>
             {
                 fields.Submit(Choice(new Button(new Icon("scan", assets, 14), new Text("setup.takeover.preview")).Soft(), "false"));
-                if (ran && Items is not null && !applied) fields.Submit(Choice(new Button(new Icon("download", assets, 14), new Text("setup.takeover.apply")).Primary(), "true"));
+                if (ran && Items is not null && !applied) fields.Submit(Choice(new Button(new Icon("download", assets, 14), new Text("setup.takeover.apply")).Primary(), "true", true));
             });
 
             var body = new List<IUiComponent> { form };
@@ -119,10 +119,11 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
             }
         }
 
-        // A button that posts whether this run takes over or only previews.
-        private static Button Choice(Button button, string apply)
+        // A button that posts whether this run takes over or only previews; the takeover needs no typed key again (it comes back sealed), so the empty key field must not block it.
+        private static Button Choice(Button button, string apply, bool skipsValidation = false)
         {
             button.Submit().Attribute("name", "apply").Attribute("value", apply);
+            if (skipsValidation) button.Attribute("formnovalidate", "formnovalidate");
             return button;
         }
 
@@ -163,8 +164,9 @@ namespace Jularr.Frontend.Pages.Setup.Takeover
                 }
             }
 
-            await RunAsync(takeoverSourceTypeId, baseUrl, apiKey, apply, rootFolders, connectionKeys, newLibraries, draft);
+            // The page is built inside the run, so the seal for the takeover that follows a preview exists before it.
             if (!apply && !string.IsNullOrEmpty(apiKey)) _seal = Sealer.Protect(apiKey, TimeSpan.FromMinutes(10));
+            await RunAsync(takeoverSourceTypeId, baseUrl, apiKey, apply, rootFolders, connectionKeys, newLibraries, draft);
             return Page();
         }
 

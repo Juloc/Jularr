@@ -147,6 +147,10 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".setup-source", new() { HasText = "refused the API key" })).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".setup-source", new() { HasText = "Sonarr" }).First).ToContainTextAsync("refused the API key");
 
+                // The wrong key was answered with the service's own 503, the one expected problem.
+                Assert.IsTrue(browser.Problems.All(problem => problem.Contains("503", StringComparison.Ordinal)), string.Join(Environment.NewLine, browser.Problems));
+                browser.Problems.Clear();
+
                 // The preview counts what is there and changes nothing in Jularr.
                 var profilesBefore = await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionProfiles\"");
                 await sonarr.Locator("[name=BaseUrl]").FillAsync(fakes.Sonarr.ToString());
@@ -159,7 +163,7 @@ namespace Jularr.E2E.Tests
                     await Assertions.Expect(sonarr.Locator(".kpi-tile", new() { HasText = kind })).ToHaveCountAsync(1);
                 }
 
-                await Assertions.Expect(sonarr.Locator(".setup-source__fold", new() { HasText = "Quality profiles" })).ToContainTextAsync("1");
+                await Assertions.Expect(sonarr.Locator(".setup-source__fold", new() { HasTextRegex = new System.Text.RegularExpressions.Regex(@"^\s*Quality profiles") })).ToContainTextAsync("1");
                 Assert.AreEqual(profilesBefore, await jularr.ScalarAsync("SELECT count(*) FROM \"AcquisitionProfiles\""), "A preview writes nothing.");
                 Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"Works\""));
                 await Evidence.SaveAsync(page, "setup-takeover-preview");
@@ -179,7 +183,7 @@ namespace Jularr.E2E.Tests
                 // The later steps start from what was taken over: the quality profile and the library are there.
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Instance");
-                await page.GotoAsync("/Setup/Profiles");
+                await page.GotoAsync("/Setup/Profiles?MediaTypeId=Series");
                 await Assertions.Expect(page.Locator(".list-row", new() { HasText = "Web 1080p" })).ToHaveCountAsync(1);
                 await page.GotoAsync("/Setup/Libraries");
                 await Assertions.Expect(page.Locator(".setup-libraries__root", new() { HasText = "Series" })).ToHaveCountAsync(1);
@@ -244,6 +248,19 @@ namespace Jularr.E2E.Tests
                 await AssertNoTabsAsync(page);
                 await NextAsync(page, "/Setup/Indexers");
                 await AssertNoTabsAsync(page);
+
+                // Only adding opens a dialog (with Cancel); the added indexer is the same card as in the administration, its settings as inputs inside it.
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }));
+                Assert.AreEqual(1, await page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).CountAsync());
+                var indexerForm = page.Locator("dialog#connection-editor form").First;
+                await indexerForm.Locator("[name=Name]").FillAsync("Setup indexer");
+                await indexerForm.Locator("[name=BaseUrl]").FillAsync(new Uri(fakes.Address, "newznab/").ToString());
+                await indexerForm.Locator("[name=ApiKey]").FillAsync(FakeServices.IndexerKey);
+                await Steps.SubmitAsync(page, indexerForm);
+                var indexerCard = page.Locator(".card-grid .feature-card", new() { HasText = "Setup indexer" });
+                await Assertions.Expect(indexerCard.Locator("[name=BaseUrl]")).ToBeVisibleAsync();
+                await Assertions.Expect(indexerCard.GetByRole(AriaRole.Button, new() { Name = "Test connection", Exact = true })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("dialog[open]")).ToHaveCountAsync(0);
                 await NextAsync(page, "/Setup/Providers");
 
                 // Providers: every provider is a card with its key right in it, saved together.

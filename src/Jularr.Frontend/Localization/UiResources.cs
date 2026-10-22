@@ -675,6 +675,8 @@ namespace Jularr.Frontend.Localization
             new("takeover.outcome.takeover_not_monitored", "Release type not monitored there"),
             new("takeover.outcome.takeover_exists", "Already set up"),
             new("takeover.outcome.takeover_needs_key", "Key needed"),
+            new("takeover.outcome.takeover_suggested", "Library suggested"),
+            new("takeover.outcome.takeover_assigned", "Library assigned"),
             new("takeover.outcome.takeover_will_add", "Will be added"),
             new("takeover.outcome.takeover_added", "Added"),
             new("takeover.outcome.takeover_no_id", "No provider id"),
