@@ -393,6 +393,7 @@ fun TvV1CatalogHost(
         }
         TvV1CatalogPage.Sessions -> TvV1SessionsScreen(
             api = profileApi,
+            canManageSessions = capabilities.hasPermission("session.self.manage"),
             onUnauthorized = onAuthenticationExpired,
             onBack = ::back,
         )
