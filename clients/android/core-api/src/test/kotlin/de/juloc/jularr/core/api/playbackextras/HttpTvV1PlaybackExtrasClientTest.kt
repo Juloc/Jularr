@@ -83,7 +83,7 @@ class HttpTvV1PlaybackExtrasClientTest {
             assertFalse(saved.has("deviceQuality"))
             assertFalse(saved.has("profileLanguage"))
             assertFalse(saved.getBoolean("autoplayNext"))
-            assertEquals("1.50", JSONObject(speedBody.get()).get("speed").toString())
+            assertEquals(0, BigDecimal(JSONObject(speedBody.get()).get("speed").toString()).compareTo(BigDecimal("1.50")))
             assertTrue(requests.any { it == "GET /api/v1/playback/assets/9002/markers" })
             assertTrue(requests.any { it == "GET /api/v1/playback/assets/9002/trickplay/1" })
         } finally {
