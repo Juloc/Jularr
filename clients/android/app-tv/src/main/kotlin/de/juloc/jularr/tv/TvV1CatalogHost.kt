@@ -332,23 +332,41 @@ fun TvV1CatalogHost(
             onBack = ::back,
             onUnauthorized = onAuthenticationExpired,
         )
-        TvV1CatalogPage.Search -> {
-            if (error != null) TvV1ApiMessage("Suche", requireNotNull(error), { reload += 1 }, ::back)
-            else TvSearchScreen(
-                library = searchResults,
-                query = searchQuery,
-                selectedFilter = category,
-                serverOrigin = serverOrigin,
-                requestHeaders = authorization,
+        TvV1CatalogPage.Search -> Row(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            TvSidebar(
+                selected = TvRoute.Home,
                 focusMemory = focusMemory,
-                onQueryChange = { searchQuery = it },
-                onFilterChange = { category = it },
-                onAnime = { card -> openWork(card.id) },
-                serverQueryResults = true,
-                onOpenDiscover = { page = TvV1CatalogPage.Discover },
+                onSelect = { route ->
+                    when (route) {
+                        TvRoute.Home -> page = TvV1CatalogPage.Home
+                        TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
+                        TvRoute.Settings -> page = TvV1CatalogPage.Settings
+                        TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
+                        else -> Unit
+                    }
+                },
             )
+            Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                if (error != null) {
+                    TvV1ApiMessage("Suche", requireNotNull(error), { reload += 1 }, ::back)
+                } else {
+                    TvSearchScreen(
+                        library = searchResults,
+                        query = searchQuery,
+                        selectedFilter = category,
+                        serverOrigin = serverOrigin,
+                        requestHeaders = authorization,
+                        focusMemory = focusMemory,
+                        onQueryChange = { searchQuery = it },
+                        onFilterChange = { category = it },
+                        onAnime = { card -> openWork(card.id) },
+                        serverQueryResults = true,
+                        onOpenDiscover = { page = TvV1CatalogPage.Discover },
+                    )
+                }
+            }
         }
-                TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
+        TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
             catalog = catalog,
             serverOrigin = serverOrigin,
             requestHeaders = authorization,
