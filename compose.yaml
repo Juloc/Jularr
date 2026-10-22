@@ -26,6 +26,8 @@ services:
       JULARR_DB: Host=postgres;Database=jularr;Username=jularr;Password=${JULARR_DB_PASSWORD}
       # A browser that already runs, for the sources that put a browser check in front of their pages.
       Browser__RemoteAddress: ${JULARR_BROWSER_ADDRESS:-}
+      # Optional existing private Ollama runtime; no model weights or runtime in the Jularr image.
+      LocalTranslation__Endpoint: ${JULARR_OLLAMA_ENDPOINT:-}
     ports:
       - "8097:8080"
       # The browser of the container, if it runs one (see deploy/browser/browser.sh).
