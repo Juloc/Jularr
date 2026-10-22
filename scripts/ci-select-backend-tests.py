@@ -40,8 +40,8 @@ AREAS = (
      ("MusicTests",)),
     (("speech", "tts", "piper", "sherpa"),
      ("SpeechTests", "SpeechDiscoveryTests")),
-    (("backup", "database", "sql", "migration"),
-     ("BackupTests", "SqlContextTests")),
+    (("backup",), ("BackupTests",)),
+    (("sql", "migration"), ("SqlContextTests",)),
     (("module", "instance"),
      ("InstanceModuleDependencyTests",)),
 )
@@ -69,10 +69,16 @@ def choose(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             else:
                 classes.update(SHARED)
         elif low.startswith(tuple(prefix.lower() for prefix in CORE_PREFIXES)) or low.startswith("database/"):
-            # Unknown shared code is never handled by *only* the basic smoke.
+            # Match directory names and filename prefixes, not arbitrary substrings:
+            # SpeechCatalog must not accidentally select every Library test.
+            parts = PurePosixPath(low).parts
+            stem = PurePosixPath(low).stem
             found = False
+            if low.startswith("database/"):
+                classes.add("SqlContextTests")
+                found = True
             for words, test_classes in AREAS:
-                if any(word in low for word in words):
+                if any(word in parts[:-1] or stem.startswith(word) for word in words):
                     classes.update(test_classes)
                     found = True
             if not found:
@@ -107,6 +113,10 @@ def self_test() -> None:
     assert not classes and filter_text.count("FullyQualifiedName~") == len(SMOKE)
     filters, classes = choose(["tests/Jularr.Backend.Tests/AuthenticationTests.cs"])
     assert classes == ("AuthenticationTests",) and "AuthenticationTests.Session_" not in filters
+    _, classes = choose(["src/Jularr.Backend/Logic/Speech/SpeechCatalog.cs"])
+    assert classes == ("SpeechDiscoveryTests", "SpeechTests"), classes
+    _, classes = choose(["database/Account.sql"])
+    assert classes == ("AuthenticationTests", "DeviceTests", "SqlContextTests"), classes
 
 
 def main() -> int:
