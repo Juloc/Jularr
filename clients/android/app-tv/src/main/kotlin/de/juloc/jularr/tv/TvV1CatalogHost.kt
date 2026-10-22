@@ -86,6 +86,11 @@ fun TvV1CatalogHost(
     var settingsSignOutRequested by remember(serverOrigin) { mutableStateOf(false) }
     var error by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var library by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
+    var homeNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var searchNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var watchlistNextPage by remember(serverOrigin) { mutableStateOf<Int?>(null) }
+    var fetchingNextPage by remember(serverOrigin) { mutableStateOf(false) }
+    var pagingError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var searchResults by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
     var continueWatching by remember(serverOrigin) { mutableStateOf<List<TvContinueItemV1>>(emptyList()) }
     var showContinueWatching by remember(serverOrigin) { mutableStateOf(true) }
@@ -155,6 +160,50 @@ fun TvV1CatalogHost(
         selectedWorkUnitId = unitId
     }
 
+    fun loadNextPage(which: TvV1CatalogPage) {
+        if (fetchingNextPage || page != which) return
+        val next = when (which) {
+            TvV1CatalogPage.Home -> homeNextPage
+            TvV1CatalogPage.Search -> searchNextPage
+            TvV1CatalogPage.Watchlist -> watchlistNextPage
+            else -> null
+        } ?: return
+        val requestedQuery = searchQuery
+        fetchingNextPage = true
+        pagingError = null
+        scope.launch {
+            try {
+                if (which == TvV1CatalogPage.Watchlist) {
+                    val result = flow.watchlistPage(next)
+                    if (page == which) {
+                        val cards = TvV1LegacyUiModels.watchlist(result.items)
+                        watchlist = (watchlist + cards).distinctBy { it.id }
+                        watchlistNextPage = if (result.hasMore) next + 1 else null
+                    }
+                } else {
+                    val result = flow.videoPage(next, if (which == TvV1CatalogPage.Search) requestedQuery else null)
+                    if (page == which && (which != TvV1CatalogPage.Search || searchQuery == requestedQuery)) {
+                        val added = TvV1LegacyUiModels.videoLibrary(result.items).anime
+                        if (which == TvV1CatalogPage.Home) {
+                            library = ClientLibrary((library.anime + added).distinctBy { it.id })
+                            homeNextPage = if (result.hasMore) next + 1 else null
+                        } else {
+                            searchResults = ClientLibrary((searchResults.anime + added).distinctBy { it.id })
+                            searchNextPage = if (result.hasMore) next + 1 else null
+                        }
+                    }
+                }
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onAuthenticationExpired()
+                else pagingError = "Weitere Medien: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                pagingError = failure.message ?: "Weitere Medien konnten nicht geladen werden."
+            } finally {
+                fetchingNextPage = false
+            }
+        }
+    }
+
     fun back() {
         error = null
         val restored = TvV1AppController.back(navigation)
@@ -196,13 +245,19 @@ fun TvV1CatalogHost(
                     library = home.library
                     continueWatching = home.continueWatching
                     showContinueWatching = home.showContinueWatching
+                    homeNextPage = if (home.hasMoreVideo) 2 else null
+                    pagingError = null
                 }
                 TvV1CatalogPage.Search -> {
                     if (searchQuery.isNotBlank()) delay(300)
                     searchResults = flow.search(searchQuery)
+                    searchNextPage = if (searchResults.anime.size == 100) 2 else null
+                    pagingError = null
                 }
                 TvV1CatalogPage.Watchlist -> {
                     watchlist = flow.watchlist()
+                    watchlistNextPage = if (watchlist.size == 100) 2 else null
+                    pagingError = null
                 }
                 TvV1CatalogPage.Details -> {
                     val result = flow.work(requireNotNull(detailWorkId))
@@ -393,6 +448,9 @@ fun TvV1CatalogHost(
                         onAnime = { card -> openWork(card.id) },
                         serverQueryResults = true,
                         onOpenDiscover = { openPage(TvV1CatalogPage.Discover) },
+                        onLoadMore = if (searchNextPage != null && !fetchingNextPage) {
+                            { loadNextPage(TvV1CatalogPage.Search) }
+                        } else null,
                     )
                 }
             }

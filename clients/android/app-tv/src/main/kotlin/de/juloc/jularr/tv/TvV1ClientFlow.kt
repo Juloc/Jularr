@@ -5,6 +5,7 @@ import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvPageV1
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
+import de.juloc.jularr.core.api.catalog.TvWorkCardV1
 import de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientLibrary
@@ -27,7 +28,10 @@ internal class TvV1ClientFlow(
         val library: ClientLibrary,
         val continueWatching: List<TvContinueItemV1>,
         val showContinueWatching: Boolean,
+        val hasMoreVideo: Boolean = false,
     )
+
+    data class PageSlice<T>(val items: List<T>, val hasMore: Boolean)
 
     data class Work(
         val title: String,
@@ -41,12 +45,8 @@ internal class TvV1ClientFlow(
 
     suspend fun home(): Home {
         ensureLibrary()
-        val library = TvV1LegacyUiModels.videoLibrary(allPages { page ->
-            api.libraryFiltered(
-                page = page, pageSize = PageSize,
-                filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
-            )
-        })
+        val video = videoPage(1)
+        val library = TvV1LegacyUiModels.videoLibrary(video.items)
         val showContinue = if (capabilities.hasModule("HomeLayout")) {
             api.homeLayout().none { it.homeShelfTypeId == 1 && it.isHidden }
         } else true
@@ -60,25 +60,39 @@ internal class TvV1ClientFlow(
                 api.continueWatching().filter { it.mediaAssetTypeId == 1 }
             } else emptyList(),
             showContinueWatching = showContinue,
+            hasMoreVideo = video.hasMore,
         )
     }
 
     suspend fun search(query: String): ClientLibrary {
         ensureLibrary()
-        return TvV1LegacyUiModels.videoLibrary(allPages { page ->
-            api.libraryFiltered(
-                page = page, pageSize = PageSize,
-                filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
-                query = query.trim().ifEmpty { null },
-            )
-        })
+        return TvV1LegacyUiModels.videoLibrary(videoPage(1, query).items)
     }
 
     suspend fun watchlist(): List<WatchlistItem> {
         ensureLibrary()
-        return TvV1LegacyUiModels.watchlist(allPages { page ->
-            api.watchlist(page = page, pageSize = PageSize)
-        })
+        return TvV1LegacyUiModels.watchlist(watchlistPage(1).items)
+    }
+
+    /** Request additional genuine server pages only when the viewer asks for them. */
+    suspend fun videoPage(page: Int, query: String? = null): PageSlice<TvWorkCardV1> {
+        ensureLibrary()
+        require(page >= 1)
+        val result = api.libraryFiltered(
+            page = page, pageSize = PageSize,
+            filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
+            query = query?.trim()?.ifEmpty { null },
+        )
+        check(result.page == page && result.pageSize == PageSize)
+        return PageSlice(result.items, result.items.size == PageSize)
+    }
+
+    suspend fun watchlistPage(page: Int): PageSlice<TvWorkCardV1> {
+        ensureLibrary()
+        require(page >= 1)
+        val result = api.watchlist(page = page, pageSize = PageSize)
+        check(result.page == page && result.pageSize == PageSize)
+        return PageSlice(result.items, result.items.size == PageSize)
     }
 
     suspend fun work(workId: Long): Work {

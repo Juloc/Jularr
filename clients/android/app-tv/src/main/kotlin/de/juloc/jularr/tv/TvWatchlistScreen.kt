@@ -127,6 +127,7 @@ fun TvWatchlistScreen(
     focusMemory: TvFocusMemory,
     onOpenAnime: (animeId: String) -> Unit,
     onOpenVideoWork: ((workId: String) -> Unit)? = null,
+    onLoadMore: (() -> Unit)? = null,
 ) {
     if (!supported) {
         TvCenteredPanel(
@@ -309,6 +310,11 @@ fun TvWatchlistScreen(
                                     }
                                 },
                             )
+                        }
+                        if (onLoadMore != null) {
+                            item(key = "load-more") {
+                                Button(onClick = onLoadMore) { Text("Weitere Watchlist-Einträge laden") }
+                            }
                         }
                     }
                 }

@@ -64,6 +64,7 @@ fun TvHomeScreen(
     v1ContinueWatching: List<TvContinueItemV1> = emptyList(),
     onContinueWork: (TvContinueItemV1) -> Unit = {},
     showV1Continue: Boolean = true,
+    onLoadMoreVideos: (() -> Unit)? = null,
 ) {
     var filter by remember {
         mutableStateOf(
@@ -305,6 +306,7 @@ fun TvHomeScreen(
                         focusMemory = focusMemory,
                         focusColor = focusColor,
                         onAnime = onAnime,
+                        onLoadMore = onLoadMoreVideos,
                     )
                 }
             }
@@ -320,6 +322,7 @@ fun TvHomeScreen(
                         focusMemory = focusMemory,
                         focusColor = focusColor,
                         onAnime = onAnime,
+                        onLoadMore = onLoadMoreVideos,
                     )
                 }
             }
@@ -350,6 +353,7 @@ private fun TvHomeAnimeRow(
     focusMemory: TvFocusMemory,
     focusColor: Color,
     onAnime: (AnimeSummary) -> Unit,
+    onLoadMore: (() -> Unit)? = null,
 ) {
     val rowState = rememberLazyListState()
     val restoreIndex = entries.indexOfFirst { restoringItem == "anime:${it.id}" }
@@ -381,6 +385,11 @@ private fun TvHomeAnimeRow(
                 },
                 onClick = { onAnime(anime) },
             )
+        }
+        if (onLoadMore != null) {
+            item(key = "load-more") {
+                Button(onClick = onLoadMore) { Text("Weitere Medien laden") }
+            }
         }
     }
 }

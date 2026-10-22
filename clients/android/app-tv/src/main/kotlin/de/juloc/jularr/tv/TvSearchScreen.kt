@@ -51,6 +51,7 @@ fun TvSearchScreen(
     onAnime: (AnimeSummary) -> Unit,
     serverQueryResults: Boolean = false,
     onOpenDiscover: (() -> Unit)? = null,
+    onLoadMore: (() -> Unit)? = null,
 ) {
     // clean-start performs query matching server-side, including aliases not present
     // in the summary card. Do not discard valid server results with a second local match.
@@ -217,6 +218,11 @@ fun TvSearchScreen(
                     }
                 }
             }
+                if (onLoadMore != null) {
+                    item(key = "load-more") {
+                        Button(onClick = onLoadMore) { Text("Weitere Ergebnisse laden") }
+                    }
+                }
         }
     }
 }
