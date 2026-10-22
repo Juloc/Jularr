@@ -229,3 +229,4 @@ fun TvSearchScreen(
         }
     }
 }
+}
