@@ -135,10 +135,7 @@ export function bookDimensions(printedPages: number, microns: number, currentPag
     const readLeaves = Math.min(leaves, Math.max(0, Math.floor(currentPage / 2)));
     const leftMm = readLeaves * microns / 1000, rightMm = (leaves - readLeaves) * microns / 1000;
     const centreMm = Math.min(leftMm, rightMm) * .35;
-    // The pages of a spread are mirror images: both share the cross-section of half the block, so
-    // reading position never changes a page's height, vertical position, outline, margins or number.
-    const blockMm = leaves * microns / 2000, spineMm = blockMm * .35;
-    return { leaves, readLeaves, leftMm, rightMm, centreMm, blockMm, spineMm,
+    return { leaves, readLeaves, leftMm, rightMm, centreMm,
         leftAngle: Math.atan2(leftMm - centreMm, 148) * 180 / Math.PI,
         rightAngle: -Math.atan2(rightMm - centreMm, 148) * 180 / Math.PI, boardMm: boardTenths / 10,
         totalMm: leaves * microns / 1000 + 2 * boardTenths / 10 };
@@ -172,6 +169,16 @@ export function paperProfile(depth: number, centre: number, curve: number, angle
     const fraction = (74 - projectedX(a)) / (projectedX(b) - projectedX(a));
     const footerLift = -(a.y + (b.y - a.y) * fraction);
     return { points, height, inset, footerLift, lift: Math.max(...points.map(point => -point.y)) };
+}
+
+// Where a page's printed text box sits on its own paper. The stack beside the spine lifts the sheet and pulls the outer
+// edge inwards, more the thicker the stack: the print rises with the paper's edge at the horizontal centre (as the page
+// number always did) and moves to the middle of the paper's narrower width, so padding above, below, at the spine and at
+// the outer edge keep the same ratio on both pages whatever has been read. A left page is the mirror of a right one: its
+// spine is on the right, so its shift has the opposite sign.
+export function printPlacement(profile: ReturnType<typeof paperProfile>, side: string, pixelScale: number) {
+    return { top: (profile.lift - profile.footerLift) * pixelScale,
+        shift: (side === 'left' ? 1 : -1) * profile.inset * pixelScale / 2 };
 }
 
 export function paperOutline(profile: ReturnType<typeof paperProfile>): Point[] {

@@ -14,7 +14,7 @@
     &__camera { position: absolute; inset: 0; }
     &[data-book-direction=rtl] &__camera { transform: scaleX(-1); }
     &[data-book-direction=rtl] .reader__page-print { transform: scaleX(-1); }
-    &__page-number { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; font: 11px/1 Georgia, serif; transform: translateY(calc(-1 * var(--page-number-rise, 0px))); }
+    &__page-number { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; font: 11px/1 Georgia, serif; }
         --paper-shade: color-mix(in srgb, var(--paper) 30%, #554432);
         --paper-bounce: color-mix(in srgb, var(--paper) 82%, #fff3d6);
         --paper-cut: color-mix(in srgb, var(--edge-colour) calc(var(--edge-strength) * 100%), var(--paper));
