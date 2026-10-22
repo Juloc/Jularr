@@ -32,6 +32,8 @@ interface TvV1ProfileClient {
     suspend fun profiles(): List<TvSelectableProfileV1>
     suspend fun selectProfile(id: Long, pin: String? = null): Long
     suspend fun sessions(): List<TvAccountSessionV1>
+    /** Returns true only if the server reports this was the current session. */
+    suspend fun revokeSession(sessionId: UUID): Boolean
     suspend fun signOut()
 }
 
@@ -94,6 +96,13 @@ class HttpTvV1ProfileClient(origin: String, private val tokens: DeviceTokenStore
             if (rows.length() < 100) return result
         }
         error("Too many sessions to display safely.")
+    }
+
+    override suspend fun revokeSession(sessionId: UUID): Boolean {
+        val json = JSONObject(request("DELETE", "/api/v1/sessions/$sessionId"))
+        val endedCurrent = json.getBoolean("endsCurrentSession")
+        if (endedCurrent) tokens.clear()
+        return endedCurrent
     }
 
     override suspend fun signOut() {
