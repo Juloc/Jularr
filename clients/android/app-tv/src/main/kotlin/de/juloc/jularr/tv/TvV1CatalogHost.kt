@@ -71,7 +71,9 @@ fun TvV1CatalogHost(
     var watchlistBusy by remember(serverOrigin) { mutableStateOf(false) }
     var watchlistError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var detailedTitle by remember(serverOrigin) { mutableStateOf("") }
-    var omittedFractionalEpisodes by remember(serverOrigin) { mutableIntStateOf(0) }
+    var fractionalEpisodes by remember(serverOrigin) {
+        mutableStateOf<List<de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1>>(emptyList())
+    }
     var detailWorkId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
     var detailAssetByUnit by remember(serverOrigin) { mutableStateOf<Map<String, Long?>>(emptyMap()) }
     var playableMovieAssets by remember(serverOrigin) { mutableStateOf<List<TvWorkAvailabilityV1>>(emptyList()) }
@@ -206,7 +208,9 @@ fun TvV1CatalogHost(
                         val episodesBySeason = seasons.associate { season ->
                             season.seasonNumber to catalog.episodes(workId, season.seasonNumber)
                         }
-                        omittedFractionalEpisodes = episodesBySeason.values.sumOf(TvV1LegacyUiModels::unsupportedEpisodeCount)
+                        fractionalEpisodes = episodesBySeason.values.flatten().filter { episode ->
+                            runCatching { episode.number.intValueExact() }.isFailure
+                        }
                         detailAssetByUnit = episodesBySeason.values.flatten().associate { episode ->
                             episode.id.toString() to episode.mediaAssetId
                         }
@@ -215,7 +219,7 @@ fun TvV1CatalogHost(
                         // The original TV detail grid is video-only; do not fake video episodes.
                         playableMovieAssets = emptyList()
                         details = null
-                        omittedFractionalEpisodes = 0
+                        fractionalEpisodes = emptyList()
                     }
                 }
                 TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
@@ -393,6 +397,10 @@ fun TvV1CatalogHost(
                             },
                             onBack = ::back,
                             isWatchlisted = isWatchlisted,
+                            specialEpisodes = fractionalEpisodes,
+                            onPlaySpecialEpisode = { episode ->
+                                playAsset(episode.playableMediaAssetId(), episode.id.toString())
+                            },
                             onToggleWatchlist = if (
                                 capabilities.hasPermission("profile.watchlist.update") && !watchlistBusy
                             ) {{
@@ -430,12 +438,7 @@ fun TvV1CatalogHost(
                                 color = MaterialTheme.colorScheme.error,
                             )
                         }
-                        if (omittedFractionalEpisodes > 0) {
-                            Text(
-                                "${omittedFractionalEpisodes} Sonderfolgen mit Bruchnummer sind in dieser TV-Ansicht noch nicht darstellbar.",
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
+
                     }
                 }
                 !loading -> TvV1ApiMessage(
