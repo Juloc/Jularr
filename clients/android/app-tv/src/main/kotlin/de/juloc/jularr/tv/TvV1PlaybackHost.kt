@@ -108,6 +108,10 @@ internal fun TvV1PlaybackHost(
                     isEnded = false,
                     isCompleted = false,
                 )
+                // Auth middleware may rotate the bearer with every API response.
+                tokenStore.current?.let { credential ->
+                    player.updateRequestHeaders(mapOf("Authorization" to "Bearer $credential"))
+                }
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (failure: AppApiException) {
@@ -128,7 +132,7 @@ internal fun TvV1PlaybackHost(
         if (finishing) return
         finishing = true
         val current = plan
-        val finalPosition = player.player.currentPosition.coerceAtLeast(positionMs)
+        val finalPosition = player.player.currentPosition.coerceAtLeast(0L)
         val finalDuration = player.player.duration.takeIf { it > 0 } ?: durationMs
         scope.launch {
             if (current != null) {
@@ -176,7 +180,9 @@ internal fun TvV1PlaybackHost(
             }) {
                 Text(if (plan == null) "Erneut versuchen" else "Zurück zu den Details")
             }
-            Button(onClick = onExit) { Text("Zurück") }
+            Button(onClick = {
+                if (plan != null) completePlayback(completed = false) else onExit()
+            }) { Text("Zurück") }
         }
         loading || plan == null -> TvCenteredPanel(
             title = "Jularr TV",
