@@ -54,6 +54,7 @@ class TvCatalogV1FiltersContractTest {
         assertTrue(runCatching { TvCatalogV1Filters(releaseYearFrom = 2027, releaseYearTo = 2020) }.isFailure)
         assertTrue(runCatching { TvCatalogV1Filters(mediaTypeIds = listOf(-2)) }.isFailure)
         assertTrue(runCatching { TvCatalogV1Filters(progressStateId = 5) }.isFailure)
+        assertTrue(runCatching { TvCatalogV1Routes.libraryFiltered(1, 25, TvCatalogV1Filters(progressStateId = 2)) }.isFailure)
         assertEquals(
             "/api/v1/watchlist?page=1&pageSize=25&progressStateId=3",
             TvCatalogV1Routes.watchlistFiltered(1, 25, TvCatalogV1Filters(progressStateId = 3)),
