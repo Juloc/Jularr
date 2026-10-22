@@ -105,6 +105,7 @@ fun TvV1CatalogHost(
 
     fun playAsset(mediaAssetId: Long?, episodeId: String? = null) {
         selectedEpisodeId = episodeId
+        selectedWorkUnitId = episodeId?.toLongOrNull()
         selectedAssetId = mediaAssetId
         if (mediaAssetId == null) {
             openPage(TvV1CatalogPage.PlaybackPending)
@@ -313,6 +314,7 @@ fun TvV1CatalogHost(
                             v1ContinueWatching = continueWatching,
                             showV1Continue = showContinueWatching,
                             onContinueWork = { item ->
+                                detailWorkId = item.workId
                                 detailedTitle = item.title
                                 playAsset(item.mediaAssetId)
                             },
