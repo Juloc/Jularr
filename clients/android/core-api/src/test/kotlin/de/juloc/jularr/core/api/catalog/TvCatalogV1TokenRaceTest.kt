@@ -31,13 +31,18 @@ class TvCatalogV1TokenRaceTest {
         val unexpected = AtomicReference<Throwable?>()
 
         server.createContext("/api/v1/continue") { exchange ->
-            firstStarted.countDown()
-            if (!finishFirst.await(5, TimeUnit.SECONDS)) {
-                exchange.respond(500, """{"code":"timeout"}""")
-            } else if (delayedStatus == 401) {
-                exchange.respond(401, """{"code":"invalid_token","resourceKey":"invalid_token"}""")
+            if (exchange.requestHeaders.getFirst("Authorization") == "Bearer fresh-token") {
+                // The stale 401 is retried once, after a concurrent token rotation.
+                exchange.respond(200, "[]")
             } else {
-                exchange.respond(200, "[]", "stale-token")
+                firstStarted.countDown()
+                if (!finishFirst.await(5, TimeUnit.SECONDS)) {
+                    exchange.respond(500, """{"code":"timeout"}""")
+                } else if (delayedStatus == 401) {
+                    exchange.respond(401, """{"code":"invalid_token","resourceKey":"invalid_token"}""")
+                } else {
+                    exchange.respond(200, "[]", "stale-token")
+                }
             }
         }
         server.createContext("/api/v1/home/layout") {
@@ -64,7 +69,7 @@ class TvCatalogV1TokenRaceTest {
             delayed.join(5_000)
             assertFalse("Delayed request still blocked", delayed.isAlive)
             assertNull(unexpected.get())
-            assertEquals(delayedStatus == 401, sawUnauthorized.get())
+            assertFalse("A stale 401 must not sign out the refreshed profile", sawUnauthorized.get())
             assertEquals("fresh-token", tokens.current)
         } finally {
             finishFirst.countDown()
