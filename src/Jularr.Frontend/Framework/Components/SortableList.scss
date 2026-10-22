@@ -1,0 +1,129 @@
+// A list put in order: each row a tile with its handle, position, icon tile, title and state line, switch and menu. A row held by its handle
+// lifts off the list and follows the pointer (--drag-offset, set by the script) while the others make room.
+.sortable {
+    min-width: 0;
+
+    // Handle and menu need script; without it the rows are only the order the form saves.
+    &:not([data-sortable-ready]) :is(.sortable__handle, .sortable__dots) { display: none; }
+
+    &__rows {
+        position: relative;
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+
+        &--dragging { user-select: none; cursor: grabbing; }
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 64px;
+        padding: 11px 14px 11px 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--surface);
+        transition: border-color var(--transition), box-shadow var(--transition), background-color var(--transition);
+
+        &:hover { border-color: var(--accent-outline); }
+
+        &--dragging {
+            position: relative;
+            z-index: 2;
+            border-color: var(--accent-outline);
+            background: var(--surface);
+            box-shadow: var(--shadow-overlay);
+            transform: translateY(var(--drag-offset, 0));
+            transition: none;
+        }
+
+        // A switched-off row is quieter, its line says so.
+        &:has(.toggle > input:not(:checked)) .sortable__title { color: var(--muted); }
+    }
+
+    &__handle,
+    &__dots {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition: background-color var(--transition), color var(--transition);
+
+        &:hover { background: var(--accent-soft); color: var(--accent-text); }
+        @media (pointer: coarse) { width: 44px; height: 44px; }
+    }
+
+    &__handle { cursor: grab; touch-action: none; }
+
+    &__number {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-small);
+        background: var(--field);
+        color: var(--muted);
+        font-size: var(--text-control);
+        font-variant-numeric: tabular-nums;
+        font-weight: 780;
+    }
+
+    &__text { display: grid; flex: 1; gap: 2px; min-width: 0; }
+    &__title { font-size: var(--text-body); font-weight: 780; overflow-wrap: anywhere; transition: color var(--transition); }
+    &__line { color: var(--muted); font-size: var(--text-small); }
+    &__line--off { display: none; }
+    &__row:has(.toggle > input:not(:checked)) &__line--on { display: none; }
+    &__row:has(.toggle > input:not(:checked)) &__line--off { display: inline; }
+
+    &__menu {
+        position: fixed;
+        inset: auto;
+        top: var(--menu-top, 0);
+        left: var(--menu-left, 0);
+        width: 200px;
+        margin: 0;
+        padding: 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-inner);
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: var(--shadow-overlay);
+
+        &:popover-open { display: grid; gap: 2px; }
+    }
+
+    &__move {
+        display: flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--radius-small);
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        font-size: var(--text-control);
+        font-weight: var(--weight-control);
+        text-align: start;
+
+        &:hover:not(:disabled), &:focus-visible { background: var(--accent-soft); color: var(--accent-text); }
+        &:disabled { opacity: .4; cursor: default; }
+    }
+
+    @media (max-width: 480px) {
+        &__row { gap: 8px; padding-inline-end: 10px; }
+        &__row .icon-tile { display: none; }
+    }
+}

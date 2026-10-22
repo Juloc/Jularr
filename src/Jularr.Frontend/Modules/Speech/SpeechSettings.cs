@@ -39,8 +39,8 @@ namespace Jularr.Frontend.Modules.Speech
                     form.Select(item => item.ProviderTypeId, "speech.provider", providers);
                     form.Select(item => item.ModelId, "speech.model", modelOptions);
                     form.Select(item => item.VoiceId, "speech.voice", voices);
-                    form.Range(item => item.Rate, "speech.rate");
-                    form.Range(item => item.Pitch, "speech.pitch");
+                    form.Range(item => item.Rate, "speech.rate", affix: FieldAffix.Unit("unit.times"));
+                    form.Range(item => item.Pitch, "speech.pitch", affix: FieldAffix.Unit("unit.times"));
                     form.Range(item => item.Volume, "speech.volume");
                     form.Save();
                 }, action, token, input, error),

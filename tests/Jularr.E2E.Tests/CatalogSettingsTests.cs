@@ -39,11 +39,11 @@ namespace Jularr.E2E.Tests
 
             // The cache of images of other titles is sized here and saved the same way.
             var covers = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Images of other titles", Exact = true }) }).Locator("form[data-save]");
-            await Assertions.Expect(covers.GetByLabel("Keep unused images for days")).ToHaveValueAsync("14");
-            await covers.GetByLabel("Largest size in MB, 0 keeps none").FillAsync("120");
+            await Assertions.Expect(covers.GetByLabel("Keep unused images for")).ToHaveValueAsync("14");
+            await covers.GetByLabel("Largest size, 0 keeps none").FillAsync("120");
             await Steps.SaveAsync(page);
             await page.ReloadAsync();
-            await Assertions.Expect(covers.GetByLabel("Largest size in MB, 0 keeps none")).ToHaveValueAsync("120");
+            await Assertions.Expect(covers.GetByLabel("Largest size, 0 keeps none")).ToHaveValueAsync("120");
         }
 
         [TestMethod]

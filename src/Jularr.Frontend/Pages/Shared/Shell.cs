@@ -203,15 +203,15 @@ namespace Jularr.Frontend.Pages.Shared
                 const string className = "nav-link";
                 if (link.Children is { } pages)
                 {
-                    // The area of the current page stays open and marks it; administration opens every area.
+                    // An area is a link to its first page, so no click lands on an empty group; the administration lists the pages below it and marks the current one.
                     var current = Current(pages);
-                    var group = new Details(new Summary(new Icon(link.Icon, assets), new Span(new Text(link.Key))).Class(current is null ? className : className + " is-active"),
-                        new Div([.. pages.Select(page =>
-                        {
-                            var anchor = new A(new Span(new Text(page.Key))).Class(page == current ? "nav-link nav-link--sub is-active" : "nav-link nav-link--sub").Attribute("href", page.Href);
-                            return page == current ? anchor.Attribute("aria-current", "page") : anchor;
-                        })]).Class("nav-group__pages")).Class("nav-group");
-                    return current is null && !expand ? group : group.Attribute("open", "open");
+                    var heading = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key))).Class(current is null ? className : className + " is-active").Attribute("href", pages[0].Href);
+                    if (!expand) return new Div(heading).Class("nav-group");
+                    return new Div(heading, new Div([.. pages.Select(page =>
+                    {
+                        var anchor = new A(new Span(new Text(page.Key))).Class(page == current ? "nav-link nav-link--sub is-active" : "nav-link nav-link--sub").Attribute("href", page.Href);
+                        return page == current ? anchor.Attribute("aria-current", "page") : anchor;
+                    })]).Class("nav-group__pages")).Class("nav-group");
                 }
 
                 var active = IsActive(link);
