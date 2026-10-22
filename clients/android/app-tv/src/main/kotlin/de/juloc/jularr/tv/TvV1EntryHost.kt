@@ -30,7 +30,9 @@ import kotlinx.coroutines.isActive
 fun TvV1EntryHost(
     settings: TvServerSettings,
     session: TvV1DeviceSession,
-    onAuthenticated: @Composable (String, InstanceCapabilities, () -> Unit) -> Unit = { origin, _, _ ->
+    onAuthenticated: @Composable (
+        String, InstanceCapabilities, () -> Unit, () -> Unit, () -> Unit, () -> Unit
+    ) -> Unit = { origin, _, _, _, _, _ ->
         TvV1AuthenticatedPendingCatalog(origin)
     },
 ) {
@@ -161,6 +163,22 @@ fun TvV1EntryHost(
                 pairing = null
                 capabilities = null
                 phase = TvV1EntryPhase.Pairing
+            },
+            {
+                // Changing profiles rotates the device bearer; reload permissions and
+                // discard the previous profile's cached library/continue data.
+                capabilities = null
+                phase = TvV1EntryPhase.Restoring
+            },
+            {
+                capabilities = null
+                pairing = null
+                phase = TvV1EntryPhase.Pairing
+            },
+            {
+                capabilities = null
+                pairing = null
+                phase = TvV1EntryPhase.Setup
             },
         )
 

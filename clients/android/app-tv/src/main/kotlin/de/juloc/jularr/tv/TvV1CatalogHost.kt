@@ -19,6 +19,8 @@ import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
+import de.juloc.jularr.core.api.profile.HttpTvV1ProfileClient
+import de.juloc.jularr.core.api.profile.TvV1ProfileClient
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientLibrary
 import de.juloc.jularr.core.model.InstanceCapabilities
@@ -37,9 +39,15 @@ fun TvV1CatalogHost(
     capabilities: InstanceCapabilities,
     deviceSession: TvV1DeviceSession,
     onAuthenticationExpired: () -> Unit,
+    onProfileChanged: () -> Unit,
+    onSignedOut: () -> Unit,
+    onChangeServer: () -> Unit,
 ) {
     val catalog: TvCatalogV1Client = remember(serverOrigin, deviceSession) {
         HttpTvCatalogV1Client(serverOrigin, deviceSession.authenticatedTokenStore())
+    }
+    val profileApi: TvV1ProfileClient = remember(serverOrigin, deviceSession) {
+        HttpTvV1ProfileClient(serverOrigin, deviceSession.authenticatedTokenStore())
     }
     val focusMemory = remember(serverOrigin) { TvFocusMemory() }
     var page by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
@@ -47,6 +55,7 @@ fun TvV1CatalogHost(
     var category by remember(serverOrigin) { mutableStateOf(TvContentFilter.ALL) }
     var reload by remember(serverOrigin) { mutableIntStateOf(0) }
     var loading by remember(serverOrigin) { mutableStateOf(false) }
+    var settingsSignOutRequested by remember(serverOrigin) { mutableStateOf(false) }
     var error by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var library by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
     var searchResults by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
@@ -96,11 +105,25 @@ fun TvV1CatalogHost(
     fun back() {
         error = null
         page = when (page) {
+            TvV1CatalogPage.Settings, TvV1CatalogPage.ProfileSelect -> TvV1CatalogPage.Home
             TvV1CatalogPage.Details -> returnPage
             TvV1CatalogPage.MovieEditions -> TvV1CatalogPage.Details
             TvV1CatalogPage.PlaybackPending -> TvV1CatalogPage.Details
             TvV1CatalogPage.Home -> TvV1CatalogPage.Home
             else -> TvV1CatalogPage.Home
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(settingsSignOutRequested) {
+        if (settingsSignOutRequested) {
+            try {
+                profileApi.signOut()
+                onSignedOut()
+            } catch (failure: Exception) {
+                error = failure.message ?: "Die Session konnte nicht abgemeldet werden."
+            } finally {
+                settingsSignOutRequested = false
+            }
         }
     }
 
@@ -123,7 +146,40 @@ fun TvV1CatalogHost(
                     // reading/ebook assets out of this TV-video-only Continue row.
                     continueWatching = catalog.continueWatching().filter { it.mediaAssetTypeId == 1 }
                 }
-                TvV1CatalogPage.Search -> {
+                TvV1CatalogPage.Settings -> Row(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            TvSidebar(
+                selected = TvRoute.Settings,
+                focusMemory = focusMemory,
+                onSelect = { route ->
+                    when (route) {
+                        TvRoute.Home -> page = TvV1CatalogPage.Home
+                        TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
+                        TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
+                        else -> Unit
+                    }
+                },
+            )
+            Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                TvV1SettingsHost(
+                    serverOrigin = serverOrigin,
+                    error = error,
+                    onSwitchProfile = { page = TvV1CatalogPage.ProfileSelect },
+                    onSignOut = {
+                        if (capabilities.hasPermission("session.self.logout")) {
+                            error = null
+                            settingsSignOutRequested = true
+                        } else error = "Abmeldung ist für diese Session nicht freigegeben."
+                    },
+                    onChangeServer = onChangeServer,
+                )
+            }
+        }
+        TvV1CatalogPage.ProfileSelect -> TvV1ProfilesScreen(
+            api = profileApi,
+            onSwitched = onProfileChanged,
+            onBack = ::back,
+        )
+        TvV1CatalogPage.Search -> {
                     require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
                         "Suche ist für dieses Profil nicht freigegeben."
                     }
@@ -168,7 +224,9 @@ fun TvV1CatalogHost(
                         omittedFractionalEpisodes = 0
                     }
                 }
-                TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player, TvV1CatalogPage.MovieEditions -> Unit
+                TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
+                TvV1CatalogPage.MovieEditions, TvV1CatalogPage.Settings,
+                TvV1CatalogPage.ProfileSelect -> Unit
             }
         } catch (cancel: CancellationException) {
             throw cancel
@@ -198,9 +256,8 @@ fun TvV1CatalogHost(
                         when (route) {
                             TvRoute.Home -> page = TvV1CatalogPage.Home
                             TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
-                            TvRoute.Settings, TvRoute.ProfileSelect -> {
-                                error = "Profile und TV-Einstellungen werden im nächsten API-Schritt angebunden."
-                            }
+                            TvRoute.Settings -> page = TvV1CatalogPage.Settings
+                            TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
                             else -> Unit
                         }
                     },
@@ -346,7 +403,9 @@ fun TvV1CatalogHost(
     }
 }
 
-private enum class TvV1CatalogPage { Home, Search, Watchlist, Details, MovieEditions, PlaybackPending, Player }
+private enum class TvV1CatalogPage {
+    Home, Search, Watchlist, Settings, ProfileSelect, Details, MovieEditions, PlaybackPending, Player
+}
 
 /** PageResult<T> has no guaranteed total count: keep requesting until a short page. */
 private suspend fun <T> loadCatalogPages(
