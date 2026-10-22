@@ -24,6 +24,7 @@ import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvPersonV1
 import de.juloc.jularr.core.api.catalog.TvWorkCardV1
 import de.juloc.jularr.core.api.catalog.TvWorkCreditV1
+import de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1
 import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.profile.HttpTvV1ProfileClient
 import de.juloc.jularr.core.api.profile.TvV1ProfileClient
@@ -90,6 +91,8 @@ fun TvV1CatalogHost(
         mutableStateOf<List<de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1>>(emptyList())
     }
     var detailWorkId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
+    var selectedWorkUnitId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
+    var episodeByUnit by remember(serverOrigin) { mutableStateOf<Map<Long, TvWorkEpisodeV1>>(emptyMap()) }
     var detailAssetByUnit by remember(serverOrigin) { mutableStateOf<Map<String, Long?>>(emptyMap()) }
     var playableMovieAssets by remember(serverOrigin) { mutableStateOf<List<TvWorkAvailabilityV1>>(emptyList()) }
     var selectedEpisodeId by remember(serverOrigin) { mutableStateOf<String?>(null) }
@@ -119,6 +122,16 @@ fun TvV1CatalogHost(
         details = null
         error = null
         openPage(TvV1CatalogPage.Details)
+    }
+
+    fun openEpisode(rawId: String) {
+        val unitId = rawId.toLongOrNull()
+        if (unitId == null || !episodeByUnit.containsKey(unitId)) {
+            error = "Diese Folge existiert nicht im aktuellen Work."
+            return
+        }
+        selectedWorkUnitId = unitId
+        openPage(TvV1CatalogPage.Episode)
     }
 
     fun back() {
@@ -209,6 +222,7 @@ fun TvV1CatalogHost(
                         fractionalEpisodes = episodesBySeason.values.flatten().filter { episode ->
                             runCatching { episode.number.intValueExact() }.isFailure
                         }
+                        episodeByUnit = episodesBySeason.values.flatten().associateBy { it.id }
                         detailAssetByUnit = episodesBySeason.values.flatten().associate { episode ->
                             episode.id.toString() to episode.mediaAssetId
                         }
@@ -216,10 +230,12 @@ fun TvV1CatalogHost(
                     } else {
                         // The original TV detail grid is video-only; do not fake video episodes.
                         playableMovieAssets = emptyList()
+                        episodeByUnit = emptyMap()
                         details = null
                         fractionalEpisodes = emptyList()
                     }
                 }
+                TvV1CatalogPage.Episode -> Unit
                 TvV1CatalogPage.Credits -> {
                     val workId = requireNotNull(detailWorkId)
                     credits = catalog.credits(workId)
@@ -399,9 +415,7 @@ fun TvV1CatalogHost(
                             focusMemory = focusMemory,
                             serverOrigin = serverOrigin,
                             requestHeaders = authorization,
-                            onEpisode = { episode ->
-                                playAsset(detailAssetByUnit[episode.id], episode.id)
-                            },
+                            onEpisode = { episode -> openEpisode(episode.id) },
                             onPlayEpisode = { episode ->
                                 playAsset(detailAssetByUnit[episode.id], episode.id)
                             },
@@ -460,6 +474,23 @@ fun TvV1CatalogHost(
                 )
                 else -> TvV1Waiting("Mediendetails werden geladen …")
             }
+        }
+        TvV1CatalogPage.Episode -> {
+            val episode = selectedWorkUnitId?.let(episodeByUnit::get)
+            val work = details
+            if (work == null || episode == null) {
+                TvV1ApiMessage(
+                    "Episodendetails", "Die Folge wurde nicht im aktuellen Work gefunden.",
+                    onRetry = { back() }, onBack = ::back,
+                )
+            } else TvV1EpisodeDetailScreen(
+                work = work,
+                episode = episode,
+                serverOrigin = serverOrigin,
+                requestHeaders = authorization,
+                onPlay = { playAsset(episode.playableMediaAssetId(), episode.id.toString()) },
+                onBack = ::back,
+            )
         }
         TvV1CatalogPage.Credits -> TvV1CreditsScreen(
             title = detailedTitle,
