@@ -47,6 +47,68 @@ class HttpTvV1PlaybackExtrasClient(
         return response.body
     }
 
+    override suspend fun startWithAudioTrack(
+        mediaAssetId: Long,
+        capabilities: de.juloc.jularr.core.api.playback.TvPlaybackV1Capabilities,
+        audioTrack: TvV1PlaybackTrack,
+        quality: Int?,
+    ): de.juloc.jularr.core.api.playback.TvPlaybackV1Plan {
+        require(mediaAssetId > 0) { "Audio selection requires an actual MediaAssetId." }
+        require(audioTrack.isAudio && audioTrack.isSupported && !audioTrack.isExternalSidecar) {
+            "Only a supported embedded audio stream can start a playback session."
+        }
+        val streamIndex = audioTrack.key.removePrefix("s").toIntOrNull()
+        require(streamIndex != null && streamIndex >= 0) { "Invalid server audio stream index." }
+        require(quality == null || quality in 1..4) { "Unsupported playback quality." }
+        val formats = capabilities.containers + capabilities.videoCodecs + capabilities.audioCodecs
+        require(
+            capabilities.containers.size <= 32 &&
+                capabilities.videoCodecs.size <= 32 &&
+                capabilities.audioCodecs.size <= 32 &&
+                formats.all { it.isNotEmpty() && it.length <= 32 }
+        ) { "Playback capability formats exceed the server contract." }
+
+        val payload = JSONObject()
+            .put("containers", JSONArray(capabilities.containers))
+            .put("videoCodecs", JSONArray(capabilities.videoCodecs))
+            .put("audioCodecs", JSONArray(capabilities.audioCodecs))
+            .put("audioStreamIndex", streamIndex)
+            .apply { if (quality != null) put("quality", quality) }
+        val plan = JSONObject(
+            read("POST", "/api/v1/playback/assets/$mediaAssetId/sessions", payload).text(),
+        )
+        val sessionId = plan.getString("playbackSessionId")
+        require(runCatching { java.util.UUID.fromString(sessionId) }.isSuccess) {
+            "Invalid playback session identifier."
+        }
+        val mode = plan.getInt("playbackModeTypeId")
+        require(mode in 1..3) { "Unsupported server playback mode." }
+        val streamUrl = plan.getString("streamUrl")
+        val expected = "/api/v1/playback/sessions/$sessionId/"
+        require(
+            streamUrl == expected + "stream" || streamUrl == expected + "playlist.m3u8"
+        ) { "Untrusted playback URL." }
+        require((mode == 1) == streamUrl.endsWith("/stream")) {
+            "Playback mode and stream path disagree."
+        }
+        val chosenAudio = if (plan.isNull("audioStreamIndex")) null else plan.getInt("audioStreamIndex")
+        require(chosenAudio == streamIndex) { "Server selected a different audio stream." }
+        val resume = plan.getLong("resumePositionMs")
+        require(resume >= 0)
+        val duration = if (plan.isNull("durationMs")) null else plan.getLong("durationMs")
+        require(duration == null || duration >= 0)
+        return de.juloc.jularr.core.api.playback.TvPlaybackV1Plan(
+            playbackSessionId = sessionId,
+            playbackModeTypeId = mode,
+            streamUrl = serverOrigin.resolve(streamUrl).toString(),
+            resumePositionMs = resume,
+            durationMs = duration,
+            audioStreamIndex = chosenAudio,
+            quality = plan.getInt("quality").also { require(it in 1..4) },
+            isReduced = plan.getBoolean("isReduced"),
+        )
+    }
+
     override suspend fun tracks(mediaAssetId: Long): List<TvV1PlaybackTrack> =
         JSONArray(read("GET", TvV1PlaybackExtrasRoutes.tracks(mediaAssetId)).text())
             .toTvExtrasList { tvPlaybackTrack() }
@@ -87,7 +149,7 @@ class HttpTvV1PlaybackExtrasClient(
         limit: Int = 4 * 1024 * 1024,
     ): Answer = withContext(Dispatchers.IO) {
         runInterruptible {
-            check(method == "GET" || method == "PUT")
+            check(method == "GET" || method == "PUT" || method == "POST")
             var answered: Answer? = null
             for (attempt in 0..1) {
                 val sent = tokens.current
