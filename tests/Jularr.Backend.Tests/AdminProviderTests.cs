@@ -137,7 +137,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
             // Every provider is one card with its own switch; the media servers are on their own chip (and their modules are off).
-            var fields = Regex.Matches(html, "id=\"(provider-[a-z0-9-]+)\"").Select(match => match.Groups[1].Value).ToArray();
+            var fields = Regex.Matches(html, "id=\"(provider-(?!settings-)[a-z0-9-]+)\"").Select(match => match.Groups[1].Value).ToArray();
             var registered = (long)(await host.ScalarAsync("SELECT count(*) FROM \"Providers\" WHERE \"Key\" NOT IN ('plex', 'jellyfin', 'emby')"))!;
             Assert.AreEqual(registered, fields.Length);
             Assert.AreEqual(registered, fields.Distinct(StringComparer.Ordinal).Count());
