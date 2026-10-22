@@ -38,6 +38,7 @@ internal fun TvV1SettingsHost(
     onUnauthorized: () -> Unit,
     onSwitchProfile: () -> Unit,
     onOpenStatistics: (() -> Unit)? = null,
+    onOpenSessions: (() -> Unit)? = null,
     onSignOut: () -> Unit,
     onChangeServer: () -> Unit,
 ) {
@@ -161,6 +162,7 @@ internal fun TvV1SettingsHost(
         onChangeServer = onChangeServer,
         onSwitchProfile = onSwitchProfile,
         onOpenStatistics = onOpenStatistics,
+        onOpenSessions = onOpenSessions,
         playbackPreferences = playbackPreferences?.let(TvV1PlaybackPreferencesBridge::display),
         busy = savingPlayback,
         error = playbackError ?: error,

@@ -64,6 +64,7 @@ fun TvProfileScreen(
     onSwitchAccount: (() -> Unit)? = null,
     onSwitchProfile: (() -> Unit)? = null,
     onOpenStatistics: (() -> Unit)? = null,
+    onOpenSessions: (() -> Unit)? = null,
     playbackPreferences: ClientPlaybackPreferences? = null,
     busy: Boolean = false,
     error: String? = null,
@@ -159,6 +160,9 @@ fun TvProfileScreen(
                 }
                 if (onOpenStatistics != null) {
                     item { TvSettingRow("Nutzungsstatistik", null, onClick = onOpenStatistics) }
+                }
+                if (onOpenSessions != null) {
+                    item { TvSettingRow("Aktive Sitzungen", null, onClick = onOpenSessions) }
                 }
                 if (onSwitchAccount != null) {
                     item {

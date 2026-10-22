@@ -6,7 +6,7 @@ package de.juloc.jularr.tv
  * Never conflate WorkId, WorkUnitId or MediaAssetId.
  */
 internal enum class TvV1CatalogPage {
-    Home, Search, Discover, Watchlist, Settings, Statistics, ProfileSelect,
+    Home, Search, Discover, Watchlist, Settings, Statistics, Sessions, ProfileSelect,
     Details, Episode, Credits, Person, MovieEditions, PlaybackPending, Player,
 }
 
@@ -63,6 +63,7 @@ internal object TvV1Navigation {
             TvV1CatalogPage.Episode, TvV1CatalogPage.Credits -> TvV1CatalogPage.Details
             TvV1CatalogPage.Person -> TvV1CatalogPage.Credits
             TvV1CatalogPage.Statistics -> TvV1CatalogPage.Settings
+            TvV1CatalogPage.Sessions -> TvV1CatalogPage.Settings
             TvV1CatalogPage.Details, TvV1CatalogPage.ProfileSelect,
             TvV1CatalogPage.Watchlist, TvV1CatalogPage.Settings -> TvV1CatalogPage.Home
         }

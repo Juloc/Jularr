@@ -276,7 +276,7 @@ fun TvV1CatalogHost(
                 TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
                 TvV1CatalogPage.MovieEditions, TvV1CatalogPage.Settings,
                 TvV1CatalogPage.ProfileSelect, TvV1CatalogPage.Discover,
-                TvV1CatalogPage.Statistics -> Unit
+                TvV1CatalogPage.Statistics, TvV1CatalogPage.Sessions -> Unit
             }
         } catch (cancel: CancellationException) {
             throw cancel
@@ -378,6 +378,9 @@ fun TvV1CatalogHost(
                     onOpenStatistics = if (capabilities.hasModule("Statistics") &&
                         capabilities.hasPermission("profile.media.read")
                     ) {{ openPage(TvV1CatalogPage.Statistics) }} else null,
+                    onOpenSessions = if (capabilities.hasPermission("session.self.read")) {
+                        { openPage(TvV1CatalogPage.Sessions) }
+                    } else null,
                     onSignOut = {
                         if (capabilities.hasPermission("session.self.logout")) {
                             error = null
@@ -388,6 +391,11 @@ fun TvV1CatalogHost(
                 )
             }
         }
+        TvV1CatalogPage.Sessions -> TvV1SessionsScreen(
+            api = profileApi,
+            onUnauthorized = onAuthenticationExpired,
+            onBack = ::back,
+        )
         TvV1CatalogPage.Statistics -> TvV1StatisticsScreen(
             api = legacy,
             onOpenWork = { id -> openWork(id.toString()) },
