@@ -1,0 +1,33 @@
+name: Install the test tools
+description: >-
+  One apt run for everything a shard needs: the PostgreSQL 18 client (pg_dump matches the test
+  database major; backups are part of the tests) and, when asked, FFmpeg and libjxl's cjxl.
+
+inputs:
+  ffmpeg:
+    description: Install FFmpeg
+    default: 'false'
+  cjxl:
+    description: Install cjxl (libjxl-tools)
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Install packages
+      shell: bash
+      env:
+        WITH_FFMPEG: ${{ inputs.ffmpeg }}
+        WITH_CJXL: ${{ inputs.cjxl }}
+      run: |
+        set -euo pipefail
+        sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+        curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "${VERSION_CODENAME}")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+        packages=(postgresql-client-18)
+        if [[ "${WITH_FFMPEG}" == "true" ]]; then packages+=(ffmpeg); fi
+        if [[ "${WITH_CJXL}" == "true" ]]; then packages+=(libjxl-tools); fi
+        sudo apt-get update -qq
+        sudo apt-get install -qq --yes --no-install-recommends "${packages[@]}"
+        echo "/usr/lib/postgresql/18/bin" >> "${GITHUB_PATH}"
+        /usr/lib/postgresql/18/bin/pg_dump --version

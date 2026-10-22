@@ -1,0 +1,24 @@
+name: Restore the shared build
+description: >-
+  Unpacks the workspace that the build job compiled once (sources, bin/obj, compiled frontend
+  assets) so a test shard runs `dotnet test --no-build` without compiling again.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.0.x
+    - uses: actions/cache/restore@v6
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
+    - uses: actions/download-artifact@v8
+      with:
+        name: jularr-build
+        path: ${{ runner.temp }}/jularr-build
+    - name: Unpack the build into the workspace
+      shell: bash
+      run: tar -xzf "${RUNNER_TEMP}/jularr-build/jularr-build.tgz" -C "${GITHUB_WORKSPACE}"

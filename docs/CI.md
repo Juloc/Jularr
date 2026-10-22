@@ -1,18 +1,70 @@
 # clean-start CI gates
 
 The ordinary PR gate is deliberately bounded. The full test suite is retained,
-not deleted. The current baseline timings are recorded in GitHub Actions'
-`backend-test-timings` / `e2e-test-timings-*` artifacts.
+not deleted. Per-test timings are kept in the `timings-*` artifacts of every run
+and, as class totals, in [`tests/ci-durations.json`](../tests/ci-durations.json).
 
 | Workflow | PRs | After merge into `clean-start` | Purpose |
 | --- | --- | --- | --- |
-| `Backend / test` | Always reported; skips builds on docs-only PRs | No | Build all backend test sources; base smoke and affected module tests selected from PR changes |
+| `Backend / prepare` + `backend (n/2)` + `test` | Always reported (`test` is the required check); skips builds on docs-only PRs | No | Build once, smoke methods, then the affected module tests selected from PR changes in two balanced shards |
 | `Frontend / razor-and-ui-resources` | When frontend/backend UI files change | Yes, matching paths | Frontend typecheck, JS tests, localization, Razor build and publish verification |
 | `Browser Smoke / smoke` | Frontend, E2E tests or schema changed | No | Fresh owner setup and sign-in in real Chromium |
 | `Image / minimal-compose` | Docker/Compose/packaging or database schema changed | Yes, including source changes | Build the shipped container and start the supplied Compose stack |
-| `Backend Full / test` and `e2e (...)` | Only when explicitly opted in | Every push | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
+| `Backend Full` (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) | Only when explicitly opted in | Every push | Entire backend and browser suite, real FFmpeg, JPEG XL and backup-tool regression |
 
 The `Release` workflow runs only for a `v*` tag (or by hand as a dry run) and is described in [RELEASE.md](RELEASE.md).
+
+## Backend Full: fast and fail-fast
+
+No job is meant to run longer than about 10 minutes. The run is a graph, not one long job:
+
+```
+smoke (build once + critical tests + frontend tests, ~5 min)
+  -> 8 shards in ONE matrix: backend 1/4..4/4 (two test processes each) and e2e 1/4..4/4
+  -> gate
+```
+
+- `smoke` compiles both test projects once, runs startup/schema/migration/session/setup-gate
+  tests (`ci-select-backend-tests.py --boot-filter`) and `npm test`, then publishes the compiled
+  workspace as the `jularr-build` artifact (about 220 MB, 1 day). Shards only unpack it
+  (`.github/actions/restore-build`) and run `dotnet test --no-build`; none compiles.
+- The shards are one matrix with `fail-fast: true`: the first failing shard cancels all others,
+  and a newer push to the same branch or PR cancels the whole older run (`concurrency`).
+- `gate` needs `smoke` and all shards and is the one conclusion of the run (the release guard
+  reads the workflow conclusion of `Backend Full`; it is not required on every PR).
+- Runner capacity: at most 8 jobs run at the same time (1 smoke, then 8 shards, then the
+  light `gate`); every shard has its own PostgreSQL service container.
+- Shards are made by `scripts/ci-shard-tests.py`: every `[TestClass]` (found in the sources) is
+  packed longest-first into the lightest shard by its measured duration in
+  `tests/ci-durations.json`. A class with no measurement weighs as the median class. Changing a
+  shard count means editing that kind's matrix entries (`1/N` ... `N/N`); the self-check in `smoke`
+  fails when a list is incomplete. Backend shard 4 also runs the three real-tool tests (FFmpeg,
+  cjxl) and is planned lighter (`--reserve 4=150`).
+- The PR gate (`Backend`) uses the same build and shard script: `prepare` runs the smoke methods and the
+  selection, `backend (1/2)` and `backend (2/2)` split the selected classes, `test` is the required check.
+
+Which shard failed: the job name says `backend (3/4)` or `e2e (2/4)`; the red lines are
+prefixed `[lane1]` / `[lane2]` for the two test processes of a backend shard; browser evidence
+is in the `e2e-evidence-*` artifact. Timings of a run: `gh run view <id> --json jobs --jq '.jobs[] | [.name,.startedAt,.completedAt] | @tsv'`.
+
+Run one shard locally (needs the test PostgreSQL, see `.agent/project.yaml`):
+
+```
+dotnet build tests/Jularr.Backend.Tests -c Release
+dotnet test tests/Jularr.Backend.Tests -c Release --no-build \
+  --filter "$(python3 scripts/ci-shard-tests.py plan --kind backend --shard 2/4)"
+python3 scripts/ci-shard-tests.py table --kind backend --shards 4 --lanes 2   # expected balance
+```
+
+Refresh the durations after a fully green run (class totals; renamed or new classes are
+picked up, unknown classes weigh as the median until then):
+
+```
+gh run download <run-id> -p "timings-*" -D timings
+python3 scripts/ci-shard-tests.py refresh timings
+```
+
+Do this when shards drift apart (compare the job times) or after many new tests; commit the file.
 
 ## Full validation before a release
 
@@ -23,7 +75,7 @@ Investigate failures; do not mark a release validated from PR smoke tests
 alone. New tests are compiled by Fast CI, but not all executed until Full CI.
 
 For PR-specific integration validation, add the `ci/full` label to the PR,
-or put `[full-ci]` in its title. `Backend Full` will run both heavy jobs on
+or put `[full-ci]` in its title. `Backend Full` will run the full graph on
 that PR. Removing the label/title marker returns later PR revisions to fast
 checks. The title marker works without creating a repository label. The
 `workflow_dispatch` entry is additionally available once the workflow is
@@ -31,10 +83,11 @@ registered on the default branch. Keep focused test evidence in the PR.
 
 ## Branch protection and status checks
 
-- Keep `Backend / test` as the stable required PR check. Path classification is
-  a step in that same job: errors fail the required check instead of skipping it.
+- Keep `Backend / test` as the stable required PR check. It is the final job that needs
+  `prepare` and the shards (a skipped shard job is fine when no test class was selected);
+  path classification is a step in `prepare`: errors fail the required check instead of skipping it.
 - `Authorship / authorship` remains unchanged.
-- Do not require old `Backend / e2e (...)` checks on *every* PR.
+- Do not require `Backend Full` checks (`smoke`, `backend (n/4)`, `e2e (n/4)`, `gate`) on *every* PR.
   They are only emitted for opted-in Full CI.
 - `Frontend`, `Browser Smoke` and `Image` are path-filtered workflows;
   do not require their individual contexts unconditionally for docs-only PRs.
@@ -57,7 +110,7 @@ once that change is explicitly approved.
 - Targets, not guarantees: backend PR smoke and targeted module suites
   approximately 2–5 minutes on ordinary changes; browser smoke 3–5 minutes.
   Larger changes can take longer; the package smoke is conditional.
-- The full suite can take 20–30+ minutes and never blocks normal PR feedback.
+- The full suite takes about 15 minutes in total (smoke, then the longest shard) and never blocks normal PR feedback.
   When several agents merge changes rapidly, newer `clean-start` pushes cancel
   obsolete branch validation runs; the newest branch revision still receives
   Full CI, Frontend and container checks. Manual Full CI is not cancelled.

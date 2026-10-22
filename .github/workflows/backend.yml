@@ -1,7 +1,12 @@
 name: Backend Full
 
 # Full integration + browser regression after merges, manually, or on PRs
-# marked ci/full or [full-ci]. Ordinary PRs skip both expensive jobs.
+# marked ci/full or [full-ci]. Ordinary PRs skip it.
+#
+# Job graph (details in docs/CI.md):
+#   smoke  ->  shards (4 backend + 4 browser, run in parallel, fail-fast)  ->  gate
+# `smoke` compiles everything once, runs the quick critical checks and publishes the build;
+# a shard only unpacks it. No job is meant to run longer than about 10 minutes.
 on:
   push:
     branches: [clean-start]
@@ -17,23 +22,29 @@ on:
       - '**/*.targets'
       - 'NuGet.Config'
       - '.github/workflows/backend.yml'
+      - '.github/actions/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Newer clean-start commits supersede older full runs to avoid runner saturation.
-# A manual release verification run is never cancelled by this workflow.
+# Newer commits supersede older runs of the same branch or PR (a failing or obsolete run
+# stops using runners). A manual release verification run is never cancelled by this workflow.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
+env:
+  JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
+
 jobs:
-  test:
+  # Build once, fail fast: compile, quick critical tests (startup, schema, migrations, sessions,
+  # first-owner setup) and the frontend unit tests. Heavy shards start only when this is green.
+  smoke:
+    name: smoke
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]')
     runs-on: ubuntu-latest
-    # Full integration coverage currently takes nearly 30 minutes.
-    timeout-minutes: 40
+    timeout-minutes: 12
     services:
       postgres:
         image: postgres:18
@@ -48,8 +59,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
     steps:
       - uses: actions/checkout@v7
         with:
@@ -68,178 +77,177 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: src/Jularr.Frontend/package-lock.json
-      - name: Compile assets for Razor integration tests
+      - name: Verify the CI scripts (test shards and selection)
+        run: |
+          python3 scripts/ci-shard-tests.py --self-test
+          python3 scripts/ci-select-backend-tests.py --self-test
+      - name: Compile assets for the Razor and browser tests
         working-directory: src/Jularr.Frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
-      - name: Install PostgreSQL 18 backup client for upgrade tests
+      - name: Frontend unit tests
+        working-directory: src/Jularr.Frontend
+        run: npm test
+      # The only compile of the run: the shards use these outputs.
+      - name: Compile the backend and browser test projects once
         run: |
-          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo ${VERSION_CODENAME})-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends postgresql-client-18
-          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
-          /usr/lib/postgresql/18/bin/pg_dump --version
-      # The assembly intentionally disables in-process parallelism.
-      # Isolated dotnet test processes can use independent fixture state and test databases.
-      - name: Compile backend tests once
-        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
-      - name: Run two independent backend test partitions
+          dotnet build tests/Jularr.Backend.Tests --configuration Release
+          dotnet build tests/Jularr.E2E.Tests --configuration Release
+      - name: Critical backend tests (startup, schema, migrations, sessions, setup gate)
+        run: |
+          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+            --filter "$(python3 scripts/ci-select-backend-tests.py --boot-filter)" \
+            --logger "trx;LogFileName=backend-smoke.trx" --results-directory TestResults/ci/smoke
+      - uses: ./.github/actions/pack-build
+      # Not named timings-*: these are partial classes and must not feed tests/ci-durations.json.
+      - name: Keep smoke test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-results
+          path: TestResults/ci/smoke/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Balanced shards by measured class duration (tests/ci-durations.json, scripts/ci-shard-tests.py).
+  # One matrix for backend and browser shards: when any shard fails, GitHub cancels all others.
+  # Backend shards run two test processes (lanes) each; browser shards run one.
+  # Change a shard count by editing the matrix entries of that kind (every kind lists 1/N .. N/N).
+  shards:
+    name: ${{ matrix.kind }} (${{ matrix.shard }})
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { kind: backend, shard: 1/4 }
+          - { kind: backend, shard: 2/4 }
+          - { kind: backend, shard: 3/4 }
+          # Also runs the real-tool tests (FFmpeg, cjxl), about 75 s: shard 4 is planned 150 lane-seconds lighter.
+          - { kind: backend, shard: 4/4, tools: true }
+          - { kind: e2e, shard: 1/4 }
+          - { kind: e2e, shard: 2/4 }
+          - { kind: e2e, shard: 3/4 }
+          - { kind: e2e, shard: 4/4 }
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jularr_test
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: jularr_test_admin
+        ports:
+          - 15433:5432
+        options: >-
+          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SHARD: ${{ matrix.shard }}
+    steps:
+      # Only the local actions are checked out; the build artifact brings the compiled workspace.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/restore-build
+      - uses: ./.github/actions/install-tools
+        with:
+          ffmpeg: ${{ matrix.kind == 'e2e' || matrix.tools == true }}
+          cjxl: ${{ matrix.tools == true }}
+      - name: Cache the Playwright browser
+        if: matrix.kind == 'e2e'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/Jularr.E2E.Tests/Jularr.E2E.Tests.csproj') }}
+      - name: Install Chromium and its system libraries
+        if: matrix.kind == 'e2e'
+        run: pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      # The assembly disables in-process parallelism; lanes are separate dotnet test processes with
+      # their own fixture state and databases. TRX files record the durations for tests/ci-durations.json.
+      - name: Run the backend shard
+        if: matrix.kind == 'backend'
         shell: bash
         run: |
           set -uo pipefail
-          # These heavier integration classes form one partition. Every other (including
-          # any newly added) test belongs to the complementary partition.
-          classes=(AcquisitionTests BookTests MangaTests MusicTests ReadingTests DiscoverTests GameTests
-            PlaybackTests StorageTests BackupTests TakeoverTests UsenetTests DeviceTests
-            NotificationTests LibraryTests SqlContextTests)
-          include=""
-          exclude=""
-          for class in "${classes[@]}"; do
-            pattern="Jularr.Backend.Tests.${class}."
-            include="${include:+${include}|}FullyQualifiedName~${pattern}"
-            exclude="${exclude:+${exclude}&}FullyQualifiedName!~${pattern}"
+          mapfile -t lanes < <(python3 scripts/ci-shard-tests.py plan --kind backend --shard "${SHARD}" --lanes 2 --reserve 4=150)
+          pids=()
+          for index in "${!lanes[@]}"; do
+            [[ -n "${lanes[$index]}" ]] || continue
+            lane=$((index + 1))
+            (set -o pipefail
+             dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+               --filter "${lanes[$index]}" --logger "trx;LogFileName=backend-lane${lane}.trx" \
+               --results-directory TestResults/ci/backend 2>&1 | sed -u "s/^/[lane${lane}] /") &
+            pids+=($!)
           done
-
-          (set -o pipefail
-           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
-             --filter "${include}" --logger "trx;LogFileName=backend-core.trx" \
-             --results-directory TestResults/ci/backend 2>&1 | sed -u 's/^/[core] /') &
-          core_pid=$!
-          (set -o pipefail
-           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
-             --filter "${exclude}" --logger "trx;LogFileName=backend-other.trx" \
-             --results-directory TestResults/ci/backend 2>&1 | sed -u 's/^/[other] /') &
-          other_pid=$!
-
-          wait "${core_pid}"
-          core_result=$?
-          wait "${other_pid}"
-          other_result=$?
-          if [ "${core_result}" -ne 0 ] || [ "${other_result}" -ne 0 ]; then
-            echo "::error::Backend partition failure: core=${core_result}, other=${other_result}"
+          failed=0
+          for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
+          if [[ "${failed}" -ne 0 ]]; then
+            echo "::error::Backend shard ${SHARD}: a test lane failed (lines are prefixed [lane1] / [lane2])."
             exit 1
           fi
-      - name: Summarize slowest backend tests
-        if: always()
-        run: python3 scripts/ci-test-timings.py TestResults/ci/backend
-      - name: Keep backend timing report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: backend-test-timings
-          path: TestResults/ci/backend/*.trx
-          if-no-files-found: ignore
-          retention-days: 7
-
-  # A fresh installation in a real browser (Playwright, Chromium).
-  e2e:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci/full') || contains(github.event.pull_request.title, '[full-ci]')
-    name: e2e (${{ matrix.shard }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Three runners share the browser tests by measured class durations; every class not named belongs to "rest".
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shard: automatic
-            filter: FullyQualifiedName~Jularr.E2E.Tests.AutomaticPathTests.
-          - shard: paths
-            filter: FullyQualifiedName~Jularr.E2E.Tests.ReadingPathTests.|FullyQualifiedName~Jularr.E2E.Tests.FailureTests.|FullyQualifiedName~Jularr.E2E.Tests.LibraryChangesTests.|FullyQualifiedName~Jularr.E2E.Tests.MusicPathTests.
-          - shard: rest
-            filter: FullyQualifiedName!~Jularr.E2E.Tests.AutomaticPathTests.&FullyQualifiedName!~Jularr.E2E.Tests.ReadingPathTests.&FullyQualifiedName!~Jularr.E2E.Tests.FailureTests.&FullyQualifiedName!~Jularr.E2E.Tests.LibraryChangesTests.&FullyQualifiedName!~Jularr.E2E.Tests.MusicPathTests.
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: jularr_test
-          POSTGRES_PASSWORD: isolated-test-password
-          POSTGRES_DB: jularr_test_admin
-        ports:
-          - 15433:5432
-        options: >-
-          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: src/Jularr.Frontend/package-lock.json
-      - name: Compile assets
-        working-directory: src/Jularr.Frontend
+      - name: Real-tool tests (FFmpeg HLS, JPEG XL covers)
+        if: matrix.kind == 'backend' && matrix.tools == true
         run: |
-          npm ci --no-audit --no-fund
-          npm run build
-      - run: dotnet build tests/Jularr.E2E.Tests --configuration Release
-      - name: Install Chromium and its system libraries
-        run: pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
-      # Test films are made and played with FFmpeg, as in a real installation.
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
-      # The cover cache encodes JPEG XL with libjxl's cjxl, as the image does.
-      - name: Install cjxl and test the JPEG XL cover cache
-        if: matrix.shard == 'rest'
-        run: |
-          sudo apt-get install --yes --no-install-recommends libjxl-tools
           cjxl --version
-          dotnet test tests/Jularr.Backend.Tests --configuration Release --filter "FullyQualifiedName~JxlEncoder_WithCjxl|FullyQualifiedName~Cover_WithFfmpegAndCjxl" --logger "trx;LogFileName=cjxl.trx" --results-directory TestResults/ci/e2e
+          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+            --filter "FullyQualifiedName~JxlEncoder_WithCjxl|FullyQualifiedName~Cover_WithFfmpegAndCjxl|FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls" \
+            --logger "trx;LogFileName=real-tools.trx" --results-directory TestResults/ci/tools
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
           JULARR_TEST_CJXL: /usr/bin/cjxl
-      - name: Direct SMB HLS regression (real FFmpeg)
-        if: matrix.shard == 'rest'
-        run: dotnet test tests/Jularr.Backend.Tests --configuration Release --filter FullyQualifiedName~Inputs_DirectShare_RealFfmpegTranscodesAndSeeksHls --logger "trx;LogFileName=ffmpeg.trx" --results-directory TestResults/ci/e2e
-        env:
-          JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
-      # The test DB is PostgreSQL 18; the runner's default pg_dump may be older.
-      # Backups are part of the E2E path, so match the client major instead of hiding failures.
-      - name: Install PostgreSQL 18 backup client
+      - name: Run the browser shard
+        if: matrix.kind == 'e2e'
         run: |
-          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo ${VERSION_CODENAME})-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends postgresql-client-18
-          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
-          /usr/lib/postgresql/18/bin/pg_dump --version
-      - name: Run browser E2E tests and record per-test durations
-        run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build --filter "${{ matrix.filter }}" --logger "trx;LogFileName=e2e-${{ matrix.shard }}.trx" --results-directory TestResults/ci/e2e
+          dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
+            --filter "$(python3 scripts/ci-shard-tests.py plan --kind e2e --shard "${SHARD}")" \
+            --logger "trx;LogFileName=e2e-shard.trx" --results-directory TestResults/ci/e2e
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
-      - name: Summarize slowest E2E tests
+
+      - name: Summarize slowest tests
         if: always()
-        run: python3 scripts/ci-test-timings.py TestResults/ci/e2e
-      - name: Keep E2E timing report
+        run: python3 scripts/ci-test-timings.py TestResults/ci/${{ matrix.kind }}
+      - name: Keep timing report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-test-timings-${{ matrix.shard }}
-          path: TestResults/ci/e2e/*.trx
+          name: timings-${{ matrix.kind }}-${{ strategy.job-index }}
+          path: TestResults/ci/${{ matrix.kind }}/*.trx
           if-no-files-found: ignore
           retention-days: 7
-      - name: Keep the evidence of a failed run
-        if: failure()
+      - name: Keep the evidence of a failed browser run
+        if: failure() && matrix.kind == 'e2e'
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-evidence-${{ matrix.shard }}
+          name: e2e-evidence-${{ strategy.job-index }}
           path: TestResults/e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # One clear conclusion for the whole run (and for branch protection, if ever required):
+  # green only when smoke and every shard passed. Skipped entirely when the run was not requested.
+  gate:
+    name: gate
+    needs: [smoke, shards]
+    if: ${{ !cancelled() && needs.smoke.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require smoke and all shards
+        env:
+          SMOKE: ${{ needs.smoke.result }}
+          SHARDS: ${{ needs.shards.result }}
+        run: |
+          echo "smoke: ${SMOKE}, shards: ${SHARDS}"
+          if [[ "${SMOKE}" != "success" || "${SHARDS}" != "success" ]]; then
+            echo "::error::Backend Full did not pass (smoke ${SMOKE}, shards ${SHARDS}). Open the failed shard job: its name says backend or e2e and the shard number."
+            exit 1
+          fi
