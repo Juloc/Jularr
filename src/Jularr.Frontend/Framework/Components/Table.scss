@@ -59,6 +59,19 @@
     td .ui-form--inline { gap: 8px; }
 }
 
+// A table of figures inside a card: head and cells as in the mockups' data table, the card around it is the section's.
+.page-table-wrap--embedded {
+    border: 0;
+    border-radius: 16px;
+    background: transparent;
+    box-shadow: none;
+}
+
+.page-table--dense {
+    th { padding: 12px 15px; }
+    td { height: auto; padding: 14px 15px; }
+}
+
 // A table inside a page's tab (tracks, versions): rows as high as their content, the mockup's 10px/16px cells.
 .page-table-wrap--compact .page-table {
     th { padding: 10px 16px; }
