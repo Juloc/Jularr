@@ -77,6 +77,30 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
         }
     }
 
+    // A folder the installation offers becomes a connection (and is looked at) before its folders are listed.
+    async function connect(link: HTMLAnchorElement): Promise<void> {
+        const token = picker.closest('form')?.querySelector<HTMLInputElement>('input[name="__RequestVerificationToken"]')?.value ?? '';
+        const headers = { 'Content-Type': 'application/json', RequestVerificationToken: token };
+        content!.inert = true;
+        try {
+            const created = await fetch('/api/v1/admin/storage/mounts', { method: 'POST', credentials: 'same-origin', headers,
+                body: JSON.stringify({ name: link.dataset.folderConnectName, storageProtocolTypeId: 3, host: null, sharePath: link.dataset.folderConnect, protocolVersion: null,
+                    username: null, domain: null, isReadOnly: false, password: null }) });
+            if (!created.ok) throw new Error('Connecting failed.');
+            const id = String((await created.json()).id);
+            await fetch(`/api/v1/admin/storage/mounts/${id}/check`, { method: 'POST', credentials: 'same-origin', headers, body: '{}' });
+            const url = new URL(link.href, location.href);
+            url.searchParams.set('storageMountId', id);
+            content!.inert = false;
+            await load(url.href);
+        } catch {
+            content!.inert = false;
+            status!.hidden = false;
+            status!.setAttribute('role', 'alert');
+            status!.textContent = picker.dataset.folderError ?? '';
+        }
+    }
+
     // Opening and folder navigation preserve the surrounding form draft.
     opener.addEventListener('click', event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -88,6 +112,12 @@ onPage(import.meta.url, () => document.querySelectorAll<HTMLElement>('[data-fold
         if (!(event.target instanceof Element)) return;
         if (event.target.closest('[data-folder-close]')) {
             dialog.close();
+            return;
+        }
+        const offered = event.target.closest<HTMLAnchorElement>('[data-folder-connect]');
+        if (offered) {
+            event.preventDefault();
+            void connect(offered);
             return;
         }
         const link = event.target.closest<HTMLAnchorElement>('[data-folder-navigate]');

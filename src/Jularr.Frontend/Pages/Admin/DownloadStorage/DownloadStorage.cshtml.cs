@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace Jularr.Frontend.Pages.Admin.DownloadStorage
 {
     public sealed class DownloadStorageModel(ReadDownloadStorageSettingsV1 read, SaveDownloadStorageSettingsV1 save, ReadStorageMountsV1 mounts,
-        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, ReadStorageLocalPathsV1 localPaths, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private readonly Dictionary<DownloadStorageArea, DownloadStorageSettingsV1> _settings = [];
         private readonly Dictionary<long, StorageMountDetailsV1> _mounts = [];
@@ -73,7 +73,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
                 ["storageMountId"] = storageMountId?.ToString(CultureInfo.InvariantCulture)
             });
             var label = storageMountId is { } id && _mounts.TryGetValue(id, out var connection) ? connection.Name + " /" + path + Free(connection) : texts["downloadStorage.unset"];
-            return new FolderPicker(browse, path, field, browse, storageMountFieldName: mountField, choosesStorage: true, selectedLabel: label);
+            return new FolderPicker(assets, browse, path, field, browse, storageMountFieldName: mountField, choosesStorage: true, selectedLabel: label);
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -97,7 +97,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
 
         public async Task<IActionResult> OnGetFoldersAsync(long? storageMountId, string? path, string? afterName, int mountPage = 1)
         {
-            var content = await StorageBrowser.FragmentAsync(Address("Folders"), storageMountId, path, afterName, mountPage, true, mounts, mount, directories, texts, HttpContext.RequestAborted);
+            var content = await StorageBrowser.FragmentAsync(Address("Folders"), storageMountId, path, afterName, mountPage, true, mounts, mount, directories, localPaths, texts, HttpContext.RequestAborted);
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
             content.WriteTo(writer, HtmlEncoder.Default, texts);
             Response.Headers.CacheControl = "no-store";
