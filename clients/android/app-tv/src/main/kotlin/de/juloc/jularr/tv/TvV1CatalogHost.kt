@@ -18,6 +18,7 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
+import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientLibrary
 import de.juloc.jularr.core.model.InstanceCapabilities
@@ -56,6 +57,7 @@ fun TvV1CatalogHost(
     var omittedFractionalEpisodes by remember(serverOrigin) { mutableIntStateOf(0) }
     var detailWorkId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
     var detailAssetByUnit by remember(serverOrigin) { mutableStateOf<Map<String, Long?>>(emptyMap()) }
+    var playableMovieAssets by remember(serverOrigin) { mutableStateOf<List<TvWorkAvailabilityV1>>(emptyList()) }
     var selectedEpisodeId by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var selectedAssetId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
     var returnPage by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
@@ -95,6 +97,7 @@ fun TvV1CatalogHost(
         error = null
         page = when (page) {
             TvV1CatalogPage.Details -> returnPage
+            TvV1CatalogPage.MovieEditions -> TvV1CatalogPage.Details
             TvV1CatalogPage.PlaybackPending -> TvV1CatalogPage.Details
             TvV1CatalogPage.Home -> TvV1CatalogPage.Home
             else -> TvV1CatalogPage.Home
@@ -145,6 +148,10 @@ fun TvV1CatalogHost(
                     val work = catalog.work(workId)
                     detailedTitle = work.canonicalTitle
                     if (TvV1LegacyUiModels.isVideo(work.mediaTypeId)) {
+                        playableMovieAssets = if (work.mediaTypeId == TvV1LegacyUiModels.MOVIE) {
+                            loadCatalogPages { n -> catalog.availability(workId, page = n, pageSize = 100) }
+                                .filter { it.playableMediaAssetId() != null }
+                        } else emptyList()
                         val seasons = catalog.seasons(workId)
                         val episodesBySeason = seasons.associate { season ->
                             season.seasonNumber to catalog.episodes(workId, season.seasonNumber)
@@ -156,11 +163,12 @@ fun TvV1CatalogHost(
                         details = TvV1LegacyUiModels.detail(work, seasons, episodesBySeason)
                     } else {
                         // The original TV detail grid is video-only; do not fake video episodes.
+                        playableMovieAssets = emptyList()
                         details = null
                         omittedFractionalEpisodes = 0
                     }
                 }
-                TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player -> Unit
+                TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player, TvV1CatalogPage.MovieEditions -> Unit
             }
         } catch (cancel: CancellationException) {
             throw cancel
@@ -271,6 +279,15 @@ fun TvV1CatalogHost(
                                 playAsset(detailAssetByUnit[episode.id], episode.id)
                             },
                             onBack = ::back,
+                            onPlayMovie = if (playableMovieAssets.isNotEmpty()) {
+                                {
+                                    if (playableMovieAssets.size == 1) {
+                                        playAsset(playableMovieAssets.single().id)
+                                    } else {
+                                        page = TvV1CatalogPage.MovieEditions
+                                    }
+                                }
+                            } else null,
                         )
                         if (omittedFractionalEpisodes > 0) {
                             Text(
@@ -288,6 +305,23 @@ fun TvV1CatalogHost(
                 )
                 else -> TvV1Waiting("Mediendetails werden geladen …")
             }
+        }
+        TvV1CatalogPage.MovieEditions -> TvCenteredPanel(
+            title = "Filmversion wählen",
+            description = detailedTitle,
+        ) {
+            playableMovieAssets.forEach { asset ->
+                Button(onClick = { playAsset(asset.id) }) {
+                    Text(
+                        listOfNotNull(
+                            asset.height?.let { "${it}p" },
+                            asset.audioLanguages.takeIf { it.isNotEmpty() }?.joinToString(", "),
+                            asset.sizeBytes.takeIf { it > 0 }?.let { "${it / 1_000_000} MB" },
+                        ).joinToString(" · ").ifEmpty { "MediaAsset ${asset.id}" },
+                    )
+                }
+            }
+            Button(onClick = ::back) { Text("Zurück") }
         }
         TvV1CatalogPage.Player -> TvV1PlaybackHost(
             origin = serverOrigin,
@@ -312,7 +346,7 @@ fun TvV1CatalogHost(
     }
 }
 
-private enum class TvV1CatalogPage { Home, Search, Watchlist, Details, PlaybackPending, Player }
+private enum class TvV1CatalogPage { Home, Search, Watchlist, Details, MovieEditions, PlaybackPending, Player }
 
 /** PageResult<T> has no guaranteed total count: keep requesting until a short page. */
 private suspend fun <T> loadCatalogPages(
