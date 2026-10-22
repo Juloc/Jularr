@@ -104,7 +104,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/Details/8003");
             await Assertions.Expect(page.Locator(".details-tabs .navigation-tabs__link", new() { HasText = "Related works" })).ToHaveCountAsync(0);
             await Evidence.SaveAsync(page, "relations-empty-work");
-            await page.GetByRole(AriaRole.Button, new() { Name = "More" }).ClickAsync();
+            await page.Locator("summary[aria-label='More']").ClickAsync();
             await page.GetByRole(AriaRole.Button, new() { Name = "Add relation" }).ClickAsync();
             await Assertions.Expect(dialog).ToBeVisibleAsync();
             await dialog.Locator("select").SelectOptionAsync(new SelectOptionValue { Label = "Sequel" });
