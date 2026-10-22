@@ -38,24 +38,16 @@ namespace Jularr.Frontend.Pages.Admin.Speech
             page.Asset("Pages/Admin/Speech/Speech.entry.scss");
             page.Asset("Pages/Admin/Speech/Speech.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
-            page.Asset("Framework/Components/FilterDialog.entry.ts");
-            page.Content.Add(new ListToolbar(new A(new Text("admin.instance.modules")).Attribute("href", "/Admin/Instance/Modules"),
+            page.Asset("Framework/Components/ChoiceSelect.entry.ts");
+            page.Content.Add(new Div(new ListToolbar(new A(new Text("admin.instance.modules")).Attribute("href", "/Admin/Instance/Modules"),
                 new SearchBox(Home, "speech.models.search", Query, keep: Filters(), icon: new Icon("search", assets, 18)),
-                new Button(new Icon("filter", assets, 18), new Text("speech.models.filters")).Attribute("data-filter-open", "speech-filters")));
-            page.Content.Add(new FilterDialog(assets, "speech-filters", "speech.models.filters", Home,
-                new Dictionary<string, string> { ["q"] = Query ?? "" }, [
-                    new(new Text("speech.language"), [new("language", "", new Text("speech.models.all"), Language is null, true),
-                        .. _languages.Select(language => new FilterChoice("language", language, new ValueText(CultureInfo.GetCultureInfo(language).DisplayName + " · " + language), language == Language, true))]),
-                    new(new Text("speech.models.gender"), [new("gender", "", new Text("speech.models.all"), Gender is null, true),
-                        .. Enum.GetValues<SpeechVoiceGenderType>().Select(gender => new FilterChoice("gender", ((byte)gender).ToString(CultureInfo.InvariantCulture), new Text(GenderKey(gender)), Gender == gender, true))]),
-                    new(new Text("speech.models.installation"), [new("isInstalled", "", new Text("speech.models.all"), IsInstalled is null, true),
-                        new("isInstalled", "true", new Text("speech.models.installed"), IsInstalled == true, true),
-                        new("isInstalled", "false", new Text("speech.models.notInstalled"), IsInstalled == false, true)])
-                ], Home + "?q=" + Uri.EscapeDataString(Query ?? "")));
+                new ChoiceSelect(Home, "language", "speech.language", [new("speech.models.allLanguages", "", Language is null),
+                    .. _languages.Select(language => new ChoiceOption("speech.language", language, language == Language, CultureInfo.GetCultureInfo(language).DisplayName + " · " + language))], FilterScope("language")),
+                new ChoiceSelect(Home, "gender", "speech.models.gender", [new("speech.models.allGenders", "", Gender is null),
+                    .. Enum.GetValues<SpeechVoiceGenderType>().Select(gender => new ChoiceOption(GenderKey(gender), ((byte)gender).ToString(CultureInfo.InvariantCulture), Gender == gender))], FilterScope("gender")),
+                new ChoiceSelect(Home, "isInstalled", "speech.models.installation", [new("speech.models.allInstallations", "", IsInstalled is null),
+                    new("speech.models.installed", "true", IsInstalled == true), new("speech.models.notInstalled", "false", IsInstalled == false)], FilterScope("isInstalled")))).Class("speech-models-toolbar"));
             page.Content.Add(new P(new Text("speech.models.explanation")));
-            page.Content.Add(new P(new ValueText(Language ?? texts["speech.models.all"]), new ValueText(" · "),
-                new Text(Gender is { } gender ? GenderKey(gender) : "speech.models.all"), new ValueText(" · "),
-                new Text(IsInstalled is null ? "speech.models.all" : IsInstalled == true ? "speech.models.installed" : "speech.models.notInstalled")));
             if (_models is { Items.Count: 0 })
             {
                 page.Content.Add(new P(new Text("speech.models.empty")).Attribute("role", "status"));
@@ -154,6 +146,14 @@ namespace Jularr.Frontend.Pages.Admin.Speech
             ["gender"] = Gender is { } gender ? ((byte)gender).ToString(CultureInfo.InvariantCulture) : "",
             ["isInstalled"] = IsInstalled?.ToString().ToLowerInvariant() ?? ""
         };
+
+        private Dictionary<string, string> FilterScope(string field)
+        {
+            var scope = Filters();
+            scope.Remove(field);
+            scope["q"] = Query ?? "";
+            return scope;
+        }
 
         private string Address(int? page = null) => Home + "?q=" + Uri.EscapeDataString(Query ?? "") + "&pageNumber=" + (page ?? PageNumber).ToString(CultureInfo.InvariantCulture)
             + string.Concat(Filters().Select(pair => "&" + pair.Key + "=" + Uri.EscapeDataString(pair.Value)));

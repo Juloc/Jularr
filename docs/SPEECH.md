@@ -44,7 +44,9 @@ pages hold 25 packages. `GET /api/v1/admin/speech/models` returns `models`
 (the shared `items`, `page`, `pageSize` result) and `languages` (the entire local
 catalog's locale choices), with `query`, optional exact `language`, `gender`,
 `isInstalled`, `page` and `pageSize` parameters. Filters are combined before
-paging. Every UI filter has All; gender also has Unknown. Filters survive search,
+paging. The three shared comboboxes apply automatically on change, without a
+filter dialog or Apply step (a native submit remains available without script).
+Every UI filter has All; gender also has Unknown. Filters survive search,
 paging and details/actions. Installation means the server archive exists with
 its expected byte size, independent of activation, not the current device cache;
 activation/download still checks SHA256. No filter performs external requests.

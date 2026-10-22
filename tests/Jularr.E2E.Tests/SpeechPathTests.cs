@@ -324,15 +324,21 @@ namespace Jularr.E2E.Tests
                     await page.GetByRole(AriaRole.Link, new() { Name = "Next", Exact = true }).ClickAsync();
                     await Assertions.Expect(rows).ToHaveCountAsync(3);
                     await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Previous", Exact = true })).ToBeVisibleAsync();
-                    await page.GetByRole(AriaRole.Button, new() { Name = "Voice filters", Exact = true }).ClickAsync();
-                    var filters = page.Locator("#speech-filters");
-                    await Assertions.Expect(filters.GetByRole(AriaRole.Radio, new() { Name = "All", Exact = true })).ToHaveCountAsync(3);
-                    await filters.Locator("input[name=language][value='de-DE']").CheckAsync();
-                    await filters.GetByRole(AriaRole.Radio, new() { Name = "Male", Exact = true }).CheckAsync();
-                    await filters.GetByRole(AriaRole.Radio, new() { Name = "Installed", Exact = true }).CheckAsync();
-                    await filters.EvaluateAsync("el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished))");
+                    async Task ChooseAsync(string label, string field, string value)
+                    {
+                        var select = page.Locator("#choice-" + field);
+                        var optionLabel = await select.Locator("option[value='" + value + "']").TextContentAsync();
+                        await page.Locator("#choice-" + field + "-button").ClickAsync();
+                        await page.GetByRole(AriaRole.Listbox, new() { Name = label, Exact = true }).GetByRole(AriaRole.Option, new() { Name = optionLabel!, Exact = true }).ClickAsync();
+                        await page.WaitForURLAsync(url => System.Web.HttpUtility.ParseQueryString(new Uri(url).Query)[field] == value);
+                        await Assertions.Expect(select).ToHaveValueAsync(value);
+                    }
+
+                    await Assertions.Expect(page.Locator(".speech-models-toolbar select option[value='']")).ToHaveCountAsync(3);
+                    await ChooseAsync("Language", "language", "de-DE");
+                    await ChooseAsync("Voice gender", "gender", "1");
+                    await ChooseAsync("Installation on server", "isInstalled", "true");
                     await Evidence.SaveAsync(page, "speech-catalog-filters");
-                    await filters.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }).ClickAsync();
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await Assertions.Expect(rows).ToContainTextAsync("fixture 27");
                     var search = page.GetByRole(AriaRole.Searchbox, new() { Name = "Search voices, languages or quality…", Exact = true });
@@ -341,10 +347,10 @@ namespace Jularr.E2E.Tests
                     await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=fixture+27", StringComparison.Ordinal));
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await Assertions.Expect(search).ToHaveValueAsync("fixture 27");
-                    await page.GetByRole(AriaRole.Button, new() { Name = "Voice filters", Exact = true }).ClickAsync();
-                    await Assertions.Expect(filters.GetByRole(AriaRole.Radio, new() { Name = "Male", Exact = true })).ToBeCheckedAsync();
-                    await filters.GetByRole(AriaRole.Link, new() { Name = "Reset", Exact = true }).ClickAsync();
-                    await page.WaitForURLAsync(url => Uri.UnescapeDataString(new Uri(url).Query) == "?q=fixture 27");
+                    await Assertions.Expect(page.Locator("#choice-gender")).ToHaveValueAsync("1");
+                    await ChooseAsync("Language", "language", "");
+                    await ChooseAsync("Voice gender", "gender", "");
+                    await ChooseAsync("Installation on server", "isInstalled", "");
                     await Assertions.Expect(rows).ToHaveCountAsync(1);
                     await search.FillAsync("fixture 28");
                     await search.PressAsync("Enter");
@@ -385,10 +391,9 @@ namespace Jularr.E2E.Tests
                         await page.SetViewportSizeAsync(390, 844);
                         await Assertions.Expect(page.Locator(".app-sidebar")).Not.ToBeVisibleAsync();
                         await Evidence.SaveAsync(page, "speech-catalog-live-phone");
-                        await page.GetByRole(AriaRole.Button, new() { Name = "Voice filters", Exact = true }).ClickAsync();
-                        await filters.EvaluateAsync("el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished))");
-                        await Assertions.Expect(filters.GetByRole(AriaRole.Radio, new() { Name = "All", Exact = true })).ToHaveCountAsync(3);
-                        Assert.IsFalse(await filters.EvaluateAsync<bool>("el => el.scrollWidth > innerWidth + 1"));
+                        await Assertions.Expect(page.Locator(".speech-models-toolbar select")).ToHaveCountAsync(3);
+                        await Assertions.Expect(page.Locator(".speech-models-toolbar select option[value='']")).ToHaveCountAsync(3);
+                        Assert.IsFalse(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth > innerWidth + 1"));
                         await Evidence.SaveAsync(page, "speech-catalog-filters-phone");
                     }
                 }

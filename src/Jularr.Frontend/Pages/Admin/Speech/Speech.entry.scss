@@ -1,4 +1,9 @@
-@use "../../../Framework/Components/FilterDialog";
+.speech-models-toolbar {
+    .list-toolbar__tools { flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+    .search-box { flex: 1 1 14rem; }
+    .choice-select { flex: 1 1 9rem; min-width: 0; }
+    .choice-select__control { width: 100%; max-width: none; }
+}
 
 .speech-models {
     --list-columns: minmax(12rem, 1fr) 5rem 5rem 11rem minmax(18rem, auto);
