@@ -26,7 +26,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             new Dictionary<AcquisitionConnectionRole, (AcquisitionConnectionType, string)[]>
             {
                 [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer")],
-                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
+                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Qbittorrent, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
                 [AcquisitionConnectionRole.Subtitles] = []
             };
 
@@ -389,6 +389,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 else if (type == AcquisitionConnectionType.OpenSubtitles)
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
+                    form.Text(item => item.Username, "acquisition.connection.username", "username");
+                    form.Password(item => item.Password, "acquisition.connection.password", "new-password");
+                }
+                else if (type == AcquisitionConnectionType.Qbittorrent)
+                {
                     form.Text(item => item.Username, "acquisition.connection.username", "username");
                     form.Password(item => item.Password, "acquisition.connection.password", "new-password");
                 }

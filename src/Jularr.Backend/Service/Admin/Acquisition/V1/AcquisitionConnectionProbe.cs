@@ -6,9 +6,11 @@ using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Data.Subtitles;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -19,17 +21,19 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly DirectSources _direct;
         private readonly UsenetJob _usenet;
         private readonly SubtitleProviders _subtitles;
         private readonly IDataProtector _protector;
 
-        public AcquisitionConnectionProbe(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, UsenetJob usenet, SubtitleProviders subtitles, IDataProtectionProvider protection)
+        public AcquisitionConnectionProbe(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, UsenetJob usenet, SubtitleProviders subtitles, IDataProtectionProvider protection)
         {
             _subtitles = subtitles;
             _usenet = usenet;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
+            _qbittorrent = qbittorrent;
             _direct = direct;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
@@ -91,6 +95,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }
             }
 
+            if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+            {
+                // A login and the version prove the torrent client.
+                var torrentTest = await _qbittorrent.TestAsync(new QbittorrentConnection(connection.HttpAddress, connection.Username,
+                    AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedPassword)), ct);
+                var torrentError = torrentTest.IsAvailable ? null : torrentTest.Version is null ? "acquisition_unavailable" : "acquisition_authentication_failed";
+                return (new AcquisitionConnectionTestV1(torrentTest.IsAvailable, torrentError, torrentTest.Version, []), null);
+            }
             var test = await _sabnzbd.TestAsync(new SabnzbdConnection(connection.HttpAddress, apiKey), ct);
             var errorKey = test.IsAvailable ? null : test.Version is null ? "acquisition_unavailable" : "acquisition_authentication_failed";
             return (new AcquisitionConnectionTestV1(test.IsAvailable, errorKey, test.Version, []), null);

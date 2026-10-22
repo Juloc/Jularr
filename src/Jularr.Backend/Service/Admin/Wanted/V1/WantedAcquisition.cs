@@ -12,8 +12,10 @@ using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Qbittorrent;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Jularr.Backend.Service.Core;
@@ -31,6 +33,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
+        private readonly QbittorrentClient _qbittorrent;
         private readonly DirectSources _direct;
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
@@ -39,12 +42,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly StorageAccess _storage;
         private readonly WorkSignals _signals;
 
-        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers,
-            TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
+        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct,
+            IDataProtectionProvider protection, IMemoryCache offers, TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
         {
             _storage = storage;
             _signals = signals;
             _downloads = downloads;
+            _qbittorrent = qbittorrent;
             _time = time;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
@@ -294,6 +298,29 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 if (failure is not null && Directory.Exists(staging))
                 {
                     Directory.Delete(staging, recursive: true);
+                }
+            }
+            else if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Qbittorrent)
+            {
+                // The torrent client writes the file into the folder Jularr reads it from.
+                var connection = new QbittorrentConnection(client.HttpAddress, client.Username, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedPassword));
+                try
+                {
+                    var result = await _qbittorrent.GrabAsync(connection,
+                        new QbittorrentGrabRequest(offer.DownloadUri, client.RemotePath ?? "", offer.Title), ct);
+                    if (result.Success && result.Hash is { } hash)
+                    {
+                        externalId = hash;
+                    }
+                    else
+                    {
+                        failure = result.ReasonKey ?? "acquisition_grab_failed";
+                    }
+                }
+                catch (Exception exception) when (exception is HttpRequestException or QbittorrentException or JsonException
+                    || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    failure = "acquisition_unavailable";
                 }
             }
             else

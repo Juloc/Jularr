@@ -110,6 +110,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("nzbfinder", "NZBFinder", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://nzbfinder.ws"),
             new("althub", "altHUB", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://api.althub.co.za"),
             new("sabnzbd", "SABnzbd", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Account, AcquisitionConnectionType.Sabnzbd),
+            new("qbittorrent", "qBittorrent (torrent client)", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Account, AcquisitionConnectionType.Qbittorrent),
             new("native", "Jularr usenet downloader", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Planned),
             new("opensubtitles", "OpenSubtitles.com", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Account, AcquisitionConnectionType.OpenSubtitles,
                 defaultBaseUrl: "https://api.opensubtitles.com/api/v1"),

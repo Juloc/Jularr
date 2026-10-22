@@ -338,10 +338,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             // Protect before persistence.
             var apiKey = data.ApiKey is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.ApiKey));
-            var password = data.AcquisitionConnectionTypeId == AcquisitionConnectionType.OpenSubtitles && data.Password is { } clear ? protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
+            var password = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.Qbittorrent
+                && data.Password is { } clear ? protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl, apiKey, data.IsEnabled, data.Priority,
                 data.Categories, data.DownloadCategory, detectedRemotePath ?? data.RemotePath, data.LocalPath,
-                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
+                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles
+                    or AcquisitionConnectionType.Qbittorrent ? data.Username : null,
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds,
                 data.SearchesAutomatically, data.QueryLimit, data.GrabLimit, data.Host, data.Port, data.UseSsl, data.DownloadStorageMountId,
                 data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Sabnzbd || data.RemovesCompleted);

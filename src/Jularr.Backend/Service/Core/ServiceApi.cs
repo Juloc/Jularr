@@ -34,6 +34,7 @@ using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Logic.Tvdb;
@@ -338,6 +339,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb, provider: "tmdb");
             AddClient<TvdbClient>(services, 15, 4, baseAddress: providers.Tvdb, provider: "tvdb");
             AddClient<SabnzbdClient>(services, 15, 16);
+            AddClient<QbittorrentClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
 
