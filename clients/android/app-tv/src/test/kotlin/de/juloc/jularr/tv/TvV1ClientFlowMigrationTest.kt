@@ -127,6 +127,48 @@ class TvV1ClientFlowMigrationTest {
         assertEquals(listOf("401"), result.detail!!.seasons.single().episodes.map { it.id })
     }
 
+    @Test fun libraryAfterTwoThousandWorksKeepsRealServerPages() = runBlocking {
+        val requestedPages = mutableListOf<Int>()
+        val backend = object : TvCatalogV1Client by fallback {
+            override suspend fun libraryFiltered(
+                page: Int, pageSize: Int, filters: TvCatalogV1Filters,
+                query: String?, sortTypeId: Int?,
+            ): TvPageV1<TvWorkCardV1> {
+                requestedPages.add(page)
+                val items = if (page == 22) listOf(card(2_101), card(2_102))
+                    else (1..100).map { card((page - 1) * 100L + it) }
+                return TvPageV1(items, page, pageSize)
+            }
+        }
+        val flow = TvV1ClientFlow(backend, permissions)
+        val first = flow.videoPage(1)
+        val beyond = flow.videoPage(21)
+        val last = flow.videoPage(22)
+        assertTrue(first.hasMore)
+        assertTrue(beyond.hasMore)
+        assertFalse(last.hasMore)
+        assertEquals(listOf(1, 21, 22), requestedPages)
+        assertEquals(2_102L, last.items.last().id)
+    }
+
+    @Test fun homeRespectsRealConfiguredVideoShelfOrderAndHiddenStatus() = runBlocking {
+        val backend = object : TvCatalogV1Client by fallback {
+            override suspend fun libraryFiltered(
+                page: Int, pageSize: Int, filters: TvCatalogV1Filters,
+                query: String?, sortTypeId: Int?,
+            ) = TvPageV1(listOf(card(701)), page, pageSize)
+            override suspend fun continueWatching() = emptyList<TvContinueItemV1>()
+            override suspend fun homeLayout() = listOf(
+                TvHomeShelfV1(5, false), // Recommendations require their own source.
+                TvHomeShelfV1(4, false), // Actual recently added.
+                TvHomeShelfV1(1, true),  // The user explicitly hid Continue Watching.
+            )
+        }
+        val home = TvV1ClientFlow(backend, permissions).home()
+        assertEquals(listOf(4), home.shelfOrder)
+        assertFalse(home.showContinueWatching)
+    }
+
     @Test fun incompatibleOrUnauthorizedMediaMustNotBeShownAsLoaded() {
         val noPermission = InstanceCapabilities(
             permissions = emptyList(), modules = listOf("Library"),
