@@ -577,14 +577,23 @@ fun TvV1CatalogHost(
                 back()
                 reload += 1
             },
+            onNavigateAsset = { asset ->
+                // Neighbour IDs were looked up through /api/v1/playback/assets/{id}.
+                // Never derive a WorkUnitId from the MediaAssetId or a fractional number.
+                selectedAssetId = asset.mediaAssetId
+                detailWorkId = asset.workId
+                selectedWorkUnitId = null
+                selectedEpisodeId = null
+                detailedTitle = tvV1PlaybackAssetTitle(asset)
+                navigation = navigation.copy(
+                    current = navigation.current.copy(workId = asset.workId, workUnitId = null),
+                )
+            },
             onUnauthorized = onAuthenticationExpired,
         )
         TvV1CatalogPage.PlaybackPending -> TvV1ApiMessage(
-            "Wiedergabe noch nicht verbunden",
-            if (selectedAssetId != null)
-                "MediaAsset ${selectedAssetId} ist gefunden. Der alte Media3-Player wird im nächsten Schritt mit den /api/v1-Playback-Sessions verbunden."
-            else
-                "Für diese Episode (WorkUnit ${selectedEpisodeId.orEmpty()}) meldet Jularr noch kein abspielbares MediaAsset.",
+            "Kein abspielbares Medium",
+            "Für diese Episode (WorkUnit ${selectedEpisodeId.orEmpty()}) meldet Jularr noch kein abspielbares MediaAsset.",
             onRetry = null,
             onBack = ::back,
         )
