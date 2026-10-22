@@ -5,6 +5,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
+using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -49,6 +50,37 @@ namespace Jularr.Backend.Tests
                 + workId + " AND file.\"MissingSince\" IS NULL"));
             Assert.IsTrue(source.Urls.Any(url => url.StartsWith("api.syosetu.com/novelapi/api/", StringComparison.Ordinal)));
             Assert.IsTrue(source.Urls.Any(url => url == "ncode.syosetu.com/n123/1/"));
+        }
+
+        [TestMethod]
+        public async Task DiscoverNarou_RequestCreatesAnIndependentMonitoredLightNovelWork()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var provider = new FakeNarou();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, provider);
+
+            using var catalog = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry",
+                new ReadDiscoverCatalogEntryDataV1(MediaType.Book, "syosetu", "n123", MediaSubtype.LightNovel));
+            Assert.AreEqual(HttpStatusCode.OK, catalog.StatusCode, await catalog.Content.ReadAsStringAsync());
+            var detail = (await catalog.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>())!;
+            Assert.AreEqual("テスト作品", detail.Title);
+
+            using var request = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests",
+                new RequestDiscoverCatalogDataV1(MediaType.Book, "syosetu", "n123", 1, MediaSubtype.LightNovel));
+            Assert.AreEqual(HttpStatusCode.OK, request.StatusCode, await request.Content.ReadAsStringAsync());
+
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*) FROM "WorkExternalIdentities" AS identity
+                JOIN "Works" AS work ON work."Id" = identity."WorkId"
+                WHERE identity."Namespace" = 'syosetu' AND identity."Value" = 'n123'
+                  AND work."MediaTypeId" = 3 AND work."MediaSubtypeId" = 3;
+                """));
+            Assert.AreEqual(1L, await host.ScalarAsync("""
+                SELECT count(*) FROM "AcquisitionRequests" AS request
+                JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = request."WorkId"
+                WHERE identity."Namespace" = 'syosetu' AND identity."Value" = 'n123';
+                """));
         }
 
         [TestMethod]
