@@ -1,3 +1,4 @@
+using Jularr.Backend.Tests.Infrastructure;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -598,7 +599,7 @@ namespace Jularr.Backend.Tests
                     builder.Configuration[key] = value;
                 }
 
-                builder.Services.AddJularrServices(builder.Configuration);
+                builder.Services.AddJularrServices(builder.Configuration).WithTestInstalledSchema(fixture.ConnectionString);
                 if (razor)
                 {
                     builder.Services.AddRazorPages(options => options.Conventions.AddJularrPages());

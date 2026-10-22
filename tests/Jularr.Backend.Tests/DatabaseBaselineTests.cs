@@ -64,11 +64,12 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task UnversionedDatabase_Startup_PreservesExistingTablesAndData()
+        public async Task LegacyDatabase_NotMatchingTheBaseline_IsRefusedAndStaysUnchanged()
         {
-            var cs = TestPostgres.ResolveConnectionString(nameof(UnversionedDatabase_Startup_PreservesExistingTablesAndData));
+            var cs = TestPostgres.ResolveConnectionString(nameof(LegacyDatabase_NotMatchingTheBaseline_IsRefusedAndStaysUnchanged));
             await ExecuteAsync(cs, "CREATE TABLE \"Unversioned\" (\"Value\" text); INSERT INTO \"Unversioned\" VALUES ('kept');");
-            await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
+            var error = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => new DatabaseBaseline(cs).StartAsync(CancellationToken.None));
+            Assert.AreEqual("baseline", error.Migration);
             CollectionAssert.AreEqual(new[] { "Unversioned" }, await TablesAsync(cs));
             Assert.AreEqual("kept", await ScalarAsync(cs, "SELECT \"Value\" FROM \"Unversioned\";"));
         }
@@ -83,7 +84,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow("INSERT INTO \"DatabaseSchemaVersions\" (\"Version\", \"Fingerprint\") VALUES (99, repeat('a', 64));")]
+        [DataRow("INSERT INTO \"DatabaseSchemaVersions\" (\"Version\", \"Name\", \"Fingerprint\") VALUES (99, 'future', repeat('a', 64));")]
         [DataRow("UPDATE \"DatabaseSchemaVersions\" SET \"Fingerprint\" = repeat('0', 64);")]
         [DataRow("DELETE FROM \"DatabaseSchemaVersions\";")]
         public async Task UnsupportedVersionHistory_StopsWithoutChangingData(string change)
@@ -92,7 +93,7 @@ namespace Jularr.Backend.Tests
             var baseline = new DatabaseBaseline(cs);
             await baseline.StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'preserved'; " + change);
-            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => baseline.StartAsync(CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => baseline.StartAsync(CancellationToken.None));
             Assert.AreEqual("preserved", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
         }
 
@@ -105,9 +106,10 @@ namespace Jularr.Backend.Tests
             await ExecuteAsync(cs, "UPDATE \"InstanceSettings\" SET \"Name\" = 'preserved';");
             var tools = Tools(cs, Path.Combine(folder.Path, "missing-pg-dump"), null);
             var next = new DatabaseBaseline(cs, new BackupOptions { Path = folder.Path }, tools,
-                [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
-            var error = await Assert.ThrowsExactlyAsync<PostgresToolException>(() => next.StartAsync(CancellationToken.None));
-            Assert.AreEqual("backup_tool_missing", error.Code);
+                [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
+            var failure = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => next.StartAsync(CancellationToken.None));
+            Assert.AreEqual("backup", failure.Migration);
+            Assert.AreEqual("backup_tool_missing", ((PostgresToolException)failure.InnerException!).Code);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'Accounts' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual("preserved", await ScalarAsync(cs, "SELECT \"Name\" FROM \"InstanceSettings\";"));
@@ -122,8 +124,9 @@ namespace Jularr.Backend.Tests
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             await ExecuteAsync(cs, "INSERT INTO \"Accounts\" (\"Id\", \"Username\", \"Email\", \"DisplayName\", \"AccountRoleTypeId\") VALUES (41, 'keys_owner', 'keys@example.test', 'Keys Owner', 1);");
             var options = new BackupOptions { Path = folder.Path, KeyDirectory = Path.Combine(folder.Path, "missing-keys") };
-            var next = new DatabaseBaseline(cs, options, migrations: [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
-            var error = await Assert.ThrowsExactlyAsync<InvalidDataException>(() => next.StartAsync(CancellationToken.None));
+            var next = new DatabaseBaseline(cs, options, migrations: [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"Accounts\" ADD COLUMN \"UpgradeProbe\" text;")]);
+            var error = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => next.StartAsync(CancellationToken.None));
+            Assert.AreEqual("backup", error.Migration);
             StringAssert.Contains(error.Message, "key ring");
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'Accounts' AND column_name = 'UpgradeProbe';"));
@@ -135,8 +138,9 @@ namespace Jularr.Backend.Tests
         {
             var cs = TestPostgres.ResolveConnectionString(nameof(FreshInstall_FailedMigration_RollsBackTheEntireInstallation));
             var broken = new DatabaseBaseline(cs, migrations:
-                [.. DatabaseBaseline.Migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), new DatabaseMigration(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
-            await Assert.ThrowsExactlyAsync<PostgresException>(() => broken.StartAsync(CancellationToken.None));
+                [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "CREATE TABLE \"UpgradeProbe\" (\"Id\" bigint);"), Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
+            var failed = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
+            Assert.AreEqual("0003_probe", failed.Migration);
             Assert.AreEqual(0, (await TablesAsync(cs)).Length);
             await new DatabaseBaseline(cs).StartAsync(CancellationToken.None);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
@@ -194,9 +198,10 @@ namespace Jularr.Backend.Tests
             var before = await ReleaseDataAsync(cs);
             var options = new BackupOptions { Path = backups.Path, KeyDirectory = keys.Path, Passphrase = "isolated-upgrade-test" };
             var tools = Tools(cs, dump, restore);
-            DatabaseMigration[] migrations = [.. DatabaseBaseline.Migrations, new(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"InstanceSettings\" ADD COLUMN \"UpgradeProbe\" text NOT NULL DEFAULT 'N+1';")];
-            var broken = new DatabaseBaseline(cs, options, tools, [.. migrations, new DatabaseMigration(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
-            await Assert.ThrowsExactlyAsync<PostgresException>(() => broken.StartAsync(CancellationToken.None));
+            DatabaseMigration[] migrations = [.. DatabaseBaseline.Migrations, Probe(DatabaseBaseline.CurrentVersion + 1, "ALTER TABLE \"InstanceSettings\" ADD COLUMN \"UpgradeProbe\" text NOT NULL DEFAULT 'N+1';")];
+            var broken = new DatabaseBaseline(cs, options, tools, [.. migrations, Probe(DatabaseBaseline.CurrentVersion + 2, "SELECT 1 / 0;")]);
+            var failedUpgrade = await Assert.ThrowsExactlyAsync<DatabaseUpgradeException>(() => broken.StartAsync(CancellationToken.None));
+            Assert.IsInstanceOfType<PostgresException>(failedUpgrade.InnerException);
             Assert.AreEqual(DatabaseBaseline.CurrentVersion, await ScalarAsync(cs, "SELECT max(\"Version\") FROM \"DatabaseSchemaVersions\";"));
             Assert.AreEqual(0L, await ScalarAsync(cs, "SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'InstanceSettings' AND column_name = 'UpgradeProbe';"));
             Assert.AreEqual(before, await ReleaseDataAsync(cs));
@@ -234,6 +239,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(PasswordVerificationResult.Success, passwords.VerifyHashedPassword(new object(), (string)(await ScalarAsync(restored, "SELECT \"PasswordHash\" FROM \"AccountPasswords\" WHERE \"AccountId\" = 41;"))!, "isolated-upgrade-password"));
         }
 
+        // A migration of the test assembly only: the production list has none until the first schema change after the release.
+        internal static DatabaseMigration Probe(int version, string statement) =>
+            new(version, version.ToString("0000", System.Globalization.CultureInfo.InvariantCulture) + "_probe", statement);
+
         private static async Task<string> ReleaseDataAsync(string cs)
         {
             var values = new List<string>();
@@ -245,7 +254,7 @@ namespace Jularr.Backend.Tests
             return string.Join('\n', values);
         }
 
-        private static PostgresBackupTools Tools(string cs, string? dump, string? restore)
+        internal static PostgresBackupTools Tools(string cs, string? dump, string? restore)
         {
             var target = new NpgsqlConnectionStringBuilder(cs);
             return new PostgresBackupTools
@@ -256,7 +265,7 @@ namespace Jularr.Backend.Tests
             };
         }
 
-        private static async Task ExecuteAsync(string cs, string statement)
+        internal static async Task ExecuteAsync(string cs, string statement)
         {
             await using var connection = new NpgsqlConnection(cs);
             await connection.OpenAsync();
@@ -264,7 +273,7 @@ namespace Jularr.Backend.Tests
             await command.ExecuteNonQueryAsync();
         }
 
-        private static async Task<object?> ScalarAsync(string cs, string statement)
+        internal static async Task<object?> ScalarAsync(string cs, string statement)
         {
             await using var connection = new NpgsqlConnection(cs);
             await connection.OpenAsync();
@@ -286,7 +295,7 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private static async Task<string[]> TablesAsync(string connectionString)
+        internal static async Task<string[]> TablesAsync(string connectionString)
         {
             await using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();

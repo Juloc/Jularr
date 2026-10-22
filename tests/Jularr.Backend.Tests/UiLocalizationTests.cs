@@ -1,3 +1,4 @@
+using Jularr.Backend.Tests.Infrastructure;
 using System.Reflection;
 using System.Net;
 using System.Net.Http.Json;
@@ -107,7 +108,7 @@ namespace Jularr.Backend.Tests
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
             builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
-            builder.Services.AddJularrServices(builder.Configuration);
+            builder.Services.AddJularrServices(builder.Configuration).WithTestInstalledSchema(fixture.ConnectionString);
             builder.Services.AddJularrLocalization([]);
             await using var app = builder.Build();
             app.UseExceptionHandler();
