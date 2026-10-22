@@ -1,37 +1,57 @@
 package de.juloc.jularr.tv
 
 /**
- * Navigation for the /api/v1 entry path, mirroring the original TV's push/back
- * behavior rather than the discontinued desktop-style shell.
- *
- * Page history contains only UI destinations. The current WorkId, WorkUnitId,
- * MediaAssetId and token remain in the owning V1 controller/host.
+ * V1 navigation reuses original TV screen surfaces. Typed identities are stored in the
+ * Back stack to prevent Person -> Work -> Back accidentally showing a different Work.
+ * Never conflate WorkId, WorkUnitId or MediaAssetId.
  */
 internal enum class TvV1CatalogPage {
     Home, Search, Discover, Watchlist, Settings, ProfileSelect,
     Details, Episode, Credits, Person, MovieEditions, PlaybackPending, Player,
 }
 
+internal data class TvV1NavigationEntry(
+    val page: TvV1CatalogPage,
+    val workId: Long? = null,
+    val personId: Long? = null,
+    val workUnitId: Long? = null,
+) {
+    init {
+        require(workId == null || workId > 0)
+        require(personId == null || personId > 0)
+        require(workUnitId == null || workUnitId > 0)
+    }
+}
+
 internal data class TvV1NavigationState(
-    val page: TvV1CatalogPage = TvV1CatalogPage.Home,
-    val previous: List<TvV1CatalogPage> = emptyList(),
-)
+    val current: TvV1NavigationEntry = TvV1NavigationEntry(TvV1CatalogPage.Home),
+    val previous: List<TvV1NavigationEntry> = emptyList(),
+) {
+    val page: TvV1CatalogPage get() = current.page
+}
 
 internal object TvV1Navigation {
-    fun open(state: TvV1NavigationState, next: TvV1CatalogPage): TvV1NavigationState {
-        if (state.page == next) return state
-        // The original TV sidebar swaps root pages instead of growing a backstack.
+    fun open(
+        state: TvV1NavigationState,
+        next: TvV1CatalogPage,
+        workId: Long? = null,
+        personId: Long? = null,
+        workUnitId: Long? = null,
+    ): TvV1NavigationState {
+        val destination = TvV1NavigationEntry(next, workId, personId, workUnitId)
+        if (state.current == destination) return state
+        // The original TV sidebar replaces roots instead of retaining other accounts' history.
         if (next == TvV1CatalogPage.Home || next == TvV1CatalogPage.Watchlist ||
             next == TvV1CatalogPage.Settings
-        ) return TvV1NavigationState(next)
-        // Selecting a profile from Settings is an overlay-style transition.
-        val stack = state.previous + state.page
-        return TvV1NavigationState(next, stack.takeLast(16))
+        ) return TvV1NavigationState(destination)
+        // A route's exact identity travels with the backstack.
+        val stack = state.previous + state.current
+        return TvV1NavigationState(destination, stack.takeLast(16))
     }
 
     fun back(state: TvV1NavigationState): TvV1NavigationState {
         if (state.previous.isNotEmpty()) return TvV1NavigationState(
-            page = state.previous.last(),
+            current = state.previous.last(),
             previous = state.previous.dropLast(1),
         )
         val fallback = when (state.page) {
@@ -45,6 +65,6 @@ internal object TvV1Navigation {
             TvV1CatalogPage.Details, TvV1CatalogPage.ProfileSelect,
             TvV1CatalogPage.Watchlist, TvV1CatalogPage.Settings -> TvV1CatalogPage.Home
         }
-        return TvV1NavigationState(fallback)
+        return TvV1NavigationState(TvV1NavigationEntry(fallback))
     }
 }

@@ -64,8 +64,13 @@ fun TvV1CatalogHost(
     val focusMemory = remember(serverOrigin) { TvFocusMemory() }
     var navigation by remember(serverOrigin) { mutableStateOf(TvV1NavigationState()) }
     val page = navigation.page
-    fun openPage(next: TvV1CatalogPage) {
-        navigation = TvV1Navigation.open(navigation, next)
+    fun openPage(
+        next: TvV1CatalogPage,
+        workId: Long? = null,
+        personId: Long? = null,
+        workUnitId: Long? = null,
+    ) {
+        navigation = TvV1Navigation.open(navigation, next, workId, personId, workUnitId)
     }
     var searchQuery by remember(serverOrigin) { mutableStateOf("") }
     var category by remember(serverOrigin) { mutableStateOf(TvContentFilter.ALL) }
@@ -109,7 +114,7 @@ fun TvV1CatalogHost(
             error = "Dieses Profil hat keine Wiedergabeberechtigung."
             return
         }
-        openPage(TvV1CatalogPage.Player)
+        openPage(TvV1CatalogPage.Player, workId = detailWorkId, workUnitId = selectedWorkUnitId)
     }
 
     fun openWork(rawId: String) {
@@ -121,7 +126,7 @@ fun TvV1CatalogHost(
         detailWorkId = workId
         details = null
         error = null
-        openPage(TvV1CatalogPage.Details)
+        openPage(TvV1CatalogPage.Details, workId = workId)
     }
 
     fun openEpisode(rawId: String) {
@@ -131,12 +136,21 @@ fun TvV1CatalogHost(
             return
         }
         selectedWorkUnitId = unitId
-        openPage(TvV1CatalogPage.Episode)
+        openPage(TvV1CatalogPage.Episode, workId = detailWorkId, workUnitId = unitId)
     }
 
     fun back() {
         error = null
-        navigation = TvV1Navigation.back(navigation)
+        val restored = TvV1Navigation.back(navigation)
+        navigation = restored
+        val restoredWorkId = restored.current.workId
+        if (restoredWorkId != null && restoredWorkId != detailWorkId) {
+            detailWorkId = restoredWorkId
+            details = null // Reload selected Work's real metadata, not the last opened Work.
+            episodeByUnit = emptyMap()
+        }
+        restored.current.personId?.let { selectedPersonId = it }
+        restored.current.workUnitId?.let { selectedWorkUnitId = it }
     }
 
     androidx.compose.runtime.LaunchedEffect(settingsSignOutRequested) {
@@ -421,7 +435,9 @@ fun TvV1CatalogHost(
                             },
                             onBack = ::back,
                             isWatchlisted = isWatchlisted,
-                            onOpenCredits = { openPage(TvV1CatalogPage.Credits) },
+                            onOpenCredits = {
+                                openPage(TvV1CatalogPage.Credits, workId = detailWorkId)
+                            },
                             specialEpisodes = fractionalEpisodes,
                             onPlaySpecialEpisode = { episode ->
                                 playAsset(episode.playableMediaAssetId(), episode.id.toString())
@@ -503,7 +519,7 @@ fun TvV1CatalogHost(
                 selectedPersonId = id
                 selectedPerson = null
                 personWorks = emptyList()
-                openPage(TvV1CatalogPage.Person)
+                openPage(TvV1CatalogPage.Person, workId = detailWorkId, personId = id)
             },
             onRetry = { reload += 1 },
             onBack = ::back,
@@ -542,7 +558,7 @@ fun TvV1CatalogHost(
             mediaAssetId = requireNotNull(selectedAssetId),
             title = detailedTitle,
             onExit = {
-                navigation = TvV1Navigation.back(navigation)
+                back()
                 reload += 1
             },
             onUnauthorized = onAuthenticationExpired,

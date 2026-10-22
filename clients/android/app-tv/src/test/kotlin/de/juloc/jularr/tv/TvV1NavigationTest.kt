@@ -38,6 +38,26 @@ class TvV1NavigationTest {
         assertEquals(TvV1CatalogPage.Home, TvV1Navigation.back(state).page)
     }
 
+    @Test fun backRestoresOriginalWorkAndPersonIdentity() {
+        var state = TvV1Navigation.open(
+            TvV1NavigationState(), TvV1CatalogPage.Details, workId = 701,
+        )
+        state = TvV1Navigation.open(state, TvV1CatalogPage.Credits, workId = 701)
+        state = TvV1Navigation.open(state, TvV1CatalogPage.Person, workId = 701, personId = 19)
+        state = TvV1Navigation.open(state, TvV1CatalogPage.Details, workId = 930)
+        assertEquals(930L, state.current.workId)
+        state = TvV1Navigation.back(state)
+        assertEquals(TvV1CatalogPage.Person, state.page)
+        assertEquals(19L, state.current.personId)
+        assertEquals(701L, state.current.workId)
+        state = TvV1Navigation.back(state)
+        assertEquals(TvV1CatalogPage.Credits, state.page)
+        assertEquals(701L, state.current.workId)
+        state = TvV1Navigation.back(state)
+        assertEquals(TvV1CatalogPage.Details, state.page)
+        assertEquals(701L, state.current.workId)
+    }
+
     @Test fun repeatNavigationToSamePageDoesNotPushDuplicates() {
         val once = TvV1Navigation.open(TvV1NavigationState(), TvV1CatalogPage.Search)
         assertEquals(once, TvV1Navigation.open(once, TvV1CatalogPage.Search))
