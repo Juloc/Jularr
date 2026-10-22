@@ -30,6 +30,49 @@ namespace Jularr.Integrations.Logic.Narou
         private static Uri WorkUri(string ncode) =>
             new("https://ncode.syosetu.com/" + ncode.ToLowerInvariant() + "/");
 
+
+        // Official Narō API; search is separate from the reader's chapter-page endpoint.
+        // The API returns a count row followed by novel records.
+        public async Task<IReadOnlyList<NarouSearchResult>> SearchAsync(string query, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(query) || query.Length > 200) return [];
+            var uri = new Uri("https://api.syosetu.com/novelapi/api/?out=json&of=t-n-w-ga&lim=24&title=1&word="
+                + Uri.EscapeDataString(query.Trim()));
+            try
+            {
+                using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+                response.EnsureSuccessStatusCode();
+                if (response.Content.Headers.ContentLength is > MaximumPageBytes)
+                    throw new NarouException("Narō search results are too large.");
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                using var document = await System.Text.Json.JsonDocument.ParseAsync(stream,
+                    new System.Text.Json.JsonDocumentOptions { MaxDepth = 12 }, ct);
+                if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                    throw new NarouException("Narō search returned an invalid response.");
+                var results = new List<NarouSearchResult>();
+                foreach (var item in document.RootElement.EnumerateArray().Take(25))
+                {
+                    if (!item.TryGetProperty("ncode", out var code) || code.ValueKind != System.Text.Json.JsonValueKind.String
+                        || !item.TryGetProperty("title", out var title) || title.ValueKind != System.Text.Json.JsonValueKind.String)
+                        continue;
+                    var id = code.GetString()?.ToLowerInvariant();
+                    if (!IsNcode(id)) continue;
+                    var author = item.TryGetProperty("writer", out var writer) && writer.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? writer.GetString() ?? "" : "";
+                    results.Add(new NarouSearchResult(id!, title.GetString() ?? "", author));
+                }
+                return results;
+            }
+            catch (HttpRequestException exception)
+            {
+                throw new NarouException("Narō search is unavailable.", exception);
+            }
+            catch (System.Text.Json.JsonException exception)
+            {
+                throw new NarouException("Narō search returned invalid JSON.", exception);
+            }
+        }
+
         public async Task ProbeAsync(CancellationToken ct)
         {
             await GetPageAsync(new Uri("https://ncode.syosetu.com/"), ct);
@@ -184,6 +227,7 @@ namespace Jularr.Integrations.Logic.Narou
 
     internal sealed record NarouWork(string Ncode, string Title, string Author, IReadOnlyList<NarouChapter> Chapters);
     internal sealed record NarouChapter(int Number, string Title);
+    internal sealed record NarouSearchResult(string Ncode, string Title, string Author);
 
     internal sealed class NarouException(string message, Exception? inner = null) : Exception(message, inner);
 }
