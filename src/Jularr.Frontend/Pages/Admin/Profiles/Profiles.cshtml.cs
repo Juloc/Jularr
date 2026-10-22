@@ -54,7 +54,6 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Title("arr.settings");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
-            page.Asset("Framework/Components/Form.entry.ts");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
             page.Content.Add(AcquisitionSettingsNavigation.Frame(Request, Tab, MediaTypeId));
             switch (Tab)

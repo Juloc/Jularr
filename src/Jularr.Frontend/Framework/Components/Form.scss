@@ -85,6 +85,30 @@
         &:focus-visible { outline: none; }
     }
 
+    // A file field: the browser's own dialog opens from a button in the button style; the chosen name follows it.
+    &__control > input[type="file"] {
+        padding: 5px;
+        color: var(--muted);
+        font-size: var(--text-control);
+        cursor: pointer;
+
+        &::file-selector-button {
+            min-height: var(--control-height-compact);
+            margin-inline-end: 12px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: var(--radius-control);
+            background: var(--accent-soft);
+            color: var(--accent-text);
+            cursor: pointer;
+            font: inherit;
+            font-size: var(--text-small);
+            font-weight: 780;
+            transition: background-color var(--transition);
+        }
+        &:hover::file-selector-button { background: var(--accent-edge); }
+    }
+
     &__control > textarea { padding-block: 10px; border-radius: var(--radius-inner); resize: vertical; }
     &__control > .ui-range > input {
         appearance: none;
@@ -155,7 +179,83 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    output { min-width: 4ch; color: var(--muted); text-align: end; font-size: var(--text-control); font-variant-numeric: tabular-nums; }
+    // The number follows the slider while it moves.
+    output { min-width: 4ch; color: var(--text); text-align: end; font-size: var(--text-control); font-weight: 760; font-variant-numeric: tabular-nums; }
+}
+// A number's own plus and minus in a small pill at the end of the field; the browser's spin buttons give way.
+.ui-field__control--number {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-inline-end: 6px;
+
+    & > input { flex: 1; min-width: 0; appearance: textfield; font-variant-numeric: tabular-nums; }
+    & > input::-webkit-inner-spin-button, & > input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+}
+// What a field wears inside its frame: an icon circle at the start, a quiet unit at the end (before a number's plus and minus).
+.ui-field__control--affixed {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    & > :is(input, select, .ui-dropdown__button) { flex: 1 1 0; min-width: 0; width: auto; }
+    &:has(> .ui-field__prefix) { padding-inline-start: 6px; }
+}
+.ui-field__prefix {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+
+    .ui-icon { width: 15px; height: 15px; }
+}
+.ui-field__suffix,
+.ui-range__unit {
+    flex: none;
+    color: var(--muted);
+    font-size: var(--text-control);
+    font-weight: 740;
+    white-space: nowrap;
+}
+.ui-field__suffix { padding-inline-end: 4px; }
+.ui-range--unit { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
+.ui-field__stepper {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    flex: none;
+    width: 22px;
+    height: 28px;
+    overflow: hidden;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+
+    &[hidden] { display: none; }
+}
+.ui-field__step {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    transition: background-color var(--transition), color var(--transition);
+
+    &:first-child { border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent); }
+    &:hover:not(:disabled) { background: var(--accent-edge); }
+    &:disabled { color: var(--muted); cursor: default; opacity: .6; }
+}
+@media (pointer: coarse) {
+    .ui-field__stepper { width: 32px; height: 36px; }
 }
 .ui-field__control--segmented { padding: 4px; }
 .ui-segments { display: flex; gap: 4px; }
@@ -168,6 +268,8 @@
     & > input {
         position: absolute;
         inset: 0;
+        width: 100%;
+        height: 100%;
         margin: 0;
         opacity: 0;
         cursor: pointer;
@@ -235,7 +337,6 @@
     thead th { color: var(--muted); font-size: var(--text-small); font-weight: 810; letter-spacing: .65px; text-transform: uppercase; }
     tbody th { text-align: left; font-weight: 600; }
     tbody tr + tr { border-top: 1px solid var(--border); }
-    input { width: 18px; height: 18px; accent-color: var(--accent); }
 }
 fieldset.ui-field {
     margin: 0;
@@ -246,12 +347,3 @@ fieldset.ui-field {
 }
 .ui-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; }
 .field-error { margin: 0; color: var(--danger); font-size: var(--text-control); }
-.ui-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--text);
-    font-size: var(--text-body);
-
-    & input { accent-color: var(--accent); width: 17px; height: 17px; }
-}

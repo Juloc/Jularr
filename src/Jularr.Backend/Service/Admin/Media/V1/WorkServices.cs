@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
@@ -12,6 +13,113 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     [ServiceEndpoint("GET", "/api/v1/admin/works")]
     public sealed class ReadWorksV1 : AdminService<ReadWorksParametersV1>
     {
+        // The titles with their state, filtered by type, library, profile and words: what the list and its counts both read.
+        internal const string ListedWorks =
+            """
+                SELECT
+                    work."Id",
+                    work."MediaTypeId",
+                    work."MediaSubtypeId",
+                    work."CanonicalTitle",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    work."CreatedAt",
+                    target."Id" AS "WantedItemId",
+                    coalesce(target."Targets", 0) AS "TargetCount",
+                    coalesce(target."IsMonitored", FALSE) AS "IsMonitored",
+                    target."AcquisitionProfileId",
+                    target."LibraryRootId",
+                    profile."Name" AS "ProfileName",
+                    coalesce(targetRoot."Name", fileRoot."Name") AS "LibraryName",
+                    coalesce(files."FileCount", 0) AS "FileCount",
+                    coalesce(files."SizeBytes", 0) AS "SizeBytes",
+                    CASE
+                        WHEN download."IsDownloading" THEN 3
+                        WHEN files."FileCount" > 0 AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkUnits" AS unit
+                            WHERE
+                                unit."WorkId" = work."Id"
+                                AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                                AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
+                                AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "MediaAssets" AS asset
+                                        JOIN "StoredFiles" AS present ON present."MediaAssetId" = asset."Id" AND present."MissingSince" IS NULL
+                                    WHERE
+                                        asset."WorkUnitId" = unit."Id"
+                                )
+                        ) THEN 1
+                        WHEN coalesce(target."IsMonitored", FALSE) THEN 2
+                        ELSE 4
+                    END::smallint AS "WorkListStatusId"
+                FROM
+                    "Works" AS work
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            (array_agg(wanted."Id" ORDER BY wanted."Id"))[1] AS "Id",
+                            (array_agg(wanted."AcquisitionProfileId" ORDER BY wanted."Id"))[1] AS "AcquisitionProfileId",
+                            (array_agg(wanted."LibraryRootId" ORDER BY wanted."Id"))[1] AS "LibraryRootId",
+                            count(*)::integer AS "Targets",
+                            bool_or(NOT wanted."IsPaused") AS "IsMonitored"
+                        FROM
+                            "WantedItems" AS wanted
+                        WHERE
+                            wanted."WorkId" = work."Id"
+                        HAVING
+                            count(*) > 0
+                    ) AS target ON TRUE
+                    LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = target."AcquisitionProfileId"
+                    LEFT JOIN "LibraryRoots" AS targetRoot ON targetRoot."Id" = target."LibraryRootId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            count(*)::integer AS "FileCount",
+                            sum(file."SizeBytes")::bigint AS "SizeBytes",
+                            (array_agg(file."LibraryRootId" ORDER BY file."Id"))[1] AS "LibraryRootId"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        WHERE
+                            asset."WorkId" = work."Id"
+                    ) AS files ON TRUE
+                    LEFT JOIN "LibraryRoots" AS fileRoot ON fileRoot."Id" = files."LibraryRootId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WantedItems" AS wanted
+                                    JOIN "AcquisitionReleases" AS release ON release."WantedItemId" = wanted."Id"
+                                    JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                                WHERE
+                                    wanted."WorkId" = work."Id"
+                                    AND operation."OperationStatusTypeId" IN (1, 2)
+                            ) AS "IsDownloading"
+                    ) AS download ON TRUE
+                WHERE
+                    (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
+                    AND (@Query::text IS NULL OR strpos(lower(work."CanonicalTitle"), lower(@Query)) > 0)
+                    AND (@AcquisitionProfileId::bigint IS NULL OR target."AcquisitionProfileId" = @AcquisitionProfileId)
+                    AND (
+                        @LibraryRootId::bigint IS NULL
+                        OR target."LibraryRootId" = @LibraryRootId
+                        OR EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "MediaAssets" AS asset
+                                JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                            WHERE
+                                asset."WorkId" = work."Id"
+                                AND file."LibraryRootId" = @LibraryRootId
+                        )
+                    )
+            """;
+
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkListItemV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadWorksParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadWorksParametersV1 parameters, Type resultType) => new("media.read");
@@ -22,111 +130,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // One bounded read: the titles are filtered and ordered first, only the page gets its cover. A title is monitored while one of its targets is not paused;
             // it is filed when it has a file and no monitored aired unit still lacks one, and downloading while one of its releases is on its way.
             var sql = new SqlStatement();
-            sql.Statement =
+            sql.Statement = "WITH listed AS (" + ListedWorks +
                 """
-                WITH listed AS (
-                    SELECT
-                        work."Id",
-                        work."MediaTypeId",
-                        work."MediaSubtypeId",
-                        work."CanonicalTitle",
-                        work."ReleaseYear"::integer AS "ReleaseYear",
-                        work."CreatedAt",
-                        target."Id" AS "WantedItemId",
-                        coalesce(target."Targets", 0) AS "TargetCount",
-                        coalesce(target."IsMonitored", FALSE) AS "IsMonitored",
-                        target."AcquisitionProfileId",
-                        target."LibraryRootId",
-                        profile."Name" AS "ProfileName",
-                        coalesce(targetRoot."Name", fileRoot."Name") AS "LibraryName",
-                        coalesce(files."FileCount", 0) AS "FileCount",
-                        coalesce(files."SizeBytes", 0) AS "SizeBytes",
-                        CASE
-                            WHEN download."IsDownloading" THEN 3
-                            WHEN files."FileCount" > 0 AND NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WorkUnits" AS unit
-                                WHERE
-                                    unit."WorkId" = work."Id"
-                                    AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
-                                    AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
-                                    AND NOT EXISTS (
-                                        SELECT
-                                            1
-                                        FROM
-                                            "MediaAssets" AS asset
-                                            JOIN "StoredFiles" AS present ON present."MediaAssetId" = asset."Id" AND present."MissingSince" IS NULL
-                                        WHERE
-                                            asset."WorkUnitId" = unit."Id"
-                                    )
-                            ) THEN 1
-                            WHEN coalesce(target."IsMonitored", FALSE) THEN 2
-                            ELSE 4
-                        END::smallint AS "WorkListStatusId"
-                    FROM
-                        "Works" AS work
-                        LEFT JOIN LATERAL (
-                            SELECT
-                                (array_agg(wanted."Id" ORDER BY wanted."Id"))[1] AS "Id",
-                                (array_agg(wanted."AcquisitionProfileId" ORDER BY wanted."Id"))[1] AS "AcquisitionProfileId",
-                                (array_agg(wanted."LibraryRootId" ORDER BY wanted."Id"))[1] AS "LibraryRootId",
-                                count(*)::integer AS "Targets",
-                                bool_or(NOT wanted."IsPaused") AS "IsMonitored"
-                            FROM
-                                "WantedItems" AS wanted
-                            WHERE
-                                wanted."WorkId" = work."Id"
-                            HAVING
-                                count(*) > 0
-                        ) AS target ON TRUE
-                        LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = target."AcquisitionProfileId"
-                        LEFT JOIN "LibraryRoots" AS targetRoot ON targetRoot."Id" = target."LibraryRootId"
-                        LEFT JOIN LATERAL (
-                            SELECT
-                                count(*)::integer AS "FileCount",
-                                sum(file."SizeBytes")::bigint AS "SizeBytes",
-                                (array_agg(file."LibraryRootId" ORDER BY file."Id"))[1] AS "LibraryRootId"
-                            FROM
-                                "MediaAssets" AS asset
-                                JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
-                            WHERE
-                                asset."WorkId" = work."Id"
-                        ) AS files ON TRUE
-                        LEFT JOIN "LibraryRoots" AS fileRoot ON fileRoot."Id" = files."LibraryRootId"
-                        LEFT JOIN LATERAL (
-                            SELECT
-                                EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        "WantedItems" AS wanted
-                                        JOIN "AcquisitionReleases" AS release ON release."WantedItemId" = wanted."Id"
-                                        JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
-                                    WHERE
-                                        wanted."WorkId" = work."Id"
-                                        AND operation."OperationStatusTypeId" IN (1, 2)
-                                ) AS "IsDownloading"
-                        ) AS download ON TRUE
-                    WHERE
-                        (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
-                        AND (@Query::text IS NULL OR strpos(lower(work."CanonicalTitle"), lower(@Query)) > 0)
-                        AND (@AcquisitionProfileId::bigint IS NULL OR target."AcquisitionProfileId" = @AcquisitionProfileId)
-                        AND (
-                            @LibraryRootId::bigint IS NULL
-                            OR target."LibraryRootId" = @LibraryRootId
-                            OR EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
-                                WHERE
-                                    asset."WorkId" = work."Id"
-                                    AND file."LibraryRootId" = @LibraryRootId
-                            )
-                        )
                 ), ordered AS (
                     SELECT
                         listed.*,
@@ -160,7 +165,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     ordered."CanonicalTitle",
                     ordered."ReleaseYear",
                     ordered."CreatedAt",
-                    poster."Value" AS "PosterUrl",
+                    facts."PosterUrl",
+                    facts."Overview",
                     ordered."WantedItemId",
                     ordered."TargetCount",
                     ordered."IsMonitored",
@@ -173,16 +179,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     ordered
                     LEFT JOIN LATERAL (
                         SELECT
-                            fact."Value"
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
+                            left((array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Overview'))[1], 600) AS "Overview"
                         FROM
                             "WorkMetadataFacts" AS fact
                         WHERE
                             fact."WorkId" = ordered."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS poster ON TRUE
+                            AND fact."FactKey" IN ('Poster', 'Overview')
+                    ) AS facts ON TRUE
                 WHERE
                     ordered."Position" > @Offset
                     AND ordered."Position" <= @Offset + @PageSize
@@ -193,6 +197,35 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 Parameters.WorkSortTypeId, Parameters.IsDescending));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkListItemV1>(sql, CancellationToken);
+        }
+    }
+
+    // The same filters as the list (its status, monitoring, order and page do not count): how many titles are in each state.
+    [ServiceEndpoint("GET", "/api/v1/admin/works/summary")]
+    public sealed class ReadWorksSummaryV1 : AdminService<ReadWorksParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WorksSummaryV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWorksParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadWorksParametersV1 parameters, Type resultType) => new("media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement = "WITH listed AS (" + ReadWorksV1.ListedWorks +
+                """
+                )
+                SELECT
+                    count(*)::integer AS "TotalCount",
+                    count(*) FILTER (WHERE listed."WorkListStatusId" = 1)::integer AS "AvailableCount",
+                    count(*) FILTER (WHERE listed."WorkListStatusId" = 2)::integer AS "MissingCount",
+                    count(*) FILTER (WHERE listed."WorkListStatusId" = 3)::integer AS "DownloadingCount",
+                    count(*) FILTER (WHERE listed."WorkListStatusId" = 4)::integer AS "UnmonitoredCount",
+                    count(*) FILTER (WHERE listed."IsMonitored")::integer AS "MonitoredCount"
+                FROM
+                    listed;
+                """;
+            sql.Parameters.Add(new AdminWorkListFilterData(Parameters.MediaTypeId, null, null, Parameters.LibraryRootId, Parameters.AcquisitionProfileId, Parameters.Query, WorkSortType.Title, false));
+            return await Context.ReadSql.ReadRequiredAsync<WorksSummaryV1>(sql, CancellationToken);
         }
     }
 

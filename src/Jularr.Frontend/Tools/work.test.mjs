@@ -8,7 +8,15 @@ const source = readFileSync(new URL('../Pages/Admin/Work/Work.ts', import.meta.u
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const exports = {};
 runInNewContext(script, { exports });
-const { normalizeColumns, compareValues, moveItem } = exports;
+const { normalizeColumns, compareValues, moveItem, listTemplates } = exports;
+
+test('the grid of a list follows the shown columns: the medium width drops the first level, the narrow one both', () => {
+    const grid = listTemplates([{ width: 'a', hide: 0 }, { width: 'b', hide: 1 }, { width: 'c', hide: 2 }, { width: 'd', hide: 0 }]);
+    assert.equal(grid.wide, 'a b c d');
+    assert.equal(grid.medium, 'a c d');
+    assert.equal(grid.narrow, 'a d');
+    assert.equal(listTemplates([]).wide, '');
+});
 
 test('a first visit shows the default columns in their order', () => {
     const state = normalizeColumns(null, ['title', 'size', 'path'], ['path']);

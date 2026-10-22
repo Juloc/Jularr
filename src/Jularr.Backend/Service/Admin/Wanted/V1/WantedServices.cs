@@ -12,18 +12,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     [ServiceEndpoint("GET", "/api/v1/admin/wanted")]
     public sealed class ReadWantedV1 : AdminService<ReadWantedParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WantedDetailsV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadWantedParametersV1 parameters) => ModuleRequirement.All("Requests");
-        protected override ServicePermission GetPermission(ReadWantedParametersV1 parameters, Type resultType) => new("wanted.read");
-        protected override PageRequest GetPageRequest(ReadWantedParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
-
-        protected override async Task<IServiceOutput> OnRead()
-        {
-            // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet: the view WantedBelowCutoff.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                WITH wanted_state AS (
+        // The targets with whether they hold media and sit below their cutoff: what the list and its counts both read.
+        internal const string WantedState =
+            """
                     SELECT
                         wanted."Id",
                         wanted."WorkId",
@@ -90,6 +81,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         "WantedItems" AS wanted
                     INNER JOIN
                         "Works" AS work ON work."Id" = wanted."WorkId"
+            """;
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WantedDetailsV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWantedParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(ReadWantedParametersV1 parameters, Type resultType) => new("wanted.read");
+        protected override PageRequest GetPageRequest(ReadWantedParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet: the view WantedBelowCutoff.
+            var sql = new SqlStatement();
+            sql.Statement = "WITH wanted_state AS (" + WantedState +
+                """
                 ), wanted_page AS (
                     SELECT
                         wanted_state."Id",
@@ -172,6 +176,33 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WantedDetailsV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/wanted/summary")]
+    public sealed class ReadWantedSummaryV1 : AdminService<ReadWantedParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WantedSummaryV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWantedParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(ReadWantedParametersV1 parameters, Type resultType) => new("wanted.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // How many targets each view of the list holds, and how many are high priority or paused.
+            var sql = new SqlStatement();
+            sql.Statement = "WITH wanted_state AS (" + ReadWantedV1.WantedState +
+                """
+                )
+                SELECT
+                    count(*)::integer AS "TotalCount",
+                    count(*) FILTER (WHERE NOT wanted_state."IsPaused" AND NOT wanted_state."HasMedia")::integer AS "MissingCount",
+                    count(*) FILTER (WHERE NOT wanted_state."IsPaused" AND wanted_state."IsCutoffUnmet")::integer AS "CutoffUnmetCount",
+                    count(*) FILTER (WHERE wanted_state."WantedPriorityTypeId" = 2)::integer AS "HighCount",
+                    count(*) FILTER (WHERE wanted_state."IsPaused")::integer AS "PausedCount"
+                FROM
+                    wanted_state;
+                """;
+            return await Context.ReadSql.ReadRequiredAsync<WantedSummaryV1>(sql, CancellationToken);
         }
     }
 

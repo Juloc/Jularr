@@ -1,0 +1,8 @@
+// The history on the list kit: the grid of its columns at three widths.
+.history-list {
+    --list-columns: minmax(220px, 2.2fr) minmax(150px, 1.2fr) minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(60px, .4fr);
+    --list-columns-medium: minmax(220px, 2.2fr) minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(60px, .4fr);
+    --list-columns-narrow: minmax(200px, 2fr) minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(60px, .4fr);
+}
+
+.history-path { overflow-wrap: anywhere; }
