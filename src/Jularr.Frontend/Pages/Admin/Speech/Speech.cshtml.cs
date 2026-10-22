@@ -63,9 +63,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
                         new ValueText(item.Language), new ValueText(ByteSize.Format(item.SizeBytes)),
                         new Div(new StateChip(new Text(item.IsInstalled ? "speech.models.installed" : "speech.models.notInstalled"), item.IsInstalled ? UiTone.Success : UiTone.Neutral,
                             new Icon(item.IsInstalled ? "check" : "download", assets, 14)), new Span(new Text(item.IsEnabled ? "speech.models.active" : "speech.models.inactive"))),
-                        new Div(Sample(item), item.RequiresLicenseAcceptance && !item.IsEnabled
-                            ? new A(new Text("speech.models.review")).Class("button button--compact").Attribute("href", Address() + "&modelHash=" + item.Sha256)
-                            : Activation(item),
+                        new Div(Sample(item), Activation(item),
                             new A(new Icon("info", assets, 16), new Span(new Text("speech.models.metadata")).Class("visually-hidden"))
                                 .Class("button button--icon").Attribute("href", Address() + "&modelHash=" + item.Sha256)).Class("list-actions")
                     ], [new ValueText(item.Language + " · " + ByteSize.Format(item.SizeBytes))])).ToArray()).Modifier("speech-models").Paged());
@@ -79,7 +77,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
                                 .Attribute("href", selected.GenderSource).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"))),
                             new P(new ValueText(selected.Id + " / " + selected.Version)), new P(new ValueText(selected.Sha256)).Class("speech-models__metadata"),
                             new A(new Text("speech.models.source")).Attribute("href", selected.Source).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
-                            new P(new Text("speech.models.deviceNotice")), Activation(selected)], [], TitleValue: selected.Name)], sheet: true, closeHref: Address(), open: true));
+                            new P(new Text("speech.models.deviceNotice"))], [], TitleValue: selected.Name)], sheet: true, closeHref: Address(), open: true));
                 }
             }
 
@@ -107,15 +105,18 @@ namespace Jularr.Frontend.Pages.Admin.Speech
                 .TextAttribute("data-play", "speech.models.samplePlay").TextAttribute("data-stop", "speech.models.sampleStop").TextAttribute("data-failed", "speech.models.sampleFailed"),
                 new Span().Attribute("data-sample-status", "").Attribute("role", "status")).Class("speech-models__sample");
 
-        private IUiComponent Activation(SpeechModelV1 item) => !texts.Can("instance.settings.update", "Reading") ? new Span()
+        private bool CanActivate => texts.Can("instance.settings.update", "Reading");
+
+        // Activation is a switch in the model's row, saved by the page's pill (saving downloads the package); a package with conditions asks to accept them beside it.
+        private IUiComponent Activation(SpeechModelV1 item) => !CanActivate ? new Span()
             : new Form<UpdateSpeechModelDataV1>(form =>
             {
-                form.Hidden(value => value.IsEnabled);
                 form.Hidden(value => value.Version);
+                form.Switch(value => value.IsEnabled, "speech.models.active", control => control);
                 if (!item.IsEnabled && item.RequiresLicenseAcceptance) form.Toggle(value => value.AcceptLicense, "speech.models.acceptLicense");
-                form.Submit(item.IsEnabled ? "speech.models.deactivate" : "speech.models.activate");
+                form.Save();
             }, Address() + "&hash=" + item.Sha256, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                new UpdateSpeechModelDataV1(!item.IsEnabled, item.Revision), _hash == item.Sha256 ? FormError : null);
+                new UpdateSpeechModelDataV1(item.IsEnabled, item.Revision), _hash == item.Sha256 ? FormError : null);
 
         public async Task<IActionResult> OnGetAsync()
         {

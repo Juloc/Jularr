@@ -184,6 +184,20 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(rows.Filter(new() { HasText = "guest" }).Locator("select")).ToBeVisibleAsync();
                 Assert.AreEqual(1, await page.Locator("main .navigation-tabs").CountAsync());
                 await Evidence.SaveAsync(page, "media-servers");
+
+                // Disconnecting deletes the stored key, so it asks first: Cancel keeps the connection, the confirmation removes it.
+                var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Disconnect this server?", Exact = false });
+                await jellyfin.GetByRole(AriaRole.Button, new() { Name = "Disconnect server", Exact = true }).First.ClickAsync();
+                await Assertions.Expect(dialog).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "media-server-disconnect-dialog");
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+                await Assertions.Expect(dialog).ToBeHiddenAsync();
+                await Assertions.Expect(jellyfin).ToContainTextAsync("Connected");
+                Assert.AreEqual("jelly", await jularr.ScalarAsync("SELECT \"ExternalId\" FROM \"Providers\" WHERE \"Key\" = 'jellyfin'"));
+                await jellyfin.GetByRole(AriaRole.Button, new() { Name = "Disconnect server", Exact = true }).First.ClickAsync();
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Disconnect server", Exact = true }));
+                await Assertions.Expect(page.Locator("#provider-jellyfin")).ToContainTextAsync("Setup needed");
+                Assert.IsTrue(await jularr.ScalarAsync("SELECT \"ExternalId\" FROM \"Providers\" WHERE \"Key\" = 'jellyfin'") is null or DBNull);
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }
             catch

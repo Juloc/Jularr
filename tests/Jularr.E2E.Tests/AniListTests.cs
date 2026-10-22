@@ -88,7 +88,16 @@ namespace Jularr.E2E.Tests
 
                 // Disconnecting offers the connection again; the progress in Jularr stays.
                 await page.GotoAsync("/Settings");
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Disconnect", Exact = true }));
+                // Disconnecting deletes the connection, so it asks first; Cancel keeps it.
+                var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Disconnect AniList?" });
+                await page.GetByRole(AriaRole.Button, new() { Name = "Disconnect", Exact = true }).First.ClickAsync();
+                await Assertions.Expect(dialog).ToBeVisibleAsync();
+                await Evidence.SaveAsync(page, "anilist-disconnect-dialog");
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+                await Assertions.Expect(dialog).ToBeHiddenAsync();
+                await Assertions.Expect(page.Locator(".anilist-card__account .truncated__text")).ToHaveTextAsync("Connected as E2E Fan");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Disconnect", Exact = true }).First.ClickAsync();
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Disconnect", Exact = true }));
                 await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Connect AniList" })).ToBeVisibleAsync();
                 await WaitForWatchedAsync(page, expectedEpisodes: 2);
 

@@ -107,7 +107,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   A script's request gets the hint in the `HX-Trigger` header of the answering page, a page without script shows it itself.
 - A dialog is the shared [Modal](../src/Jularr.Frontend/Framework/Components/Modal.cs): title row with the X at the right, the body, and the footer, which is the actions of its form
   (`form.Cancel()` and the primary `form.Submit(...)`, never `form.Save()`); a dialog's form saves on its own and the page's save pill does not take part.
-- Owner's decision 22 Oct: the settings of a provider, service or catalog are inputs inside its card (a `Form.Save` form saved by the page's pill), never behind a Settings or Configure button that opens a dialog. Dialogs stay for adding something new (with Cancel) and for destructive confirmations.
+- Owner's decision 22 Oct: the settings of a provider, service or catalog are inputs inside its card (a `Form.Save` form saved by the page's pill), never behind a Settings or Configure button that opens a dialog. Dialogs stay for adding something new (with Cancel) and for destructive confirmations (`Modal.Confirm`: a Disconnect that deletes a stored key or token asks first, Cancel keeps it). A row of a catalog list (a speech model) carries its switches inline in the same way.
 - Owner's decision 19 Oct: settings forms end with `form.Save()` instead of their own save button. The page's one
   [save dock](../src/Jularr.Frontend/Framework/Components/SavePill.cs) (the [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs) in its
   form-page mode: "N changes", Discard, Save) appears centred in the content while a value

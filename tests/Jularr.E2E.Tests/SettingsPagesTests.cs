@@ -129,7 +129,7 @@ namespace Jularr.E2E.Tests
 
         [TestMethod]
         [Timeout(300_000)]
-        public async Task Languages_AddAndEditInDrawers_FromTheListWithItsDock()
+        public async Task Languages_AddInADialogWithCancel_AndEditInlineInTheCardSavedByThePill()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -137,23 +137,38 @@ namespace Jularr.E2E.Tests
             await Owner.SetUpAndSignInAsync(page);
             await page.GotoAsync("/Admin/Instance/Languages");
             await page.EvaluateAsync(Marker);
-            await Assertions.Expect(page.Locator(".list-row", new() { HasText = "English" })).ToBeVisibleAsync();
+            ILocator Card(string name) => page.Locator(".feature-card", new() { HasText = name });
+            await Assertions.Expect(Card("English").First).ToBeVisibleAsync();
 
-            // A new language is a row of its own, and the row opens its drawer.
-            await page.GetByRole(AriaRole.Button, new() { Name = "Add language", Exact = true }).ClickAsync();
+            // Adding stays a dialog: Cancel leaves nothing behind, adding creates the card.
             var add = page.GetByRole(AriaRole.Dialog, new() { Name = "Add language", Exact = true });
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add language", Exact = true }).ClickAsync();
+            await add.Locator("[name=Locale]").FillAsync("xx-XX");
+            await add.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+            await Assertions.Expect(add).ToBeHiddenAsync();
+            await Assertions.Expect(Card("xx-XX")).ToHaveCountAsync(0);
+            await page.GetByRole(AriaRole.Button, new() { Name = "Add language", Exact = true }).ClickAsync();
             await add.Locator("[name=Locale]").FillAsync("fr-CA");
             await add.Locator("[name=Name]").FillAsync("French (CA)");
             await Steps.FollowAsync(page, add.GetByRole(AriaRole.Button, new() { Name = "Add language", Exact = true }));
-            var row = page.Locator(".list-row", new() { HasText = "French (CA)" });
-            await Assertions.Expect(row).ToContainTextAsync("Enabled");
+            await Assertions.Expect(Card("French (CA)")).ToContainTextAsync("Enabled");
 
-            await row.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).ClickAsync();
-            var edit = page.GetByRole(AriaRole.Dialog, new() { Name = "Edit language", Exact = true }).Filter(new() { HasText = "fr-CA" });
-            await edit.Locator("[name=IsEnabled][value=False]").CheckAsync();
-            await Steps.FollowAsync(page, edit.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
-            await Assertions.Expect(page.Locator(".list-row", new() { HasText = "French (CA)" })).ToContainTextAsync("Disabled");
+            // Editing is in the card itself, with no Edit button, dialog or drawer; the pill saves it.
+            var card = Card("French (CA)");
+            Assert.AreEqual(0, await page.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).CountAsync());
+            await card.Locator("[name=Name]").FillAsync("Canadian French");
+            await card.Locator(".toggle").ClickAsync();
+            var pill = page.Locator("[data-save-pill]");
+            await Assertions.Expect(pill).ToContainTextAsync("2 changes");
+            await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
+            await Steps.SaveAsync(page);
+            await Assertions.Expect(Card("Canadian French")).ToContainTextAsync("Disabled");
+            await Assertions.Expect(pill).ToBeHiddenAsync();
             Assert.AreEqual("same document", await page.EvaluateAsync<string>("window.settingsMarker"));
+            await page.ReloadAsync();
+            await Assertions.Expect(Card("Canadian French").Locator("[name=Name]")).ToHaveValueAsync("Canadian French");
+            await Assertions.Expect(Card("Canadian French").Locator("input[name=IsEnabled][type=checkbox]")).Not.ToBeCheckedAsync();
+            await Evidence.SaveAsync(page, "languages-inline");
         }
 
         [TestMethod]
