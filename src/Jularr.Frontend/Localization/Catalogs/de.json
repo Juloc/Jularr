@@ -12643,6 +12643,202 @@
   "setup.overview.set": [
    "Set",
    "Gesetzt"
+  ],
+  "setup.check.downloadStorage.Usenet": [
+   "Choose and confirm download storage for the Jularr Usenet downloader.",
+   "Wähle den Download-Speicher für den Usenet-Downloader von Jularr und bestätige ihn."
+  ],
+  "setup.check.downloadStorage.Direct": [
+   "Choose and confirm storage for direct downloads.",
+   "Wähle den Speicher für direkte Downloads und bestätige ihn."
+  ],
+  "nav.administration": [
+   "Administration",
+   "Verwaltung"
+  ],
+  "nav.menu": [
+   "Open the menu",
+   "Menü öffnen"
+  ],
+  "nav.theme": [
+   "Switch between light and dark",
+   "Zwischen hell und dunkel wechseln"
+  ],
+  "acquisition.outcome.acquisition_paused": [
+   "Monitoring was paused during the search",
+   "Die Überwachung wurde während der Suche pausiert"
+  ],
+  "acquisition.outcome.acquisition_import_path_unconfigured": [
+   "Set up and verify the SABnzbd Complete folder",
+   "Den Complete-Ordner von SABnzbd einrichten und prüfen"
+  ],
+  "acquisition.outcome.download_storage_mount_required": [
+   "Download storage must be mounted inside Jularr",
+   "Der Download-Speicher muss in Jularr eingebunden sein"
+  ],
+  "acquisition.outcome.download_storage_unavailable": [
+   "Download storage is unavailable or its mount changed",
+   "Der Download-Speicher ist nicht erreichbar oder seine Einbindung hat sich geändert"
+  ],
+  "acquisition.outcome.download_storage_reserve": [
+   "Free space is below the reserve or could not be checked",
+   "Der freie Speicherplatz liegt unter der Reserve oder konnte nicht geprüft werden"
+  ],
+  "acquisition.outcome.download_workspace_limit": [
+   "Download workspace limit reached",
+   "Das Limit für den Download-Arbeitsbereich ist erreicht"
+  ],
+  "acquisition.outcome.download_size_limit": [
+   "Download size limit reached",
+   "Das Limit für die Download-Größe ist erreicht"
+  ],
+  "acquisition.workspace.unlimited": [
+   "No size limit",
+   "Keine Größenbegrenzung"
+  ],
+  "acquisition.outcome.import_storage_unavailable": [
+   "Storage became unavailable while importing",
+   "Der Speicher war beim Import nicht mehr erreichbar"
+  ],
+  "acquisition.outcome.import_assignment_failed": [
+   "The copied files could not be fully assigned to the library. Download files were kept for recovery.",
+   "Die kopierten Dateien konnten nicht vollständig der Bibliothek zugeordnet werden. Die Download-Dateien wurden zur Wiederherstellung behalten."
+  ],
+  "acquisition.outcome.import_target_conflict": [
+   "All available import filenames are occupied. The existing library files were not overwritten.",
+   "Alle möglichen Dateinamen für den Import sind belegt. Die vorhandenen Dateien der Bibliothek wurden nicht überschrieben."
+  ],
+  "acquisition.outcome.import_storage_full": [
+   "Library space is insufficient or could not be checked",
+   "Der Platz der Bibliothek reicht nicht aus oder konnte nicht geprüft werden"
+  ],
+  "acquisition.connection.downloadStorage": [
+   "Completed download storage",
+   "Speicher der fertigen Downloads"
+  ],
+  "acquisition.connection.containerStorage": [
+   "Path inside the Jularr container",
+   "Pfad im Jularr-Container"
+  ],
+  "acquisition.connection.downloadStorageHint": [
+   "Choose the existing storage connection that contains SABnzbd's completed files, then browse its folder. Without a connection, enter an absolute path visible inside Jularr. The remote prefix must match SABnzbd's reported path.",
+   "Wähle die vorhandene Speicherverbindung, auf der die fertigen Dateien von SABnzbd liegen, und durchsuche dann ihren Ordner. Ohne Verbindung gibst du einen absoluten Pfad an, der in Jularr sichtbar ist. Das entfernte Präfix muss zum Pfad passen, den SABnzbd meldet."
+  ],
+  "player.status.playback_cache_unavailable": [
+   "Playback cache is full or its storage is unavailable",
+   "Der Wiedergabe-Cache ist voll oder sein Speicher ist nicht erreichbar"
+  ],
+  "system.tool.cjxl": [
+   "cjxl (cover cache, JPEG XL)",
+   "cjxl (Cover-Cache, JPEG XL)"
+  ],
+  "folderPicker.close": [
+   "Close folder browser",
+   "Ordnerauswahl schließen"
+  ],
+  "folderPicker.storageConnections": [
+   "Available storage",
+   "Verfügbare Speicher"
+  ],
+  "form.sizeUnit": [
+   "Size unit",
+   "Größeneinheit"
+  ],
+  "common.close": [
+   "Close",
+   "Schließen"
+  ],
+  "downloadStorage.configure": [
+   "Configure download storage",
+   "Download-Speicher einrichten"
+  ],
+  "downloadStorage.purpose": [
+   "Choose Incomplete and Complete folders for Jularr's own downloads. External clients keep their own download folders.",
+   "Wähle die Ordner Incomplete und Complete für die eigenen Downloads von Jularr. Externe Clients behalten ihre eigenen Download-Ordner."
+  ],
+  "downloadStorage.area.Usenet": [
+   "Jularr Usenet downloader",
+   "Usenet-Downloader von Jularr"
+  ],
+  "downloadStorage.area.Direct": [
+   "Direct downloads",
+   "Direkte Downloads"
+  ],
+  "downloadStorage.incomplete": [
+   "Incomplete · working folder",
+   "Incomplete · Arbeitsordner"
+  ],
+  "downloadStorage.complete": [
+   "Complete · ready for import",
+   "Complete · bereit für den Import"
+  ],
+  "downloadStorage.reserve": [
+   "Free space reserve",
+   "Reserve an freiem Speicherplatz"
+  ],
+  "downloadStorage.jobLimit": [
+   "Optional download size limit",
+   "Optionales Limit für die Download-Größe"
+  ],
+  "downloadStorage.workspaceLimit": [
+   "Optional workspace limit",
+   "Optionales Limit für den Arbeitsbereich"
+  ],
+  "downloadStorage.parallel": [
+   "Maximum parallel jobs",
+   "Maximale parallele Aufträge"
+  ],
+  "downloadStorage.limitHint": [
+   "The download size limit applies to the downloaded payload. The workspace limit counts archives, unpacked files and all jobs together. Repair and unpack programs are monitored and stopped when a limit is exceeded; they may briefly exceed it before stopping.",
+   "Das Limit für die Download-Größe gilt für die heruntergeladenen Daten. Das Limit für den Arbeitsbereich zählt Archive, entpackte Dateien und alle Aufträge zusammen. Reparatur- und Entpackprogramme werden überwacht und gestoppt, sobald ein Limit überschritten ist; bis zum Stopp können sie es kurz überschreiten."
+  ],
+  "downloadStorage.confirmHint": [
+   "Confirm these storage targets, including any local VM storage you deliberately selected. The folders must be writable and separate. Leave size limits empty for no ceiling. Paths of active jobs cannot be changed.",
+   "Bestätige diese Speicherziele, auch einen lokalen VM-Speicher, den du bewusst gewählt hast. Die Ordner müssen beschreibbar und voneinander getrennt sein. Lass die Größenlimits leer, wenn es keine Obergrenze geben soll. Pfade laufender Aufträge lassen sich nicht ändern."
+  ],
+  "downloadStorage.confirm": [
+   "Check and confirm storage",
+   "Speicher prüfen und bestätigen"
+  ],
+  "downloadStorage.unset": [
+   "Not selected",
+   "Nicht ausgewählt"
+  ],
+  "downloadStorage.readOnly": [
+   "This storage is read-only. Choose writable download storage.",
+   "Dieser Speicher ist schreibgeschützt. Wähle einen beschreibbaren Download-Speicher."
+  ],
+  "downloadStorage.mountRequired": [
+   "This direct SMB connection can serve libraries. Downloading and unpacking need the share mounted inside the Jularr container; configure that mount first.",
+   "Diese direkte SMB-Verbindung kann Bibliotheken bereitstellen. Zum Herunterladen und Entpacken muss die Freigabe im Jularr-Container eingebunden sein; richte diese Einbindung zuerst ein."
+  ],
+  "downloadStorage.noStorage": [
+   "No storage connections are configured. Add a local path exposed through Compose or a mounted SMB/NFS share in Storage first.",
+   "Es sind keine Speicherverbindungen eingerichtet. Füge zuerst unter Speicher einen über Compose bereitgestellten lokalen Pfad oder eine eingebundene SMB/NFS-Freigabe hinzu."
+  ],
+  "folderPicker.choose": [
+   "Use this folder",
+   "Diesen Ordner verwenden"
+  ],
+  "folderPicker.loading": [
+   "Loading folders…",
+   "Ordner werden geladen …"
+  ],
+  "folderPicker.failed": [
+   "Folders could not be loaded. Your selection has not changed. Close the browser and try again.",
+   "Die Ordner konnten nicht geladen werden. Deine Auswahl hat sich nicht geändert. Schließe die Ordnerauswahl und versuche es erneut."
+  ],
+  "folderPicker.first": [
+   "First folders",
+   "Erste Ordner"
+  ],
+  "folderPicker.more": [
+   "More folders",
+   "Weitere Ordner"
+  ],
+  "folderPicker.end": [
+   "No more folders.",
+   "Keine weiteren Ordner."
   ]
  }
 }

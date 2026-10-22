@@ -467,7 +467,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         "storageMountId", input.DownloadStorageMountId?.ToString(CultureInfo.InvariantCulture) ?? "");
                     if (texts.Can("storage.read"))
                     {
-                        form.Content(new FolderPicker(browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
+                        form.Content(new FolderPicker(assets, browse, input.LocalPath ?? "", nameof(input.LocalPath), "/Admin/Storage",
                             storageMountFieldName: nameof(input.DownloadStorageMountId), isVisible: input.DownloadStorageMountId is not null));
                     }
                 }
