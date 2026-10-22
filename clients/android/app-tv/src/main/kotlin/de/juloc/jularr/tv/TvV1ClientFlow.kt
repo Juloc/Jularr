@@ -53,7 +53,9 @@ internal class TvV1ClientFlow(
 
         return Home(
             library = library,
-            continueWatching = if (capabilities.hasModule("Playback")) {
+            continueWatching = if (capabilities.hasModule("Playback") &&
+                capabilities.hasPermission("profile.playback")
+            ) {
                 // Reading progress or games must never be passed into a TV video player.
                 api.continueWatching().filter { it.mediaAssetTypeId == 1 }
             } else emptyList(),
