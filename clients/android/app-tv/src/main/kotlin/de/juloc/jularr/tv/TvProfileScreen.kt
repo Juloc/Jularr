@@ -49,7 +49,7 @@ import de.juloc.jularr.core.update.UpdateCheckResult
  */
 @Composable
 fun TvProfileScreen(
-    account: ClientAccount,
+    account: ClientAccount?,
     serverOrigin: String,
     currentVersionName: String,
     updateState: TvUpdateState,
@@ -160,7 +160,7 @@ fun TvProfileScreen(
                     item {
                         TvSettingRow(
                             stringResource(R.string.tv_profile_switch_account),
-                            account.userName,
+                            account?.userName,
                             onClick = onSwitchAccount,
                         )
                     }
