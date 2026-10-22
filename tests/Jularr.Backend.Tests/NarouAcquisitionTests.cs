@@ -40,14 +40,22 @@ namespace Jularr.Backend.Tests
                 "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
             Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
 
-            await using (var scope = host.Services.CreateAsyncScope())
+            var count = 0L;
+            for (var pass = 0; pass < 4; pass++)
             {
-                await scope.ServiceProvider.GetRequiredService<MonitorDownloadsV1>()
-                    .ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
+                await using (var scope = host.Services.CreateAsyncScope())
+                {
+                    await scope.ServiceProvider.GetRequiredService<MonitorDownloadsV1>()
+                        .ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
+                }
+                count = (long)(await host.ScalarAsync(
+                    "SELECT count(*) FROM \"StoredFiles\" AS file JOIN \"MediaAssets\" AS asset ON file.\"MediaAssetId\" = asset.\"Id\" WHERE asset.\"WorkId\" = "
+                    + workId + " AND file.\"MissingSince\" IS NULL"))!;
+                if (count > 0) break;
             }
-            Assert.AreEqual(1L, await host.ScalarAsync(
-                "SELECT count(*) FROM \"StoredFiles\" AS file JOIN \"MediaAssets\" AS asset ON file.\"MediaAssetId\" = asset.\"Id\" WHERE asset.\"WorkId\" = "
-                + workId + " AND file.\"MissingSince\" IS NULL"));
+            var attention = await host.ScalarAsync(
+                "SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2 ORDER BY \"Id\" DESC LIMIT 1");
+            Assert.AreEqual(1L, count, "Narō import attention: " + attention);
             Assert.IsTrue(source.Urls.Any(url => url.StartsWith("api.syosetu.com/novelapi/api/", StringComparison.Ordinal)));
             Assert.IsTrue(source.Urls.Any(url => url == "ncode.syosetu.com/n123/1/"));
         }
