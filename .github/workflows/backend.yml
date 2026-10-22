@@ -22,10 +22,11 @@ on:
 permissions:
   contents: read
 
-# Keep full branch runs independent; never cancel validation after a merge.
+# Newer clean-start commits supersede older full runs to avoid runner saturation.
+# A manual release verification run is never cancelled by this workflow.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   test:
