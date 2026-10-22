@@ -11,6 +11,11 @@ services:
       - "127.0.0.1:8888:8888"
       - "127.0.0.1:8000:8000"
       - "127.0.0.1:8080:8080"
+    # The free tier of the provider has no IPv6. Left on, the client tries the IPv6 address of a
+    # tracker, waits for a reply that never comes and only then tries IPv4. Off, the attempt fails
+    # at once and the client goes to IPv4.
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
 
   qbittorrent:
     depends_on:
@@ -29,3 +34,8 @@ services:
       vpn:
         # Not "healthy": a tunnel that does not come up is one of the cases to measure.
         condition: service_started
+    environment:
+      # Inside the tunnel the name server is Gluetun's, so the names of the services do not
+      # resolve any more; the client and the control server share this network space.
+      QBITTORRENT_URL: http://127.0.0.1:8080
+      VPN_CONTROL_URL: http://127.0.0.1:8000

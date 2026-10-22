@@ -28,13 +28,21 @@ services:
       - path: ./vpn/vpn.env
         required: false
     environment:
-      # The path of the configuration is fixed; the file itself is not in the repository.
-      VPN_CUSTOM_CONFIG_PATH: /vpn/jularr.conf
+      # The name server of the provider from the configuration, inside the tunnel: nothing
+      # goes out unencrypted, and no name server outside the tunnel is needed.
+      DNS_SERVER: "off"
+      DNS_UPSTREAM_RESOLVER_TYPE: plain
+      DNS_UPSTREAM_PLAIN_ADDRESSES: ${VPN_DNS:-10.2.0.1:53}
+      # The path to the server is narrower than the discovery suggests: with 1320 the handshake
+      # of larger sites breaks, with 1280 it does not.
+      WIREGUARD_MTU: ${VPN_MTU:-1280}
+      # The control server of the tunnel is private: the measurement needs it to close the tunnel.
+      HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE: '{"auth":"apikey","apikey":"${VPN_API_KEY}"}'
       FIREWALL_INPUT_PORTS: ${VPN_INPUT_PORTS:-6881}
       FIREWALL_OUTBOUND_BLOCKED_PORTS: 6881
-      # The name server of Gluetun, whose queries travel through the tunnel, so nothing leaks.
-      DNS_SERVER: "on"
     volumes:
+      # The configuration of the provider, in the place Gluetun reads it from.
+      - ./vpn/jularr.conf:/gluetun/wireguard/wg0.conf:ro
       - ./vpn:/vpn:ro
     ports:
       - "127.0.0.1:8888:8888" # http proxy
@@ -72,6 +80,7 @@ services:
       QBITTORRENT_URL: http://qbittorrent:8080
       QBITTORRENT_USER: ${QBITTORRENT_USER:-admin}
       QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD}
+      API_KEY: ${VPN_API_KEY:-}
       TORRENT_URL: ${TORRENT_URL:-https://releases.ubuntu.com/24.04/ubuntu-24.04.5-live-server-amd64.iso.torrent}
       DOWNLOAD_DIR: /downloads
     volumes:
