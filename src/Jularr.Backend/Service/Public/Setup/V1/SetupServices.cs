@@ -7,6 +7,7 @@ using Jularr.Backend.Logic.Account;
 using Jularr.Backend.Logic.Session;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Public.Localization.V1;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Public.Setup.V1
@@ -74,11 +75,13 @@ namespace Jularr.Backend.Service.Public.Setup.V1
     {
         private readonly AuthenticationOptions _options;
         private readonly UiLocalizationCache _localization;
+        private readonly IHttpContextAccessor _http;
 
-        internal CreateOwnerV1(IOptions<AuthenticationOptions> options, UiLocalizationCache localization)
+        internal CreateOwnerV1(IOptions<AuthenticationOptions> options, UiLocalizationCache localization, IHttpContextAccessor http)
         {
             _options = options.Value;
             _localization = localization;
+            _http = http;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -89,7 +92,7 @@ namespace Jularr.Backend.Service.Public.Setup.V1
         {
             // Create and sign in atomically.
             var account = await Context.CreateFirstOwnerAsync(Data.Username, Data.DisplayName, Data.Password, Data.UiLocaleId, CancellationToken);
-            var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), CancellationToken);
+            var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), BrowserDevice.Current(_http.HttpContext), CancellationToken);
             return new LoginResultV1(session);
         }
 

@@ -621,7 +621,7 @@ namespace Jularr.Backend.Service.Core
             };
 
         // No cookies, no cross-site forgery.
-        private static bool IsAppRequest(HttpContext http) =>
+        internal static bool IsAppRequest(HttpContext http) =>
             http.User.Identity?.AuthenticationType == DeviceBearerScheme || http.GetEndpoint()?.Metadata.GetMetadata<ServiceEndpointAttribute>()?.ForApps == true;
 
         // Razor shares committed auth effects.
@@ -661,6 +661,7 @@ namespace Jularr.Backend.Service.Core
                     new AuthenticationProperties { ExpiresUtc = session.ExpiresAt, IsPersistent = true });
                 http.User = principal;
                 http.Response.Headers["RequestVerificationToken"] = antiforgery.GetAndStoreTokens(http).RequestToken;
+                BrowserDevice.Issue(http);
             }
 
             if (result is IAuthenticationChallengeResult challenge)

@@ -2,6 +2,9 @@
     // The lavender field tone for the chips and tabs inside the drawer.
     --tint: var(--field);
 
+    // Open without script (a row's address) it stands over the page like the modal does.
+    position: fixed;
+    z-index: 41;
     inset: 0 0 0 auto;
     display: flex;
     flex-direction: column;

@@ -284,7 +284,7 @@ CREATE TABLE "ProfilePlaybackPreferences" (
     "SubtitleLanguage" varchar(2) NULL CHECK ("SubtitleLanguage" ~ '^[a-z]{2}$'),
     -- 1 off, 2 forced only, 3 always, 4 only while the audio is foreign.
     "SubtitleModeTypeId" smallint NOT NULL DEFAULT 4 CHECK ("SubtitleModeTypeId" BETWEEN 1 AND 4),
-    "Speed" numeric(3, 2) NOT NULL DEFAULT 1 CHECK ("Speed" BETWEEN 0.5 AND 2),
+    "Speed" numeric(3, 2) NOT NULL DEFAULT 1 CHECK ("Speed" BETWEEN 0.25 AND 4),
     "AutoplayNext" boolean NOT NULL DEFAULT TRUE,
     -- What happens at an intro (or recap) and at credits (or preview): 1 nothing, 2 a Skip button, 3 skipped by itself.
     "IntroSkipModeTypeId" smallint NOT NULL DEFAULT 2 CHECK ("IntroSkipModeTypeId" BETWEEN 1 AND 3),

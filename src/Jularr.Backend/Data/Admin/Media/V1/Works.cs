@@ -60,7 +60,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     // One row of the library list: the title with its cover, whether it is monitored, what it holds on disk and the profile and library its target uses.
     public sealed class WorkListItemV1 : BaseResponse
     {
-        public WorkListItemV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, DateTime createdAt, string? posterUrl, long? wantedItemId,
+        public WorkListItemV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, DateTime createdAt, string? posterUrl, string? overview, long? wantedItemId,
             int targetCount, bool isMonitored, string? profileName, string? libraryName, int fileCount, long sizeBytes, WorkListStatus workListStatusId)
         {
             Id = id;
@@ -70,6 +70,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             ReleaseYear = releaseYear;
             CreatedAt = createdAt;
             PosterUrl = posterUrl;
+            Overview = overview;
             WantedItemId = wantedItemId;
             TargetCount = targetCount;
             IsMonitored = isMonitored;
@@ -101,6 +102,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.ImageUrl))]
         public string? PosterUrl { get; }
 
+        // The start of its synopsis, for the list's overview view.
+        [DataField(typeof(WorkManagementFields), nameof(WorkManagementFields.Overview))]
+        public string? Overview { get; }
+
         // Its first acquisition target; none until the title is wanted.
         [DataField(typeof(Fields.Acquisition.WantedItemFields), nameof(Fields.Acquisition.WantedItemFields.Id), false)]
         public long? WantedItemId { get; }
@@ -126,6 +131,38 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkListFields), nameof(WorkListFields.WorkListStatusId))]
         public WorkListStatus WorkListStatusId { get; }
+    }
+
+    // The numbers of the library list's filter chips and figures: every title that passes the type, library, profile and words of the list, by state.
+    public sealed class WorksSummaryV1 : BaseResponse
+    {
+        public WorksSummaryV1(int totalCount, int availableCount, int missingCount, int downloadingCount, int unmonitoredCount, int monitoredCount)
+        {
+            TotalCount = totalCount;
+            AvailableCount = availableCount;
+            MissingCount = missingCount;
+            DownloadingCount = downloadingCount;
+            UnmonitoredCount = unmonitoredCount;
+            MonitoredCount = monitoredCount;
+        }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
+        public int TotalCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
+        public int AvailableCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
+        public int MissingCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
+        public int DownloadingCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
+        public int UnmonitoredCount { get; }
+
+        [DataField(typeof(WorkListFields), nameof(WorkListFields.TitleCount))]
+        public int MonitoredCount { get; }
     }
 
     public sealed class WorkParametersV1 : BaseParameters

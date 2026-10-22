@@ -86,7 +86,7 @@ namespace Jularr.E2E.Tests
                 await visitor.GotoAsync("/Requests");
                 await Assertions.Expect(visitor.Locator(".request-row", new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("Waiting for approval");
                 await page.GotoAsync("/Admin/Requests");
-                await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).Locator("form")
+                await Steps.SubmitAsync(page, Steps.ListRow(page, FakeServices.MovieTitle).Locator("form")
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
                 fakes.Offer(film);
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);

@@ -10,7 +10,7 @@ namespace Jularr.Frontend.Framework
         {
             var picker = new Div(
                 new P(new Strong(new Text("storage.paths.selected")), new ValueText(": "),
-                    new Span(new ValueText(selectedLabel ?? "/" + selectedPath)).Attribute("data-folder-selection", "")),
+                    new Span(new Truncated(selectedLabel ?? "/" + selectedPath)).Class("folder-picker__selection").Attribute("data-folder-selection", "")),
                 new A(new Text("storage.paths.browse")).Class("button").Attribute("href", fallbackUrl)
                     .Attribute("data-folder-open", "").Attribute("data-navigation", "full").Attribute("data-folder-url", QueryHelpers.AddQueryString(browseUrl, "path", selectedPath)),
                 new NoScript(new Div([.. fallback ?? []])),
@@ -39,14 +39,14 @@ namespace Jularr.Frontend.Framework
             var segments = path.Length == 0 ? [] : path.Split('/');
             for (var index = 0; index < segments.Length; index++)
             {
-                trail.Add(new A(new ValueText(segments[index])).Attribute("href", QueryHelpers.AddQueryString(browseUrl, "path", string.Join('/', segments[..(index + 1)])))
+                trail.Add(new A(new Truncated(segments[index])).Attribute("href", QueryHelpers.AddQueryString(browseUrl, "path", string.Join('/', segments[..(index + 1)])))
                     .Attribute("data-folder-navigate", ""));
             }
 
             return new Section(
                 new Nav([.. trail]).Class("folder-picker__trail").Attribute("aria-label", texts["storage.paths.selected"]),
                 names.Count == 0 ? new P(new Text(afterName is null ? "storage.paths.noFolders" : "folderPicker.end"))
-                    : new Ul([.. names.Select(name => new Li(new A(new ValueText(name))
+                    : new Ul([.. names.Select(name => new Li(new A(new Truncated(name))
                         .Attribute("href", QueryHelpers.AddQueryString(browseUrl, "path", path.Length == 0 ? name : path + "/" + name))
                         .Attribute("data-folder-navigate", "")))]).Class("folder-picker__folders"),
                 new Div(

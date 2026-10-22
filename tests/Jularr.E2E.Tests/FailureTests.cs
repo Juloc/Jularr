@@ -34,7 +34,7 @@ namespace Jularr.E2E.Tests
 
                 // Still signed in; the running job, not a new one, is picked up again and imported once it finishes.
                 await page.GotoAsync("/Admin/Activity");
-                var queued = page.Locator("tr", new() { HasText = FakeServices.MovieTitle });
+                var queued = Steps.ListRow(page, FakeServices.MovieTitle);
                 await Assertions.Expect(queued).ToContainTextAsync("Downloading");
                 await Assertions.Expect(queued).ToContainTextAsync("40 %");
 
@@ -105,9 +105,9 @@ namespace Jularr.E2E.Tests
 
                 // The error tile counts it and the Errors filter lists it, next to the history.
                 await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToHaveTextAsync("1");
-                await Steps.FollowAsync(page, page.Locator(".activity-bar").GetByRole(AriaRole.Link, new() { Name = "Errors", Exact = true }));
-                await Assertions.Expect(page.Locator("tr", new() { HasText = "Download failed" })).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".activity-bar .navigation-tabs__link")).ToHaveCountAsync(6);
+                await Steps.FollowAsync(page, page.Locator(".list-toolbar").GetByRole(AriaRole.Link, new() { Name = "Errors", Exact = false }));
+                await Assertions.Expect(Steps.ListRow(page, "Download failed")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".list-toolbar .navigation-tabs__link")).ToHaveCountAsync(6);
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
@@ -196,8 +196,8 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "queue-waiting");
 
                 // Removing is in the entry's panel and asks first: the summary opens the button that deletes the partial files.
-                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Details", Exact = true }));
-                var panel = page.Locator(".activity-drawer");
+                await waiting.GetByRole(AriaRole.Link, new() { Name = "Details", Exact = true }).ClickAsync();
+                var panel = page.Locator("dialog.drawer[open]");
                 await Assertions.Expect(panel.Locator("details.activity-confirm summary", new() { HasText = "Remove" }).First).ToBeVisibleAsync();
                 await Evidence.SaveAsync(page, "queue-panel");
                 fakes.Offer(LowerFilm with { File = video });
@@ -216,7 +216,7 @@ namespace Jularr.E2E.Tests
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(Film).ToString(), fakes.NzbAddress(LowerFilm).ToString() }, fakes.Grabbed.ToArray());
                 await page.GotoAsync("/Admin/Activity?Filter=History");
-                await Assertions.Expect(page.Locator("tr", new() { HasText = "Removed from the queue" })).ToHaveCountAsync(1);
+                await Assertions.Expect(Steps.ListRow(page, "Removed from the queue")).ToHaveCountAsync(1);
                 Assert.IsTrue(details.Length > 0);
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
@@ -233,7 +233,7 @@ namespace Jularr.E2E.Tests
             while (DateTime.UtcNow < deadline)
             {
                 await page.GotoAsync("/Admin/Activity");
-                var row = page.Locator("tr", new() { HasText = reason });
+                var row = Steps.ListRow(page, reason);
                 if (await row.CountAsync() > 0)
                 {
                     return row.First;
@@ -285,7 +285,7 @@ namespace Jularr.E2E.Tests
             while (DateTime.UtcNow < deadline)
             {
                 await page.GotoAsync("/Admin/Activity");
-                var row = page.Locator("tr", new() { HasText = "Download failed" });
+                var row = Steps.ListRow(page, "Download failed");
                 if (await row.CountAsync() > 0)
                 {
                     return row.First;

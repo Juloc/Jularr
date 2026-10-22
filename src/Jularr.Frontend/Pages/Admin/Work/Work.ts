@@ -14,6 +14,18 @@ export function normalizeColumns(stored: unknown, available: string[], hiddenByD
     return { order, hidden: [...new Set(hidden)] };
 }
 
+// A column of a list on the list kit: its grid track and the width below which it leaves (1: the medium width, 2: the narrow one).
+export interface GridColumn {
+    width: string;
+    hide: number;
+}
+
+// The grid of a list for its three widths from the columns that are shown, in their order: the medium width drops the first level, the narrow one both.
+export function listTemplates(columns: readonly GridColumn[]): { wide: string; medium: string; narrow: string } {
+    const track = (shown: (column: GridColumn) => boolean): string => columns.filter(shown).map(column => column.width).join(' ');
+    return { wide: track(() => true), medium: track(column => column.hide !== 1), narrow: track(column => column.hide === 0) };
+}
+
 // Numbers compare as numbers, everything else as text in the person's language.
 export function compareValues(left: string, right: string): number {
     const number = /^-?\d+(\.\d+)?$/;
