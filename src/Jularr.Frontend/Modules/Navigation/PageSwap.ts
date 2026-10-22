@@ -1,6 +1,10 @@
 import htmx from "htmx.org";
 import { staysInApp } from "./Navigation";
 
+// The settle step temporarily copies every old attribute, including control values.
+// Focused inputs then keep that stale value. Native SCSS transitions need no such step.
+htmx.config.defaultSettleDelay = 0;
+
 // In-place navigation with htmx: links and forms of the app shell replace #app-content; the shell and a playing player stay.
 // Back and Forward load the page again from the server; no page HTML is kept in the browser.
 

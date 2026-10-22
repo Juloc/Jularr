@@ -1,4 +1,17 @@
+@use "../../../Framework/Components/FilterDialog";
+
+.speech-models {
+    --list-columns: minmax(12rem, 1fr) 5rem 5rem 11rem minmax(18rem, auto);
+    --list-columns-medium: minmax(12rem, 1fr) 11rem minmax(16rem, auto);
+    --list-columns-narrow: minmax(12rem, 1fr) 11rem minmax(16rem, auto);
+}
+
 .speech-models__metadata {
-    max-inline-size: 18rem;
     overflow-wrap: anywhere;
+}
+
+.speech-models__sample {
+    display: grid;
+    gap: .35rem;
+    justify-items: start;
 }

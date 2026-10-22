@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Speech;
+using Jularr.Backend.Data.Enums.Speech;
 
 namespace Jularr.Backend.Data.User.Speech.V1
 {
@@ -15,7 +16,8 @@ namespace Jularr.Backend.Data.User.Speech.V1
     public sealed class SpeechModelV1 : BaseResponse
     {
         public SpeechModelV1(string id, string version, string name, string language, string voice, string license, string licenseUrl, string source, long sizeBytes,
-            string sha256, bool isEnabled, long revision)
+            string sha256, bool isEnabled, long revision, bool requiresLicenseAcceptance = false, string? sampleUrl = null,
+            SpeechVoiceGenderType gender = SpeechVoiceGenderType.Unknown, string? genderSource = null, bool isInstalled = false)
         {
             Id = id;
             Version = version;
@@ -29,6 +31,11 @@ namespace Jularr.Backend.Data.User.Speech.V1
             Sha256 = sha256;
             IsEnabled = isEnabled;
             Revision = revision;
+            RequiresLicenseAcceptance = requiresLicenseAcceptance;
+            SampleUrl = sampleUrl;
+            Gender = gender;
+            GenderSource = genderSource;
+            IsInstalled = isInstalled;
         }
 
         [DataField(typeof(SpeechFields), nameof(SpeechFields.Id))]
@@ -55,6 +62,13 @@ namespace Jularr.Backend.Data.User.Speech.V1
         public bool IsEnabled { get; }
         [DataField(typeof(SpeechFields), nameof(SpeechFields.Version))]
         public long Revision { get; }
+        public bool RequiresLicenseAcceptance { get; }
+        [DataField(typeof(SpeechFields), nameof(SpeechFields.Url), false)]
+        public string? SampleUrl { get; }
+        public SpeechVoiceGenderType Gender { get; }
+        [DataField(typeof(SpeechFields), nameof(SpeechFields.Url), false)]
+        public string? GenderSource { get; }
+        public bool IsInstalled { get; }
     }
 
     public sealed class SpeechModelFileV1(Stream content) : BaseResponse, IImmutableFileOutput

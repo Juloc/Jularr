@@ -79,7 +79,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 ## Admin pages
 
-- [Speech models](Pages/Admin/Speech/Speech.cshtml.cs): `/Admin/Instance/Speech`, reached from the existing module administration; real catalog, license references and explicit verified-package activation using shared Table/Form. [Speech scope](../../docs/SPEECH.md); tests `SpeechTests`, `SpeechPathTests`.
+- [Speech models](Pages/Admin/Speech/Speech.cshtml.cs): `/Admin/Instance/Speech`, reached from module administration; shared list/drawer/Form, paged search, explicit source refresh, model-card confirmation and verified activation. [Sample playback](Pages/Admin/Speech/Speech.entry.ts) loads one official prerecorded clip only on Play; no synthesis or weights. [Speech scope](../../docs/SPEECH.md); tests `SpeechTests`, `SpeechDiscoveryTests`, `SpeechPathTests`.
 
 - [Download storage](Pages/Admin/DownloadStorage/DownloadStorage.cshtml.cs), also `/Setup/DownloadStorage` after library storage with Acquisition: per-area Incomplete/Complete folder dialogs, reserve, optional limits and parallel jobs. The chip row joins Storage; each folder shows the free space last measured on its connection. Uses the canonical Storage services; browser tests: `DownloadStorageTests`.
 

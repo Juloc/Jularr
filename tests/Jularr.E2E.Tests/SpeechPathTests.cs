@@ -252,17 +252,18 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Instance/Modules");
                 await page.GetByRole(AriaRole.Link, new() { Name = "Speech models", Exact = true }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/Admin/Instance/Speech$"));
-                var rows = page.Locator(".page-table tbody tr");
+                var rows = page.Locator(".speech-models .list-body .list-row");
                 await Assertions.Expect(rows).ToHaveCountAsync(3);
                 await Assertions.Expect(rows.Nth(0)).ToContainTextAsync("de-DE");
                 await Assertions.Expect(rows.Nth(1)).ToContainTextAsync("id-ID");
                 await Assertions.Expect(rows.Nth(2)).ToContainTextAsync("en-US");
                 await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Download and activate", Exact = true })).ToHaveCountAsync(3);
                 await Assertions.Expect(page.GetByText("Not activated", new() { Exact = true })).ToHaveCountAsync(3);
-                await rows.Nth(1).GetByText("Package details", new() { Exact = true }).ClickAsync();
-                await Assertions.Expect(rows.Nth(1).Locator("details")).ToHaveAttributeAsync("open", "");
-                await Assertions.Expect(rows.Nth(1)).ToContainTextAsync("634b0169fe41c368e9fafe128f30647f9e0301e852ce503cd78146db524f1f12");
-                await Assertions.Expect(rows.Nth(1).GetByRole(AriaRole.Button, new() { Name = "Download and activate", Exact = true })).ToBeInViewportAsync();
+                await rows.Nth(1).GetByRole(AriaRole.Link, new() { Name = "Package details", Exact = true }).ClickAsync();
+                var drawer = page.GetByRole(AriaRole.Dialog);
+                await Assertions.Expect(drawer).ToBeVisibleAsync();
+                await Assertions.Expect(drawer).ToContainTextAsync("634b0169fe41c368e9fafe128f30647f9e0301e852ce503cd78146db524f1f12");
+                await drawer.GetByRole(AriaRole.Link, new() { Name = "Close", Exact = true }).ClickAsync();
                 await Evidence.SaveAsync(page, "speech-models-desktop");
                 await page.SetViewportSizeAsync(390, 844);
                 await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Modules", Exact = true })).ToBeVisibleAsync();
@@ -273,6 +274,143 @@ namespace Jularr.E2E.Tests
                 await Evidence.SaveAsync(page, "speech-models-failed");
                 throw;
             }
+        }
+
+        [TestMethod]
+        [Timeout(120_000)]
+        public async Task Catalog_SearchPagingSamplesAndLicenseReviewWorkOnDesktopAndPhone()
+        {
+            var speech = Directory.CreateTempSubdirectory("jularr-speech-catalog-e2e-").FullName;
+            try
+            {
+                // Synthetic metadata only; no external package or inference runtime is needed.
+                var models = Enumerable.Range(1, 28).Select(index => new
+                {
+                    id = "catalog-fixture-" + index, version = "1", name = "Catalogue fixture " + index.ToString("00"), language = index == 1 ? "en-US" : "de-DE", voice = "0",
+                    gender = index == 28 ? 2 : index == 27 ? 1 : 0, genderSource = index >= 27 ? "https://example.test/synthetic-gender" : null,
+                    license = "Review model card", licenseUrl = "https://example.test/model-card", source = "https://example.test/package.tar.bz2", sizeBytes = 1002,
+                    sha256 = Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("catalog-fixture-" + index))), requiresLicenseAcceptance = true,
+                    sampleUrl = "https://k2-fsa.github.io/sherpa/onnx/tts/all/piper/mp3/de_DE/fixture-" + index + "/0.mp3"
+                }).ToArray();
+                await File.WriteAllTextAsync(Path.Combine(speech, "catalog.json"), JsonSerializer.Serialize(new { models }));
+                await File.WriteAllBytesAsync(Path.Combine(speech, models[26].sha256 + ".tar.bz2"), new byte[1002]);
+                await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Media:SpeechPath"] = speech });
+                await using var session = await BrowserSession.StartAsync(jularr);
+                var page = session.Page;
+                try
+                {
+                    var samples = 0;
+                    await page.RouteAsync("https://k2-fsa.github.io/sherpa/onnx/tts/all/piper/mp3/**", route =>
+                    {
+                        samples++;
+                        return route.FulfillAsync(new RouteFulfillOptions { ContentType = "audio/wav", BodyBytes = SilentSample() });
+                    });
+                    await Owner.SetUpAndSignInAsync(page);
+                    await page.GotoAsync("/Admin/Instance/Speech");
+                    var rows = page.Locator(".speech-models .list-body .list-row");
+                    await Assertions.Expect(rows).ToHaveCountAsync(25);
+                    Assert.AreEqual(0, samples, "Opening a catalog must not load audio.");
+                    var first = rows.Nth(0).Locator("[data-speech-sample]");
+                    await first.ClickAsync();
+                    await Assertions.Expect(first).ToHaveAttributeAsync("aria-pressed", "true");
+                    await Assertions.Expect(first).ToHaveTextAsync("Stop sample");
+                    var second = rows.Nth(1).Locator("[data-speech-sample]");
+                    await second.ClickAsync();
+                    await Assertions.Expect(first).ToHaveAttributeAsync("aria-pressed", "false");
+                    await Assertions.Expect(second).ToHaveAttributeAsync("aria-pressed", "true");
+                    await second.ClickAsync();
+                    await Assertions.Expect(second).ToHaveAttributeAsync("aria-pressed", "false");
+                    await Evidence.SaveAsync(page, "speech-catalog-desktop");
+                    await page.GetByRole(AriaRole.Link, new() { Name = "Next", Exact = true }).ClickAsync();
+                    await Assertions.Expect(rows).ToHaveCountAsync(3);
+                    await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Previous", Exact = true })).ToBeVisibleAsync();
+                    await page.GetByRole(AriaRole.Button, new() { Name = "Voice filters", Exact = true }).ClickAsync();
+                    var filters = page.Locator("#speech-filters");
+                    await Assertions.Expect(filters.GetByRole(AriaRole.Radio, new() { Name = "All", Exact = true })).ToHaveCountAsync(3);
+                    await filters.Locator("input[name=language][value='de-DE']").CheckAsync();
+                    await filters.GetByRole(AriaRole.Radio, new() { Name = "Male", Exact = true }).CheckAsync();
+                    await filters.GetByRole(AriaRole.Radio, new() { Name = "Installed", Exact = true }).CheckAsync();
+                    await filters.EvaluateAsync("el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished))");
+                    await Evidence.SaveAsync(page, "speech-catalog-filters");
+                    await filters.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }).ClickAsync();
+                    await Assertions.Expect(rows).ToHaveCountAsync(1);
+                    await Assertions.Expect(rows).ToContainTextAsync("fixture 27");
+                    var search = page.GetByRole(AriaRole.Searchbox, new() { Name = "Search voices, languages or quality…", Exact = true });
+                    await search.FillAsync("fixture 27");
+                    await search.PressAsync("Enter");
+                    await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=fixture+27", StringComparison.Ordinal));
+                    await Assertions.Expect(rows).ToHaveCountAsync(1);
+                    await Assertions.Expect(search).ToHaveValueAsync("fixture 27");
+                    await page.GetByRole(AriaRole.Button, new() { Name = "Voice filters", Exact = true }).ClickAsync();
+                    await Assertions.Expect(filters.GetByRole(AriaRole.Radio, new() { Name = "Male", Exact = true })).ToBeCheckedAsync();
+                    await filters.GetByRole(AriaRole.Link, new() { Name = "Reset", Exact = true }).ClickAsync();
+                    await page.WaitForURLAsync(url => Uri.UnescapeDataString(new Uri(url).Query) == "?q=fixture 27");
+                    await Assertions.Expect(rows).ToHaveCountAsync(1);
+                    await search.FillAsync("fixture 28");
+                    await search.PressAsync("Enter");
+                    await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=fixture+28", StringComparison.Ordinal));
+                    await Assertions.Expect(rows).ToHaveCountAsync(1);
+                    await Assertions.Expect(search).ToHaveValueAsync("fixture 28");
+                    await rows.GetByRole(AriaRole.Link, new() { Name = "Review model conditions", Exact = true }).Last.ClickAsync();
+                    var drawer = page.GetByRole(AriaRole.Dialog);
+                    await Assertions.Expect(drawer).ToBeVisibleAsync();
+                    await drawer.GetByRole(AriaRole.Button, new() { Name = "Download and activate", Exact = true }).ClickAsync();
+                    await Assertions.Expect(drawer).ToContainTextAsync("Review and confirm this model's conditions");
+                    Assert.IsTrue(await drawer.EvaluateAsync<bool>("dialog => dialog.matches(':modal')"), "The shared drawer must reopen as a modal after an action replaces its markup.");
+                    await Assertions.Expect(drawer.Locator("[name=AcceptLicense][type=checkbox]")).Not.ToBeCheckedAsync();
+                    await page.SetViewportSizeAsync(390, 844);
+                    await drawer.EvaluateAsync("el => Promise.all(el.getAnimations().map(animation => animation.finished))");
+                    await Evidence.SaveAsync(page, "speech-catalog-license-phone");
+                    await drawer.GetByRole(AriaRole.Link, new() { Name = "Close", Exact = true }).ClickAsync();
+                    await Assertions.Expect(rows).ToHaveCountAsync(1);
+                    Assert.IsFalse(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth > innerWidth + 1"), "The catalog must fit on a phone.");
+                    await Evidence.SaveAsync(page, "speech-catalog-phone");
+                    Assert.AreEqual(1, Directory.EnumerateFiles(speech, "*.tar.bz2").Count(), "Only the explicitly supplied synthetic installed fixture exists.");
+                    if (Environment.GetEnvironmentVariable("JULARR_SPEECH_LIVE_METADATA") == "1")
+                    {
+                        // Explicit manual replay of the real sources; still no package downloads.
+                        await File.WriteAllTextAsync(Path.Combine(speech, "catalog.json"), "{\"models\":[]}");
+                        await page.SetViewportSizeAsync(1440, 1000);
+                        await page.GotoAsync("/Admin/Instance/Speech");
+                        await page.GetByRole(AriaRole.Button, new() { Name = "Refresh voice catalog", Exact = true }).ClickAsync();
+                        await Assertions.Expect(rows.First).ToBeVisibleAsync(new() { Timeout = 30000 });
+                        await search.FillAsync("de-DE");
+                        await search.PressAsync("Enter");
+                        await page.WaitForURLAsync(url => new Uri(url).Query.Contains("q=de-DE", StringComparison.Ordinal));
+                        await Assertions.Expect(rows.Filter(new() { HasText = "eva_k" })).ToHaveCountAsync(1, new() { Timeout = 10000 });
+                        await Assertions.Expect(search).ToHaveValueAsync("de-DE");
+                        using var snapshot = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(speech, "discovered.json")));
+                        Evidence.Log("Official metadata: " + snapshot.RootElement.GetProperty("models").GetArrayLength() + " compatible pinned packages; no weights downloaded.");
+                        await Evidence.SaveAsync(page, "speech-catalog-live-german");
+                        await page.SetViewportSizeAsync(390, 844);
+                        await Assertions.Expect(page.Locator(".app-sidebar")).Not.ToBeVisibleAsync();
+                        await Evidence.SaveAsync(page, "speech-catalog-live-phone");
+                        await page.GetByRole(AriaRole.Button, new() { Name = "Voice filters", Exact = true }).ClickAsync();
+                        await filters.EvaluateAsync("el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished))");
+                        await Assertions.Expect(filters.GetByRole(AriaRole.Radio, new() { Name = "All", Exact = true })).ToHaveCountAsync(3);
+                        Assert.IsFalse(await filters.EvaluateAsync<bool>("el => el.scrollWidth > innerWidth + 1"));
+                        await Evidence.SaveAsync(page, "speech-catalog-filters-phone");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Evidence.Log("Speech catalog failure: " + exception.Message);
+                    await Evidence.SaveAsync(page, "speech-catalog-failed");
+                    throw;
+                }
+            }
+            finally { Directory.Delete(speech, true); }
+        }
+
+        private static byte[] SilentSample()
+        {
+            using var output = new MemoryStream();
+            using var wave = new BinaryWriter(output);
+            wave.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); wave.Write(160036);
+            wave.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); wave.Write(16);
+            wave.Write((short)1); wave.Write((short)1); wave.Write(8000); wave.Write(16000); wave.Write((short)2); wave.Write((short)16);
+            wave.Write(System.Text.Encoding.ASCII.GetBytes("data")); wave.Write(160000); wave.Write(new byte[160000]);
+            return output.ToArray();
         }
     }
 }

@@ -9,7 +9,7 @@ Android integration belongs to the client foundation in #1296.
 
 `/Admin/Instance/Speech` is linked from Instance modules, not a new sidebar
 destination. Existing `instance.settings` permissions protect administration;
-Reading must be enabled for activation and device delivery. Disabling a module
+Reading must be enabled for source refresh, activation and device delivery. Disabling a module
 or package retains its data. Deactivation prevents subsequent server deliveries;
 it does not revoke a copy a device already downloaded.
 
@@ -29,11 +29,79 @@ blanket claim that non-commercial use permits everything:
 
 The Owner may replace the recommendations without rebuilding by writing
 `DataPath/speech/catalog.json` (or `Media:SpeechPath/catalog.json`) with the same
-format. Its array order is the recommendation order. At most 64 entries and
-1 MiB of metadata are accepted. Entries require identity/version, language,
+format. Its array order is the recommendation order. At most 1024 entries and
+2 MiB of metadata are accepted. Entries require identity/version, language,
 voice, license reference, HTTPS source, positive bounded size and SHA-256.
 Invalid or duplicate entries cannot be installed; a malformed override fails
 visibly instead of silently restoring the shipped recommendations.
+
+### Discovering more voices
+
+The Owner approved dynamic discovery and explicit review of unclear model terms
+on 22 October 2026. The same module page uses the shared admin list, details
+drawer and forms. Search matches name, package identity, language and quality;
+pages hold 25 packages. `GET /api/v1/admin/speech/models` returns `models`
+(the shared `items`, `page`, `pageSize` result) and `languages` (the entire local
+catalog's locale choices), with `query`, optional exact `language`, `gender`,
+`isInstalled`, `page` and `pageSize` parameters. Filters are combined before
+paging. Every UI filter has All; gender also has Unknown. Filters survive search,
+paging and details/actions. Installation means the server archive exists with
+its expected byte size, independent of activation, not the current device cache;
+activation/download still checks SHA256. No filter performs external requests.
+
+Gender metadata is optional (`0` unknown, `1` male, `2` female); a known value
+requires an HTTPS `genderSource`. The upstream index has no structured gender
+metadata, so discovered entries remain unknown, not inferred from names/audio.
+Reviewed recommendations cite the [Thorsten dataset](https://www.openslr.org/95/)
+and [LJSpeech research corpus description](https://pmc.ncbi.nlm.nih.gov/articles/PMC10395974/).
+The shared htmx page-swap configuration disables its temporary old-attribute
+settling pass: otherwise a focused search could retain its old empty value after
+the server returned the new query. Ordinary SCSS transitions remain enabled.
+
+`POST /api/v1/admin/speech/models/refresh` explicitly reads the fixed official
+sherpa-onnx `tts-models` release metadata and the
+[Piper voice index](https://huggingface.co/rhasspy/piper-voices/raw/main/voices.json).
+Only cross-matched converted Piper/VITS archives with an exact published SHA256,
+size within the browser's 128 MiB compressed limit, a locale accepted by the
+canonical Speech field, speaker metadata
+and a model-card reference are admitted. Raw Piper ONNX downloads, MD5-only
+entries, missing metadata and other sherpa engines are not install options.
+Packages with several speakers currently expose speaker 0, not a fabricated list
+of all speakers. This is not every model on the internet or a per-device runtime
+compatibility guarantee; archive/extraction/runtime checks still apply.
+
+Only the two bounded JSON resources are fetched (20-second total timeout, 8/2 MiB
+limits). Concurrent refresh clicks share one discovery with a one-minute cooldown.
+The merged snapshot is atomically persisted at `SpeechPath/discovered.json`;
+failed refreshes retain the saved snapshot and active package files. Reads and
+device delivery never depend on an upstream request. Existing catalog entries
+keep their reviewed terms and identities; discovery can add their sample link.
+Previously pinned versions remain pinned if upstream changes or removes them:
+refresh is discovery, not an implicit installed-model upgrade or removal.
+
+The upstream index has no reliable structured license value. Newly discovered
+entries therefore explicitly require model-card review, not a blanket free-use
+claim. Activation with `requiresLicenseAcceptance` requires `acceptLicense: true`
+on that invocation, before any package I/O. The page links the exact card and
+shows the confirmation in its details drawer; disabling never needs confirmation.
+The three reviewed recommendations retain their known terms and direct activation.
+An Owner's explicit local catalog override may supply reviewed terms itself.
+
+Samples use the official sherpa Piper prerecorded-sample URL for speaker 0.
+The sample host is contacted only on Play; no text, weights or synthesis runtime
+are loaded. One sample plays at a time and stops on navigation or hiding the page.
+If upstream has no clip or playback fails, the page reports this without installing
+anything. These samples are not a local custom-text synthesis test, which remains
+a separate slice. `sampleUrl` accepts only the fixed HTTPS official sample host
+and path. Samples may differ from the pinned package version after upstream changes.
+
+Focused discovery coverage: `SpeechDiscoveryTests` checks source matching,
+permissions, confirmation-before-download, verified delivery, paging and retaining
+the snapshot on source failure. `SpeechPathTests.Catalog_…` checks the real controls,
+exclusive sample playback and the shared drawer after failed actions on desktop
+and phone. An explicit `JULARR_SPEECH_LIVE_METADATA=1` opts into official metadata
+replay in that browser test and `SpeechDiscoveryTests.Source_ExplicitOfficialMetadataSmoke`;
+normal CI uses synthetic metadata/audio only. Neither replay installs model weights.
 
 `POST /api/v1/admin/speech/models/{hash}/activation` with `isEnabled` and
 `version` downloads one selected package, checks its exact byte count and digest,
