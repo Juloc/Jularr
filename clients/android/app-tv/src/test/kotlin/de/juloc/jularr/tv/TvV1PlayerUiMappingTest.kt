@@ -24,6 +24,32 @@ class TvV1PlayerUiMappingTest {
         assertNull(TvV1PlayerUiMapping.automaticSkipTarget(55000, markers, preferences))
     }
 
+    @Test fun realServerTrackKeysMapWithoutInventingCodecOrSidecarStreamIndex() {
+        val audio = TvV1PlayerUiMapping.trackForDisplay(
+            de.juloc.jularr.core.api.playbackextras.TvV1PlaybackTrack(
+                key = "s4", mediaTrackTypeId = 2, language = "ja", title = null,
+                channels = 2, isDefault = true, isForced = false,
+                isSupported = true, isSelected = true,
+            ),
+        )
+        assertEquals("s4", audio.id)
+        assertEquals(4, audio.streamIndex)
+        assertEquals("audio", audio.kind)
+        assertNull(audio.codec)
+
+        val subtitle = TvV1PlayerUiMapping.trackForDisplay(
+            de.juloc.jularr.core.api.playbackextras.TvV1PlaybackTrack(
+                key = "f731", mediaTrackTypeId = 3, language = "de", title = "German VTT",
+                channels = null, isDefault = false, isForced = false,
+                isSupported = true, isSelected = true,
+            ),
+        )
+        assertEquals("f731", subtitle.id)
+        assertEquals(-1, subtitle.streamIndex)
+        assertTrue(subtitle.isText)
+        assertNull(subtitle.codec)
+    }
+
     @Test fun trickplayUsesActualOneBasedSpriteSheetsAndFrameGeometry() {
         val desc = TvV1PlayerUiMapping.trickplay(9002, TvV1Trickplay(10, 21, 4, 3, 160, 90))
         assertEquals(10000, desc.intervalMs)
