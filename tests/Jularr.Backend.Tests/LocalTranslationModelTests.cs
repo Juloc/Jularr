@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Jularr.Backend.Service.User.Translation.V1;
+using Jularr.Backend.Service.Core;
+using Microsoft.Extensions.Options;
 using Jularr.Integrations.Logic.Translation;
 
 namespace Jularr.Backend.Tests
@@ -32,7 +34,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Rina ging nach Hause.", result.Text);
             Assert.AreEqual(10.0, result.TokensPerSecond);
             await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "untrusted:90b", "id", "de", "Rina pulang.", default));
-            await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "translategemma:4b", "id", "de", new string('x', 2401), default));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(async () => await client.TranslateAsync(server, "translategemma:4b", "id", "de", new string('x', 20001), default));
         }
 
         [TestMethod]
@@ -71,6 +73,25 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(chunks.All(chunk => chunk.Length is > 0 and <= 2400));
             Assert.AreEqual(text, string.Join(' ', chunks));
             Assert.ThrowsExactly<ArgumentException>(() => OllamaLocalModels.Segments(new string('a', 20001)));
+        }
+
+        [TestMethod]
+        public void DownloadQueue_DeniesModelsWithoutOperatorVerifiedVolumeBudget()
+        {
+            using var http = new HttpClient(new FakeOllama());
+            var client = new OllamaLocalModels(http);
+            using var noCapacity = new LocalTranslationDownloads(client,
+                Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 0 }),
+                new LocalTranslationGate());
+            Assert.IsFalse(noCapacity.Queue("translategemma:4b"));
+            Assert.IsFalse(noCapacity.Queue("other:27b"));
+
+            using var adequate = new LocalTranslationDownloads(client,
+                Options.Create(new LocalTranslationOptions { Endpoint = "http://ollama:11434", OperatorVerifiedFreeBytes = 6_000_000_000L }),
+                new LocalTranslationGate());
+            Assert.IsTrue(adequate.Queue("translategemma:4b"));
+            Assert.IsFalse(adequate.Queue("translategemma:12b"));
+            Assert.AreEqual("queued", adequate.Current().State);
         }
 
         private sealed class FakeOllama : HttpMessageHandler

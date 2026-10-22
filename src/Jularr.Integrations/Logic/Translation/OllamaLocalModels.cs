@@ -35,7 +35,17 @@ namespace Jularr.Integrations.Logic.Translation
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is > 2_097_152) throw new InvalidDataException("Ollama response too large.");
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            return await JsonDocument.ParseAsync(stream, new JsonDocumentOptions { MaxDepth = 16 }, ct);
+            // Do not trust Content-Length: chunked servers can omit it.
+            using var buffer = new MemoryStream();
+            var chunk = new byte[16_384];
+            int count;
+            while ((count = await stream.ReadAsync(chunk, ct)) > 0)
+            {
+                if (buffer.Length + count > 2_097_152) throw new InvalidDataException("Oversized Ollama response.");
+                buffer.Write(chunk, 0, count);
+            }
+            buffer.Position = 0;
+            return await JsonDocument.ParseAsync(buffer, new JsonDocumentOptions { MaxDepth = 16 }, ct);
         }
 
         // Model tags are mutable: the digest participates in the cache identity.
@@ -47,7 +57,7 @@ namespace Jularr.Integrations.Logic.Translation
                 throw new InvalidDataException("Model catalog unavailable.");
             foreach (var item in models.EnumerateArray())
             {
-                if (!item.TryGetProperty("name", out var name) || name.GetString() != model
+                if (!item.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String || name.GetString() != model
                     || !item.TryGetProperty("digest", out var digest) || digest.ValueKind != JsonValueKind.String) continue;
                 var value = digest.GetString()!;
                 if (value.Length == 64 && value.All(Uri.IsHexDigit)) return value.ToLowerInvariant();

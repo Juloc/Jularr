@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.Admin.Translation.V1
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationModelsV1>()];
-        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(LocalTranslationModelsParametersV1 parameters) => ModuleRequirement.All("Translation");
         protected override ServicePermission GetPermission(LocalTranslationModelsParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
         protected override async Task<IServiceOutput> OnRead()
