@@ -36,50 +36,61 @@ class HttpAppApiClient(
     private suspend fun request(method: String, route: String, body: JSONObject?): AppResponse =
         withContext(Dispatchers.IO) {
             runInterruptible {
-                val connection = (URL(originUri.toString() + route).openConnection() as HttpURLConnection).apply {
-                    requestMethod = method
-                    connectTimeout = ConnectTimeoutMs
-                    readTimeout = ReadTimeoutMs
-                    setRequestProperty("Accept", "application/json")
-                    deviceTokens.current?.let { setRequestProperty("Authorization", "Bearer $it") }
-                    if (body != null) {
-                        doOutput = true
-                        setRequestProperty("Content-Type", "application/json")
-                    }
-                }
-
-                try {
-                    body?.let { payload ->
-                        connection.outputStream.use { stream ->
-                            stream.write(payload.toString().toByteArray(Charsets.UTF_8))
+                var answer: AppResponse? = null
+                for (attempt in 0..1) {
+                    val requestToken = deviceTokens.current
+                    val connection = (URL(originUri.toString() + route).openConnection() as HttpURLConnection).apply {
+                        requestMethod = method
+                        connectTimeout = ConnectTimeoutMs
+                        readTimeout = ReadTimeoutMs
+                        instanceFollowRedirects = false
+                        setRequestProperty("Accept", "application/json")
+                        requestToken?.let { setRequestProperty("Authorization", "Bearer $it") }
+                        if (body != null) {
+                            doOutput = true
+                            setRequestProperty("Content-Type", "application/json")
                         }
                     }
 
-                    val status = connection.responseCode
-                    val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                        ?.bufferedReader(Charsets.UTF_8)
-                        ?.use { it.readText() }
-                        .orEmpty()
+                    try {
+                        body?.let { json ->
+                            connection.outputStream.use { stream ->
+                                stream.write(json.toString().toByteArray(Charsets.UTF_8))
+                            }
+                        }
 
-                    // The server renews the device token past half its lifetime.
-                    val deviceToken = connection.getHeaderField(AppApiRoutes.DeviceTokenHeader)
-                    if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                        deviceTokens.clear()
-                    } else if (status in 200..299) {
-                        deviceTokens.update(deviceToken)
+                        val status = connection.responseCode
+                        val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                        val deviceToken = connection.getHeaderField(AppApiRoutes.DeviceTokenHeader)
+
+                        // A parallel profile switch or renewal may have replaced this token
+                        // while the HTTP request was in flight. Apply headers/401 only if
+                        // the same credential is still active.
+                        val outdated = synchronized(deviceTokens) {
+                            if (deviceTokens.current == requestToken) {
+                                if (status == HttpURLConnection.HTTP_UNAUTHORIZED) deviceTokens.clear()
+                                else if (status in 200..299) deviceTokens.update(deviceToken)
+                                false
+                            } else true
+                        }
+                        if (outdated && status == HttpURLConnection.HTTP_UNAUTHORIZED &&
+                            attempt == 0 && deviceTokens.current != null
+                        ) {
+                            continue // Retry once with the active, newer credential.
+                        }
+                        if (status !in 200..299) throw appApiException(status, payload)
+
+                        answer = AppResponse(
+                            payload = if (payload.isBlank()) JSONObject() else JSONObject(payload),
+                            deviceToken = deviceToken,
+                        )
+                        break
+                    } finally {
+                        connection.disconnect()
                     }
-
-                    if (status !in 200..299) {
-                        throw appApiException(status, payload)
-                    }
-
-                    AppResponse(
-                        payload = if (payload.isBlank()) JSONObject() else JSONObject(payload),
-                        deviceToken = deviceToken,
-                    )
-                } finally {
-                    connection.disconnect()
                 }
+                checkNotNull(answer) { "The app request could not be completed." }
             }
         }
 

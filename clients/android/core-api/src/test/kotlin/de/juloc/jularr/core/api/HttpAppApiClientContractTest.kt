@@ -96,6 +96,33 @@ class HttpAppApiClientContractTest {
         assertFalse(runCatching { HttpAppApiClient("https://example.com") }.isFailure)
     }
 
+    @Test
+    fun concurrentTokenRenewalSurvivesStaleCapability401() {
+        val tokens = DeviceTokenStore("old-credential")
+        val seen = mutableListOf<String?>()
+        val server = localServer()
+        server.createContext("/api/v1/instance/capabilities") { exchange ->
+            val bearer = exchange.requestHeaders.getFirst("Authorization")
+            synchronized(seen) { seen.add(bearer) }
+            if (bearer == "Bearer old-credential") {
+                tokens.update("new-credential")
+                exchange.respond(401, """{"code":"invalid_token","resourceKey":"error.invalid_token"}""")
+            } else {
+                exchange.respond(200, """{"permissions":["profile.playback"],"modules":["Library","Playback"]}""")
+            }
+        }
+        server.start()
+        try {
+            val client = HttpAppApiClient("http://127.0.0.1:${server.address.port}", tokens)
+            val response = runBlocking { client.capabilities() }
+            assertTrue(response.hasModule("Library"))
+            assertEquals(listOf("Bearer old-credential", "Bearer new-credential"), seen)
+            assertEquals("new-credential", tokens.current)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     private fun localServer(): HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
 
     private fun HttpExchange.respond(status: Int, json: String, deviceToken: String? = null) {
