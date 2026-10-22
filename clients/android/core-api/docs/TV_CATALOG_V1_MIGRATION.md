@@ -20,11 +20,14 @@ plus `src/Jularr.Backend/Data/Pagination.cs` and
 | Library / local search | GET `/api/v1/library?page=1&pageSize=48&query=...` | PageResult<LibraryItemV1> |
 | Continue Watching | GET `/api/v1/continue` | JSON array of ContinueItemV1, at most 20 |
 | Watchlist | GET `/api/v1/watchlist?page=1&pageSize=25` | PageResult<LibraryItemV1> |
+| Watchlist count | GET `/api/v1/watchlist/count` | `{"total":61}` for this profile |
 | Set watchlisted | PUT `/api/v1/watchlist/{workId}` | body `{"isWatchlisted":true/false}`, result `{"success":true}` |
 | Discover scopes | GET `/api/v1/discover/scopes` | JSON array of DiscoverScopeV1 |
 | Discover shelves | POST `/api/v1/discover/shelves` | body optional `scopeSlug`; JSON array of DiscoverShelfV1 |
 | Discover feed | POST `/api/v1/discover/feed` | body `mediaTypeId`, `discoverFeedTypeId`, `page`; JSON array of DiscoverItemV1 |
 | Discover search | POST `/api/v1/discover/search` | body `query`, optional `mediaTypeId`, `page`; JSON array of DiscoverItemV1 |
+| External TMDB details | POST `/api/v1/discover/{mediaTypeId}/{tmdbId}` | `DiscoverItemV1` for movie/series; `workId` may be null |
+| External catalog details | POST `/api/v1/discover/catalog/entry` | `DiscoverCatalogEntryV1`; body `mediaTypeId`, `namespace`, `externalId`, optional `mediaSubtypeId` |
 | Catalog search (books/manga/light novels/music/games/anime) | POST `/api/v1/discover/catalog/search` | body `mediaTypeId`, `query`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
 | Catalog feed | POST `/api/v1/discover/catalog/feed` | body `mediaTypeId`, `discoverFeedTypeId`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
 | Suggestions | POST `/api/v1/discover/suggestions` | body `query`, optional `scopeSlug`; JSON array of DiscoverSuggestionV1 |
@@ -61,7 +64,12 @@ val catalogClient: TvCatalogV1Client = HttpTvCatalogV1Client(serverOrigin, token
 - Home: `catalogClient.homeLayout()` for configured visible shelf order if the
   HomeLayout module is enabled; `library()` for cards and `continueWatching()`
   for the resume row. Do not substitute a fake shelf/layout when the module is absent.
-- Watchlist: `watchlist(page)` and `setWatchlisted(workId, true/false)`.
+- Watchlist: `watchlist(page)`, `watchlistCount()`, and `setWatchlisted(workId, true/false)`.
+  Use `watchlistFiltered(page, pageSize, TvCatalogV1Filters(...))` for subtype, year, and progress filters.
+- Library: `libraryFiltered(page, pageSize, TvCatalogV1Filters(...), query)` for server-side
+  media type, subtype and release year filters. Type and subtype IDs are separate; a type
+  does not silently include the explicitly separated subtype. The backend handles paging
+  and sorting; do not fetch every page for client-side filtering.
   `TvWorkCardV1.id` **is** `WorkId`.
 - Search/Discover: `library(query = text)` searches the local library;
   `discoverSearch(text)` searches local + provider catalogs. Call
@@ -92,9 +100,11 @@ the token on HTTP 401, and surfaces server problem details through existing
    old TV layout needs different row contents, discuss an actual API gap before
    proposing any backend change. Do not invent recommendations.
 2. **Provider-only Discover results:** An external entry without `workId`
-   cannot open `/api/v1/works/{workId}`; do not use TMDB id as a WorkId. A
-   future flow must use the existing discover/catalog read endpoints or
-   owner-approved behavior before navigation.
+   cannot open `/api/v1/works/{workId}`; do not use TMDB id as a WorkId. Instead,
+      use the existing `discoverTmdbItem(mediaTypeId, tmdbId)` or
+   `discoverCatalogEntry(mediaTypeId, namespace, externalId, mediaSubtypeId)`.
+   These return provider details without creating a local Work; navigation into
+   `/api/v1/works/{workId}` still requires a genuine non-null WorkId.
 3. **Asset selection:** Episode endpoint exposes one playable MediaAssetId
    when its video is present, whereas availability may list several editions.
    The UI must not synthesize a fallback asset id for missing episodes.
@@ -115,3 +125,15 @@ contract tests using local HTTP responses shaped like the real backend
 DTOs, and route/query tests. A green CI run or a local Gradle run is
 required before declaring runtime/build success; no TV device runtime
 verification is claimed.
+
+## Incremental follow-up (22 October 2026)
+
+The separate catalog client additionally exposes the existing provider detail
+routes, server-side library/watchlist filters (type, subtype, year, progress),
+and real watchlist count. These are all **client-only** changes. The catalog
+backend is still read-only to this PR, and screen/controller integration remains
+owned by the parallel TV agent.
+
+The foundation branch has additional session/auth changes after this branch's
+creation. **Do not rebase or merge** as long as that parallel work is ongoing;
+the integration owner must verify the latest foundation tip before final merge.
