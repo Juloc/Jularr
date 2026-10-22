@@ -30,16 +30,17 @@ public_ip() {
 say "1) Der Zustand des Tunnels"
 if [ -n "${VPN_CONTROL_URL}" ]; then
     # The tunnel may still be coming up, and it may be stopped from an earlier run. Wait for the
-    # address the world sees: that is only there when the tunnel really stands.
+    # address the world sees - but ask it from here, not from the control server: that one keeps
+    # the last known address and would report a tunnel that is long gone.
     for i in $(seq 1 24); do
         state=$(vpn "${VPN_CONTROL_URL}/v1/vpn/status" | grep -o '"status":"[^"]*"' | head -1)
         case "$state" in
             *stopped*) vpn -X PUT -H "Content-Type: application/json" -d '{"status":"running"}' "${VPN_CONTROL_URL}/v1/vpn/status" >/dev/null ;;
         esac
-        tunnel_ip=$(vpn "${VPN_CONTROL_URL}/v1/publicip/ip" | grep -o '"public_ip":"[^"]*"' | head -1)
-        [ -n "$tunnel_ip" ] && break
+        if [ -n "$(public_ip)" ]; then break; fi
         sleep 5
     done
+    tunnel_ip=$(vpn "${VPN_CONTROL_URL}/v1/publicip/ip" | grep -o '"public_ip":"[^"]*"' | head -1)
     say "   Zustand: ${state:-unbekannt}"
     say "   Adresse im Tunnel: ${tunnel_ip:-keine}"
     say "   (die Adresse ohne Tunnel ist die des Hosts, siehe RESULT.md)"

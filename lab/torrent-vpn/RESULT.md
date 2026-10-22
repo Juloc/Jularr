@@ -14,16 +14,27 @@ WireGuard, Konfiguration aus dem Proton-Dashboard.
 | IPv6 | **kein IPv6** – der Gratis-Tarif gibt keines; der Client bleibt sonst an der IPv6-Adresse eines Trackers hängen |
 | Tunnel nach Abbruch | der Container läuft weiter, die Firewall bleibt zu: **keine Verbindung, kein Download** |
 | Torrent-Client im Container | `qBittorrent` v5.3.0, WebUI-API antwortet |
-| Torrent im Tunnel | **keine Peers**: der Tracker antwortet, der Client meldet aber `timed out`; nach 3 Minuten `availability` 0, 0 Byte |
+| Torrent im Tunnel | **läuft**: 517 Peers verbunden, der Fortschritt steigt (0,05 % → 0,14 % in drei Minuten), die Datei wächst |
+| Tempo im Tunnel | Spitzen 90 kB/s, sonst einzelne kB/s – der geteilte Gratis-Server ist langsam; direkt waren es 4–6 MB/s |
 | Torrent ohne Tunnel | 4–6 MB/s (direkt), die Datei landet im gemounteten Ordner |
 
 **Der Kill-Switch hält.** Mit gestopptem Tunnel scheitern die Anfragen der Probe – sie rutschen
 nicht unverschlüsselt hinaus. Im Tunnel-Netzraum gemessen, nicht von außen.
 
-**Der Gratis-Tarif von Proton trägt keine Torrents.** Proton führt „P2P-Unterstützung" selbst
-als Premium-Funktion; die Messung bestätigt es: der Tracker antwortet, aber es kommen keine
-Peers. Für **gesperrte Direktquellen** (die Light-Novel-Seiten) reicht der Gratis-Tarif, weil
-eine EPUB-Datei wenige Megabyte kostet.
+**P2P geht – auch im Gratis-Tarif von Proton.** Proton führt „P2P-Unterstützung" als
+Premium-Funktion; die Messung sagt etwas anderes: der Tracker antwortet, 517 Peers stehen
+bereit, die Datei wächst. Der Engpass ist nicht der Anbieter, sondern das Tempo (und die
+geteilte Adresse des Gratis-Servers).
+
+## Zwei Fehler, die die Messung zunächst verfälscht haben
+
+1. **Nach dem Kill-Switch bleibt der Tunnel im Container fest.** Gluetun meldet danach wieder
+   „running", aber die Route über `tun0` fehlt – der Verkehr geht nirgends hin. Die Messung
+   darf sich deshalb nicht auf den Wert des Steuerkanals verlassen (der ist ein Cache), sondern
+   muss von innen fragen, ob eine Antwort kommt. Und vor der nächsten Messung muss der Container
+   **neu erzeugt** werden (`up -d --force-recreate`); nur den VPN neu zu starten genügt nicht.
+2. **Ein gestoppter Tunnel lässt alles nach 5 s scheitern** – auch die Kontrollabfragen. Wer
+   das nicht weiß, misst einen Timeout und hält ihn für ein Problem des Anbieters.
 
 ## Was beim Messen auffiel und im Lab steht
 
@@ -65,7 +76,8 @@ docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.ya
 2. **Der VPN gehört in den Container, nicht in Jularr** – so bleibt Jularr unabhängig vom Anbieter ✔.
    Die Regel „ohne VPN kein Download" ist eine Eigenschaft des Containers (Kill-Switch) ✔, Jularr
    merkt nur „Quelle nicht erreichbar" ✔.
-3. **Für Torrents braucht es einen Anbieter, der P2P erlaubt** – der Gratis-Tarif von Proton nicht,
-   Premium (derzeit 1,11 €/Monat) schon, oder ein eigener Server. Das ist die offene Entscheidung.
+3. **Für Torrents braucht es keinen bezahlten Tarif** – der Gratis-Tarif von Proton trägt sie,
+   nur langsam (Spitzen 90 kB/s über den geteilten Server, direkt 4-6 MB/s). Der Anbieter bleibt
+   austauschbar, weil Jularr nur "Quelle nicht erreichbar" oder "langsam" zu sehen bekommt.
 4. **IPv6 gehört abgeschaltet oder mitgenommen** – sonst läuft ein Teil des Verkehrs am VPN vorbei,
    und genau daran würde der Kill-Switch scheitern.
