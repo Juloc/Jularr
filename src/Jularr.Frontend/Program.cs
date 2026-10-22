@@ -28,6 +28,16 @@ builder.Services.AddSingleton<ShellNavigation>();
 builder.Services.AddSingleton<FrontendAssets>();
 
 var app = builder.Build();
+
+// The database is brought to this version (migrations after a backup) before anything serves; a failed update was rolled back and leaves the
+// maintenance page only, on the same addresses.
+if (await DatabaseUpgrade.RunAsync(app.Services) is { } upgradeFailure)
+{
+    await app.DisposeAsync();
+    await DatabaseMaintenance.RunAsync(args, upgradeFailure);
+    return;
+}
+
 app.UseExceptionHandler();
 app.UseTrustedProxies();
 if (!app.Environment.IsDevelopment())

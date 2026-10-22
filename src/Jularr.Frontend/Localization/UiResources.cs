@@ -1544,6 +1544,8 @@ namespace Jularr.Frontend.Localization
             new("error.502.text", "Jularr could not reach a service it needs. Please try again shortly."),
             new("error.503.title", "503 Service Unavailable"),
             new("error.503.text", "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly."),
+            new("maintenance.databaseUpdate.title", "Database update failed"),
+            new("maintenance.databaseUpdate.text", "The update {0} could not be applied. See the log; the previous version can be started again."),
             new("nav.breadcrumb", "Breadcrumb"),
             new("nav.admin", "Admin"),
             new("nav.administration", "Administration"),

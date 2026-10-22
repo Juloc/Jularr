@@ -30,6 +30,7 @@
 - Extend the canonical owner; do not add parallel business rules or unnecessary abstractions.
 - Preserve unrelated and uncommitted changes. Do not reset, delete or overwrite user work without explicit authorization.
 - Never expose or commit secrets. Do not change an active database; use isolated databases for tests.
+- The database baseline `database/*.sql` is frozen (schema version 1, `database/baseline.sha256`; CI fails on edits). Schema changes are new numbered migrations `database/migrations/NNNN_short_name.sql`: [Database migrations](docs/DATABASE_MIGRATIONS.md).
 - Discuss framework limitations and new dependencies before adding workarounds. Frontend owns the single web host and invokes Services only. Do not modify active databases or run destructive migrations without an individually approved migration plan, verified backups, rollback and isolated tests.
 
 ## Validation and Git

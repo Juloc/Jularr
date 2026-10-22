@@ -45,7 +45,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## Contracts and persistence
 
-- [DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs), [Schema.sql](../database/Schema.sql): serialized fresh installation and backup-first versioned upgrades; [upgrade contract](DATABASE_UPGRADES.md), focused `DatabaseBaselineTests.cs` including real PostgreSQL dump/restore.
+- [DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs), [Schema.sql](../database/Schema.sql): serialized fresh installation, legacy adoption and backup-first numbered migrations from [database/migrations](../database/migrations) (frozen baseline hash [baseline.sha256](../database/baseline.sha256), [freeze script](../scripts/freeze-baseline.mjs)); [DatabaseUpgrade.cs](../src/Jularr.Backend/Service/Core/DatabaseUpgrade.cs) and [DatabaseMaintenance.cs](../src/Jularr.Frontend/Framework/DatabaseMaintenance.cs) serve the maintenance page on a failed update; [migration contract](DATABASE_MIGRATIONS.md), focused `DatabaseBaselineTests.cs`, `DatabaseMigrationTests.cs` (fake pg_dump) and real PostgreSQL dump/restore.
 
 - [Storage services](../src/Jularr.Backend/Service/Admin/Storage/V1): bounded Owner configuration/catalog reads, protected connection saves, the Check action and the compose lines of a Docker volume. [Storage data](../src/Jularr.Backend/Data/Admin/Storage/V1) contains versioned inputs/results.
   [DownloadStorageServices.cs](../src/Jularr.Backend/Service/Admin/Storage/V1/DownloadStorageServices.cs) exposes effective native workspace configuration through `ReadDownloadStorageV1`; pages never read Backend options directly or infer mount health from a configured path.
