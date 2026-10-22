@@ -1,7 +1,14 @@
 # Das Labor und seine Geheimnisse
 
-- `vpn/jularr.conf` – die Konfiguration des VPN-Anbieters (Schlüssel, IDs): **nicht** einchecken.
-- `.env` – das temporäre Passwort des Torrent-Clients: **nicht** einchecken.
-- `qbittorrent/config/` und `qbittorrent/downloads/` – der Zustand und die Downloads des Clients: **nicht** einchecken.
+# Alles im Ordner der Konfigurationen gehoert nicht ins Repository: die Datei des Anbieters
+# mit Schluessel und IDs, die Angaben fuer den Container mit den Zugangsdaten.
+vpn/*
+!vpn/PROVIDERS.md
+!vpn/jularr.conf.example
 
-Die Beispielform der VPN-Konfiguration steht in `vpn/jularr.conf.example`.
+# Das temporaere Passwort des Torrent-Clients.
+.env
+
+# Der Zustand und die Downloads des Clients.
+qbittorrent/config/
+qbittorrent/downloads/
