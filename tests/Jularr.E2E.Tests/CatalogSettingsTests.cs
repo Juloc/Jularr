@@ -39,11 +39,40 @@ namespace Jularr.E2E.Tests
 
             // The cache of images of other titles is sized here and saved the same way.
             var covers = page.Locator(".ui-section", new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Images of other titles", Exact = true }) }).Locator("form[data-save]");
-            await Assertions.Expect(covers.GetByLabel("Keep unused images for")).ToHaveValueAsync("7");
+            await Assertions.Expect(covers.GetByLabel("Keep unused images for")).ToHaveValueAsync("14");
             await covers.GetByLabel("Largest size, 0 keeps none").FillAsync("120");
             await Steps.SaveAsync(page);
             await page.ReloadAsync();
             await Assertions.Expect(covers.GetByLabel("Largest size, 0 keeps none")).ToHaveValueAsync("120");
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task EveryCatalog_ShowsItsNameAndIcon_NeverItsKey()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            await Owner.SetUpAndSignInAsync(page);
+            await jularr.RunSqlAsync("""
+                INSERT INTO "ExternalWorkSyncs" ("Namespace", "RequestsPerMinute") VALUES ('tvdb', 30), ('openlibrary', 30), ('musicbrainz', 30), ('igdb', 30);
+                """);
+            await page.GotoAsync("/Admin/Catalog");
+
+            // Seven catalogs, each a section with an icon tile and its display name; no section is headed by a raw key.
+            var titles = page.Locator(".ui-section__title");
+            await Assertions.Expect(titles).ToHaveCountAsync(7);
+            foreach (var name in new[] { "TMDB films", "TMDB series", "AniList", "TVDB", "Open Library", "MusicBrainz", "IGDB" })
+            {
+                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = name, Exact = true })).ToHaveCountAsync(1);
+            }
+
+            await Assertions.Expect(page.Locator(".ui-section__title .icon-tile .ui-icon")).ToHaveCountAsync(7);
+            var text = await page.Locator("#app-content").InnerTextAsync();
+            foreach (var key in new[] { "tmdb_movie", "tmdb_tv", "tvdb", "openlibrary", "musicbrainz", "igdb", "anilist", "admin.catalog." })
+            {
+                Assert.IsFalse(text.Contains(key, StringComparison.Ordinal), key);
+            }
         }
     }
 }

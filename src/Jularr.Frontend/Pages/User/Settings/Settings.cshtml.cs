@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         // Speeds the player offers; languages a person is likely to choose, each by its own name.
-        private static readonly decimal[] Speeds = [0.5m, 0.75m, 1m, 1.25m, 1.5m, 1.75m, 2m];
+        private static readonly decimal[] Speeds = [0.25m, 0.5m, 0.75m, 1m, 1.25m, 1.5m, 1.75m, 2m, 3m, 4m];
         private static readonly string[] Languages = ["en", "de", "fr", "es", "it", "pt", "nl", "pl", "sv", "da", "no", "fi", "cs", "hu", "ro", "tr", "el", "ru", "uk", "ar", "he", "hi", "th", "id", "ja", "ko", "zh"];
 
         private PlaybackPreferencesV1? _playback;

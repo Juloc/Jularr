@@ -20,7 +20,7 @@ The design source is UiDesigner's `Projects/Jularr/Player/PlayerDesign.cs` and
 - A native settings popover is 400px wide and at most 460px high, lightly translucent, CSS-anchored to the timeline's right edge 8px above it (a full screen on small viewports) and
   never scrolls: fixed header, one pane of compact form fields, bottom tabs. Basic holds Audio, Subtitles, Speed and Quality; Audio and Subtitles repeat their field; Playback has
   Quality, Speed (slider 0.25 to 4 with the usual speeds as dots and a number), Fit/Fill/Original, autoplay and the intro/credits skip choice; Info lists delivery, picture size, audio and quality.
-  Everything except the speed applies to the current playback only; the profile keeps speeds from 0.5 to 2. Existing WebVTT subtitles remain supported.
+  Everything except the speed applies to the current playback only; the profile keeps speeds from 0.25 to 4. Existing WebVTT subtitles remain supported.
 - Episodes (where the list is not beside the picture: Wide, Fullscreen, narrow) is the first button of the bottom bar's right group; a file with chapters adds a Chapters button beside it
   that opens the chapter list, and ticks on the timeline seek to them. A Skip button (Skip intro, Skip credits and so on) sits above the timeline's right edge while playback is inside a marked stretch;
   where the profile chose Automatic the player jumps on arrival and shows a short note with Undo, and credits that run to the end of the file open the next episode after that note when autoplay is on.

@@ -56,10 +56,12 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
     public sealed class LoginV1 : PublicService<AuthenticationParametersV1, LoginDataV1>
     {
         private readonly AuthenticationOptions _options;
+        private readonly IHttpContextAccessor _http;
 
-        internal LoginV1(IOptions<AuthenticationOptions> options)
+        internal LoginV1(IOptions<AuthenticationOptions> options, IHttpContextAccessor http)
         {
             _options = options.Value;
+            _http = http;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -72,7 +74,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
             var account = await Context.AuthenticatePasswordAsync(new AccountLoginParameters(Data.Username), Data.Password, CancellationToken);
 
             // Issue the session atomically.
-            var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), CancellationToken);
+            var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), BrowserDevice.Current(_http.HttpContext), CancellationToken);
 
             return new LoginResultV1(session);
         }

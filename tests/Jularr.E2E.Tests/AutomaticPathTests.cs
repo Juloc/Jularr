@@ -119,7 +119,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(seriesRow).Not.ToContainTextAsync("High");
 
                 // Priorities are for chosen rows: the dock shows its bulk zone, with how many are chosen, only while rows are chosen.
-                var dock = page.Locator(".action-dock");
+                var dock = page.Locator(".action-dock:not(.save-pill)");
                 await Assertions.Expect(dock.GetByRole(AriaRole.Button, new() { Name = "High priority", Exact = true })).ToBeHiddenAsync();
                 await seriesRow.GetByRole(AriaRole.Checkbox, new() { Name = "Select" }).CheckAsync();
                 await Assertions.Expect(dock).ToContainTextAsync("1 selected");
