@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Jularr.Frontend.Framework
 {
-    public sealed class FolderPicker(string browseUrl, string selectedPath, string fieldName, string fallbackUrl, IReadOnlyList<IUiComponent>? fallback = null,
+    public sealed class FolderPicker(FrontendAssets assets, string browseUrl, string selectedPath, string fieldName, string fallbackUrl, IReadOnlyList<IUiComponent>? fallback = null,
         string? storageMountFieldName = null, bool isVisible = true, bool choosesStorage = false, string? selectedLabel = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
@@ -17,7 +17,7 @@ namespace Jularr.Frontend.Framework
                 new NoScript(new Div([.. fallback ?? []])),
                 new Dialog(
                     new Div(new H2(new Text("storage.paths.browse")),
-                        new Button(new Text("folderPicker.close")).Attribute("data-folder-close", "")).Class("folder-picker__heading"),
+                        new Button(new Icon("close", assets, 18)).IconOnly(texts["folderPicker.close"]).Attribute("data-folder-close", "")).Class("folder-picker__heading"),
                     new P(new Text("folderPicker.loading")).Attribute("role", "status").Attribute("data-folder-status", "").Attribute("hidden", "hidden"),
                     new Div().Attribute("data-folder-content", "")
                 ).Class("folder-picker__dialog").Attribute("aria-label", texts["storage.paths.browse"])

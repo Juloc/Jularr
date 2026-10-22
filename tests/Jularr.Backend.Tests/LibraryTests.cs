@@ -221,6 +221,44 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Storage_ConfiguredLocalPath_IsNotAConnectionUntilConnectedAndThenBrowsable()
+        {
+            using var storage = new TemporaryDirectory();
+            Directory.CreateDirectory(System.IO.Path.Combine(storage.Path, "Movies"));
+            await using var host = await CreateHostAsync(storage.Path);
+
+            // The deployment offers the path, but it is no connection yet: the folder browser has to offer it and connect it on choosing.
+            using var offered = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/storage/local-paths");
+            Assert.AreEqual(HttpStatusCode.OK, offered.StatusCode, await offered.Content.ReadAsStringAsync());
+            CollectionAssert.Contains((await offered.Content.ReadFromJsonAsync<BaseDataList<StorageLocalPathV1>>())!.Select(path => path.LocalPath).ToArray(), storage.Path);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StorageMounts\""));
+
+            // The body the folder browser sends: writable, named like the folder.
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts", new
+            {
+                name = System.IO.Path.GetFileName(storage.Path),
+                storageProtocolTypeId = (int)StorageProtocolType.Local,
+                host = (string?)null,
+                sharePath = storage.Path,
+                protocolVersion = (string?)null,
+                username = (string?)null,
+                domain = (string?)null,
+                isReadOnly = false,
+                password = (string?)null
+            });
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var mountId = (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
+            using var checkedMount = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + mountId + "/check");
+            Assert.AreEqual(HttpStatusCode.OK, checkedMount.StatusCode, await checkedMount.Content.ReadAsStringAsync());
+
+            // The connection lists the folders below the path and is writable.
+            using var folders = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts/" + mountId + "/directories", new ReadStorageDirectoriesDataV1(""));
+            Assert.AreEqual(HttpStatusCode.OK, folders.StatusCode, await folders.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "Movies" }, (await folders.Content.ReadFromJsonAsync<BaseDataList<StorageDirectoryV1>>())!.Select(directory => directory.Name).ToArray());
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsReadOnly\" FROM \"StorageMounts\" WHERE \"Id\" = " + mountId));
+        }
+
+        [TestMethod]
         public async Task Storage_LocalPathsWakeAndBrowsing_StayInsideConfiguredConnections()
         {
             using var storage = new TemporaryDirectory();

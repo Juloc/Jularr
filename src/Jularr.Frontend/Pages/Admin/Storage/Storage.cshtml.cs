@@ -170,10 +170,10 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         // A folder of this installation that is not connected yet: one click connects it.
         private IUiComponent LocalPathCard(StorageLocalPathV1 path, string? csrf)
         {
-            var name = path.LocalPath.TrimEnd('/', '\\').Split('/', '\\')[^1];
+            var name = StorageBrowser.LocalName(path.LocalPath);
             var chip = new StateChip(new Text("storage.available"), UiTone.Info, Glyph("link", 14));
             var connect = new PostForm(Address(handler: "ConnectLocal"), csrf, [("localPath", path.LocalPath)], new Button(Glyph("plus", 14), new Text("storage.connect")).Compact().Soft().Submit());
-            return new FeatureCard(new IconTile(Glyph("drive", 18), UiTone.Accent), name.Length == 0 ? path.LocalPath : name, texts["storage.protocol.Local"], chip,
+            return new FeatureCard(new IconTile(Glyph("drive", 18), UiTone.Accent), name, texts["storage.protocol.Local"], chip,
                 [new Div(new Truncated(path.LocalPath)).Class("feature-card__path")], [connect]);
         }
 
@@ -527,7 +527,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             {
                 form.Hidden(item => item.StorageMountId);
                 form.Hidden(item => item.RelativePath);
-                form.Content(new FolderPicker(Address(mount.Id, handler: "Folders"), path, nameof(CreateLibraryRootDataV1.RelativePath), Address(mount.Id, browse: path), folderFallback));
+                form.Content(new FolderPicker(assets, Address(mount.Id, handler: "Folders"), path, nameof(CreateLibraryRootDataV1.RelativePath), Address(mount.Id, browse: path), folderFallback));
                 form.Text(item => item.Name, "storage.name");
                 form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
                 form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
@@ -591,8 +591,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         // A folder the installation offers becomes a connection as it is, named like the folder.
         public async Task<IActionResult> OnPostConnectLocalAsync([BindRequired] string localPath)
         {
-            var name = localPath.TrimEnd('/', '\\').Split('/', '\\')[^1];
-            var created = await create.ExecuteAsync<CreateStorageMountResultV1>(new SaveStorageMountDataV1(name.Length == 0 ? localPath : name, StorageProtocolType.Local, null, localPath, null, null, null, false, null), HttpContext.RequestAborted);
+            var created = await create.ExecuteAsync<CreateStorageMountResultV1>(new SaveStorageMountDataV1(StorageBrowser.LocalName(localPath), StorageProtocolType.Local, null, localPath, null, null, null, false, null), HttpContext.RequestAborted);
             await check.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(created.Id), default, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
