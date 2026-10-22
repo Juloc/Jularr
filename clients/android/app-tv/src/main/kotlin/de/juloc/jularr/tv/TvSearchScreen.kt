@@ -49,6 +49,7 @@ fun TvSearchScreen(
     onFilterChange: (TvContentFilter) -> Unit,
     onAnime: (AnimeSummary) -> Unit,
     serverQueryResults: Boolean = false,
+    onOpenDiscover: (() -> Unit)? = null,
 ) {
     // clean-start performs query matching server-side, including aliases not present
     // in the summary card. Do not discard valid server results with a second local match.
@@ -128,6 +129,11 @@ fun TvSearchScreen(
             screenKey = "search",
             onSelect = onFilterChange,
         )
+        if (onOpenDiscover != null) {
+            Button(onClick = onOpenDiscover) {
+                Text("Im gesamten Katalog suchen (Discover)")
+            }
+        }
 
         Text(
             stringResource(

@@ -99,9 +99,12 @@ fun TvV1CatalogHost(
             error = "Ungültige Work-ID der Jularr-Instanz."
             return
         }
-        returnPage = if (page == TvV1CatalogPage.Watchlist) TvV1CatalogPage.Watchlist
-            else if (page == TvV1CatalogPage.Search) TvV1CatalogPage.Search
-            else TvV1CatalogPage.Home
+        returnPage = when (page) {
+            TvV1CatalogPage.Watchlist -> TvV1CatalogPage.Watchlist
+            TvV1CatalogPage.Search -> TvV1CatalogPage.Search
+            TvV1CatalogPage.Discover -> TvV1CatalogPage.Discover
+            else -> TvV1CatalogPage.Home
+        }
         detailWorkId = workId
         details = null
         error = null
@@ -112,6 +115,7 @@ fun TvV1CatalogHost(
         error = null
         page = when (page) {
             TvV1CatalogPage.Settings, TvV1CatalogPage.ProfileSelect -> TvV1CatalogPage.Home
+            TvV1CatalogPage.Discover -> TvV1CatalogPage.Search
             TvV1CatalogPage.Details -> returnPage
             TvV1CatalogPage.MovieEditions -> TvV1CatalogPage.Details
             TvV1CatalogPage.PlaybackPending -> TvV1CatalogPage.Details
@@ -202,7 +206,14 @@ fun TvV1CatalogHost(
                         catalog.watchlist(page = pageNumber, pageSize = 100)
                     })
                 }
-                TvV1CatalogPage.Details -> {
+                TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
+            catalog = catalog,
+            serverOrigin = serverOrigin,
+            requestHeaders = authorization,
+            onLocalWork = { id -> openWork(id.toString()) },
+            onBack = ::back,
+        )
+        TvV1CatalogPage.Details -> {
                     val workId = requireNotNull(detailWorkId)
                     require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
                         "Mediendetails sind für dieses Profil nicht freigegeben."
@@ -234,7 +245,7 @@ fun TvV1CatalogHost(
                 }
                 TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
                 TvV1CatalogPage.MovieEditions, TvV1CatalogPage.Settings,
-                TvV1CatalogPage.ProfileSelect -> Unit
+                TvV1CatalogPage.ProfileSelect, TvV1CatalogPage.Discover -> Unit
             }
         } catch (cancel: CancellationException) {
             throw cancel
@@ -324,6 +335,7 @@ fun TvV1CatalogHost(
                 onFilterChange = { category = it },
                 onAnime = { card -> openWork(card.id) },
                 serverQueryResults = true,
+                onOpenDiscover = { page = TvV1CatalogPage.Discover },
             )
         }
         TvV1CatalogPage.Details -> {
@@ -440,7 +452,7 @@ fun TvV1CatalogHost(
 }
 
 private enum class TvV1CatalogPage {
-    Home, Search, Watchlist, Settings, ProfileSelect, Details, MovieEditions, PlaybackPending, Player
+    Home, Search, Discover, Watchlist, Settings, ProfileSelect, Details, MovieEditions, PlaybackPending, Player
 }
 
 /** PageResult<T> has no guaranteed total count: keep requesting until a short page. */
