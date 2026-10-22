@@ -63,6 +63,7 @@ fun TvProfileScreen(
     onChangeServer: () -> Unit,
     onSwitchAccount: (() -> Unit)? = null,
     onSwitchProfile: (() -> Unit)? = null,
+    onOpenStatistics: (() -> Unit)? = null,
     playbackPreferences: ClientPlaybackPreferences? = null,
     busy: Boolean = false,
     error: String? = null,
@@ -155,6 +156,9 @@ fun TvProfileScreen(
                     item {
                         TvSettingRow(stringResource(R.string.tv_profile_switch_profile), null, onClick = onSwitchProfile)
                     }
+                }
+                if (onOpenStatistics != null) {
+                    item { TvSettingRow("Nutzungsstatistik", null, onClick = onOpenStatistics) }
                 }
                 if (onSwitchAccount != null) {
                     item {

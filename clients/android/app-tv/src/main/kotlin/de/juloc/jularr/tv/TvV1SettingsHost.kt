@@ -37,6 +37,7 @@ internal fun TvV1SettingsHost(
     playbackExtras: TvV1PlaybackExtrasClient,
     onUnauthorized: () -> Unit,
     onSwitchProfile: () -> Unit,
+    onOpenStatistics: (() -> Unit)? = null,
     onSignOut: () -> Unit,
     onChangeServer: () -> Unit,
 ) {
@@ -159,6 +160,7 @@ internal fun TvV1SettingsHost(
         onSignOut = onSignOut,
         onChangeServer = onChangeServer,
         onSwitchProfile = onSwitchProfile,
+        onOpenStatistics = onOpenStatistics,
         playbackPreferences = playbackPreferences?.let(TvV1PlaybackPreferencesBridge::display),
         busy = savingPlayback,
         error = playbackError ?: error,

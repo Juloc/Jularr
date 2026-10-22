@@ -25,6 +25,7 @@ import de.juloc.jularr.core.api.catalog.TvPersonV1
 import de.juloc.jularr.core.api.catalog.TvWorkCardV1
 import de.juloc.jularr.core.api.catalog.TvWorkCreditV1
 import de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1
+import de.juloc.jularr.core.api.tvlegacy.HttpTvV1LegacyFeaturesClient
 import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.profile.HttpTvV1ProfileClient
 import de.juloc.jularr.core.api.profile.TvV1ProfileClient
@@ -60,6 +61,9 @@ fun TvV1CatalogHost(
     val scope = rememberCoroutineScope()
     val playbackExtras = remember(serverOrigin, deviceSession) {
         HttpTvV1PlaybackExtrasClient(serverOrigin, deviceSession.authenticatedTokenStore())
+    }
+    val legacy = remember(serverOrigin, deviceSession) {
+        HttpTvV1LegacyFeaturesClient(serverOrigin, deviceSession.authenticatedTokenStore())
     }
     val focusMemory = remember(serverOrigin) { TvFocusMemory() }
     var navigation by remember(serverOrigin) { mutableStateOf(TvV1NavigationState()) }
@@ -263,7 +267,8 @@ fun TvV1CatalogHost(
                 }
                 TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
                 TvV1CatalogPage.MovieEditions, TvV1CatalogPage.Settings,
-                TvV1CatalogPage.ProfileSelect, TvV1CatalogPage.Discover -> Unit
+                TvV1CatalogPage.ProfileSelect, TvV1CatalogPage.Discover,
+                TvV1CatalogPage.Statistics -> Unit
             }
         } catch (cancel: CancellationException) {
             throw cancel
@@ -362,6 +367,9 @@ fun TvV1CatalogHost(
                     playbackExtras = playbackExtras,
                     onUnauthorized = onAuthenticationExpired,
                     onSwitchProfile = { openPage(TvV1CatalogPage.ProfileSelect) },
+                    onOpenStatistics = if (capabilities.hasModule("Statistics") &&
+                        capabilities.hasPermission("profile.media.read")
+                    ) {{ openPage(TvV1CatalogPage.Statistics) }} else null,
                     onSignOut = {
                         if (capabilities.hasPermission("session.self.logout")) {
                             error = null
@@ -372,6 +380,12 @@ fun TvV1CatalogHost(
                 )
             }
         }
+        TvV1CatalogPage.Statistics -> TvV1StatisticsScreen(
+            api = legacy,
+            onOpenWork = { id -> openWork(id.toString()) },
+            onUnauthorized = onAuthenticationExpired,
+            onBack = ::back,
+        )
         TvV1CatalogPage.ProfileSelect -> TvV1ProfilesScreen(
             api = profileApi,
             onSwitched = onProfileChanged,
