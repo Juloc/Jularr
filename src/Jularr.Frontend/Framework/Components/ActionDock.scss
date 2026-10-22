@@ -13,6 +13,9 @@
 
     &__label { padding: 0 6px; color: var(--muted); font-size: var(--text-control); font-weight: 650; white-space: nowrap; }
 
+    // The paging zone drawn in place, below a list inside a detail pane.
+    &__paging--inline { justify-content: center; margin-top: 8px; }
+
     // Chosen rows: the bulk zone takes the place of the page's actions.
     &[data-selecting] &__actions { display: none; }
     &__bulk[hidden] { display: none; }

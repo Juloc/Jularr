@@ -214,12 +214,17 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   an icon, rows (a `SpaceBar` for a volume's free space), the actions at the foot (first group at the start, second at the end). A card with an id is a Region: its switch or test swaps just that card.
   Settings of a card open in the shared `Modal`; a thing with many parts (a storage connection with its library paths) has its own page. One chip row joins the pages of an area (Storage: connections, download storage;
   Integrations: providers, media servers, catalogs); keys are entered in a masked field and never shown again, only whether one is stored.
-- Owner's decision 21 Oct: admin list pages keep their page actions, bulk actions and paging in the one floating
+- Owner's decision 21 Oct: admin list pages keep their page actions and bulk actions in the one floating
   [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
-  floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with three optional zones as slots: actions (icon and short
-  label; a phone keeps the icons), bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count) and paging (previous, "Page 2 / 9"
-  or a range, next, optional page size select; plain GET links with the filters in the address, `pageNumber`). **No infinite scroll on admin pages**: lists are paged,
-  25 rows by default. With a visible save pill the dock stacks above it.
+  floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with two optional zones as slots: actions (icon and short
+  label; a phone keeps the icons) and bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count); the pager of the page's list joins it by itself
+  (see Paging). **No infinite scroll on admin pages**: lists are paged, 25 rows by default. With a visible save pill the dock stacks above it.
+- **Paging: set `.Paged()` on the list.** `Table`, `ListPanel` (`.Paged(pageSize: 25, key: "pageNumber", primary: false)`) and any other component (`content.Paged(rows, pageSize, key)`, e.g. a grid of cards)
+  take paging as an option; the page never builds a dock, a pager or an address for it. The rule is the same everywhere (see [Paging.cs](../src/Jularr.Frontend/Framework/Components/Paging.cs)):
+  a page is up to `pageSize` rows read without a count and without looking ahead, the pager says "Page 2", **Next is on iff the page is full**, Previous from page 2 on, and a page behind the last one shows
+  the list's empty state and leads back. The page number is read from the address (`?pageNumber=2`); the links keep every other query value. A page with several paged lists gives each its own key
+  (`.Paged(key: "files")` pages `?files=2`, the others keep their page); the pager of the primary list (the first, or the one marked `primary: true`) sits in the floating dock, every other list draws the same small
+  pager under itself. The service call takes the same page number and size and returns exactly its rows; never a total, never an extra row.
 - Related admin list pages are joined by **one** row of section chips whose group is defined once (an entry of `AdminMenu`; the quality rules are panes of one address), above the list in a `ListToolbar` that may carry the list's one scope menu on its right; a page without filters of its own (the acquisition lists) has no other chips. The editor of a list item is a `Modal` that the address opens (`?edit=`, `?new=`, `?AcquisitionConnectionId=`) with the list's address as `returnTo`, so a reload after closing shows the list; it saves on its own with `form.Cancel()` and `form.Submit(...)`, a row switch or test is a `PostForm` and the figures above follow because the page content is swapped. There is no delay, waiting or minimum-age option on any acquisition page.
 
 Everything that changes colour with the theme follows the switch with `transition: color var(--transition)` (or the colour it changes), the wordmark and the mark included; no element has a
@@ -420,7 +425,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
 - Local content must not wait for optional external recommendations. Load their
   server-rendered fragments independently, retaining usable native links and
   visible failures. Do not parallelize operations over one shared SQL transaction.
-- Paging uses returned item count only. Empty later pages keep Previous and the
+- Paging uses returned item count only (`.Paged()`, above). Empty later pages keep Previous and the
   current filter/sort scope; every bounded editable collection remains navigable.
 - Playback and Reading are independent capabilities. Continue reads and actions
   include only assets whose own module is enabled; no Frontend-only bypass.

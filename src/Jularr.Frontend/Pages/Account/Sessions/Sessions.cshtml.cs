@@ -57,8 +57,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                     ]));
                 }
 
-                if (_sessions.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Url.Page("/Account/Sessions/Sessions", new { pageNumber = _sessions.Page - 1 })!));
-                if (_sessions.Items.Count == _sessions.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Url.Page("/Account/Sessions/Sessions", new { pageNumber = _sessions.Page + 1 })!));
+                page.Content.Add(new Span().Paged(_sessions.Items.Count, _sessions.PageSize));
             }
 
             page.Content.Add(new A(new Text("nav.settings")).Attribute("href", "/Settings"));

@@ -80,8 +80,16 @@ namespace Jularr.Frontend.Framework
     {
         private string _modifier = "";
         private string? _pickerKind;
+        private PagedList? _paged;
 
         // The page's own class, which sets --list-columns (and -medium, -narrow) for its columns.
+        // The list is paged: up to pageSize rows a page, its pager in the page's dock (or under it when it is not the page's primary list). See Paging.cs.
+        public ListPanel Paged(int pageSize = 25, string key = PagedList.DefaultKey, bool primary = false)
+        {
+            _paged = PagingScope.Register(rows.Count, pageSize, key, primary);
+            return this;
+        }
+
         public ListPanel Modifier(string name)
         {
             _modifier = " " + name;
@@ -122,6 +130,7 @@ namespace Jularr.Frontend.Framework
             if (empty is not null) parts.Add(rows.Count == 0 ? new Div(empty).Class("list-empty") : new Div(empty).Class("list-empty").Attribute("hidden", "hidden"));
             var panel = new Div([.. parts]).Class("list-panel" + _modifier).Attribute("role", "table").Attribute("aria-label", texts[ariaLabelKey]);
             new Div(_pickerKind is null ? panel : panel.Attribute("data-work-table", _pickerKind)).Class("list").WriteTo(writer, encoder, texts);
+            _paged?.WriteInline(writer, encoder, texts);
         }
 
         // What the column picker reads from a head cell: the key, the name it shows, the grid track, when the column leaves and whether it starts hidden or fixed.

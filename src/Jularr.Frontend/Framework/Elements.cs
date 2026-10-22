@@ -7,7 +7,7 @@ namespace Jularr.Frontend.Framework
     {
         private static readonly HashSet<string> VoidTags = ["input", "img", "br", "hr"];
         private readonly string _tag;
-        private readonly IUiComponent[] _children;
+        private readonly List<IUiComponent> _children;
         private readonly List<(string Name, string Value)> _attributes = [];
         private readonly List<(string Name, string Key)> _textAttributes = [];
 
@@ -19,8 +19,12 @@ namespace Jularr.Frontend.Framework
             }
 
             _tag = tag;
-            _children = children;
+            _children = [.. children];
         }
+
+        protected int ChildCount => _children.Count;
+
+        protected void AddChild(IUiComponent child) => _children.Add(child);
 
         public HtmlElement Attribute(string name, string value)
         {
@@ -92,7 +96,7 @@ namespace Jularr.Frontend.Framework
             writer.Write('>');
             if (VoidTags.Contains(_tag))
             {
-                if (_children.Length > 0) throw new InvalidOperationException("Void elements cannot have children.");
+                if (_children.Count > 0) throw new InvalidOperationException("Void elements cannot have children.");
                 return;
             }
 

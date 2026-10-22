@@ -111,7 +111,19 @@ namespace Jularr.Frontend.Framework
         internal Page BuildDefinition()
         {
             var page = new Page();
-            Define(page);
+
+            // Lists that are `.Paged()` register while the page is defined; the primary one's pager then joins the page's dock.
+            var paging = PagingScope.Begin(Request, HttpContext.RequestServices.GetRequiredService<FrontendAssets>());
+            try
+            {
+                Define(page);
+            }
+            finally
+            {
+                PagingScope.End();
+            }
+
+            paging.Attach(page);
 
             // A top page of an administration entry opens with the entry's row of sibling pages (a page that merges it with its own filters, or is a detail, says so).
             if (page.Shell && !page.SuppressPageRow && page.Parents.Count == 0 && Request.Path.StartsWithSegments("/Admin")

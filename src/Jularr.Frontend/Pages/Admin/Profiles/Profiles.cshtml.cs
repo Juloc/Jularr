@@ -142,13 +142,6 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private string? Token => antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
         private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
 
-        // The paging zone of a paged pane's dock.
-        private DockPaging? Paging<T>(PageResult<T> result) where T : BaseData
-        {
-            if (result.Page <= 1 && result.Items.Count != result.PageSize) return null;
-            return new DockPaging(result.Page > 1 ? Address(page: result.Page - 1) : null, result.Items.Count == result.PageSize ? Address(page: result.Page + 1) : null,
-                new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page.single"], result.Page)));
-        }
 
         private IUiComponent AddAction(string labelKey) => new A(Glyph("plus", 16), new Span(new Text(labelKey)).Class("action-dock__text")).Class("button").Attribute("href", Address(isNew: true));
 

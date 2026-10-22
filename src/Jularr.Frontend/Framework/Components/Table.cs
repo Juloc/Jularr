@@ -15,6 +15,7 @@ namespace Jularr.Frontend.Framework
         private readonly List<Column> _columns = [];
         private bool _dense;
         private bool _compact;
+        private PagedList? _paged;
 
         // A table of figures that sits inside a card: the mockups' data table with rows of about 46px and no card of its own, instead of the 76px list row.
         public Table<TData> Dense()
@@ -27,6 +28,13 @@ namespace Jularr.Frontend.Framework
         public Table<TData> Compact()
         {
             _compact = true;
+            return this;
+        }
+
+        // The table is paged: up to pageSize rows a page, its pager in the page's dock (or under it when it is not the page's primary list). See Paging.cs.
+        public Table<TData> Paged(int pageSize = 25, string key = PagedList.DefaultKey, bool primary = false)
+        {
+            _paged = PagingScope.Register(rows.Count, pageSize, key, primary);
             return this;
         }
 
@@ -71,6 +79,7 @@ namespace Jularr.Frontend.Framework
             // Headings without rows are no table; the page says why it is empty.
             if (rows.Count == 0)
             {
+                _paged?.WriteInline(writer, encoder, texts);
                 return;
             }
 
@@ -86,6 +95,7 @@ namespace Jularr.Frontend.Framework
 
             new Div(new TableElement(new Thead(new Tr(headings)), new Tbody(body))
                 .Class(_dense ? "page-table page-table--dense" : "page-table")).Class("page-table-wrap page-table-wrap--stack" + (_dense ? " page-table-wrap--embedded" : "") + (_compact ? " page-table-wrap--compact" : "")).WriteTo(writer, encoder, texts);
+            _paged?.WriteInline(writer, encoder, texts);
         }
 
         private sealed class Column(string labelKey, Func<TData, IUiComponent> value)

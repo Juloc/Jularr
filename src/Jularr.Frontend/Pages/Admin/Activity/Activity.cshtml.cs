@@ -53,7 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 var columns = IsHistory
                     ? new List<ListColumn> { new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.reason", ListRole.Data, 1), new("activity.size", ListRole.Data, 2), new("operation.created"), new("common.actions", ListRole.Actions) }
                     : [new("activity.item", ListRole.Main), new("table.status", ListRole.Status), new("activity.source", ListRole.Data, 2), new("activity.transfer", ListRole.Data, 1), new("common.actions", ListRole.Actions)];
-                page.Content.Add(new ListPanel("activity.list", columns, [.. items.Items.Select(item => IsHistory ? HistoryRow(item, csrf) : QueueRow(item, csrf))], empty).Modifier(IsHistory ? "activity-list activity-history" : "activity-list activity-queue"));
+                page.Content.Add(new ListPanel("activity.list", columns, [.. items.Items.Select(item => IsHistory ? HistoryRow(item, csrf) : QueueRow(item, csrf))], empty).Modifier(IsHistory ? "activity-list activity-history" : "activity-list activity-queue").Paged());
                 page.Content.AddRange(items.Items.Select(item => DrawerOf(item, csrf)));
             }
 
@@ -112,18 +112,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 actions.Add(QueueButton("ResumeAll", "play", "activity.resumeAll", csrf));
             }
 
-            DockPaging? paging = null;
-            if (_items is { } items && CountOf(_summary) is { } total)
-            {
-                var pages = Math.Max(1, (total + items.PageSize - 1) / items.PageSize);
-                if (pages > 1 || items.Page > 1)
-                {
-                    paging = new DockPaging(items.Page > 1 ? Address(items.Page - 1) : null, items.Page < pages ? Address(items.Page + 1) : null,
-                        new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page"], items.Page, pages)));
-                }
-            }
-
-            return new ActionDock(assets, "activity.actions", actions, paging: paging);
+            return new ActionDock(assets, "activity.actions", actions);
         }
 
         private IUiComponent QueueButton(string handler, string icon, string labelKey, string? csrf) =>

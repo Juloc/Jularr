@@ -345,23 +345,11 @@ namespace Jularr.Frontend.Pages.Admin.Works
             if (CanManageMedia) bulk.Add(BulkButton("refresh", "works.bar.refresh", "sync"));
             if (CanManageWanted) bulk.Add(Drawer.Opener(new Button(Glyph("sliders", 16), new Span(new Text("works.bulk.change")).Class("action-dock__text")), "works-change"));
             if (CanManageMedia) bulk.Add(new Button(Glyph("trash", 16), new Span(new Text("work.delete")).Class("action-dock__text")).Attribute("data-works-delete", ""));
-            return new ActionDock(assets, "works.actions", actions, Selectable ? bulk : null, works is null ? null : Paging(works));
+            return new ActionDock(assets, "works.actions", actions, Selectable ? bulk : null);
         }
 
         private IUiComponent BulkButton(string action, string labelKey, string icon) =>
             new Button(Glyph(icon, 16), new Span(new Text(labelKey)).Class("action-dock__text")).Submit().Attribute("form", BulkForm).Attribute("name", "action").Attribute("value", action);
-
-        // Page n of m while the count is known, else only the page; the next link stays while a full page may be followed by another.
-        private DockPaging? Paging(PageResult<WorkListItemV1> works)
-        {
-            int? total = MonitoredFilter is null ? CountOf(StatusFilter) : null;
-            var next = total is { } known ? works.Page * works.PageSize < known : works.Items.Count == works.PageSize;
-            if (works.Page == 1 && !next) return null;
-            var label = total is { } count
-                ? string.Format(CultureInfo.CurrentCulture, texts["dock.page"], works.Page, Math.Max(1, (count + works.PageSize - 1) / works.PageSize))
-                : string.Format(CultureInfo.CurrentCulture, texts["dock.pageOnly"], works.Page);
-            return new DockPaging(works.Page > 1 ? Address(pageNumber: works.Page - 1) : null, next ? Address(pageNumber: works.Page + 1) : null, new ValueText(label));
-        }
 
         // Sonarr's dialog for the chosen titles: the files go too when asked, and an exclusion keeps a request from bringing them back. The titles are written in when it opens.
         private IUiComponent DeleteDialog(string? csrf)

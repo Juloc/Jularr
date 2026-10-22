@@ -34,7 +34,6 @@ namespace Jularr.Frontend.Pages.User.Favorites
         private IReadOnlyDictionary<long, long[]> _membership = new Dictionary<long, long[]>();
         private CollectionV1? _current;
         private bool _loaded;
-        private bool _hasMore;
         private int? _total;
 
         // Media types as slugs, repeated or separated by commas; none shows all of them.
@@ -89,13 +88,11 @@ namespace Jularr.Frontend.Pages.User.Favorites
             {
                 var works = await readCollectionWorks.ExecuteAsync<PageResult<LibraryItemV1>>(new CollectionWorksParametersV1(collection.Id, page, PageSize, types, subtypes, yearFrom, yearTo, ProgressState, Sort), token);
                 _entries = [.. works.Items.Select(Entry)];
-                _hasMore = works.Items.Count == works.PageSize;
             }
             else
             {
                 var works = await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadWatchlistParametersV1(page, PageSize, types, subtypes, yearFrom, yearTo, ProgressState, Sort), token);
                 _entries = [.. works.Items.Select(Entry)];
-                _hasMore = works.Items.Count == works.PageSize;
             }
 
             // Which hand-picked collections hold the shown titles, in one read.

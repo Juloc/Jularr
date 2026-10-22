@@ -72,7 +72,12 @@ namespace Jularr.Frontend.Pages.User.Details
             var items = _availability?.Items ?? [];
             var parts = new List<IUiComponent>();
             if (kind == WorkKind.Game && _platforms is { Count: > 0 } platforms) parts.Add(PlatformCards(work, platforms));
-            if (items.Count == 0) return new Div([.. parts]);
+            if (items.Count == 0)
+            {
+                // An empty page behind the last one leads back.
+                if (!preview) parts.Add(new Span().Paged(0, _availability?.PageSize ?? 48, "p"));
+                return new Div([.. parts]);
+            }
 
             if (preview) return new Div([.. parts, VersionTable(kind, [.. items.Take(5)])]);
 
@@ -87,12 +92,10 @@ namespace Jularr.Frontend.Pages.User.Details
             }
 
             // One bounded inventory page.
-            var paging = new List<IUiComponent>();
-            if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(query => { query["tab"] = "files"; query["p"] = (PageNumber - 1).ToString(CultureInfo.InvariantCulture); })));
-            if (items.Count == _availability!.PageSize) paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(query => { query["tab"] = "files"; query["p"] = (PageNumber + 1).ToString(CultureInfo.InvariantCulture); })));
-            if (paging.Count > 0) parts.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
+            parts.Add(new Span().Paged(items.Count, _availability!.PageSize, "p"));
             return new Div([.. parts]).Class("details-files");
         }
+
 
         // The platforms a game is on, the ones that are here marked, and the one the primary action opens.
         private IUiComponent PlatformCards(WorkDetailsV1 work, IReadOnlyList<GamePlatformV1> platforms)

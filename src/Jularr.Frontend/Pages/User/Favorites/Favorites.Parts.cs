@@ -78,10 +78,7 @@ namespace Jularr.Frontend.Pages.User.Favorites
             if (_entries.Count > 0) parts.Add(new Div([.. _entries.Select(entry => EntryCard(entry, csrf, canCollect))]).Class("media-grid favorites-grid"));
             else parts.Add(new P(new Text(EmptyKey())).Class("favorites-empty").Attribute("role", "status"));
 
-            var paging = new List<IUiComponent>();
-            if (Current.Page > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(Current with { Page = Current.Page - 1 })));
-            if (_hasMore) paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(Current with { Page = Current.Page + 1 })));
-            if (paging.Count > 0) parts.Add(new Nav([.. paging]).Class("page-actions").Attribute("aria-label", texts["library.paging"]));
+            parts.Add(new Span().Paged(_entries.Count, PageSize, "p"));
 
             // Panels open over the page.
             parts.Add(FilterDrawer());

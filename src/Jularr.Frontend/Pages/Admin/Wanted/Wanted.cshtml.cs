@@ -44,7 +44,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             {
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("wanted.empty")));
                 var columns = new List<ListColumn> { new("table.work", ListRole.Main, Head: manage ? ListIdentity.SelectAllHead(new Text("table.work"), "wanted.selectAll") : null), new("table.status", ListRole.Status), new("wanted.priority"), new("request.language", ListRole.Data, 2), new("wanted.lastSearch", ListRole.Data, 1), new("common.actions", ListRole.Actions) };
-                page.Content.Add(new ListPanel("wanted.list", columns, [.. wanted.Items.Select(item => Row(item, acquire, manage, wanted.Page, csrf))], empty).Modifier("wanted-list"));
+                page.Content.Add(new ListPanel("wanted.list", columns, [.. wanted.Items.Select(item => Row(item, acquire, manage, wanted.Page, csrf))], empty).Modifier("wanted-list").Paged());
                 if (manage && wanted.Items.Count > 0) page.Content.Add(BulkFormElement(csrf));
                 page.Content.Add(Dock(wanted, manage, acquire));
             }
@@ -135,16 +135,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 if (acquire) bulk.Add(BulkButton("Search", "search", "wanted.search.selected", true));
             }
 
-            DockPaging? paging = null;
-            var total = CountOf(View);
-            var pages = total is { } count ? Math.Max(1, (count + wanted.PageSize - 1) / wanted.PageSize) : wanted.Page + (wanted.Items.Count == wanted.PageSize ? 1 : 0);
-            if (pages > 1 || wanted.Page > 1)
-            {
-                paging = new DockPaging(wanted.Page > 1 ? Address(wanted.Page - 1) : null, wanted.Page < pages ? Address(wanted.Page + 1) : null,
-                    new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page"], wanted.Page, pages)));
-            }
-
-            return new ActionDock(assets, "wanted.actions", actions, bulk, paging);
+            return new ActionDock(assets, "wanted.actions", actions, bulk);
         }
 
         private IUiComponent BulkButton(string value, string icon, string labelKey, bool primary)

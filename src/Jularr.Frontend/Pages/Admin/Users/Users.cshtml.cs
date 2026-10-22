@@ -49,12 +49,11 @@ namespace Jularr.Frontend.Pages.Admin.Users
                     .Content("request.rule.profile", item => new ValueText(item.RequestRuleName + (item.IsInherited ? " · " + texts["request.rule.inherited"] : "")
                         + (item.IsOverridden ? " · " + texts["request.rule.overridden"] : "")))
                     .Content("request.rule.limitColumn", item => new ValueText(Limit(item)))
-                    .Content("request.rule.approval", item => new Text(item.IsAutomaticApproval ? "request.rule.automatic" : "request.rule.manual")));
+                    .Content("request.rule.approval", item => new Text(item.IsAutomaticApproval ? "request.rule.automatic" : "request.rule.manual")).Paged());
 
-                if (users.Page > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(null, users.Page - 1)));
-                if (users.Items.Count == users.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(null, users.Page + 1)));
                 if (_selected is { } selected) split.Secondary.Add(AccountForm(selected));
             }).MasterDetail(AccountId is not null, Address(null, PageNumber)));
+
         }
 
         private Form<SaveAccountRequestRuleDataV1> AccountForm(AccountRequestRuleV1 account)

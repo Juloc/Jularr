@@ -41,16 +41,9 @@ namespace Jularr.Frontend.Pages.Admin.Requests
             {
                 var columns = new List<ListColumn> { new("table.work", ListRole.Main), new("table.status", ListRole.Status), new("table.requester", ListRole.Data, 1), new("request.language", ListRole.Data, 1), new("table.requestedAt", ListRole.Data, 2), new("common.actions", ListRole.Actions) };
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("request.empty")));
-                page.Content.Add(new ListPanel("requests.list", columns, [.. requests.Items.Select(item => Row(item, csrf))], empty).Modifier("requests-list"));
+                page.Content.Add(new ListPanel("requests.list", columns, [.. requests.Items.Select(item => Row(item, csrf))], empty).Modifier("requests-list").Paged());
                 page.Content.AddRange(requests.Items.Select(item => DrawerOf(item, csrf)));
 
-                var total = CountOf(Tab);
-                var pages = total is { } count ? Math.Max(1, (count + requests.PageSize - 1) / requests.PageSize) : requests.Page + (requests.Items.Count == requests.PageSize ? 1 : 0);
-                if (pages > 1 || requests.Page > 1)
-                {
-                    page.Content.Add(new ActionDock(assets, "requests.actions", paging: new DockPaging(requests.Page > 1 ? Address(requests.Page - 1, Tab) : null, requests.Page < pages ? Address(requests.Page + 1, Tab) : null,
-                        new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page"], requests.Page, pages)))));
-                }
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));

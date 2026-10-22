@@ -126,17 +126,10 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             cards.Add(AddCard());
 
             // An action of a card swaps the figures and the cards together.
-            page.Content.Add(new Region("storage-connections", figures, new CardGrid([.. cards])).Class("storage__cards"));
+            page.Content.Add(new Region("storage-connections", figures, new CardGrid([.. cards])).Class("storage__cards").Paged(mounts.Count, _mounts?.PageSize ?? 25));
             page.Content.AddRange(dialogs);
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
 
-            // Paging sits in the one floating dock.
-            var previous = _mounts is { Page: > 1 } ? Address(pageNumber: PageNumber - 1) : null;
-            var next = _mounts is { } rows && rows.Items.Count == rows.PageSize ? Address(pageNumber: PageNumber + 1) : null;
-            if (previous is not null || next is not null)
-            {
-                page.Content.Add(new ActionDock(assets, "storage.actions", paging: new DockPaging(previous, next, new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.pageNumber"], PageNumber)))));
-            }
         }
 
         // The state with its icon, the free space, when it was looked at and what the connection offers.
@@ -426,16 +419,15 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                             form.Hidden(root => root.LibraryRootId);
                             form.Hidden(root => root.Version);
                             form.Submit("storage.paths.remove");
-                        }, Address(mount.Id, handler: "DeleteRoot"), csrf, new DeleteLibraryRootParametersV1(item.Id, item.Version)))));
+                        }, Address(mount.Id, handler: "DeleteRoot"), csrf, new DeleteLibraryRootParametersV1(item.Id, item.Version)))).Paged(key: "rootPageNumber"));
                 items.Add(new P(new Text("storage.paths.removeHint")));
             }
-
-            // Paths have independent paging.
-            if (_roots is { } rootPage)
+            else
             {
-                if (rootPage.Page > 1) items.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(mount.Id, rootPageNumber: rootPage.Page - 1)));
-                if (rootPage.Items.Count == rootPage.PageSize) items.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(mount.Id, rootPageNumber: rootPage.Page + 1)));
+                // An empty page behind the last one still leads back.
+                items.Add(new Span().Paged(0, key: "rootPageNumber"));
             }
+
 
             // Rename keeps location and media type.
             if (roots.FirstOrDefault(root => root.Id == LibraryRootId) is { } selected)

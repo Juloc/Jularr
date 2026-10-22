@@ -39,10 +39,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
             }
 
             page.Content.Add(new Ul([.. notifications.Items.Select(Item)]).Class("notifications"));
-            var paging = new List<IUiComponent>();
-            if (notifications.Page > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", "/Notifications?pageNumber=" + (notifications.Page - 1).ToString(CultureInfo.InvariantCulture)));
-            if (notifications.Items.Count == notifications.PageSize) paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", "/Notifications?pageNumber=" + (notifications.Page + 1).ToString(CultureInfo.InvariantCulture)));
-            if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("notifications__paging").Attribute("aria-label", texts["notifications.pages"]));
+            page.Content.Add(new Span().Paged(notifications.Items.Count, notifications.PageSize));
 
             // One switch per kind of notice.
             var states = new[] { new SelectOption("False", texts["notifications.on"]), new SelectOption("True", texts["notifications.off"]) };

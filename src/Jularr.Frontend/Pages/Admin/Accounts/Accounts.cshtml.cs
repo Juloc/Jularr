@@ -57,9 +57,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         .Text(item => item.Email, "account.field.email")
                         .Resource(item => item.AccountRoleTypeId, "admin.accounts.role", RoleKey)
                         .Resource(item => item.IsEnabled, "admin.accounts.status", enabled => enabled ? "admin.accounts.enabled" : "admin.accounts.disabled")
-                        .Link(item => item.Id, "common.actions", id => Address(id), "common.edit"));
-                    if (PageNumber > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(pageNumber: PageNumber - 1)));
-                    if (_accounts.Items.Count == _accounts.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
+                        .Link(item => item.Id, "common.actions", id => Address(id, PageNumber), "common.edit").Paged(primary: true));
                 }
 
                 if (_selected is not null)
@@ -131,8 +129,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         }
                     }
 
-                    if (ProfilePageNumber > 1) split.Secondary.Add(new A(new Text("common.previous")).Attribute("href", Address(_selected.Id) + "&ProfilePageNumber=" + (ProfilePageNumber - 1)));
-                    if (_profiles is { } && _profiles.Items.Count == _profiles.PageSize) split.Secondary.Add(new A(new Text("common.next")).Attribute("href", Address(_selected.Id) + "&ProfilePageNumber=" + (ProfilePageNumber + 1)));
+                    split.Secondary.Add(new Span().Paged(_profiles?.Items.Count ?? 0, key: "ProfilePageNumber"));
 
                     // Inspect and revoke account sessions.
                     split.Secondary.Add(new H2(new Text("settings.sessions")));
@@ -148,8 +145,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                             new RevokeAccountSessionParametersV1(_selected.Id, session.Id)));
                     }
 
-                    if (SessionPageNumber > 1) split.Secondary.Add(new A(new Text("common.previous")).Attribute("href", Address(_selected.Id) + "&SessionPageNumber=" + (SessionPageNumber - 1)));
-                    if (_sessions is { } && _sessions.Items.Count == _sessions.PageSize) split.Secondary.Add(new A(new Text("common.next")).Attribute("href", Address(_selected.Id) + "&SessionPageNumber=" + (SessionPageNumber + 1)));
+                    split.Secondary.Add(new Span().Paged(_sessions?.Items.Count ?? 0, key: "SessionPageNumber"));
                     if (_revocation is not null && FormError is not null) split.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                 }
                 else if (FormError is not null)
@@ -157,6 +153,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                     split.Primary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                 }
             }).MasterDetail(_selected is not null, Address()));
+
 
         }
 

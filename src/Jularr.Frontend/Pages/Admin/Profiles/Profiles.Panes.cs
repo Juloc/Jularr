@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 var caption = new List<IUiComponent> { ListPanel.Fact("arr.col.conditions", Count(item.Conditions.Count)), ListPanel.Fact("arr.col.profiles", Count(using_)) };
                 return new ListRow([identity, state, new Span(Count(item.Conditions.Count)).Class("list-value"), renaming, new Span(Count(using_)).Class("list-value"), new Div(EditLink(Address(edit: item.Id))).Class("list-actions")], caption);
             }).ToList();
-            page.Content.Add(new ListPanel("arr.formats", columns, rows, empty).Modifier("formats-list"));
+            page.Content.Add(new ListPanel("arr.formats", columns, rows, empty).Modifier("formats-list").Paged());
 
             // The editor and the import, each a dialog.
             var input = _format ?? new SaveCustomFormatDataV1(null, MediaTypeId, "", false,
@@ -96,7 +96,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 AddAction("arr.format.add"),
                 Modal.Opener(new Button(Glyph("download", 16), new Span(new Text("arr.import")).Class("action-dock__text")).Soft(), "format-import")
             };
-            page.Content.Add(new ActionDock(assets, "arr.actions", actions, paging: Paging(result)));
+            page.Content.Add(new ActionDock(assets, "arr.actions", actions));
         }
 
         private void DefineSizes(Page page)
@@ -136,7 +136,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 return new ListRow([identity, state, new Span(Count(item.Required.Length)).Class("list-value"), new Span(Count(item.Ignored.Length)).Class("list-value"),
                     new Span(new ValueText(indexer)).Class("list-value"), new Div(EditLink(Address(edit: item.Id))).Class("list-actions")], caption);
             }).ToList();
-            page.Content.Add(new ListPanel("arr.releaseProfiles", columns, rows, empty).Modifier("release-list"));
+            page.Content.Add(new ListPanel("arr.releaseProfiles", columns, rows, empty).Modifier("release-list").Paged());
 
             var input = _release ?? new SaveReleaseProfileDataV1(null, MediaTypeId, "", true, [], [], null, [], null);
             var form = new Form<SaveReleaseProfileDataV1>(form =>
@@ -157,7 +157,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var body = new List<IUiComponent> { form };
             if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
             if (Edit is not null || IsNew || _release is not null) page.Content.Add(new Modal(assets, "release-editor", "arr.release.title", body, open: true, returnTo: Address()));
-            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.release.add")], paging: Paging(result)));
+            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.release.add")]));
         }
 
         private void DefineTags(Page page)
@@ -168,7 +168,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var rows = result.Items.Select(item => new ListRow([
                 new ListIdentity(new IconTile(Glyph("tag", 18), UiTone.Accent), new A(new ValueText(item.Label)).Class("list-identity__title").Attribute("href", Address(edit: item.Id)), new Span()),
                 new Div(EditLink(Address(edit: item.Id))).Class("list-actions")])).ToList();
-            page.Content.Add(new ListPanel("arr.tags", columns, rows, empty).Modifier("tags-list"));
+            page.Content.Add(new ListPanel("arr.tags", columns, rows, empty).Modifier("tags-list").Paged());
 
             var input = _tag ?? new SaveAcquisitionTagDataV1(null, "", null);
             var form = new Form<SaveAcquisitionTagDataV1>(form =>
@@ -182,7 +182,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var body = new List<IUiComponent> { form };
             if (input.Id is { } id) body.Add(DeleteForm(id, input.Version!.Value));
             if (Edit is not null || IsNew || _tag is not null) page.Content.Add(new Modal(assets, "tag-editor", "arr.tag.title", body, open: true, returnTo: Address()));
-            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.tag.add")], paging: Paging(result)));
+            page.Content.Add(new ActionDock(assets, "arr.actions", [AddAction("arr.tag.add")]));
         }
 
         // The deletion of the edited item behind one more click.

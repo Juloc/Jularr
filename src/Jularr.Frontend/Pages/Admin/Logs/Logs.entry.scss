@@ -1,6 +1,6 @@
 @use "../../../Framework/Components/SelectLinkMenu";
 
-// One card: the filters on top, the messages below, the pager at the end.
+// One card: the filters on top, the messages below.
 .logs {
     min-width: 0;
 
@@ -41,12 +41,4 @@
         &__message { grid-column: 1 / -1; padding-top: 0; }
         &__when { padding-top: 0; align-self: center; }
     }
-}
-
-.logs-pager {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-
-    &:empty { display: none; }
 }
