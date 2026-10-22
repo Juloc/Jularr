@@ -523,7 +523,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task CoverBackfill_ConvertsOnlyWhatIsNotInTheChosenFormat_AndNeverRemovesBeforeTheNewFileExists()
         {
-            // Tools that cannot run: the files are fakes, the job's decisions are what is checked.
+            // Tools that cannot run: the files are fakes, the job's decisions are what is checked. Without a cjxl that runs, the one format the widths are kept in is WebP.
             var missing = Path.Combine(Path.GetTempPath(), "jularr-no-tool-" + Guid.NewGuid().ToString("N"));
             await using var host = await CreateHostAsync(new FakeImages(), new Dictionary<string, string> { ["Media:FfmpegPath"] = missing, ["Media:CjxlPath"] = missing });
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
@@ -533,7 +533,7 @@ namespace Jularr.Backend.Tests
             var folder = Path.Combine(root, workId.ToString());
 
             // New covers are recorded in the format they were made for, even when no tool could make the widths.
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 1"));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
 
             // Covers from before: the triple of formats, no recorded format.
             foreach (var name in new[] { "poster-250.webp", "poster-250.jpg", "poster-500.webp", "poster-500.jpg", "poster-250.jxl", "poster-500.jxl" })
@@ -544,38 +544,38 @@ namespace Jularr.Backend.Tests
             await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = NULL WHERE \"CoverKindId\" = 1");
             Assert.IsFalse((await ConvertAsync(host)).Success, "One pass takes the whole cover and nothing else is waiting.");
 
-            // The poster's widths are already JPEG XL: the other formats of them leave, the download stays, the cover is recorded.
-            foreach (var name in new[] { "poster-250.jxl", "poster-500.jxl", "poster.png" })
+            // The poster's widths are already WebP: the other formats of them leave, the download stays, the cover is recorded.
+            foreach (var name in new[] { "poster-250.webp", "poster-500.webp", "poster.png" })
             {
                 Assert.IsTrue(File.Exists(Path.Combine(folder, name)), name);
             }
 
-            foreach (var name in new[] { "poster-250.webp", "poster-250.jpg", "poster-500.webp", "poster-500.jpg" })
+            foreach (var name in new[] { "poster-250.jxl", "poster-250.jpg", "poster-500.jxl", "poster-500.jpg" })
             {
                 Assert.IsFalse(File.Exists(Path.Combine(folder, name)), name);
             }
 
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" IS NULL"));
 
-            // Widths in WebP only, JPEG XL chosen, and no tool that can make it: nothing is removed, the cover is not tried again until the choice changes.
-            File.Delete(Path.Combine(folder, "poster-250.jxl"));
-            await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.webp"), [1, 2, 3]);
-            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = 2 WHERE \"CoverKindId\" = 1");
+            // A width in JPEG XL only, WebP chosen, and no tool that can make it: nothing is removed, the cover is recorded and not tried again until the choice changes.
+            File.Delete(Path.Combine(folder, "poster-250.webp"));
+            await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.jxl"), [1, 2, 3]);
+            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = 1 WHERE \"CoverKindId\" = 1");
             await ConvertAsync(host);
-            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster-250.webp")), "The old width stays when the new one could not be written.");
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster-250.jxl")), "The old width stays when the new one could not be written.");
             Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 1"));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
             await ConvertAsync(host);
-            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 1"));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
 
             // The sweep knows every extension a width may have and still removes what no cover refers to.
             var stale = Path.Combine(folder, "unit-77-250.jxl");
             await File.WriteAllBytesAsync(stale, [1]);
             File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-1));
-            File.SetLastWriteTimeUtc(Path.Combine(folder, "poster-500.jxl"), DateTime.UtcNow.AddDays(-1));
+            File.SetLastWriteTimeUtc(Path.Combine(folder, "poster-250.jxl"), DateTime.UtcNow.AddDays(-1));
             await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<CleanCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default));
             Assert.IsFalse(File.Exists(stale));
-            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster-500.jxl")));
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster-250.jxl")));
         }
 
         [TestMethod]
