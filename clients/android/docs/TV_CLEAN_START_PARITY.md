@@ -185,3 +185,40 @@ The latest Android CI and live hardware tests remain separate quality gates.
   transitional limitation. The eventual TV library should use server-side
   page loading/on-demand LazyRow pagination instead of claiming all Works were
   loaded. True multiple-saved-account switching also remains outstanding.
+
+
+## Release scope decision — 2026-10-22
+
+**User-approved first TV release:**
+- Online Direct/HLS playback with normal audio and text subtitles, NAS Wake-on-Demand,
+  libraries, Home, Watchlist, search, details, profiles and multiple individually paired accounts.
+- Learning/interactive study cues and **TV offline downloads are explicitly excluded**.
+  They are no longer TV release blockers; never fabricate missing cue identities.
+- Chronological playback Activity/History deferred: [#1504](https://github.com/Juloc/Jularr/issues/1504).
+- Internet subtitle provider search deferred: [#1505](https://github.com/Juloc/Jularr/issues/1505).
+- **Companion/phone remote is required for this release**, but clean-start currently
+  lacks the corresponding session-owned V1 remote protocol. It is tracked as an
+  independent backend + phone integration blocker [#1508](https://github.com/Juloc/Jularr/issues/1508);
+  DO NOT claim it works through the old cookie services.
+- Actual server NAS WOL behavior confirmed in `StartPlaybackV1`: try the configured
+  mount and media file; if inaccessible and both `WakeOnDemand` and MAC are present,
+  send WOL and return `storage_waking`. The TV now retries only that code,
+  with a bounded backoff; it does not call the admin-only wake route.
+- The account vault now stores independent encrypted bearer **slots per server**,
+  supports pairing additional accounts and switching between their active tokens.
+  Each token update is bound to its immutable slot ID, avoiding cross-account
+  contamination from an in-flight request. Usernames are not inferred from tokens.
+- Home now reads supported video shelf order/visibility (Continue Watching and
+  Recently Added) from `/api/v1/home/layout`. Reading/listening shelves are not video
+  TV content. A general personalized Recommendations shelf has no directly
+  equivalent combined content contract; Work-level recommendations must not
+  be passed off as personalized Home recommendations.
+- Home/search/watchlist now read a first 100-item page and expose focusable
+  D-pad `Weitere laden` controls; subsequent pages are requested individually
+  with the correct query and V1 ID mapping. The old 20-page/2,000-result cutoff
+  no longer applies to those lists. Other per-Work APIs still retain their own
+  bounded paging safeguards and should be audited for exceptionally large works.
+
+**Release is not approved until the latest combined Android CI, real TV/device
+pairing + switching + NAS/HLS/device-focus tests, and the companion contract
+and phone integration are complete.**
