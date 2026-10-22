@@ -147,3 +147,26 @@ The latest Android CI and live hardware tests remain separate quality gates.
   Android TV are correct. **Multiple saved accounts on one server remain unported**:
   no credentials are reconstructed from other account sessions or the old
   cookie map.
+
+
+## V1 client flow migration — newest increment
+
+- `TvV1ClientFlow` is now the **active typed data controller** for Home,
+  video-filtered library search, Watchlist and Work details. It reads
+  clean-start `/api/v1` through the reviewed catalog adapter and hands
+  presentation-only legacy models to the **original Compose TV screens**.
+- `TvV1CatalogHost` delegates those reads to the new controller rather than
+  duplicating HTTP orchestration inside the UI. The old `TvClientFlow` still
+  exists for reference, but must **never** be called from the V1 entry.
+- The controller validates WorkId response identity, tracks all real WorkUnitIds,
+  keeps decimal-numbered specials, only exposes actual playable MediaAssetIds,
+  and clears stale episode state on a different Work.
+- Home and search filter movie/series on the server, not by downloading the
+  first few pages of unrelated book/game media. Continue Watching only loads
+  when the verified profile has Playback module and `profile.playback`.
+- Unit tests exercise video filters, per-profile module permission checks,
+  decimal episode mapping, and no invented MediaAsset IDs.
+- Follow-up: cap of 20 × 100 works per screen is still a non-scalable
+  transitional limitation. The eventual TV library should use server-side
+  page loading/on-demand LazyRow pagination instead of claiming all Works were
+  loaded. True multiple-saved-account switching also remains outstanding.
