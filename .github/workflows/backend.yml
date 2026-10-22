@@ -4,7 +4,7 @@ name: Backend Full
 # marked ci/full or [full-ci]. Ordinary PRs skip both expensive jobs.
 on:
   push:
-    branches: [clean-start, codex/backend-clean-start]
+    branches: [clean-start]
   pull_request:
     types: [opened, synchronize, reopened, labeled, edited]
     paths:
