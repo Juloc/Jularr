@@ -1,0 +1,84 @@
+name: Backend
+
+# A bounded PR gate: compile everything, exercise the public API and real
+# PostgreSQL bootstrap, leave the full regression suite to Backend Full.
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'database/**'
+      - 'scripts/**'
+      - '*.sln'
+      - '**/*.props'
+      - '**/*.targets'
+      - 'NuGet.Config'
+      - '.github/workflows/backend.yml'
+      - '.github/workflows/backend-pr.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jularr_test
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: jularr_test_admin
+        ports:
+          - 15433:5432
+        options: >-
+          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
+      - name: Compile assets required by Razor tests
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Compile the backend test project and its dependencies
+        run: dotnet build tests/Jularr.Backend.Tests --configuration Release
+      - name: Smoke test API errors, registration, database bootstrap and module dependencies
+        run: |
+          dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
+            --filter "FullyQualifiedName~Jularr.Backend.Tests.ServiceApiTests.UnknownErrors_ReadAsUnknownAndShowTheirMessageToAdministratorsOnly|FullyQualifiedName~Jularr.Backend.Tests.ServiceApiTests.Registration_MissingDatabaseConfiguration_IsRejected|FullyQualifiedName~Jularr.Backend.Tests.ServiceApiTests.Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime|FullyQualifiedName~Jularr.Backend.Tests.AuthenticationTests.Session_ExpiredOrRevoked_IsNotRenewed|FullyQualifiedName~Jularr.Backend.Tests.InstanceModuleDependencyTests.Modules_Read_NameWhatEachNeeds" \
+            --logger "trx;LogFileName=backend-pr.trx" \
+            --results-directory TestResults/ci/fast
+      - name: Keep smoke test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-pr-smoke
+          path: TestResults/ci/fast/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
