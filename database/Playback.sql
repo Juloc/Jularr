@@ -52,6 +52,103 @@ CREATE TABLE "ProviderProgress" (
     PRIMARY KEY ("ProviderProfileLinkId", "ExternalItemId")
 );
 
+-- A profile's own AniList account. The token stays protected; sending progress is the profile's choice (PushEnabledAt) and only covers progress made after it.
+-- One AniList user belongs to one profile.
+CREATE TABLE "AniListConnections" (
+    "ProfileId" bigint PRIMARY KEY REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    "ViewerId" integer NOT NULL UNIQUE CHECK ("ViewerId" > 0),
+    "ViewerName" varchar(64) NOT NULL CHECK (length(btrim("ViewerName")) > 0),
+    "ProtectedToken" bytea NOT NULL,
+    "ExpiresAt" timestamptz NULL,
+    "ConnectedAt" timestamptz NOT NULL DEFAULT now(),
+    "PushEnabledAt" timestamptz NULL,
+    "SyncedAt" timestamptz NULL,
+    -- The last pass's failure (a code), cleared by the next good one.
+    "FailureCode" varchar(64) NULL
+);
+
+-- The profile's AniList list as last read. An entry whose title is no Work (or season) yet waits as a pending match; nothing creates a Work for it.
+-- RemoteUpdatedAt is the entry's state in AniList; ImportedUpdatedAt the state last taken over, so progress a person took back in Jularr is not imported again.
+CREATE TABLE "AniListEntries" (
+    "ProfileId" bigint NOT NULL REFERENCES "AniListConnections" ("ProfileId") ON DELETE CASCADE,
+    "MediaId" integer NOT NULL CHECK ("MediaId" > 0),
+    "ListEntryId" bigint NOT NULL CHECK ("ListEntryId" > 0),
+    "IsManga" boolean NOT NULL,
+    "Title" varchar(500) NOT NULL CHECK (length(btrim("Title")) > 0),
+    "Status" varchar(16) NOT NULL CHECK ("Status" IN ('CURRENT', 'PLANNING', 'COMPLETED', 'DROPPED', 'PAUSED', 'REPEATING')),
+    "Progress" integer NOT NULL CHECK ("Progress" >= 0),
+    "ProgressVolumes" integer NOT NULL DEFAULT 0 CHECK ("ProgressVolumes" >= 0),
+    -- Points out of a hundred, whatever format the person's AniList shows; 0 is unscored.
+    "Score" smallint NOT NULL DEFAULT 0 CHECK ("Score" BETWEEN 0 AND 100),
+    "TotalCount" integer NULL CHECK ("TotalCount" > 0),
+    "TotalVolumes" integer NULL CHECK ("TotalVolumes" > 0),
+    "RemoteUpdatedAt" timestamptz NOT NULL,
+    "ImportedUpdatedAt" timestamptz NULL,
+    -- When the profile's progress for the entry was last looked at for sending; only progress made after it is looked at again.
+    "PushCheckedAt" timestamptz NULL,
+    "AttemptCount" smallint NOT NULL DEFAULT 0 CHECK ("AttemptCount" >= 0),
+    "NextAttemptAt" timestamptz NULL,
+    "LastError" varchar(64) NULL,
+    PRIMARY KEY ("ProfileId", "MediaId")
+);
+
+-- What an entry covers in the library: a film, the episodes of a season (numbered as AniList numbers them), or the volumes of a book.
+CREATE VIEW "AniListEntryUnits" AS
+SELECT
+    entry."ProfileId",
+    entry."MediaId",
+    unit."WorkId",
+    unit."Id" AS "WorkUnitId",
+    (unit."Number" - mapped."EpisodeOffset")::integer AS "Number"
+FROM
+    "AniListEntries" AS entry
+    JOIN "WorkUnitExternalIdentities" AS mapped ON mapped."Namespace" = 'anilist' AND mapped."Value" = entry."MediaId"::text
+    JOIN "WorkUnits" AS unit ON unit."ParentWorkUnitId" = mapped."WorkUnitId" AND unit."WorkUnitTypeId" = 2
+WHERE
+    NOT entry."IsManga"
+    AND unit."Number" > mapped."EpisodeOffset"
+    AND unit."Number" = floor(unit."Number")
+    AND NOT EXISTS (
+        SELECT
+            1
+        FROM
+            "WorkUnitExternalIdentities" AS later
+        WHERE
+            later."Namespace" = 'anilist'
+            AND later."WorkUnitId" = mapped."WorkUnitId"
+            AND later."EpisodeOffset" > mapped."EpisodeOffset"
+            AND later."EpisodeOffset" < unit."Number"
+    )
+UNION ALL
+SELECT
+    entry."ProfileId",
+    entry."MediaId",
+    work."Id",
+    NULL::bigint,
+    1
+FROM
+    "AniListEntries" AS entry
+    JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = 'anilist' AND identity."Value" = entry."MediaId"::text
+    JOIN "Works" AS work ON work."Id" = identity."WorkId" AND work."MediaTypeId" = 1
+WHERE
+    NOT entry."IsManga"
+UNION ALL
+SELECT
+    entry."ProfileId",
+    entry."MediaId",
+    unit."WorkId",
+    unit."Id",
+    unit."Number"::integer
+FROM
+    "AniListEntries" AS entry
+    JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = 'anilist' AND identity."Value" = entry."MediaId"::text
+    JOIN "Works" AS work ON work."Id" = identity."WorkId" AND work."MediaTypeId" = 3
+    JOIN "WorkUnits" AS unit ON unit."WorkId" = work."Id" AND unit."WorkUnitTypeId" = 3
+WHERE
+    entry."IsManga"
+    AND unit."Number" >= 1
+    AND unit."Number" = floor(unit."Number");
+
 -- A profile's saves of a game file, opaque to the server: the console's own save memory and one save state.
 -- Play time is the game's MediaProgress (type Game, PositionMs played).
 CREATE TABLE "GameSaveTypes" (

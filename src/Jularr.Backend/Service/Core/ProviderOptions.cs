@@ -7,6 +7,9 @@ namespace Jularr.Backend.Service.Core
         public Uri Tvdb { get; set; } = new("https://api4.thetvdb.com/v4/");
         public Uri MusicBrainz { get; set; } = new("https://musicbrainz.org/ws/2/");
         public Uri AniList { get; set; } = new("https://graphql.anilist.co/");
+
+        // Where a profile signs in to its own AniList account (the authorization page, its PIN page and the token exchange).
+        public Uri AniListAccount { get; set; } = new("https://anilist.co/");
         public Uri OpenLibrary { get; set; } = new("https://openlibrary.org/");
         public Uri Hardcover { get; set; } = new("https://api.hardcover.app/v1/");
         public Uri AcoustId { get; set; } = new("https://api.acoustid.org/v2/");
@@ -20,7 +23,7 @@ namespace Jularr.Backend.Service.Core
         // Keys travel along, so plain HTTP only stays on this machine.
         internal ProviderOptions Validated()
         {
-            Uri[] addresses = [Tmdb, Tvdb, MusicBrainz, AniList, OpenLibrary, Hardcover, AcoustId, OcrModels, .. Images.Values];
+            Uri[] addresses = [Tmdb, Tvdb, MusicBrainz, AniList, AniListAccount, OpenLibrary, Hardcover, AcoustId, OcrModels, .. Images.Values];
             return addresses.All(address => address.IsAbsoluteUri && (address.Scheme == "https" || address.Scheme == "http" && address.IsLoopback)
                 && address.AbsolutePath.EndsWith('/') && address.UserInfo.Length == 0 && address.Query.Length == 0)
                 ? this

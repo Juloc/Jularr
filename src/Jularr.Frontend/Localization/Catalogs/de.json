@@ -1060,22 +1060,6 @@
    "AniList",
    "AniList"
   ],
-  "admin.catalog.tvdb": [
-   "TVDB",
-   "TVDB"
-  ],
-  "admin.catalog.openlibrary": [
-   "Open Library",
-   "Open Library"
-  ],
-  "admin.catalog.musicbrainz": [
-   "MusicBrainz",
-   "MusicBrainz"
-  ],
-  "admin.catalog.igdb": [
-   "IGDB",
-   "IGDB"
-  ],
   "admin.catalog.entries": [
    "Titles",
    "Titel"
@@ -11140,6 +11124,74 @@
    "Mark unheard",
    "Als ungehört markieren"
   ],
+  "jobs.job.aniListSync": [
+   "AniList sync",
+   "AniList-Abgleich"
+  ],
+  "jobs.about.aniListSync": [
+   "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",
+   "Liest die AniList-Liste jedes verbundenen Profils, übernimmt, was dort gesehen oder gelesen ist, und sendet den hier gemachten Fortschritt."
+  ],
+  "settings.anilist.title": [
+   "AniList",
+   "AniList"
+  ],
+  "settings.anilist.open": [
+   "Open AniList",
+   "AniList öffnen"
+  ],
+  "settings.anilist.code": [
+   "Code from AniList",
+   "Code von AniList"
+  ],
+  "settings.anilist.connect": [
+   "Connect AniList",
+   "AniList verbinden"
+  ],
+  "settings.anilist.connected": [
+   "Connected as {0}",
+   "Verbunden als {0}"
+  ],
+  "settings.anilist.push": [
+   "Send my progress to AniList",
+   "Meinen Fortschritt an AniList senden"
+  ],
+  "settings.anilist.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "hint.AniListFields.Code.info": [
+   "After you allow Jularr at AniList, its page shows a code. Paste it here once.",
+   "Nachdem du Jularr bei AniList erlaubt hast, zeigt die Seite einen Code. Füge ihn hier einmal ein."
+  ],
+  "hint.AniListFields.IsPushEnabled.info": [
+   "Only progress you make after switching this on is sent. Jularr never lowers progress, changes a status or a score, or adds titles to your list.",
+   "Gesendet wird nur Fortschritt, den du nach dem Einschalten machst. Jularr senkt nie einen Fortschritt, ändert keinen Status und keine Wertung und fügt keine Titel zu deiner Liste hinzu."
+  ],
+  "errors.anilist_unavailable": [
+   "AniList could not be reached.",
+   "AniList war nicht erreichbar."
+  ],
+  "errors.anilist_authentication_failed": [
+   "AniList did not accept this sign-in.",
+   "AniList hat diese Anmeldung nicht akzeptiert."
+  ],
+  "errors.anilist_invalid_response": [
+   "AniList returned an invalid response.",
+   "AniList hat eine ungültige Antwort geliefert."
+  ],
+  "errors.anilist_rate_limited": [
+   "AniList limits requests right now. Please try again shortly.",
+   "AniList begrenzt gerade die Anfragen. Bitte versuche es gleich noch einmal."
+  ],
+  "errors.anilist_not_configured": [
+   "AniList is not set up by the administrator yet.",
+   "AniList ist vom Administrator noch nicht eingerichtet."
+  ],
+  "errors.anilist_token_expired": [
+   "The AniList sign-in has expired; connect again.",
+   "Die AniList-Anmeldung ist abgelaufen; verbinde erneut."
+  ],
   "settings.tabs": [
    "Settings",
    "Einstellungen"
@@ -11212,113 +11264,81 @@
    "Page {0}",
    "Seite {0}"
   ],
-  "details.relation.kind": [
-   "Relation",
-   "Beziehung"
+  "sortable.handle": [
+   "Reorder",
+   "Verschieben"
   ],
-  "details.relation.Sequel": [
-   "Sequel",
-   "Fortsetzung"
+  "sortable.menu": [
+   "Row actions",
+   "Zeilenaktionen"
   ],
-  "details.relation.Prequel": [
-   "Prequel",
-   "Vorgänger"
+  "sortable.top": [
+   "Move to top",
+   "Ganz nach oben"
   ],
-  "details.relation.SideStory": [
-   "Side story",
-   "Nebengeschichte"
+  "sortable.up": [
+   "Move up",
+   "Nach oben"
   ],
-  "details.relation.SpinOff": [
-   "Spin-off",
-   "Ableger"
+  "sortable.down": [
+   "Move down",
+   "Nach unten"
   ],
-  "details.relation.MainStory": [
-   "Main story",
-   "Hauptgeschichte"
+  "sortable.bottom": [
+   "Move to bottom",
+   "Ganz nach unten"
   ],
-  "details.relation.Adaptation": [
-   "Adaptation",
-   "Adaption"
+  "sortable.position": [
+   "Position {0} of {1}",
+   "Position {0} von {1}"
   ],
-  "details.relation.SourceMaterial": [
-   "Source material",
-   "Vorlage"
+  "form.number.decrease": [
+   "Decrease value",
+   "Wert verringern"
   ],
-  "details.relation.Alternative": [
-   "Alternative version",
-   "Andere Fassung"
+  "form.number.increase": [
+   "Increase value",
+   "Wert erhöhen"
   ],
-  "details.relation.SharedUniverse": [
-   "Same universe",
-   "Gleiches Universum"
+  "unit.megabytes": [
+   "MB",
+   "MB"
   ],
-  "details.relation.Summary": [
-   "Summary",
-   "Zusammenfassung"
+  "unit.hours": [
+   "hours",
+   "Stunden"
   ],
-  "details.relation.Other": [
-   "Other",
-   "Sonstiges"
+  "unit.minutes": [
+   "min",
+   "min"
   ],
-  "details.relation.source": [
-   "Source: {0}",
-   "Quelle: {0}"
+  "unit.days": [
+   "days",
+   "Tage"
   ],
-  "details.relation.source.manual": [
-   "Added by hand",
-   "Von Hand ergänzt"
+  "unit.perMinute": [
+   "per min",
+   "pro Min."
   ],
-  "details.relation.notInLibrary": [
-   "Not in library",
-   "Nicht in der Bibliothek"
+  "unit.times": [
+   "×",
+   "×"
   ],
-  "details.relation.missing": [
-   "Missing",
-   "Fehlt"
+  "admin.catalog.tvdb": [
+   "TVDB",
+   "TVDB"
   ],
-  "details.relation.add": [
-   "Add relation",
-   "Beziehung hinzufügen"
+  "admin.catalog.openlibrary": [
+   "Open Library",
+   "Open Library"
   ],
-  "details.relation.dialog": [
-   "Add a related title",
-   "Verwandten Titel hinzufügen"
+  "admin.catalog.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
   ],
-  "details.relation.find": [
-   "Search a title",
-   "Titel suchen"
-  ],
-  "details.relation.search": [
-   "Search",
-   "Suchen"
-  ],
-  "details.relation.pick": [
-   "Add",
-   "Hinzufügen"
-  ],
-  "details.relation.results": [
-   "Matches",
-   "Treffer"
-  ],
-  "details.relation.none": [
-   "No titles found",
-   "Keine Titel gefunden"
-  ],
-  "details.relation.added": [
-   "Relation added",
-   "Beziehung hinzugefügt"
-  ],
-  "details.relation.removed": [
-   "Relation removed",
-   "Beziehung entfernt"
-  ],
-  "details.relation.remove": [
-   "Remove relation",
-   "Beziehung entfernen"
-  ],
-  "details.relation.request": [
-   "Request",
-   "Anfragen"
+  "admin.catalog.igdb": [
+   "IGDB",
+   "IGDB"
   ],
   "works.kpi.total": [
    "Titles",
@@ -11488,66 +11508,6 @@
    "Open title",
    "Titel öffnen"
   ],
-  "sortable.handle": [
-   "Reorder",
-   "Verschieben"
-  ],
-  "sortable.menu": [
-   "Row actions",
-   "Zeilenaktionen"
-  ],
-  "sortable.top": [
-   "Move to top",
-   "Ganz nach oben"
-  ],
-  "sortable.up": [
-   "Move up",
-   "Nach oben"
-  ],
-  "sortable.down": [
-   "Move down",
-   "Nach unten"
-  ],
-  "sortable.bottom": [
-   "Move to bottom",
-   "Ganz nach unten"
-  ],
-  "sortable.position": [
-   "Position {0} of {1}",
-   "Position {0} von {1}"
-  ],
-  "form.number.decrease": [
-   "Decrease value",
-   "Wert verringern"
-  ],
-  "form.number.increase": [
-   "Increase value",
-   "Wert erhöhen"
-  ],
-  "unit.megabytes": [
-   "MB",
-   "MB"
-  ],
-  "unit.hours": [
-   "hours",
-   "Stunden"
-  ],
-  "unit.minutes": [
-   "min",
-   "min"
-  ],
-  "unit.days": [
-   "days",
-   "Tage"
-  ],
-  "unit.perMinute": [
-   "per min",
-   "pro Min."
-  ],
-  "unit.times": [
-   "×",
-   "×"
-  ],
   "system.performance": [
    "Performance",
    "Leistung"
@@ -11683,6 +11643,114 @@
   "speech.timer.left": [
    "{0} min",
    "{0} Min."
+  ],
+  "details.relation.kind": [
+   "Relation",
+   "Beziehung"
+  ],
+  "details.relation.Sequel": [
+   "Sequel",
+   "Fortsetzung"
+  ],
+  "details.relation.Prequel": [
+   "Prequel",
+   "Vorgänger"
+  ],
+  "details.relation.SideStory": [
+   "Side story",
+   "Nebengeschichte"
+  ],
+  "details.relation.SpinOff": [
+   "Spin-off",
+   "Ableger"
+  ],
+  "details.relation.MainStory": [
+   "Main story",
+   "Hauptgeschichte"
+  ],
+  "details.relation.Adaptation": [
+   "Adaptation",
+   "Adaption"
+  ],
+  "details.relation.SourceMaterial": [
+   "Source material",
+   "Vorlage"
+  ],
+  "details.relation.Alternative": [
+   "Alternative version",
+   "Andere Fassung"
+  ],
+  "details.relation.SharedUniverse": [
+   "Same universe",
+   "Gleiches Universum"
+  ],
+  "details.relation.Summary": [
+   "Summary",
+   "Zusammenfassung"
+  ],
+  "details.relation.Other": [
+   "Other",
+   "Sonstiges"
+  ],
+  "details.relation.source": [
+   "Source: {0}",
+   "Quelle: {0}"
+  ],
+  "details.relation.source.manual": [
+   "Added by hand",
+   "Von Hand ergänzt"
+  ],
+  "details.relation.notInLibrary": [
+   "Not in library",
+   "Nicht in der Bibliothek"
+  ],
+  "details.relation.missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "details.relation.add": [
+   "Add relation",
+   "Beziehung hinzufügen"
+  ],
+  "details.relation.dialog": [
+   "Add a related title",
+   "Verwandten Titel hinzufügen"
+  ],
+  "details.relation.find": [
+   "Search a title",
+   "Titel suchen"
+  ],
+  "details.relation.search": [
+   "Search",
+   "Suchen"
+  ],
+  "details.relation.pick": [
+   "Add",
+   "Hinzufügen"
+  ],
+  "details.relation.results": [
+   "Matches",
+   "Treffer"
+  ],
+  "details.relation.none": [
+   "No titles found",
+   "Keine Titel gefunden"
+  ],
+  "details.relation.added": [
+   "Relation added",
+   "Beziehung hinzugefügt"
+  ],
+  "details.relation.removed": [
+   "Relation removed",
+   "Beziehung entfernt"
+  ],
+  "details.relation.remove": [
+   "Remove relation",
+   "Beziehung entfernen"
+  ],
+  "details.relation.request": [
+   "Request",
+   "Anfragen"
   ]
  }
 }

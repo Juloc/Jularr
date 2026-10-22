@@ -223,6 +223,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<MusicTagIdentification>();
             services.TryAddTransient<AniListMetadata>();
             services.TryAddTransient<AniListMatcher>();
+            services.TryAddTransient<AniListAccounts>();
             services.TryAddTransient<MusicMetadata>();
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
@@ -323,6 +324,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
             AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");
             AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
+            services.TryAddSingleton(providers);
             AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList, provider: "anilist");
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz, provider: "musicbrainz");
             AddClient<IgdbClient>(services, 20, 8, agent: true, provider: "igdb");

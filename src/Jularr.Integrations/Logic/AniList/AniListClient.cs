@@ -159,7 +159,11 @@ namespace Jularr.Integrations.Logic.AniList
                     }).OfType<AniListRelation>()]
                 : [];
 
-        private async Task<JsonDocument> PostAsync(string query, Dictionary<string, object> variables, CancellationToken ct)
+        private Task<JsonDocument> PostAsync(string query, Dictionary<string, object> variables, CancellationToken ct, string? token = null) =>
+            PostAsync(new Dictionary<string, object> { ["query"] = query, ["variables"] = variables }, http.BaseAddress!, token, true, ct);
+
+        // A person's own calls carry their token; the token exchange answers without GraphQL data.
+        private async Task<JsonDocument> PostAsync(object body, Uri endpoint, string? token, bool graphql, CancellationToken ct)
         {
             // A rate limit holds every caller until AniList allows requests again.
             if (Interlocked.Read(ref _blockedUntilTicks) > DateTimeOffset.UtcNow.UtcTicks)
@@ -178,7 +182,13 @@ namespace Jularr.Integrations.Logic.AniList
                 }
 
                 _last = DateTimeOffset.UtcNow;
-                response = await http.PostAsJsonAsync(http.BaseAddress, new Dictionary<string, object> { ["query"] = query, ["variables"] = variables }, ct);
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(body) };
+                if (token is not null)
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+
+                response = await http.SendAsync(request, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
             {
@@ -194,6 +204,13 @@ namespace Jularr.Integrations.Logic.AniList
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
                     throw new AniListException(AniListFailure.NotFound, "AniList does not know this title.");
+                }
+
+                // A token AniList no longer accepts, or a code it refuses.
+                if (response.StatusCode == HttpStatusCode.Unauthorized
+                    || response.StatusCode == HttpStatusCode.BadRequest && (!graphql || token is not null && (await response.Content.ReadAsStringAsync(ct)).Contains("Invalid token", StringComparison.Ordinal)))
+                {
+                    throw new AniListException(AniListFailure.Unauthorized, "AniList does not accept this sign-in.");
                 }
 
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -220,7 +237,7 @@ namespace Jularr.Integrations.Logic.AniList
                 {
                     await using var stream = await response.Content.ReadAsStreamAsync(ct);
                     var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-                    if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                    if (graphql && (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object))
                     {
                         document.Dispose();
                         throw new AniListException(AniListFailure.InvalidResponse, "AniList returned no data.");
