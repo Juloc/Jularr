@@ -2462,7 +2462,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, sab);
             var wantedId = await CreateWantedMovieAsync(host);
 
-            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RemotePath\" = NULL WHERE \"AcquisitionConnectionTypeId\" = 2");
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RemotePath\" = NULL, \"LocalPath\" = NULL, \"DownloadStorageMountId\" = NULL WHERE \"AcquisitionConnectionTypeId\" = 2");
             await RunAsync<SearchDueWantedV1>(host);
             Assert.AreEqual(0, sab.Grabbed.Count);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
@@ -2474,7 +2474,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
             Assert.AreEqual(0, sab.Grabbed.Count);
 
-            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RemotePath\" = '/downloads' WHERE \"AcquisitionConnectionTypeId\" = 2");
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"RemotePath\" = '/downloads', \"LocalPath\" = '" + downloads.Path.Replace("'", "''", StringComparison.Ordinal) + "' WHERE \"AcquisitionConnectionTypeId\" = 2");
             Directory.Delete(downloads.Path, true);
             using var offline = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, offline.StatusCode);
