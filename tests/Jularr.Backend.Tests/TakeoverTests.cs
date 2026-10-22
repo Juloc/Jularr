@@ -110,6 +110,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse((await keyed.Content.ReadAsStringAsync()).Contains("inline-", StringComparison.Ordinal));
             Assert.AreEqual(4L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\" WHERE \"Name\" IN ('Hidden', 'SAB') AND \"ProtectedApiKey\" IS NOT NULL"));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'SAB'"),
+                "A taken-over SABnzbd client has no verified import mapping and must require explicit activation.");
         }
 
         [TestMethod]
