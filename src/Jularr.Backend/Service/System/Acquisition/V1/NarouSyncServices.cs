@@ -221,6 +221,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         file.StoredFileId, file.SizeBytes, revised.Length, StoredFileLogic.StoredTime(revised.ModifiedAt)));
                     if (await ctx.ExecuteAsyncForAffectedRows(sql, token) != 1)
                         throw new IOException("The stored book changed during Narō synchronization.");
+
+                    // The file has new bytes, but the same asset and stable chapter indices.
+                    // Detach its former content-hash document; the next Reader open prepares
+                    // the new EPUB and existing bookmarks/progress still point to that asset.
+                    sql = new SqlStatement
+                    {
+                        Statement = """
+                            UPDATE "ReadingDocuments" SET "StoredFileId" = NULL
+                            WHERE "StoredFileId" = @StoredFileId;
+                            """
+                    };
+                    sql.Parameters.Add(new { file.StoredFileId });
+                    await ctx.ExecuteAsyncForAffectedRows(sql, token);
                     return true;
                 }, ct);
                 committed = true;
