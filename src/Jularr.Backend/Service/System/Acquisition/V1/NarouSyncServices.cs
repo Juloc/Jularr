@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Fields.Storage;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.Storage;
@@ -132,7 +133,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await AppendAsync(file, settings.MaxJobBytes, CancellationToken);
                 }
                 catch (Exception error) when (error is NarouException or IOException or UnauthorizedAccessException
-                    or System.IO.InvalidDataException)
+                    or InvalidDataException)
                 {
                     errorCode = "narou_sync_failed";
                     logger.LogWarning(error, "Narō update for file {StoredFileId} requires retry or review.", file.StoredFileId);
