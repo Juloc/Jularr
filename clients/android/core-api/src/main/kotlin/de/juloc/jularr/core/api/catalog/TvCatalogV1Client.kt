@@ -12,6 +12,11 @@ interface TvCatalogV1Client {
     ): TvPageV1<TvWorkCardV1>
     suspend fun continueWatching(): List<TvContinueItemV1>
     suspend fun watchlist(page: Int = 1, pageSize: Int = 25, sortTypeId: Int? = null): TvPageV1<TvWorkCardV1>
+    suspend fun watchlistFiltered(
+        page: Int = 1, pageSize: Int = 25,
+        filters: TvCatalogV1Filters, sortTypeId: Int? = null,
+    ): TvPageV1<TvWorkCardV1>
+    suspend fun watchlistCount(): Int
     suspend fun setWatchlisted(workId: Long, isWatchlisted: Boolean): Boolean
     suspend fun homeLayout(): List<TvHomeShelfV1>
     suspend fun discoverScopes(): List<TvDiscoverScopeV1>
