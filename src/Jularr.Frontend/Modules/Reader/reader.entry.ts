@@ -12,6 +12,7 @@ import { initializeFigures } from './Figures';
 import { initializeBookmarks } from './bookmarks';
 import { initializeOriginalPages } from './OriginalPages';
 import { initializeViewChoice } from './ViewChoice';
+import { initializeProgressBar } from './ProgressBar';
 
 const reader = document.querySelector<HTMLElement>('.reader');
 if (reader) {
@@ -33,7 +34,6 @@ function pdfPageOf(block: HTMLElement | undefined, reader: HTMLElement): number 
 
 function initializeText(reader: HTMLElement): void {
     const content = reader.querySelector<HTMLElement>('[data-role=content]')!;
-    const position = reader.querySelector<HTMLElement>('[data-role=position]');
     const section = Number(reader.dataset.section);
     const blocks = Math.max(1, Number(reader.dataset.blocks));
     const before = Number(reader.dataset.before);
@@ -44,6 +44,7 @@ function initializeText(reader: HTMLElement): void {
     let paging: ReturnType<typeof initializePaperPages> | undefined;
     let progress = before / total;
     let marks: ReturnType<typeof initializeBookmarks> | undefined;
+    let bar: ReturnType<typeof initializeProgressBar> | undefined;
     const settings = initializeReaderSettings(reader, () => paging?.layout());
     const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
         const feedback = reader.querySelector<HTMLElement>('[data-role=save-error]');
@@ -52,16 +53,19 @@ function initializeText(reader: HTMLElement): void {
     highlights(reader, content, section);
     if (reader.dataset.query) findings(content, reader.dataset.query);
     initializeFigures(reader, content);
-    paging = initializePaperPages(reader, content, settings, () => report(false));
+    paging = initializePaperPages(reader, content, settings, () => report(false), () => bar?.refresh());
+    bar = initializeProgressBar(reader, { seek: share => paging!.seek(share), share: () => paging!.share() });
     paging.layout();
     marks = initializeBookmarks(reader, () => ({
         section, block: Number(paging!.current()?.dataset.b ?? 0), progression: progress,
-        title: reader.querySelector('.reader__chapter')?.textContent?.trim() || null
+        title: reader.querySelector('.reader__chapter .truncated__text')?.textContent?.trim() || null
     }));
     initializeReadAloud(reader, content, range => paging!.reveal(range), () => paging!.current());
 
     initializeViewChoice(reader, () => pdfPageOf(paging!.current(), reader));
-    const requested = new URLSearchParams(location.search).get('b') ?? reader.dataset.startBlock ?? null;
+    const query = new URLSearchParams(location.search);
+    const requested = query.get('b') ?? reader.dataset.startBlock ?? null;
+    const fraction = query.has('f') ? Number(query.get('f')) : NaN;
     const match = /^s(\d+)\/b(\d+)$/.exec(reader.dataset.locator ?? '');
     const block = requested && /^\d+$/.test(requested) ? requested : match && Number(match[1]) === section ? match[2] : null;
     requestAnimationFrame(() => {
@@ -69,6 +73,8 @@ function initializeText(reader: HTMLElement): void {
             : block !== null ? content.querySelector<HTMLElement>(`[data-b="${block}"]`) : null;
         if (target && content.contains(target)) paging!.reveal(target);
     });
+    // The progress slider sends a share of the chapter, which is a page the same way as its own seek, once the fonts have settled the pages.
+    if (Number.isFinite(fraction)) void document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => paging!.seek(Math.min(1, Math.max(0, fraction))))));
 
     // Existing translation and annotation services remain the only data owners.
     const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
@@ -110,7 +116,7 @@ function initializeText(reader: HTMLElement): void {
         const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
         progress = progression;
         marks?.refresh();
-        if (position) position.textContent = `${Math.round(progression * 100)} %`;
+        bar?.refresh();
         save({ locator: `s${section}/b${block}`, progression: Number(progression.toFixed(4)), isCompleted: completed }, leaving);
     }
 }

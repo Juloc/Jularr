@@ -1,28 +1,32 @@
 import type { BookGroup, initializeBookRenderer } from './BookRenderer';
 import type { ReaderSettings } from './Settings';
-import { updateRangeValue } from '../../Framework/Components/Range';
 import { paperPageCount } from './PaperMeasure';
 import { initializeBookPages } from './BookPages';
+import { pageAt, pageFraction } from './ProgressMath';
 
 // Canonical CSS columns own pagination; decorative faces never own progress.
-export function initializePaperPages(reader: HTMLElement, content: HTMLElement, settings: ReaderSettings, changed: () => void) {
+export function initializePaperPages(reader: HTMLElement, content: HTMLElement, settings: ReaderSettings, changed: () => void, painted: () => void = () => {}) {
     const paper = reader.querySelector<HTMLElement>('.reader__paper')!;
     const canvas = reader.querySelector<HTMLElement>('.reader__canvas')!;
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     const label = reader.querySelector<HTMLElement>('[data-role=pages]');
-    const seek = reader.querySelector<HTMLInputElement>('[data-role=seek] input[type=range]')!;
-    reader.querySelector<HTMLElement>('[data-role=seek]')!.hidden = false;
     const bookPages = initializeBookPages(reader, content);
     let columns = 1, pages = 1, spread = 0, step = 1, frame = 0, navigation = 0;
     let book: ReturnType<typeof initializeBookRenderer> | undefined;
     let loading: Promise<void> | undefined;
     let failed = false;
+    // A place asked for before the first layout waits for it; the pages it is measured in do not exist yet.
+    let measured = false;
+    let waiting: (() => void) | undefined;
     const edge = (delta: number) => reader.querySelector<HTMLAnchorElement>(`[data-role=${delta < 0 ? 'previous' : 'next'}]`);
     const blocks = () => Array.from(content.querySelectorAll<HTMLElement>('[data-b]'));
+    // The first block that begins in view; a block that began on an earlier page and runs on into this one is not where the page starts.
     const current = (): HTMLElement | undefined => {
         const bounds = content.getBoundingClientRect();
-        return blocks().find(block => Array.from(block.getClientRects()).some(box => settings.mode === 'paged'
-            ? box.right > bounds.left + 24 && box.left < bounds.right - 24 : box.bottom > bounds.top + 24));
+        const visible = (box: DOMRect) => settings.mode === 'paged' ? box.right > bounds.left + 24 && box.left < bounds.right - 24 : box.bottom > bounds.top + 24;
+        const all = blocks();
+        if (settings.mode !== 'paged') return all.find(block => Array.from(block.getClientRects()).some(visible));
+        return all.find(block => { const box = block.getClientRects()[0]; return box && visible(box); }) ?? all.find(block => Array.from(block.getClientRects()).some(visible));
     };
     const group = (target: number): BookGroup | undefined => {
         if (target >= 0 && target < Math.ceil(pages / columns)) return { source: content, page: target * columns, count: pages };
@@ -35,6 +39,17 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         placeholder.append(caption);
         return { source: placeholder, page: 0, count: 1 };
     };
+    // Once the whole book is counted the numbers are the book's, else the chapter's.
+    const labelPages = (): void => {
+        if (!label) return;
+        label.hidden = settings.mode !== 'paged';
+        const counted = Number(reader.dataset.bookPageCount), before = Number(reader.dataset.bookPageBefore);
+        const whole = reader.dataset.bookPageState === 'ready' && Number.isInteger(counted) && counted > 0 && Number.isInteger(before);
+        const offset = whole ? before : 0;
+        label.textContent = reader.dataset.pageLabel!.replace('{0}', String(offset + spread * columns + 1)).replace('{1}', String(offset + Math.min(pages, (spread + 1) * columns)))
+            .replace('{2}', String(whole ? counted : pages));
+    };
+    new MutationObserver(labelPages).observe(reader, { attributes: true, attributeFilter: ['data-book-page-count', 'data-book-page-before'] });
     const paint = (): void => {
         const offset = spread * step * (settings.direction === 'rtl' ? -1 : 1);
         content.scrollTo({ left: settings.mode === 'paged' ? offset : 0, behavior: 'instant' });
@@ -43,15 +58,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         reader.dataset.columns = String(columns);
         reader.querySelector<HTMLElement>('[data-role=turn-tools]')!.hidden = settings.mode !== 'paged';
         bookPages.position(spread * columns + 1);
-        if (label) {
-            label.hidden = settings.mode !== 'paged';
-            label.textContent = reader.dataset.pageLabel!.replace('{0}', String(spread * columns + 1)).replace('{1}', String(Math.min(pages, (spread + 1) * columns))).replace('{2}', String(pages));
-        }
-        seek.max = String(settings.mode === 'paged' ? pages : Math.ceil(Math.max(0, content.scrollHeight - content.clientHeight) / Math.max(1, content.clientHeight)) + 1);
-        seek.step = String(settings.mode === 'paged' ? columns : 1);
-        seek.value = String(settings.mode === 'paged' ? spread * columns + 1 : Math.ceil(content.scrollTop / Math.max(1, content.clientHeight)) + 1);
-        updateRangeValue(seek);
-        seek.disabled = settings.mode === 'paged' ? pages <= columns : content.scrollHeight <= content.clientHeight;
+        labelPages();
         reader.querySelectorAll<HTMLButtonElement>('[data-turn]').forEach(button => {
             const delta = Number(button.dataset.turn);
             button.disabled = delta < 0 ? spread === 0 && !edge(-1) : spread + 1 >= Math.ceil(pages / columns) && !edge(1);
@@ -72,6 +79,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             reader.querySelector<HTMLElement>('.reader-book')?.setAttribute('hidden', 'hidden');
             reader.querySelector<HTMLElement>('[data-role=animation-error]')?.removeAttribute('hidden');
         });
+        painted();
     };
     const commit = (target: number): void => {
         if (target < 0 || target >= Math.ceil(pages / columns)) { edge(target < 0 ? -1 : 1)?.click(); return; }
@@ -86,6 +94,7 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
     };
     const reveal = (element: HTMLElement | Range): void => {
         navigation++;
+        if (!measured) { waiting = () => reveal(element); return; }
         if (settings.mode === 'scroll') {
             content.scrollTop += element.getBoundingClientRect().top - content.getBoundingClientRect().top - 24;
             return;
@@ -97,21 +106,16 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         spread = Math.max(0, Math.min(Math.ceil(pages / columns) - 1, spread + Math.floor((relative + 1) / step)));
         paint();
     };
-    // Commit on release/change, not on every pointer sample. Existing progress keeps the semantic locator.
-    seek.addEventListener('change', () => {
-        const at = seek.valueAsNumber - 1;
-        if (!Number.isFinite(at)) return;
+    // The progress slider asks for a place as a share of this chapter; a page is its first page, a scrolled text its offset.
+    const seek = (fraction: number): void => {
         navigation++;
-        if (settings.mode === 'paged') spread = Math.floor(at / columns);
-        else content.scrollTop = Math.min(at * content.clientHeight, content.scrollHeight - content.clientHeight);
+        if (!measured) { waiting = () => seek(fraction); return; }
+        if (settings.mode === 'paged') spread = Math.floor(pageAt(fraction, pages, columns) / columns);
+        else content.scrollTop = Math.min(fraction * (content.scrollHeight - content.clientHeight), content.scrollHeight - content.clientHeight);
         paint();
         changed();
-    });
-    content.addEventListener('scroll', () => {
-        if (settings.mode !== 'scroll') return;
-        seek.value = String(Math.ceil(content.scrollTop / Math.max(1, content.clientHeight)) + 1);
-        updateRangeValue(seek);
-    }, { passive: true });
+    };
+    content.addEventListener('scroll', () => { if (settings.mode === 'scroll') painted(); }, { passive: true });
     const layout = (): void => {
         cancelAnimationFrame(frame);
         const anchor = current(), version = navigation;
@@ -123,14 +127,18 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
             columns = two ? 2 : 1;
             reader.style.setProperty('--reader-columns', String(columns));
             content.removeAttribute('data-pad');
-            const gap = parseFloat(getComputedStyle(content).columnGap) || 40;
+            const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
             step = content.clientWidth + gap;
             pages = settings.mode === 'paged' ? paperPageCount(content, columns, gap, settings.direction === 'rtl') : 1;
             content.toggleAttribute('data-pad', columns === 2 && pages % 2 !== 0);
             spread = Math.min(spread, Math.ceil(pages / columns) - 1);
             bookPages.update({ width: content.clientWidth, height: content.clientHeight, columns, gap, pages, rtl: settings.direction === 'rtl' });
+            measured = true;
             paint();
-            if (latest) reveal(latest);
+            const asked = waiting;
+            waiting = undefined;
+            if (asked) asked();
+            else if (latest) reveal(latest);
         });
     };
     new ResizeObserver(layout).observe(canvas);
@@ -164,5 +172,10 @@ export function initializePaperPages(reader: HTMLElement, content: HTMLElement, 
         if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(event.clientY - from.y) * 1.4) turn((dx < 0 ? 1 : -1) * (settings.direction === 'rtl' ? -1 : 1));
     });
     canvas.addEventListener('pointercancel', () => start = undefined);
-    return { layout, reveal, turn, current, end: () => spread + 1 >= Math.ceil(pages / columns) };
+    // Where the reader stands in this chapter, as a share from 0 to 1.
+    const share = (): number => {
+        if (settings.mode === 'scroll') return content.scrollHeight > content.clientHeight ? Math.min(1, Math.max(0, content.scrollTop / (content.scrollHeight - content.clientHeight))) : 0;
+        return pageFraction(spread * columns, pages, spread + 1 >= Math.ceil(pages / columns));
+    };
+    return { layout, reveal, turn, current, seek, share, end: () => spread + 1 >= Math.ceil(pages / columns) };
 }
