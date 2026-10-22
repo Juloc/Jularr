@@ -102,6 +102,37 @@ class TvV1ProfileClientTest {
         }
     }
 
+    @Test fun successfulOldProfileResponseMustNotLeakIntoNewViewer() = runBlocking {
+        val tokens = DeviceTokenStore("old-profile")
+        val seen = mutableListOf<String?>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/profiles") { exchange ->
+            val bearer = exchange.requestHeaders.getFirst("Authorization")
+            synchronized(seen) { seen.add(bearer) }
+            if (bearer == "Bearer old-profile") {
+                // Old profile was valid when the call began, but another screen
+                // rotated the device token before the response arrived.
+                tokens.update("new-profile")
+                exchange.respond(200, """{"items":[{"id":12,"displayName":"PRIVATE OLD PROFILE",
+                    "isLocked":false,"pinLength":null,"isOwned":true}],
+                    "page":1,"pageSize":100}""")
+            } else {
+                exchange.respond(200, """{"items":[{"id":24,"displayName":"New viewer",
+                    "isLocked":false,"pinLength":null,"isOwned":true}],
+                    "page":1,"pageSize":100}""")
+            }
+        }
+        server.start()
+        try {
+            val client = HttpTvV1ProfileClient("http://127.0.0.1:${server.address.port}", tokens)
+            assertEquals(listOf("New viewer"), client.profiles().map { it.displayName })
+            assertEquals(listOf("Bearer old-profile", "Bearer new-profile"), seen)
+            assertEquals("new-profile", tokens.current)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     @Test fun staleSessionList401RetriesWithNewProfileCredential() = runBlocking {
         val tokens = DeviceTokenStore("previous-profile")
         val observed = mutableListOf<String?>()
