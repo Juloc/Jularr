@@ -1,5 +1,8 @@
 name: Image
 
+# Container smoke for packaging/schema PRs; source-only PRs use the fast gates.
+# All source changes are still checked in the assembled image after merge.
+
 on:
   pull_request:
     paths:
@@ -7,7 +10,6 @@ on:
       - 'compose.yaml'
       - '.dockerignore'
       - 'database/**'
-      - 'src/**'
       - '.github/workflows/image.yml'
   push:
     branches: [clean-start]
@@ -24,7 +26,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   minimal-compose:

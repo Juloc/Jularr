@@ -10,9 +10,11 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Integrations.Data.Newznab;
+using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data.Enums.Storage;
@@ -34,11 +36,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly IMemoryCache _offers;
         private readonly TimeProvider _time;
         private readonly DownloadStorage _downloads;
+        private readonly StorageAccess _storage;
         private readonly WorkSignals _signals;
 
         public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers,
-            TimeProvider time, DownloadStorage downloads, WorkSignals signals)
+            TimeProvider time, DownloadStorage downloads, StorageAccess storage, WorkSignals signals)
         {
+            _storage = storage;
             _signals = signals;
             _downloads = downloads;
             _time = time;
@@ -194,7 +198,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
-            long? accountId = null)
+            long? accountId = null, bool automatic = false)
         {
             // A direct-source book writes to Jularr's own workspace. Check the actual path
             // before creating an operation; a missing mount must never fall back to the VM.
@@ -202,7 +206,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 var paths = await _downloads.OpenAsync(context, DownloadStorageArea.Direct, ct);
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
-                    source.ToString(), accountId);
+                    source.ToString(), accountId) { RequiresActiveMonitoring = automatic };
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.RequireDownloadStorageSettingsAsync(paths.Settings, token);
@@ -231,6 +235,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new DataValidationException("CandidateId", "invalid_transition");
             }
 
+            // SABnzbd owns the download folder. Do not send a release that Jularr cannot import.
+            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd)
+            {
+                await RequireSabImportSourceAsync(context, client, ct);
+            }
+
             // Refuse native downloads before reserving an operation or using an indexer grab.
             DownloadStoragePaths? nativePaths = null;
             if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
@@ -251,7 +261,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
-                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags] };
+                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 if (nativePaths is not null) await ctx.RequireDownloadStorageSettingsAsync(nativePaths.Settings, token);
@@ -329,6 +339,38 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 return true;
             }, ct);
             _signals.Downloads.Notify();
+        }
+
+        private async Task RequireSabImportSourceAsync(LogicContext context, AcquisitionConnectionData client, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(client.RemotePath) || client.DownloadStorageMountId is null && string.IsNullOrWhiteSpace(client.LocalPath))
+            {
+                throw new ServiceUnavailableException("acquisition_import_path_unconfigured");
+            }
+
+            try
+            {
+                if (client.DownloadStorageMountId is { } mountId)
+                {
+                    var mount = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadStorageMountAsync(mountId, token), ct);
+                    if (await _storage.Open(mount).GetAsync(client.LocalPath ?? "", ct) is not { IsDirectory: true })
+                    {
+                        throw new ServiceUnavailableException("acquisition_import_path_unconfigured");
+                    }
+                }
+                else
+                {
+                    var directory = StorageFileSystem.ResolveDirectory(client.LocalPath!, "");
+                    if (!Directory.Exists(directory))
+                    {
+                        throw new ServiceUnavailableException("acquisition_import_path_unconfigured");
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+            {
+                throw new ServiceUnavailableException("acquisition_import_path_unconfigured");
+            }
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, int? igdbPlatform, IEnumerable<PlannedQuery> queries, SearchBudget budget,

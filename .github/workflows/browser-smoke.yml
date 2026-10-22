@@ -1,0 +1,88 @@
+name: Browser Smoke
+
+# One real Chromium journey for UI/schema PRs. Full Playwright shards run
+# in Backend Full after merge, never as a prerequisite for routine PRs.
+on:
+  pull_request:
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'tests/Jularr.E2E.Tests/**'
+      - 'database/**'
+      - '.github/workflows/browser-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jularr_test
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: jularr_test_admin
+        ports:
+          - 15433:5432
+        options: >-
+          --health-cmd "pg_isready -U jularr_test -d jularr_test_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      JULARR_TEST_DB: Host=127.0.0.1;Port=15433;Username=jularr_test;Password=isolated-test-password;Database=jularr_test_admin
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Jularr.Frontend/package-lock.json
+      - name: Compile frontend assets
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Compile E2E test host
+        run: dotnet build tests/Jularr.E2E.Tests --configuration Release
+      - name: Install browser
+        run: pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - name: Check fresh installation, owner setup and sign-in in Chromium
+        run: |
+          dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build \
+            --filter "FullyQualifiedName~FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors" \
+            --logger "trx;LogFileName=browser-smoke.trx" \
+            --results-directory TestResults/ci/browser-smoke
+      - name: Keep browser-smoke results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-smoke
+          path: TestResults/ci/browser-smoke/*.trx
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Keep screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-smoke-evidence
+          path: TestResults/e2e
+          if-no-files-found: ignore
+          retention-days: 7
