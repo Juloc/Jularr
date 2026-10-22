@@ -76,11 +76,38 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         var key = target.ExternalIdentities.Select(identity => identity.Split(':', 2))
                             .Where(pair => pair.Length == 2 && pair[0] == "syosetu")
                             .Select(pair => pair[1]).FirstOrDefault();
-                        if (!NarouClient.IsNcode(key)) return [];
-                        var novel = await _narou.ReadWorkAsync(key!, ct);
-                        var author = string.IsNullOrWhiteSpace(target.Author) ? [] : new[] { target.Author };
-                        return [Offer(source, "narou:" + novel.Ncode + ":epub", author, target.CanonicalTitle,
-                            "ja", "epub", new Uri("https://ncode.syosetu.com/" + novel.Ncode + "/"), null, identityBound: true)];
+                        if (NarouClient.IsNcode(key))
+                        {
+                            var novel = await _narou.ReadWorkAsync(key!, ct);
+                            var author = string.IsNullOrWhiteSpace(target.Author) ? [] : new[] { target.Author };
+                            return [Offer(source, "narou:" + novel.Ncode + ":epub", author, target.CanonicalTitle,
+                                "ja", "epub", new Uri("https://ncode.syosetu.com/" + novel.Ncode + "/"), null, identityBound: true)];
+                        }
+
+                        // For a Discover/Request item, check official Narō catalog only for
+                        // *native Japanese* aliases. Cross-language guesses are not identities.
+                        // Never auto-grab a web-novel counterpart without exact Japanese title
+                        // and author evidence; a published edition remains a separate source.
+                        var wantedAuthor = NativeKey(target.Author);
+                        if (wantedAuthor.Length == 0) return [];
+                        var candidates = new List<ReleaseOffer>();
+                        var nativeNames = new[] { target.CanonicalTitle }
+                            .Concat(target.Titles).Concat(target.EditionTitles)
+                            .Where(name => !string.IsNullOrWhiteSpace(name) && name.Any(c => c >= '\u3000'))
+                            .Distinct(StringComparer.Ordinal).Take(2);
+                        foreach (var name in nativeNames)
+                        {
+                            foreach (var item in await _narou.SearchAsync(name, ct))
+                            {
+                                if (NativeKey(name) != NativeKey(item.Title) || NativeKey(item.Author) != wantedAuthor)
+                                    continue;
+                                if (candidates.Any(offer => offer.Guid == "narou:" + item.Ncode + ":epub"))
+                                    continue;
+                                candidates.Add(Offer(source, "narou:" + item.Ncode + ":epub", [item.Author], item.Title,
+                                    "ja", "epub", new Uri("https://ncode.syosetu.com/" + item.Ncode + "/"), null, identityBound: true));
+                            }
+                        }
+                        return candidates;
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
                         // Every way to find the work is asked in turn; the choice says when one way was enough.
@@ -262,6 +289,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             return ways;
         }
+
+        // Unicode compatibility and punctuation normalization for Japanese titles/authors.
+        // No fuzzy auto-match: the author and the complete native title must agree.
+        private static string NativeKey(string? value) => string.Concat(
+            (value ?? "").Normalize(NormalizationForm.FormKC).ToLowerInvariant().Where(char.IsLetterOrDigit));
 
         private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false, bool identityBound = false)
         {
