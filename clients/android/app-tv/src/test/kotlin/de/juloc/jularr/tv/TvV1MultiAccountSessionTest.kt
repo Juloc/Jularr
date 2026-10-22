@@ -44,8 +44,10 @@ class TvV1MultiAccountSessionTest {
     private class FakeApi(private val token: DeviceTokenStore) : AppApiClient {
         override suspend fun startPairing(request: DevicePairingRequest) =
             DevicePairingStarted("pair", "123456", "2026-10-22T10:00:00Z")
-        override suspend fun claimPairing(pairingId: String): DevicePairingClaim =
-            DevicePairingClaim(isPaired = false)
+        override suspend fun claimPairing(pairingId: String): DevicePairingClaim {
+            token.update("first-token")
+            return DevicePairingClaim(isPaired = true, deviceToken = "first-token")
+        }
         override suspend fun capabilities() =
             InstanceCapabilities(listOf("profile.playback"), listOf("Library", "Playback"))
     }
@@ -55,6 +57,7 @@ class TvV1MultiAccountSessionTest {
         val session = TvV1DeviceSession(vault) { _, token -> FakeApi(token) }
         session.selectServer("https://jularr.example")
         val first = session.accounts().single().id
+        runBlocking { session.claimPairing("pair") }
         val oldHttpTokenStore = session.authenticatedTokenStore()
         oldHttpTokenStore.update("alice-device-token")
         session.beginNewAccount()
@@ -76,7 +79,7 @@ class TvV1MultiAccountSessionTest {
         val session = TvV1DeviceSession(vault) { _, token -> FakeApi(token) }
         session.selectServer("https://jularr.example")
         val first = session.accounts().single().id
-        session.authenticatedTokenStore().update("first-token")
+        runBlocking { session.claimPairing("pair") }
         session.beginNewAccount()
         val second = session.accounts().last().id
         // Populate new slot after pairing.
