@@ -18,9 +18,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // Read-only query of the imported, eligible Narō web novel EPUBs.
     // Every matching file retains its StoredFileId and MediaAssetId across updates.
     internal sealed class NarouSyncFileData(
-        long storedFileId, long storageMountId, string rootPath, string relativePath,
+        long workId, long storedFileId, long storageMountId, string rootPath, string relativePath,
         long sizeBytes, string ncode) : BaseData
     {
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; } = workId;
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
         public long StoredFileId { get; } = storedFileId;
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
@@ -45,6 +47,16 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         public long NewSizeBytes { get; } = newSizeBytes;
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
         public DateTime ModifiedAt { get; } = modifiedAt;
+    }
+
+    internal sealed class NarouSyncCheckData(long workId, DateTime checkedAt, string? errorCode) : BaseData
+    {
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; } = workId;
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime CheckedAt { get; } = checkedAt;
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? ErrorCode { get; } = errorCode;
     }
 
     // Lightweight periodic post-import updater. There is no second Wanted, Download or
@@ -79,24 +91,33 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 var sql = new SqlStatement
                 {
                     Statement = """
-                        SELECT file."Id" AS "StoredFileId", root."StorageMountId",
-                            root."RelativePath" AS "RootPath", file."RelativePath", file."SizeBytes",
-                            identity."Value" AS "Ncode"
-                        FROM "WantedItems" AS wanted
-                        JOIN "Works" AS work ON work."Id" = wanted."WorkId"
-                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id" AND identity."Namespace" = 'syosetu'
-                        JOIN "MediaAssets" AS asset ON asset."WorkId" = work."Id" AND asset."WorkUnitId" IS NULL AND NOT asset."IsProtected"
-                        JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
-                        JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
-                        JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
-                        WHERE work."MediaTypeId" = 3 AND work."MediaSubtypeId" = 3
-                          AND NOT wanted."IsPaused" AND NOT mount."IsReadOnly"
-                          AND lower(right(file."RelativePath", 5)) = '.epub'
-                          AND EXISTS (
-                            SELECT 1 FROM "AcquisitionConnections" AS connection
-                            WHERE connection."AcquisitionConnectionTypeId" = 9 AND connection."IsEnabled"
-                          )
-                        ORDER BY file."Id" LIMIT 4;
+                        WITH candidates AS (
+                            SELECT DISTINCT ON (work."Id")
+                                work."Id" AS "WorkId",
+                                file."Id" AS "StoredFileId", root."StorageMountId",
+                                root."RelativePath" AS "RootPath", file."RelativePath",
+                                file."SizeBytes", identity."Value" AS "Ncode"
+                            FROM "WantedItems" AS wanted
+                            JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                            JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id" AND identity."Namespace" = 'syosetu'
+                            JOIN "MediaAssets" AS asset ON asset."WorkId" = work."Id" AND asset."WorkUnitId" IS NULL AND NOT asset."IsProtected"
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
+                            JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                            JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                            WHERE work."MediaTypeId" = 3 AND work."MediaSubtypeId" = 3
+                              AND NOT wanted."IsPaused" AND NOT mount."IsReadOnly"
+                              AND lower(right(file."RelativePath", 5)) = '.epub'
+                              AND EXISTS (
+                                  SELECT 1 FROM "AcquisitionConnections" AS connection
+                                  WHERE connection."AcquisitionConnectionTypeId" = 9 AND connection."IsEnabled"
+                              )
+                            ORDER BY work."Id", file."Id"
+                        )
+                        SELECT candidate.*
+                        FROM candidates AS candidate
+                        LEFT JOIN "NarouSyncStates" AS state ON state."WorkId" = candidate."WorkId"
+                        ORDER BY state."LastCheckedAt" NULLS FIRST, candidate."WorkId"
+                        LIMIT 4;
                         """
                 };
                 return (await ctx.ReadSql.ReadListAsync<NarouSyncFileData>(sql, token),
@@ -105,6 +126,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             foreach (var file in files.Take(PerPass))
             {
+                string? errorCode = null;
                 try
                 {
                     await AppendAsync(file, settings.MaxJobBytes, CancellationToken);
@@ -112,7 +134,28 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 catch (Exception error) when (error is NarouException or IOException or UnauthorizedAccessException
                     or System.IO.InvalidDataException)
                 {
+                    errorCode = "narou_sync_failed";
                     logger.LogWarning(error, "Narō update for file {StoredFileId} requires retry or review.", file.StoredFileId);
+                }
+                finally
+                {
+                    // Persistent oldest-first cursor: every monitored work is eventually visited.
+                    await Context.ExecuteBatchAsync(async (ctx, token) =>
+                    {
+                        var sql = new SqlStatement
+                        {
+                            Statement = """
+                                INSERT INTO "NarouSyncStates" ("WorkId", "LastCheckedAt", "LastErrorCode")
+                                VALUES (@WorkId, @CheckedAt, @ErrorCode)
+                                ON CONFLICT ("WorkId") DO UPDATE SET
+                                    "LastCheckedAt" = EXCLUDED."LastCheckedAt",
+                                    "LastErrorCode" = EXCLUDED."LastErrorCode";
+                                """
+                        };
+                        sql.Parameters.Add(new NarouSyncCheckData(file.WorkId, DateTime.UtcNow, errorCode));
+                        await ctx.ExecuteAsyncForAffectedRows(sql, token);
+                        return true;
+                    }, CancellationToken);
                 }
             }
             return new UpdateResult(true);
