@@ -102,6 +102,31 @@ class TvV1ProfileClientTest {
         }
     }
 
+    @Test fun staleSessionList401RetriesWithNewProfileCredential() = runBlocking {
+        val tokens = DeviceTokenStore("previous-profile")
+        val observed = mutableListOf<String?>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/sessions") { exchange ->
+            val bearer = exchange.requestHeaders.getFirst("Authorization")
+            synchronized(observed) { observed.add(bearer) }
+            if (bearer == "Bearer previous-profile") {
+                tokens.update("new-profile")
+                exchange.respond(401, """{"code":"invalid_token","resourceKey":"error.invalid_token"}""")
+            } else {
+                exchange.respond(200, """{"items":[],"page":1,"pageSize":100}""")
+            }
+        }
+        server.start()
+        try {
+            val client = HttpTvV1ProfileClient("http://127.0.0.1:${server.address.port}", tokens)
+            assertTrue(client.sessions().isEmpty())
+            assertEquals(listOf("Bearer previous-profile", "Bearer new-profile"), observed)
+            assertEquals("new-profile", tokens.current)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     private fun HttpExchange.respond(status: Int, body: String, token: String? = null) {
         val bytes = body.toByteArray()
         responseHeaders.add("Content-Type", "application/json")
