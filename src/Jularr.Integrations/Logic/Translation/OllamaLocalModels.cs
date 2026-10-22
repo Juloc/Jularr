@@ -87,8 +87,13 @@ namespace Jularr.Integrations.Logic.Translation
                 || !source.All(char.IsAsciiLetterLower) || !target.All(char.IsAsciiLetterLower))
                 throw new ArgumentException("Unsupported language identifier.");
             if (string.IsNullOrWhiteSpace(text) || text.Length > 2400) throw new ArgumentException("Translation unit out of bounds.");
-            var prompt = $"You are a professional {source} to {target} translator. Translate accurately, preserving all details, names and tone. "
-                + $"Output ONLY the {target} translation. Translate the following {source} text into {target}:\n\n\n{text}";
+            var sourceName = global::System.Globalization.CultureInfo.GetCultureInfo(source).EnglishName;
+            var targetName = global::System.Globalization.CultureInfo.GetCultureInfo(target).EnglishName;
+            // Ollama TranslateGemma prompt guide: exactly two blank lines before source text.
+            var prompt = $"You are a professional {sourceName} ({source}) to {targetName} ({target}) translator. "
+                + $"Your goal is to accurately convey the meaning and nuances of the original {sourceName} text while adhering to {targetName} grammar, vocabulary, and cultural sensitivities.\n"
+                + $"Produce only the {targetName} translation, without any additional explanations or commentary. "
+                + $"Please translate the following {sourceName} text into {targetName}:\n\n\n{text}";
             var timer = Stopwatch.StartNew();
             using var response = await JsonAsync(server, "api/generate",
                 new { model, prompt, stream = false, keep_alive = "5m", options = new { temperature = 0, num_ctx = 3072, num_predict = 1536 } }, ct);

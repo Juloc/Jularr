@@ -59,6 +59,9 @@ namespace Jularr.Backend.Tests
                     using var json = JsonDocument.Parse(source);
                     Assert.AreEqual("translategemma:4b", json.RootElement.GetProperty("model").GetString());
                     Assert.IsFalse(json.RootElement.GetProperty("stream").GetBoolean());
+                    var prompt = json.RootElement.GetProperty("prompt").GetString()!;
+                    StringAssert.Contains(prompt, "Indonesian (id) to German (de) translator");
+                    StringAssert.Contains(prompt, "into German:\n\n\nRina pulang.");
                     body = """{"response":"Rina ging nach Hause.","eval_count":20,"eval_duration":2000000000}""";
                 }
                 else throw new InvalidOperationException(request.RequestUri!.ToString());
