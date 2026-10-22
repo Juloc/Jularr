@@ -1,34 +1,25 @@
-name: Backend
+name: Backend Full
 
+# Full integration + browser regression on clean-start merges or explicit runs.
+# This workflow must not block every incremental PR.
 on:
   push:
-    branches: [codex/backend-clean-start]
-  pull_request:
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'database/**'
-      - 'scripts/**'
-      - '*.sln'
-      - '**/*.props'
-      - '**/*.targets'
-      - 'NuGet.Config'
-      - '.github/workflows/backend.yml'
+    branches: [clean-start, codex/backend-clean-start]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# Only the newest revision of each pull request needs a full test run.
-# Keep branch runs independent and never cancel a target-branch push.
+# Keep full branch runs independent; never cancel validation after a merge.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    # Integration tests can finish just under 20 minutes; leave headroom for CI variability.
-    timeout-minutes: 30
+    # Full integration coverage currently takes nearly 30 minutes.
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:18
