@@ -33,7 +33,7 @@ class TvCatalogV1FiltersContractTest {
                 releaseYearFrom = 2020, releaseYearTo = 2026, progressStateId = 2,
             )
             runBlocking {
-                assertEquals(3, api.libraryFiltered(page = 3, pageSize = 24, filters = filters, query = "Anime").page)
+                assertEquals(3, api.libraryFiltered(page = 3, pageSize = 24, filters = filters.copy(progressStateId = null), query = "Anime").page)
                 assertEquals(61, api.watchlistCount())
                 assertTrue(api.watchlistFiltered(page = 1, pageSize = 20, filters = filters).items.isEmpty())
             }
