@@ -254,9 +254,6 @@
     &:hover:not(:disabled) { background: var(--accent-edge); }
     &:disabled { color: var(--muted); cursor: default; opacity: .6; }
 }
-@media (pointer: coarse) {
-    .ui-field__stepper { width: 32px; height: 36px; }
-}
 .ui-field__control--segmented { padding: 4px; }
 .ui-segments { display: flex; gap: 4px; }
 .ui-segment {

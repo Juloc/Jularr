@@ -53,7 +53,6 @@
 
     // A refused click draws the eye to the tags that name the reason.
     &--refused { animation: setting-card-refused .5s; }
-    @media (prefers-reduced-motion: reduce) { &--refused { animation: none; border-color: var(--warning); } }
 }
 
 @keyframes setting-card-refused {

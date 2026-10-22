@@ -104,8 +104,6 @@ select.ui-dropdown__native {
     &--above:popover-open {
         @starting-style { translate: 0 6px; }
     }
-
-    @media (prefers-reduced-motion: reduce) { transition: none; }
 }
 
 .ui-dropdown__option {
