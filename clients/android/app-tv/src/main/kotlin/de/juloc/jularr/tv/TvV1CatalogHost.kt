@@ -21,6 +21,9 @@ import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
+import de.juloc.jularr.core.api.catalog.TvPersonV1
+import de.juloc.jularr.core.api.catalog.TvWorkCardV1
+import de.juloc.jularr.core.api.catalog.TvWorkCreditV1
 import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.profile.HttpTvV1ProfileClient
 import de.juloc.jularr.core.api.profile.TvV1ProfileClient
@@ -79,6 +82,10 @@ fun TvV1CatalogHost(
     var watchlistBusy by remember(serverOrigin) { mutableStateOf(false) }
     var watchlistError by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var detailedTitle by remember(serverOrigin) { mutableStateOf("") }
+    var credits by remember(serverOrigin) { mutableStateOf<List<TvWorkCreditV1>>(emptyList()) }
+    var selectedPersonId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
+    var selectedPerson by remember(serverOrigin) { mutableStateOf<TvPersonV1?>(null) }
+    var personWorks by remember(serverOrigin) { mutableStateOf<List<TvWorkCardV1>>(emptyList()) }
     var fractionalEpisodes by remember(serverOrigin) {
         mutableStateOf<List<de.juloc.jularr.core.api.catalog.TvWorkEpisodeV1>>(emptyList())
     }
@@ -136,7 +143,7 @@ fun TvV1CatalogHost(
     // TvPlayerScreen handles Back itself so it can end its /api/v1 session first.
     BackHandler(enabled = page != TvV1CatalogPage.Home && page != TvV1CatalogPage.Player) { back() }
 
-    LaunchedEffect(serverOrigin, page, searchQuery, detailWorkId, reload) {
+    LaunchedEffect(serverOrigin, page, searchQuery, detailWorkId, selectedPersonId, reload) {
         error = null
         loading = true
         try {
@@ -212,6 +219,16 @@ fun TvV1CatalogHost(
                         details = null
                         fractionalEpisodes = emptyList()
                     }
+                }
+                TvV1CatalogPage.Credits -> {
+                    val workId = requireNotNull(detailWorkId)
+                    credits = catalog.credits(workId)
+                }
+                TvV1CatalogPage.Person -> {
+                    val personId = requireNotNull(selectedPersonId)
+                    selectedPerson = catalog.person(personId)
+                    personWorks = loadCatalogPages { n -> catalog.personWorks(personId, page = n, pageSize = 100) }
+                        .filter { TvV1LegacyUiModels.isVideo(it.mediaTypeId) }
                 }
                 TvV1CatalogPage.PlaybackPending, TvV1CatalogPage.Player,
                 TvV1CatalogPage.MovieEditions, TvV1CatalogPage.Settings,
@@ -390,6 +407,7 @@ fun TvV1CatalogHost(
                             },
                             onBack = ::back,
                             isWatchlisted = isWatchlisted,
+                            onOpenCredits = { openPage(TvV1CatalogPage.Credits) },
                             specialEpisodes = fractionalEpisodes,
                             onPlaySpecialEpisode = { episode ->
                                 playAsset(episode.playableMediaAssetId(), episode.id.toString())
@@ -443,6 +461,33 @@ fun TvV1CatalogHost(
                 else -> TvV1Waiting("Mediendetails werden geladen …")
             }
         }
+        TvV1CatalogPage.Credits -> TvV1CreditsScreen(
+            title = detailedTitle,
+            credits = credits,
+            loading = loading,
+            error = error,
+            serverOrigin = serverOrigin,
+            requestHeaders = authorization,
+            onPerson = { id ->
+                selectedPersonId = id
+                selectedPerson = null
+                personWorks = emptyList()
+                openPage(TvV1CatalogPage.Person)
+            },
+            onRetry = { reload += 1 },
+            onBack = ::back,
+        )
+        TvV1CatalogPage.Person -> TvV1PersonScreen(
+            person = selectedPerson,
+            works = personWorks,
+            loading = loading,
+            error = error,
+            serverOrigin = serverOrigin,
+            requestHeaders = authorization,
+            onWork = { id -> openWork(id.toString()) },
+            onRetry = { reload += 1 },
+            onBack = ::back,
+        )
         TvV1CatalogPage.MovieEditions -> TvCenteredPanel(
             title = "Filmversion wählen",
             description = detailedTitle,

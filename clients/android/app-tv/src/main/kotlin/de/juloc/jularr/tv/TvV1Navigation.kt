@@ -9,7 +9,7 @@ package de.juloc.jularr.tv
  */
 internal enum class TvV1CatalogPage {
     Home, Search, Discover, Watchlist, Settings, ProfileSelect,
-    Details, MovieEditions, PlaybackPending, Player,
+    Details, Credits, Person, MovieEditions, PlaybackPending, Player,
 }
 
 internal data class TvV1NavigationState(
@@ -40,6 +40,8 @@ internal object TvV1Navigation {
             TvV1CatalogPage.Discover -> TvV1CatalogPage.Search
             TvV1CatalogPage.MovieEditions, TvV1CatalogPage.PlaybackPending,
             TvV1CatalogPage.Player -> TvV1CatalogPage.Details
+            TvV1CatalogPage.Credits -> TvV1CatalogPage.Details
+            TvV1CatalogPage.Person -> TvV1CatalogPage.Credits
             TvV1CatalogPage.Details, TvV1CatalogPage.ProfileSelect,
             TvV1CatalogPage.Watchlist, TvV1CatalogPage.Settings -> TvV1CatalogPage.Home
         }

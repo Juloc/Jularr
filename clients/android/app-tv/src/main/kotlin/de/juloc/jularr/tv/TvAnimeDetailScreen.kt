@@ -83,6 +83,7 @@ fun TvAnimeScreen(
     onPlayMovie: (() -> Unit)? = null,
     isWatchlisted: Boolean = false,
     onToggleWatchlist: (() -> Unit)? = null,
+    onOpenCredits: (() -> Unit)? = null,
     specialEpisodes: List<TvWorkEpisodeV1> = emptyList(),
     onPlaySpecialEpisode: (TvWorkEpisodeV1) -> Unit = {},
 ) {
@@ -222,6 +223,9 @@ fun TvAnimeScreen(
                             Button(onClick = onToggleWatchlist) {
                                 Text(if (isWatchlisted) "Von Watchlist entfernen" else "Zur Watchlist")
                             }
+                        }
+                        if (onOpenCredits != null) {
+                            Button(onClick = onOpenCredits) { Text("Mitwirkende") }
                         }
                         Button(
                             onClick = onBack,
