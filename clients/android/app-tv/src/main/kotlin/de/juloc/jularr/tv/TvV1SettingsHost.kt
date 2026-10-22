@@ -3,12 +3,18 @@ package de.juloc.jularr.tv
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import de.juloc.jularr.core.api.AppApiException
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackExtrasClient
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
+import kotlinx.coroutines.CancellationException
 import de.juloc.jularr.core.update.AppVariant
 import de.juloc.jularr.core.update.UpdateCheckResult
 import de.juloc.jularr.core.update.UpdateDownloadResult
@@ -28,6 +34,8 @@ import java.io.File
 internal fun TvV1SettingsHost(
     serverOrigin: String,
     error: String?,
+    playbackExtras: TvV1PlaybackExtrasClient,
+    onUnauthorized: () -> Unit,
     onSwitchProfile: () -> Unit,
     onSignOut: () -> Unit,
     onChangeServer: () -> Unit,
@@ -38,6 +46,49 @@ internal fun TvV1SettingsHost(
     val preferences = remember { UpdatePreferences(context.applicationContext) }
     var checksEnabled by remember { mutableStateOf(preferences.checksEnabled) }
     var updateState by remember { mutableStateOf<TvUpdateState>(TvUpdateState.Idle) }
+    var playbackPreferences by remember(playbackExtras) { mutableStateOf<TvV1PlaybackPreferences?>(null) }
+    var playbackError by remember(playbackExtras) { mutableStateOf<String?>(null) }
+    var savingPlayback by remember(playbackExtras) { mutableStateOf(false) }
+
+    LaunchedEffect(playbackExtras) {
+        try {
+            playbackPreferences = playbackExtras.preferences()
+            playbackError = null
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (failure: AppApiException) {
+            if (failure.statusCode == 401) onUnauthorized()
+            else playbackError = "Playback-Einstellungen: ${failure.code} (HTTP ${failure.statusCode})"
+        } catch (failure: Exception) {
+            playbackError = failure.message ?: "Wiedergabeeinstellungen konnten nicht geladen werden."
+        }
+    }
+
+    fun savePlayback(change: ClientPlaybackPreferencesUpdate) {
+        val current = playbackPreferences ?: return
+        if (savingPlayback) return
+        savingPlayback = true
+        scope.launch {
+            try {
+                val update = TvV1PlaybackPreferencesBridge.update(current, change)
+                check(playbackExtras.savePreferences(update)) {
+                    "Jularr hat die Einstellungen nicht übernommen."
+                }
+                // Server is authoritative: refresh in case it normalizes any field.
+                playbackPreferences = playbackExtras.preferences()
+                playbackError = null
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: AppApiException) {
+                if (failure.statusCode == 401) onUnauthorized()
+                else playbackError = "Playback-Einstellungen: ${failure.code} (HTTP ${failure.statusCode})"
+            } catch (failure: Exception) {
+                playbackError = failure.message ?: "Wiedergabeeinstellungen konnten nicht gespeichert werden."
+            } finally {
+                savingPlayback = false
+            }
+        }
+    }
     val installPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { /* Installation permission is checked again after the user returns. */ }
@@ -108,6 +159,9 @@ internal fun TvV1SettingsHost(
         onSignOut = onSignOut,
         onChangeServer = onChangeServer,
         onSwitchProfile = onSwitchProfile,
-        error = error,
+        playbackPreferences = playbackPreferences?.let(TvV1PlaybackPreferencesBridge::display),
+        busy = savingPlayback,
+        error = playbackError ?: error,
+        onUpdatePlaybackPreferences = ::savePlayback,
     )
 }
