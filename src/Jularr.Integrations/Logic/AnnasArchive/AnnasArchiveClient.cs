@@ -31,7 +31,8 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static bool IsTrustedSource(Uri configured, Uri candidate)
         {
-            if (candidate.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(candidate.UserInfo))
+            if (configured.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(configured.UserInfo)
+                || candidate.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(candidate.UserInfo))
             {
                 return false;
             }
