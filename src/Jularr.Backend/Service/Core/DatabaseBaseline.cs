@@ -64,6 +64,16 @@ namespace Jularr.Backend.Service.Core
                     ADD CONSTRAINT "CK_WorkExternalIdentities_NarouNamespace"
                     CHECK ("Namespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'imdb', 'plex', 'openlibrary',
                         'isbn', 'gutenberg', 'anilist', 'musicbrainz', 'igdb', 'syosetu'));
+                """),
+            new(3, """
+                -- A persisted fair cursor for bounded, regular Narō updates. The EPUB itself
+                -- remains the source of truth for which chapters have been imported.
+                CREATE TABLE "NarouSyncStates" (
+                    "WorkId" bigint PRIMARY KEY REFERENCES "Works" ("Id") ON DELETE CASCADE,
+                    "LastCheckedAt" timestamptz NOT NULL,
+                    "LastErrorCode" varchar(64) NULL
+                );
+                CREATE INDEX "IX_NarouSyncStates_Checked" ON "NarouSyncStates" ("LastCheckedAt");
                 """)
         ];
 
