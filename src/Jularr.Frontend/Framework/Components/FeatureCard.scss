@@ -59,6 +59,12 @@
     &__note { min-width: 0; color: var(--muted); font-size: var(--text-body); }
     &__row strong { font-size: var(--text-body); font-weight: 780; white-space: nowrap; }
 
+    // A card with inputs: its forms sit under the head; the pill saves them, so a row holding only their save button is gone.
+    &--wide { grid-column: 1 / -1; }
+    // On a wide card address and key stand side by side; groups of choices keep their own row.
+    &--wide > .ui-form > .ui-field--wide:not(fieldset) { grid-column: auto; }
+    [data-save-ready] & > .ui-form[data-save] > .ui-form__actions:not(:has(> :not([data-form-save]))) { display: none; }
+
     // The add card: the same size as its neighbours, outlined only.
     &--add { align-items: center; justify-content: center; min-height: 190px; border-style: dashed; box-shadow: none; text-align: center; }
 }

@@ -1,8 +1,2 @@
-// The Catalog page's part of the list kit: the grid of the catalogs at three widths.
-.catalog-list {
-    --list-columns: minmax(230px, 2.4fr) minmax(86px, .8fr) minmax(90px, .9fr) minmax(90px, .9fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(130px, 1fr);
-    --list-columns-medium: minmax(210px, 2.4fr) minmax(86px, .8fr) minmax(90px, .9fr) minmax(110px, 1fr) minmax(130px, 1fr);
-    --list-columns-narrow: minmax(180px, 2.4fr) minmax(90px, .9fr) minmax(110px, 1fr) minmax(130px, 1fr);
-}
-
-.list + .ui-section { margin-top: 16px; }
+// The Catalog page's part of the card grid: the covers section sits under the catalogs.
+.card-grid + .ui-section { margin-top: 16px; }

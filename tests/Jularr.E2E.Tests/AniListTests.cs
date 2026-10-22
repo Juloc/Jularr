@@ -41,9 +41,7 @@ namespace Jularr.E2E.Tests
 
                 // The Owner enters the application's client id and secret; the secret is never shown again.
                 await page.GotoAsync("/Admin/Providers");
-                var provider = page.Locator("#provider-anilist");
-                await provider.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
-                var application = page.GetByRole(AriaRole.Dialog, new() { Name = "AniList", Exact = true }).Locator("form[action*='handler=Secret']");
+                var application = page.Locator("#provider-anilist form[action*='handler=Secret']");
                 await application.Locator("[name=ClientId]").FillAsync(FakeServices.AniListClientId);
                 await application.Locator("[name=Secret]").FillAsync(FakeServices.AniListSecret);
                 await Steps.SubmitAsync(page, application);
