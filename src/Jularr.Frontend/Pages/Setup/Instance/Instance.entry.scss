@@ -1,15 +1,13 @@
+// The module step: the starting sets, then the form with the name, the basic functions, the media groups and the other modules, one under the other.
 .setup-modules {
-    &__presets {
-        &:not([hidden]) { display: flex; }
-        flex-wrap: wrap;
-        gap: .5rem;
-        margin-block: 1rem;
+    display: grid;
+    gap: 16px;
+
+    &__form > .ui-form {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
     }
 
-    .ui-form__row {
-        padding: .75rem;
-        border: 1px solid var(--accent-line);
-        border-radius: 1rem;
-        background: var(--surface);
-    }
+    // The name keeps its field width; the groups and the button take the whole row.
+    &__form > .ui-form > .ui-field { max-width: 360px; }
 }

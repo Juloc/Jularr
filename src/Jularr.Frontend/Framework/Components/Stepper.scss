@@ -1,0 +1,82 @@
+// The owner's setup mockup: a 32px square bubble (11px radius, 11px/850) beside a 12px/770 name; the passed ones green with a check, the current
+// one the accent with white text. Thin lines join the steps; on a phone only the current step keeps its name.
+.stepper {
+    min-width: 0;
+    max-width: 100%;
+
+    &__list {
+        display: flex;
+        flex-wrap: wrap;
+        min-width: 0;
+        align-items: center;
+        gap: 6px 0;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    &__step {
+        display: flex;
+        flex: none;
+        align-items: center;
+        max-width: 100%;
+
+        &:not(:last-child)::after {
+            content: "";
+            flex: 1 1 10px;
+            min-width: 8px;
+            max-width: 20px;
+            height: 1px;
+            margin-inline: 6px;
+            background: var(--border);
+        }
+    }
+
+    &__item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 6px 10px 6px 6px;
+        border-radius: var(--radius-inner);
+        color: var(--muted);
+        text-decoration: none;
+        transition: background var(--transition), color var(--transition);
+    }
+    a.stepper__item:hover { background: var(--field); color: var(--text); }
+
+    &__bubble {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-tile);
+        background: var(--surface);
+        color: var(--muted);
+        font-size: var(--text-control);
+        font-weight: 850;
+        transition: background var(--transition), color var(--transition), border-color var(--transition);
+    }
+
+    &__label {
+        min-width: 0;
+        font-size: var(--text-body);
+        font-weight: 770;
+        white-space: nowrap;
+    }
+
+    &__step--done &__bubble { border-color: transparent; background: var(--success-soft); color: var(--success); }
+    &__step--done &__item { color: var(--text); }
+    &__step--current &__item { background: var(--accent-soft); color: var(--accent-text); }
+    &__step--current &__bubble { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+
+    @media (max-width: 640px) {
+        .stepper__step--current { flex: 0 1 auto; min-width: 0; }
+        .stepper__step--current .stepper__label { overflow: hidden; text-overflow: ellipsis; }
+        .stepper__step:not(.stepper__step--current) .stepper__label { display: none; }
+        .stepper__step:not(.stepper__step--current) .stepper__item { padding-inline: 0; }
+        .stepper__step:not(:last-child)::after { min-width: 4px; margin-inline: 2px; }
+    }
+}

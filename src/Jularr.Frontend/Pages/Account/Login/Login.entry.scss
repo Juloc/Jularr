@@ -48,14 +48,14 @@ html:not([data-skin="original"]) body:has(.login-card) {
     // One column of fields, the label above its field, the eye and the forgot link inside the field's row.
     .ui-form { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
     .ui-field { gap: 0; }
-    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px; font-size: 12px; font-weight: 750; line-height: normal; }
+    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; max-width: none; margin: 0 0 8px var(--field-label-inset); line-height: normal; }
     .ui-field__control {
         display: flex;
         align-items: center;
         height: 46px;
         padding: 0;
         border: 1px solid var(--border);
-        border-radius: var(--radius-inner);
+        border-radius: var(--radius-field);
         background: var(--field);
         transition: border-color .2s, box-shadow .2s;
 
@@ -70,23 +70,6 @@ html:not([data-skin="original"]) body:has(.login-card) {
 }
 
 .auth-forgot { color: var(--muted); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; &:hover { color: var(--accent); } }
-.password-reveal {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 35px;
-    height: 34px;
-    margin-right: 4px;
-    padding: 0;
-    border: 0;
-    border-radius: 9px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-
-    &:hover { background: var(--accent-soft); color: var(--accent); }
-    .ui-icon { width: 18px; height: 18px; }
-}
 
 // The one filled action: the accent in a soft gradient. The same look serves a link (back to sign in).
 .auth-submit {

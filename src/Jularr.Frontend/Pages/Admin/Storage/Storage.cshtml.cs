@@ -75,7 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             if (IsSetup)
             {
                 page.Title("setup.storage.title");
-                page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
+                page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
             }
             else if (IsDetail)
             {

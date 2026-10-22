@@ -41,12 +41,13 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
     public sealed class SaveSetupModulesDataV1 : BaseData
     {
-        public SaveSetupModulesDataV1(string name, long version, long setupVersion, BaseDataList<InstanceModuleInputV1> modules)
+        public SaveSetupModulesDataV1(string name, long version, long setupVersion, BaseDataList<InstanceModuleInputV1> modules, BaseDataList<UpdateInstanceMediaDataV1> media)
         {
             Name = name;
             Version = version;
             SetupVersion = setupVersion;
             Modules = modules;
+            Media = media;
         }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
@@ -59,12 +60,18 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         public long SetupVersion { get; }
         public BaseDataList<InstanceModuleInputV1> Modules { get; }
 
+        // The media types and subtypes the instance offers, saved with the modules; types before the subtypes that need them.
+        public BaseDataList<UpdateInstanceMediaDataV1> Media { get; }
+
         public override void Validate()
         {
             base.Validate();
             if (Modules is null || Modules.Count is < 1 or > 64) throw new DataValidationException(nameof(Modules), "out_of_range");
             Modules.Validate();
             if (Modules.Select(module => module.Id).Distinct().Count() != Modules.Count) throw new DataValidationException(nameof(Modules), "duplicate_value");
+            if (Media is null || Media.Count > 16) throw new DataValidationException(nameof(Media), "out_of_range");
+            Media.Validate();
+            if (Media.Select(item => item.Key).Distinct().Count() != Media.Count) throw new DataValidationException(nameof(Media), "duplicate_value");
         }
     }
 }

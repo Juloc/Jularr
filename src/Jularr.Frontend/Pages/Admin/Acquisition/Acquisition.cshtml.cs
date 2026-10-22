@@ -80,7 +80,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (Role == AcquisitionConnectionRole.Download) page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var isSetup = SetupWizard.IsActive(Request);
-            if (isSetup) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
+            if (isSetup) page.Content.Add(SetupWizard.Frame(HttpContext, Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             var type = _selected?.AcquisitionConnectionTypeId ?? Type;
             var items = _connections?.Items ?? [];
 

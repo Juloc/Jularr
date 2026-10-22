@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Enums.Instance;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Frontend.Framework
 {
@@ -31,18 +32,31 @@ namespace Jularr.Frontend.Framework
         // The address an editor was opened under.
         public static string Address(HttpRequest request, SetupStepType step, string adminPath) => IsActive(request) ? Paths[step] : adminPath;
 
-        public static IUiComponent Frame(SetupStepType current, string? sourcePane = null, bool acquisition = true)
+        // The step row of the flow; the Owner step (before anyone is signed in) is the one with no step type.
+        public static IUiComponent Frame(HttpContext context, SetupStepType? current, string? sourcePane = null, bool acquisition = true)
         {
             var isSource = current >= SetupStepType.Indexers && current != SetupStepType.DownloadStorage;
-            var steps = new List<NavigationTab>
+            var places = new List<(string Label, string Path, int Position)>
             {
-                new("setup.step.Owner", "/Setup", false),
-                new("setup.step.Instance", "/Setup/Instance", current == SetupStepType.Instance),
-                new("setup.step.Storage", "/Setup/Storage", current == SetupStepType.Storage)
+                ("setup.step.Owner", "/Setup", 0),
+                ("setup.step.Instance", "/Setup/Instance", 1),
+                ("setup.step.Storage", "/Setup/Storage", 2)
             };
-            if (acquisition) steps.Add(new("downloadStorage.title", Paths[SetupStepType.DownloadStorage], current == SetupStepType.DownloadStorage));
-            steps.Add(new("setup.step.Sources", "/Setup/Sources", isSource));
-            var items = new List<IUiComponent> { new NavigationTabs(steps, "setup.steps") };
+            if (acquisition) places.Add(("downloadStorage.title", Paths[SetupStepType.DownloadStorage], 3));
+            places.Add(("setup.step.Sources", "/Setup/Sources", 4));
+            var position = current switch
+            {
+                null => 0,
+                SetupStepType.Instance => 1,
+                SetupStepType.Storage => 2,
+                SetupStepType.DownloadStorage => 3,
+                _ => 4
+            };
+
+            // Nothing past the Owner step can be opened before the Owner exists.
+            var steps = places.Select(place => new StepperStep(place.Label, current is null ? null : place.Path,
+                place.Position == position ? StepState.Current : place.Position < position ? StepState.Done : StepState.Upcoming)).ToList();
+            var items = new List<IUiComponent> { new Stepper(steps, "setup.steps", context.RequestServices.GetRequiredService<FrontendAssets>()) };
             if (current == SetupStepType.Instance)
             {
                 items.Add(new A(new Text("setup.restore")).Class("button").Attribute("href", "/Setup/Backup"));

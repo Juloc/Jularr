@@ -106,3 +106,12 @@ form.querySelectorAll<HTMLElement>('[data-byte-size]').forEach(control => {
     });
 });
 }
+
+// A select whose options carry an icon shows the icon of the chosen option at the start of its field.
+document.addEventListener("change", event => {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement)) return;
+    const icons = select.closest(".ui-field__control")?.querySelector<HTMLElement>("[data-option-icons]");
+    if (!icons) return;
+    for (const icon of Array.from(icons.querySelectorAll<HTMLElement>("[data-option-icon]"))) icon.hidden = icon.dataset.optionIcon !== select.value;
+});

@@ -224,9 +224,9 @@
    "Start and system",
    "Início e sistema"
   ],
-  "setup.owner.title": [
-   "Create the first Owner",
-   "Criar o primeiro Proprietário"
+  "setup.owner.userName": [
+   "User name",
+   "Nome de usuário"
   ],
   "setup.owner.passwordConfirmation": [
    "Confirm password",
@@ -1425,12 +1425,12 @@
    "Permitida"
   ],
   "profile.minimumSize": [
-   "Minimum size (MB)",
-   "Tamanho mínimo (MB)"
+   "Minimum size",
+   "Tamanho mínimo"
   ],
   "profile.maximumSize": [
-   "Maximum size (MB)",
-   "Tamanho máximo (MB)"
+   "Maximum size",
+   "Tamanho máximo"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -6428,14 +6428,6 @@
    "Requests",
    "Pedidos"
   ],
-  "setup.modules.media": [
-   "Media",
-   "Multimédia"
-  ],
-  "setup.modules.requests": [
-   "Requests & downloads",
-   "Pedidos e transferências"
-  ],
   "setup.modules.personal": [
    "Profiles & personal features",
    "Perfis e funcionalidades pessoais"
@@ -6573,16 +6565,16 @@
    "Importar formatos"
   ],
   "arr.minimumMb": [
-   "Minimum (MB/min)",
-   "Mínimo (MB/min)"
+   "Minimum",
+   "Mínimo"
   ],
   "arr.preferredMb": [
-   "Preferred (MB/min)",
-   "Preferido (MB/min)"
+   "Preferred",
+   "Preferido"
   ],
   "arr.maximumMb": [
-   "Maximum (MB/min)",
-   "Máximo (MB/min)"
+   "Maximum",
+   "Máximo"
   ],
   "arr.requiredTerms": [
    "One required term",

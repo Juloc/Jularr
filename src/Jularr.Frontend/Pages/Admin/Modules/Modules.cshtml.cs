@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Admin.Instance.V1;
@@ -12,38 +11,6 @@ namespace Jularr.Frontend.Pages.Admin.Modules
     public sealed class ModulesModel(ReadInstanceModulesV1 read, UpdateInstanceModulesV1 update, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Instance/Modules";
-
-        // The icon of what a module does, from the project's icon set.
-        private static readonly Dictionary<string, string> Icons = new()
-        {
-            ["Library"] = "library",
-            ["Requests"] = "requests",
-            ["Acquisition"] = "download",
-            ["Playback"] = "play",
-            ["Reading"] = "book",
-            ["Profiles"] = "users",
-            ["Emulation"] = "gamepad",
-            ["Notifications"] = "bell",
-            ["Collections"] = "bookmark",
-            ["Calendar"] = "calendar",
-            ["Statistics"] = "pulse",
-            ["UnitGroups"] = "list",
-            ["HomeLayout"] = "home",
-            ["Trickplay"] = "scan",
-            ["Franchises"] = "layers",
-            ["Diagnostics"] = "activity",
-            ["Subtitles"] = "subtitles",
-            ["Uploads"] = "upload",
-            ["ProgressSync"] = "sync",
-            ["AniList"] = "anilist",
-            ["Devices"] = "devices",
-            ["Registration"] = "user-plus",
-            ["Translation"] = "globe",
-            ["Ocr"] = "text-select",
-            ["SmartPdf"] = "document",
-            ["DiscoverCache"] = "drive",
-            ["LocalDiscovery"] = "network"
-        };
 
         private IReadOnlyList<InstanceModuleDetailsV1> _modules = [];
         private UpdateInstanceModulesDataV1? _input;
@@ -69,7 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Modules
                     var module = byId[item.Id];
                     row.Hidden(data => data.Id);
                     row.Hidden(data => data.Version);
-                    row.Switch(data => data.IsEnabled, "instance.module." + module.Key, control => Card(module, control, item.IsEnabled, enabled));
+                    row.Switch(data => data.IsEnabled, "instance.module." + module.Key, control => ModuleCard.Build(module, _modules, control, item.IsEnabled, enabled, assets, texts));
                 });
                 fields.Save();
             }, Address, csrf, input, FormError);
@@ -78,33 +45,6 @@ namespace Jularr.Frontend.Pages.Admin.Modules
             // What belongs to a module but is not a switch: the speech models of the reader's read-aloud.
             page.Content.Add(new ActionDock(assets, "admin.modules.actions", [new A(new Icon("headphones", assets, 16), new Span(new Text("speech.models.title")).Class("action-dock__text"))
                 .Class("button").Attribute("href", "/Admin/Instance/Speech")]));
-        }
-
-        // The card of one module: its name and state, its switch, and the modules it needs and the ones that need it.
-        private IUiComponent Card(InstanceModuleDetailsV1 module, IUiComponent control, bool isOn, IReadOnlyDictionary<string, bool> enabled)
-        {
-            var tags = new List<IUiComponent>();
-            if (module.Requires.Length > 0)
-            {
-                tags.Add(new Span(new Text("settings.module.needs")).Class("setting-card__tags-label"));
-                tags.AddRange(module.Requires.Select(key => (IUiComponent)new Tag(new Truncated(texts["instance.module." + key])).Attribute("data-needs", key)
-                    .Class(enabled.GetValueOrDefault(key) ? "tag" : "tag tag--warning")));
-            }
-
-            // Those that need this module and are on, in one line; the script keeps it as they are switched.
-            var dependants = _modules.Where(other => other.Requires.Contains(module.Key)).ToList();
-            if (dependants.Count > 0)
-            {
-                var names = string.Join(", ", dependants.Where(other => enabled.GetValueOrDefault(other.Key)).Select(other => texts["instance.module." + other.Key]));
-                var needed = new Tag(new Span(new Text("settings.module.neededBy")).Class("setting-card__tags-label"), new Truncated(names)).Attribute("data-needed-names",
-                    JsonSerializer.Serialize(dependants.ToDictionary(other => other.Key, other => texts["instance.module." + other.Key])));
-                tags.Add(names.Length > 0 ? needed : needed.Attribute("hidden", "hidden"));
-            }
-
-            var blocked = isOn ? dependants.Any(other => enabled.GetValueOrDefault(other.Key)) : module.Requires.Any(key => !enabled.GetValueOrDefault(key));
-            var card = new SettingCard(new IconTile(new Icon(Icons.GetValueOrDefault(module.Key, "settings"), assets, 17)), new Truncated(texts["instance.module." + module.Key]), control, isOn,
-                "admin.providers.enabled", "admin.providers.disabled", tags).Data("module", module.Key).Data("requires", string.Join(' ', module.Requires));
-            return blocked ? card.Blocked() : card;
         }
 
         public async Task<IActionResult> OnGetAsync()

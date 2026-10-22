@@ -116,7 +116,7 @@ namespace Jularr.Backend.Logic.Account
             return account;
         }
 
-        public static async Task<long?> CreateAccountAsync(this LogicContext ctx, AccountCreationData data, long uiLocaleId, CancellationToken ct)
+        public static async Task<long?> CreateAccountAsync(this LogicContext ctx, AccountCreationData data, long uiLocaleId, CancellationToken ct, string? profileName = null)
         {
             // Registration follows Owner setup.
             if (data.AccountRoleTypeId != AccountRoleType.Owner)
@@ -163,11 +163,11 @@ namespace Jularr.Backend.Logic.Account
             }
 
             // Create ownership atomically.
-            await ctx.CreateProfileAsync(new ProfileCreationData(account.Id, data.DisplayName, uiLocaleId), ct);
+            await ctx.CreateProfileAsync(new ProfileCreationData(account.Id, profileName ?? data.DisplayName, uiLocaleId), ct);
             return account.Id;
         }
 
-        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext ctx, string username, string displayName, string password, long uiLocaleId, CancellationToken ct)
+        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext ctx, string username, string profileName, string password, long uiLocaleId, CancellationToken ct)
         {
             AccountPasswordPolicy.Require(password, "Password");
 
@@ -203,8 +203,8 @@ namespace Jularr.Backend.Logic.Account
             // Reuse canonical account/profile writes.
             await ctx.EnableInitialUiLocaleAsync(uiLocaleId, ct);
             await ctx.SetInitialInstanceLocaleAsync(uiLocaleId, ct);
-            var data = new AccountCreationData(username, null, displayName, true, null, AccountRoleType.Owner);
-            var id = await ctx.CreateAccountAsync(data, uiLocaleId, ct)
+            var data = new AccountCreationData(username, null, username, true, null, AccountRoleType.Owner);
+            var id = await ctx.CreateAccountAsync(data, uiLocaleId, ct, profileName)
                 ?? throw new SecurityException("Initial Owner creation is unavailable.");
             var account = new AccountAuthenticationData(id, 1, null, true, false);
             await ctx.WritePasswordAsync(new AccountPasswordData(id, PasswordHasher.HashPassword(account, password)), ct);

@@ -228,6 +228,19 @@ namespace Jularr.Frontend.Framework
             var select = new HtmlSelect(items).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
             Configure(field, select);
             if (refreshAction is not null) select.Attribute("data-form-refresh", refreshAction);
+
+            // Every option's icon is written; the chosen one shows (Form.entry.ts follows the choice).
+            if (affix?.Prefix is null && choices.Any(option => option.Icon is not null))
+            {
+                var icons = choices.Where(option => option.Icon is not null).Select(option =>
+                {
+                    var icon = new Span(option.Icon!).Attribute("data-option-icon", option.Value);
+                    return option.Value == value ? icon : icon.Attribute("hidden", "hidden");
+                }).ToArray<IUiComponent>();
+                var prefix = new Span(icons).Attribute("data-option-icons", "");
+                affix = affix is null ? new FieldAffix(prefix) : affix with { Prefix = prefix };
+            }
+
             AddField(field, select, affix: affix);
             RefreshButton(refreshAction, refreshLabelKey);
             return this;
@@ -295,6 +308,19 @@ namespace Jularr.Frontend.Framework
             _target = outer;
             _actions = outerActions;
             _target.Add(new HtmlFieldset([.. inner]).Class("ui-form__section"));
+            return this;
+        }
+
+        // Fields, rows and content declared inside sit within a container the page builds (a collapsible group, a panel); the form keeps one save.
+        public Form<TData> Wrap(Func<IReadOnlyList<IUiComponent>, IUiComponent> wrap, Action<Form<TData>> define)
+        {
+            var outer = _target;
+            var inner = new List<IUiComponent>();
+            _target = inner;
+            define(this);
+            _target = outer;
+            _target.Add(wrap(inner));
+            _hasWideField = true;
             return this;
         }
 
@@ -639,7 +665,8 @@ namespace Jularr.Frontend.Framework
         internal IReadOnlySet<string> Selected { get; }
     }
 
-    public sealed record SelectOption(string Value, string Label);
+    // An option may carry an icon (a flag); a select without a prefix of its own then shows the icon of the chosen option at its start.
+    public sealed record SelectOption(string Value, string Label, IUiComponent? Icon = null);
 
     // What a field wears inside its frame: an icon circle at the start (built by the page, which owns the icon sprite) and a unit text key at the end.
     public sealed record FieldAffix(IUiComponent? Prefix = null, string? SuffixKey = null)

@@ -46,6 +46,11 @@ document.addEventListener("click", event => {
     applyRules();
 });
 
+// Switches set by a script (the setup's presets) show their cards as the rules allow too.
+document.addEventListener("change", event => {
+    if (event.target instanceof HTMLInputElement && event.target.type === "checkbox" && event.target.closest("[data-module]")) applyRules();
+});
+
 // A discarded or reloaded form shows its switches as saved.
 document.addEventListener("reset", () => queueMicrotask(applyRules));
 

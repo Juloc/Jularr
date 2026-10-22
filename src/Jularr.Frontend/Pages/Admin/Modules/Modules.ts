@@ -36,3 +36,15 @@ export function switchesOf(root: ParentNode): ModuleSwitch[] {
 export function dependantNames(names: Record<string, string>, dependants: string[]): string {
     return dependants.map(key => names[key] ?? key).join(", ");
 }
+
+// The modules that go on with this one: what it needs and what that needs, in the order they are found; the module itself comes first.
+export function withRequired(modules: ModuleSwitch[], key: string): string[] {
+    const found: string[] = [];
+    const visit = (current: string): void => {
+        if (found.includes(current)) return;
+        found.push(current);
+        for (const required of modules.find(item => item.key === current)?.requires ?? []) visit(required);
+    };
+    visit(key);
+    return found;
+}

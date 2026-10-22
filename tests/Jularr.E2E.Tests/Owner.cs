@@ -14,7 +14,7 @@ namespace Jularr.E2E.Tests
             await page.GotoAsync("/");
             await page.WaitForURLAsync("**/Setup**");
             await page.FillAsync("[name=Username]", Username);
-            await page.FillAsync("[name=DisplayName]", "Owner");
+            await page.FillAsync("[name=ProfileName]", "Owner");
             await page.FillAsync("[name=Password]", Password);
             await page.FillAsync("[name=PasswordConfirmation]", Password);
             await page.Locator("form button[type=submit]").Last.ClickAsync();

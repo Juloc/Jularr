@@ -224,9 +224,9 @@
    "Start and system",
    "Start en systeem"
   ],
-  "setup.owner.title": [
-   "Create the first Owner",
-   "Eerste Eigenaar aanmaken"
+  "setup.owner.userName": [
+   "User name",
+   "Gebruikersnaam"
   ],
   "setup.owner.passwordConfirmation": [
    "Confirm password",
@@ -1425,12 +1425,12 @@
    "Toegestaan"
   ],
   "profile.minimumSize": [
-   "Minimum size (MB)",
-   "Minimale grootte (MB)"
+   "Minimum size",
+   "Minimale grootte"
   ],
   "profile.maximumSize": [
-   "Maximum size (MB)",
-   "Maximale grootte (MB)"
+   "Maximum size",
+   "Maximale grootte"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -6428,14 +6428,6 @@
    "Requests",
    "Aanvragen"
   ],
-  "setup.modules.media": [
-   "Media",
-   "Media"
-  ],
-  "setup.modules.requests": [
-   "Requests & downloads",
-   "Aanvragen en downloads"
-  ],
   "setup.modules.personal": [
    "Profiles & personal features",
    "Profielen en persoonlijke functies"
@@ -6573,16 +6565,16 @@
    "Formaten importeren"
   ],
   "arr.minimumMb": [
-   "Minimum (MB/min)",
-   "Minimum (MB/min)"
+   "Minimum",
+   "Minimum"
   ],
   "arr.preferredMb": [
-   "Preferred (MB/min)",
-   "Voorkeur (MB/min)"
+   "Preferred",
+   "Voorkeur"
   ],
   "arr.maximumMb": [
-   "Maximum (MB/min)",
-   "Maximum (MB/min)"
+   "Maximum",
+   "Maximum"
   ],
   "arr.requiredTerms": [
    "One required term",

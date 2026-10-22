@@ -91,7 +91,7 @@ namespace Jularr.Backend.Service.Public.Setup.V1
         protected override async Task<IServiceOutput> OnCreate()
         {
             // Create and sign in atomically.
-            var account = await Context.CreateFirstOwnerAsync(Data.Username, Data.DisplayName, Data.Password, Data.UiLocaleId, CancellationToken);
+            var account = await Context.CreateFirstOwnerAsync(Data.Username, Data.ProfileName, Data.Password, Data.UiLocaleId, CancellationToken);
             var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), BrowserDevice.Current(_http.HttpContext), CancellationToken);
             return new LoginResultV1(session);
         }

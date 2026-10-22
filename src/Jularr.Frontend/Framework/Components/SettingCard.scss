@@ -14,7 +14,7 @@
 
     // Without script each form keeps its own save button, as one more cell; with the pill it has none.
     & > .ui-form > .ui-form__actions { grid-column: auto; }
-    [data-save-ready] & > .ui-form > .ui-form__actions { display: none; }
+    [data-save-ready] & > .ui-form[data-save] > .ui-form__actions { display: none; }
 }
 
 .setting-card {

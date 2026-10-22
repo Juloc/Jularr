@@ -122,7 +122,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   ([NumberStepper](../src/Jularr.Frontend/Framework/Components/NumberStepper.ts)); a slider shows its number while it moves (`Form.entry.ts` is part of every page); a file field
   has the pill button of the page (the system's file dialog itself cannot be restyled). `Form.entry.ts` and `Dropdown.entry.ts` load in the shell; pages do not opt in.
 - A field may wear a `FieldAffix` (`Text`, `Number`, `Select`, `Range`): an icon circle at its start (the page builds the icon) and a quiet unit at its end, from a `unit.*` text key, inside the frame
-  and before a number's plus and minus. A unit belongs there, not in the label ("Library scan interval" + hours); validation and stepping stay the field's own.
+  and before a number's plus and minus. A unit belongs there, not in the label ("Library scan interval" + hours); validation and stepping stay the field's own. A select whose `SelectOption`s carry an `Icon` (a language's flag) shows the chosen option's icon as the prefix. A flow with steps (the setup) shows them in one [Stepper](../src/Jularr.Frontend/Framework/Components/Stepper.cs) at its top, with no heading, subtitle or help line of its own per step.
 - A list the person puts in order is a [SortableList](../src/Jularr.Frontend/Framework/Components/SortableList.cs) (`Form.Sortable`): rows with a drag handle (pointer events;
   arrow keys on the handle), the position, an icon tile, title and one state line, a switch and a menu of moves; the rows send their keys in order and the switched-on ones,
   and every move counts as a change of the save dock.
@@ -140,8 +140,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Backend-owned. Hidden-field errors must be visible at form level; failed reads
   receive the shared Page error presentation, including empty-result pages; unknown errors render in the page too
   (`ErrorText`), not as a bare JSON answer.
-- Buttons and search use the pill radius, fields the 11px field radius. Form labels sit
-  above the field (11px/770, with the (i) after them), remain associated through `for`/id (a group of choices through its legend) and wrap without
+- Buttons, search and single-line fields use the pill radius (`--radius-field`; multiline fields keep `--radius-inner`). Form labels sit
+  above the field, inset by `--field-label-inset` (12px; 11px/650, with the (i) after them), remain associated through `for`/id (a group of choices through its legend) and wrap without
   truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
   through `Form.Toggle` so Backend field metadata and POST values stay central.
 - `Form<T>` owns the layout: short fields share two columns where there is room and one
