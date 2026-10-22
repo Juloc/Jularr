@@ -74,7 +74,7 @@ fun TvV1CatalogHost(
         personId: Long? = null,
         workUnitId: Long? = null,
     ) {
-        navigation = TvV1Navigation.open(navigation, next, workId, personId, workUnitId)
+        navigation = TvV1AppController.open(navigation, next, workId, personId, workUnitId)
     }
     var searchQuery by remember(serverOrigin) { mutableStateOf("") }
     var category by remember(serverOrigin) { mutableStateOf(TvContentFilter.ALL) }
@@ -119,7 +119,9 @@ fun TvV1CatalogHost(
             error = "Dieses Profil hat keine Wiedergabeberechtigung."
             return
         }
-        openPage(TvV1CatalogPage.Player, workId = detailWorkId, workUnitId = selectedWorkUnitId)
+        navigation = TvV1AppController.playback(
+            navigation, mediaAssetId, detailWorkId, selectedWorkUnitId,
+        )
     }
 
     fun openWork(rawId: String) {
@@ -130,8 +132,11 @@ fun TvV1CatalogHost(
         }
         detailWorkId = workId
         details = null
+        episodeByUnit = emptyMap()
+        selectedWorkUnitId = null
+        selectedEpisodeId = null
         error = null
-        openPage(TvV1CatalogPage.Details, workId = workId)
+        navigation = TvV1AppController.work(navigation, workId)
     }
 
     fun openEpisode(rawId: String) {
@@ -140,13 +145,16 @@ fun TvV1CatalogHost(
             error = "Diese Folge existiert nicht im aktuellen Work."
             return
         }
+        val workId = requireNotNull(detailWorkId)
+        navigation = TvV1AppController.episode(
+            navigation, workId, unitId, episodeByUnit.keys,
+        )
         selectedWorkUnitId = unitId
-        openPage(TvV1CatalogPage.Episode, workId = detailWorkId, workUnitId = unitId)
     }
 
     fun back() {
         error = null
-        val restored = TvV1Navigation.back(navigation)
+        val restored = TvV1AppController.back(navigation)
         navigation = restored
         val restoredWorkId = restored.current.workId
         if (restoredWorkId != null && restoredWorkId != detailWorkId) {
@@ -585,8 +593,8 @@ fun TvV1CatalogHost(
                 selectedWorkUnitId = null
                 selectedEpisodeId = null
                 detailedTitle = tvV1PlaybackAssetTitle(asset)
-                navigation = navigation.copy(
-                    current = navigation.current.copy(workId = asset.workId, workUnitId = null),
+                navigation = TvV1AppController.verifiedNeighbour(
+                    navigation, asset.mediaAssetId, asset,
                 )
             },
             onUnauthorized = onAuthenticationExpired,
