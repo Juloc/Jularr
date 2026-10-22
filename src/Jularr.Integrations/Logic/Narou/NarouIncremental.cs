@@ -129,7 +129,8 @@ namespace Jularr.Integrations.Logic.Narou
 
         private async Task<string> ReadChapterTextAsync(string ncode, int number, CancellationToken ct)
         {
-            var html = await GetPageAsync(new Uri(WorkUri(ncode), number + "/"), ct);
+            var html = await GetPageAsync(number == 0 ? WorkUri(ncode)
+                : new Uri(WorkUri(ncode), number + "/"), ct);
             var body = Body.Match(html);
             if (!body.Success)
                 throw new NarouException("Narō returned no chapter content.");
