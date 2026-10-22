@@ -94,6 +94,7 @@ fun TvV1CatalogHost(
     var searchResults by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
     var continueWatching by remember(serverOrigin) { mutableStateOf<List<TvContinueItemV1>>(emptyList()) }
     var showContinueWatching by remember(serverOrigin) { mutableStateOf(true) }
+    var homeShelfOrder by remember(serverOrigin) { mutableStateOf(listOf(1, 4)) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var details by remember(serverOrigin) { mutableStateOf<AnimeDetail?>(null) }
     var isWatchlisted by remember(serverOrigin) { mutableStateOf(false) }
@@ -245,6 +246,7 @@ fun TvV1CatalogHost(
                     library = home.library
                     continueWatching = home.continueWatching
                     showContinueWatching = home.showContinueWatching
+                    homeShelfOrder = home.shelfOrder
                     homeNextPage = if (home.hasMoreVideo) 2 else null
                     pagingError = null
                 }
@@ -334,6 +336,7 @@ fun TvV1CatalogHost(
                             onContinueWatching = { /* Legacy bootstrap is intentionally disconnected. */ },
                             v1ContinueWatching = continueWatching,
                             showV1Continue = showContinueWatching,
+                            shelfOrder = homeShelfOrder,
                             onLoadMoreVideos = if (homeNextPage != null && !fetchingNextPage) {
                                 { loadNextPage(TvV1CatalogPage.Home) }
                             } else null,

@@ -64,6 +64,7 @@ fun TvHomeScreen(
     v1ContinueWatching: List<TvContinueItemV1> = emptyList(),
     onContinueWork: (TvContinueItemV1) -> Unit = {},
     showV1Continue: Boolean = true,
+    shelfOrder: List<Int> = listOf(1, 4),
     onLoadMoreVideos: (() -> Unit)? = null,
 ) {
     var filter by remember {
@@ -79,6 +80,7 @@ fun TvHomeScreen(
     val selected = remember(library, filter) {
         library.anime.filter { filter.includes(it.format) }
     }
+    val recentlyAdded = selected.take(20)
     val featured = selected.firstOrNull { !it.bannerImageUrl.isNullOrBlank() }
         ?: selected.firstOrNull()
     val formats = remember(library) { library.anime.associateBy { it.id } }
@@ -93,7 +95,13 @@ fun TvHomeScreen(
         add("filters")
         if (featured != null) add("hero")
         if (error != null) add("error")
-        if (showV1Continue && v1ContinueWatching.isNotEmpty()) addAll(listOf("v1-continue-title", "v1-continue-row"))
+        shelfOrder.forEach { shelf ->
+            when (shelf) {
+                1 -> if (showV1Continue && v1ContinueWatching.isNotEmpty())
+                    addAll(listOf("v1-continue-title", "v1-continue-row"))
+                4 -> if (recentlyAdded.isNotEmpty()) addAll(listOf("recent-title", "recent-row"))
+            }
+        }
         if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
         if (series.isNotEmpty()) addAll(listOf("series-title", "series-row"))
         if (movies.isNotEmpty()) addAll(listOf("movies-title", "movies-row"))
@@ -223,38 +231,62 @@ fun TvHomeScreen(
                 item { Text(message, color = MaterialTheme.colorScheme.error) }
             }
 
-            if (showV1Continue && v1ContinueWatching.isNotEmpty()) {
-                item(key = "v1-continue-title") {
-                    Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
-                }
-                item(key = "v1-continue-row") {
-                    val rowState = rememberLazyListState()
-                    val restoreIndex = v1ContinueWatching.indexOfFirst {
-                        restoringItem == "v1continue:${it.mediaAssetId}"
-                    }
-                    LaunchedEffect(restoreIndex) {
-                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
-                    }
-                    LazyRow(
-                        state = rowState,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        items(v1ContinueWatching, key = { it.mediaAssetId }) { entry ->
-                            val itemFocus = remember(entry.mediaAssetId) { FocusRequester() }
-                            LaunchedEffect(restoringItem, entry.mediaAssetId) {
-                                if (restoringItem == "v1continue:${entry.mediaAssetId}") {
-                                    runCatching { itemFocus.requestFocus() }
+            shelfOrder.forEach { shelf ->
+                when (shelf) {
+                    1 -> {
+                        if (showV1Continue && v1ContinueWatching.isNotEmpty()) {
+                            item(key = "v1-continue-title") {
+                                Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
+                            }
+                            item(key = "v1-continue-row") {
+                                val rowState = rememberLazyListState()
+                                val restoreIndex = v1ContinueWatching.indexOfFirst {
+                                    restoringItem == "v1continue:${it.mediaAssetId}"
+                                }
+                                LaunchedEffect(restoreIndex) {
+                                    if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+                                }
+                                LazyRow(
+                                    state = rowState,
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    items(v1ContinueWatching, key = { it.mediaAssetId }) { entry ->
+                                        val itemFocus = remember(entry.mediaAssetId) { FocusRequester() }
+                                        LaunchedEffect(restoringItem, entry.mediaAssetId) {
+                                            if (restoringItem == "v1continue:${entry.mediaAssetId}") {
+                                                runCatching { itemFocus.requestFocus() }
+                                            }
+                                        }
+                                        TvV1ContinueWatchingCard(
+                                            item = entry,
+                                            serverOrigin = serverOrigin,
+                                            requestHeaders = requestHeaders,
+                                            focusRequester = itemFocus,
+                                            onFocused = {
+                                                focusMemory.remember("home", "v1continue:${entry.mediaAssetId}")
+                                            },
+                                            onClick = { onContinueWork(entry) },
+                                        )
+                                    }
                                 }
                             }
-                            TvV1ContinueWatchingCard(
-                                item = entry,
+                        }
+
+
+                    }
+                    4 -> if (recentlyAdded.isNotEmpty()) {
+                        item(key = "recent-title") {
+                            Text("Zuletzt hinzugefügt", style = MaterialTheme.typography.titleLarge)
+                        }
+                        item(key = "recent-row") {
+                            TvHomeAnimeRow(
+                                entries = recentlyAdded,
+                                restoringItem = restoringItem,
                                 serverOrigin = serverOrigin,
                                 requestHeaders = requestHeaders,
-                                focusRequester = itemFocus,
-                                onFocused = {
-                                    focusMemory.remember("home", "v1continue:${entry.mediaAssetId}")
-                                },
-                                onClick = { onContinueWork(entry) },
+                                focusMemory = focusMemory,
+                                focusColor = focusColor,
+                                onAnime = onAnime,
                             )
                         }
                     }

@@ -29,6 +29,7 @@ internal class TvV1ClientFlow(
         val continueWatching: List<TvContinueItemV1>,
         val showContinueWatching: Boolean,
         val hasMoreVideo: Boolean = false,
+        val shelfOrder: List<Int> = listOf(1, 4),
     )
 
     data class PageSlice<T>(val items: List<T>, val hasMore: Boolean)
@@ -47,9 +48,14 @@ internal class TvV1ClientFlow(
         ensureLibrary()
         val video = videoPage(1)
         val library = TvV1LegacyUiModels.videoLibrary(video.items)
-        val showContinue = if (capabilities.hasModule("HomeLayout")) {
-            api.homeLayout().none { it.homeShelfTypeId == 1 && it.isHidden }
-        } else true
+        // The backend exposes ordered shelf IDs. The TV renders supported video
+        // shelves only: 1=Continue Watching, 4=Recently Added. Other shelves are
+        // not replaced by fake recommendations or unrelated audiobook/book rows.
+        val configured = if (capabilities.hasModule("HomeLayout")) api.homeLayout()
+            .filterNot { it.isHidden }.map { it.homeShelfTypeId }
+        else listOf(1, 4)
+        val videoShelfOrder = configured.filter { it == 1 || it == 4 }.distinct()
+        val showContinue = 1 in videoShelfOrder
 
         return Home(
             library = library,
@@ -61,6 +67,7 @@ internal class TvV1ClientFlow(
             } else emptyList(),
             showContinueWatching = showContinue,
             hasMoreVideo = video.hasMore,
+            shelfOrder = videoShelfOrder,
         )
     }
 
