@@ -16,6 +16,9 @@ Do not replace the original TV screens or add a backend endpoint without owner d
 | Continue Watching | `/api/v1/continue`, real work/asset/time identity; video only |
 | Watchlist | `/api/v1/watchlist`, read + toggle in original details |
 | Work, seasons, episodes, specials | `/api/v1/works/*`; WorkId and WorkUnitId retained; fractional episode numbers not truncated |
+| Original episode detail UX | Restored V1 episode page with real WorkUnit metadata, media asset and resume progress; no fabricated vocabulary totals |
+| Work credits, people and filmography | Actual catalog `/api/v1/works/{id}/credits`, `/api/v1/people/{id}` and person Works; movie/series filters |
+| TV navigation and Back | Stack-aware V1 state machine for Search → Discover → Work → Episode/Player → Back, preserving original focus surfaces |
 | Movie media choices | Work availability; only real playable MediaAssetId entries |
 | Discover movie/series and TMDB details | Server discover scopes/shelves/search, source TMDB details; external IDs never reused as local WorkId |
 | Video | Server playback sessions, authenticated Media3 Direct/HLS, heartbeat/final progress |
@@ -34,12 +37,15 @@ Do not replace the original TV screens or add a backend endpoint without owner d
    `JularrClientApi`, cookie sessions and `/api/client/v1`. The active app uses
    `TvV1CatalogHost` with original screen composables. Full legacy navigation state,
    account lists, history, and every original feature are **not** restored yet.
+   The active V1 path now has tested stack-aware navigation, original TV detail
+   composables, and a V1 episode detail page built from verified V1 DTOs.
 2. **Multiaccount / device identity**: current encrypted tokens are scoped by *server
    origin*, not account identity. Additional sign-ins to the same Jularr server do not
    yet have the old multiaccount account-picking behavior. No username is fabricated.
 3. **Discover**: provider search in the active TV screen currently covers movie/series.
    The API adapter supports books/manga/other external catalog types and person/credit
-   details but their original TV UI flow is not yet wired.
+   details for non-video catalog types still need dedicated TV screens; film/series
+   Work credits, person details and local filmography are now wired.
 4. **Home**: full personalized shelf composition is not yet parity. HomeLayout exposes
    visibility/order; it does not materialize arbitrary recommendation rows.
 5. **Playback**: the Media3 + V1 extras wiring has no confirmed real-device/live-server
