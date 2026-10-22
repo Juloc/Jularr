@@ -736,7 +736,7 @@ namespace Jularr.E2E.Tests
             await page.WaitForFunctionAsync("() => { const r = document.querySelector('.reader'); return r.dataset.bookReady === 'true' && r.dataset.bookActiveLeaves === '0' && r.dataset.bookPendingFrame === 'false'; }");
             await page.SetViewportSizeAsync(390, 844);
             await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.columns === '1'");
-            Assert.IsFalse(await page.Locator(".app-sidebar").IsVisibleAsync());
+            await Assertions.Expect(page.Locator(".app-sidebar")).ToBeHiddenAsync();
             Assert.AreEqual(1, await page.Locator("[data-action=settings]").CountAsync(), "Mobile must reuse the same controls, not another toolbar copy.");
             var mobileTools = await page.Locator("[data-action=contents]").BoundingBoxAsync();
             var mobileCanvas = await page.Locator(".reader__canvas").BoundingBoxAsync();
