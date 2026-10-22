@@ -28,6 +28,8 @@ services:
       Browser__RemoteAddress: ${JULARR_BROWSER_ADDRESS:-}
     ports:
       - "8097:8080"
+      # The browser of the container, if it runs one (see deploy/browser/browser.sh).
+      - "127.0.0.1:9223:9223"
     volumes:
       - jularr-data:/data
       - ${JULARR_MEDIA:-./media}:/media

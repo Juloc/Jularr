@@ -38,33 +38,28 @@ Zustand liegt unter `DataPath` (`/data` im Image: `keys`, `backups`, `trickplay`
 Bibliotheken unter `/media` (`Storage:LocalPaths`). Eine leere Datenbank erhält beim ersten Start
 alle frischen Baselines in einer Transaktion; eine bestehende wird nie verändert oder migriert.
 
-### Optionaler Browser für Quellen mit Browserprüfung
+### Browser für Quellen mit Browserprüfung
 
-Jularr funktioniert ohne Browser. Für Quellen mit Browserprüfung kann eine separate,
-nicht öffentlich erreichbare Browser-Instanz mit virtuellem Bildschirm (Xvfb) gestartet werden:
+Anna's Archive stellt seine Seiten hinter eine Prüfung, die nur ein Browser besteht. Jularr liest
+solche Seiten mit einem echten Chrome oder Chromium, den es **nicht** selbst mitbringt: das Image
+bleibt schlank, der Browser kommt später dazu.
+
+Im Container, einmal je Container (der Browser landet in der Schicht, sein Profil im Volume):
 
 ```bash
-docker compose -f compose.yaml -f compose.browser.yaml up -d --build
-docker compose -f compose.yaml -f compose.browser.yaml exec browser curl -fsS http://127.0.0.1:9223/json/version
+docker compose exec -u root jularr jularr-browser install   # Browser und Bibliotheken
+docker compose exec -d jularr jularr-browser run            # startet ihn auf Port 9222
 ```
 
-Der Browser wird beim Image-Build installiert, bei Docker-Starts automatisch gestartet
-und durch `restart: unless-stopped` überwacht. Sein Profil bleibt im Volume
-`jularr-browser`. Der Debugging-Port wird nur intern bereitgestellt, nicht
-als Host-Port veröffentlicht. Der DevTools-Zugriff ermöglicht die vollständige Kontrolle
-des Browsers; nur vertrauenswürdige Container dürfen dieses Compose-Netz teilen.
+`Browser:RemoteAddress` (z. B. `http://127.0.0.1:9222`) lässt Jularr einen Browser benutzen, der
+schon läuft – auch einen auf einem anderen Rechner. `Browser:Path` startet einen eigenen Browser
+mit dem Profil unter `DataPath/browser`; `Browser:Port` gibt dessen Port an, damit er von außen
+erreichbar ist. Beides zugleich geht nicht: sie teilen sich das Profil.
 
-Der Browser läuft ohne sichtbaren Desktop. Kann die Quelle ihre Browserprüfung dennoch
-nicht bestätigen (z. B. CAPTCHA), benötigt der Download eine manuelle Bestätigung.
-Eine automatische CAPTCHA-Lösung ist nicht implementiert. Falls die Sandbox einer
-Docker-Umgebung das Starten verhindert, kann `JULARR_BROWSER_NO_SANDBOX=1`
-nur im isolierten Browser-Container ausdrücklich aktiviert werden, reduziert aber dessen
-Sicherheit.
-
-Ohne Zusatz-Compose kann alternativ ein bereits erreichbarer vertrauenswürdiger Browser
-mit `Browser__RemoteAddress` eingebunden werden. Eine Installation per
-`docker compose exec ... jularr-browser install` überlebt eine
-Container-Neuerstellung nicht und wird für den Dauerbetrieb nicht empfohlen.
+Besteht der Browser die Prüfung der Quelle nicht (ein Captcha), bleibt die Quelle beim Menschen:
+der Link wird von Hand eingetragen. Auf einem Server ohne Grafik erkennt die Prüfung den Browser
+meist, dort hilft ein Browser auf einem Desktop-Rechner, den Jularr über `Browser:RemoteAddress`
+benutzt.
 
 ## Backend im gemeinsamen Host
 
