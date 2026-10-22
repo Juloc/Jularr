@@ -9,6 +9,7 @@ object TvCatalogV1Routes {
     const val Library = "$base/library"
     const val Continue = "$base/continue"
     const val Watchlist = "$base/watchlist"
+    const val WatchlistCount = "$base/watchlist/count"
     const val HomeLayout = "$base/home/layout"
     const val DiscoverScopes = "$base/discover/scopes"
     const val DiscoverShelves = "$base/discover/shelves"
