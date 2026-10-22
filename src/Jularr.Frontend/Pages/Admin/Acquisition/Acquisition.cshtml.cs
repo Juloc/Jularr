@@ -26,7 +26,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             new Dictionary<AcquisitionConnectionRole, (AcquisitionConnectionType, string)[]>
             {
                 [AcquisitionConnectionRole.Search] = [(AcquisitionConnectionType.Newznab, "acquisition.connection.addIndexer")],
-                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
+                [AcquisitionConnectionRole.Download] = [(AcquisitionConnectionType.Sabnzbd, "acquisition.connection.addClient"), (AcquisitionConnectionType.Qbittorrent, "acquisition.connection.addClient"), (AcquisitionConnectionType.Usenet, "acquisition.connection.addUsenet")],
                 [AcquisitionConnectionRole.Subtitles] = []
             };
 
@@ -382,6 +382,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Text(item => item.Username, "acquisition.connection.username", "username");
                     form.Password(item => item.Password, "acquisition.connection.password", "new-password");
                 }
+                else if (type == AcquisitionConnectionType.Qbittorrent)
+                {
+                    form.Text(item => item.Username, "acquisition.connection.username", "username");
+                    form.Password(item => item.Password, "acquisition.connection.password", "new-password");
+                }
                 else if (type == AcquisitionConnectionType.AnnasArchive)
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.memberKey", "new-password");
@@ -422,10 +427,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 // Only download clients place files and report their own paths.
-                if (type == AcquisitionConnectionType.Sabnzbd)
+                if (type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Qbittorrent)
                 {
-                    form.Text(item => item.DownloadCategory, "acquisition.connection.category");
-                    form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    if (type == AcquisitionConnectionType.Sabnzbd)
+                    {
+                        form.Text(item => item.DownloadCategory, "acquisition.connection.category");
+                        form.Toggle(item => item.RemovesCompleted, "acquisition.connection.removesCompleted");
+                    }
                     // SAB reports its real Complete path; only the Jularr-visible folder is chosen here.
                     if (existing?.RemotePath is { } detected)
                         form.Content(new P(new Strong(new Text("acquisition.connection.remotePath")), new ValueText(": " + detected)));
