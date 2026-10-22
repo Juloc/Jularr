@@ -78,6 +78,24 @@ function initializeText(reader: HTMLElement): void {
 
     // Existing translation and annotation services remain the only data owners.
     const translate = reader.dataset.translationUrl ? translator(reader, content, createTranslationWorker) : undefined;
+    const quality = reader.querySelector<HTMLButtonElement>('[data-local-quality-toggle]');
+    if (quality && translate) {
+        void fetch('/api/v1/translation/local/availability', { credentials: 'same-origin' }).then(async response => {
+            if (!response.ok) return;
+            const available = await response.json() as { model: string | null };
+            if (available.model) {
+                reader.dataset.localModel = available.model;
+                quality.hidden = false;
+            }
+        }).catch(() => undefined);
+        quality.addEventListener('click', () => {
+            if (!reader.dataset.localModel) return;
+            const gemma = reader.dataset.translationEngine !== 'gemma';
+            reader.dataset.translationEngine = gemma ? 'gemma' : 'bergamot';
+            quality.setAttribute('aria-pressed', String(gemma));
+            void translate(reader.dataset.readingLanguage === 'original' ? '' : reader.dataset.readingLanguage ?? '');
+        });
+    }
     let reading = reader.dataset.readingLanguage ?? 'original';
     if (translate) void translate(reading === 'original' ? '' : reading);
     reader.querySelectorAll<HTMLButtonElement>('[data-language-choice]').forEach(button => button.addEventListener('click', async () => {

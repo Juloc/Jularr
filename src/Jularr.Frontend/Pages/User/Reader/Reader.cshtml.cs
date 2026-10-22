@@ -161,7 +161,9 @@ namespace Jularr.Frontend.Pages.User.Reader
                 ? new Div(new P(new Text("reader.language.none")), new A(new Text("reader.language.configure")).Class("button").Attribute("href", "/Settings")).Class("reader__panel")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"])
                 : new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
-                    .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false"))]).Class("reader__panel reader__choices")
+                    .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false")),
+                    new Button(new Text("reader.translation.localQuality")).Class("button")
+                        .Attribute("data-local-quality-toggle", "").Attribute("aria-pressed", "false").Attribute("hidden", "hidden")]).Class("reader__panel reader__choices")
                     .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
             var bottom = new Div(Seek(false), new Div(
@@ -268,6 +270,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 view.Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
                     .Attribute("data-reading-language", Chosen(document))
                     .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
+                    .Attribute("data-local-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/" + index.ToString(CultureInfo.InvariantCulture) + "/local-translations/")
                     .Attribute("data-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/"
                         + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
                     .Attribute("data-route-url", "/api/v1/translation/routes/")
