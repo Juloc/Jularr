@@ -71,7 +71,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
             var skipped = allNewznab.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - newznab.Length;
             var uses = new ConcurrentDictionary<long, IndexerUse>();
-            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
+            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId) &&
+                (kind == AcquisitionKind.LightNovel || indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Narou)).ToArray() : [];
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
             // Direct book sources answer one title and author query; they are asked at the same time as the indexers.

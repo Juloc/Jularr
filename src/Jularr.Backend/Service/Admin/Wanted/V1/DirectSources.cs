@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
@@ -13,6 +14,7 @@ using Jularr.Integrations.Data.Gutenberg;
 using Jularr.Integrations.Data.Opds;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Gutenberg;
+using Jularr.Integrations.Logic.Narou;
 using Jularr.Integrations.Logic.Opds;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -28,24 +30,26 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly GutenbergClient _gutenberg;
         private readonly OpdsClient _opds;
         private readonly AnnasArchiveClient _annas;
+        private readonly NarouClient _narou;
         private readonly IDataProtector _protector;
 
-        public DirectSources(GutenbergClient gutenberg, OpdsClient opds, AnnasArchiveClient annas, IDataProtectionProvider protection)
+        public DirectSources(GutenbergClient gutenberg, OpdsClient opds, AnnasArchiveClient annas, NarouClient narou, IDataProtectionProvider protection)
         {
             _gutenberg = gutenberg;
             _opds = opds;
             _annas = annas;
+            _narou = narou;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
         // The download waits for a person to pass the source's own check and paste the file link.
         public const string ManualLinkKey = "source_manual_link";
 
-        public static bool IsDirect(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive;
+        public static bool IsDirect(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.Narou;
 
         // Offer ids are "<source>:<key>:<format>"; the format names the stored file.
         public static bool IsDirectOffer(string? guid) => guid is not null && (guid.StartsWith("gutenberg:", StringComparison.Ordinal) || guid.StartsWith("opds:", StringComparison.Ordinal)
-            || guid.StartsWith("annas:", StringComparison.Ordinal));
+            || guid.StartsWith("annas:", StringComparison.Ordinal) || guid.StartsWith("narou:", StringComparison.Ordinal));
 
         public static string Format(string externalId) => externalId.Split(':').Last() is { Length: > 0 and <= 5 } format && format.All(char.IsAsciiLetterOrDigit) ? format : "epub";
 
@@ -65,6 +69,45 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     case AcquisitionConnectionType.Opds:
                         return [.. (await _opds.SearchAsync(Opds(source), query, ct)).SelectMany(book => book.Links.Select(link =>
                             Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
+                    case AcquisitionConnectionType.Narou:
+                        // A Narō web novel is not a published Light Novel volume. Only a
+                        // Work explicitly linked to an ncode is eligible for this direct source.
+                        if (target.MediaSubtypeId != MediaSubtype.LightNovel) return [];
+                        var key = target.ExternalIdentities.Select(identity => identity.Split(':', 2))
+                            .Where(pair => pair.Length == 2 && pair[0] == "syosetu")
+                            .Select(pair => pair[1]).FirstOrDefault();
+                        if (NarouClient.IsNcode(key))
+                        {
+                            var novel = await _narou.ReadWorkAsync(key!, ct);
+                            var author = string.IsNullOrWhiteSpace(target.Author) ? [] : new[] { target.Author };
+                            return [Offer(source, "narou:" + novel.Ncode + ":epub", author, target.CanonicalTitle,
+                                "ja", "epub", new Uri("https://ncode.syosetu.com/" + novel.Ncode + "/"), null, identityBound: true)];
+                        }
+
+                        // For a Discover/Request item, check official Narō catalog only for
+                        // *native Japanese* aliases. Cross-language guesses are not identities.
+                        // Never auto-grab a web-novel counterpart without exact Japanese title
+                        // and author evidence; a published edition remains a separate source.
+                        var wantedAuthor = NativeKey(BookReleaseJudge.Authors(target.Author).FirstOrDefault());
+                        if (wantedAuthor.Length == 0) return [];
+                        var candidates = new List<ReleaseOffer>();
+                        var nativeNames = new[] { target.CanonicalTitle }
+                            .Concat(target.Titles).Concat(target.EditionTitles)
+                            .Where(name => !string.IsNullOrWhiteSpace(name) && name.Any(c => c >= '\u3000'))
+                            .Distinct(StringComparer.Ordinal).Take(2);
+                        foreach (var name in nativeNames)
+                        {
+                            foreach (var item in await _narou.SearchAsync(name, ct))
+                            {
+                                if (NativeKey(name) != NativeKey(item.Title) || NativeKey(item.Author) != wantedAuthor)
+                                    continue;
+                                if (candidates.Any(offer => offer.Guid == "narou:" + item.Ncode + ":epub"))
+                                    continue;
+                                candidates.Add(Offer(source, "narou:" + item.Ncode + ":epub", [item.Author], item.Title,
+                                    "ja", "epub", new Uri("https://ncode.syosetu.com/" + item.Ncode + "/"), null, identityBound: true, nativeVerified: true));
+                            }
+                        }
+                        return candidates;
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
                         // Every way to find the work is asked in turn; the choice says when one way was enough.
@@ -85,7 +128,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         return [];
                 }
             }
-            catch (Exception exception) when (exception is GutenbergException or OpdsException or AnnasArchiveException)
+            catch (Exception exception) when (exception is GutenbergException or OpdsException or AnnasArchiveException or NarouException)
             {
                 return null;
             }
@@ -93,6 +136,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public async Task<string?> TestAsync(AcquisitionConnectionData source, CancellationToken ct)
         {
+            // Narō without an explicit ncode is not searchable: probe the provider itself.
+            if (source.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou)
+            {
+                try
+                {
+                    await _narou.ProbeAsync(ct);
+                    return null;
+                }
+                catch (NarouException)
+                {
+                    return "acquisition_unavailable";
+                }
+            }
+
             // A search that answers proves the source; null means healthy.
             var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, null, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null, null, null);
             return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
@@ -119,6 +176,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         break;
                     case AcquisitionConnectionType.Opds:
                         await _opds.DownloadAsync(Opds(source), address, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                        break;
+                    case AcquisitionConnectionType.Narou:
+                        var ncode = download.ExternalId?.Split(':') is ["narou", var sourceKey, ..] && NarouClient.IsNcode(sourceKey)
+                            ? sourceKey : throw new DirectSourceException("acquisition_grab_failed");
+                        if (!address.Host.Equals("ncode.syosetu.com", StringComparison.OrdinalIgnoreCase)
+                            || !address.AbsolutePath.Equals("/" + ncode + "/", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new DirectSourceException("acquisition_grab_failed");
+                        }
+
+                        await _narou.WriteEpubAsync(ncode, destination, paths.Settings.MaxJobBytes, Reserve, ct);
                         break;
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
@@ -186,7 +254,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     _ => "acquisition_unavailable"
                 });
             }
-            catch (Exception exception) when (exception is GutenbergException or OpdsException)
+            catch (Exception exception) when (exception is GutenbergException or OpdsException or NarouException)
             {
                 throw new DirectSourceException("acquisition_unavailable");
             }
@@ -222,10 +290,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             return ways;
         }
 
-        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false)
+        // Unicode compatibility and punctuation normalization for Japanese titles/authors.
+        // No fuzzy auto-match: the author and the complete native title must agree.
+        private static string NativeKey(string? value) => string.Concat(
+            (value ?? "").Normalize(NormalizationForm.FormKC).ToLowerInvariant().Where(char.IsLetterOrDigit));
+
+        private static ReleaseOffer Offer(AcquisitionConnectionData source, string guid, string[] authors, string title, string? language, string format, Uri download, long? sizeBytes, bool isPart = false, bool identityBound = false, bool nativeVerified = false)
         {
             var name = (authors.Length > 0 ? string.Join(", ", authors) + " - " : "") + title + (language is { Length: > 0 } ? " (" + language.ToUpperInvariant() + ")" : "") + " (" + format + ")";
-            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, ["title"]) { IsPart = isPart };
+            return new ReleaseOffer(name.Length <= 1000 ? name : name[..1000], source.Id, source.Name, source.Priority, guid, download, download.ToString(), sizeBytes, null, nativeVerified ? ["id", "narou_native_verified"] : identityBound ? ["id"] : ["title"]) { IsPart = isPart };
         }
 
         private OpdsConnection Opds(AcquisitionConnectionData source) =>

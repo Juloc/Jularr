@@ -70,6 +70,7 @@ namespace Jularr.Backend.Service.Core
             // Tracking looks every minute and every 15 seconds while a download runs.
             new("downloads", WorkerGroupType.Download, TimeSpan.FromMinutes(1), TimeSpan.Zero),
             new("wantedSearch", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(10), intervalSetting: WorkerIntervalSettingType.WantedSearchMinutes),
+            new("narouSync", WorkerGroupType.Acquisition, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(3)),
 
             // One read of the connected media servers; each provider has its own switch and result.
             new("providerSync", WorkerGroupType.Provider, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(40), canPauseWhileUsed: true, pausesWhileUsedByDefault: true,

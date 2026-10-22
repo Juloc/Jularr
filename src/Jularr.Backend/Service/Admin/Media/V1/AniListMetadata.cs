@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.AniList;
@@ -12,6 +13,15 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
+    internal sealed class AniListNativeTitleData(long workId, string title) : BaseData
+    {
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; } = workId;
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; } = title;
+    }
+
     // AniList lookups, shared and cached; Manga and Light Novels import as Book Works with their known volumes.
     internal sealed class AniListMetadata(AniListClient aniList, IMemoryCache cache, CoverStore covers)
     {
@@ -110,6 +120,28 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var saved = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
+                // Native Japanese titles are needed to identify a Narō original. Keep
+                // the Romanized/English titles already saved by SaveWorkMetadataAsync.
+                // Do not link Narō by title alone; the DirectSource also requires author evidence.
+                if (AniListMatching.Subtype(media.Format) == MediaSubtype.LightNovel
+                    && media.NativeTitle is { Length: > 0 } native)
+                {
+                    var alias = new SqlStatement
+                    {
+                        Statement = """
+                            INSERT INTO "WorkTitles" ("WorkId", "Title", "ProviderId", "IsManual")
+                            SELECT @WorkId, @Title, provider."Id", FALSE
+                            FROM "Providers" AS provider
+                            WHERE provider."Key" = 'anilist'
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM "WorkTitles" AS old
+                                  WHERE old."WorkId" = @WorkId AND old."Title" = @Title
+                              );
+                            """
+                    };
+                    alias.Parameters.Add(new AniListNativeTitleData(workId, TextLimit.Cut(native, 500)!));
+                    await ctx.ExecuteAsyncForAffectedRows(alias, token);
+                }
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
                 await ctx.SaveWorkRelationsAsync(new WorkRelationSyncData(workId, Namespace, relations), token);
                 return workId;

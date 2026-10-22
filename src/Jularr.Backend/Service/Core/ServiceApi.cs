@@ -212,6 +212,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<PlaybackSubtitles>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<MetadataCatalog>();
+            services.TryAddTransient<NarouCatalog>();
             services.TryAddTransient<MediaImportPlanner>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<TvdbMetadata>();
@@ -322,6 +323,7 @@ namespace Jularr.Backend.Service.Core
                 handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<Jularr.Integrations.Logic.Narou.NarouClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary, provider: "openlibrary");
             AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover, provider: "hardcover");
             AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId, provider: "acoustid");
