@@ -20,11 +20,12 @@ check and the commands in [`.agent/project.yaml`](../.agent/project.yaml).
 Investigate failures; do not mark a release validated from PR smoke tests
 alone. New tests are compiled by Fast CI, but not all executed until Full CI.
 
-For PR-specific integration validation, add the `ci/full` label to the PR.
-`Backend Full` will run both heavy jobs on that PR; removing the label
-returns later PR revisions to fast checks. Alternatively, run `Backend Full`
-via `workflow_dispatch` once the workflow is registered on the repository's
-default branch. Keep the focused test evidence in the PR description.
+For PR-specific integration validation, add the `ci/full` label to the PR,
+or put `[full-ci]` in its title. `Backend Full` will run both heavy jobs on
+that PR. Removing the label/title marker returns later PR revisions to fast
+checks. The title marker works without creating a repository label. The
+`workflow_dispatch` entry is additionally available once the workflow is
+registered on the default branch. Keep focused test evidence in the PR.
 
 ## Branch protection and status checks
 
