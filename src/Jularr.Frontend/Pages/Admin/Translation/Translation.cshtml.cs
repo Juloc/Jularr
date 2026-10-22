@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Translation.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Service.Admin.Translation.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;

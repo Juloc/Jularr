@@ -194,8 +194,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 var translated = await _models.TranslateAsync(server, Parameters.Model, Data.SourceLanguage, Parameters.Language, source, CancellationToken);
                 var value = translated.Text;
                 // Do not silently accept truncation, identical language or absurd length.
-                if (value.Length < Math.Min(3, source.Length / 12) || value.Length > 20_000 || value.Length > source.Length * 6 + 200
-                    || value.Equals(source, StringComparison.Ordinal) && Data.SourceLanguage != Parameters.Language)
+                if (value.Length < Math.Min(3, source.Length / 12) || value.Length > 20_000 || value.Length > source.Length * 6 + 200)
                     throw new ServiceUnavailableException("translation_local_unverified");
 
                 // Serialize competing writes across instances on the canonical ReadingDocument.

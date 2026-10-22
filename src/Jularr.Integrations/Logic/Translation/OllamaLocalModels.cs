@@ -142,15 +142,15 @@ namespace Jularr.Integrations.Logic.Translation
             if (text.Length > 2400)
             {
                 var output = new List<string>();
-                double seconds = 0, speed = 0;
+                double seconds = 0, chunkSpeed = 0;
                 foreach (var part in Segments(text))
                 {
                     var translated = await TranslateAsync(server, model, source, target, part, ct);
                     output.Add(translated.Text);
                     seconds += translated.Seconds;
-                    speed += translated.TokensPerSecond;
+                    chunkSpeed += translated.TokensPerSecond;
                 }
-                return (string.Join(" ", output), Math.Round(seconds, 2), Math.Round(speed / output.Count, 2));
+                return (string.Join(" ", output), Math.Round(seconds, 2), Math.Round(chunkSpeed / output.Count, 2));
             }
             var sourceName = global::System.Globalization.CultureInfo.GetCultureInfo(source).EnglishName;
             var targetName = global::System.Globalization.CultureInfo.GetCultureInfo(target).EnglishName;
