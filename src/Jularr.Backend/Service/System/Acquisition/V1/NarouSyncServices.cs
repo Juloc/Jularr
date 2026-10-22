@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Storage;
+using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.Core;
@@ -50,11 +51,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     // Reader implementation: this updates only an already-imported Narō-origin EPUB.
     // The EPUB is an append-only chapter document, and its existing MediaAssetId, stable
     // chapter filenames and section order preserve the Reader's anchors/bookmarks.
-    public sealed class SyncNarouChaptersV1(
-        NarouClient narou, StorageAccess storage, ILogger<SyncNarouChaptersV1> logger)
-        : SystemService<AcquisitionCycleParametersV1, NoData>
+    public sealed class SyncNarouChaptersV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private const int PerPass = 4;
+        private readonly NarouClient narou;
+        private readonly StorageAccess storage;
+        private readonly ILogger<SyncNarouChaptersV1> logger;
+
+        internal SyncNarouChaptersV1(NarouClient narou, StorageAccess storage, ILogger<SyncNarouChaptersV1> logger)
+        {
+            this.narou = narou;
+            this.storage = storage;
+            this.logger = logger;
+        }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
@@ -82,7 +91,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                         WHERE work."MediaTypeId" = 3 AND work."MediaSubtypeId" = 3
                           AND NOT wanted."IsPaused" AND NOT mount."IsReadOnly"
-                          AND file."RelativePath" ~* '\\.epub$'
+                          AND lower(right(file."RelativePath", 5)) = '.epub'
                           AND EXISTS (
                             SELECT 1 FROM "AcquisitionConnections" AS connection
                             WHERE connection."AcquisitionConnectionTypeId" = 9 AND connection."IsEnabled"
@@ -120,8 +129,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var entry = await library.GetAsync(path, ct);
             if (entry is null || entry.Length != file.SizeBytes) return; // changed by a scanner/person
 
-            await using var original = await library.OpenReadAsync(path, ct);
-            var update = await narou.AppendNewChaptersAsync(file.Ncode, original, sizeLimit, ct);
+            byte[]? update;
+            await using (var original = await library.OpenReadAsync(path, ct))
+            {
+                update = await narou.AppendNewChaptersAsync(file.Ncode, original, sizeLimit, ct);
+            }
             if (update is null) return;
 
             // Never mutate the working EPUB directly. The old copy remains recoverable
