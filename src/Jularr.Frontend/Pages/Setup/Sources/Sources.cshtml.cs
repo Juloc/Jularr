@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Setup.Sources
 {
     public sealed class SourcesModel(ReadSetupProgressV1 readProgress, ReadSetupSourcesV1 readSources, SaveSetupSourcesV1 save,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         private SetupProgressV1? _progress;
         private SetupSourcesDetailsV1? _sources;
@@ -17,8 +17,9 @@ namespace Jularr.Frontend.Pages.Setup.Sources
         protected override void Define(Page page)
         {
             page.Title("setup.step.Sources");
+            page.Asset("Framework/Components/PasswordReveal.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, "metadata", texts.Can(null, "Acquisition")));
+            page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Providers, "metadata", texts.Can(null, "Acquisition")));
             if (_progress is not { } progress) return;
 
             page.Content.Add(new Form<SaveSetupSourcesDataV1>(form =>
@@ -26,7 +27,7 @@ namespace Jularr.Frontend.Pages.Setup.Sources
                 form.Hidden(item => item.Version);
                 form.Section("setup.sources.metadata", section =>
                 {
-                    section.Password(item => item.TmdbKey, "setup.sources.tmdbKey", "new-password");
+                    section.Password(item => item.TmdbKey, "setup.sources.tmdbKey", "new-password", new FieldHelp(Trailing: new PasswordReveal(assets)));
                     section.Content(new P(new Text(_sources?.HasTmdbKey is true ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
                     section.Content(new A(new Text("setup.sources.tmdbAccount")).Attribute("href", "https://www.themoviedb.org/settings/api").Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
                 });

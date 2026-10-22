@@ -224,9 +224,9 @@
    "Start and system",
    "開始とシステム"
   ],
-  "setup.owner.title": [
-   "Create the first Owner",
-   "最初のオーナーを作成"
+  "setup.owner.userName": [
+   "User name",
+   "ユーザー名"
   ],
   "setup.owner.passwordConfirmation": [
    "Confirm password",
@@ -1425,12 +1425,12 @@
    "許可"
   ],
   "profile.minimumSize": [
-   "Minimum size (MB)",
-   "最小サイズ（MB）"
+   "Minimum size",
+   "最小サイズ"
   ],
   "profile.maximumSize": [
-   "Maximum size (MB)",
-   "最大サイズ（MB）"
+   "Maximum size",
+   "最大サイズ"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -6573,16 +6573,16 @@
    "フォーマットをインポート"
   ],
   "arr.minimumMb": [
-   "Minimum (MB/min)",
-   "最小（MB/分）"
+   "Minimum",
+   "最小"
   ],
   "arr.preferredMb": [
-   "Preferred (MB/min)",
-   "推奨（MB/分）"
+   "Preferred",
+   "推奨"
   ],
   "arr.maximumMb": [
-   "Maximum (MB/min)",
-   "最大（MB/分）"
+   "Maximum",
+   "最大"
   ],
   "arr.requiredTerms": [
    "One required term",

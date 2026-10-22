@@ -31,6 +31,13 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "minlength=\"12\"");
             StringAssert.Contains(html, "name=\"PasswordConfirmation\"");
 
+            // Two names, two password eyes and the steps with the first one current.
+            StringAssert.Contains(html, "name=\"ProfileName\"");
+            Assert.IsFalse(html.Contains("name=\"DisplayName\"", StringComparison.Ordinal));
+            Assert.AreEqual(2, Regex.Matches(html, "data-password-reveal").Count);
+            Assert.AreEqual(1, Regex.Matches(html, "stepper__step--current").Count);
+            Assert.AreEqual(4, Regex.Matches(html, "stepper__step--upcoming").Count);
+
             // The owner's language starts as the instance's, however the shipped languages sort.
             var chosen = System.Text.RegularExpressions.Regex.Match(html, @"<option(?=[^>]*\bselected\b)[^>]*value=""(\d+)""").Groups[1].Value;
             Assert.AreEqual(Convert.ToString(await host.ScalarAsync("SELECT \"UiLocaleId\" FROM \"InstanceSettings\""), System.Globalization.CultureInfo.InvariantCulture), chosen, html);
@@ -60,6 +67,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("owner_one", await host.ScalarAsync("SELECT \"Username\" FROM \"Accounts\""));
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"Email\" FROM \"Accounts\""));
             Assert.AreEqual("First Owner", await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Profiles\""));
+            Assert.AreEqual("owner_one", await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Accounts\""));
             Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode);
             Assert.AreEqual("/Setup/Progress", created.Headers.Location!.OriginalString);
 
@@ -325,7 +333,7 @@ namespace Jularr.Backend.Tests
             {
                 ["__RequestVerificationToken"] = WebUtility.HtmlDecode(token.Groups[1].Value),
                 ["Username"] = "owner_one",
-                ["DisplayName"] = "First Owner",
+                ["ProfileName"] = "First Owner",
                 ["Password"] = password,
                 ["PasswordConfirmation"] = confirmation,
                 ["UiLocaleId"] = uiLocaleId

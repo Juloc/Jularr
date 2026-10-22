@@ -21,10 +21,10 @@ namespace Jularr.Backend.Data.Public.Setup.V1
 
     public sealed class CreateOwnerDataV1 : BaseData
     {
-        public CreateOwnerDataV1(string username, string displayName, string password, string passwordConfirmation, long uiLocaleId)
+        public CreateOwnerDataV1(string username, string profileName, string password, string passwordConfirmation, long uiLocaleId)
         {
             Username = username;
-            DisplayName = displayName;
+            ProfileName = profileName;
             Password = password;
             PasswordConfirmation = passwordConfirmation;
             UiLocaleId = uiLocaleId;
@@ -33,8 +33,8 @@ namespace Jularr.Backend.Data.Public.Setup.V1
         [DataField(typeof(AccountFields), nameof(AccountFields.Username))]
         public string Username { get; }
 
-        [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName), true, 100)]
-        public string DisplayName { get; }
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName), true, 100)]
+        public string ProfileName { get; }
 
         [DataField(typeof(AuthenticationFields), nameof(AuthenticationFields.NewPassword))]
         public string Password { get; }

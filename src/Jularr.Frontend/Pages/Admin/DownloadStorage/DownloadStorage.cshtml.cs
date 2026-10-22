@@ -30,9 +30,9 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             page.Title("downloadStorage.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/FolderPicker.entry.ts");
-            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.DownloadStorage));
+            if (IsSetup) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.DownloadStorage));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(new P(new Text("downloadStorage.purpose")));
+            if (!IsSetup) page.Content.Add(new P(new Text("downloadStorage.purpose")));
             foreach (var area in Enum.GetValues<DownloadStorageArea>())
             {
                 if (!_settings.TryGetValue(area, out var settings)) continue;

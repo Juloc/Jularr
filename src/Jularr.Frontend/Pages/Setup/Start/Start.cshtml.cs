@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Public.Setup.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Public.Setup.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Pages.Admin.Work;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,7 +18,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
 {
     [AllowAnonymous]
     [EnableRateLimiting("public")]
-    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadSetupLocalesV1 readLocales, ReadInstancePresentationV1 readPresentation, IAntiforgery antiforgery, UiText texts)
+    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadSetupLocalesV1 readLocales, ReadInstancePresentationV1 readPresentation, IAntiforgery antiforgery, UiText texts, FrontendAssets assets)
         : JularrPage
     {
         private bool _requiresOwner;
@@ -27,6 +28,8 @@ namespace Jularr.Frontend.Pages.Setup.Start
         protected override void Define(Page page)
         {
             page.Title("setup.start.title");
+            page.Asset("Pages/Setup/Start/Start.entry.scss");
+            page.Asset("Framework/Components/PasswordReveal.entry.ts");
 
             // Render only available setup.
             if (!_requiresOwner)
@@ -37,17 +40,20 @@ namespace Jularr.Frontend.Pages.Setup.Start
                 return;
             }
 
+            // Each language shows its flag at the start of the field where one exists.
             var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture),
-                locale.IsMachineTranslated ? string.Format(CultureInfo.CurrentCulture, texts["setup.locale.machine"], locale.Name) : locale.Name));
-            page.Content.Add(new UiSection("setup.owner.title", [new Form<CreateOwnerDataV1>(form =>
+                locale.IsMachineTranslated ? string.Format(CultureInfo.CurrentCulture, texts["setup.locale.machine"], locale.Name) : locale.Name,
+                WorkLanguages.FlagIcon(locale.Locale, assets)));
+            var form = new Form<CreateOwnerDataV1>(form =>
             {
-                form.Text(item => item.Username, "account.field.username", "username");
-                form.Text(item => item.DisplayName, "admin.accounts.name", "nickname");
-                form.Password(item => item.Password, "account.field.password", "new-password");
-                form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password", new FieldHelp(Info: ""));
+                form.Text(item => item.Username, "setup.owner.userName", "username");
+                form.Text(item => item.ProfileName, "profile.field.displayName", "nickname");
+                form.Password(item => item.Password, "account.field.password", "new-password", new FieldHelp(Trailing: new PasswordReveal(assets)));
+                form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password", new FieldHelp(Info: "", Trailing: new PasswordReveal(assets)));
                 form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                 form.Submit("setup.owner.create");
-            }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError)]));
+            }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError);
+            page.Content.Add(new Div(SetupWizard.Frame(HttpContext, null), new Div(form).Class("ui-section")).Class("setup-owner"));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -62,10 +68,10 @@ namespace Jularr.Frontend.Pages.Setup.Start
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? username, string? displayName, string? password, string? passwordConfirmation, long uiLocaleId)
+        public async Task<IActionResult> OnPostAsync(string? username, string? profileName, string? password, string? passwordConfirmation, long uiLocaleId)
         {
             // Invoke the canonical bootstrap service.
-            _input = new CreateOwnerDataV1(username ?? "", displayName ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId);
+            _input = new CreateOwnerDataV1(username ?? "", profileName ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId);
             var result = await createOwner.ExecuteAsync<LoginResultV1>(_input, HttpContext.RequestAborted);
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
 

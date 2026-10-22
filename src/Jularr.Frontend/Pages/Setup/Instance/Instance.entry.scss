@@ -6,10 +6,16 @@
         margin-block: 1rem;
     }
 
-    .ui-form__row {
-        padding: .75rem;
-        border: 1px solid var(--accent-line);
-        border-radius: 1rem;
-        background: var(--surface);
+    // The name, the groups of modules and the button each take a whole row of the card grid.
+    &__cards > .ui-form > .ui-field,
+    &__cards > .ui-form > .setup-modules__group,
+    &__cards > .ui-form > .ui-form__actions { grid-column: 1 / -1; }
+    &__cards > .ui-form > .ui-field { max-width: 360px; }
+
+    // The group's name: the mockup's 12px bold label above its cards.
+    &__group {
+        margin: 11px 0 -4px;
+        font-size: var(--text-body);
+        font-weight: 805;
     }
 }

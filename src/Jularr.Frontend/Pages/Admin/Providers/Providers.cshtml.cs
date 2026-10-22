@@ -68,7 +68,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 .OrderBy(provider => Rank(provider.Key)).ToList();
             if (IsSetup)
             {
-                page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, acquisition: texts.Can(null, "Acquisition")));
+                page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Providers, acquisition: texts.Can(null, "Acquisition")));
             }
             else
             {

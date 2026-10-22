@@ -192,6 +192,32 @@
     & > input { flex: 1; min-width: 0; appearance: textfield; font-variant-numeric: tabular-nums; }
     & > input::-webkit-inner-spin-button, & > input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 }
+// A password's eye at the end of its frame (PasswordReveal.entry.ts switches the field between hidden and readable).
+.ui-field__control--trailing {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-inline-end: 0;
+
+    & > input { flex: 1 1 0; min-width: 0; width: auto; }
+}
+.password-reveal {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 35px;
+    height: 34px;
+    margin-right: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+
+    &:hover { background: var(--accent-soft); color: var(--accent); }
+    .ui-icon { width: 18px; height: 18px; }
+}
 // What a field wears inside its frame: an icon circle at the start, a quiet unit at the end (before a number's plus and minus).
 .ui-field__control--affixed {
     display: flex;
@@ -212,6 +238,10 @@
     color: var(--accent-text);
 
     .ui-icon { width: 15px; height: 15px; }
+
+    // A select's chosen option shows its own icon, such as a flag.
+    [data-option-icons] { display: grid; place-items: center; line-height: 0; }
+    [data-option-icons] > [hidden] { display: none; }
 }
 .ui-field__suffix,
 .ui-range__unit {

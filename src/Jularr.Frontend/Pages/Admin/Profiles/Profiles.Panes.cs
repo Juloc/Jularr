@@ -109,9 +109,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                     row.Hidden(value => value.Quality);
                     row.Hidden(value => value.Version);
                     row.Content(new P(new ValueText(item.Quality)));
-                    row.Number(value => value.MinimumMbPerMinute, "arr.minimumMb");
-                    row.Number(value => value.PreferredMbPerMinute, "arr.preferredMb");
-                    row.Number(value => value.MaximumMbPerMinute, "arr.maximumMb");
+                    row.Number(value => value.MinimumMbPerMinute, "arr.minimumMb", affix: FieldAffix.Unit("unit.megabytesPerMinute"));
+                    row.Number(value => value.PreferredMbPerMinute, "arr.preferredMb", affix: FieldAffix.Unit("unit.megabytesPerMinute"));
+                    row.Number(value => value.MaximumMbPerMinute, "arr.maximumMb", affix: FieldAffix.Unit("unit.megabytesPerMinute"));
                 });
                 form.Save();
             }, Address("Sizes"), Token, _sizes, FormError));

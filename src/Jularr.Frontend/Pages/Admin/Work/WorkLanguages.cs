@@ -21,6 +21,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         private static readonly HashSet<string> Flags = ["ja", "en", "de", "fr", "es", "it", "nl", "pl", "pt", "ru", "ko", "zh"];
 
+        // The flag of a locale's language as a field icon, the globe where the set has none.
+        public static IUiComponent FlagIcon(string locale, FrontendAssets assets, int size = 16)
+        {
+            var code = Code(locale);
+            return new Icon(Flags.Contains(code) ? "flag-" + code : "globe", assets, size);
+        }
+
         public static string Code(string value)
         {
             var code = value.Trim().ToLowerInvariant();

@@ -10,6 +10,7 @@ for (const panel of Array.from(document.querySelectorAll<HTMLElement>("[data-set
                 const prefix = toggle.name.slice(0, -"IsEnabled".length);
                 const id = panel.querySelector<HTMLInputElement>(`input[name="${prefix}Id"]`);
                 toggle.checked = selected.has(Number(id?.value));
+                toggle.dispatchEvent(new Event("change", { bubbles: true }));
             }
         });
     }

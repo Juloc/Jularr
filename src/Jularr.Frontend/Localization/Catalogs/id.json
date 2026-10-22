@@ -224,9 +224,9 @@
    "Start and system",
    "Mulai dan sistem"
   ],
-  "setup.owner.title": [
-   "Create the first Owner",
-   "Buat Pemilik pertama"
+  "setup.owner.userName": [
+   "User name",
+   "Nama pengguna"
   ],
   "setup.owner.passwordConfirmation": [
    "Confirm password",
@@ -1425,12 +1425,12 @@
    "Diizinkan"
   ],
   "profile.minimumSize": [
-   "Minimum size (MB)",
-   "Ukuran minimum (MB)"
+   "Minimum size",
+   "Ukuran minimum"
   ],
   "profile.maximumSize": [
-   "Maximum size (MB)",
-   "Ukuran maksimum (MB)"
+   "Maximum size",
+   "Ukuran maksimum"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -6573,16 +6573,16 @@
    "Impor format"
   ],
   "arr.minimumMb": [
-   "Minimum (MB/min)",
-   "Minimum (MB/menit)"
+   "Minimum",
+   "Minimum"
   ],
   "arr.preferredMb": [
-   "Preferred (MB/min)",
-   "Pilihan (MB/menit)"
+   "Preferred",
+   "Pilihan"
   ],
   "arr.maximumMb": [
-   "Maximum (MB/min)",
-   "Maksimum (MB/menit)"
+   "Maximum",
+   "Maksimum"
   ],
   "arr.requiredTerms": [
    "One required term",

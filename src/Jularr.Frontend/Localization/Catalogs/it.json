@@ -224,9 +224,9 @@
    "Start and system",
    "Avvio e sistema"
   ],
-  "setup.owner.title": [
-   "Create the first Owner",
-   "Crea il primo Proprietario"
+  "setup.owner.userName": [
+   "User name",
+   "Nome utente"
   ],
   "setup.owner.passwordConfirmation": [
    "Confirm password",
@@ -1425,12 +1425,12 @@
    "Consentita"
   ],
   "profile.minimumSize": [
-   "Minimum size (MB)",
-   "Dimensione minima (MB)"
+   "Minimum size",
+   "Dimensione minima"
   ],
   "profile.maximumSize": [
-   "Maximum size (MB)",
-   "Dimensione massima (MB)"
+   "Maximum size",
+   "Dimensione massima"
   ],
   "wanted.profile": [
    "Quality profile",
@@ -6573,16 +6573,16 @@
    "Importa formati"
   ],
   "arr.minimumMb": [
-   "Minimum (MB/min)",
-   "Minimo (MB/min)"
+   "Minimum",
+   "Minimo"
   ],
   "arr.preferredMb": [
-   "Preferred (MB/min)",
-   "Preferito (MB/min)"
+   "Preferred",
+   "Preferito"
   ],
   "arr.maximumMb": [
-   "Maximum (MB/min)",
-   "Massimo (MB/min)"
+   "Maximum",
+   "Massimo"
   ],
   "arr.requiredTerms": [
    "One required term",

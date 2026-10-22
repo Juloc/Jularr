@@ -8,11 +8,13 @@ it adds neither its own settings store nor database migrations.
 
 | Step | Page | Saved behavior |
 | --- | --- | --- |
-| 1. Owner and language | /Setup | Public ReadSetupLocalesV1 lists all installed languages, marking generated translations. CreateOwnerV1 atomically enables the selected language, applies it to the instance and the first profile, creates the Owner and signs in. Bootstrap remains exactly once. |
-| 2. Instance and modules | /Setup/Instance | ReadSetupModulesV1 supplies the existing switches and preset membership. SaveSetupModulesV1 saves the instance name, all shown module rows and progress in one transaction, with ID/version checks. |
+| 1. Owner and language | /Setup | Fields User name, Profile name, password with confirmation (each with the eye) and language (its flag at the field's start). Public ReadSetupLocalesV1 lists all installed languages, marking generated translations. CreateOwnerV1 atomically enables the selected language, applies it to the instance and the first profile, creates the Owner (Accounts.DisplayName is the user name) with its first profile (Profiles.DisplayName is the profile name) and signs in. Bootstrap remains exactly once. |
+| 2. Instance and modules | /Setup/Instance | ReadSetupModulesV1 supplies the existing switches and preset membership; the modules show as the Modules page's cards in four groups, each naming the modules it needs (ReadInstanceModulesV1). SaveSetupModulesV1 saves the instance name, all shown module rows and progress in one transaction, with ID/version checks. |
 | 3. Libraries | /Setup/Storage | The shared Storage editor creates, checks and browses connections and library roots. Continue invokes SaveSetupLibrariesV1, disables types/subtypes without a library and advances to Download storage when Acquisition is enabled, otherwise Sources. A parent needed by a subtype root stays enabled. |
 | 4. Download storage (with Acquisition) | /Setup/DownloadStorage | The canonical download-storage editor selects Incomplete/Complete through the shared dialog and confirms writable targets, reserve and optional limits. Native Usenet and direct sources have separate settings. External-client-only installations can continue without configuring a native workspace. |
 | 5. Sources and finish | /Setup/Sources | Tabs for metadata, indexers, downloaders, native quality profiles, takeover and provider connections keep their canonical editors inside this step. SaveSetupSourcesV1 preserves an empty key and saves a supplied key. Save changes stays in Sources; Finish setup also completes setup after the canonical checks pass in the same transaction. Enabled native/direct connections require confirmed download storage. |
+
+Every step has the same row of steps at the top (Framework Stepper: numbered, the current one marked, passed ones with a check) and no heading, subtitle or help line of its own.
 
 The three presets are Complete, Media server and Requests. Complete includes all
 implemented modules, including local Registration. Media server selects playback,

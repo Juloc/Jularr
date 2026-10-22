@@ -9,12 +9,13 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Setup.Instance
 {
-    public sealed class InstanceModel(ReadInstanceSettingsV1 readSettings, ReadSetupModulesV1 readModules, ReadSetupProgressV1 readProgress,
-        SaveSetupModulesV1 save, IAntiforgery antiforgery) : JularrPage
+    public sealed class InstanceModel(ReadInstanceSettingsV1 readSettings, ReadSetupModulesV1 readModules, ReadInstanceModulesV1 readDetails, ReadSetupProgressV1 readProgress,
+        SaveSetupModulesV1 save, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private InstanceSettingsDetailsV1? _settings;
         private SetupProgressV1? _progress;
         private IReadOnlyList<SetupModuleV1> _modules = [];
+        private IReadOnlyList<InstanceModuleDetailsV1> _details = [];
         private SaveSetupModulesDataV1? _input;
 
         protected override void Define(Page page)
@@ -22,8 +23,11 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             page.Title("setup.step.Instance");
             page.Asset("Pages/Setup/Instance/Instance.entry.ts");
             page.Asset("Pages/Setup/Instance/Instance.entry.scss");
+            page.Asset("Framework/Components/SettingCard.entry.scss");
+            page.Asset("Framework/Components/Truncated.entry.ts");
+            page.Asset("Pages/Admin/Modules/Modules.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(SetupWizard.Frame(SetupStepType.Instance));
+            page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Instance));
             if (_settings is not { } settings || _progress is not { } progress) return;
 
             var input = _input ?? new SaveSetupModulesDataV1(settings.Name, settings.Version, progress.Version,
@@ -31,24 +35,30 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             var presets = new[] { "complete", "mediaServer", "requests" }.Select(preset => new Button(new Text("setup.preset." + preset)).Attribute("data-setup-preset", preset)).ToArray<IUiComponent>();
             var choices = new Div(presets).Class("setup-modules__presets").Attribute("hidden", "hidden").Attribute("role", "group").TextAttribute("aria-label", "setup.presets");
             var keys = _modules.ToDictionary(module => module.Id, module => module.Key);
+            var details = _details.ToDictionary(module => module.Key);
+            var enabled = input.Modules.ToDictionary(module => keys[module.Id], module => module.IsEnabled);
             var form = new Form<SaveSetupModulesDataV1>(fields =>
             {
                 fields.Hidden(item => item.Version);
                 fields.Hidden(item => item.SetupVersion);
                 fields.Text(item => item.Name, "admin.instance.name");
+
+                // The modules by what they are for; each card names what its module needs.
                 foreach (var group in new[] { "media", "requests", "personal", "operations" })
                 {
-                    fields.Section("setup.modules." + group, section => section.Rows(item => item.Modules, (row, module) =>
+                    fields.Content(new H3(new Text("setup.modules." + group)).Class("setup-modules__group"));
+                    fields.Rows(item => item.Modules, (row, module) =>
                     {
                         row.Hidden(item => item.Id);
                         row.Hidden(item => item.Version);
-                        row.Toggle(item => item.IsEnabled, "instance.module." + keys[module.Id], new FieldHelp(Info: ""));
-                    }, module => keys.TryGetValue(module.Id, out var key) && Group(key) == group));
+                        row.Switch(item => item.IsEnabled, "instance.module." + keys[module.Id],
+                            control => ModuleCard.Build(details[keys[module.Id]], _details, control, module.IsEnabled, enabled, assets, texts));
+                    }, module => keys.TryGetValue(module.Id, out var key) && details.ContainsKey(key) && Group(key) == group);
                 }
 
                 fields.Submit("setup.next");
             }, "/Setup/Instance", csrf, input, FormError);
-            page.Content.Add(new Div(choices, form).Class("setup-modules").Attribute("data-setup-presets", JsonSerializer.Serialize(new Dictionary<string, long[]>
+            page.Content.Add(new Div(choices, new Div(form).Class("setting-cards setup-modules__cards")).Class("setup-modules").Attribute("data-setup-presets", JsonSerializer.Serialize(new Dictionary<string, long[]>
             {
                 ["complete"] = [.. _modules.Where(module => module.Complete).Select(module => module.Id)],
                 ["mediaServer"] = [.. _modules.Where(module => module.MediaServer).Select(module => module.Id)],
@@ -78,6 +88,7 @@ namespace Jularr.Frontend.Pages.Setup.Instance
             _progress = await readProgress.ExecuteAsync<SetupProgressV1>(cancellationToken: ct);
             _settings = await readSettings.ExecuteAsync<InstanceSettingsDetailsV1>(new ReadInstanceSettingsParametersV1(), ct);
             _modules = await readModules.ExecuteAsync<BaseDataList<SetupModuleV1>>(cancellationToken: ct);
+            _details = await readDetails.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), ct);
         }
 
         private static string Group(string key) => key switch

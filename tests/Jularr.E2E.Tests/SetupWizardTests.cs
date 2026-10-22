@@ -20,12 +20,12 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Setup");
                 await Assertions.Expect(page.Locator("select[name=UiLocaleId]")).ToContainTextAsync("machine translated");
                 await page.FillAsync("[name=Username]", Owner.Username);
-                await page.FillAsync("[name=DisplayName]", "Owner");
+                await page.FillAsync("[name=ProfileName]", "Owner");
                 await page.FillAsync("[name=Password]", Owner.Password);
                 await page.FillAsync("[name=PasswordConfirmation]", Owner.Password);
                 await page.GetByRole(AriaRole.Button, new() { Name = "Create Owner", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Instance");
-                Assert.AreEqual(5, await page.Locator(".setup-wizard .navigation-tabs a").CountAsync());
+                Assert.AreEqual(5, await page.Locator(".setup-wizard .stepper__step").CountAsync());
                 Assert.AreEqual(1, await page.Locator("form[action='/Setup/Instance']").CountAsync());
                 Assert.AreEqual(0, await page.Locator("[name=UsersConfirmSources]").CountAsync());
                 await page.GetByRole(AriaRole.Button, new() { Name = "Requests", Exact = true }).ClickAsync();
@@ -47,7 +47,7 @@ namespace Jularr.E2E.Tests
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync("**/Setup/Sources");
                 await CheckViewportAsync(page, "sources", width);
-                Assert.AreEqual(6, await page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a").CountAsync());
+                Assert.AreEqual(6, await page.Locator(".setup-wizard .navigation-tabs a").CountAsync());
                 await page.FillAsync("[name=TmdbKey]", "setup-browser-key");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Save changes", Exact = true }));
                 await page.WaitForURLAsync("**/Setup/Sources");
@@ -64,7 +64,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".profiles-list")).ToBeVisibleAsync();
                 await CheckViewportAsync(page, "profiles", width);
                 await page.Locator(".profiles-list a[href^='/Setup/Profiles/']").First.ClickAsync();
-                await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", "/Setup/Profiles");
+                await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs a[aria-current=page]")).ToHaveAttributeAsync("href", "/Setup/Profiles");
                 await Assertions.Expect(page.Locator("[name=Name]")).ToBeVisibleAsync();
                 await OpenSourceTabAsync(page, "/Setup/Takeover");
                 await Assertions.Expect(page.Locator("[name=BaseUrl]")).ToBeVisibleAsync();
@@ -89,10 +89,10 @@ namespace Jularr.E2E.Tests
 
         private static async Task OpenSourceTabAsync(IPage page, string path)
         {
-            await page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator($"a[href='{path}']").ClickAsync();
+            await page.Locator(".setup-wizard .navigation-tabs").Locator($"a[href='{path}']").ClickAsync();
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == path);
-            await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").First.Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", "/Setup/Sources");
-            await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", path);
+            await Assertions.Expect(page.Locator(".setup-wizard .stepper a[aria-current=step]")).ToHaveAttributeAsync("href", "/Setup/Sources");
+            await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs a[aria-current=page]")).ToHaveAttributeAsync("href", path);
         }
 
         // The connection is added in the dialog of its list.

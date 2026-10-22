@@ -6,13 +6,14 @@ using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Service.Admin.Instance.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Pages.Admin.Work;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Instance
 {
     // The instance's own settings in sections of one form, saved by the page's pill; what only matters while a module is on appears only then.
-    public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private InstanceSettingsDetailsV1? _settings;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
@@ -25,11 +26,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             page.Title("admin.instance.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Form.entry.ts");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Instance));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Instance));
 
             if (_settings is { } settings)
             {
-                var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
+                var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name, WorkLanguages.FlagIcon(locale.Locale, assets)));
                 page.Content.Add(new Form<UpdateInstanceSettingsDataV1>(form =>
                 {
                     form.Hidden(item => item.Version);
@@ -39,7 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                         general.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                         general.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
                             [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
-                        if (texts.Can(null, "Subtitles")) general.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
+                        if (texts.Can(null, "Subtitles")) general.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages", affix: new FieldAffix(new Icon("subtitles", assets, 15)));
                         if (texts.Can(null, "Collections")) general.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
                         if (texts.Can(null, "UnitGroups")) general.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
                     });

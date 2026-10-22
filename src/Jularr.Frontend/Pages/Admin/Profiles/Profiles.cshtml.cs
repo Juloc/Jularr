@@ -68,7 +68,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
             var isSetup = SetupWizard.IsActive(Request);
-            if (isSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
+            if (isSetup) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Profiles));
 
             // One row of navigation; the quality rules are scoped by a media type (tags belong to every type).
             page.NoPageRow();

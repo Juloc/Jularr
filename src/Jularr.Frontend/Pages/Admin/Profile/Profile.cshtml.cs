@@ -57,7 +57,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Profiles));
             if (_profile is null && Id != NewId) return;
             var input = WithMatrix(_input ?? (_profile is { } profile ? FromProfile(profile) : NewProfile(NewType!.Value, NewSubtype)));
             var order = DisplayOrder(input);
@@ -113,8 +113,8 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 });
                 fields.Section("profile.section.size", section =>
                 {
-                    section.Number(item => item.MinimumSizeMb, "profile.minimumSize");
-                    section.Number(item => item.MaximumSizeMb, "profile.maximumSize");
+                    section.Number(item => item.MinimumSizeMb, "profile.minimumSize", affix: FieldAffix.Unit("unit.megabytes"));
+                    section.Number(item => item.MaximumSizeMb, "profile.maximumSize", affix: FieldAffix.Unit("unit.megabytes"));
                 });
                 if (_profile is { } imported && (imported.MonitoredTypes.Length > 0 || imported.MonitoredLanguages.Length > 0 || imported.MinimumPages is not null))
                 {

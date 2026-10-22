@@ -70,23 +70,6 @@ html:not([data-skin="original"]) body:has(.login-card) {
 }
 
 .auth-forgot { color: var(--muted); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; &:hover { color: var(--accent); } }
-.password-reveal {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 35px;
-    height: 34px;
-    margin-right: 4px;
-    padding: 0;
-    border: 0;
-    border-radius: 9px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-
-    &:hover { background: var(--accent-soft); color: var(--accent); }
-    .ui-icon { width: 18px; height: 18px; }
-}
 
 // The one filled action: the accent in a soft gradient. The same look serves a link (back to sign in).
 .auth-submit {
