@@ -132,8 +132,8 @@ namespace Jularr.Backend.Tests
             using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
             var readyHtml = await ready.Content.ReadAsStringAsync();
             StringAssert.Contains(readyHtml, "has no indexer yet.");
-            var version = Regex.Match(readyHtml, "name=\"version\" value=\"(\\d+)\"").Groups[1].Value;
-            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Overview?handler=Finish", Token(readyHtml, ("version", version)));
+            var version = Regex.Match(readyHtml, "name=\"version\" value=\"(\\d+)\"", RegexOptions.IgnoreCase).Groups[1].Value;
+            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Overview?handler=Finish", Token(readyHtml, ("version", version), ("acceptMissing", "true")));
             Assert.AreEqual("/", finished.Headers.Location!.OriginalString);
             using var closed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
             Assert.AreEqual("/", closed.Headers.Location!.OriginalString);
@@ -241,7 +241,7 @@ namespace Jularr.Backend.Tests
             using var overviewPage = await host.SendAsync(HttpMethod.Get, "/Setup/Overview");
             var overviewHtml = await overviewPage.Content.ReadAsStringAsync();
             var current = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
-            using var finish = await host.SendAsync(HttpMethod.Post, "/Setup/Overview?handler=Finish", Token(overviewHtml, ("version", current.ToString())));
+            using var finish = await host.SendAsync(HttpMethod.Post, "/Setup/Overview?handler=Finish", Token(overviewHtml, ("version", current.ToString()), ("acceptMissing", "true")));
             Assert.AreEqual("/", finish.Headers.Location!.OriginalString, await finish.Content.ReadAsStringAsync());
 
             // Local account requests remain available without a Plex connection and always await approval.
