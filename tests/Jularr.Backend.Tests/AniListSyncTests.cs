@@ -98,6 +98,11 @@ namespace Jularr.Backend.Tests
             // Off by default, and a profile needs the Owner's application.
             using var off = await host.SendAsync(HttpMethod.Get, Route);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+
+            // The account part also needs the progress sync: AniList alone offers no account.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'AniList'");
+            using var withoutSync = await host.SendAsync(HttpMethod.Get, Route);
+            Assert.AreEqual(HttpStatusCode.Forbidden, withoutSync.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('ProgressSync', 'AniList', 'Library')");
             var unset = await ReadAsync(host);
             Assert.IsFalse(unset.IsConfigured);

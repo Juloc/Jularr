@@ -93,7 +93,7 @@ INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Subtitles', FALSE);
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Uploads', FALSE);
 -- ProgressSync shares watch progress with connected Jellyfin and Emby servers and, per profile, with its AniList account.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('ProgressSync', FALSE);
--- AniList connects each profile's AniList account (list import, progress push) and keeps the relations AniList names for the library's anime, manga and light novels; off, nothing is sent to or asked of AniList for it.
+-- AniList keeps the relations AniList names for the library's anime, manga and light novels; with ProgressSync also on, each profile can connect its AniList account (list import, progress push). Off, nothing is sent to or asked of AniList for it.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('AniList', FALSE);
 -- Devices pairs TVs, phones and apps by a code a signed-in profile confirms.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Devices', FALSE);
@@ -110,7 +110,7 @@ CREATE TABLE "InstanceModuleDependencies" (
 INSERT INTO "InstanceModuleDependencies" ("ModuleKey", "RequiredKey") VALUES
     ('Playback', 'Library'), ('Reading', 'Library'), ('Emulation', 'Library'), ('Subtitles', 'Library'), ('Uploads', 'Library'), ('Collections', 'Library'),
     ('UnitGroups', 'Library'), ('HomeLayout', 'Library'), ('Franchises', 'Library'), ('Statistics', 'Library'), ('Calendar', 'Library'), ('ProgressSync', 'Library'),
-    ('AniList', 'Library'), ('AniList', 'ProgressSync'),
+    ('AniList', 'Library'),
     ('Trickplay', 'Playback'), ('Translation', 'Reading'), ('Ocr', 'Reading'), ('SmartPdf', 'Reading'), ('LocalDiscovery', 'DiscoverCache');
 
 -- Profiles an account may use: with the Profiles module every linked one, otherwise its main profile (its own first, then the oldest).

@@ -94,10 +94,10 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Connect AniList" })).ToBeVisibleAsync();
                 await WaitForWatchedAsync(page, expectedEpisodes: 2);
 
-                // AniList is a module of its own that needs the library and the progress sync; off, a profile has nothing to connect.
+                // AniList is a module of its own that needs the library (the account also needs the progress sync); off, a profile has nothing to connect.
                 await page.GotoAsync("/Admin/Instance/Modules");
                 var module = page.Locator(".setting-card[data-module=AniList]");
-                await Assertions.Expect(module.Locator("[data-needs]")).ToHaveCountAsync(2);
+                await Assertions.Expect(module.Locator("[data-needs]")).ToHaveCountAsync(1);
                 await page.GotoAsync("/Settings");
                 await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Open AniList" })).ToBeVisibleAsync();
                 await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'AniList'");

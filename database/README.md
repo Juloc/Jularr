@@ -107,7 +107,7 @@ GameSaves keep a profile's save memory and one save state per game file, opaque 
 server; a game's play time is its MediaProgress of type Game. Instance.sql seeds the
 Emulation module for them. ProviderProfileLinks tie a Jellyfin or Emby user to the profile
 it shares progress with, and ProviderProgress keeps the state last agreed per server item
-(ProgressSync module, off by default). The AniList module (off by default, needs Library and ProgressSync) holds each profile's AniList account and the relations read for matched titles.
+(ProgressSync module, off by default). The AniList module (off by default, needs Library) holds the relations read for matched titles; with ProgressSync also on, it holds each profile's AniList account.
 
 `Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative

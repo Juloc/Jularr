@@ -26,7 +26,7 @@ namespace Jularr.Backend.Tests
             var aniList = new FakeAniList();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
             await host.Fixture.RunSqlAsync("""
-                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('ProgressSync', 'AniList');
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'AniList';
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES (10, 2, 1, 'Example Quest', 2019), (50, 3, 2, 'Example Quest Manga', 2015);
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (50, 'anilist', '501');
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1), (200, 10, 1, 2);
@@ -89,7 +89,6 @@ namespace Jularr.Backend.Tests
             var aniList = new FakeAniList();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
             await host.Fixture.RunSqlAsync("""
-                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'ProgressSync';
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES (10, 2, 1, 'Example Quest', 2019);
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1);
                 INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value") VALUES (100, 'anilist', '1');
@@ -126,7 +125,7 @@ namespace Jularr.Backend.Tests
             var aniList = new FakeAniList { IsDown = true };
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList));
             await host.Fixture.RunSqlAsync("""
-                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" IN ('ProgressSync', 'AniList');
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'AniList';
                 INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear") VALUES (10, 2, 1, 'Example Quest', 2019);
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1);
                 INSERT INTO "WorkUnitExternalIdentities" ("WorkUnitId", "Namespace", "Value") VALUES (100, 'anilist', '1');
