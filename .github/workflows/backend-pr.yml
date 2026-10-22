@@ -13,33 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.paths.outputs.backend }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Detect affected project files
-        id: paths
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
-          if grep -Eq '^(src/|tests/|database/|scripts/|[^/]+[.]sln$|NuGet[.]Config$|[.]github/workflows/backend(-pr)?[.]yml$)|[.](props|targets)$' <<< "$files"; then
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "backend=false" >> "$GITHUB_OUTPUT"
-          fi
-
   test:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -63,30 +37,51 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Detect affected project files
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          if grep -Eq '^(src/|tests/|database/|scripts/|[^/]+[.]sln$|NuGet[.]Config$|[.]github/workflows/backend(-pr)?[.]yml$)|[.](props|targets)$' <<< "$files"; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-dotnet@v6
+        if: steps.paths.outputs.backend == 'true'
         with:
           dotnet-version: 10.0.x
       - uses: actions/cache@v6
+        if: steps.paths.outputs.backend == 'true'
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
           restore-keys: |
             nuget-${{ runner.os }}-
       - uses: actions/setup-node@v7
+        if: steps.paths.outputs.backend == 'true'
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: src/Jularr.Frontend/package-lock.json
       - name: Compile assets required by Razor tests
+        if: steps.paths.outputs.backend == 'true'
         working-directory: src/Jularr.Frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
       - name: Compile the backend test project and its dependencies
+        if: steps.paths.outputs.backend == 'true'
         run: dotnet build tests/Jularr.Backend.Tests --configuration Release
       - name: Verify change-aware test selection
+        if: steps.paths.outputs.backend == 'true'
         run: python3 scripts/ci-select-backend-tests.py --self-test
       - name: Smoke and focused tests for changed backend areas
+        if: steps.paths.outputs.backend == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -98,7 +93,7 @@ jobs:
             --logger "trx;LogFileName=backend-pr.trx" \
             --results-directory TestResults/ci/fast
       - name: Keep smoke test results
-        if: always()
+        if: always() && steps.paths.outputs.backend == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: backend-pr-smoke
