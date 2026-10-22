@@ -321,7 +321,8 @@ namespace Jularr.E2E.Tests
         private static async Task AssertSpreadMirrorsAsync(IPage page, string view, bool textFills = true)
         {
             await page.EvaluateAsync("() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))");
-            await page.WaitForFunctionAsync("() => document.querySelector('.reader').dataset.bookState === 'idle' && document.querySelectorAll('.reader-book__print > .reader__page-print').length === 2");
+            // The last page of a book has no page after it: that side shows blank paper and no print.
+            await page.WaitForFunctionAsync("(expected) => document.querySelector('.reader').dataset.bookState === 'idle' && document.querySelectorAll('.reader-book__print > .reader__page-print').length >= expected", textFills ? 2 : 1);
             await Evidence.SaveAsync(page, "reader-spread-" + view.Replace(' ', '-'));
             var sides = await page.EvaluateAsync<System.Text.Json.JsonElement>("""
                 () => {
@@ -330,7 +331,9 @@ namespace Jularr.E2E.Tests
                         const sheet = document.querySelector(`[data-book-sheet=${side}]`), box = sheet.getBoundingClientRect();
                         const points = sheet.style.clipPath.slice(8, -1).split(',').map(point => point.trim().split(' ').map(value => parseFloat(value) / 100));
                         const ys = points.map(point => box.top + point[1] * box.height), xs = points.map(point => box.left + point[0] * box.width);
-                        const print = sheet.querySelector('.reader__page-print'), printBox = print.getBoundingClientRect();
+                        const print = sheet.querySelector('.reader__page-print');
+                        if (!print) return { sheetTop: box.top, sheetHeight: box.height, top: Math.min(...ys), bottom: Math.max(...ys), height: Math.max(...ys) - Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), columns: Number(document.querySelector('.reader').dataset.columns) };
+                        const printBox = print.getBoundingClientRect();
                         const text = [...print.querySelectorAll('span')].filter(span => span.textContent.trim()).map(span => span.getBoundingClientRect());
                         const firstText = text.length ? Math.min(...text.map(rect => rect.top)) : 0, lastText = text.length ? Math.max(...text.map(rect => rect.bottom)) : 0;
                         const number = print.querySelector('[data-book-number]').getBoundingClientRect();
@@ -346,10 +349,11 @@ namespace Jularr.E2E.Tests
                 """);
             var left = sides.GetProperty("left"); var right = sides.GetProperty("right");
             var line = sides.GetProperty("line").GetDouble();
-            double Value(System.Text.Json.JsonElement side, string name) => side.GetProperty(name).GetDouble();
+            double Value(System.Text.Json.JsonElement side, string name) => side.TryGetProperty(name, out var value) ? value.GetDouble() : double.NaN;
             var differences = new List<string>();
             foreach (var name in new[] { "sheetTop", "sheetHeight", "top", "bottom", "height", "width", "printTop", "printHeight", "numberGap", "numberOuter" })
             {
+                if (double.IsNaN(Value(left, name)) || double.IsNaN(Value(right, name))) continue;
                 if (Math.Abs(Value(left, name) - Value(right, name)) > 1) differences.Add($"{name} {Value(left, name):F1} vs {Value(right, name):F1}");
             }
 
