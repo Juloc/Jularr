@@ -140,7 +140,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge(
-                    kind == AcquisitionKind.LightNovel && offer.Guid.StartsWith("narou:", StringComparison.Ordinal)
+                    kind == AcquisitionKind.LightNovel && offer.Guid?.StartsWith("narou:", StringComparison.Ordinal) == true
                         && offer.Stages.Contains("narou_native_verified")
                         ? [target.CanonicalTitle, .. target.EditionTitles, .. target.Titles]
                         : [target.CanonicalTitle, .. target.EditionTitles], target.Author, offer,
