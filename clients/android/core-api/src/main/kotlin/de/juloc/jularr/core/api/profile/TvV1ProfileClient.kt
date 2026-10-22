@@ -150,10 +150,16 @@ class HttpTvV1ProfileClient(origin: String, private val tokens: DeviceTokenStore
                                 false
                             }
                         }
-                        if (stale && status == HttpURLConnection.HTTP_UNAUTHORIZED &&
-                            method == "GET" && attempt == 0 && tokens.current != null
-                        ) {
-                            continue
+                        if (stale) {
+                            // A successful response for the PREVIOUS profile must not be
+                            // delivered to the new viewer either. Ignore it and re-read
+                            // with the latest bearer. Never replay a state-changing call.
+                            if (method == "GET" && attempt == 0 && tokens.current != null) {
+                                continue
+                            }
+                            throw IllegalStateException(
+                                "The profile changed during the request; refresh this screen.",
+                            )
                         }
                         if (status !in 200..299) throw appApiException(status, payload)
                         completed = payload
