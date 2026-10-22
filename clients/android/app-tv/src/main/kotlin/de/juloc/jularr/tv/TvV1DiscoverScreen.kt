@@ -90,9 +90,10 @@ internal fun TvV1DiscoverScreen(
     val external = selectedExternal
     // Provider data is read on demand and replaces search-summary details.
     LaunchedEffect(external?.mediaTypeId, external?.tmdbId) {
-        if (external?.workId == null && external?.tmdbId != null) {
+        val tmdbId = external?.tmdbId
+        if (external != null && external.workId == null && tmdbId != null) {
             try {
-                selectedExternal = catalog.discoverTmdbItem(external.mediaTypeId, external.tmdbId)
+                selectedExternal = catalog.discoverTmdbItem(external.mediaTypeId, tmdbId)
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (failure: Exception) {
@@ -108,8 +109,9 @@ internal fun TvV1DiscoverScreen(
                     external.rating?.let { "Bewertung $it" }).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (external.workId != null) {
-                Button(onClick = { onLocalWork(external.workId) }) {
+            val localWorkId = external.workId
+            if (localWorkId != null) {
+                Button(onClick = { onLocalWork(localWorkId) }) {
                     Text("In der Bibliothek öffnen")
                 }
             } else {
@@ -155,7 +157,8 @@ internal fun TvV1DiscoverScreen(
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
-                        if (item.workId != null) onLocalWork(item.workId)
+                        val workId = item.workId
+                        if (workId != null) onLocalWork(workId)
                         else if (item.tmdbId != null) {
                             // Details must be fetched from the provider route, not /works/TMDB-ID.
                             selectedExternal = item
