@@ -96,9 +96,10 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers?view=servers");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            // In the language of the page: English where no text of the language exists, else the German one.
-            Assert.IsTrue(html.Contains(WebUtility.HtmlEncode(jellyfin.ProfileName + " shares progress with " + jellyfin.ProfileName), StringComparison.Ordinal)
-                || html.Contains(WebUtility.HtmlEncode(jellyfin.ProfileName + " teilt den Fortschritt mit " + jellyfin.ProfileName), StringComparison.Ordinal), "The page does not say who shares progress with whom.");
+            // One row per server user: the user, the confirmed profile and the state, in the language of the page (English where no text of the language exists, else the German one).
+            var row = html.Split("class=\"list-row", StringSplitOptions.None).Skip(1).FirstOrDefault(item => item.Contains(WebUtility.HtmlEncode(jellyfin.ProfileName), StringComparison.Ordinal));
+            Assert.IsNotNull(row, "The page does not say who shares progress with whom.");
+            Assert.IsTrue(row.Contains("Linked", StringComparison.Ordinal) || row.Contains("Verknüpft", StringComparison.Ordinal), "The row of the confirmed user does not say it is linked.");
             Assert.IsFalse(html.Contains(FakeServer.ApiKey, StringComparison.Ordinal));
         }
 
