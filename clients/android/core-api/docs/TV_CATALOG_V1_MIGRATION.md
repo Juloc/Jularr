@@ -89,8 +89,10 @@ val catalogClient: TvCatalogV1Client = HttpTvCatalogV1Client(serverOrigin, token
 
 The adapter sends `Authorization: Bearer` from the supplied device token, accepts
 `Jularr-Device-Token` rotation into the same store, never sends cookies, clears
-the token on HTTP 401, and surfaces server problem details through existing
-`AppApiException`. It does not own or persist session state.
+the token on HTTP 401 only if that request still uses the active token,
+and surfaces server problem details through existing `AppApiException`.
+Late 401s or rotation headers cannot overwrite a newer token. It does not own
+or persist session state.
 
 ## Integration and API decision points
 
