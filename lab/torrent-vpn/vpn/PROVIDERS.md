@@ -28,6 +28,27 @@ Was nicht geht: die Dashboard-Schnittstelle nachzubauen, um den Generator auch i
 zu benutzen. Die Nutzungsbedingungen (Stand 1. Mai 2026) untersagen das ausdrücklich – 8.2 (h)
 automatisierte Zugriffe, 8.2 (i) das Umgehen von Nutzungsgrenzen und 6.1 (c) Reverse Engineering.
 
+## Was es schon gibt (geprüft am 2026-10-22)
+
+| Projekt | Was es tut | Stand |
+| --- | --- | --- |
+| `hongkongkiwi/privado-wireguard-vpn` (21 Sterne, Shell) | holt die WireGuard-Zugangsdaten über die Privado-API mit dem eigenen Konto | das README sagt selbst: nicht mehr nötig, die Weboberfläche kann die Konfiguration inzwischen selbst erzeugen |
+| `eagle10162026/privado-vpn-linux` (Rust, AGPL-3.0) | inoffizieller Linux-Client (IKEv2/WireGuard/OpenVPN) mit eigenem Kill-Switch und DNS-Schutz, gebaut durch Interoperabilitäts-Forschung am offiziellen Android-APK | Code fertig, aber laut eigener Angabe noch nicht gegen echte Server getestet |
+| `digitalCanine/PrivadoVPN-CLI` | Kommandozeile für Linux über OpenVPN | - |
+| `boboysdadda/qbittorrent-privado-vpn` | qBittorrent mit dem SOCKS5-Weg | - |
+
+Der Hinweis im ersten Projekt ist der wichtige: Privado hat auf die API-Nutzung nicht mit
+einem Verbot, sondern mit dem Generator in der Weboberfläche reagiert. Im Dashboard unter
+**app.privadovpn.com → admin-panel → „Manual Configuration"** lässt sich deshalb prüfen, ob
+der Generator für das eigene Konto sichtbar ist. Die Erstellerin des Projekts fragt in Issue #2
+ausdrücklich, ob der Abschnitt nur regional vorhanden ist – das ist offen.
+
+**Die Prüfung, die 30 Sekunden braucht:** anmelden, nach unten scrollen, „Manual Configuration"
+suchen. Ist der Abschnitt da, gibt es die Konfiguration dort als Datei, und `prepare-config.ps1`
+nimmt sie direkt. Ist er nicht da, bleiben die Wege darüber: Premium, der inoffizielle
+Linux-Client als Client im Container (dann gehört der Kill-Switch dem Container, nicht dem
+Anbieter) oder ein anderer Anbieter mit Konfiguration im Gratis-Tarif.
+
 ## Die Anbieter im Vergleich
 
 | Anbieter | Kostenlos | Konfigurationsdatei | Linux-Client | P2P im Gratis-Tarif | Bemerkung |
