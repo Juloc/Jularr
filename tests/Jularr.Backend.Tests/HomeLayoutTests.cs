@@ -32,30 +32,28 @@ namespace Jularr.Backend.Tests
             using var home = await host.SendAsync(HttpMethod.Get, "/");
             Assert.IsFalse((await home.Content.ReadAsStringAsync()).Contains("id=\"discover-recommendations\"", StringComparison.Ordinal));
 
-            // The settings page moves and shows shelves with plain forms.
+            // The settings page shows the shelves as a sortable list and saves the order and the switched-on ones with one form.
             using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
             var html = await settings.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode, html);
-            using var moved = await host.SendAsync(HttpMethod.Post, "/Settings?handler=Home&shelf=ContinueWatching&action=Up", new Dictionary<string, string>
-            {
-                ["__RequestVerificationToken"] = LibraryTests.Token(html)
-            });
+            StringAssert.Contains(html, "data-sortable-handle");
+            StringAssert.Contains(html, "name=\"ShelfKeys\"");
+            string[] order = ["ContinueWatching", "RecentlyAdded", "ContinueListening", "ContinueReading", "Recommendations"];
+            var values = new List<KeyValuePair<string, string>> { new("__RequestVerificationToken", LibraryTests.Token(html)) };
+            values.AddRange(order.Select(key => new KeyValuePair<string, string>("shelfKeys", key)));
+            values.AddRange(order.Where(key => key != "ContinueReading").Select(key => new KeyValuePair<string, string>("shownKeys", key)));
+            using var moved = await host.SendAsync(HttpMethod.Post, "/Settings?handler=HomeLayout", new FormUrlEncodedContent(values));
             Assert.AreEqual(HttpStatusCode.Redirect, moved.StatusCode, await moved.Content.ReadAsStringAsync());
-            using var shown = await host.SendAsync(HttpMethod.Post, "/Settings?handler=Home&shelf=Recommendations&action=Show", new Dictionary<string, string>
-            {
-                ["__RequestVerificationToken"] = LibraryTests.Token(html)
-            });
-            Assert.AreEqual(HttpStatusCode.Redirect, shown.StatusCode, await shown.Content.ReadAsStringAsync());
             layout = await ReadAsync(host);
-            Assert.AreEqual(HomeShelfType.ContinueWatching, layout[0].HomeShelfTypeId);
-            Assert.IsTrue(layout.All(shelf => !shelf.IsHidden));
+            CollectionAssert.AreEqual(order, layout.Select(shelf => shelf.HomeShelfTypeId.ToString()).ToArray());
+            Assert.AreEqual("ContinueReading", layout.Single(shelf => shelf.IsHidden).HomeShelfTypeId.ToString());
 
             // Switched off, everyone sees the default page.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'HomeLayout'");
             using var off = await host.SendAsync(HttpMethod.Get, Route);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
             using var plain = await host.SendAsync(HttpMethod.Get, "/Settings");
-            Assert.IsFalse((await plain.Content.ReadAsStringAsync()).Contains("handler=Home", StringComparison.Ordinal));
+            Assert.IsFalse((await plain.Content.ReadAsStringAsync()).Contains("handler=HomeLayout", StringComparison.Ordinal));
         }
 
         private static async Task<IReadOnlyList<HomeShelfV1>> ReadAsync(AuthenticationTests.Host host)

@@ -135,7 +135,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     form.Select(item => item.RecycleModeId, "library.replacement.mode", modes);
                     form.Select(item => item.RecycleStorageMountId, "library.replacement.mount", mounts);
                     form.Text(item => item.RecyclePath, "library.replacement.path");
-                    form.Number(item => item.RecycleDays, "library.replacement.days");
+                    form.Number(item => item.RecycleDays, "library.replacement.days", affix: FieldAffix.Unit("unit.days"));
                     form.Toggle(item => item.UnmonitorsDeletedUnits, "library.replacement.unmonitorsDeleted");
                     form.Save();
                 }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecycleModeId,
