@@ -68,6 +68,7 @@ class TvV1DeviceSessionTest {
         assertEquals("device-token", vault.loadToken("https://example.com"))
         assertEquals(1, fake.capabilitiesCalled)
         assertTrue(flow.hasDeviceToken)
+        assertTrue(flow.authenticatedTokenStore() === fake.tokens)
     }
 
     @Test

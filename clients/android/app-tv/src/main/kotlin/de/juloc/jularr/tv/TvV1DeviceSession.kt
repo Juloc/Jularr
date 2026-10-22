@@ -30,6 +30,15 @@ class TvV1DeviceSession(
     val hasDeviceToken: Boolean
         get() = tokens?.current != null
 
+    /**
+     * Give the catalog and playback clients the *same* rotating token store as pairing.
+     * No bearer token is passed to Compose or copied into the legacy cookie store.
+     */
+    fun authenticatedTokenStore(): DeviceTokenStore {
+        check(hasDeviceToken) { "The TV must be paired before requesting media." }
+        return requireNotNull(tokens)
+    }
+
     /** Select one server, restoring only that server's encrypted device token. */
     fun selectServer(rawOrigin: String) {
         val normalized = TvServerOrigin.normalize(rawOrigin)
