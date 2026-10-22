@@ -5400,86 +5400,6 @@
    "Series",
    "Serien"
   ],
-  "system.performance": [
-   "Performance",
-   "Leistung"
-  ],
-  "system.performance.processor": [
-   "Processor",
-   "Prozessor"
-  ],
-  "system.performance.memory": [
-   "Memory",
-   "Arbeitsspeicher"
-  ],
-  "system.performance.processorHistory": [
-   "Processor use over the last six hours",
-   "Prozessorauslastung der letzten sechs Stunden"
-  ],
-  "system.performance.memoryHistory": [
-   "Memory use over the last six hours",
-   "Speicherauslastung der letzten sechs Stunden"
-  ],
-  "system.performance.service": [
-   "Service",
-   "Dienst"
-  ],
-  "system.performance.calls": [
-   "Calls",
-   "Aufrufe"
-  ],
-  "system.performance.errors": [
-   "Errors",
-   "Fehler"
-  ],
-  "system.performance.average": [
-   "Average",
-   "Durchschnitt"
-  ],
-  "system.performance.maximum": [
-   "Longest",
-   "Längster"
-  ],
-  "system.performance.empty": [
-   "No calls in the last hour.",
-   "Keine Aufrufe in der letzten Stunde."
-  ],
-  "system.logs": [
-   "Recent warnings and errors",
-   "Letzte Warnungen und Fehler"
-  ],
-  "system.logs.empty": [
-   "Nothing went wrong since Jularr started.",
-   "Seit dem Start von Jularr ist nichts schiefgelaufen."
-  ],
-  "system.logs.at": [
-   "Time",
-   "Zeit"
-  ],
-  "system.logs.level": [
-   "Level",
-   "Stufe"
-  ],
-  "system.logs.area": [
-   "Area",
-   "Bereich"
-  ],
-  "system.logs.message": [
-   "Message",
-   "Meldung"
-  ],
-  "system.logs.level.Warning": [
-   "Warning",
-   "Warnung"
-  ],
-  "system.logs.level.Error": [
-   "Error",
-   "Fehler"
-  ],
-  "system.logs.level.Critical": [
-   "Critical",
-   "Kritisch"
-  ],
   "calendar.view.Month": [
    "Month",
    "Monat"
@@ -7256,10 +7176,6 @@
    "Move",
    "Verschieben"
   ],
-  "manualImport.import": [
-   "Import",
-   "Importieren"
-  ],
   "manualImport.season": [
    "Season",
    "Staffel"
@@ -7268,13 +7184,141 @@
    "Episode",
    "Episode"
   ],
-  "manualImport.run": [
-   "Import",
-   "Importieren"
-  ],
   "manualImport.done": [
    "Imported files: {0}",
    "Importierte Dateien: {0}"
+  ],
+  "manualImport.list.works": [
+   "Films and series",
+   "Filme und Serien"
+  ],
+  "manualImport.list.target": [
+   "Import target",
+   "Importziel"
+  ],
+  "manualImport.list.files": [
+   "Files",
+   "Dateien"
+  ],
+  "manualImport.list.report": [
+   "Result",
+   "Ergebnis"
+  ],
+  "manualImport.col.file": [
+   "File",
+   "Datei"
+  ],
+  "manualImport.col.series": [
+   "Film or series",
+   "Film oder Serie"
+  ],
+  "manualImport.col.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "manualImport.col.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "manualImport.col.language": [
+   "Language",
+   "Sprache"
+  ],
+  "manualImport.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "manualImport.col.reason": [
+   "Reason",
+   "Grund"
+  ],
+  "manualImport.select": [
+   "Choose this file",
+   "Diese Datei wählen"
+  ],
+  "manualImport.selectAll": [
+   "All files",
+   "Alle Dateien"
+  ],
+  "manualImport.state.ready": [
+   "Ready",
+   "Bereit"
+  ],
+  "manualImport.state.needs": [
+   "Needs episode",
+   "Episode fehlt"
+  ],
+  "manualImport.state.left": [
+   "Left out",
+   "Ausgelassen"
+  ],
+  "manualImport.state.imported": [
+   "Imported",
+   "Importiert"
+  ],
+  "manualImport.state.failed": [
+   "Not imported",
+   "Nicht importiert"
+  ],
+  "manualImport.match": [
+   "Match",
+   "Zuordnen"
+  ],
+  "manualImport.matchTitle": [
+   "Match file",
+   "Datei zuordnen"
+  ],
+  "manualImport.matchQuery": [
+   "Search the library",
+   "Bibliothek durchsuchen"
+  ],
+  "manualImport.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "manualImport.qualityFromName": [
+   "From the file name",
+   "Aus dem Dateinamen"
+  ],
+  "manualImport.apply": [
+   "Apply",
+   "Übernehmen"
+  ],
+  "manualImport.runSelected": [
+   "Import selected",
+   "Auswahl importieren"
+  ],
+  "manualImport.changeFolder": [
+   "Another folder",
+   "Anderer Ordner"
+  ],
+  "manualImport.backToQueue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "manualImport.more": [
+   "Import more",
+   "Weiter importieren"
+  ],
+  "manualImport.actions": [
+   "Manual import actions",
+   "Aktionen des manuellen Imports"
+  ],
+  "manualImport.incomplete": [
+   "Every chosen episode needs its season and episode.",
+   "Jede gewählte Episode braucht ihre Staffel und Episode."
+  ],
+  "manualImport.kpi.imported": [
+   "Imported",
+   "Importiert"
+  ],
+  "manualImport.kpi.failed": [
+   "Not imported",
+   "Nicht importiert"
+  ],
+  "manualImport.kpi.left": [
+   "Left out",
+   "Ausgelassen"
   ],
   "activity.importManually": [
    "Import by hand",
@@ -9556,10 +9600,6 @@
    "System",
    "System"
   ],
-  "nav.system.overview": [
-   "Overview",
-   "Übersicht"
-  ],
   "operation.type.Job": [
    "Background job",
    "Hintergrundjob"
@@ -10432,49 +10472,309 @@
    "This username is already taken.",
    "Dieser Benutzername ist schon vergeben."
   ],
-  "reader.seek.book": [
-   "Position in the book",
-   "Position im Buch"
+  "nav.group.overview": [
+   "Overview",
+   "Übersicht"
   ],
-  "reader.paragraph": [
-   "Paragraph spacing (%)",
-   "Absatzabstand (%)"
+  "nav.system.server": [
+   "Server",
+   "Server"
   ],
-  "reader.language.none": [
-   "No reading language is set up yet. Choose your languages in the profile settings.",
-   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+  "admin.dashboard.title": [
+   "Dashboard",
+   "Dashboard"
   ],
-  "reader.language.configure": [
-   "Open profile settings",
-   "Profileinstellungen öffnen"
+  "admin.performance.title": [
+   "Performance",
+   "Performance"
   ],
-  "reader.chapter.previous": [
-   "Previous chapter",
-   "Vorheriges Kapitel"
+  "admin.logs.title": [
+   "Logs",
+   "Logs"
   ],
-  "reader.chapter.next": [
-   "Next chapter",
-   "Nächstes Kapitel"
+  "dashboard.kpi.status": [
+   "System status",
+   "Systemstatus"
   ],
-  "speech.timer": [
-   "Sleep timer",
-   "Einschlaf-Timer"
+  "dashboard.kpi.media": [
+   "Media",
+   "Medien"
   ],
-  "speech.timer.after": [
-   "Stop reading aloud after",
-   "Vorlesen beenden nach"
+  "dashboard.kpi.downloads": [
+   "Downloads",
+   "Downloads"
   ],
-  "speech.timer.off": [
-   "Off",
-   "Aus"
+  "dashboard.kpi.requests": [
+   "Open requests",
+   "Offene Requests"
   ],
-  "speech.timer.minutes": [
-   "{0} minutes",
-   "{0} Minuten"
+  "dashboard.status.stable": [
+   "Stable",
+   "Stabil"
   ],
-  "speech.timer.left": [
-   "{0} min",
-   "{0} Min."
+  "dashboard.status.warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "dashboard.status.stable.foot": [
+   "All services answer",
+   "Alle Dienste erreichbar"
+  ],
+  "dashboard.status.warning.foot": [
+   "{0} service(s) do not answer",
+   "{0} Dienst(e) nicht erreichbar"
+  ],
+  "dashboard.status.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.media.files": [
+   "{0} files managed",
+   "{0} Dateien verwaltet"
+  ],
+  "dashboard.downloads.failed": [
+   " with errors",
+   " mit Fehler"
+  ],
+  "dashboard.requests.foot": [
+   "Waiting for a decision",
+   "Warten auf Freigabe"
+  ],
+  "dashboard.performance": [
+   "System performance",
+   "Systemleistung"
+  ],
+  "dashboard.performance.window": [
+   "Last 24 hours",
+   "Letzte 24 Stunden"
+  ],
+  "dashboard.activity": [
+   "Activity & downloads",
+   "Aktivität & Downloads"
+  ],
+  "dashboard.activity.open": [
+   "To the queue",
+   "Zur Queue"
+  ],
+  "dashboard.activity.empty": [
+   "Nothing is downloading right now.",
+   "Gerade läuft kein Download."
+  ],
+  "dashboard.services": [
+   "Available services",
+   "Verfügbare Dienste"
+  ],
+  "dashboard.services.check": [
+   "Check now",
+   "Jetzt prüfen"
+  ],
+  "dashboard.services.empty": [
+   "No service is set up yet.",
+   "Es ist noch kein Dienst eingerichtet."
+  ],
+  "dashboard.services.checked": [
+   "Last checked {0}",
+   "Zuletzt geprüft {0}"
+  ],
+  "dashboard.services.never": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "dashboard.storage.open": [
+   "Open storage",
+   "Speicher öffnen"
+  ],
+  "dashboard.storage.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage.video": [
+   "Video",
+   "Videos"
+  ],
+  "dashboard.storage.books": [
+   "Books",
+   "Bücher"
+  ],
+  "dashboard.storage.music": [
+   "Music",
+   "Musik"
+  ],
+  "dashboard.storage.games": [
+   "Games",
+   "Games"
+  ],
+  "dashboard.storage.other": [
+   "Other data",
+   "Andere Daten"
+  ],
+  "health.type.Database": [
+   "Database",
+   "Datenbank"
+  ],
+  "health.type.Storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "health.type.Provider": [
+   "Provider",
+   "Anbieter"
+  ],
+  "health.type.MediaServer": [
+   "Media server",
+   "Medienserver"
+  ],
+  "health.type.DownloadClient": [
+   "Download client",
+   "Download-Client"
+  ],
+  "health.type.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "health.state.Available": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "health.state.Unavailable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "health.state.Unknown": [
+   "Not checked",
+   "Nicht geprüft"
+  ],
+  "resource.now": [
+   "Now",
+   "Jetzt"
+  ],
+  "resource.chart": [
+   "Processor and memory use over the last 24 hours",
+   "Prozessor- und Speichernutzung der letzten 24 Stunden"
+  ],
+  "resource.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "resource.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "performance.kpi.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.response": [
+   "Response time",
+   "Antwortzeit"
+  ],
+  "performance.kpi.errors": [
+   "Error rate",
+   "Fehlerquote"
+  ],
+  "performance.window": [
+   "Period: 24 hours",
+   "Zeitraum: 24 Stunden"
+  ],
+  "performance.history": [
+   "Load and memory use",
+   "Leistung und Speichernutzung"
+  ],
+  "performance.services": [
+   "Services by runtime",
+   "Services nach Laufzeit"
+  ],
+  "performance.service": [
+   "Service",
+   "Service"
+  ],
+  "performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "performance.maximum": [
+   "Longest",
+   "Max."
+  ],
+  "performance.errorCount": [
+   "Errors",
+   "Fehler"
+  ],
+  "performance.empty": [
+   "No service was called in the last 24 hours.",
+   "In den letzten 24 Stunden wurde kein Service aufgerufen."
+  ],
+  "logs.level.All": [
+   "All",
+   "Alle"
+  ],
+  "logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "logs.level.Info": [
+   "Info",
+   "Info"
+  ],
+  "logs.source": [
+   "Source",
+   "Quelle"
+  ],
+  "logs.source.All": [
+   "All sources",
+   "Alle Quellen"
+  ],
+  "logs.source.Activity": [
+   "Activity",
+   "Aktivität"
+  ],
+  "logs.source.Job": [
+   "Jobs",
+   "Jobs"
+  ],
+  "logs.source.Application": [
+   "Application",
+   "Anwendung"
+  ],
+  "logs.search": [
+   "Filter messages",
+   "Meldungen filtern"
+  ],
+  "logs.empty": [
+   "No messages for this filter.",
+   "Keine Meldungen für diesen Filter."
+  ],
+  "jobs.job.health": [
+   "Health check",
+   "Gesundheitsprüfung"
+  ],
+  "jobs.worker.Health": [
+   "Health",
+   "Gesundheit"
+  ],
+  "jobs.health.summary": [
+   "{0} of {1} services reachable",
+   "{0} von {1} Diensten erreichbar"
+  ],
+  "jobs.about.health": [
+   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
+   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
   ],
   "error.homePage": [
    "Go to home page",
@@ -10912,441 +11212,113 @@
    "Page {0}",
    "Seite {0}"
   ],
-  "manualImport.list.works": [
-   "Films and series",
-   "Filme und Serien"
-  ],
-  "manualImport.list.target": [
-   "Import target",
-   "Importziel"
-  ],
-  "manualImport.list.files": [
-   "Files",
-   "Dateien"
-  ],
-  "manualImport.list.report": [
-   "Result",
-   "Ergebnis"
-  ],
-  "manualImport.col.file": [
-   "File",
-   "Datei"
-  ],
-  "manualImport.col.series": [
-   "Film or series",
-   "Film oder Serie"
-  ],
-  "manualImport.col.episode": [
-   "Episode",
-   "Episode"
-  ],
-  "manualImport.col.quality": [
-   "Quality",
-   "Qualität"
-  ],
-  "manualImport.col.language": [
-   "Language",
-   "Sprache"
-  ],
-  "manualImport.col.size": [
-   "Size",
-   "Größe"
-  ],
-  "manualImport.col.reason": [
-   "Reason",
-   "Grund"
-  ],
-  "manualImport.select": [
-   "Choose this file",
-   "Diese Datei wählen"
-  ],
-  "manualImport.selectAll": [
-   "All files",
-   "Alle Dateien"
-  ],
-  "manualImport.state.ready": [
-   "Ready",
-   "Bereit"
-  ],
-  "manualImport.state.needs": [
-   "Needs episode",
-   "Episode fehlt"
-  ],
-  "manualImport.state.left": [
-   "Left out",
-   "Ausgelassen"
-  ],
-  "manualImport.state.imported": [
-   "Imported",
-   "Importiert"
-  ],
-  "manualImport.state.failed": [
-   "Not imported",
-   "Nicht importiert"
-  ],
-  "manualImport.match": [
-   "Match",
-   "Zuordnen"
-  ],
-  "manualImport.matchTitle": [
-   "Match file",
-   "Datei zuordnen"
-  ],
-  "manualImport.matchQuery": [
-   "Search the library",
-   "Bibliothek durchsuchen"
-  ],
-  "manualImport.quality": [
-   "Quality",
-   "Qualität"
-  ],
-  "manualImport.qualityFromName": [
-   "From the file name",
-   "Aus dem Dateinamen"
-  ],
-  "manualImport.apply": [
-   "Apply",
-   "Übernehmen"
-  ],
-  "manualImport.runSelected": [
-   "Import selected",
-   "Auswahl importieren"
-  ],
-  "manualImport.changeFolder": [
-   "Another folder",
-   "Anderer Ordner"
-  ],
-  "manualImport.backToQueue": [
-   "Queue",
-   "Warteschlange"
-  ],
-  "manualImport.more": [
-   "Import more",
-   "Weiter importieren"
-  ],
-  "manualImport.actions": [
-   "Manual import actions",
-   "Aktionen des manuellen Imports"
-  ],
-  "manualImport.incomplete": [
-   "Every chosen episode needs its season and episode.",
-   "Jede gewählte Episode braucht ihre Staffel und Episode."
-  ],
-  "manualImport.kpi.imported": [
-   "Imported",
-   "Importiert"
-  ],
-  "manualImport.kpi.failed": [
-   "Not imported",
-   "Nicht importiert"
-  ],
-  "manualImport.kpi.left": [
-   "Left out",
-   "Ausgelassen"
-  ],
-  "nav.group.overview": [
-   "Overview",
-   "Übersicht"
-  ],
-  "nav.system.server": [
-   "Server",
-   "Server"
-  ],
-  "admin.dashboard.title": [
-   "Dashboard",
-   "Dashboard"
-  ],
-  "admin.performance.title": [
-   "Performance",
-   "Performance"
-  ],
-  "admin.logs.title": [
-   "Logs",
-   "Logs"
-  ],
-  "dashboard.kpi.status": [
-   "System status",
-   "Systemstatus"
-  ],
-  "dashboard.kpi.media": [
-   "Media",
-   "Medien"
-  ],
-  "dashboard.kpi.downloads": [
-   "Downloads",
-   "Downloads"
-  ],
-  "dashboard.kpi.requests": [
-   "Open requests",
-   "Offene Requests"
-  ],
-  "dashboard.status.stable": [
-   "Stable",
-   "Stabil"
-  ],
-  "dashboard.status.warning": [
-   "Warning",
-   "Warnung"
-  ],
-  "dashboard.status.stable.foot": [
-   "All services answer",
-   "Alle Dienste erreichbar"
-  ],
-  "dashboard.status.warning.foot": [
-   "{0} service(s) do not answer",
-   "{0} Dienst(e) nicht erreichbar"
-  ],
-  "dashboard.status.unchecked": [
-   "Not checked yet",
-   "Noch nicht geprüft"
-  ],
-  "dashboard.media.files": [
-   "{0} files managed",
-   "{0} Dateien verwaltet"
-  ],
-  "dashboard.downloads.failed": [
-   " with errors",
-   " mit Fehler"
-  ],
-  "dashboard.requests.foot": [
-   "Waiting for a decision",
-   "Warten auf Freigabe"
-  ],
-  "dashboard.performance": [
-   "System performance",
-   "Systemleistung"
-  ],
-  "dashboard.performance.window": [
-   "Last 24 hours",
-   "Letzte 24 Stunden"
-  ],
-  "dashboard.activity": [
-   "Activity & downloads",
-   "Aktivität & Downloads"
-  ],
-  "dashboard.activity.open": [
-   "To the queue",
-   "Zur Queue"
-  ],
-  "dashboard.activity.empty": [
-   "Nothing is downloading right now.",
-   "Gerade läuft kein Download."
-  ],
-  "dashboard.services": [
-   "Available services",
-   "Verfügbare Dienste"
-  ],
-  "dashboard.services.check": [
-   "Check now",
-   "Jetzt prüfen"
-  ],
-  "dashboard.services.empty": [
-   "No service is set up yet.",
-   "Es ist noch kein Dienst eingerichtet."
-  ],
-  "dashboard.services.checked": [
-   "Last checked {0}",
-   "Zuletzt geprüft {0}"
-  ],
-  "dashboard.services.never": [
-   "Not checked yet",
-   "Noch nicht geprüft"
-  ],
-  "dashboard.storage": [
-   "Storage",
-   "Speicher"
-  ],
-  "dashboard.storage.open": [
-   "Open storage",
-   "Speicher öffnen"
-  ],
-  "dashboard.storage.unchecked": [
-   "Not checked yet",
-   "Noch nicht geprüft"
-  ],
-  "dashboard.storage.video": [
-   "Video",
-   "Videos"
-  ],
-  "dashboard.storage.books": [
-   "Books",
-   "Bücher"
-  ],
-  "dashboard.storage.music": [
-   "Music",
-   "Musik"
-  ],
-  "dashboard.storage.games": [
-   "Games",
-   "Games"
-  ],
-  "dashboard.storage.other": [
-   "Other data",
-   "Andere Daten"
-  ],
-  "health.type.Database": [
-   "Database",
-   "Datenbank"
-  ],
-  "health.type.Storage": [
-   "Storage",
-   "Speicher"
-  ],
-  "health.type.Provider": [
-   "Provider",
-   "Anbieter"
-  ],
-  "health.type.MediaServer": [
-   "Media server",
-   "Medienserver"
-  ],
-  "health.type.DownloadClient": [
-   "Download client",
-   "Download-Client"
-  ],
-  "health.type.Indexer": [
-   "Indexer",
-   "Indexer"
-  ],
-  "health.state.Available": [
-   "Reachable",
-   "Erreichbar"
-  ],
-  "health.state.Unavailable": [
-   "Not reachable",
-   "Nicht erreichbar"
-  ],
-  "health.state.Unknown": [
-   "Not checked",
-   "Nicht geprüft"
-  ],
-  "resource.now": [
-   "Now",
-   "Jetzt"
-  ],
-  "resource.chart": [
-   "Processor and memory use over the last 24 hours",
-   "Prozessor- und Speichernutzung der letzten 24 Stunden"
-  ],
-  "resource.processor": [
-   "CPU",
-   "CPU"
-  ],
-  "resource.memory": [
-   "RAM",
-   "RAM"
-  ],
-  "performance.kpi.processor": [
-   "CPU",
-   "CPU"
-  ],
-  "performance.kpi.memory": [
-   "RAM",
-   "RAM"
-  ],
-  "performance.kpi.response": [
-   "Response time",
-   "Antwortzeit"
-  ],
-  "performance.kpi.errors": [
-   "Error rate",
-   "Fehlerquote"
-  ],
-  "performance.window": [
-   "Period: 24 hours",
-   "Zeitraum: 24 Stunden"
-  ],
-  "performance.history": [
-   "Load and memory use",
-   "Leistung und Speichernutzung"
-  ],
-  "performance.services": [
-   "Services by runtime",
-   "Services nach Laufzeit"
-  ],
-  "performance.service": [
-   "Service",
-   "Service"
-  ],
-  "performance.calls": [
-   "Calls",
-   "Aufrufe"
-  ],
-  "performance.average": [
-   "Average",
-   "Durchschnitt"
-  ],
-  "performance.maximum": [
-   "Longest",
-   "Max."
-  ],
-  "performance.errorCount": [
-   "Errors",
-   "Fehler"
-  ],
-  "performance.empty": [
-   "No service was called in the last 24 hours.",
-   "In den letzten 24 Stunden wurde kein Service aufgerufen."
-  ],
-  "logs.level.All": [
-   "All",
-   "Alle"
-  ],
-  "logs.level.Error": [
-   "Error",
-   "Fehler"
-  ],
-  "logs.level.Warning": [
-   "Warning",
-   "Warnung"
-  ],
-  "logs.level.Info": [
-   "Info",
-   "Info"
-  ],
-  "logs.source": [
-   "Source",
-   "Quelle"
-  ],
-  "logs.source.All": [
-   "All sources",
-   "Alle Quellen"
-  ],
-  "logs.source.Activity": [
-   "Activity",
-   "Aktivität"
-  ],
-  "logs.source.Job": [
-   "Jobs",
-   "Jobs"
-  ],
-  "logs.source.Application": [
-   "Application",
-   "Anwendung"
-  ],
-  "logs.search": [
-   "Filter messages",
-   "Meldungen filtern"
-  ],
-  "logs.empty": [
-   "No messages for this filter.",
-   "Keine Meldungen für diesen Filter."
-  ],
-  "jobs.job.health": [
-   "Health check",
-   "Gesundheitsprüfung"
-  ],
-  "jobs.worker.Health": [
-   "Health",
-   "Gesundheit"
-  ],
-  "jobs.health.summary": [
-   "{0} of {1} services reachable",
-   "{0} von {1} Diensten erreichbar"
-  ],
-  "jobs.about.health": [
-   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
-   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
+  "details.relation.kind": [
+   "Relation",
+   "Beziehung"
+  ],
+  "details.relation.Sequel": [
+   "Sequel",
+   "Fortsetzung"
+  ],
+  "details.relation.Prequel": [
+   "Prequel",
+   "Vorgänger"
+  ],
+  "details.relation.SideStory": [
+   "Side story",
+   "Nebengeschichte"
+  ],
+  "details.relation.SpinOff": [
+   "Spin-off",
+   "Ableger"
+  ],
+  "details.relation.MainStory": [
+   "Main story",
+   "Hauptgeschichte"
+  ],
+  "details.relation.Adaptation": [
+   "Adaptation",
+   "Adaption"
+  ],
+  "details.relation.SourceMaterial": [
+   "Source material",
+   "Vorlage"
+  ],
+  "details.relation.Alternative": [
+   "Alternative version",
+   "Andere Fassung"
+  ],
+  "details.relation.SharedUniverse": [
+   "Same universe",
+   "Gleiches Universum"
+  ],
+  "details.relation.Summary": [
+   "Summary",
+   "Zusammenfassung"
+  ],
+  "details.relation.Other": [
+   "Other",
+   "Sonstiges"
+  ],
+  "details.relation.source": [
+   "Source: {0}",
+   "Quelle: {0}"
+  ],
+  "details.relation.source.manual": [
+   "Added by hand",
+   "Von Hand ergänzt"
+  ],
+  "details.relation.notInLibrary": [
+   "Not in library",
+   "Nicht in der Bibliothek"
+  ],
+  "details.relation.missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "details.relation.add": [
+   "Add relation",
+   "Beziehung hinzufügen"
+  ],
+  "details.relation.dialog": [
+   "Add a related title",
+   "Verwandten Titel hinzufügen"
+  ],
+  "details.relation.find": [
+   "Search a title",
+   "Titel suchen"
+  ],
+  "details.relation.search": [
+   "Search",
+   "Suchen"
+  ],
+  "details.relation.pick": [
+   "Add",
+   "Hinzufügen"
+  ],
+  "details.relation.results": [
+   "Matches",
+   "Treffer"
+  ],
+  "details.relation.none": [
+   "No titles found",
+   "Keine Titel gefunden"
+  ],
+  "details.relation.added": [
+   "Relation added",
+   "Beziehung hinzugefügt"
+  ],
+  "details.relation.removed": [
+   "Relation removed",
+   "Beziehung entfernt"
+  ],
+  "details.relation.remove": [
+   "Remove relation",
+   "Beziehung entfernen"
+  ],
+  "details.relation.request": [
+   "Request",
+   "Anfragen"
   ],
   "works.kpi.total": [
    "Titles",
@@ -11575,6 +11547,142 @@
   "unit.times": [
    "×",
    "×"
+  ],
+  "system.performance": [
+   "Performance",
+   "Leistung"
+  ],
+  "system.performance.processor": [
+   "Processor",
+   "Prozessor"
+  ],
+  "system.performance.memory": [
+   "Memory",
+   "Arbeitsspeicher"
+  ],
+  "system.performance.processorHistory": [
+   "Processor use over the last six hours",
+   "Prozessorauslastung der letzten sechs Stunden"
+  ],
+  "system.performance.memoryHistory": [
+   "Memory use over the last six hours",
+   "Speicherauslastung der letzten sechs Stunden"
+  ],
+  "system.performance.service": [
+   "Service",
+   "Dienst"
+  ],
+  "system.performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "system.performance.errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "system.performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "system.performance.maximum": [
+   "Longest",
+   "Längster"
+  ],
+  "system.performance.empty": [
+   "No calls in the last hour.",
+   "Keine Aufrufe in der letzten Stunde."
+  ],
+  "system.logs": [
+   "Recent warnings and errors",
+   "Letzte Warnungen und Fehler"
+  ],
+  "system.logs.empty": [
+   "Nothing went wrong since Jularr started.",
+   "Seit dem Start von Jularr ist nichts schiefgelaufen."
+  ],
+  "system.logs.at": [
+   "Time",
+   "Zeit"
+  ],
+  "system.logs.level": [
+   "Level",
+   "Stufe"
+  ],
+  "system.logs.area": [
+   "Area",
+   "Bereich"
+  ],
+  "system.logs.message": [
+   "Message",
+   "Meldung"
+  ],
+  "system.logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "system.logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "system.logs.level.Critical": [
+   "Critical",
+   "Kritisch"
+  ],
+  "manualImport.import": [
+   "Import",
+   "Importieren"
+  ],
+  "manualImport.run": [
+   "Import",
+   "Importieren"
+  ],
+  "nav.system.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "reader.seek.book": [
+   "Position in the book",
+   "Position im Buch"
+  ],
+  "reader.paragraph": [
+   "Paragraph spacing (%)",
+   "Absatzabstand (%)"
+  ],
+  "reader.language.none": [
+   "No reading language is set up yet. Choose your languages in the profile settings.",
+   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+  ],
+  "reader.language.configure": [
+   "Open profile settings",
+   "Profileinstellungen öffnen"
+  ],
+  "reader.chapter.previous": [
+   "Previous chapter",
+   "Vorheriges Kapitel"
+  ],
+  "reader.chapter.next": [
+   "Next chapter",
+   "Nächstes Kapitel"
+  ],
+  "speech.timer": [
+   "Sleep timer",
+   "Einschlaf-Timer"
+  ],
+  "speech.timer.after": [
+   "Stop reading aloud after",
+   "Vorlesen beenden nach"
+  ],
+  "speech.timer.off": [
+   "Off",
+   "Aus"
+  ],
+  "speech.timer.minutes": [
+   "{0} minutes",
+   "{0} Minuten"
+  ],
+  "speech.timer.left": [
+   "{0} min",
+   "{0} Min."
   ]
  }
 }
