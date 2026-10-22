@@ -30,6 +30,7 @@ namespace Jularr.Integrations.Logic.Browser
     {
         // The source's own check needs an undisturbed page; reading it too often makes it fail.
         private const int PollMilliseconds = 3000;
+        private const int MaximumPageChars = 4 * 1024 * 1024;
 
         // A fresh browser needs a moment before its first page counts.
         private const int StartMilliseconds = 4000;
@@ -746,7 +747,7 @@ namespace Jularr.Integrations.Logic.Browser
             string answer;
             try
             {
-                answer = await _client!.EvaluateAsync("JSON.stringify({href: location.href, ready: document.readyState, html: document.documentElement ? document.documentElement.outerHTML : ''})", ct, session);
+                answer = await _client!.EvaluateAsync("JSON.stringify({href: location.href, ready: document.readyState, html: document.documentElement ? document.documentElement.outerHTML.slice(0, 4194305) : ''})", ct, session);
             }
             catch (Exception exception) when (exception is SourceBrowserException or OperationCanceledException)
             {
@@ -762,7 +763,8 @@ namespace Jularr.Integrations.Logic.Browser
             {
                 using var document = JsonDocument.Parse(answer);
                 var root = document.RootElement;
-                return new BrowserState(root.GetProperty("href").GetString() ?? "", root.GetProperty("ready").GetString() ?? "", root.GetProperty("html").GetString() ?? "");
+                var html = root.GetProperty("html").GetString() ?? "";
+                return html.Length > MaximumPageChars ? null : new BrowserState(root.GetProperty("href").GetString() ?? "", root.GetProperty("ready").GetString() ?? "", html);
             }
             catch (JsonException)
             {

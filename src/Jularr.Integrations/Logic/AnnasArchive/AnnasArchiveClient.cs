@@ -158,6 +158,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             {
                 return await DirectDownload.ReadPageAsync(http, new Uri(mirror, "search?q=" + Uri.EscapeDataString(query)), gates, browser, ct);
             }
+            catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.TooLarge)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The search page exceeds its size limit.", exception);
+            }
             catch (DirectDownloadException)
             {
                 return null;

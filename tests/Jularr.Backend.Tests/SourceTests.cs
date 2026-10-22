@@ -401,6 +401,18 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_OversizedSearchNeverFallsBackToBrowser()
+        {
+            var sources = new FakeSources { OversizedSearch = true };
+            var browser = new FakeBrowser();
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), browser);
+            var error = await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
+                client.SearchAsync(new Uri("https://annas.example.test/"), "oversized", CancellationToken.None));
+            Assert.AreEqual(Integrations.Data.AnnasArchive.AnnasArchiveFailure.InvalidResponse, error.Failure);
+            Assert.AreEqual(0, browser.PagesRead);
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_CaptchaWordInBookTitleIsNotAChallenge()
         {
             var sources = new FakeSources();
@@ -526,6 +538,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeBrowser : ISourceBrowser
         {
             public int Saved { get; private set; }
+            public int PagesRead { get; private set; }
             public bool SaveHtml { get; set; }
 
             public bool IsAvailable => true;
@@ -540,7 +553,11 @@ namespace Jularr.Backend.Tests
 
             public Task ResetAsync() => Task.CompletedTask;
 
-            public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct) => Task.FromResult<BrowserPage?>(null);
+            public Task<BrowserPage?> ReadPagesAsync(IReadOnlyList<Uri> addresses, CancellationToken ct)
+            {
+                PagesRead++;
+                return Task.FromResult<BrowserPage?>(null);
+            }
 
             public Task SaveFileAsync(Uri file, string destination, long? maximumBytes, Func<long, IDisposable>? reserveWrite, CancellationToken ct)
             {
