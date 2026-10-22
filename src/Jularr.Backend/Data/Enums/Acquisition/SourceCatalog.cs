@@ -71,7 +71,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("standardebooks", "Standard Ebooks (OPDS)", SourceGroup.Books, SearchDownload, SourceAvailability.Account, AcquisitionConnectionType.Opds, defaultBaseUrl: "https://standardebooks.org/feeds/opds"),
             new("opds", "OPDS catalog", SourceGroup.Books, SearchDownload, SourceAvailability.Ready, AcquisitionConnectionType.Opds),
             new("calibreweb", "Calibre / Calibre-Web (OPDS)", SourceGroup.Books, SearchDownload, SourceAvailability.Account, AcquisitionConnectionType.Opds),
-            new("annasarchive", "Anna's Archive (optional member key)", SourceGroup.Books, SearchDownload, SourceAvailability.Account, AcquisitionConnectionType.AnnasArchive, defaultBaseUrl: "https://annas-archive.gl"),
+            new("annasarchive", "Anna's Archive (optional member key)", SourceGroup.Books, SearchDownload, SourceAvailability.Account, AcquisitionConnectionType.AnnasArchive, defaultBaseUrl: "https://annas-archive.org"),
             new("googlebooks", "Google Books", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
             new("hardcover", "Hardcover (book series)", SourceGroup.Books, SourceCapability.Metadata, SourceAvailability.Account, providerKey: "hardcover"),
             new("wikisource", "Wikisource", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
