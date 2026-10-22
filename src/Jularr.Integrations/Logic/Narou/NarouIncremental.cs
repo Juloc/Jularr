@@ -43,8 +43,8 @@ namespace Jularr.Integrations.Logic.Narou
                 .OrderBy(entry => entry.FullName, StringComparer.Ordinal).ToArray();
             var count = chapterEntries.Length;
             if (count == 0 || count != tocLinks.Length || count > MaximumChapters
-                || chapterEntries.Any((entry, index) =>
-                    entry.FullName != "OEBPS/chapters/" + (index + 1).ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".xhtml"))
+                || chapterEntries.Where((entry, index) =>
+                    entry.FullName != "OEBPS/chapters/" + (index + 1).ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".xhtml").Any())
                 throw new NarouException("The existing EPUB has an unsupported chapter layout.");
 
             var allowed = old.Entries.All(entry => entry.FullName is "mimetype" or
