@@ -78,6 +78,4 @@
             > :not(h2):not(.media-preview__meta) { grid-column: 1 / -1; }
         }
     }
-
-    @media (prefers-reduced-motion: reduce) { &__poster { transition: none; } }
 }

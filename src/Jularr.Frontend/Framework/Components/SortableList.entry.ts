@@ -7,7 +7,6 @@ import { available, dropIndex, fill, scrollSpeed, targetIndex, type Move } from 
 // The order is the order of the rows in the document, which is what the form sends; every change tells the form (the page's save dock listens).
 
 const rowsOf = (list: Element) => Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-sortable-row]"));
-const calm = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function renumber(list: HTMLElement): void {
     rowsOf(list).forEach((row, index) => { row.querySelector(".sortable__number")!.textContent = String(index + 1); });
@@ -30,7 +29,6 @@ function changed(row: HTMLElement): void {
 function glide(list: HTMLElement, change: () => void, except?: HTMLElement): void {
     const before = new Map(rowsOf(list).map(row => [row, row.getBoundingClientRect().top]));
     change();
-    if (calm()) return;
     for (const row of rowsOf(list)) {
         const shift = (before.get(row) ?? 0) - row.getBoundingClientRect().top;
         if (row !== except && shift !== 0) row.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }], { duration: 160, easing: "ease-out" });
@@ -93,7 +91,7 @@ function drag(handle: HTMLElement, event: PointerEvent): void {
         row.classList.remove("sortable__row--dragging");
         list.classList.remove("sortable__rows--dragging");
         row.style.removeProperty("--drag-offset");
-        if (!calm() && settle !== 0) row.animate([{ transform: `translateY(${settle}px)` }, { transform: "none" }], { duration: 160, easing: "ease-out" });
+        if (settle !== 0) row.animate([{ transform: `translateY(${settle}px)` }, { transform: "none" }], { duration: 160, easing: "ease-out" });
         if (!cancel && rowsOf(list).some((item, index) => item !== original[index])) changed(row);
         else if (cancel) renumber(list);
     };

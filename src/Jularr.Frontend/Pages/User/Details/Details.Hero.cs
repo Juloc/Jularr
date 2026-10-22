@@ -138,6 +138,11 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (started && start is not null) menu.Add(ProgressForm(startOver, ProgressAction.Unwatched, null, PlayHref(start), "history", ProgressStyle.Menu));
             }
 
+            if (texts.CanManageRelations())
+            {
+                menu.Add(Modal.Opener(new Button(new Icon("link", assets, 16), new Span(new Text("details.relation.add"))).Class("action-menu__item"), RelationDialogId));
+            }
+
             if (texts.CanManageMedia())
             {
                 if (menu.Count > 0) menu.Add(new Hr().Class("action-menu__divider"));

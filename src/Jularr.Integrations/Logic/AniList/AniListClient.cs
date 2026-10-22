@@ -18,7 +18,7 @@ namespace Jularr.Integrations.Logic.AniList
 
         private const string Fields =
             "id type format countryOfOrigin title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } bannerImage trailer { id site } "
-            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { id name { full } } } } relations { edges { relationType node { id type } } }";
+            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { id name { full } } } } relations { edges { relationType node { id type format title { romaji english } startDate { year } coverImage { large } } } }";
 
         public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
         {
@@ -126,6 +126,7 @@ namespace Jularr.Integrations.Logic.AniList
                 Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer)
             {
                 People = people,
+                Relations = Relations(media),
                 OriginalLanguage = Text(media, "countryOfOrigin") switch { "JP" => "ja", "KR" => "ko", "CN" or "TW" => "zh", _ => null }
             };
         }
@@ -139,6 +140,23 @@ namespace Jularr.Integrations.Logic.AniList
                     .Where(link => Text(link, "relationType") == relationType && Child(link, "node") is { } node && Text(node, "type") == Type(media))
                     .Select(link => Child(link, "node")!.Value.TryGetProperty("id", out var related) && related.TryGetInt32(out var relatedId) ? relatedId : 0)
                     .Where(relatedId => relatedId > 0).Distinct().ToArray()
+                : [];
+
+        // Every related entry that AniList names with a title.
+        private static AniListRelation[] Relations(JsonElement media) =>
+            Child(media, "relations") is { } relations && relations.TryGetProperty("edges", out var links) && links.ValueKind == JsonValueKind.Array
+                ? [.. links.EnumerateArray().Select(link =>
+                    {
+                        if (Text(link, "relationType") is not { } relationType || Child(link, "node") is not { } node || Text(node, "type") is not { } type
+                            || !node.TryGetProperty("id", out var id) || !id.TryGetInt32(out var relatedId) || relatedId <= 0 || Child(node, "title") is not { } title)
+                        {
+                            return null;
+                        }
+
+                        var name = Text(title, "english") ?? Text(title, "romaji");
+                        var year = Child(node, "startDate") is { } start && start.TryGetProperty("year", out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt32() : (int?)null;
+                        return name is null ? null : new AniListRelation(relationType, relatedId, type, Text(node, "format"), name, year, Https(Child(node, "coverImage") is { } image ? Text(image, "large") : null));
+                    }).OfType<AniListRelation>()]
                 : [];
 
         private Task<JsonDocument> PostAsync(string query, Dictionary<string, object> variables, CancellationToken ct, string? token = null) =>

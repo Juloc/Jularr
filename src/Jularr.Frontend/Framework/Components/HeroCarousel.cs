@@ -8,7 +8,7 @@ namespace Jularr.Frontend.Framework
         string? DetailsHref, string Group, int Pass, bool IsContinue = false);
 
     // The page decides which titles are highlighted; this shows one at a time with arrows, a position bar and a pause.
-    // The script chooses from the slides by the device's preferences (see HeroCarousel.ts) and turns itself off for reduced motion.
+    // The script chooses from the slides by the device's preferences (see HeroCarousel.ts).
     public sealed class HeroCarousel(FrontendAssets assets, IReadOnlyList<HeroSlide> slides, string preferencesKey) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)

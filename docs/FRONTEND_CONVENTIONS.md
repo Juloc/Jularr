@@ -27,7 +27,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   its DOM setup with `onPage(import.meta.url, setup)`: it runs once per document load
   and again for each new page the script belongs to; document-level listeners are
   installed once at module level. HTML a script inserts goes through `inserted(element)`.
-- Frontend owns UI appearance, accessible interaction, presentation-only state.
+- Frontend owns UI appearance, interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
 - Browser interactions use the canonical Backend API or an authorized Razor HTML
@@ -56,7 +56,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   shared HTML writer, encoding dynamic values and attribute values.
 - Never concatenate unchecked raw HTML. Validate HTML attribute names and
   URL schemes, use semantic tags, accessible names, keyboard/focus states,
-  reduced motion, responsive layout and antiforgery for real POST forms.
+  responsive layout and antiforgery for real POST forms.
 - A page owns its independent `.cshtml.cs` definition and thin `.cshtml`
   entry. Reuse `Table<T>`, `Form<T>`, `Split`, tabs, menus, media cards
   and other domain-neutral components rather than copying UI code.
@@ -183,7 +183,7 @@ One visual language for every page, owned by [Theme.scss](../src/Jularr.Frontend
 status, shadows) and [Palette.ts](../src/Jularr.Frontend/Modules/Appearance/Palette.ts) (colours from the accent, applied at runtime). The
 default accent `#8040f7` reproduces the mockup palette **verbatim**; any other accent turns the same palette to its hue and chroma
 (tinted neutrals, lavender, lines), so the Owner's accent setting still drives everything. Components use the tokens, never literals; a page
-adds none of its own colours, radii, shadows or font sizes. The mockup values are the rule: contrast ratios are not a design constraint.
+adds none of its own colours, radii, shadows or font sizes. Design follows the owner mockups and the global tokens; no accessibility/contrast rule set. Invisible aria attributes stay (tests use them).
 
 | Group | Tokens (light / dark) |
 | --- | --- |
@@ -195,7 +195,7 @@ adds none of its own colours, radii, shadows or font sizes. The mockup values ar
 | Shape | `--radius-control` 999px (buttons, chips, search, pills), `--radius-panel` 19px, `--radius-dialog` 22px, `--radius-inner` 13px (detail tiles, textareas), `--radius-tile` 12px (icon tiles), `--radius-field` 11px, `--radius-small` 10px |
 | Depth | `--shadow` 0 9px 30px (panels, tables, sections), `--shadow-drawer` -10px 0 40px #0002, `--shadow-overlay` 0 11px 30px #0004 (popovers, save pill, toast), `--scrim` #16122570 with a 4px blur; no other shadows, bevels or coloured stripes |
 | Type | Inter, then Segoe UI/system; body `--text-body` 12px, controls `--text-control` 11px/740, captions, labels, pills and table heads `--text-small` 10px (heads 810, uppercase, .65px); h1 27px/850 -1.05px, h2 `--text-heading` 14px/805 -.3px, drawer title 22px |
-| Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; all 44px for a coarse pointer; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity; menu entries (sidebar, popups) are pills, fields use `--radius-field` |
+| Controls | `--control-height` 37px (button, 11px), compact 32px (row button, 10px), `--icon-button` 36px circle, `--field-height` 40px, search 39px; 1px borders, focus ring 3px `--focus` offset 2px, `--transition` .15s, press scales to .98, disabled .4 opacity |
 
 - Owner's decision 21 Oct: admin lists are built from the list kit, never from their own grids or tables. A page composes one `ListToolbar` (a
   `NavigationTabs` row of filter chips, modifier `filters`: icon of the state, name and count; at most one filter field (`SearchBox` with `listFilter`; the header
@@ -428,7 +428,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   storage. Reader completion requires reaching the actual content end.
 - Device preferences are optional: validate stored shapes/ranges once on load and
   keep controls functional when browser storage is unavailable. Focused playback
-  controls stay visible; honor reduced motion and prefer wrapping over truncation.
+  controls stay visible; prefer wrapping over truncation.
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
   Disabled buttons use the mockups' .4 opacity.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
@@ -486,7 +486,7 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   essential information must remain accessible without hover. Clipped decoration
   and layout containers without hidden text do not need tooltips.
 - Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
-  accessibility. Full Player and minimized Now Playing are presentations of the
+  behaviour. Full Player and minimized Now Playing are presentations of the
   same playback session; keep the media element outside exchanged page content.
   Learning remains out of the current implementation scope.
 - Display the skin names as **Original** and **Clean**. Clean is neutral with a purple
