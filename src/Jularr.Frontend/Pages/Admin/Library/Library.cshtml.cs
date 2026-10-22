@@ -279,7 +279,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                         form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
                         form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
                         form.Hidden(item => item.RelativePath);
-                        form.Content(new FolderPicker(browseUrl, relativePath, nameof(CreateLibraryRootDataV1.RelativePath), browseUrl,
+                        form.Content(new FolderPicker(assets, browseUrl, relativePath, nameof(CreateLibraryRootDataV1.RelativePath), browseUrl,
                             storageMountFieldName: nameof(CreateLibraryRootDataV1.StorageMountId)));
                         form.Submit("library.add");
                     }, Address(handler: "CreateLibraryRoot"), csrf, _libraryInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, 0, ""), _libraryInput is null ? null : FormError)
