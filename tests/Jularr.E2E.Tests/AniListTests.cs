@@ -69,7 +69,7 @@ namespace Jularr.E2E.Tests
 
                 // Sending is the profile's choice. Episode 2 finished afterwards goes out, nothing else does.
                 await page.GotoAsync("/Settings");
-                await page.GetByRole(AriaRole.Switch, new() { Name = "Send my progress to AniList" }).ClickAsync();
+                await page.GetByRole(AriaRole.Switch, new() { Name = "Send my progress to AniList" }).CheckAsync(new() { Force = true });
                 await Steps.SaveAsync(page);
                 await jularr.RunSqlAsync($"""
                     INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId", "ProgressPositionTypeId", "PositionMs", "IsCompleted", "CompletedAt")
