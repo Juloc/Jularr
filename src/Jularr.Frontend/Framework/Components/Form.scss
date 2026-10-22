@@ -42,17 +42,17 @@
         // The mockups' fields are the soft lavender on any ground.
         background: var(--field);
     }
-    // The label sits above the field, like the mockups' `.field label`: 11px/770; its (i) follows it.
+    // The label sits above the field, inset to the right: 11px/650; its (i) follows it.
     &__top {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 4px;
-        max-width: 100%;
-        margin: 0;
+        max-width: calc(100% - var(--field-label-inset));
+        margin: 0 0 0 var(--field-label-inset);
         padding: 0;
         color: var(--text);
-        font-weight: 770;
+        font-weight: 650;
         font-size: var(--text-control);
         line-height: 1.3;
         overflow-wrap: anywhere;
@@ -64,7 +64,7 @@
         padding: 0;
         border: 0;
 
-        & > legend { float: left; width: 100%; margin: 0 0 6px; padding: 0; }
+        & > legend { float: left; width: calc(100% - var(--field-label-inset)); margin: 0 0 6px var(--field-label-inset); padding: 0; }
         & > legend + * { clear: both; }
     }
     &:has([aria-invalid="true"]) &__top { color: var(--danger); }

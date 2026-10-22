@@ -178,12 +178,24 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Devices'"));
 
             form[$"Modules[{modules.Count - 1}].Version"] = modules[^1].Version.ToString();
+
+            // The media types go with the modules: a changed one is saved, an unchanged one is left alone.
+            var musicVersion = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"MediaTypes\" WHERE \"Key\" = 'Music'"))!;
+            var movieVersion = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"MediaTypes\" WHERE \"Key\" = 'Movie'"))!;
+            form["Media[0].Key"] = "Movie";
+            form["Media[0].Version"] = movieVersion.ToString();
+            form["Media[0].IsEnabled"] = "True";
+            form["Media[1].Key"] = "Music";
+            form["Media[1].Version"] = musicVersion.ToString();
+            form["Media[1].IsEnabled"] = "False";
             using var saved = await host.SendAsync(HttpMethod.Post, "/Setup/Instance", form);
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             Assert.AreEqual("/Setup/Storage", saved.Headers.Location!.OriginalString);
             Assert.AreEqual("My server", await host.ScalarAsync("SELECT \"Name\" FROM \"InstanceSettings\""));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Devices'"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Registration'"));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaTypes\" WHERE \"Key\" = 'Music'"));
+            Assert.AreEqual(movieVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"MediaTypes\" WHERE \"Key\" = 'Movie'"));
 
             using var nextPage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
             var nextHtml = await nextPage.Content.ReadAsStringAsync();

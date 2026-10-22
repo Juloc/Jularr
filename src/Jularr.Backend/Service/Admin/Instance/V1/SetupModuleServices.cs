@@ -3,8 +3,10 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Instance;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Instance;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Instance.V1
@@ -54,6 +56,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, settings.UiLocaleId, Data.Version, null, null, null, null, null, null, null, null, null,
                 settings.PublicUrl, null), CancellationToken);
             await Context.UpdateInstanceModulesAsync(Data.Modules.Select(module => new InstanceModuleUpdateData(module.Id, module.IsEnabled, module.Version)).ToArray(), CancellationToken);
+            foreach (var media in Data.Media) await Context.UpdateMediaCategoryAsync(new MediaCategoryUpdateData(media.Key, media.IsEnabled, media.Version), CancellationToken);
             await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Storage), CancellationToken);
             return new UpdateResult(true);
         }

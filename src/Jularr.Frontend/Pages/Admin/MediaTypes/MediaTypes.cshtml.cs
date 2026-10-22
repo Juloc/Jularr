@@ -13,19 +13,6 @@ namespace Jularr.Frontend.Pages.Admin.MediaTypes
     {
         private const string Address = "/Admin/Instance/MediaTypes";
 
-        // The catalog key of each slug the media-type bar uses.
-        private static readonly Dictionary<string, string> Keys = new()
-        {
-            ["movies"] = "Movie",
-            ["series"] = "Series",
-            ["anime"] = "Anime",
-            ["books"] = "Book",
-            ["manga"] = "Manga",
-            ["lightnovels"] = "LightNovel",
-            ["music"] = "Music",
-            ["games"] = "Game"
-        };
-
         private IReadOnlyList<InstanceMediaDetailsV1> _media = [];
         private UpdateInstanceMediaDataV1? _input;
 
@@ -40,7 +27,7 @@ namespace Jularr.Frontend.Pages.Admin.MediaTypes
             foreach (var area in MediaAreas.All)
             {
                 var cards = new List<IUiComponent>();
-                foreach (var key in area.Slugs.Select(slug => Keys[slug]))
+                foreach (var key in area.Slugs.Select(slug => MediaAreas.Keys[slug]))
                 {
                     if (_media.FirstOrDefault(item => item.Key == key) is not { } media) continue;
                     var failed = _input?.Key == media.Key;

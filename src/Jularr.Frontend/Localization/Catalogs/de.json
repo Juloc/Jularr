@@ -8826,23 +8826,15 @@
   ],
   "setup.preset.complete": [
    "Complete",
-   "Komplett"
+   "Alles in einem"
   ],
   "setup.preset.mediaServer": [
    "Media server",
-   "Mediaserver"
+   "Mediathek & Player"
   ],
   "setup.preset.requests": [
    "Requests",
-   "Anfragen"
-  ],
-  "setup.modules.media": [
-   "Media",
-   "Medien"
-  ],
-  "setup.modules.requests": [
-   "Requests & downloads",
-   "Anfragen & Downloads"
+   "Anfragen & Arr+"
   ],
   "setup.modules.personal": [
    "Profiles & personal features",
@@ -12307,6 +12299,198 @@
   "profile.add.Game": [
    "Add game profile",
    "Spiele-Profil hinzufügen"
+  ],
+  "setup.preset.complete.line": [
+   "Library, player and reader, Discover, automatic search and import.",
+   "Bibliothek, Player und Reader, Discover, automatische Suche und Import."
+  ],
+  "setup.preset.mediaServer.line": [
+   "Play and read your own files, without download automation.",
+   "Eigene Dateien abspielen und lesen, ohne eigene Download-Automatik."
+  ],
+  "setup.preset.requests.line": [
+   "Take requests and let Arr+ search, download and import, without player or reader.",
+   "Anfragen annehmen, Arr+ sucht, lädt und importiert, ohne Player und Reader."
+  ],
+  "setup.modules.discovery": [
+   "Discover & catalogs",
+   "Discover & Kataloge"
+  ],
+  "setup.group.active": [
+   "{0}/{1} on",
+   "{0}/{1} aktiv"
+  ],
+  "setup.type.help.Movie": [
+   "Feature films, also from film series.",
+   "Kinofilme, auch aus Filmreihen."
+  ],
+  "setup.type.help.Series": [
+   "TV series with seasons and episodes.",
+   "TV-Serien mit Staffeln und Episoden."
+  ],
+  "setup.type.help.Anime": [
+   "Anime series and films.",
+   "Anime-Serien und -Filme."
+  ],
+  "setup.type.help.Book": [
+   "E-books and editions in several languages.",
+   "E-Books und Ausgaben in verschiedenen Sprachen."
+  ],
+  "setup.type.help.Manga": [
+   "Manga and comics, in volumes.",
+   "Manga und Comics in Bänden."
+  ],
+  "setup.type.help.LightNovel": [
+   "Light novels and novels in series.",
+   "Light Novels und Romane in Reihen."
+  ],
+  "setup.type.help.Music": [
+   "Albums, artists and single tracks.",
+   "Alben, Künstler und einzelne Tracks."
+  ],
+  "setup.type.help.Game": [
+   "Games, platforms and ROM files.",
+   "Spiele, Plattformen und ROM-Dateien."
+  ],
+  "setup.module.help.Library": [
+   "Manage your own library and local media.",
+   "Persönliche Bibliothek und lokale Medien verwalten."
+  ],
+  "setup.module.help.Requests": [
+   "People can ask for missing media; without Arr+ a request stays a request.",
+   "Nutzer können fehlende Medien anfragen; ohne Arr+ bleibt es bei der Anfrage."
+  ],
+  "setup.module.help.Acquisition": [
+   "Search, monitor, download and import titles; an alternative to Sonarr, Radarr, Readarr and Lidarr.",
+   "Titel suchen, überwachen, herunterladen und importieren, als Alternative zu Sonarr, Radarr, Readarr und Lidarr."
+  ],
+  "setup.module.help.Playback": [
+   "Play films and series in the browser.",
+   "Filme und Serien im Browser abspielen."
+  ],
+  "setup.module.help.Reading": [
+   "Read books, comics and light novels; books are prepared for it.",
+   "Bücher, Comics und Light Novels direkt lesen; Bücher werden dafür vorbereitet."
+  ],
+  "setup.module.help.Emulation": [
+   "Start retro games in the browser, with saves per profile.",
+   "Retro-Spiele im Browser starten, Spielstände pro Profil."
+  ],
+  "setup.module.help.Notifications": [
+   "Notifications about media and tasks.",
+   "Benachrichtigungen zu Medien und Aufgaben."
+  ],
+  "setup.module.help.Collections": [
+   "Your own lists of favourites and media.",
+   "Eigene Favoriten- und Medienlisten."
+  ],
+  "setup.module.help.Calendar": [
+   "Releases in calendar views.",
+   "Veröffentlichungen in Kalenderansichten."
+  ],
+  "setup.module.help.Statistics": [
+   "Personal usage statistics.",
+   "Persönliche Nutzungsstatistiken."
+  ],
+  "setup.module.help.UnitGroups": [
+   "Your own groups for episodes and volumes.",
+   "Eigene Gruppen für Episoden und Bände."
+  ],
+  "setup.module.help.HomeLayout": [
+   "Arrange the home page by personal interests.",
+   "Startseite nach persönlichen Interessen anordnen."
+  ],
+  "setup.module.help.Franchises": [
+   "Show the series of films and books and how titles relate.",
+   "Reihen von Filmen und Büchern und die Beziehungen der Titel zeigen."
+  ],
+  "setup.module.help.Diagnostics": [
+   "Warnings, timings and load kept in memory only.",
+   "Warnungen, Zeiten und Auslastung nur im Arbeitsspeicher."
+  ],
+  "setup.module.help.Profiles": [
+   "Several media profiles under one account.",
+   "Mehrere Medienprofile unter demselben Konto."
+  ],
+  "setup.module.help.Trickplay": [
+   "Preview images while seeking in the player; costs processor time.",
+   "Vorschaubilder beim Spulen im Player; kostet Rechenzeit."
+  ],
+  "setup.module.help.Translation": [
+   "Translate book text locally in the reader.",
+   "Buchtext im Reader lokal übersetzen."
+  ],
+  "setup.module.help.Ocr": [
+   "Recognize the text of scanned book pages.",
+   "Text aus gescannten Buchseiten erkennen."
+  ],
+  "setup.module.help.SmartPdf": [
+   "Prepare matching EPUB reading copies of PDF books.",
+   "Aus PDF-Büchern passende EPUB-Lesekopien vorbereiten."
+  ],
+  "setup.module.help.DiscoverCache": [
+   "Keep the titles Discover found on this server.",
+   "Entdeckte Titel lokal zwischenspeichern."
+  ],
+  "setup.module.help.LocalDiscovery": [
+   "Keep whole provider catalogs here; needs more storage.",
+   "Ganze Anbieter-Kataloge lokal halten; braucht mehr Speicher."
+  ],
+  "setup.module.help.Subtitles": [
+   "Look for missing subtitles at providers.",
+   "Fehlende Untertitel bei Anbietern suchen."
+  ],
+  "setup.module.help.Uploads": [
+   "Upload manga volumes from your own device.",
+   "Manga-Bände vom eigenen Gerät hochladen."
+  ],
+  "setup.module.help.ProgressSync": [
+   "Share watch progress with Jellyfin and Emby.",
+   "Wiedergabefortschritt mit Jellyfin und Emby teilen."
+  ],
+  "setup.module.help.AniList": [
+   "Keep AniList's relations of titles; profiles can connect their AniList account.",
+   "AniList-Beziehungen der Titel pflegen; Profile können ihr AniList-Konto verbinden."
+  ],
+  "setup.module.help.Devices": [
+   "Pair TVs, phones and apps by code.",
+   "Fernseher, Handys und Apps per Code koppeln."
+  ],
+  "setup.module.help.Registration": [
+   "Visitors can ask for an account; an administrator enables it.",
+   "Besucher können ein Konto beantragen; ein Administrator schaltet es frei."
+  ],
+  "setup.type.name.Movie": [
+   "Movies",
+   "Filme"
+  ],
+  "setup.type.name.Series": [
+   "Series",
+   "Serien"
+  ],
+  "setup.type.name.Anime": [
+   "Anime",
+   "Anime"
+  ],
+  "setup.type.name.Book": [
+   "Books",
+   "Bücher"
+  ],
+  "setup.type.name.Manga": [
+   "Manga",
+   "Manga"
+  ],
+  "setup.type.name.LightNovel": [
+   "Light novels",
+   "Light Novels"
+  ],
+  "setup.type.name.Music": [
+   "Music",
+   "Musik"
+  ],
+  "setup.type.name.Game": [
+   "Games",
+   "Games"
   ]
  }
 }

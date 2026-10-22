@@ -48,14 +48,14 @@ html:not([data-skin="original"]) body:has(.login-card) {
     // One column of fields, the label above its field, the eye and the forgot link inside the field's row.
     .ui-form { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
     .ui-field { gap: 0; }
-    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px; font-size: 12px; font-weight: 750; line-height: normal; }
+    .ui-field__top { flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 6px; max-width: none; margin: 0 0 8px var(--field-label-inset); line-height: normal; }
     .ui-field__control {
         display: flex;
         align-items: center;
         height: 46px;
         padding: 0;
         border: 1px solid var(--border);
-        border-radius: var(--radius-inner);
+        border-radius: var(--radius-field);
         background: var(--field);
         transition: border-color .2s, box-shadow .2s;
 

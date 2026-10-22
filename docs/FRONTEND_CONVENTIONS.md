@@ -140,8 +140,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Backend-owned. Hidden-field errors must be visible at form level; failed reads
   receive the shared Page error presentation, including empty-result pages; unknown errors render in the page too
   (`ErrorText`), not as a bare JSON answer.
-- Buttons and search use the pill radius, fields the 11px field radius. Form labels sit
-  above the field (11px/770, with the (i) after them), remain associated through `for`/id (a group of choices through its legend) and wrap without
+- Buttons, search and single-line fields use the pill radius (`--radius-field`; multiline fields keep `--radius-inner`). Form labels sit
+  above the field, inset by `--field-label-inset` (12px; 11px/650, with the (i) after them), remain associated through `for`/id (a group of choices through its legend) and wrap without
   truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
   through `Form.Toggle` so Backend field metadata and POST values stay central.
 - `Form<T>` owns the layout: short fields share two columns where there is room and one

@@ -6428,14 +6428,6 @@
    "Requests",
    "Demandes"
   ],
-  "setup.modules.media": [
-   "Media",
-   "Médias"
-  ],
-  "setup.modules.requests": [
-   "Requests & downloads",
-   "Demandes et téléchargements"
-  ],
   "setup.modules.personal": [
    "Profiles & personal features",
    "Profils et fonctions personnelles"

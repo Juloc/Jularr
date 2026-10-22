@@ -1,0 +1,109 @@
+// The setup's module step, after the owner's mockup: a card per starting set, tinted cards for the basic functions, collapsible groups whose rows
+// are a name, one line and a switch, and the choices that belong to a media type in a tinted box under it.
+.option-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: 12px;
+}
+
+.option-preset {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+    min-width: 0;
+    padding: 17px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: border-color var(--transition), background-color var(--transition);
+
+    .icon-tile { width: 39px; height: 39px; border-radius: var(--radius-inner); }
+    &__name { font-size: 13px; font-weight: 850; }
+    &__line { color: var(--muted); font-size: var(--text-control); line-height: 1.6; }
+    &:hover { border-color: var(--accent-outline); }
+    &[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+}
+
+.option-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    min-width: 0;
+
+    &__text { display: grid; flex: 1; gap: 4px; min-width: 0; }
+    &__name { min-width: 0; color: var(--text); font-size: var(--text-body); font-weight: 780; line-height: 1.3; }
+    &__line { min-width: 0; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
+    &__switch { flex: none; }
+    &__switch .toggle { min-height: 0; }
+    // Why a switch stays where it is, on its own line under the row.
+    &__reason { flex-basis: 100%; margin: 0; overflow: hidden; color: var(--warning); font-size: var(--text-small); font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
+    &__reason[hidden] { display: none; }
+
+    &--card { padding: 13px 14px; border: 1px solid var(--border); border-radius: var(--radius-inner); background: var(--field); }
+    &--type { padding: 13px 0; border-top: 1px solid var(--border); }
+    &--type &__name { font-weight: 810; }
+    &--sub { padding: 9px 0; }
+    &--sub + &--sub, &--sub + .ui-form__row, .ui-form__row + .ui-form__row > &--sub { border-top: 1px solid var(--border); }
+    &--sub &__name { font-size: var(--text-control); }
+}
+
+// Rows are written inside the form's own row wrappers; the wrappers add no space.
+.option-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    gap: 12px;
+}
+.option-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+    align-items: start;
+    gap: 13px;
+}
+
+// A media type with the choices that belong to it; they show while the type is on.
+.option-type {
+    &:first-child > .ui-form__row > .option-row--type { border-top: 0; }
+    &:has(> .ui-form__row input[type="checkbox"]:not(:checked)) > .option-subs { display: none; }
+    &:has(> .ui-form__row input[type="checkbox"]:not(:checked)) > .ui-form__row > .option-row--type > .option-row__text { opacity: .55; }
+}
+.option-subs {
+    margin: 0 0 8px;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--field);
+    .ui-form__row + .ui-form__row { border-top: 1px solid var(--border); }
+}
+
+.option-group {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 15px;
+        cursor: pointer;
+        list-style: none;
+    }
+    &__head::-webkit-details-marker { display: none; }
+    &__name { flex: 1; min-width: 0; color: var(--text); font-size: 14px; font-weight: 805; }
+    &__count { flex: none; }
+    &__chevron { display: grid; flex: none; place-items: center; color: var(--muted); transition: transform var(--transition); }
+    &[open] &__chevron { transform: rotate(180deg); }
+    &[open] > &__head { border-bottom: 1px solid var(--border); }
+    &__body { display: grid; gap: 0; padding: 0 15px 12px; }
+    // Rows of a group without media types (the extras) are separated by their own line.
+    &__body > .ui-form__row + .ui-form__row > .option-row { border-top: 1px solid var(--border); padding-top: 12px; }
+    &__body > .ui-form__row > .option-row { padding: 12px 0; }
+}

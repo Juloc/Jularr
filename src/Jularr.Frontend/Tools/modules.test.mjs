@@ -12,7 +12,7 @@ function load(path) {
     return exports;
 }
 
-const { viewOf, switchesOf, dependantNames } = load('../Pages/Admin/Modules/Modules.ts');
+const { viewOf, switchesOf, dependantNames, withRequired } = load('../Pages/Admin/Modules/Modules.ts');
 const { insertToken, previewAddress } = load('../Pages/Admin/Naming/Naming.ts');
 
 const modules = on => [
@@ -63,4 +63,9 @@ test('a placeholder replaces the selection and moves the caret behind it', () =>
 test('the preview asks for the type, the folder when there is one, and the file name', () => {
     assert.equal(previewAddress('Series', '', '{Title}'), '/api/v1/admin/library/naming/preview?mediaTypeId=Series&file=%7BTitle%7D');
     assert.equal(previewAddress('Movie', '{Title}', '{Title}'), '/api/v1/admin/library/naming/preview?mediaTypeId=Movie&file=%7BTitle%7D&folder=%7BTitle%7D');
+});
+
+test('switching a module on takes what it needs, and what that needs, with it', () => {
+    assert.deepEqual([...withRequired(modules([]), 'Trickplay')], ['Trickplay', 'Playback', 'Library']);
+    assert.deepEqual([...withRequired(modules([]), 'Library')], ['Library']);
 });

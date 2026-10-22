@@ -66,10 +66,18 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".stepper__step:not(.stepper__step--done):not(.stepper__step--current)")).ToHaveCountAsync(3);
                 await Evidence.SaveAsync(page, "setup-modules-" + width + (dark ? "-dark" : "-light"));
 
-                // The modules stand in groups of cards that name what they need.
-                await Assertions.Expect(page.Locator(".setup-modules__group")).ToHaveCountAsync(4);
-                var playback = page.Locator(".setting-card[data-module=Playback]");
-                await Assertions.Expect(playback.Locator("[data-needs=Library]")).ToBeVisibleAsync();
+                // Three starting sets; the choices of a media type sit under it, and a switch that needs another one turns it on or says why it stays.
+                await Assertions.Expect(page.Locator(".option-preset")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".option-group")).ToHaveCountAsync(7);
+                var library = page.Locator(".option-row[data-module=Library]");
+                await library.Locator(".toggle").ClickAsync();
+                await Assertions.Expect(library.Locator("input[type=checkbox]")).ToBeCheckedAsync();
+                await Assertions.Expect(library.Locator(".option-row__reason")).ToBeVisibleAsync();
+                var playback = page.Locator(".option-row[data-module=Playback] input[type=checkbox]");
+                await page.Locator(".option-row[data-module=Playback] .toggle").ClickAsync();
+                await Assertions.Expect(playback).Not.ToBeCheckedAsync();
+                await page.Locator(".option-type .option-row[data-module=Trickplay] .toggle").ClickAsync();
+                await Assertions.Expect(playback).ToBeCheckedAsync();
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
             }
             catch

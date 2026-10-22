@@ -311,6 +311,19 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        // Fields, rows and content declared inside sit within a container the page builds (a collapsible group, a panel); the form keeps one save.
+        public Form<TData> Wrap(Func<IReadOnlyList<IUiComponent>, IUiComponent> wrap, Action<Form<TData>> define)
+        {
+            var outer = _target;
+            var inner = new List<IUiComponent>();
+            _target = inner;
+            define(this);
+            _target = outer;
+            _target.Add(wrap(inner));
+            _hasWideField = true;
+            return this;
+        }
+
         public Form<TData> Content(IUiComponent component)
         {
             _target.Add(component);

@@ -41,13 +41,13 @@
     --info: light-dark(#487bd6, #9dbdf7);
     --info-soft: light-dark(#edf3ff, #273653);
 
-    // Shapes: pills for buttons, chips and search; 19px panels, 13px stat and detail tiles, 12px icon tiles, 11px fields.
+    // Shapes: pills for buttons, chips, search and single-line fields; 19px panels, 13px stat and detail tiles and multiline fields, 12px icon tiles.
     --radius-control: 999px;
     --radius-panel: 19px;
     --radius-dialog: 22px;
     --radius-inner: 13px;
     --radius-tile: 12px;
-    --radius-field: 11px;
+    --radius-field: 999px;
     --radius-small: 10px;
     // Depth: the card shadow on panels, the drawer's and the floating pill's own.
     --shadow: 0 9px 30px light-dark(rgb(55 37 105 / 4.5%), #0003);
@@ -69,6 +69,8 @@
     --control-height-compact: 32px;
     --icon-button: 36px;
     --field-height: 40px;
+    // A field's label sits above it, inset to the right so it starts where the pill's text does.
+    --field-label-inset: 12px;
     --icon-size: 18px;
     --transition: .15s;
     --art-hue-rotate: 0deg;

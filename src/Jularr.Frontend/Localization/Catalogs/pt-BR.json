@@ -6428,14 +6428,6 @@
    "Requests",
    "Pedidos"
   ],
-  "setup.modules.media": [
-   "Media",
-   "Multimédia"
-  ],
-  "setup.modules.requests": [
-   "Requests & downloads",
-   "Pedidos e transferências"
-  ],
   "setup.modules.personal": [
    "Profiles & personal features",
    "Perfis e funcionalidades pessoais"

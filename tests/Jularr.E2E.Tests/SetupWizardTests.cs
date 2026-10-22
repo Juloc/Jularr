@@ -28,10 +28,10 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(5, await page.Locator(".setup-wizard .stepper__step").CountAsync());
                 Assert.AreEqual(1, await page.Locator("form[action='/Setup/Instance']").CountAsync());
                 Assert.AreEqual(0, await page.Locator("[name=UsersConfirmSources]").CountAsync());
-                await page.GetByRole(AriaRole.Button, new() { Name = "Requests", Exact = true }).ClickAsync();
+                await page.Locator("[data-setup-preset=requests]").ClickAsync();
                 Assert.IsTrue(await page.GetByRole(AriaRole.Switch, new() { Name = "Arr+", Exact = true }).IsCheckedAsync());
-                Assert.IsTrue(await page.GetByRole(AriaRole.Switch, new() { Name = "Let visitors ask for an account an administrator enables", Exact = true }).IsCheckedAsync());
-                await page.GetByRole(AriaRole.Button, new() { Name = "Complete", Exact = true }).ClickAsync();
+                Assert.IsTrue(await page.Locator("[data-module=Registration] input[type=checkbox]").IsCheckedAsync());
+                await page.Locator("[data-setup-preset=complete]").ClickAsync();
                 await CheckViewportAsync(page, "modules", width);
                 await page.FillAsync("[name=Name]", "Wizard test");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).ClickAsync();
