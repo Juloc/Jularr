@@ -14,7 +14,7 @@ class TvV1PlaybackExtrasJsonTest {
                 {"mediaMarkerKindTypeId":3,"startMs":0,"endMs":12000},
                 {"mediaMarkerKindTypeId":4,"startMs":1350000,"endMs":1370000}]"""
         ).toTvExtrasList { tvPlaybackMarker() }
-        assertEquals(listOf(3, 1, 2, 4), markers.map { it.mediaMarkerKindTypeId }.sorted())
+        assertEquals(listOf(1, 2, 3, 4), markers.map { it.mediaMarkerKindTypeId }.sorted())
         assertTrue(markers[0].contains(15200))
         assertFalse(markers[0].contains(95000))
         assertEquals(4, markers.size)
