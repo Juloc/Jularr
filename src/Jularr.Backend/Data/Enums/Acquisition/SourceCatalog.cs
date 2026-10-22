@@ -77,7 +77,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("wikisource", "Wikisource", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
             new("internetarchive", "Internet Archive", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
             new("nyt", "NYT Best Sellers", SourceGroup.Books, SourceCapability.Metadata, SourceAvailability.Planned),
-            new("narou", "Shōsetsuka ni Narō", SourceGroup.Novels, MetadataSearch | SourceCapability.Monitoring, SourceAvailability.Planned),
+            new("narou", "Shōsetsuka ni Narō", SourceGroup.Novels, SearchDownload | SourceCapability.Monitoring, SourceAvailability.Ready, AcquisitionConnectionType.Narou, defaultBaseUrl: "https://ncode.syosetu.com"),
             new("kakuyomu", "Kakuyomu", SourceGroup.Novels, MetadataSearch | SourceCapability.Monitoring, SourceAvailability.Planned),
             new("royalroad", "Royal Road", SourceGroup.Novels, MetadataSearch | SourceCapability.Monitoring, SourceAvailability.Planned),
             new("scribblehub", "Scribble Hub", SourceGroup.Novels, MetadataSearch | SourceCapability.Monitoring, SourceAvailability.Planned),
