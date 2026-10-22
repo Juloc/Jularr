@@ -119,3 +119,31 @@ these functions are not present in the reviewed V1 user services; no old
 planning any new backend contracts.
 
 The latest Android CI and live hardware tests remain separate quality gates.
+
+
+## V1 controller and account sessions — latest integration
+
+- `TvV1AppController` now owns the active TV entry's typed route transitions:
+  actual Work IDs, WorkUnit IDs and verified MediaAsset IDs are checked before
+  entering detail/episode/player screens; old WorkUnit identity cannot leak across
+  verified previous/next playback assets.
+- `TvV1CatalogHost` delegates relevant navigation to the controller while keeping
+  the original Compose screen designs. Profile switches must drop the viewer's
+  route history. **This does not mean the old cookie-dependent `TvAppController` /
+  `TvClientFlow` have been fully migrated**; unsupported original functions
+  must remain explicit until actual V1 contracts exist.
+- Original settings now offer an **Active sessions** page when the backend reports
+  `session.self.read`. These are real sessions for the *current account*, not
+  a fabricated multi-account chooser. Users with `session.self.manage` may
+  terminate a *different* session through the real
+  `DELETE /api/v1/sessions/{sessionPublicId}` contract with confirmation.
+  The current TV session is never offered there for remote revocation; it still
+  signs out with `DELETE /api/v1/auth/session`.
+- Contract tests cover session revocation of other sessions (current bearer
+  preserved) and server-authoritative termination of the current session
+  (local bearer cleared); typed-controller tests cover route identity and
+  viewer-history isolation.
+- Before release, verify that session permissions returned for a real paired
+  Android TV are correct. **Multiple saved accounts on one server remain unported**:
+  no credentials are reconstructed from other account sessions or the old
+  cookie map.
