@@ -301,9 +301,12 @@ fun TvWatchlistScreen(
                                         entry.mediaType.equals("anime", ignoreCase = true)
                                     }
                                     if (playableId != null) onOpenAnime(playableId)
-                                    else if (entry.localMediaId != null && onOpenVideoWork != null) {
-                                        onOpenVideoWork(entry.localMediaId)
-                                    } else infoEntry = entry
+                                    else {
+                                        val workId = entry.localMediaId
+                                        if (workId != null && onOpenVideoWork != null) {
+                                            onOpenVideoWork(workId)
+                                        } else infoEntry = entry
+                                    }
                                 },
                             )
                         }
