@@ -90,3 +90,20 @@
         .kpi-tile__value { font-size: 18px; }
     }
 }
+
+// The card with a foot line (the Dashboard): the mockups' figure, large, with one muted line under it.
+.kpi-tile--card {
+    gap: 0;
+    padding: 17px 19px;
+
+    .kpi-tile__label { font-size: var(--text-control); font-weight: 720; }
+    .kpi-tile__value { margin: 12px 0 3px; font-size: 29px; font-weight: 850; letter-spacing: -1.2px; }
+}
+
+.kpi-tile__foot {
+    color: var(--muted);
+    font-size: var(--text-small);
+
+    &--success { color: var(--success); }
+    &--warning { color: var(--warning); }
+}
