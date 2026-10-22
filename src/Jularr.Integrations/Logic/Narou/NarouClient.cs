@@ -8,7 +8,7 @@ namespace Jularr.Integrations.Logic.Narou
 {
     // Narō's public ncode works are WEB NOVELS. Never treat this source as an edition of
     // a published Light Novel without an explicit source identity on the requested Work.
-    internal sealed class NarouClient(HttpClient http)
+    internal sealed partial class NarouClient(HttpClient http)
     {
         private const int MaximumIndexPages = 50;
         private const int MaximumChapters = 3000;
