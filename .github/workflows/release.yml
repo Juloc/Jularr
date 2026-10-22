@@ -1,0 +1,197 @@
+name: Release
+
+# A release is a git tag `v<MAJOR>.<MINOR>.<PATCH>[-prerelease]` on a commit of clean-start (or main). Nothing here runs on branches.
+# The tag builds the image from the tagged commit, pushes it to GHCR and creates the GitHub release; see docs/RELEASE.md.
+# workflow_dispatch rehearses everything except the push and the release: with dry_run the image is built and not published.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build the image, publish nothing (a branch may be chosen; publishing needs a version tag)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/juloc/jularr
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      dry_run: ${{ steps.check.outputs.dry_run }}
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+      minor: ${{ steps.check.outputs.minor }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check tag, branch and test runs of the tagged commit
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+
+          if [[ "${REF_TYPE}" == "tag" ]]; then
+            tag="${REF_NAME}"
+            semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+            if ! [[ "${tag}" =~ ${semver} ]]; then
+              echo "::error::Tag ${tag} is not v<MAJOR>.<MINOR>.<PATCH> or v<MAJOR>.<MINOR>.<PATCH>-<prerelease>."
+              exit 1
+            fi
+            version="${tag#v}"
+            minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            prerelease=false
+            [[ -z "${BASH_REMATCH[4]}" ]] || prerelease=true
+          elif [[ "${DRY_RUN}" == "true" ]]; then
+            # A rehearsal from a branch has no version; it still has to pass every other check.
+            tag=""; version="0.0.0-dryrun"; minor="0.0"; prerelease=true
+          else
+            echo "::error::Publishing runs from a version tag (v0.2.0), not from ${REF_NAME}. Choose the tag, or keep dry_run on."
+            exit 1
+          fi
+
+          reachable=false
+          for branch in clean-start main; do
+            if git rev-parse --verify --quiet "refs/remotes/origin/${branch}" > /dev/null \
+                && git merge-base --is-ancestor "${sha}" "refs/remotes/origin/${branch}"; then
+              reachable=true
+            fi
+          done
+          if [[ "${reachable}" != "true" ]]; then
+            echo "::error::Commit ${sha} is on neither origin/clean-start nor origin/main. Tag a commit that was merged."
+            exit 1
+          fi
+
+          # The newest completed run of each workflow for exactly this commit must have succeeded.
+          failed=false
+          for workflow in "Frontend" "Backend Full"; do
+            run="$(gh run list --commit "${sha}" --workflow "${workflow}" --limit 50 \
+              --json status,conclusion,createdAt,url \
+              --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | last // empty | [.conclusion, .url] | @tsv')"
+            if [[ -z "${run}" ]]; then
+              echo "::error::No completed ${workflow} run for ${sha}. Let it finish or start it (see docs/RELEASE.md)."
+              failed=true
+            elif [[ "${run%%$'\t'*}" != "success" ]]; then
+              echo "::error::The latest ${workflow} run for ${sha} is ${run%%$'\t'*}: ${run#*$'\t'}"
+              failed=true
+            else
+              echo "${workflow}: success (${run#*$'\t'})"
+            fi
+          done
+          [[ "${failed}" == "false" ]] || exit 1
+
+          {
+            echo "dry_run=${DRY_RUN}"
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "minor=${minor}"
+            echo "prerelease=${prerelease}"
+          } >> "${GITHUB_OUTPUT}"
+
+  image:
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      # linux/amd64 only: the Dockerfile supports arm64, but its SDK and apt steps would run under QEMU emulation.
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        if: needs.guard.outputs.dry_run != 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # A published version is immutable; only latest and the minor tag move.
+      - name: Refuse to overwrite a published version
+        if: needs.guard.outputs.dry_run != 'true'
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          if docker manifest inspect "${IMAGE}:${VERSION}" > /dev/null 2>&1; then
+            echo "::error::${IMAGE}:${VERSION} is already published. Release a new version instead."
+            exit 1
+          fi
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.guard.outputs.version }}
+            type=raw,value=${{ needs.guard.outputs.minor }},enable=${{ needs.guard.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.guard.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.guard.outputs.version }}
+      # Without dry_run this pushes; with it the image is only built.
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ needs.guard.outputs.dry_run != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: JULARR_VERSION=${{ needs.guard.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Verify the published image
+        if: needs.guard.outputs.dry_run != 'true'
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          docker pull "${IMAGE}:${VERSION}"
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "${IMAGE}:${VERSION}")" = "${VERSION}"
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${IMAGE}:${VERSION}")" = "${GITHUB_SHA}"
+
+  release:
+    needs: [guard, image]
+    if: needs.guard.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          VERSION: ${{ needs.guard.outputs.version }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "Release ${TAG} already exists."
+            exit 0
+          fi
+          args=()
+          [[ "${PRERELEASE}" == "false" ]] || args+=(--prerelease)
+          gh release create "${TAG}" --verify-tag --title "Jularr ${VERSION}" --generate-notes "${args[@]}"

@@ -447,6 +447,8 @@ Schemahistorie: das Schema ist eingefroren, Änderungen sind nummerierte Migrati
 automatischen Backup (Datenbank und Schlüssel); ohne Backup oder bei einer fehlgeschlagenen
 Migration wird alles zurückgerollt, Jularr startet nicht und zeigt eine Wartungsseite. Ablauf und
 verbleibende Release-Abnahme: [Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
+Ein Release ist ein Git-Tag `vX.Y.Z`; der Workflow baut das Image und veröffentlicht `ghcr.io/juloc/jularr:X.Y.Z`
+(und `latest`): [Release](docs/RELEASE.md).
 
 Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
 Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch im

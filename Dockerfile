@@ -23,9 +23,11 @@ RUN --mount=type=cache,target=/root/.nuget/packages \
 COPY . .
 COPY --from=frontend /src/src/Jularr.Frontend/wwwroot/ src/Jularr.Frontend/wwwroot/
 COPY --from=frontend /src/src/Jularr.Frontend/Assets/Generated/ src/Jularr.Frontend/Assets/Generated/
+# The release workflow passes the tag's version; the Admin System page shows it.
+ARG JULARR_VERSION=0.0.0-dev
 RUN --mount=type=cache,target=/root/.nuget/packages \
     dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj \
-      --configuration Release --output /app \
+      --configuration Release --output /app -p:Version=$JULARR_VERSION \
       --runtime linux-$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) --self-contained false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

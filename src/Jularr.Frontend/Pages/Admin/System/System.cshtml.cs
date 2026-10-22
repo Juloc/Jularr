@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Service.Admin.System.V1;
 using Jularr.Frontend.Framework;
@@ -10,6 +11,9 @@ namespace Jularr.Frontend.Pages.Admin.System
     // The Dashboard, Performance and Logs show how it is doing.
     public sealed class SystemModel(ReadSystemHealthV1 read, UiText texts) : JularrPage
     {
+        // The release's version (the image build sets it from the tag); a build outside a release reports 1.0.0.
+        private static readonly string Version = typeof(SystemModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "";
+
         private SystemHealthV1? _health;
 
         protected override void Define(Page page)
@@ -19,6 +23,7 @@ namespace Jularr.Frontend.Pages.Admin.System
             if (_health is not { } health) return;
 
             page.Content.Add(new FactList([
+                ("table.version", new ValueText(Version)),
                 ("system.database", new ValueText(ByteSize.Format(health.DatabaseBytes))),
                 ("system.profiles", new ValueText(health.Profiles.ToString(CultureInfo.CurrentCulture))),
                 ("system.queued", Link(health.QueuedOperations.ToString(CultureInfo.CurrentCulture), "/Admin/Activity")),
