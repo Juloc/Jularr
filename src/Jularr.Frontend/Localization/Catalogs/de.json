@@ -11859,6 +11859,114 @@
   "speech.timer.left": [
    "{0} min",
    "{0} Min."
+  ],
+  "details.relation.kind": [
+   "Relation",
+   "Beziehung"
+  ],
+  "details.relation.Sequel": [
+   "Sequel",
+   "Fortsetzung"
+  ],
+  "details.relation.Prequel": [
+   "Prequel",
+   "Vorgänger"
+  ],
+  "details.relation.SideStory": [
+   "Side story",
+   "Nebengeschichte"
+  ],
+  "details.relation.SpinOff": [
+   "Spin-off",
+   "Ableger"
+  ],
+  "details.relation.MainStory": [
+   "Main story",
+   "Hauptgeschichte"
+  ],
+  "details.relation.Adaptation": [
+   "Adaptation",
+   "Adaption"
+  ],
+  "details.relation.SourceMaterial": [
+   "Source material",
+   "Vorlage"
+  ],
+  "details.relation.Alternative": [
+   "Alternative version",
+   "Andere Fassung"
+  ],
+  "details.relation.SharedUniverse": [
+   "Same universe",
+   "Gleiches Universum"
+  ],
+  "details.relation.Summary": [
+   "Summary",
+   "Zusammenfassung"
+  ],
+  "details.relation.Other": [
+   "Other",
+   "Sonstiges"
+  ],
+  "details.relation.source": [
+   "Source: {0}",
+   "Quelle: {0}"
+  ],
+  "details.relation.source.manual": [
+   "Added by hand",
+   "Von Hand ergänzt"
+  ],
+  "details.relation.notInLibrary": [
+   "Not in library",
+   "Nicht in der Bibliothek"
+  ],
+  "details.relation.missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "details.relation.add": [
+   "Add relation",
+   "Beziehung hinzufügen"
+  ],
+  "details.relation.dialog": [
+   "Add a related title",
+   "Verwandten Titel hinzufügen"
+  ],
+  "details.relation.find": [
+   "Search a title",
+   "Titel suchen"
+  ],
+  "details.relation.search": [
+   "Search",
+   "Suchen"
+  ],
+  "details.relation.pick": [
+   "Add",
+   "Hinzufügen"
+  ],
+  "details.relation.results": [
+   "Matches",
+   "Treffer"
+  ],
+  "details.relation.none": [
+   "No titles found",
+   "Keine Titel gefunden"
+  ],
+  "details.relation.added": [
+   "Relation added",
+   "Beziehung hinzugefügt"
+  ],
+  "details.relation.removed": [
+   "Relation removed",
+   "Beziehung entfernt"
+  ],
+  "details.relation.remove": [
+   "Remove relation",
+   "Beziehung entfernen"
+  ],
+  "details.relation.request": [
+   "Request",
+   "Anfragen"
   ]
  }
 }

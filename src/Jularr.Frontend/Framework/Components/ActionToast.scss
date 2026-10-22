@@ -49,19 +49,10 @@
         bottom: calc(96px + env(safe-area-inset-bottom));
         body:has(.save-pill:not([hidden])) & { bottom: calc(152px + env(safe-area-inset-bottom)); }
     }
-
-    @media (prefers-reduced-motion: reduce) {
-        &--show { animation-name: action-toast-still; }
-    }
 }
 
 @keyframes action-toast {
     0% { opacity: 0; visibility: visible; translate: -50% 16px; scale: .94; }
     10%, 85% { opacity: 1; visibility: visible; translate: -50% 0; scale: 1; }
     100% { opacity: 0; visibility: hidden; translate: -50% 0; scale: 1; }
-}
-
-@keyframes action-toast-still {
-    0%, 85% { opacity: 1; visibility: visible; }
-    100% { opacity: 0; visibility: hidden; }
 }

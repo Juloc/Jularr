@@ -224,11 +224,6 @@ $interval: 9s;
 
 html:has(.drawer[open]) .hero-carousel__segment--current span { animation-play-state: paused; }
 
-@media (prefers-reduced-motion: reduce) {
-    // Nothing advances by itself; the bar only shows where the carousel is.
-    .hero-carousel__segment--current span { animation: none; transform: scaleX(1); }
-}
-
 [dir="rtl"] .hero-carousel__arrow {
     .ui-icon { transform: rotate(180deg); }
     &--next .ui-icon { transform: none; }

@@ -182,7 +182,6 @@
     }
     @media (hover: none), (pointer: coarse) {
         &__actions { opacity: 1; visibility: visible; }
-        &__bookmark .button { width: 44px; min-width: 44px; min-height: 44px; height: 44px; }
     }
     // The card under an open preview is hidden, not removed: the cards of the row never change width or position.
     &[data-preview-open] > &__surface, &[data-preview-open] > &__details { opacity: 0; }
@@ -398,13 +397,6 @@
         .media-card__preview-body { padding-top: 4px; }
         .media-card__description { -webkit-line-clamp: 1; }
         .media-card__preview-actions { padding-top: 3px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        &__preview:popover-open { animation: none; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        &__actions { transition: none; }
     }
     .media-availability-badge { top: 0; left: 0; }
     .media-availability-badge__hint { max-width: calc(100cqw - 12px); }

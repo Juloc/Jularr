@@ -60,7 +60,6 @@
         transition: background-color var(--transition), color var(--transition);
 
         &:hover { background: var(--accent-soft); color: var(--accent-text); }
-        @media (pointer: coarse) { width: 44px; height: 44px; }
     }
 
     &__handle { cursor: grab; touch-action: none; }

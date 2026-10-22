@@ -60,7 +60,3 @@
 
     &:has(input:disabled) { cursor: default; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-    :where(input[type="checkbox"], input[type="radio"]), :where(input[type="checkbox"], input[type="radio"])::before { transition: none; }
-}

@@ -31,10 +31,6 @@
     // A divider between the pill's actions.
     &__divider { align-self: stretch; width: 1px; margin: 4px 2px; background: var(--border); }
 
-    @media (prefers-reduced-motion: reduce) {
-        transition: none;
-    }
-
     @media (max-width: 780px) {
         bottom: calc(96px + env(safe-area-inset-bottom));
     }

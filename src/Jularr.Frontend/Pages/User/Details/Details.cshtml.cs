@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data;
+using AdminMedia = Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
@@ -9,6 +10,7 @@ using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Backend.Data.User.Discover.V1;
+using AdminServices = Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Service.User.Collection.V1;
 using Jularr.Backend.Service.User.Discover.V1;
@@ -26,10 +28,9 @@ namespace Jularr.Frontend.Pages.User.Details
     public sealed partial class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, ReadWorkEditionsV1 readEditions, UpdateWatchlistV1 update, CreateRequestV1 request,
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
-        ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, ReadDiscoverScopesV1 readScopes, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery,
-        FrontendAssets assets, UiText texts) : JularrPage
+        ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
+        ReadDiscoverScopesV1 readScopes, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
-        private IReadOnlyList<LibraryItemV1> _related = [];
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
         private IReadOnlyList<DiscoverScopeV1> _scopes = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
@@ -90,10 +91,13 @@ namespace Jularr.Frontend.Pages.User.Details
                 var blocks = Blocks(work);
                 var shown = blocks.FirstOrDefault(block => block.TabKey == TabKey);
 
+                // A refused action of the page that no form of it shows (a relation added twice) says why above the page.
+                if (FormError is { } refused && _requestInput is null && _relationSearch is null) page.Content.Add(new P(ErrorText.Of(refused)).Class("ui-page-error").Attribute("role", "alert"));
                 page.Content.Add(Hero(work, page));
                 page.Content.Add(new Div(new NavigationTabs([new NavigationTab("details.tab.overview", Address(query => query["tab"] = null), shown is null),
                     .. blocks.Select(block => new NavigationTab(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count))], "details.tabs")).Class("details-tabs"));
                 page.Content.Add(new Div(shown is null ? [.. blocks.Select(Preview)] : [shown.Render(false)]).Class("details-panel"));
+                if (texts.CanManageRelations()) page.Content.Add(RelationDialog());
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
@@ -133,6 +137,32 @@ namespace Jularr.Frontend.Pages.User.Details
         {
             await removeFromCollection.ExecuteAsync<UpdateResult>(new CollectionWorkParametersV1(collectionId, Id), default, HttpContext.RequestAborted);
             return RedirectToPage("/User/Details/Details", new { id = Id });
+        }
+
+        // The matches for the words of the dialog; the Work itself is never offered as its own relation.
+        public async Task<IActionResult> OnPostSearchRelationAsync([BindRequired] WorkRelationType workRelationTypeId, string? query)
+        {
+            _relationSearch = new WorkRelationSearchData(workRelationTypeId, query ?? "");
+            await LoadDataAsync();
+            _relationResults = (await suggest.ExecuteAsync<BaseDataList<DiscoverSuggestionV1>>(new DiscoverParametersV1(), new SuggestDiscoverDataV1(query ?? ""), HttpContext.RequestAborted))
+                .Where(item => item.WorkId != Id).ToArray();
+            PreparePage();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostAddRelationAsync([BindRequired] WorkRelationType workRelationTypeId, long? relatedWorkId, string? @namespace, string? externalId)
+        {
+            await createRelation.ExecuteAsync<UpdateResult>(new AdminMedia.WorkParametersV1(Id), new AdminMedia.CreateWorkRelationDataV1(workRelationTypeId, relatedWorkId, @namespace, externalId),
+                HttpContext.RequestAborted);
+            Hint("details.relation.added");
+            return LocalRedirect(Address(query => query["tab"] = "related"));
+        }
+
+        public async Task<IActionResult> OnPostRemoveRelationAsync([BindRequired] long workRelationId)
+        {
+            await deleteRelation.ExecuteAsync<UpdateResult>(new AdminMedia.WorkRelationParametersV1(Id, workRelationId), default, HttpContext.RequestAborted);
+            Hint("details.relation.removed");
+            return LocalRedirect(Address(query => query["tab"] = "related"));
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted, string? returnUrl = null)
@@ -178,16 +208,21 @@ namespace Jularr.Frontend.Pages.User.Details
             _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
             _editions = await readEditions.ExecuteAsync<BaseDataList<WorkEditionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            if (_work.FranchiseId is { } franchiseId)
+            if (texts.CanSeeRelations())
             {
-                _related = [.. (await readFranchise.ExecuteAsync<PageResult<LibraryItemV1>>(new FranchiseWorksParametersV1(franchiseId, pageSize: 20), HttpContext.RequestAborted)).Items
-                    .Where(item => item.Id != Id)];
+                _relations = await readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+            }
+
+            // The Discover pages of titles that are no Work.
+            if (_relations.Any(relation => relation.RelatedWorkId is null))
+            {
+                _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
             }
 
             try
             {
                 _recommendations = await readRecommendations.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
-                if (_recommendations.Count > 0) _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
+                if (_recommendations.Count > 0 && _scopes.Count == 0) _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
             }
             catch (ServiceUnavailableException)
             {

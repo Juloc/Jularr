@@ -46,7 +46,7 @@ namespace Jularr.Frontend.Pages.User.Details
             }
 
             if (_credits.Count > 0) blocks.Add(new("people", "details.tab.people", _credits.Count, People));
-            if (_related.Count > 0) blocks.Add(new("related", "details.related", _related.Count, preview => Related(work, preview)));
+            if (_relations.Count > 0) blocks.Add(new("related", "details.related", _relations.Count, preview => Related(work, preview)));
             var similar = _recommendations.Where(item => item.WorkId is not null || _scopes.Any(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog)).ToArray();
             if (similar.Length > 0) blocks.Add(new("similar", "details.tab.similar", similar.Length, preview => Similar(similar, preview)));
             blocks.Add(new("details", "details.tab.facts", null, preview => Facts(work, kind, preview)));
@@ -101,21 +101,6 @@ namespace Jularr.Frontend.Pages.User.Details
             new Strong(new Truncated(credit.Name)),
             credit.Credit is null ? new Span() : new Span(new Truncated(credit.Credit)).Class("details-person__role"))
             .Class("details-person").Attribute("href", PersonHref(credit.PersonId));
-
-        // The other titles of its series as cards, with the way to the series itself.
-        private IUiComponent Related(WorkDetailsV1 work, bool preview)
-        {
-            var parts = new List<IUiComponent>();
-            if (work.FranchiseId is { } franchiseId && work.FranchiseName is { } franchiseName)
-            {
-                parts.Add(new P(new Span(new Text("details.franchise")), new ValueText(" "), new A(new ValueText(franchiseName)).Attribute("href", "/Franchise/" + franchiseId.ToString(CultureInfo.InvariantCulture)),
-                    new ValueText(work.FranchisePosition is { } place ? " · " + place.ToString("0.##", CultureInfo.CurrentCulture) : "")).Class("details-franchise"));
-            }
-
-            parts.Add(new Div([.. (preview ? _related.Take(6) : _related).Select(item => (IUiComponent)MediaCard.For(assets, item)
-                .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, _csrf)))]).Class("media-grid"));
-            return new Div([.. parts]);
-        }
 
         // Similar titles lead to their Work or to their request; a known one can also go into the favorites from its card.
         private IUiComponent Similar(IReadOnlyList<DiscoverItemV1> similar, bool preview) =>

@@ -7,7 +7,7 @@ import ts from 'typescript';
 const source = readFileSync(new URL('../Framework/Components/MediaShelf.ts', import.meta.url), 'utf8');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 
-function shelf(direction = 'ltr', reduced = false) {
+function shelf(direction = 'ltr') {
     const events = {};
     const observed = new Set();
     let onResize;
@@ -24,7 +24,7 @@ function shelf(direction = 'ltr', reduced = false) {
     class Element { constructor(button) { this.button = button; } closest() { return this.button; } }
     const exports = {};
     runInNewContext(script, { exports, document, Element, Set,
-        getComputedStyle: () => ({ direction }), matchMedia: () => ({ matches: reduced }),
+        getComputedStyle: () => ({ direction }),
         ResizeObserver: class { constructor(action) { onResize = action; } observe(item) { observed.add(item); } unobserve(item) { observed.delete(item); } }
     });
     return { previous, next, items, document, movements, observed,
@@ -52,13 +52,13 @@ test('shelf arrows track overflow, both edges and keyboard focus', () => {
     assert.equal(view.next.hidden, true);
 });
 
-test('shelf buttons respect RTL and reduced motion without any network work', () => {
+test('shelf buttons respect RTL without any network work', () => {
     for (const direction of ['ltr', 'rtl']) {
-        const view = shelf(direction, true);
+        const view = shelf(direction);
         view.initialize();
         view.click(view.next);
         assert.equal(view.movements[0].left, direction === 'rtl' ? -255 : 255);
-        assert.equal(view.movements[0].behavior, 'auto');
+        assert.equal(view.movements[0].behavior, 'smooth');
         view.items.scrollLeft = direction === 'rtl' ? -350 : 350;
         view.scroll();
         view.click(view.previous);

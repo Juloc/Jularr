@@ -89,7 +89,7 @@
     }
 }
 
-@media (prefers-reduced-motion: no-preference) and (max-width: 640px) {
+@media (max-width: 640px) {
     .filter-dialog[open] { animation: filter-sheet-in .23s ease; }
     @keyframes filter-sheet-in { from { transform: translateY(40px); opacity: 0; } }
 }
