@@ -80,6 +80,44 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Razor_TranslationTable_PagesWithTheSharedPager_NextOnlyOnAFullPage()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await SignInAsync(host);
+            var messages = (long)(await host.ScalarAsync("SELECT count(*) FROM \"UiTranslationMessages\""))!;
+            var last = (int)((messages + 24) / 25);
+            Assert.IsTrue(last > 2, "The catalog fills more than two pages.");
+
+            // The first page is full: Page 1, no way back, a way on; the table has no buttons of its own.
+            var first = await GetAsync(host, "/Admin/Localization?UiLocaleId=1");
+            StringAssert.Contains(first, "action-dock__paging");
+            StringAssert.Contains(first, "Page 1");
+            StringAssert.Contains(first, "href=\"/Admin/Localization?UiLocaleId=1&amp;pageNumber=2\"");
+            Assert.IsFalse(first.Contains("pageNumber=0", StringComparison.Ordinal));
+            Assert.IsTrue(Regex.IsMatch(first, "<button[^>]*disabled[^>]*aria-label=\"Previous\"|<button[^>]*aria-label=\"Previous\"[^>]*disabled"), "Previous is disabled on page 1.");
+
+            // A middle page steps both ways and keeps the chosen locale.
+            var second = await GetAsync(host, "/Admin/Localization?UiLocaleId=1&pageNumber=2");
+            StringAssert.Contains(second, "Page 2");
+            StringAssert.Contains(second, "href=\"/Admin/Localization?UiLocaleId=1\"");
+            StringAssert.Contains(second, "pageNumber=3");
+
+            // Behind the last page the list is empty and still leads back; there is no next.
+            var empty = await GetAsync(host, "/Admin/Localization?UiLocaleId=1&pageNumber=" + (last + 1));
+            StringAssert.Contains(empty, "Page " + (last + 1));
+            StringAssert.Contains(empty, "pageNumber=" + last);
+            Assert.IsFalse(empty.Contains("pageNumber=" + (last + 2), StringComparison.Ordinal), "An empty page offers no next.");
+        }
+
+        private static async Task<string> GetAsync(Host host, string address)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, address);
+            var html = await response.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
+            return html;
+        }
+
+        [TestMethod]
         public async Task Catalog_MediaManager_CannotReadOrWriteConfiguration()
         {
             await using var host = await Host.CreateAsync(razor: true);

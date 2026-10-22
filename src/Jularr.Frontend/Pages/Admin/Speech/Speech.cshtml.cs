@@ -51,7 +51,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
             page.Content.Add(new P(new Text("speech.models.explanation")));
             if (_models is { Items.Count: 0 })
             {
-                page.Content.Add(new P(new Text("speech.models.empty")).Attribute("role", "status"));
+                page.Content.Add(new P(new Text("speech.models.empty")).Attribute("role", "status").Paged(0));
             }
             else if (_models is not null)
             {
@@ -68,7 +68,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
                             : Activation(item),
                             new A(new Icon("info", assets, 16), new Span(new Text("speech.models.metadata")).Class("visually-hidden"))
                                 .Class("button button--icon").Attribute("href", Address() + "&modelHash=" + item.Sha256)).Class("list-actions")
-                    ], [new ValueText(item.Language + " · " + ByteSize.Format(item.SizeBytes))])).ToArray()).Modifier("speech-models"));
+                    ], [new ValueText(item.Language + " · " + ByteSize.Format(item.SizeBytes))])).ToArray()).Modifier("speech-models").Paged());
 
                 if (_models.Items.FirstOrDefault(item => item.Sha256 == ModelHash) is { } selected)
                 {
@@ -86,9 +86,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
             var actions = new List<IUiComponent>();
             if (texts.Can("instance.settings.update", "Reading")) actions.Add(new PostForm(Address() + "&handler=Refresh", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, [],
                 new Button(new Icon("sync", assets, 18), new Text("speech.models.refresh")).Submit()));
-            page.Content.Add(new ActionDock(assets, "speech.models.title", actions, paging: _models is null ? null : new DockPaging(
-                _models.Page > 1 ? Address(_models.Page - 1) : null, _models.Items.Count == _models.PageSize ? Address(_models.Page + 1) : null,
-                new ValueText(string.Format(CultureInfo.CurrentCulture, texts["speech.models.page"], _models.Page)))));
+            page.Content.Add(new ActionDock(assets, "speech.models.title", actions));
 
             if (FormError is not null && _hash is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }

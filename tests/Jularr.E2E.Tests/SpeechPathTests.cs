@@ -321,9 +321,16 @@ namespace Jularr.E2E.Tests
                     await second.ClickAsync();
                     await Assertions.Expect(second).ToHaveAttributeAsync("aria-pressed", "false");
                     await Evidence.SaveAsync(page, "speech-catalog-desktop");
+
+                    // The shared pager: a full first page has no way back and a way on; the short second page the other way round.
+                    var pager = page.GetByRole(AriaRole.Navigation, new() { Name = "Pages", Exact = true });
+                    await Assertions.Expect(pager).ToContainTextAsync("Page 1");
+                    await Assertions.Expect(pager.GetByRole(AriaRole.Button, new() { Name = "Previous", Exact = true })).ToBeDisabledAsync();
                     await page.GetByRole(AriaRole.Link, new() { Name = "Next", Exact = true }).ClickAsync();
                     await Assertions.Expect(rows).ToHaveCountAsync(3);
+                    await Assertions.Expect(pager).ToContainTextAsync("Page 2");
                     await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Previous", Exact = true })).ToBeVisibleAsync();
+                    await Assertions.Expect(pager.GetByRole(AriaRole.Button, new() { Name = "Next", Exact = true })).ToBeDisabledAsync();
                     async Task ChooseAsync(string label, string field, string value)
                     {
                         var select = page.Locator("#choice-" + field);

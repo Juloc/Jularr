@@ -715,8 +715,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
                         item.ReasonKey is { } reason ? new Span(new Text("acquisition.outcome." + reason)) : new Span()))
                     .Content("history.by", item => new ValueText(item.AccountName ?? texts["history.byJularr"])));
                 if (events.Items.Count == 0) content.Add(new P(new Text("history.empty")));
-                if (events.Page > 1) content.Add(new A(new Text("common.previous")).Attribute("href", Address(WorkTab.History, null, events.Page - 1)));
-                if (events.Items.Count == events.PageSize) content.Add(new A(new Text("common.next")).Attribute("href", Address(WorkTab.History, null, events.Page + 1)));
+                content.Add(new Span().Paged(events.Items.Count, key: "HistoryPage"));
             }
 
             if (_releases.Count > 0)

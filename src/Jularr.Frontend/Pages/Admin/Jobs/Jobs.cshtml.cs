@@ -100,13 +100,12 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
 
             // The jobs, a drawer of details for each of them.
             var columns = new List<ListColumn> { new("jobs.job", ListRole.Main), new("table.status", ListRole.Status), new("jobs.last"), new("jobs.next", ListRole.Data, 2), new("jobs.use", ListRole.Data, 1), new("common.actions", ListRole.Actions) };
-            var pages = Math.Max(1, (shown.Count + PageSize - 1) / PageSize);
-            var current = Math.Clamp(PageNumber, 1, pages);
+            var current = Math.Max(1, PageNumber);
             var visible = shown.Skip((current - 1) * PageSize).Take(PageSize).ToList();
             var rows = visible.Select(job => Row(job, csrf, canControl)).ToList();
             var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("jobs.empty")),
                 state is null && string.IsNullOrEmpty(QueryFilter) ? new Span() : new A(new Text("jobs.clear")).Class("button button--soft button--compact").Attribute("href", Address));
-            page.Content.Add(new ListPanel("jobs.list", columns, rows, empty).Modifier("jobs-list"));
+            page.Content.Add(new ListPanel("jobs.list", columns, rows, empty).Modifier("jobs-list").Paged(PageSize));
             page.Content.AddRange(visible.Select(job => Details(job, csrf, canControl)));
 
             // What the queue did, newest first.
@@ -127,11 +126,7 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
                 actions.Add(Post("PauseAll", csrf, [("isPaused", allPaused ? "false" : "true")], new Button(Glyph(allPaused ? "play" : "pause", 16), new Span(new Text(allPaused ? "jobs.resumeAll" : "jobs.pauseAll")).Class("action-dock__text")).Soft().Submit()));
             }
 
-            var paging = pages > 1
-                ? new DockPaging(current > 1 ? Link(state, QueryFilter, current - 1) : null, current < pages ? Link(state, QueryFilter, current + 1) : null,
-                    new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page"], current, pages)))
-                : null;
-            page.Content.Add(new ActionDock(assets, "jobs.actions", actions, paging: paging));
+            page.Content.Add(new ActionDock(assets, "jobs.actions", actions));
         }
 
         // Whether every service answered, how many, and when the health job last looked.

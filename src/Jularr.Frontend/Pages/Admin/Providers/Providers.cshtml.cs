@@ -91,18 +91,11 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 if (Settings(provider, csrf) is { } dialog) dialogs.Add(dialog);
             }
 
-            page.Content.Add(new CardGrid([.. cards]));
+            page.Content.Add(new CardGrid([.. cards]).Paged(_providers?.Items.Count ?? 0, _providers?.PageSize ?? 25));
             if ((IsServers || IsSetup) && Links(csrf) is { } links) page.Content.Add(links);
             page.Content.AddRange(dialogs);
             if (FormError is not null && _secretFailedFor is null && _plexInput is null && _serverInput is null && _signInInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
 
-            // Paging sits in the one floating dock.
-            var previous = _providers is { Page: > 1 } ? Home + "?pageNumber=" + (_providers.Page - 1).ToString(CultureInfo.InvariantCulture) : null;
-            var next = _providers is { } rows && rows.Items.Count == rows.PageSize ? Home + "?pageNumber=" + (rows.Page + 1).ToString(CultureInfo.InvariantCulture) : null;
-            if (previous is not null || next is not null)
-            {
-                page.Content.Add(new ActionDock(assets, "admin.providers.actions", paging: new DockPaging(previous, next, new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.pageNumber"], PageNumber)))));
-            }
         }
 
         private static int Rank(string key)

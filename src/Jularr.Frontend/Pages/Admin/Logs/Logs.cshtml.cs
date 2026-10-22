@@ -47,10 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Logs
                     new SearchBox("/Admin/Logs", "logs.search", Query, kept)).Class("logs-filters__tools")).Class("logs-filters");
 
             var rows = logs.Items.Count > 0 ? new Div([.. logs.Items.Select(Row)]).Class("logs-list") : (IUiComponent)new P(new Text("logs.empty"));
-            var pager = new List<IUiComponent>();
-            if (logs.Page > 1) pager.Add(new A(new Text("common.previous")).Class("button button--compact").Attribute("href", Address(Level, Source, Query, logs.Page - 1)));
-            if (logs.Items.Count == logs.PageSize) pager.Add(new A(new Text("common.next")).Class("button button--compact").Attribute("href", Address(Level, Source, Query, logs.Page + 1)));
-            page.Content.Add(new Section(filters, rows, new Div([.. pager]).Class("logs-pager")).Class("ui-section logs"));
+            page.Content.Add(new Section(filters, rows.Paged(logs.Items.Count)).Class("ui-section logs"));
         }
 
         private IUiComponent Row(LogEntryV1 entry)

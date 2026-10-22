@@ -69,10 +69,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                 page.Content.Add(new Ul([.. requests.Items.Select(item => Row(item, csrf))]).Class(Cards ? "requests-list requests-list--cards" : "requests-list"));
             }
 
-            var paging = new List<IUiComponent>();
-            if (requests.Page > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(page: requests.Page - 1)));
-            if (requests.Items.Count == requests.PageSize) paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(page: requests.Page + 1)));
-            if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("page-actions").Attribute("aria-label", texts["library.paging"]));
+            page.Content.Add(new Span().Paged(requests.Items.Count, requests.PageSize, "p"));
 
             if (RequestId is { } selected && requests.Items.FirstOrDefault(item => item.Id == selected) is { } chosen) page.Content.Add(Drawer(chosen, csrf));
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));

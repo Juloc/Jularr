@@ -39,6 +39,10 @@ namespace Jularr.Frontend.Pages.Admin.Works
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        // The excluded titles page on their own.
+        [BindProperty(SupportsGet = true, Name = "exclusions")]
+        public int ExclusionPage { get; set; } = 1;
+
         // Filters and order live in the address, so a list can be shared, reloaded and paged.
         [BindProperty(SupportsGet = true, Name = "type")]
         public MediaType? TypeFilter { get; set; }
@@ -97,7 +101,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.Content.Add(Toolbar());
             if (_works is { } works)
             {
-                page.Content.Add(Titles(works.Items, csrf));
+                page.Content.Add(Titles(works.Items, csrf).Paged(works.Items.Count, PageSize, primary: true));
                 if (_view == WorksViewType.Table) page.Content.Add(new ColumnPicker());
                 if (works.Items.Count > 0 && CanManageMedia) page.Content.Add(DeleteDialog(csrf));
                 if (works.Items.Count > 0 && Selectable)
@@ -111,13 +115,13 @@ namespace Jularr.Frontend.Pages.Admin.Works
             page.Content.Add(FilterDrawer());
 
             // Titles deleted with an exclusion stay out of requests until the exclusion is removed.
-            if (_exclusions is { Items.Count: > 0 } exclusions)
+            if (_exclusions is { } exclusions && (exclusions.Items.Count > 0 || ExclusionPage > 1))
             {
                 page.Content.Add(new UiSection("admin.works.exclusions", [new Table<WorkExclusionV1>(exclusions.Items)
                     .Text(item => item.Title, "media.title")
                     .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, null)))
                     .Content("common.actions", item => new PostForm(Address("RemoveExclusion"), csrf, [("workExclusionId", item.Id.ToString(CultureInfo.InvariantCulture))],
-                        new Button(new Text("admin.works.exclusion.remove")).Submit()))]));
+                        new Button(new Text("admin.works.exclusion.remove")).Submit())).Paged(key: "exclusions")]));
             }
 
             page.Content.Add(AddDialog(csrf));
@@ -224,7 +228,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
         {
             var ct = HttpContext.RequestAborted;
             _view = ResolveView();
-            _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(), ct);
+            _exclusions = await readExclusions.ExecuteAsync<PageResult<WorkExclusionV1>>(new ReadWorkExclusionsParametersV1(Math.Max(1, ExclusionPage)), ct);
             _works = await read.ExecuteAsync<PageResult<WorkListItemV1>>(new ReadWorksParametersV1(PageNumber, PageSize, TypeFilter, MonitoredFilter, StatusFilter, LibraryFilter, ProfileFilter, QueryFilter, Sort, Descending), ct);
             _summary = await readSummary.ExecuteAsync<WorksSummaryV1>(new ReadWorksParametersV1(1, PageSize, TypeFilter, null, null, LibraryFilter, ProfileFilter, QueryFilter), ct);
             _libraries = await readLibraries.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);

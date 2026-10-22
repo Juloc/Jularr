@@ -94,8 +94,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     : table.Content("table.work", item => item.WorkId is { } workId
                         ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), Release(item, csrf), Subtitles(item))
                         : new Text("library.unmatched"));
-                page.Content.Add(files.Items.Count > 0 ? table : new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty")));
-                Paging(page, files.Page, files.Items.Count == files.PageSize);
+                page.Content.Add((files.Items.Count > 0 ? (IUiComponent)table : new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty"))).Paged(files.Items.Count, files.PageSize));
             }
 
             if (_renames is { } renames)
@@ -119,7 +118,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     }, Address(handler: "Rename"), csrf, new ApplyLibraryRenamesDataV1(renames.Fingerprint)));
                 }
 
-                Paging(page, PageNumber, renames.Items.Count == RenamePageSize);
+                page.Content.Add(new Span().Paged(renames.Items.Count, RenamePageSize));
             }
 
             // What an import does with the earlier file of the same film or episode.
@@ -293,12 +292,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
             }
 
             _files = await readFiles.ExecuteAsync<PageResult<LibraryFileDetailsV1>>(new ReadLibraryFilesParametersV1(RootId, Tab == LibraryTab.Unmatched, PageNumber), ct);
-        }
-
-        private void Paging(Page page, int current, bool hasNext)
-        {
-            if (current > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(current - 1)));
-            if (hasNext) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(current + 1)));
         }
 
         private bool CanRename => texts.CanManageStorage();

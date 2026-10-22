@@ -47,15 +47,7 @@ namespace Jularr.Frontend.Pages.Account.Profiles
                 {
                     content.Add(new A(new Text("account.profile.add")).Attribute("href", Url.Page("/Account/ProfileNew/ProfileNew", new { returnUrl = _returnUrl })!));
                 }
-                if (_profiles.Page > 1)
-                {
-                    content.Add(new A(new Text("common.previous")).Attribute("href", Url.Page("/Account/Profiles/Profiles", new { pageNumber = _profiles.Page - 1, returnUrl = _returnUrl })!));
-                }
-
-                if (_profiles.Items.Count == _profiles.PageSize)
-                {
-                    content.Add(new A(new Text("common.next")).Attribute("href", Url.Page("/Account/Profiles/Profiles", new { pageNumber = _profiles.Page + 1, returnUrl = _returnUrl })!));
-                }
+                content.Add(new Span().Paged(_profiles.Items.Count, _profiles.PageSize));
             }
 
             content.Add(new A(new Text("account.logout.title")).Attribute("href", "/Account/Logout"));

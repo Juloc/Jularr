@@ -51,9 +51,7 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                         .Text(item => item.Text, "admin.localization.translation")
                         .Resource(item => item.UiTranslationStatusTypeId, "admin.localization.status", status => "admin.localization.status." + (status ?? UiTranslationStatusType.Missing).ToString().ToLowerInvariant())
                         .Text(item => item.Version, "admin.localization.version")
-                        .Link(item => item.Id, "common.actions", id => Address(UiLocaleId, id), "common.edit"));
-                    if (PageNumber > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(UiLocaleId, pageNumber: PageNumber - 1)));
-                    if (_messages.Items.Count == _messages.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(UiLocaleId, pageNumber: PageNumber + 1)));
+                        .Link(item => item.Id, "common.actions", id => Address(UiLocaleId, id, PageNumber), "common.edit").Paged());
                 }
 
                 // Separate source and translation edits.
@@ -66,7 +64,7 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                         form.Hidden(item => item.MessageVersion);
                         form.Multiline(item => item.Description, "admin.localization.description");
                         form.Save();
-                    }, Address(UiLocaleId, _selected.Id, handler: "Description"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                    }, Address(UiLocaleId, _selected.Id, PageNumber, "Description"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         _description ?? new UpdateUiDescriptionDataV1(_selected.Version, _selected.Description), _description is null ? null : FormError));
                     split.Secondary.Add(new Form<SaveUiTranslationDataV1>(form =>
                     {
@@ -74,10 +72,11 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                         form.Hidden(item => item.TranslationVersion);
                         form.Multiline(item => item.Text, "admin.localization.translation");
                         form.Save();
-                    }, Address(UiLocaleId, _selected.Id, handler: "Translation"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                    }, Address(UiLocaleId, _selected.Id, PageNumber, "Translation"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         _translation ?? new SaveUiTranslationDataV1(_selected.Version, _selected.TranslationVersion, _selected.Text ?? ""), _translation is null ? null : FormError));
                 }
-            }).MasterDetail(_selected is not null, Address(UiLocaleId)));
+            }).MasterDetail(_selected is not null, Address(UiLocaleId, pageNumber: PageNumber)));
+
 
             if (FormError is not null && _description is null && _translation is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
@@ -93,14 +92,14 @@ namespace Jularr.Frontend.Pages.Admin.Localization
         {
             _description = new UpdateUiDescriptionDataV1(messageVersion, description);
             await updateDescription.ExecuteAsync<UpdateResult>(new UpdateUiDescriptionParametersV1(SelectedParameters().UiTranslationMessageId), _description, HttpContext.RequestAborted);
-            return LocalRedirect(Address(UiLocaleId, UiTranslationMessageId));
+            return LocalRedirect(Address(UiLocaleId, UiTranslationMessageId, PageNumber));
         }
 
         public async Task<IActionResult> OnPostTranslationAsync(long messageVersion, long? translationVersion, string? text)
         {
             _translation = new SaveUiTranslationDataV1(messageVersion, translationVersion, text ?? "");
             await translation.ExecuteAsync<UpdateResult>(SelectedParameters(), _translation, HttpContext.RequestAborted);
-            return LocalRedirect(Address(UiLocaleId, UiTranslationMessageId));
+            return LocalRedirect(Address(UiLocaleId, UiTranslationMessageId, PageNumber));
         }
 
         private UiMessageParametersV1 SelectedParameters() => new(UiTranslationMessageId ?? throw new KeyNotFoundException("No catalog message was selected."), UiLocaleId);

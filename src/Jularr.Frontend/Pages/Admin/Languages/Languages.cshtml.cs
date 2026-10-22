@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Languages
             // One row per language; its drawer edits the name, the state and the direction.
             var items = _locales?.Items ?? [];
             var columns = new List<ListColumn> { new("admin.languages.title", ListRole.Main), new("table.status", ListRole.Status), new("admin.languages.direction", ListRole.Data, 1), new("common.actions", ListRole.Actions) };
-            page.Content.Add(new ListPanel("admin.languages.list", columns, [.. items.Select(Row)]).Modifier("languages-list"));
+            page.Content.Add(new ListPanel("admin.languages.list", columns, [.. items.Select(Row)]).Modifier("languages-list").Paged());
             page.Content.AddRange(items.Select(locale => Edit(locale, csrf, states, directions)));
 
             // A new language starts with its code, name and direction.
@@ -53,11 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Languages
 
             var actions = new List<IUiComponent> { Drawer.Opener(new Button(new Icon("plus", assets, 16), new Span(new Text("admin.languages.add")).Class("action-dock__text")).Primary(), "locale-new") };
             if (texts.Can("localization.read")) actions.Add(new A(new Icon("globe", assets, 16), new Span(new Text("admin.localization.title")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Localization"));
-            var paging = _locales is { } result && (result.Page > 1 || result.Items.Count == result.PageSize)
-                ? new DockPaging(result.Page > 1 ? Link(result.Page - 1) : null, result.Items.Count == result.PageSize ? Link(result.Page + 1) : null,
-                    new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.pageOnly"], result.Page)))
-                : null;
-            page.Content.Add(new ActionDock(assets, "admin.languages.actions", actions, paging: paging));
+            page.Content.Add(new ActionDock(assets, "admin.languages.actions", actions));
         }
 
         private ListRow Row(UiLocaleDetailsV1 locale)

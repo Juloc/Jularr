@@ -60,8 +60,7 @@ namespace Jularr.Frontend.Pages.Admin.Matches
                 page.Content.Add(new Section([.. content]).Class("ui-section"));
             }
 
-            if (reviews.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", "/Admin/Works/Matches?pageNumber=" + (reviews.Page - 1)));
-            if (reviews.Items.Count == reviews.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Admin/Works/Matches?pageNumber=" + (reviews.Page + 1)));
+            page.Content.Add(new Span().Paged(reviews.Items.Count));
         }
 
         public async Task<IActionResult> OnGetAsync()

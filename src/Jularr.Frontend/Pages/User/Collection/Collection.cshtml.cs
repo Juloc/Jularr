@@ -66,8 +66,7 @@ namespace Jularr.Frontend.Pages.User.Collection
                         Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry");
                 })]).Class("media-grid"));
                 if (works.Items.Count == 0) page.Content.Add(new P(new Text(collection.IsSmart ? "collections.noMatch" : "collections.noWorks")));
-                if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Home + "?pageNumber=" + (works.Page - 1).ToString(CultureInfo.InvariantCulture)));
-                if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Class("button").Attribute("href", Home + "?pageNumber=" + (works.Page + 1).ToString(CultureInfo.InvariantCulture)));
+                page.Content.Add(new Span().Paged(works.Items.Count, works.PageSize));
             }
 
             // A hand-picked collection finds titles in the library and adds them.

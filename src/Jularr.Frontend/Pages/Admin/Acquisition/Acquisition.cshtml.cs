@@ -99,7 +99,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (_connections is { } list)
             {
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("acquisition.connection.none." + Role)).Attribute("role", "status"));
-                page.Content.Add(new ListPanel("acquisition.role." + Role, Columns(), [.. items.Select(item => Row(item, csrf))], empty).Modifier("connections-list connections-list--" + Role.ToString().ToLowerInvariant()));
+                page.Content.Add(new ListPanel("acquisition.role." + Role, Columns(), [.. items.Select(item => Row(item, csrf))], empty).Modifier("connections-list connections-list--" + Role.ToString().ToLowerInvariant()).Paged());
             }
 
             if (type is { } selectedType) page.Content.Add(Editor(selectedType, csrf));
@@ -127,14 +127,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     .Attribute("href", isSetup ? "/Setup/DownloadStorage" : "/Admin/DownloadStorage"));
             }
 
-            DockPaging? paging = null;
-            if (_connections is { } paged && (PageNumber > 1 || paged.Items.Count == paged.PageSize))
-            {
-                paging = new DockPaging(PageNumber > 1 ? Address(pageNumber: PageNumber - 1) : null, paged.Items.Count == paged.PageSize ? Address(pageNumber: PageNumber + 1) : null,
-                    new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page.single"], PageNumber)));
-            }
-
-            page.Content.Add(new ActionDock(assets, "acquisition.actions", actions, paging: paging));
+            page.Content.Add(new ActionDock(assets, "acquisition.actions", actions));
         }
 
         // The columns each kind shows: what decides its use.

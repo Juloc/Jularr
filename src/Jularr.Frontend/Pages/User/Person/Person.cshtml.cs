@@ -35,8 +35,7 @@ namespace Jularr.Frontend.Pages.User.Person
                     ? new Div([.. works.Items.Select(item => MediaCard.For(assets, item)
                         .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid")
                     : new P(new Text("person.empty")));
-                if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(works.Page - 1)));
-                if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(works.Page + 1)));
+                page.Content.Add(new Span().Paged(works.Items.Count, works.PageSize));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));

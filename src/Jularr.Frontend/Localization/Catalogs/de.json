@@ -880,10 +880,6 @@
    "Select text to highlight it or add a note.",
    "Markiere Text, um ihn hervorzuheben oder eine Notiz hinzuzufügen."
   ],
-  "reader.notesPages": [
-   "Note pages",
-   "Notizseiten"
-  ],
   "reader.note": [
    "Note",
    "Notiz"
@@ -3868,10 +3864,6 @@
    "Year",
    "Jahr"
   ],
-  "library.paging": [
-   "Pages",
-   "Seiten"
-  ],
   "library.userEmpty": [
    "Your library is empty. Discover finds something to watch.",
    "Deine Bibliothek ist leer. Unter Entdecken findest du etwas zum Ansehen."
@@ -5880,10 +5872,6 @@
    "Nothing new.",
    "Nichts Neues."
   ],
-  "notifications.pages": [
-   "Notification pages",
-   "Benachrichtigungsseiten"
-  ],
   "notifications.times": [
    "({0}×)",
    "({0}×)"
@@ -6735,10 +6723,6 @@
   "details.wholeWork": [
    "Whole work",
    "Ganzes Werk"
-  ],
-  "details.pages": [
-   "Version pages",
-   "Versionsseiten"
   ],
   "media.asset.Video": [
    "Video",
@@ -10460,10 +10444,6 @@
    "Page actions",
    "Seitenaktionen"
   ],
-  "dock.page": [
-   "Page {0} / {1}",
-   "Seite {0} / {1}"
-  ],
   "dock.selected": [
    "{0} selected",
    "{0} ausgewählt"
@@ -11396,10 +11376,6 @@
    "Naming actions",
    "Aktionen für die Benennung"
   ],
-  "dock.pageOnly": [
-   "Page {0}",
-   "Seite {0}"
-  ],
   "nav.system.server": [
    "Server",
    "Server"
@@ -12163,10 +12139,6 @@
   "acquisition.actions": [
    "Page actions",
    "Aktionen der Seite"
-  ],
-  "dock.page.single": [
-   "Page {0}",
-   "Seite {0}"
   ],
   "arr.scope": [
    "Media type",

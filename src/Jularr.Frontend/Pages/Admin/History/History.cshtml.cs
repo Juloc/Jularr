@@ -43,16 +43,9 @@ namespace Jularr.Frontend.Pages.Admin.History
             page.Content.Add(new ListToolbar(Chips()));
             var columns = new List<ListColumn> { new("table.work", ListRole.Main), new("history.event", ListRole.Status), new("history.release", ListRole.Data, 1), new("history.source", ListRole.Data, 2), new("history.when"), new("common.actions", ListRole.Actions) };
             var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("history.empty")));
-            page.Content.Add(new ListPanel("history.list", columns, [.. events.Items.Select(Row)], empty).Modifier("history-list"));
+            page.Content.Add(new ListPanel("history.list", columns, [.. events.Items.Select(Row)], empty).Modifier("history-list").Paged());
             page.Content.AddRange(events.Items.Select(DrawerOf));
 
-            var total = CountOf(Group);
-            var pages = total is { } count ? Math.Max(1, (count + events.PageSize - 1) / events.PageSize) : events.Page + (events.Items.Count == events.PageSize ? 1 : 0);
-            if (pages > 1 || events.Page > 1)
-            {
-                page.Content.Add(new ActionDock(assets, "history.actions", paging: new DockPaging(events.Page > 1 ? Address(Group, events.Page - 1) : null, events.Page < pages ? Address(Group, events.Page + 1) : null,
-                    new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.page"], events.Page, pages)))));
-            }
         }
 
         private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);

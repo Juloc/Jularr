@@ -572,7 +572,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             if (_notes is not { Items.Count: > 0 } notes)
             {
                 // A later empty page leads back.
-                panel.Add(NotesPage > 1 ? new A(new Text("common.previous")).Attribute("href", NotesAddress(index, NotesPage - 1)) : new P(new Text("reader.notesEmpty")));
+                panel.Add(new P(new Text("reader.notesEmpty")).Paged(0, key: "n"));
             }
             else
             {
@@ -583,10 +583,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     new Form<ReadingAnnotationParametersV1>(form => form.Submit("reader.deleteNote"),
                         "/Read/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=DeleteNote&s=" + index.ToString(CultureInfo.InvariantCulture) + "&noteId=" + note.Id.ToString(CultureInfo.InvariantCulture), csrf,
                         new ReadingAnnotationParametersV1(Id, note.Id))]).Class("reader__note"))]).Class("reader__notes"));
-                var paging = new List<IUiComponent>();
-                if (notes.Page > 1) paging.Add(new A(new Text("common.previous")).Attribute("href", NotesAddress(index, notes.Page - 1)));
-                if (notes.Items.Count == notes.PageSize) paging.Add(new A(new Text("common.next")).Attribute("href", NotesAddress(index, notes.Page + 1)));
-                if (paging.Count > 0) panel.Add(new Nav([.. paging]).Attribute("aria-label", texts["reader.notesPages"]));
+                panel.Add(new Span().Paged(notes.Items.Count, notes.PageSize, "n"));
             }
 
             var div = new Div([.. panel]).Class("reader__panel").Attribute("data-panel", "notes").Attribute("aria-label", texts["reader.notes"]);
@@ -643,7 +640,6 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Class("reader__choices")
         ).Class("reader__popover").Attribute("data-role", "popover").Attribute("hidden", "hidden");
 
-        private static string NotesAddress(int section, int page) => "?s=" + section.ToString(CultureInfo.InvariantCulture) + "&n=" + page.ToString(CultureInfo.InvariantCulture);
 
         public async Task<IActionResult> OnPostDeleteNoteAsync([BindRequired] long noteId)
         {
