@@ -3,7 +3,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // Reusable semantic grouping; the owning page selects its heading and contents. An icon sits before the heading on a small tile; an action (a button or a short note) sits at the heading's end.
-    public sealed class UiSection(string headingKey, IReadOnlyList<IUiComponent> items, IUiComponent? action = null, IUiComponent? icon = null) : IUiComponent
+    public sealed class UiSection(string headingKey, IReadOnlyList<IUiComponent> items, IUiComponent? icon = null, IUiComponent? action = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
