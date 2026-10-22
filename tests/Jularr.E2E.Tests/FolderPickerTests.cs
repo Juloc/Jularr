@@ -78,5 +78,55 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task SetupLibraries_OfferTheLocalPathBeforeItIsConnected_AndConnectItOnChoosing()
+        {
+            using var folders = new Folders("Movies");
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string> { ["Storage:LocalPaths:0"] = folders.Library });
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            try
+            {
+                await Owner.CreateAsync(page);
+                await page.GetByRole(AriaRole.Button, new() { Name = "New setup", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync("**/Setup/Storage");
+
+                // The storage step shows the path as a tile that is not connected; the libraries step still offers it.
+                await Assertions.Expect(page.Locator(".feature-card", new() { HasText = "Available" })).ToHaveCountAsync(1);
+                await page.GotoAsync("/Setup/Libraries");
+                var movies = page.Locator(".setup-libraries__row", new() { HasText = "Movies" });
+                await movies.GetByRole(AriaRole.Link, new() { Name = "Browse folders" }).ClickAsync();
+                var picker = page.GetByRole(AriaRole.Dialog, new() { Name = "Browse folders", Exact = true });
+                await Assertions.Expect(picker.GetByText("No storage connections are configured", new() { Exact = false })).ToHaveCountAsync(0);
+
+                // The dialog closes with a plain X: an icon, no visible text, its name only for assistive technology.
+                var close = picker.GetByRole(AriaRole.Button, new() { Name = "Close folder browser", Exact = true });
+                await Assertions.Expect(close).ToBeVisibleAsync();
+                Assert.AreEqual("", (await close.InnerTextAsync()).Trim());
+                Assert.AreEqual(1, await close.Locator("svg").CountAsync());
+
+                // Choosing the path connects it, and its folders can be browsed and chosen.
+                Assert.AreEqual(0L, await jularr.ScalarAsync("SELECT count(*) FROM \"StorageMounts\""));
+                await picker.GetByRole(AriaRole.Link, new() { Name = "library · " + folders.Library, Exact = true }).ClickAsync();
+                await picker.GetByRole(AriaRole.Link, new() { Name = "Movies", Exact = true }).ClickAsync();
+                await picker.GetByRole(AriaRole.Button, new() { Name = "Use this folder", Exact = true }).ClickAsync();
+                await movies.GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync("**/Setup/Libraries");
+                await Assertions.Expect(page.Locator(".setup-libraries__row", new() { HasText = "Movies" }).Locator(".setup-libraries__root")).ToHaveCountAsync(1);
+                Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"StorageMounts\""));
+
+                // Once connected the path is listed once, as the connection.
+                await movies.GetByRole(AriaRole.Link, new() { Name = "Browse folders" }).ClickAsync();
+                await Assertions.Expect(picker.GetByRole(AriaRole.Link, new() { Name = "library · " + folders.Library, Exact = true })).ToHaveCountAsync(1);
+                CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "folder-picker-setup-libraries");
+                throw;
+            }
+        }
     }
 }
