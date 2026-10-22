@@ -40,6 +40,14 @@ class HttpTvCatalogV1Client(
     override suspend fun watchlist(page: Int, pageSize: Int, sortTypeId: Int?): TvPageV1<TvWorkCardV1> =
         readObject(TvCatalogV1Routes.watchlist(page, pageSize, sortTypeId)).page { workCard() }
 
+    override suspend fun watchlistFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters, sortTypeId: Int?,
+    ): TvPageV1<TvWorkCardV1> =
+        readObject(TvCatalogV1Routes.watchlistFiltered(page, pageSize, filters, sortTypeId)).page { workCard() }
+
+    override suspend fun watchlistCount(): Int =
+        readObject(TvCatalogV1Routes.WatchlistCount).getInt("total")
+
     override suspend fun setWatchlisted(workId: Long, isWatchlisted: Boolean): Boolean =
         readObject(TvCatalogV1Routes.watchlistItem(workId), "PUT", JSONObject().put("isWatchlisted", isWatchlisted))
             .getBoolean("success")
