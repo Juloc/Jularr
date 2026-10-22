@@ -13315,6 +13315,90 @@
   "common.close": [
    "Close",
    "Schließen"
+  ],
+  "translation.local.title": [
+   "Local translation models",
+   "Lokale Übersetzungsmodelle"
+  ],
+  "translation.local.description": [
+   "Optional TranslateGemma on a separately installed private Ollama server. Its models are not included in the Jularr image.",
+   "Optionales TranslateGemma auf einem separat installierten privaten Ollama-Server. Die Modelle sind nicht im Jularr-Image enthalten."
+  ],
+  "translation.local.back": [
+   "Back to instance settings",
+   "Zurück zu den Instanzeinstellungen"
+  ],
+  "translation.local.configure": [
+   "Configure LocalTranslation__Endpoint with a private Ollama address, such as http://ollama:11434.",
+   "Konfiguriere LocalTranslation__Endpoint mit einer privaten Ollama-Adresse, zum Beispiel http://ollama:11434."
+  ],
+  "translation.local.offline": [
+   "The configured local model server cannot be contacted.",
+   "Der konfigurierte lokale Modellserver ist nicht erreichbar."
+  ],
+  "translation.local.capacity": [
+   "Model downloads require the administrator to check the Ollama model volume and configure LocalTranslation__OperatorVerifiedFreeBytes. Keep at least 2 GB free after downloading. Jularr cannot inspect the disk space of another container.",
+   "Für Modell-Downloads muss der Administrator das Ollama-Modellvolume prüfen und LocalTranslation__OperatorVerifiedFreeBytes konfigurieren. Nach dem Download sollten mindestens 2 GB frei bleiben. Jularr kann den Speicherplatz eines anderen Containers nicht prüfen."
+  ],
+  "translation.local.loaded": [
+   "Loaded",
+   "Geladen"
+  ],
+  "translation.local.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "translation.local.notInstalled": [
+   "Not installed",
+   "Nicht installiert"
+  ],
+  "translation.local.benchmark": [
+   "Test speed",
+   "Geschwindigkeit testen"
+  ],
+  "translation.local.pull": [
+   "Download model",
+   "Modell herunterladen"
+  ],
+  "translation.local.pullBlocked": [
+   "Download not available: verify free space or finish the active download.",
+   "Download nicht möglich: Prüfe den freien Speicherplatz oder warte, bis der aktive Download abgeschlossen ist."
+  ],
+  "translation.local.refresh": [
+   "Refresh model state",
+   "Modellstatus aktualisieren"
+  ],
+  "translation.local.benchmarkWarning": [
+   "A short speed test, not a literary quality assessment.",
+   "Ein kurzer Geschwindigkeitstest, keine Bewertung der literarischen Qualität."
+  ],
+  "translation.local.state.idle": [
+   "Idle",
+   "Leerlauf"
+  ],
+  "translation.local.state.queued": [
+   "Queued",
+   "In Warteschlange"
+  ],
+  "translation.local.state.downloading": [
+   "Downloading",
+   "Wird heruntergeladen"
+  ],
+  "translation.local.state.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "translation.local.state.failed": [
+   "Failed",
+   "Fehlgeschlagen"
+  ],
+  "translation.local.state.interrupted": [
+   "Interrupted",
+   "Unterbrochen"
+  ],
+  "reader.translation.localQuality": [
+   "TranslateGemma · local",
+   "TranslateGemma · lokal"
   ]
  }
 }
