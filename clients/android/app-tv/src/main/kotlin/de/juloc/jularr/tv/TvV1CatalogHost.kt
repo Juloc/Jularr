@@ -16,6 +16,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
+import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientLibrary
@@ -48,6 +49,7 @@ fun TvV1CatalogHost(
     var error by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var library by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
     var searchResults by remember(serverOrigin) { mutableStateOf(ClientLibrary(emptyList())) }
+    var continueWatching by remember(serverOrigin) { mutableStateOf<List<TvContinueItemV1>>(emptyList()) }
     var watchlist by remember(serverOrigin) { mutableStateOf<List<WatchlistItem>>(emptyList()) }
     var details by remember(serverOrigin) { mutableStateOf<AnimeDetail?>(null) }
     var detailedTitle by remember(serverOrigin) { mutableStateOf("") }
@@ -97,6 +99,9 @@ fun TvV1CatalogHost(
                     library = TvV1LegacyUiModels.videoLibrary(loadCatalogPages { pageNumber ->
                         catalog.library(page = pageNumber, pageSize = 100)
                     })
+                    // The server supplies real MediaAssetId, WorkId and timecodes. Keep
+                    // reading/ebook assets out of this TV-video-only Continue row.
+                    continueWatching = catalog.continueWatching().filter { it.mediaAssetTypeId == 1 }
                 }
                 TvV1CatalogPage.Search -> {
                     require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
@@ -186,7 +191,9 @@ fun TvV1CatalogHost(
                             focusMemory = focusMemory,
                             onOpenSearch = { page = TvV1CatalogPage.Search },
                             onAnime = { card -> openWork(card.id) },
-                            onContinueWatching = { /* V1 playback integration pending */ },
+                            onContinueWatching = { /* Legacy bootstrap is intentionally disconnected. */ },
+                            v1ContinueWatching = continueWatching,
+                            onContinueWork = { item -> openWork(item.workId.toString()) },
                         )
                         TvV1CatalogPage.Watchlist -> {
                             if (error != null) {

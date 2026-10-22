@@ -45,6 +45,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.model.AnimeSummary
 import de.juloc.jularr.core.model.ClientLibrary
 import de.juloc.jularr.core.model.ContinueWatchingItem
@@ -60,6 +61,8 @@ fun TvHomeScreen(
     onOpenSearch: () -> Unit,
     onAnime: (AnimeSummary) -> Unit,
     onContinueWatching: (ContinueWatchingItem) -> Unit,
+    v1ContinueWatching: List<TvContinueItemV1> = emptyList(),
+    onContinueWork: (TvContinueItemV1) -> Unit = {},
 ) {
     var filter by remember {
         mutableStateOf(
@@ -88,6 +91,7 @@ fun TvHomeScreen(
         add("filters")
         if (featured != null) add("hero")
         if (error != null) add("error")
+        if (v1ContinueWatching.isNotEmpty()) addAll(listOf("v1-continue-title", "v1-continue-row"))
         if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
         if (series.isNotEmpty()) addAll(listOf("series-title", "series-row"))
         if (movies.isNotEmpty()) addAll(listOf("movies-title", "movies-row"))
@@ -97,6 +101,7 @@ fun TvHomeScreen(
     LaunchedEffect(restoringItem) {
         val targetRow = when {
             restoringItem == "hero:${featured?.id}" -> "hero"
+            restoringItem?.startsWith("v1continue:") == true -> "v1-continue-row"
             restoringItem?.startsWith("continue:") == true -> "continue-row"
             restoringItem?.startsWith("anime:") == true -> {
                 val id = restoringItem.removePrefix("anime:")
@@ -214,6 +219,44 @@ fun TvHomeScreen(
 
             error?.let { message ->
                 item { Text(message, color = MaterialTheme.colorScheme.error) }
+            }
+
+            if (v1ContinueWatching.isNotEmpty()) {
+                item(key = "v1-continue-title") {
+                    Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
+                }
+                item(key = "v1-continue-row") {
+                    val rowState = rememberLazyListState()
+                    val restoreIndex = v1ContinueWatching.indexOfFirst {
+                        restoringItem == "v1continue:${it.mediaAssetId}"
+                    }
+                    LaunchedEffect(restoreIndex) {
+                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+                    }
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(v1ContinueWatching, key = { it.mediaAssetId }) { entry ->
+                            val itemFocus = remember(entry.mediaAssetId) { FocusRequester() }
+                            LaunchedEffect(restoringItem, entry.mediaAssetId) {
+                                if (restoringItem == "v1continue:${entry.mediaAssetId}") {
+                                    runCatching { itemFocus.requestFocus() }
+                                }
+                            }
+                            TvV1ContinueWatchingCard(
+                                item = entry,
+                                serverOrigin = serverOrigin,
+                                requestHeaders = requestHeaders,
+                                focusRequester = itemFocus,
+                                onFocused = {
+                                    focusMemory.remember("home", "v1continue:${entry.mediaAssetId}")
+                                },
+                                onClick = { onContinueWork(entry) },
+                            )
+                        }
+                    }
+                }
             }
 
             if (inProgress.isNotEmpty()) {
