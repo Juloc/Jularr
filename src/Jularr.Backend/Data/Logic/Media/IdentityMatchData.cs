@@ -51,6 +51,30 @@ namespace Jularr.Backend.Data.Logic.Media
         public int Limit { get; }
     }
 
+    // A matched Work whose AniList relations are due, with the AniList entries it holds (the entry of a film, a book, or the entries of its seasons).
+    internal sealed class IdentityRelationTargetData : BaseData
+    {
+        public IdentityRelationTargetData(long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, int[] providerIds)
+        {
+            WorkId = workId;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            ProviderIds = providerIds;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(IdentityMatchFields), nameof(IdentityMatchFields.ProviderIds))]
+        public int[] ProviderIds { get; }
+    }
+
     internal sealed class SeasonEpisodesData : BaseData
     {
         public SeasonEpisodesData(int seasonNumber, int episodes)

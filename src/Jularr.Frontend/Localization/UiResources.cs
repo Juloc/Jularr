@@ -2479,6 +2479,7 @@ namespace Jularr.Frontend.Localization
             new("instance.module.Emulation", "Retro games in the browser"),
             new("instance.module.UnitGroups", "Named sections for episodes and volumes"),
             new("instance.module.ProgressSync", "Share watch progress with Jellyfin and Emby"),
+            new("instance.module.AniList", "Connect AniList accounts and keep AniList's relations of titles"),
             new("unitGroups.title", "Sections"),
             new("unitGroups.name", "Name"),
             new("unitGroups.delete", "Delete"),
@@ -2728,6 +2729,7 @@ namespace Jularr.Frontend.Localization
             new("jobs.job.usenet", "Usenet downloads"),
             new("jobs.job.aniListMatching", "AniList matching"),
             new("jobs.job.aniListSync", "AniList sync"),
+            new("jobs.job.aniListRelations", "AniList relations"),
             new("jobs.job.covers", "Provider covers"),
             new("jobs.job.storage", "Storage check"),
             new("jobs.job.scanScheduling", "Scan scheduling"),
@@ -2912,6 +2914,7 @@ namespace Jularr.Frontend.Localization
             new("jobs.about.providerSyncEmby", "Syncs the connected Emby server on the schedule of the provider sync."),
             new("jobs.about.usenet", "Works through the download jobs of Jularr's own Usenet downloader."),
             new("jobs.about.aniListMatching", "Checks open AniList matches of anime titles."),
+            new("jobs.about.aniListRelations", "Reads the relations AniList names for matched titles and adds them to the library's relations."),
             new("jobs.about.aniListSync", "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here."),
             new("jobs.about.covers", "Fetches and renews the covers of titles from their providers."),
             new("jobs.about.storage", "Checks that the mounts and storage paths can be reached."),
@@ -3054,6 +3057,7 @@ namespace Jularr.Frontend.Localization
             new("details.relation.removed", "Relation removed"),
             new("details.relation.remove", "Remove relation"),
             new("details.relation.request", "Request"),
+            new("details.relation.requested", "Requested"),
         ];
     }
 }

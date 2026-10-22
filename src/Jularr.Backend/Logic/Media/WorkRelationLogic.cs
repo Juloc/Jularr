@@ -55,6 +55,13 @@ namespace Jularr.Backend.Logic.Media
             .DistinctBy(target => (target.Value, target.WorkRelationTypeId))
             .Take(ProviderLimit)];
 
+        // The relations of every AniList entry a Work holds (a series holds one per season); the entries of the Work itself are not relations of it.
+        public static IReadOnlyList<WorkRelationTarget> AniListTargets(IEnumerable<AniListMedia> entries, IReadOnlyCollection<int> ownIds) => [.. entries
+            .SelectMany(media => AniListTargets(media))
+            .Where(target => !ownIds.Contains(int.Parse(target.Value, CultureInfo.InvariantCulture)))
+            .DistinctBy(target => (target.Value, target.WorkRelationTypeId))
+            .Take(ProviderLimit)];
+
         // What a provider names replaces its earlier relations of the Work; the titles it names that Discover does not know yet are kept in its catalog, and a relation a person hid stays hidden.
         public static async Task SaveWorkRelationsAsync(this LogicContext ctx, WorkRelationSyncData data, CancellationToken ct)
         {

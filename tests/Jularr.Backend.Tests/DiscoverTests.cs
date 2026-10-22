@@ -15,6 +15,8 @@ using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Data.Tmdb;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -346,6 +348,58 @@ namespace Jularr.Backend.Tests
             using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
             Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
             Assert.AreEqual("/Details/" + workId, known.Headers.Location!.OriginalString);
+        }
+
+        [TestMethod]
+        public async Task RelatedWork_RequestedFromItsRow_IsTheDiscoverRequestWithoutLeavingThePage()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+
+            // A Work names a season of an anime that is no Work yet.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (700, 1, 'Source Film', 2001);
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear") VALUES (800, 'anilist', '21', 2, 1, 'The Matrix Show Season 2', 2021);
+                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (700, 800, 1, 'anilist');
+                """);
+            using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
+            browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            browser.DefaultRequestHeaders.Add("HX-Request", "true");
+
+            // The row offers the request itself, not a link to Discover.
+            using var shown = await browser.GetAsync("/Details/700?tab=related");
+            var html = await shown.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, shown.StatusCode, html);
+            StringAssert.Contains(html, "handler=RequestRelated");
+            StringAssert.Contains(html, "name=\"externalId\" value=\"21\"");
+            var token = WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+            var form = new Dictionary<string, string> { ["__RequestVerificationToken"] = token, ["namespace"] = "anilist", ["externalId"] = "21" };
+
+            // A title this Work does not name is not requested through it.
+            using var foreign = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(new Dictionary<string, string>(form) { ["externalId"] = "999" }));
+            Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+
+            // The request is made as Discover makes it; the answer is the page again with the hint and no redirect, and the row says Requested instead of offering the button.
+            using var requested = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(form));
+            var answer = await requested.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, answer);
+            StringAssert.Contains(string.Join(' ', requested.Headers.GetValues("HX-Trigger")), "Requested");
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = " + workId));
+            StringAssert.Contains(answer, "state-chip__label\">Requested<");
+            Assert.IsFalse(answer.Contains("name=\"externalId\" value=\"21\"", StringComparison.Ordinal));
+
+            // Without Requests there is no button and no way to post one.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests';");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "MediaSubtypeId", "Title", "ReleaseYear") VALUES (801, 'anilist', '22', 2, 1, 'Another Season', 2022);
+                INSERT INTO "WorkRelations" ("WorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES (700, 801, 2, 'anilist');
+                """);
+            using var disabled = await browser.GetAsync("/Details/700?tab=related");
+            Assert.IsFalse((await disabled.Content.ReadAsStringAsync()).Contains("handler=RequestRelated", StringComparison.Ordinal));
+            using var refused = await browser.PostAsync("/Details/700?handler=RequestRelated&tab=related", new FormUrlEncodedContent(new Dictionary<string, string>(form) { ["externalId"] = "22" }));
+            Assert.AreNotEqual(HttpStatusCode.OK, refused.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
         }
 
         [TestMethod]

@@ -6728,6 +6728,10 @@
    "Share watch progress with Jellyfin and Emby",
    "Wiedergabefortschritt mit Jellyfin und Emby teilen"
   ],
+  "instance.module.AniList": [
+   "Connect AniList accounts and keep AniList's relations of titles",
+   "AniList-Konten verbinden und die Beziehungen von AniList zu Titeln pflegen"
+  ],
   "unitGroups.title": [
    "Sections",
    "Abschnitte"
@@ -11988,9 +11992,21 @@
    "Request",
    "Anfragen"
   ],
+  "details.relation.requested": [
+   "Requested",
+   "Angefragt"
+  ],
   "jobs.job.aniListSync": [
    "AniList sync",
    "AniList-Abgleich"
+  ],
+  "jobs.job.aniListRelations": [
+   "AniList relations",
+   "AniList-Beziehungen"
+  ],
+  "jobs.about.aniListRelations": [
+   "Reads the relations AniList names for matched titles and adds them to the library's relations.",
+   "Liest die Beziehungen, die AniList für zugeordnete Titel nennt, und ergänzt damit die Beziehungen der Bibliothek."
   ],
   "jobs.about.aniListSync": [
    "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",

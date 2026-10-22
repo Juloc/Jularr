@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.User.AniList.V1
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AniListConnectionV1>()];
-        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync", "AniList");
         protected override ServicePermission GetPermission(AniListParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override async Task<IServiceOutput> OnRead()
@@ -66,7 +66,7 @@ namespace Jularr.Backend.Service.User.AniList.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync", "AniList");
         protected override ServicePermission GetPermission(AniListParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override async Task<IServiceOutput> OnExecute()
@@ -87,7 +87,7 @@ namespace Jularr.Backend.Service.User.AniList.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync", "AniList");
         protected override ServicePermission GetPermission(AniListParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override async Task<IServiceOutput> OnDelete()
@@ -103,7 +103,7 @@ namespace Jularr.Backend.Service.User.AniList.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(AniListParametersV1 parameters) => ModuleRequirement.All("Library", "ProgressSync", "AniList");
         protected override ServicePermission GetPermission(AniListParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override async Task<IServiceOutput> OnUpdate()

@@ -20,6 +20,10 @@ namespace Jularr.Workers
             await Runner.RunAsync("aniListMatching", (services, token) =>
                 services.GetRequiredService<MatchAniListV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
 
+            // The relations AniList names for matched Works, while the AniList module is on.
+            await Runner.RunAsync("aniListRelations", (services, token) =>
+                services.GetRequiredService<SyncAniListRelationsV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
+
             // Covers still named by a provider, a pass of twenty at a time with a short pause.
             await Runner.RunWhileBusyAsync("covers", async (services, token) =>
                 (await services.GetRequiredService<StoreCoversV1>().ExecuteAsync<UpdateResult>(new CoverParametersV1(), default, token)).Success, TimeSpan.FromSeconds(2), Time, ct);

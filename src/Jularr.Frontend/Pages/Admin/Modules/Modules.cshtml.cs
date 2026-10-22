@@ -35,6 +35,7 @@ namespace Jularr.Frontend.Pages.Admin.Modules
             ["Subtitles"] = "subtitles",
             ["Uploads"] = "upload",
             ["ProgressSync"] = "sync",
+            ["AniList"] = "anilist",
             ["Devices"] = "devices",
             ["Registration"] = "user-plus",
             ["Translation"] = "globe",
