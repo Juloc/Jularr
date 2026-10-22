@@ -9,6 +9,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,7 +30,19 @@ interface TvDeviceTokenPersistence {
     fun storeToken(serverOrigin: String, token: String?)
 }
 
-class TvSessionStore(context: Context) : TvDeviceTokenPersistence {
+/** A slot is local and opaque: it is NOT an account identity invented from a device token. */
+data class TvV1SavedAccount(val id: String, val label: String, val hasToken: Boolean)
+
+interface TvV1AccountPersistence : TvDeviceTokenPersistence {
+    fun listV1Accounts(serverOrigin: String): List<TvV1SavedAccount>
+    fun ensureV1Account(serverOrigin: String): String
+    fun createV1Account(serverOrigin: String): String
+    fun activateV1Account(serverOrigin: String, id: String)
+    fun loadV1AccountToken(serverOrigin: String, id: String): String?
+    fun storeV1AccountToken(serverOrigin: String, id: String, token: String?)
+}
+
+class TvSessionStore(context: Context) : TvV1AccountPersistence {
     private val preferences = context.getSharedPreferences(
         PREFS_NAME,
         Context.MODE_PRIVATE,
@@ -163,6 +176,121 @@ class TvSessionStore(context: Context) : TvDeviceTokenPersistence {
         }
     }
 
+    // New encrypted V1 slots; independent of the original /api/client/v1 cookie accounts.
+    // The token callback ALWAYS captures a slot ID, so an in-flight response for a
+    // previous viewer cannot write its rotated bearer into the newly selected slot.
+    private fun readV1Accounts(): JSONObject =
+        preferences.getString(KEY_ENCRYPTED_V1_ACCOUNTS, null)
+            ?.let { JSONObject(decrypt(it)) } ?: JSONObject()
+
+    private fun saveV1Accounts(data: JSONObject) {
+        check(preferences.edit()
+            .putString(KEY_ENCRYPTED_V1_ACCOUNTS, encrypt(data.toString()))
+            .commit()) { "Unable to persist encrypted TV account slots." }
+    }
+
+    private fun section(data: JSONObject, origin: String): JSONObject? =
+        data.optJSONObject(TvServerOrigin.normalize(origin))
+
+    @Synchronized
+    override fun listV1Accounts(serverOrigin: String): List<TvV1SavedAccount> {
+        val data = readV1Accounts()
+        val group = section(data, serverOrigin) ?: return emptyList()
+        val slots = group.optJSONArray("slots") ?: return emptyList()
+        return (0 until slots.length()).map { i ->
+            val slot = slots.getJSONObject(i)
+            TvV1SavedAccount(
+                id = slot.getString("id"),
+                label = slot.getString("label"),
+                hasToken = slot.optString("token").isNotBlank(),
+            )
+        }
+    }
+
+    @Synchronized
+    override fun ensureV1Account(serverOrigin: String): String {
+        val origin = TvServerOrigin.normalize(serverOrigin)
+        val data = readV1Accounts()
+        val existing = section(data, origin)
+        if (existing != null) {
+            val id = existing.getString("active")
+            require((0 until existing.getJSONArray("slots").length()).any {
+                existing.getJSONArray("slots").getJSONObject(it).getString("id") == id
+            }) { "Active TV account not found." }
+            return id
+        }
+
+        // One-time compatibility migration of a previously paired per-origin V1 token.
+        val legacy = readDeviceTokens()
+        val migrated = legacy.optString(origin).takeIf(String::isNotBlank)
+        val id = UUID.randomUUID().toString()
+        val slots = JSONArray().put(JSONObject().put("id", id)
+            .put("label", "Anmeldung 1").put("token", migrated ?: ""))
+        data.put(origin, JSONObject().put("active", id).put("slots", slots))
+        // Commit both values together so the old token cannot be restored into a
+        // different account after the slot-based store becomes authoritative.
+        legacy.remove(origin)
+        check(preferences.edit()
+            .putString(KEY_ENCRYPTED_V1_ACCOUNTS, encrypt(data.toString()))
+            .putString(KEY_ENCRYPTED_DEVICE_TOKENS, encrypt(legacy.toString()))
+            .commit()) { "Unable to migrate encrypted device credentials." }
+        return id
+    }
+
+    @Synchronized
+    override fun createV1Account(serverOrigin: String): String {
+        val origin = TvServerOrigin.normalize(serverOrigin)
+        ensureV1Account(origin)
+        val data = readV1Accounts()
+        val group = requireNotNull(section(data, origin))
+        val slots = group.getJSONArray("slots")
+        val id = UUID.randomUUID().toString()
+        slots.put(JSONObject().put("id", id)
+            .put("label", "Anmeldung ${slots.length() + 1}").put("token", ""))
+        group.put("active", id)
+        saveV1Accounts(data)
+        return id
+    }
+
+    @Synchronized
+    override fun activateV1Account(serverOrigin: String, id: String) {
+        val data = readV1Accounts()
+        val group = requireNotNull(section(data, serverOrigin)) { "TV server has no saved accounts." }
+        val slots = group.getJSONArray("slots")
+        require((0 until slots.length()).any { slots.getJSONObject(it).getString("id") == id }) {
+            "Unknown TV account slot."
+        }
+        group.put("active", id)
+        saveV1Accounts(data)
+    }
+
+    @Synchronized
+    override fun loadV1AccountToken(serverOrigin: String, id: String): String? {
+        val group = section(readV1Accounts(), serverOrigin) ?: return null
+        val slots = group.getJSONArray("slots")
+        for (i in 0 until slots.length()) {
+            val slot = slots.getJSONObject(i)
+            if (slot.getString("id") == id) return slot.optString("token").takeIf(String::isNotBlank)
+        }
+        error("Unknown TV account slot.")
+    }
+
+    @Synchronized
+    override fun storeV1AccountToken(serverOrigin: String, id: String, token: String?) {
+        val data = readV1Accounts()
+        val group = requireNotNull(section(data, serverOrigin))
+        val slots = group.getJSONArray("slots")
+        for (i in 0 until slots.length()) {
+            val slot = slots.getJSONObject(i)
+            if (slot.getString("id") == id) {
+                slot.put("token", token ?: "")
+                saveV1Accounts(data)
+                return
+            }
+        }
+        error("Unknown TV account slot.")
+    }
+
     private fun readDeviceTokens(): JSONObject {
         val encrypted = preferences.getString(KEY_ENCRYPTED_DEVICE_TOKENS, null)
             ?: return JSONObject()
@@ -229,6 +357,7 @@ class TvSessionStore(context: Context) : TvDeviceTokenPersistence {
         const val KEY_SESSIONS = "saved_sessions"
         const val KEY_ENCRYPTED_SESSIONS = "encrypted_sessions"
         const val KEY_ENCRYPTED_DEVICE_TOKENS = "encrypted_device_tokens"
+        const val KEY_ENCRYPTED_V1_ACCOUNTS = "encrypted_device_account_slots_v1"
         const val KEY_ACTIVE_ID = "active_session_id"
         const val KEY_ALIAS = "jularr-tv-sessions-key"
         const val NEW_SIGN_IN = "new-sign-in"

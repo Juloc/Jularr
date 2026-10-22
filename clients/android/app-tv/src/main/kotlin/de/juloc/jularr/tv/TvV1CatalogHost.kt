@@ -50,6 +50,7 @@ fun TvV1CatalogHost(
     onProfileChanged: () -> Unit,
     onSignedOut: () -> Unit,
     onChangeServer: () -> Unit,
+    onSwitchAccount: () -> Unit,
 ) {
     val catalog: TvCatalogV1Client = remember(serverOrigin, deviceSession) {
         HttpTvCatalogV1Client(serverOrigin, deviceSession.authenticatedTokenStore())
@@ -327,6 +328,7 @@ fun TvV1CatalogHost(
                     playbackExtras = playbackExtras,
                     onUnauthorized = onAuthenticationExpired,
                     onSwitchProfile = { openPage(TvV1CatalogPage.ProfileSelect) },
+                    onSwitchAccount = onSwitchAccount,
                     onOpenStatistics = if (capabilities.hasModule("Statistics") &&
                         capabilities.hasPermission("profile.media.read")
                     ) {{ openPage(TvV1CatalogPage.Statistics) }} else null,

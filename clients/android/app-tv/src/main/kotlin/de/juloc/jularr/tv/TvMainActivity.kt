@@ -20,10 +20,10 @@ class TvMainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 TvV1EntryHost(settings, deviceSession) {
-                        origin, capabilities, onExpired, onProfileChanged, onSignOut, onChangeServer ->
+                        origin, capabilities, onExpired, onProfileChanged, onSignOut, onChangeServer, onSwitchAccount ->
                     TvV1CatalogHost(
                         origin, capabilities, deviceSession, onExpired,
-                        onProfileChanged, onSignOut, onChangeServer,
+                        onProfileChanged, onSignOut, onChangeServer, onSwitchAccount,
                     )
                 }
             }
