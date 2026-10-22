@@ -3,15 +3,14 @@
 #
 #   docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml up -d
 services:
+  vpn:
+    # The tunnel belongs to this file only, so it starts without naming a profile.
+    profiles: !reset []
+
   qbittorrent:
     depends_on:
       vpn:
         condition: service_healthy
     network_mode: "service:vpn"
-    ports: []
-    volumes:
-      - ./qbittorrent/config:/config
-      - ./qbittorrent/downloads:/downloads
-
-  vpn:
-    profiles: []
+    # The client shares the tunnel's network; it may not have ports of its own then.
+    ports: !reset []

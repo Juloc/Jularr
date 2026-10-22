@@ -22,10 +22,13 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    # prepare-config.ps1 writes this file: the type of the tunnel and, when the configuration
+    # asks for them, the access data. It is not in the repository.
+    env_file:
+      - path: ./vpn/vpn.env
+        required: false
     environment:
-      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:-custom}
-      VPN_TYPE: ${VPN_TYPE:-wireguard}
-      # A provider that gives a configuration file; the file itself is not in the repository.
+      # The path of the configuration is fixed; the file itself is not in the repository.
       VPN_CUSTOM_CONFIG_PATH: /vpn/jularr.conf
       FIREWALL_INPUT_PORTS: ${VPN_INPUT_PORTS:-6881}
       FIREWALL_OUTBOUND_BLOCKED_PORTS: 6881
