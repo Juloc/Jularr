@@ -3,6 +3,21 @@
 **Original UI**: `feat/android-tv-integrated-906-20261009`. **Integration**: PR #1468,
 stacked on #1459/#1452. Media/catalog contract PR #1462, playback extras #1474.
 
+## Owner-approved TV scope (2026-10-22)
+
+- **Out of scope for the Android-TV release:** vocabulary learning, word-level
+  interactive subtitle cues/term actions, TV downloads and offline video.
+  No TV backend endpoints are required for these features, and they are
+  **not release blockers**. Ordinary audio/subtitle selection and server-
+  streamed WebVTT remain in scope.
+- **Optional, separate decisions:** Phone companion/remote/handoff; chronological
+  playback history; image-based/PGS subtitles; remote subtitle-provider search;
+  explicit user-profile NAS wake. Do not implement backend changes by assumption.
+  Existing server-controlled Wake-on-Demand stays the default.
+- **Client/release work remains mandatory:** saved multi-account UX, full Home
+  shelf parity, scalable pagination, live D-pad and Media3/real-server testing,
+  controller cleanup and reliable error/session recovery.
+
 This is a code/contract status, not a claim of Android TV hardware playback success.
 Do not replace the original TV screens or add a backend endpoint without owner discussion.
 
@@ -79,7 +94,7 @@ Do not replace the original TV screens or add a backend endpoint without owner d
 2. Genuine pairing → Home → Search → Work → Episode → HLS/DirectPlay → progress.
 3. Device-token renewal and profile switching under concurrent HTTP/HLS traffic.
 4. D-pad focus and Back behavior on original screens; no hidden/discarded feature.
-5. Confirm user decisions on missing learning/companion/storage/image subtitles.
+5. Confirm scope/UX decisions for companion, manual NAS wake and image subtitles; learning and TV offline are explicitly deferred.
 6. No unreviewed backend or Phone code changes, no invented Work/WorkUnit/Asset identity.
 
 
