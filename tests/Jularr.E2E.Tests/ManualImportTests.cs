@@ -64,7 +64,7 @@ namespace Jularr.E2E.Tests
                 await Steps.FollowAsync(page, row.GetByRole(AriaRole.Button, new() { Name = "Match", Exact = true }));
                 var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Match file", Exact = true });
                 await Assertions.Expect(dialog).ToBeVisibleAsync();
-                await dialog.GetByLabel("Quality").SelectOptionAsync("Bluray-1080p");
+                await dialog.Locator("select[name=MatchedQualityKey]").SelectOptionAsync("Bluray-1080p");
                 await Evidence.SaveAsync(page, "manual-import-match");
                 await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
                 await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);

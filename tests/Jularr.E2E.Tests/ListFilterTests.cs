@@ -34,7 +34,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(bar).ToHaveCountAsync(1);
                 await Assertions.Expect(bar.Locator(".capsule-bar__all--on")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator(".media-card")).ToHaveCountAsync(4);
-                await Assertions.Expect(page.Locator(".choice-select__control")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator("button.choice-select__control")).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator("[data-layout-toggle]")).ToBeVisibleAsync();
                 var libraryBar = await bar.Locator(".capsule-bar__areas").InnerTextAsync();
 
@@ -60,7 +60,7 @@ namespace Jularr.E2E.Tests
 
                 // The order and the layout stay with the choices; the layout is the device's and rows replace the grid.
                 await page.GotoAsync("/Library");
-                await page.Locator(".choice-select__control").SelectOptionAsync("Year");
+                await page.Locator("select.choice-select__control").SelectOptionAsync("Year");
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("sort=Year"));
                 await Assertions.Expect(page.Locator(".media-card__title").First).ToContainTextAsync("New Series");
                 await page.Locator("[data-layout-toggle]").ClickAsync();

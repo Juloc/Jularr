@@ -377,8 +377,8 @@
    "Verzoeklimiet"
   ],
   "request.rule.period": [
-   "Rolling period (days)",
-   "Voortschrijdende periode (dagen)"
+   "Rolling period",
+   "Voortschrijdende periode"
   ],
   "request.rule.approval": [
    "Approval",
@@ -981,23 +981,23 @@
    "Naam van de instantie"
   ],
   "admin.instance.readingCacheMegabytes": [
-   "Reading cache for offline storage (MB)",
-   "Leescache voor offline opslag (MB)"
+   "Reading cache for offline storage",
+   "Leescache voor offline opslag"
   ],
   "admin.instance.readingCacheWorks": [
    "Reading cache: most recently read books",
    "Leescache: laatst gelezen boeken"
   ],
   "admin.instance.libraryScanIntervalHours": [
-   "Library scan interval (hours)",
-   "Scaninterval van de bibliotheek (uren)"
+   "Library scan interval",
+   "Scaninterval van de bibliotheek"
   ],
   "admin.instance.historyRetentionDays": [
-   "Keep finished activity for days",
-   "Voltooide activiteit bewaren (dagen)"
+   "Keep finished activity for",
+   "Voltooide activiteit bewaren"
   ],
   "admin.instance.historyMegabytes": [
-   "Activity history size in MB",
+   "Activity history size",
    "Grootte van de activiteitengeschiedenis in MB"
   ],
   "admin.instance.collectionLimit": [
@@ -4560,22 +4560,6 @@
    "Recommendations",
    "Aanbevelingen"
   ],
-  "home.moveUp": [
-   "Up",
-   "Omhoog"
-  ],
-  "home.moveDown": [
-   "Down",
-   "Omlaag"
-  ],
-  "home.hide": [
-   "Hide",
-   "Verbergen"
-  ],
-  "home.show": [
-   "Show",
-   "Tonen"
-  ],
   "instance.module.HomeLayout": [
    "Personal home page order",
    "Persoonlijke volgorde van de startpagina"
@@ -5145,7 +5129,7 @@
    "Eigen prullenbak: map"
   ],
   "library.replacement.days": [
-   "Days in the recycle bin",
+   "Keep in the recycle bin",
    "Dagen in de prullenbak"
   ],
   "library.keepOnly": [
