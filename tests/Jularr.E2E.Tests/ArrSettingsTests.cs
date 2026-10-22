@@ -8,9 +8,12 @@ namespace Jularr.E2E.Tests
         // The list kit's row of an item, found by the words of its name.
         private static ILocator Row(IPage page, string text) => page.Locator(".list-body .list-row", new() { HasText = text });
 
+        // The card of a release profile, found by the words of its name.
+        private static ILocator Card(IPage page, string text) => page.Locator(".card-grid .feature-card", new() { HasText = text });
+
         [TestMethod]
         [Timeout(600_000)]
-        public async Task FormatsProfilesAndTags_WorkThroughListsAndDialogs_OnDesktopAndMobile()
+        public async Task FormatsProfilesAndTags_WorkThroughListsCardsAndDialogs_OnDesktopAndMobile()
         {
             await using var jularr = await JularrInstance.StartAsync();
             await using var browser = await BrowserSession.StartAsync(jularr);
@@ -73,26 +76,41 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=profiles&mediaTypeId=1");
                 await Assertions.Expect(Row(page, "Browser quality")).ToBeVisibleAsync();
 
-                // A release profile is a dialog of its list.
+                // A release profile is added in a dialog with Cancel; afterwards its settings are inputs of its card, saved by the page's pill.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=release&mediaTypeId=1");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "New release profile", Exact = true }));
+                Assert.AreEqual(1, await page.Locator("dialog#release-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).CountAsync());
                 var release = page.Locator("dialog#release-editor form").First;
                 await release.Locator("[name=Name]").FillAsync("Browser release");
                 await release.Locator("[name=Required]").FillAsync("/^TEAM{1,3},HDR$/i");
                 await release.Locator("[name=Ignored]").FillAsync("x265\nCAM");
                 await Steps.SubmitAsync(page, release);
-                await Steps.FollowAsync(page, Row(page, "Browser release").GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }));
-                release = page.Locator("dialog#release-editor form").First;
-                Assert.AreEqual("/^TEAM{1,3},HDR$/i", await release.Locator("[name=Required]").InputValueAsync());
-                Assert.AreEqual("x265\nCAM", await release.Locator("[name=Ignored]").InputValueAsync());
-                await page.Locator("dialog#release-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator("dialog#release-editor[open]")).ToHaveCountAsync(0);
+                Assert.AreEqual(0, await page.GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }).CountAsync(), "Release profiles have no Edit button.");
+                var releaseCard = Card(page, "Browser release");
+                Assert.AreEqual("/^TEAM{1,3},HDR$/i", await releaseCard.Locator("[name=Required]").InputValueAsync());
+                Assert.AreEqual("x265\nCAM", await releaseCard.Locator("[name=Ignored]").InputValueAsync());
+                await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeHiddenAsync();
+                await releaseCard.Locator("[name=Ignored]").FillAsync("x265");
+                await Assertions.Expect(page.Locator("[data-save-pill] .save-pill__count")).ToHaveTextAsync("1 change");
+                await Steps.SaveAsync(page);
+                await page.ReloadAsync();
+                Assert.AreEqual("x265", await Card(page, "Browser release").Locator("[name=Ignored]").InputValueAsync());
 
+                // A tag is a card whose label is its input; removing asks in a dialog with Cancel.
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=tags");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "New tag", Exact = true }));
                 var tag = page.Locator("dialog#tag-editor form").First;
                 await tag.Locator("[name=Label]").FillAsync("browser-tag");
                 await Steps.SubmitAsync(page, tag);
-                await Assertions.Expect(Row(page, "browser-tag")).ToBeVisibleAsync();
+                var tagField = page.Locator(".tag-card [name=Label]");
+                await Assertions.Expect(tagField).ToHaveValueAsync("browser-tag");
+                await tagField.FillAsync("renamed-tag");
+                await Steps.SaveAsync(page);
+                await Assertions.Expect(page.Locator(".tag-card [name=Label]")).ToHaveValueAsync("renamed-tag");
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Remove", Exact = true }));
+                await page.Locator("dialog#delete-confirm").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+                await Assertions.Expect(page.Locator(".tag-card [name=Label]")).ToHaveValueAsync("renamed-tag");
 
                 await page.SetViewportSizeAsync(1440, 1000);
                 await page.GotoAsync("/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1");
@@ -112,7 +130,7 @@ namespace Jularr.E2E.Tests
             }
             catch
             {
-                await Evidence.SaveAsync(page, nameof(FormatsProfilesAndTags_WorkThroughListsAndDialogs_OnDesktopAndMobile));
+                await Evidence.SaveAsync(page, nameof(FormatsProfilesAndTags_WorkThroughListsCardsAndDialogs_OnDesktopAndMobile));
                 throw;
             }
         }
