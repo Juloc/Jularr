@@ -13,6 +13,17 @@ interface TvV1PlaybackExtrasClient {
     /** Raw authenticated JPEG sprite sheet, to decode/crop using TvV1TrickplayTile. */
     suspend fun trickplaySheet(mediaAssetId: Long, sheetIndex: Int): ByteArray
     suspend fun tracks(mediaAssetId: Long): List<TvV1PlaybackTrack>
+    /**
+     * Use an audio track returned by tracks() to start a new real backend session with
+     * its audioStreamIndex. The existing session must be ended by its owner.
+     * Does not switch a Media3 stream in place or invent an unavailable track.
+     */
+    suspend fun startWithAudioTrack(
+        mediaAssetId: Long,
+        capabilities: de.juloc.jularr.core.api.playback.TvPlaybackV1Capabilities,
+        audioTrack: TvV1PlaybackTrack,
+        quality: Int? = null,
+    ): de.juloc.jularr.core.api.playback.TvPlaybackV1Plan
     /** Only use a supported subtitle track key returned by tracks(); returns literal WebVTT text. */
     suspend fun subtitleVtt(mediaAssetId: Long, key: String): String
     suspend fun preferences(): TvV1PlaybackPreferences
