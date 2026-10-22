@@ -24,6 +24,9 @@ import de.juloc.jularr.core.api.DeviceTokenStore
 import de.juloc.jularr.core.api.playback.HttpTvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Plan
+import de.juloc.jularr.core.api.tvlegacy.HttpTvV1LegacyFeaturesClient
+import de.juloc.jularr.core.api.tvlegacy.TvV1LegacyFeaturesClient
+import de.juloc.jularr.core.api.tvlegacy.TvV1PlaybackAssetInfo
 import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackExtrasClient
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackChapter
@@ -52,6 +55,7 @@ internal fun TvV1PlaybackHost(
     mediaAssetId: Long,
     title: String,
     onExit: () -> Unit,
+    onNavigateAsset: (TvV1PlaybackAssetInfo) -> Unit,
     onUnauthorized: () -> Unit,
     createClient: (String, DeviceTokenStore) -> TvPlaybackV1Client = { server, tokens ->
         HttpTvPlaybackV1Client(server, tokens)
@@ -62,6 +66,9 @@ internal fun TvV1PlaybackHost(
     val api = remember(origin, tokenStore) { createClient(origin, tokenStore) }
     val extras: TvV1PlaybackExtrasClient = remember(origin, tokenStore) {
         HttpTvV1PlaybackExtrasClient(origin, tokenStore)
+    }
+    val legacy: TvV1LegacyFeaturesClient = remember(origin, tokenStore) {
+        HttpTvV1LegacyFeaturesClient(origin, tokenStore)
     }
     val scope = rememberCoroutineScope()
     var plan by remember(mediaAssetId) { mutableStateOf<TvPlaybackV1Plan?>(null) }
@@ -75,6 +82,8 @@ internal fun TvV1PlaybackHost(
     var chapters by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackChapter>>(emptyList()) }
     var playbackPreferences by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackPreferences?>(null) }
     var seekPreview by remember(mediaAssetId) { mutableStateOf<ClientTrickplayDescriptor?>(null) }
+    var previousAsset by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackAssetInfo?>(null) }
+    var nextAsset by remember(mediaAssetId) { mutableStateOf<TvV1PlaybackAssetInfo?>(null) }
     var availableTracks by remember(mediaAssetId) { mutableStateOf<List<TvV1PlaybackTrack>>(emptyList()) }
     var selectedAudioKey by remember(mediaAssetId) { mutableStateOf<String?>(null) }
     var audioStreamIndex by remember(mediaAssetId) { mutableStateOf<Int?>(null) }
@@ -82,7 +91,8 @@ internal fun TvV1PlaybackHost(
     var selectedSubtitleConfig by remember(mediaAssetId) {
         mutableStateOf<MediaItem.SubtitleConfiguration?>(null)
     }
-    val subtitleFiles = remember(mediaAssetId) { mutableListOf<File>() }
+    // Keep sidecars until the Media3 player is disposed, even across autoplay-next.
+    val subtitleFiles = remember(player) { mutableListOf<File>() }
 
     DisposableEffect(player) {
         onDispose {
@@ -137,6 +147,49 @@ internal fun TvV1PlaybackHost(
             error = failure.message ?: "Die Wiedergabe konnte nicht gestartet werden."
         } finally {
             loading = false
+        }
+    }
+
+    // Optional real neighbour IDs are fetched and validated independently of the stream.
+    // A missing/forbidden route must not be replaced by fake episode-number increments.
+    LaunchedEffect(mediaAssetId, legacy) {
+        previousAsset = null
+        nextAsset = null
+        suspend fun findAsset(id: Long?): TvV1PlaybackAssetInfo? {
+            if (id == null) return null
+            val value = legacy.playbackAsset(id)
+            return value.takeIf { it.mediaAssetId == id }
+        }
+        try {
+            val current = findAsset(mediaAssetId)
+            if (current != null) {
+                previousAsset = try {
+                    findAsset(current.previousMediaAssetId)
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (failure: AppApiException) {
+                    if (failure.statusCode == 401) onUnauthorized()
+                    null
+                } catch (_: Exception) {
+                    null
+                }
+                nextAsset = try {
+                    findAsset(current.nextMediaAssetId)
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (failure: AppApiException) {
+                    if (failure.statusCode == 401) onUnauthorized()
+                    null
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (failure: AppApiException) {
+            if (failure.statusCode == 401) onUnauthorized()
+        } catch (_: Exception) {
+            // No next/previous controls when actual V1 identity cannot be verified.
         }
     }
 
@@ -281,7 +334,7 @@ internal fun TvV1PlaybackHost(
         return true
     }
 
-    fun completePlayback(completed: Boolean) {
+    fun completePlayback(completed: Boolean, navigateTo: TvV1PlaybackAssetInfo? = null) {
         if (finishing) return
         finishing = true
         val current = plan
@@ -315,7 +368,7 @@ internal fun TvV1PlaybackHost(
                 }
             }
             player.player.stop()
-            onExit()
+            if (navigateTo != null) onNavigateAsset(navigateTo) else onExit()
         }
     }
 
@@ -373,10 +426,19 @@ internal fun TvV1PlaybackHost(
                 positionMs = position
                 if (duration > 0) durationMs = duration
             },
+            previousEpisodeTitle = previousAsset?.let(::tvV1PlaybackAssetTitle),
+            nextEpisodeTitle = nextAsset?.let(::tvV1PlaybackAssetTitle),
+            onPreviousEpisode = {
+                previousAsset?.let { completePlayback(completed = false, navigateTo = it) }
+            },
+            onNextEpisode = {
+                nextAsset?.let { completePlayback(completed = false, navigateTo = it) }
+            },
             onPlaybackEnded = { position, duration ->
                 positionMs = position
                 if (duration > 0) durationMs = duration
-                completePlayback(completed = true)
+                val autoplayTarget = if (playbackPreferences?.autoplayNext == true) nextAsset else null
+                completePlayback(completed = true, navigateTo = autoplayTarget)
             },
             onPlaybackFailure = { position ->
                 positionMs = position
@@ -404,3 +466,7 @@ internal fun TvV1PlaybackHost(
         )
     }
 }
+
+/** Only actual server labels from the next/previous playback asset may be shown. */
+internal fun tvV1PlaybackAssetTitle(asset: TvV1PlaybackAssetInfo): String =
+    asset.unitTitle?.takeIf(String::isNotBlank) ?: asset.canonicalTitle
