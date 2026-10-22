@@ -73,7 +73,7 @@
         &:hover { background: var(--surface-hover); }
     }
 
-    &__input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
+    &__input { margin: 0; }
 
     // On a phone a bottom sheet, as in the mockups.
     @media (max-width: 640px) {

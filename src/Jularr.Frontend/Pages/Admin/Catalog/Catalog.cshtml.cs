@@ -72,8 +72,8 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
                 new Form<UpdateCoverCacheDataV1>(form =>
                 {
                     form.Hidden(item => item.Version);
-                    form.Number(item => item.KeepDays, "admin.catalog.coversKeepDays");
-                    form.Number(item => item.MaximumMegabytes, "admin.catalog.coversMaximumMegabytes");
+                    form.Number(item => item.KeepDays, "admin.catalog.coversKeepDays", affix: FieldAffix.Unit("unit.days"));
+                    form.Number(item => item.MaximumMegabytes, "admin.catalog.coversMaximumMegabytes", affix: FieldAffix.Unit("unit.megabytes"));
                     form.Save();
                 }, "/Admin/Catalog?handler=Covers", token, covers, _coversDraft is null ? null : FormError)]));
 
@@ -109,7 +109,7 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             {
                 form.Hidden(item => item.Version);
                 form.Toggle(item => item.IsEnabled, "admin.catalog.enabled");
-                form.Number(item => item.RequestsPerMinute, "admin.catalog.requestsPerMinute");
+                form.Number(item => item.RequestsPerMinute, "admin.catalog.requestsPerMinute", affix: FieldAffix.Unit("unit.perMinute"));
                 form.Toggle(item => item.PausesWhileUsed, "admin.catalog.pausesWhileUsed");
                 form.Rows(item => item.Windows, (row, _) =>
                 {

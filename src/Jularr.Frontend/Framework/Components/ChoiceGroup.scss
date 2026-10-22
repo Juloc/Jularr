@@ -46,7 +46,7 @@
         cursor: pointer;
         font-size: var(--text-body);
 
-        input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+        input { margin: 0; }
     }
 
     // A frame per area, as on a phone's media chooser.

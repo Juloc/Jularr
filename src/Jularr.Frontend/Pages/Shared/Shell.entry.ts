@@ -1,6 +1,5 @@
-// The shell's own interactions, installed once for the document: the phone's menu drawer, the slash key for the search and the
-// tablet's icon-only areas. The shell itself is swapped with every page, so the handlers are delegated.
-const tablet = window.matchMedia("(min-width: 641px) and (max-width: 1120px)");
+// The shell's own interactions, installed once for the document: the phone's menu drawer and the slash key for the search.
+// The shell itself is swapped with every page, so the handlers are delegated.
 const phone = window.matchMedia("(max-width: 640px)");
 
 function setMenu(open: boolean): void {
@@ -18,13 +17,6 @@ document.addEventListener("click", event => {
         setMenu(!document.querySelector(".app-layout")?.classList.contains("app-layout--menu-open"));
     } else if (event.target.closest("[data-sidebar-overlay]")) {
         setMenu(false);
-    } else if (tablet.matches) {
-        // An area is only its icon here: a click opens its first page.
-        const summary = event.target.closest(".nav-group > summary");
-        if (summary) {
-            event.preventDefault();
-            summary.parentElement?.querySelector<HTMLAnchorElement>(".nav-group__pages a")?.click();
-        }
     }
 });
 
