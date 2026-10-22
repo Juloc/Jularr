@@ -69,7 +69,7 @@ internal fun TvV1PlaybackHost(
         try {
             val current = api.start(mediaAssetId, TvV1PlaybackCapabilities.read())
             // The server may rotate credentials in the session-creation response.
-            val credential = tokenStore.current ?: error("The device token is no longer valid.")
+            val credential = checkNotNull(tokenStore.current) { "The device token is no longer valid." }
             val uri = Uri.parse(current.streamUrl)
             check(uri.scheme == "http" || uri.scheme == "https")
             plan = current
