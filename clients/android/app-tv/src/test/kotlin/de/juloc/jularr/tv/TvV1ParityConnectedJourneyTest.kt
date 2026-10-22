@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import de.juloc.jularr.core.api.AppApiRoutes
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
+import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.playback.HttpTvPlaybackV1Client
 import de.juloc.jularr.core.api.playback.TvPlaybackV1Capabilities
 import de.juloc.jularr.core.api.playbackextras.HttpTvV1PlaybackExtrasClient
@@ -71,7 +72,13 @@ class TvV1ParityConnectedJourneyTest {
                     exchange.json(200, """{"profileId":9}""", nextToken = "profile-token")
                 }
                 "/api/v1/library" -> exchange.json(200,
-                    """{"items":[${card()}],"page":1,"pageSize":25}""")
+                    """{"items":[${card()}],"page":1,"pageSize":100}""")
+                "/api/v1/continue" -> exchange.json(200,
+                    """[{"workId":741,"mediaAssetId":9002,"mediaAssetTypeId":1,
+                        "mediaTypeId":2,"mediaSubtypeId":1,"title":"Test Series",
+                        "releaseYear":2026,"posterUrl":null,"workUnitTypeId":2,
+                        "unitNumber":1.5,"parentUnitNumber":1,"positionMs":5000,
+                        "durationMs":100000,"progression":null}]""")
                 "/api/v1/works/741" -> exchange.json(200,
                     """{"id":741,"mediaTypeId":2,"mediaSubtypeId":1,"canonicalTitle":"Test Series",
                        "isWatchlisted":true,"releaseYear":2026,"overview":null,"posterUrl":null,
@@ -148,8 +155,17 @@ class TvV1ParityConnectedJourneyTest {
             val extras = HttpTvV1PlaybackExtrasClient(origin, tokens)
             val identity = HttpTvV1LegacyFeaturesClient(origin, tokens)
 
-            assertEquals(741L, catalog.library(page = 1, pageSize = 25).items.single().id)
-            assertEquals(741L, catalog.library(page = 1, pageSize = 25, query = "Test").items.single().id)
+            val videoFilter = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2))
+            assertEquals(741L, catalog.libraryFiltered(
+                page = 1, pageSize = 100, filters = videoFilter,
+            ).items.single().id)
+            assertEquals(741L, catalog.libraryFiltered(
+                page = 1, pageSize = 100, filters = videoFilter, query = "Test",
+            ).items.single().id)
+            val continuing = catalog.continueWatching().single()
+            assertEquals(741L, continuing.workId)
+            assertEquals(9002L, continuing.mediaAssetId)
+            assertEquals("1.5", requireNotNull(continuing.unitNumber).toPlainString())
             assertEquals("Test Series", catalog.work(741).canonicalTitle)
             assertEquals(1, catalog.seasons(741).single().seasonNumber)
             val episode = catalog.episodes(741, 1).single()
@@ -191,6 +207,7 @@ class TvV1ParityConnectedJourneyTest {
             assertTrue(requests.contains("PUT /api/v1/auth/profile/9/pin").not()) // PIN uses POST.
             assertTrue(requests.contains("POST /api/v1/auth/profile/9/pin"))
             assertTrue(requests.contains("POST /api/v1/playback/assets/9003/sessions"))
+            assertTrue(requests.contains("GET /api/v1/continue"))
             assertFalse(requests.contains("POST /api/v1/playback/assets/8002/sessions"))
             assertFalse(requests.any { it.contains("/api/client/v1") })
             assertEquals("stream-token", vault.token)
