@@ -101,7 +101,7 @@ the token on HTTP 401, and surfaces server problem details through existing
    proposing any backend change. Do not invent recommendations.
 2. **Provider-only Discover results:** An external entry without `workId`
    cannot open `/api/v1/works/{workId}`; do not use TMDB id as a WorkId. Instead,
-      use the existing `discoverTmdbItem(mediaTypeId, tmdbId)` or
+   use the existing `discoverTmdbItem(mediaTypeId, tmdbId)` or
    `discoverCatalogEntry(mediaTypeId, namespace, externalId, mediaSubtypeId)`.
    These return provider details without creating a local Work; navigation into
    `/api/v1/works/{workId}` still requires a genuine non-null WorkId.
@@ -115,7 +115,7 @@ the token on HTTP 401, and surfaces server problem details through existing
    session/controller agent.
 5. **Not covered in this PR:** Profile switching, device pairing UI,
    playback sessions, stream delivery, native player controls, multi-account
-   persistence, rich provider-only catalog details, and Phone app.
+   persistence, provider request submission, and Phone app.
 
 ## Validation
 
