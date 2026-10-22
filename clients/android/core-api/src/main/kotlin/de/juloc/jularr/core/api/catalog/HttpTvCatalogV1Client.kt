@@ -29,6 +29,11 @@ class HttpTvCatalogV1Client(
     override suspend fun library(page: Int, pageSize: Int, query: String?, sortTypeId: Int?): TvPageV1<TvWorkCardV1> =
         readObject(TvCatalogV1Routes.library(page, pageSize, query, sortTypeId)).page { workCard() }
 
+    override suspend fun libraryFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters, query: String?, sortTypeId: Int?,
+    ): TvPageV1<TvWorkCardV1> =
+        readObject(TvCatalogV1Routes.libraryFiltered(page, pageSize, filters, query, sortTypeId)).page { workCard() }
+
     override suspend fun continueWatching(): List<TvContinueItemV1> =
         readArray(TvCatalogV1Routes.Continue).objects { continueItem() }
 
