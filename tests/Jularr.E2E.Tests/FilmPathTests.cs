@@ -67,9 +67,9 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, EpisodeRow(page, "2").Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }) }));
                 await Assertions.Expect(EpisodeRow(page, "2")).ToContainTextAsync("Not monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
-                Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
+                Assert.AreEqual(0, await Steps.ListRow(page, FakeServices.SeriesTitle).CountAsync(), "The series is still listed as missing.");
                 await page.GotoAsync("/Admin/Requests");
-                await Assertions.Expect(page.Locator("tr", new() { HasText = FakeServices.SeriesTitle })).ToContainTextAsync("Completed");
+                await Assertions.Expect(Steps.ListRow(page, FakeServices.SeriesTitle)).ToContainTextAsync("Completed");
 
                 // Playing needs a real file; FFmpeg makes one.
                 if (ffmpeg is null)
@@ -162,8 +162,8 @@ namespace Jularr.E2E.Tests
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
                 await page.Locator("[data-work-table=files] [data-edit-file]").ClickAsync();
                 var editor = page.Locator("#work-files-edit");
-                await editor.GetByLabel("Quality").SelectOptionAsync("HDTV-720p");
-                await editor.GetByLabel("Audio language").SelectOptionAsync("ger");
+                await editor.Locator("select[name=QualityKey]").SelectOptionAsync("HDTV-720p");
+                await editor.Locator("select[name=AudioLanguage]").SelectOptionAsync("ger");
                 await Steps.SubmitAsync(page, editor.Locator("form"));
                 await Assertions.Expect(page.Locator("[data-action-toast]")).ToContainTextAsync("1 updated");
                 await Assertions.Expect(page.Locator("tr.work-file")).ToContainTextAsync("HDTV-720p");

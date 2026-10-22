@@ -23,6 +23,34 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         public WantedViewType WantedViewTypeId { get; }
     }
 
+    // The numbers of the wanted list's filter chips and figures.
+    public sealed class WantedSummaryV1 : BaseResponse
+    {
+        public WantedSummaryV1(int totalCount, int missingCount, int cutoffUnmetCount, int highCount, int pausedCount)
+        {
+            TotalCount = totalCount;
+            MissingCount = missingCount;
+            CutoffUnmetCount = cutoffUnmetCount;
+            HighCount = highCount;
+            PausedCount = pausedCount;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.TargetCount))]
+        public int TotalCount { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.TargetCount))]
+        public int MissingCount { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.TargetCount))]
+        public int CutoffUnmetCount { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.TargetCount))]
+        public int HighCount { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.TargetCount))]
+        public int PausedCount { get; }
+    }
+
     public sealed class UpdateWantedParametersV1 : BaseParameters
     {
         public UpdateWantedParametersV1(long wantedItemId)

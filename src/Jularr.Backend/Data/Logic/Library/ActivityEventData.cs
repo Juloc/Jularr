@@ -54,10 +54,14 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class ActivityWorkData : BaseData
     {
-        public ActivityWorkData(long? workId)
+        public ActivityWorkData(long? workId, ActivityEventGroupType activityEventGroupTypeId = ActivityEventGroupType.All)
         {
             WorkId = workId;
+            ActivityEventGroupTypeId = activityEventGroupTypeId;
         }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ActivityEventGroupTypeId))]
+        public ActivityEventGroupType ActivityEventGroupTypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }

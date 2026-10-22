@@ -76,7 +76,7 @@
 
     .kpi-tile__figure { min-width: 0; }
     .kpi-tile__value { font-size: 20px; font-weight: 780; letter-spacing: -.8px; }
-    .kpi-tile__caption { margin-top: 3px; color: var(--muted); font-size: var(--text-small); font-weight: 650; }
+    .kpi-tile__caption { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: var(--text-small); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 // Two by two on a narrow container.

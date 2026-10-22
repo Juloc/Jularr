@@ -1,150 +1,53 @@
-// The one row above the queue: the filters, then the whole queue's pause and resume. It never wraps.
-.activity-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-    margin-bottom: 14px;
+// The queue on the list kit: the grid of its columns at three widths, the live status of a row and the drawer's parts.
 
-    .navigation-tabs--activity {
-        flex: 0 1 auto;
-        min-width: 0;
-
-        .navigation-tabs__link { min-height: 34px; padding: 6px 14px; font-size: 12px; }
-    }
-
-    &__tools {
-        display: flex;
-        flex: none;
-        align-items: center;
-        gap: 6px;
-        margin-left: auto;
-
-        form { display: flex; }
-    }
+.activity-queue {
+    --list-columns: minmax(220px, 2.4fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(110px, .8fr);
+    --list-columns-medium: minmax(220px, 2.4fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(110px, .8fr);
+    --list-columns-narrow: minmax(200px, 2.2fr) minmax(150px, 1.3fr) minmax(110px, .8fr);
 }
 
-// Work first, release name below; one line each, the whole text on hover.
-.activity-job {
-    min-width: 0;
-    max-width: 340px;
-
-    &__release { color: var(--muted); font-size: 12px; }
+.activity-history {
+    --list-columns: minmax(220px, 2.4fr) minmax(130px, 1fr) minmax(130px, 1.2fr) minmax(80px, .7fr) minmax(130px, 1fr) minmax(60px, .4fr);
+    --list-columns-medium: minmax(220px, 2.4fr) minmax(130px, 1fr) minmax(80px, .7fr) minmax(130px, 1fr) minmax(60px, .4fr);
+    --list-columns-narrow: minmax(200px, 2.2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(60px, .4fr);
 }
 
-.activity-source { max-width: 220px; }
-
-// Where a download stands: its state, how far it is, and why it waits or failed.
+// Where an entry stands: the state pill takes the tone of the phase the stream sets, a bar shows how far it is and one line says why it waits or failed.
 .live-progress.activity-status {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    min-width: 150px;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 6px 8px;
+    min-width: 0;
 
-    .live-progress__bar { flex: none; width: 100%; max-width: 180px; min-width: 0; }
+    .state-chip { grid-column: 1 / -1; }
+    .live-progress__bar { grid-column: 1; width: 100%; min-width: 0; height: 6px; }
+    .live-progress__facts { grid-column: 1 / -1; max-width: 100%; overflow: hidden; color: var(--muted); font-size: var(--text-small); text-overflow: ellipsis; white-space: nowrap; }
+    .live-progress__bar:not([hidden]) + .live-progress__facts { grid-column: 2; }
+    [hidden] { display: none; }
 }
+
+.live-progress.activity-status--drawer { grid-template-columns: minmax(0, 1fr); justify-items: stretch; .live-progress__bar, .live-progress__facts { grid-column: 1; } .state-chip { justify-self: start; } }
 
 .activity-transfer {
     display: grid;
     gap: 2px;
-    min-width: 120px;
+    min-width: 0;
     white-space: nowrap;
 
     &__speed { font-weight: 650; }
-    &__detail { color: var(--muted); font-size: 12px; }
+    &__detail { overflow: hidden; color: var(--muted); font-size: var(--text-small); font-weight: 520; text-overflow: ellipsis; }
     [hidden] { display: none; }
 }
 
-// A row's actions next to each other, icons only.
-.activity-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 6px;
-
-    form { display: flex; }
-}
-
-.page-table td .activity-actions .button--icon {
-    width: 32px;
-    min-height: 32px;
-    padding: 0;
-    border-radius: 50%;
-}
-
 // Taking a job out asks first: the summary opens the button that does it.
+.activity-confirms { display: grid; gap: 8px; margin-top: 24px; justify-items: start; }
+
 .activity-confirm {
-    summary { display: inline-block; padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-weight: 600; list-style: none; }
+    summary { display: inline-block; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; font-size: var(--text-control); font-weight: 700; list-style: none; }
     summary::-webkit-details-marker { display: none; }
     &[open] summary { margin-bottom: 8px; }
 }
 
-// The panel of one entry, from the right.
-.activity-drawer {
-    position: fixed;
-    z-index: 41;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    width: min(440px, 100vw);
-    border-left: 1px solid var(--accent-line);
-    background: var(--surface);
-    box-shadow: var(--shadow);
-
-    &__scrim {
-        position: fixed;
-        z-index: 40;
-        inset: 0;
-        background: color-mix(in srgb, var(--text) 38%, transparent);
-    }
-
-    &__head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 18px 20px 14px;
-        border-bottom: 1px solid var(--accent-line);
-
-        h2 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
-    }
-
-    &__meta { color: var(--muted); font-size: 12px; }
-
-    &__body { display: grid; flex: 1; align-content: start; gap: 18px; padding: 16px 20px; overflow-y: auto; overscroll-behavior: contain; }
-
-    &__facts {
-        display: grid;
-        grid-template-columns: max-content minmax(0, 1fr);
-        gap: 8px 16px;
-        margin: 0;
-        font-size: 13px;
-
-        dt { color: var(--muted); }
-        dd { margin: 0; overflow-wrap: anywhere; }
-    }
-
-    &__actions {
-        display: grid;
-        gap: 8px;
-        justify-items: start;
-
-        form { margin: 0; }
-    }
-}
-
-// A phone: two tiles a row; the queue keeps the entry, its state and its actions, the rest is in the entry's panel.
-@media (max-width: 760px) {
-    .activity-bar { gap: 6px; }
-    .activity-tiles .fact-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
-    .activity-job { max-width: 92px; }
-    .live-progress.activity-status { min-width: 0; max-width: 104px; }
-    .activity-list .page-table :is(th, td) { padding: 10px 8px; }
-
-    // The actions stay in view while the rest of the row slides.
-    .activity-list--queue .page-table :is(th, td):last-child { position: sticky; right: 0; }
-    .activity-list--queue .page-table td:last-child { background: var(--surface); }
-    .activity-list--queue .page-table :is(th, td):is(:nth-child(3), :nth-child(4)) { display: none; }
-    .activity-drawer { width: 100vw; }
-}
+.activity-source-check { display: grid; gap: 12px; justify-items: start; }

@@ -24,6 +24,42 @@ namespace Jularr.Backend.Data.Admin.Request.V1
         public RequestTabType RequestTabTypeId { get; }
     }
 
+    public sealed class ReadRequestsSummaryParametersV1 : BaseParameters
+    {
+    }
+
+    // The numbers of the request list's filter chips and figures: how many requests each tab holds.
+    public sealed class RequestsSummaryV1 : BaseResponse
+    {
+        public RequestsSummaryV1(int totalCount, int openCount, int approvedCount, int inProgressCount, int doneCount, int rejectedCount)
+        {
+            TotalCount = totalCount;
+            OpenCount = openCount;
+            ApprovedCount = approvedCount;
+            InProgressCount = inProgressCount;
+            DoneCount = doneCount;
+            RejectedCount = rejectedCount;
+        }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestCount))]
+        public int TotalCount { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestCount))]
+        public int OpenCount { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestCount))]
+        public int ApprovedCount { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestCount))]
+        public int InProgressCount { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestCount))]
+        public int DoneCount { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.RequestCount))]
+        public int RejectedCount { get; }
+    }
+
     public sealed class UpdateRequestParametersV1 : BaseParameters
     {
         public UpdateRequestParametersV1(long acquisitionRequestId)

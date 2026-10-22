@@ -193,10 +193,13 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
+        // A row of the admin list on the page (the list kit): the one whose text holds this.
+        public static ILocator ListRow(IPage page, string text) => page.Locator(".list-body .list-row", new() { HasText = text });
+
         public static async Task OpenWantedAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Wanted");
-            await FollowAsync(page, page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Edit target" }));
+            await FollowAsync(page, ListRow(page, title).GetByRole(AriaRole.Link, new() { Name = "Edit target" }));
         }
 
         // The manual search page of a target.

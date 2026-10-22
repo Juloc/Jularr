@@ -24,18 +24,10 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Settings
 {
-    public enum HomeShelfAction : byte
-    {
-        Up = 1,
-        Down = 2,
-        Hide = 3,
-        Show = 4
-    }
-
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
         ReadSpeechPreferencesV1 readSpeech, SaveSpeechPreferencesV1 saveSpeech, ReadAvailableSpeechModelsV1 readSpeechModels, ReadPlaybackPreferencesV1 readPlayback, SavePlaybackPreferencesV1 savePlayback,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        IAntiforgery antiforgery, UiText texts, FrontendAssets assets) : JularrPage
     {
         // Speeds the player offers; languages a person is likely to choose, each by its own name.
         private static readonly decimal[] Speeds = [0.5m, 0.75m, 1m, 1.25m, 1.5m, 1.75m, 2m];
@@ -60,6 +52,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             page.Title("settings.title");
             page.Navigation("nav.settings");
             page.Asset("Modules/Appearance/appearance.entry.scss");
+            page.Asset("Framework/Components/SortableList.entry.ts");
             page.Asset("Modules/Speech/settings.entry.ts");
             page.Asset("Modules/Speech/settings.entry.scss");
             page.Content.Add(new UiSection("appearance.title", [new Appearance()]));
@@ -141,22 +134,17 @@ namespace Jularr.Frontend.Pages.User.Settings
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             }
 
-            // Home shelves in their order; each moves or hides with one button.
+            // Home shelves in their order: dragged into place, each switched on or off, saved with the page's other changes.
             if (_layout.Count > 0)
             {
-                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-                var positions = _layout.Select((shelf, index) => (shelf.HomeShelfTypeId, index)).ToDictionary(item => item.HomeShelfTypeId, item => item.index);
-                page.Content.Add(new UiSection("home.layout", [new Table<HomeShelfV1>(_layout)
-                    .Resource(shelf => shelf.HomeShelfTypeId, "home.shelf", type => "home.shelf." + type)
-                    .Content("table.status", shelf => new Text(shelf.IsHidden ? "home.hidden" : "home.shown"))
-                    .Content("common.actions", shelf =>
-                    {
-                        var index = positions[shelf.HomeShelfTypeId];
-                        return new Div([
-                            .. index > 0 ? new IUiComponent[] { HomeAction(shelf, HomeShelfAction.Up, "home.moveUp", csrf) } : [],
-                            .. index + 1 < _layout.Count ? new IUiComponent[] { HomeAction(shelf, HomeShelfAction.Down, "home.moveDown", csrf) } : [],
-                            HomeAction(shelf, shelf.IsHidden ? HomeShelfAction.Show : HomeShelfAction.Hide, shelf.IsHidden ? "home.show" : "home.hide", csrf)]);
-                    })]));
+                var items = _layout.Select(shelf => new SortableItem(shelf.HomeShelfTypeId.ToString(), new Text("home.shelf." + shelf.HomeShelfTypeId), ShelfIcon(shelf.HomeShelfTypeId),
+                    !shelf.IsHidden, ShelfTone(shelf.HomeShelfTypeId))).ToArray();
+                var layout = new SaveHomeLayoutDataV1([.. _layout.Select(shelf => shelf.HomeShelfTypeId.ToString())], [.. _layout.Where(shelf => shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId.ToString())]);
+                page.Content.Add(new UiSection("home.layout", [new Form<SaveHomeLayoutDataV1>(form =>
+                {
+                    form.Sortable(x => x.ShelfKeys, "home.layout", assets, items, "shownKeys", "home.shown", "home.hidden");
+                    form.Save();
+                }, Url.Page("/User/Settings/Settings", "HomeLayout"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, layout)]));
             }
 
             page.Content.Add(new UiSection("settings.account", [
@@ -273,23 +261,30 @@ namespace Jularr.Frontend.Pages.User.Settings
             return RedirectToPage("/User/Settings/Settings");
         }
 
-        private IUiComponent HomeAction(HomeShelfV1 shelf, HomeShelfAction action, string labelKey, string? csrf) =>
-            new Form<HomeLayoutParametersV1>(form => form.Submit(labelKey), "/Settings?handler=Home&shelf=" + shelf.HomeShelfTypeId + "&action=" + action, csrf, new HomeLayoutParametersV1());
-
-        public async Task<IActionResult> OnPostHomeAsync([BindRequired] HomeShelfType shelf, [BindRequired] HomeShelfAction action)
+        private static string ShelfIcon(HomeShelfType shelf) => shelf switch
         {
-            // The whole order is saved; one shelf moves or changes its visibility.
-            var layout = (await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted)).ToList();
-            var index = layout.FindIndex(item => item.HomeShelfTypeId == shelf);
-            var target = action switch { HomeShelfAction.Up => index - 1, HomeShelfAction.Down => index + 1, _ => index };
-            if (index >= 0 && target >= 0 && target < layout.Count)
-            {
-                (layout[index], layout[target]) = (layout[target], layout[index]);
-            }
+            HomeShelfType.ContinueWatching => "play",
+            HomeShelfType.ContinueListening => "headphones",
+            HomeShelfType.ContinueReading => "book",
+            HomeShelfType.RecentlyAdded => "clock",
+            _ => "spark"
+        };
 
-            bool Hidden(HomeShelfV1 item) => item.HomeShelfTypeId != shelf ? item.IsHidden : action switch { HomeShelfAction.Hide => true, HomeShelfAction.Show => false, _ => item.IsHidden };
-            var hidden = layout.Where(Hidden).Select(item => item.HomeShelfTypeId.ToString()).ToArray();
-            await saveLayout.ExecuteAsync<UpdateResult>(new HomeLayoutParametersV1(), new SaveHomeLayoutDataV1([.. layout.Select(item => item.HomeShelfTypeId.ToString())], hidden),
+        private static UiTone ShelfTone(HomeShelfType shelf) => shelf switch
+        {
+            HomeShelfType.ContinueWatching => UiTone.Accent,
+            HomeShelfType.ContinueListening => UiTone.Info,
+            HomeShelfType.ContinueReading => UiTone.Success,
+            HomeShelfType.RecentlyAdded => UiTone.Warning,
+            _ => UiTone.Danger
+        };
+
+        public async Task<IActionResult> OnPostHomeLayoutAsync(string[]? shelfKeys, string[]? shownKeys)
+        {
+            // The whole order is saved; the shelves that are not switched on are the hidden ones.
+            var order = shelfKeys ?? [];
+            var shown = shownKeys ?? [];
+            await saveLayout.ExecuteAsync<UpdateResult>(new HomeLayoutParametersV1(), new SaveHomeLayoutDataV1(order, [.. order.Where(key => !shown.Contains(key, StringComparer.Ordinal))]),
                 HttpContext.RequestAborted);
             return RedirectToPage("/User/Settings/Settings");
         }

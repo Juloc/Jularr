@@ -268,42 +268,23 @@ html[data-skin="original"] .sidebar-secondary {
     min-height: 43px;
     gap: 10px;
     padding: 0 12px;
-    border-radius: 13px;
+    border-radius: var(--radius-control);
     color: var(--text);
     text-decoration: none;
     font-size: var(--text-body);
     font-weight: 740;
+    transition: background-color var(--transition), color var(--transition);
 }
 .nav-link:hover { background-color: var(--surface-hover); }
 .nav-link.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
 
-// An area opens into its pages; its heading stays quiet, the current page is marked.
+// An area links to its first page; in the administration its pages stay listed below it and the current page is marked.
 .nav-group {
-    & > summary {
-        cursor: pointer;
-        list-style: none;
-
-        &::-webkit-details-marker { display: none; }
-
-        &::after {
-            content: "";
-            width: 6px;
-            height: 6px;
-            margin-left: auto;
-            border-right: 1.75px solid var(--muted);
-            border-bottom: 1.75px solid var(--muted);
-            transform: rotate(-45deg);
-            transition: transform .12s;
-        }
-
-        &.is-active { background-color: transparent; color: var(--text); }
-    }
-
-    &[open] > summary::after { transform: rotate(45deg); }
+    & > .nav-link.is-active { background-color: transparent; color: var(--text); }
 
     &__pages { display: grid; gap: 2px; padding: 2px 0 8px 37px; }
 }
-.nav-link--sub { min-height: 35px; padding: 0 12px; border-radius: var(--radius-small); color: var(--muted); font-weight: 400; }
+.nav-link--sub { min-height: 35px; padding: 0 12px; color: var(--muted); font-weight: 400; }
 .nav-link--sub:hover { color: var(--accent-text); }
 .nav-link--sub.is-active { font-weight: 810; }
 
@@ -329,7 +310,7 @@ html[data-skin="original"] .sidebar-secondary {
     .app-layout { --side: 67px; }
     .app-sidebar { overflow-x: clip; }
     .sidebar-brand { justify-content: center; padding: 0 15px; }
-    .sidebar-brand .shell-brand__name, .sidebar-brand .shell-brand__attribution, .nav-eyebrow, .nav-link > span, .nav-group > summary::after, .nav-group__pages { display: none; }
+    .sidebar-brand .shell-brand__name, .sidebar-brand .shell-brand__attribution, .nav-eyebrow, .nav-link > span, .nav-group__pages { display: none; }
     .sidebar-navigation { padding: 20px 8px; }
     .nav-eyebrow + .sidebar-navigation { padding-top: 20px; }
     .nav-link { justify-content: center; padding: 0; }
@@ -337,7 +318,7 @@ html[data-skin="original"] .sidebar-secondary {
 }
 // Where the sidebar is narrow or a drawer, the area of the current page is tinted.
 @media (max-width: 1120px) {
-    .nav-group > summary.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
+    .nav-group > .nav-link.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
 }
 
 // Phone: the sidebar is a drawer over a dimmed page, opened from the header's menu button; the header is one row of 65px.

@@ -83,13 +83,15 @@ namespace Jularr.Frontend.Framework
         }
 
         // A form may name another example or explanation than the field's own where the field means something special there.
-        public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null) =>
-            Add(field, FieldControl.Text, labelKey, autocomplete, help);
+        // An affix puts an icon at the start of the field and a quiet unit at its end, inside the field; validation and stepping stay the field's own.
+        public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null, FieldAffix? affix = null) =>
+            Add(field, FieldControl.Text, labelKey, autocomplete, help, affix);
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off", FieldHelp? help = null) =>
             Add(field, FieldControl.Password, labelKey, autocomplete, help);
-        public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null) => Add(field, FieldControl.Number, labelKey, "off", help);
+        public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey, FieldHelp? help = null, FieldAffix? affix = null) =>
+            Add(field, FieldControl.Number, labelKey, "off", help, affix);
 
-        public Form<TData> Range<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null)
+        public Form<TData> Range<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FieldHelp? help = null, FieldAffix? affix = null)
         {
             var field = Declare(selector, FieldControl.Range, labelKey, help);
             var valueType = Nullable.GetUnderlyingType(field.ValueType) ?? field.ValueType;
@@ -103,9 +105,14 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-range-precision", (field.Scale ?? 0).ToString(CultureInfo.InvariantCulture));
             if (Value(field) is { } value) input.Attribute("value", value);
             Configure(field, input);
-            AddField(field, new Div(input,
+            var readout = new List<IUiComponent>
+            {
+                input,
                 new HtmlOutput(new ValueText(_data is null ? "" : Convert.ToString(field.ReadValue(_data), CultureInfo.CurrentCulture) ?? ""))
-                    .Attribute("for", _id + "-" + field.Name).Attribute("aria-hidden", "true")).Class("ui-range"));
+                    .Attribute("for", _id + "-" + field.Name).Attribute("aria-hidden", "true")
+            };
+            if (affix?.SuffixKey is { } unit) readout.Add(new Span(new Text(unit)).Class("ui-range__unit"));
+            AddField(field, new Div([.. readout]).Class(affix?.SuffixKey is null ? "ui-range" : "ui-range ui-range--unit"));
             return this;
         }
 
@@ -184,7 +191,7 @@ namespace Jularr.Frontend.Framework
         }
 
         public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options, FieldHelp? help = null,
-            string? refreshAction = null, string? refreshLabelKey = null)
+            string? refreshAction = null, string? refreshLabelKey = null, FieldAffix? affix = null)
         {
             var field = Declare(selector, FieldControl.Select, labelKey, help);
             var value = Value(field);
@@ -221,7 +228,7 @@ namespace Jularr.Frontend.Framework
             var select = new HtmlSelect(items).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
             Configure(field, select);
             if (refreshAction is not null) select.Attribute("data-form-refresh", refreshAction);
-            AddField(field, select);
+            AddField(field, select, affix: affix);
             RefreshButton(refreshAction, refreshLabelKey);
             return this;
         }
@@ -241,13 +248,8 @@ namespace Jularr.Frontend.Framework
             var field = Declare(selector, FieldControl.MultiSelect, labelKey, help);
             var selected = (_data is null ? null : field.ReadValue(_data) as System.Collections.IEnumerable)?.Cast<object>()
                 .Select(item => Convert.ToString(item, CultureInfo.InvariantCulture)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
-            var choices = options.Select(option =>
-            {
-                var input = new Input().Attribute("type", "checkbox").Attribute("name", field.Name).Attribute("value", option.Value);
-                if (selected.Contains(option.Value)) input.Attribute("checked", "checked");
-                if (_action is null && !_local) input.Attribute("disabled", "disabled");
-                return new HtmlLabel(input, new Span(new ValueText(option.Label))).Class("ui-checkbox");
-            }).ToArray<IUiComponent>();
+            var choices = options.Select(option => new Checkbox(new ValueText(option.Label), field.Name, option.Value, selected.Contains(option.Value), _action is null && !_local))
+                .ToArray<IUiComponent>();
             var content = new List<IUiComponent> { new HtmlLegend(new Text(field.LabelKey), new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info")), new Div(choices).Class("ui-choices") };
             if (_error?.Field == field.Name)
             {
@@ -255,6 +257,24 @@ namespace Jularr.Frontend.Framework
             }
 
             _target.Add(new HtmlFieldset([.. content]).Class("ui-field ui-field--wide"));
+            _visibleFields++;
+            _hasWideField = true;
+            return this;
+        }
+
+        // Rows the person puts in order, each with a switch: the keys in their order under the field's name, the keys of the switched-on rows under
+        // `shownName`. The surrounding section names the list, so it shows no label of its own.
+        public Form<TData> Sortable<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, FrontendAssets assets, IReadOnlyList<SortableItem> items, string shownName,
+            string stateOnKey, string stateOffKey)
+        {
+            var field = Declare(selector, FieldControl.MultiSelect, labelKey);
+            var content = new List<IUiComponent> { new SortableList(assets, field.Name, _prefix + shownName, labelKey, items, stateOnKey, stateOffKey, _action is null && !_local) };
+            if (_error?.Field == field.Name)
+            {
+                content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+            }
+
+            _target.Add(new Div([.. content]).Class("ui-field ui-field--wide"));
             _visibleFields++;
             _hasWideField = true;
             return this;
@@ -342,7 +362,7 @@ namespace Jularr.Frontend.Framework
 
         public Form<TData> Checkbox(string labelKey)
         {
-            _target.Add(new HtmlLabel(new Input().Attribute("type", "checkbox").Attribute("disabled", "disabled"), new Span(new Text(labelKey))).Class("ui-checkbox"));
+            _target.Add(new Checkbox(new Text(labelKey), disabled: true));
             return this;
         }
 
@@ -456,7 +476,7 @@ namespace Jularr.Frontend.Framework
             form.WriteTo(writer, encoder, texts);
         }
 
-        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete, FieldHelp? help)
+        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete, FieldHelp? help, FieldAffix? affix = null)
         {
             var field = Declare(selector, control, labelKey, help);
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name)
@@ -469,7 +489,7 @@ namespace Jularr.Frontend.Framework
             }
 
             Configure(field, input);
-            AddField(field, input, wide: control == FieldControl.Text && (field.ValueType.IsArray || field.MaximumLength is null or > WideLength), help: help);
+            AddField(field, input, wide: control == FieldControl.Text && (field.ValueType.IsArray || field.MaximumLength is null or > WideLength), stepper: control == FieldControl.Number, affix: affix, help: help);
             return this;
         }
 
@@ -531,12 +551,16 @@ namespace Jularr.Frontend.Framework
             }
         }
 
+        private HtmlElement NumberStepper() => new Div([.. new[] { 1, -1 }.Select(delta => (IUiComponent)new Button(new ValueText(delta < 0 ? "−" : "+")).Class("ui-field__step")
+            .Attribute("data-number-step", delta < 0 ? "-1" : "1").TextAttribute("aria-label", delta < 0 ? "form.number.decrease" : "form.number.increase")
+            .Attribute("tabindex", "-1"))]).Class("ui-field__stepper").Attribute("hidden", "hidden");
+
         // Lists and longer texts, such as addresses, get the whole row.
         private const int WideLength = 200;
         private const int MaxSegments = 3;
         private const int MaxSegmentLength = 20;
 
-        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false, FieldHelp? help = null, bool bare = false)
+        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false, bool stepper = false, FieldAffix? affix = null, FieldHelp? help = null, bool bare = false)
         {
             // The label sits above the field (the mockups' `.field label`); a segmented control is a group named by its legend.
             var info = new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info");
@@ -551,9 +575,22 @@ namespace Jularr.Frontend.Framework
             {
                 content.Add(new Div([new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), info,
                     .. help?.Aside is { } aside ? new[] { aside } : []]).Class("ui-field__top"));
-                content.Add(bare ? input : help?.Trailing is { } trailing
-                    ? new Div(input, trailing).Class("ui-field__control ui-field__control--trailing")
-                    : new Div(input).Class("ui-field__control"));
+                if (bare)
+                {
+                    content.Add(input);
+                }
+                else
+                {
+                    // A number steps with its own plus and minus (shown by script; the browser's spin buttons are hidden).
+                    // An icon leads the field and a unit follows it, before the stepper.
+                    var parts = new List<IUiComponent>();
+                    if (affix?.Prefix is { } prefix) parts.Add(new Span(prefix).Class("ui-field__prefix").Attribute("aria-hidden", "true"));
+                    parts.Add(input);
+                    if (affix?.SuffixKey is { } suffix) parts.Add(new Span(new Text(suffix)).Class("ui-field__suffix"));
+                    if (stepper) parts.Add(NumberStepper());
+                    if (help?.Trailing is { } trailing) parts.Add(trailing);
+                    content.Add(new Div([.. parts]).Class("ui-field__control" + (stepper ? " ui-field__control--number" : "") + (affix is null ? "" : " ui-field__control--affixed") + (help?.Trailing is null ? "" : " ui-field__control--trailing")));
+                }
                 if (help?.Note is { } note) content.Add(note);
             }
             if (field.Control == FieldControl.Checkbox) content.Add(new FieldInfo(field.InfoKey, _id + "-" + field.Name + "-info"));
@@ -603,4 +640,10 @@ namespace Jularr.Frontend.Framework
     }
 
     public sealed record SelectOption(string Value, string Label);
+
+    // What a field wears inside its frame: an icon circle at the start (built by the page, which owns the icon sprite) and a unit text key at the end.
+    public sealed record FieldAffix(IUiComponent? Prefix = null, string? SuffixKey = null)
+    {
+        public static FieldAffix Unit(string suffixKey) => new(null, suffixKey);
+    }
 }
