@@ -223,6 +223,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Registry_ProcessRestart_CleansOnlyOwnedTranscodeSessionDirectories()
+        {
+            using var cache = new LibraryTests.TemporaryDirectory();
+            var obsoleteSession = Path.Combine(cache.Path, Guid.NewGuid().ToString("N"));
+            var unrelated = Path.Combine(cache.Path, "unrelated");
+            Directory.CreateDirectory(obsoleteSession);
+            Directory.CreateDirectory(unrelated);
+            File.WriteAllBytes(Path.Combine(obsoleteSession, "segment0.ts"), new byte[32]);
+            File.WriteAllBytes(Path.Combine(unrelated, "keep.txt"), new byte[32]);
+
+            using var transcodes = new PlaybackTranscodes(new MediaTranscoder(), Microsoft.Extensions.Options.Options.Create(new MediaOptions
+            {
+                TranscodeCachePath = cache.Path,
+                TranscodeCacheFreeSpaceReserveBytes = 0
+            }));
+
+            Assert.IsFalse(Directory.Exists(obsoleteSession));
+            Assert.IsTrue(File.Exists(Path.Combine(unrelated, "keep.txt")));
+        }
+
+        [TestMethod]
         public async Task Registry_Admission_StopsTheNewestNormalConversionAndTellsItsPlayer()
         {
             using var cache = new LibraryTests.TemporaryDirectory();

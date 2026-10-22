@@ -62,12 +62,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var parent = Path.GetDirectoryName(Path.GetFullPath(_options.TranscodeCachePath));
             _cacheFilesystemIdentity = parent is not null ? StorageFileSystem.DownloadFilesystemIdentity(parent) : null;
 
-            // Abandoned segments of earlier processes are removed.
-            if (Directory.Exists(_options.TranscodeCachePath))
+            // No playback session survives a process restart; reclaim only our session directories.
+            if (CacheFilesystemMatches() && Directory.Exists(_options.TranscodeCachePath))
             {
                 foreach (var directory in new DirectoryInfo(_options.TranscodeCachePath).EnumerateDirectories())
                 {
-                    if (DateTime.UtcNow - directory.LastWriteTimeUtc > ExpiryTimeout) TryDelete(directory.FullName);
+                    if (Guid.TryParseExact(directory.Name, "N", out _)) TryDelete(directory.FullName);
                 }
             }
 
@@ -279,6 +279,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             // An external FFmpeg process can grow its segments without an API request.
             if (!CacheWithinBudget())
             {
+                var canClean = CacheFilesystemMatches();
                 foreach (var job in _jobs.Values)
                 {
                     lock (job)
@@ -286,6 +287,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         job.CacheUnavailable = true;
                         Kill(job);
                     }
+
+                    // Never delete through a stale mount after the backing filesystem changed.
+                    if (canClean) TryDelete(job.Directory);
                 }
             }
 
@@ -326,14 +330,19 @@ namespace Jularr.Backend.Service.User.Playback.V1
             if (!CacheWithinBudget()) throw new ServiceUnavailableException("playback_cache_unavailable");
         }
 
+        private bool CacheFilesystemMatches()
+        {
+            var parent = Path.GetDirectoryName(Path.GetFullPath(_options.TranscodeCachePath));
+            return parent is not null && Directory.Exists(parent)
+                && StorageFileSystem.DownloadFilesystemIdentity(parent) == _cacheFilesystemIdentity;
+        }
+
         private bool CacheWithinBudget()
         {
             if (_options.MaxTranscodeCacheBytes <= 0 || _options.TranscodeCacheFreeSpaceReserveBytes < 0) return false;
             try
             {
-                var parent = Path.GetDirectoryName(Path.GetFullPath(_options.TranscodeCachePath));
-                if (parent is null || !Directory.Exists(parent)) return false;
-                if (_cacheFilesystemIdentity is not null && StorageFileSystem.DownloadFilesystemIdentity(parent) != _cacheFilesystemIdentity) return false;
+                if (!CacheFilesystemMatches()) return false;
                 Directory.CreateDirectory(_options.TranscodeCachePath);
                 var available = StorageFileSystem.AvailableFreeSpace(_options.TranscodeCachePath);
                 if (available is null || available <= _options.TranscodeCacheFreeSpaceReserveBytes) return false;
