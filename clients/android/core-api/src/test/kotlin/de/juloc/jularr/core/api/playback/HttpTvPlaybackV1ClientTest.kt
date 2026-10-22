@@ -120,6 +120,38 @@ class HttpTvPlaybackV1ClientTest {
         }
     }
 
+    @Test fun lateUnauthorizedResponseCannotInvalidateRotatedDeviceToken() {
+        val tokens = DeviceTokenStore("initial-token")
+        val attempts = mutableListOf<String?>()
+        val server = localServer()
+        server.createContext("/api/v1/playback/assets/9002/sessions") { exchange ->
+            val supplied = exchange.requestHeaders.getFirst("Authorization")
+            synchronized(attempts) { attempts.add(supplied) }
+            if (supplied == "Bearer initial-token") {
+                // Another request/profile switch rotated the token while this request was in flight.
+                tokens.update("fresh-token")
+                exchange.reply(401, """{"code":"invalid_token","resourceKey":"error.invalid_token"}""")
+            } else {
+                exchange.reply(200, """{"playbackSessionId":"$session","playbackModeTypeId":1,
+                    "streamUrl":"/api/v1/playback/sessions/$session/stream",
+                    "resumePositionMs":0,"durationMs":50000,"audioStreamIndex":null,
+                    "quality":1,"isReduced":false}""")
+            }
+        }
+        server.start()
+        try {
+            val client = HttpTvPlaybackV1Client("http://127.0.0.1:${server.address.port}", tokens)
+            val started = runBlocking {
+                client.start(9002, TvPlaybackV1Capabilities(listOf("mp4"), listOf("h264"), listOf("aac")))
+            }
+            assertEquals(1, started.playbackModeTypeId)
+            assertEquals(listOf("Bearer initial-token", "Bearer fresh-token"), attempts)
+            assertEquals("fresh-token", tokens.current)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     private fun localServer() = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
 
     private fun HttpExchange.reply(status: Int, json: String, token: String? = null) {
