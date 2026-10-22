@@ -19,7 +19,6 @@ import de.juloc.jularr.core.api.AppApiException
 import de.juloc.jularr.core.api.catalog.HttpTvCatalogV1Client
 import de.juloc.jularr.core.api.catalog.TvContinueItemV1
 import de.juloc.jularr.core.api.catalog.TvCatalogV1Client
-import de.juloc.jularr.core.api.catalog.TvCatalogV1Filters
 import de.juloc.jularr.core.api.catalog.TvWorkAvailabilityV1
 import de.juloc.jularr.core.api.catalog.TvPersonV1
 import de.juloc.jularr.core.api.catalog.TvWorkCardV1
@@ -54,6 +53,9 @@ fun TvV1CatalogHost(
 ) {
     val catalog: TvCatalogV1Client = remember(serverOrigin, deviceSession) {
         HttpTvCatalogV1Client(serverOrigin, deviceSession.authenticatedTokenStore())
+    }
+    val flow = remember(serverOrigin, catalog, capabilities) {
+        TvV1ClientFlow(catalog, capabilities)
     }
     val profileApi: TvV1ProfileClient = remember(serverOrigin, deviceSession) {
         HttpTvV1ProfileClient(serverOrigin, deviceSession.authenticatedTokenStore())
@@ -189,78 +191,28 @@ fun TvV1CatalogHost(
         try {
             when (page) {
                 TvV1CatalogPage.Home -> {
-                    require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
-                        "Bibliothek ist für dieses Profil nicht freigegeben."
-                    }
-                    // Filter at the source. Downloading the first 2000 Books/Games and then
-                    // hiding them can otherwise make real TV video works disappear.
-                    library = TvV1LegacyUiModels.videoLibrary(loadCatalogPages { pageNumber ->
-                        catalog.libraryFiltered(
-                            page = pageNumber, pageSize = 100,
-                            filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
-                        )
-                    })
-                    showContinueWatching = if (capabilities.hasModule("HomeLayout")) {
-                        catalog.homeLayout().none { it.homeShelfTypeId == 1 && it.isHidden }
-                    } else true
-                    // The server supplies real MediaAssetId, WorkId and timecodes. Keep
-                    // reading/ebook assets out of this TV-video-only Continue row.
-                    continueWatching = catalog.continueWatching().filter { it.mediaAssetTypeId == 1 }
+                    val home = flow.home()
+                    library = home.library
+                    continueWatching = home.continueWatching
+                    showContinueWatching = home.showContinueWatching
                 }
-        TvV1CatalogPage.Search -> {
-                    require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
-                        "Suche ist für dieses Profil nicht freigegeben."
-                    }
+                TvV1CatalogPage.Search -> {
                     if (searchQuery.isNotBlank()) delay(300)
-                    searchResults = TvV1LegacyUiModels.videoLibrary(loadCatalogPages { pageNumber ->
-                        catalog.libraryFiltered(
-                            page = pageNumber, pageSize = 100,
-                            filters = TvCatalogV1Filters(mediaTypeIds = listOf(1, 2)),
-                            query = searchQuery.trim().ifEmpty { null },
-                        )
-                    })
+                    searchResults = flow.search(searchQuery)
                 }
                 TvV1CatalogPage.Watchlist -> {
-                    require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
-                        "Watchlist ist für dieses Profil nicht freigegeben."
-                    }
-                    watchlist = TvV1LegacyUiModels.watchlist(loadCatalogPages { pageNumber ->
-                        catalog.watchlist(page = pageNumber, pageSize = 100)
-                    })
+                    watchlist = flow.watchlist()
                 }
-        TvV1CatalogPage.Details -> {
-                    val workId = requireNotNull(detailWorkId)
-                    require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
-                        "Mediendetails sind für dieses Profil nicht freigegeben."
-                    }
-                    val work = catalog.work(workId)
-                    isWatchlisted = work.isWatchlisted
+                TvV1CatalogPage.Details -> {
+                    val result = flow.work(requireNotNull(detailWorkId))
+                    isWatchlisted = result.isWatchlisted
                     watchlistError = null
-                    detailedTitle = work.canonicalTitle
-                    if (TvV1LegacyUiModels.isVideo(work.mediaTypeId)) {
-                        playableMovieAssets = if (work.mediaTypeId == TvV1LegacyUiModels.MOVIE) {
-                            loadCatalogPages { n -> catalog.availability(workId, page = n, pageSize = 100) }
-                                .filter { it.playableMediaAssetId() != null }
-                        } else emptyList()
-                        val seasons = catalog.seasons(workId)
-                        val episodesBySeason = seasons.associate { season ->
-                            season.seasonNumber to catalog.episodes(workId, season.seasonNumber)
-                        }
-                        fractionalEpisodes = episodesBySeason.values.flatten().filter { episode ->
-                            runCatching { episode.number.intValueExact() }.isFailure
-                        }
-                        episodeByUnit = episodesBySeason.values.flatten().associateBy { it.id }
-                        detailAssetByUnit = episodesBySeason.values.flatten().associate { episode ->
-                            episode.id.toString() to episode.mediaAssetId
-                        }
-                        details = TvV1LegacyUiModels.detail(work, seasons, episodesBySeason)
-                    } else {
-                        // The original TV detail grid is video-only; do not fake video episodes.
-                        playableMovieAssets = emptyList()
-                        episodeByUnit = emptyMap()
-                        details = null
-                        fractionalEpisodes = emptyList()
-                    }
+                    detailedTitle = result.title
+                    playableMovieAssets = result.availableMovieAssets
+                    fractionalEpisodes = result.fractionalEpisodes
+                    episodeByUnit = result.episodeByUnit
+                    detailAssetByUnit = result.assetByUnit
+                    details = result.detail
                 }
                 TvV1CatalogPage.Episode -> Unit
                 TvV1CatalogPage.Credits -> {
