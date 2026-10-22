@@ -136,7 +136,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 "ReadingResources" AS translation
                             WHERE
                                 translation."ReadingDocumentId" = document."Id"
-                                AND translation."Path" LIKE ':translation/%'
+                                AND translation."Path" ~ '^:translation/[a-z]{2,3}/[0-9]{5}$'
                             GROUP BY
                                 1
                             HAVING
