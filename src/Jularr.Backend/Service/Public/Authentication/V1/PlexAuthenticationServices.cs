@@ -169,7 +169,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
             // Complete atomically.
             var completed = await Context.ExecuteBatchAsync(
                 (context, token) => context.CompletePlexAsync(parameters, identityData, registration,
-                    TimeSpan.FromHours(_options.SessionLifetimeHours), token), CancellationToken);
+                    TimeSpan.FromHours(_options.SessionLifetimeHours), BrowserDevice.Current(_http.HttpContext), token), CancellationToken);
 
             return new LoginResultV1(completed.Session, completed.RequiresApproval);
         }

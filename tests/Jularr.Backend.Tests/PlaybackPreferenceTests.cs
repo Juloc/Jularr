@@ -62,8 +62,17 @@ namespace Jularr.Backend.Tests
             // Unknown languages and speeds outside the player's range are refused; no language is allowed.
             using var language = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1("deu", null, SubtitleMode.Off, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.BadRequest, language.StatusCode);
-            using var tooFast = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(3m));
+            using var tooFast = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(4.05m));
             Assert.AreEqual(HttpStatusCode.BadRequest, tooFast.StatusCode);
+            using var tooSlow = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(0.2m));
+            Assert.AreEqual(HttpStatusCode.BadRequest, tooSlow.StatusCode);
+            // The profile keeps the whole range of the player, 0.25 to 4.
+            foreach (var edge in new[] { 0.25m, 4m })
+            {
+                using var kept = await host.SendAsync(HttpMethod.Put, Route + "/speed", new SavePlaybackSpeedDataV1(edge));
+                Assert.AreEqual(HttpStatusCode.OK, kept.StatusCode, await kept.Content.ReadAsStringAsync());
+                Assert.AreEqual(edge, (await ReadAsync(host)).Speed);
+            }
             using var cleared = await host.SendAsync(HttpMethod.Put, Route, new SavePlaybackPreferencesDataV1(null, null, SubtitleMode.Always, 1m, true, SkipMode.Button, SkipMode.Button));
             Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"AudioLanguage\" IS NULL AND \"SubtitleLanguage\" IS NULL FROM \"ProfilePlaybackPreferences\""));

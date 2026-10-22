@@ -22,6 +22,14 @@
     }
 }
 
+// A heading with its icon tile: one line, the text cut with an ellipsis.
+.ui-section__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
 // Buttons and small forms that belong together, in one wrapping row.
 .page-actions {
     display: flex;

@@ -67,9 +67,9 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, EpisodeRow(page, "2").Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Switch, new() { Name = "Stop monitoring" }) }));
                 await Assertions.Expect(EpisodeRow(page, "2")).ToContainTextAsync("Not monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
-                Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
+                Assert.AreEqual(0, await Steps.ListRow(page, FakeServices.SeriesTitle).CountAsync(), "The series is still listed as missing.");
                 await page.GotoAsync("/Admin/Requests");
-                await Assertions.Expect(page.Locator("tr", new() { HasText = FakeServices.SeriesTitle })).ToContainTextAsync("Completed");
+                await Assertions.Expect(Steps.ListRow(page, FakeServices.SeriesTitle)).ToContainTextAsync("Completed");
 
                 // Playing needs a real file; FFmpeg makes one.
                 if (ffmpeg is null)
@@ -222,6 +222,11 @@ namespace Jularr.E2E.Tests
             await speeds.Locator("[data-setting=speed-number]").BlurAsync();
             Assert.AreEqual(3, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
             Assert.AreEqual("3", await settings.Locator("[data-panel=basic] [data-setting=speed-range]").InputValueAsync());
+            foreach (var edge in new[] { "0.25", "4" })
+            {
+                await speeds.Locator($"[data-speed='{edge}']").ClickAsync();
+                Assert.AreEqual(double.Parse(edge, System.Globalization.CultureInfo.InvariantCulture), await video.EvaluateAsync<double>("video => video.playbackRate"), .001);
+            }
             await speeds.Locator("[data-speed='1']").ClickAsync();
             Assert.AreEqual(1, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
 

@@ -17,6 +17,7 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
         FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const int MaxWindows = 8;
+
         private IReadOnlyList<ExternalWorkSyncV1> _syncs = [];
         private bool _isOn;
         private bool _keeps;

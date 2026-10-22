@@ -33,11 +33,13 @@
     letter-spacing: .6px;
     text-transform: uppercase;
 
-    .list-cell { color: inherit; font-size: inherit; font-weight: inherit; }
+    // A head stays on one line; a longer name ends in an ellipsis (its title says it whole).
+    .list-cell { overflow: hidden; color: inherit; font-size: inherit; font-weight: inherit; text-overflow: ellipsis; white-space: nowrap; }
+    .list-cell--data, .list-cell--actions { text-align: right; }
 }
 
 .list-row {
-    min-height: 76px;
+    min-height: 80px;
     border-bottom: 1px solid var(--border);
     transition: background-color var(--transition);
 
@@ -56,12 +58,46 @@
     min-width: 0;
     font-size: var(--text-small);
 
-    &--data { color: var(--text); font-weight: 650; }
-    &--actions .list-actions { justify-content: flex-start; }
+    // Values and actions stand at the right edge of their column, in every row alike; what a row does not have is left out, never a different shape.
+    &--data { color: var(--text); font-weight: 650; text-align: right; }
+    &--actions .list-actions { justify-content: flex-end; }
+}
+
+// A state that follows the phase the live stream sets (data-phase): the pill inside takes the phase's tone, so its label can change without a reload.
+.list-phase {
+    &[data-phase="downloading"], &[data-phase="running"], &[data-phase="searching"] { --phase: var(--info); --phase-soft: var(--info-soft); }
+    &[data-phase="waiting"], &[data-phase="paused"], &[data-phase="open"] { --phase: var(--warning); --phase-soft: var(--warning-soft); }
+    &[data-phase="postprocessing"], &[data-phase="queued"], &[data-phase="approved"], &[data-phase="importing"] { --phase: var(--accent-text); --phase-soft: var(--accent-soft); }
+    &[data-phase="completed"] { --phase: var(--success); --phase-soft: var(--success-soft); }
+    &[data-phase="failed"], &[data-phase="rejected"] { --phase: var(--danger); --phase-soft: var(--danger-soft); }
+    &[data-phase="cancelled"] { --phase: var(--muted); --phase-soft: var(--field); }
+
+    &[data-phase] .state-chip { border-color: var(--phase-soft); background: var(--phase-soft); color: var(--phase); }
+}
+
+// What the last action did, above the list's figures.
+.list-notice {
+    margin: 0 0 12px;
+    padding: 11px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-inner);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--text-control);
+    font-weight: 650;
 }
 
 .list-value { white-space: nowrap; }
+.list-value--fill { display: block; min-width: 0; }
+
+// A name, a line under it and a note stay on one line each; a cut-off text shows whole on hover (Truncated).
+.list-identity__name, .list-identity__sub, .list-identity__note { display: block; min-width: 0; max-width: 100%; }
+.list-identity__title .truncated { display: inline-block; max-width: 100%; vertical-align: bottom; }
+.list-head-title { display: flex; align-items: center; gap: 12px; }
 .list-value--dim { color: var(--muted); font-weight: 520; }
+
+// A cut-off value at the right edge shows its whole text towards the left.
+.list-cell--data .truncated__tip { right: 0; left: auto; text-align: left; }
 
 .list-identity {
     display: flex;
@@ -79,7 +115,9 @@
         background: transparent;
         color: var(--text);
         cursor: pointer;
+        font: inherit;
         text-align: start;
+        text-decoration: none;
 
         &:hover { color: var(--accent-text); }
     }
@@ -90,6 +128,39 @@
 }
 
 .list-row--child .list-identity { gap: 10px; }
+
+// A cover where an icon tile would be: the poster's proportions, the tile's corner.
+.list-poster {
+    display: inline-grid;
+    flex: none;
+    width: 38px;
+    height: 56px;
+    overflow: hidden;
+    border-radius: var(--radius-small);
+    background: var(--accent-soft);
+
+    img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+    &--large { width: 56px; height: 84px; }
+}
+
+// The box of a row that can be chosen; the dock's bulk zone counts them. A chosen row takes the accent wash.
+.list-select { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.list-row--selected {
+    background: var(--accent-soft);
+    &:hover { background: var(--accent-soft); }
+
+    // A pill of the accent tone would vanish into the wash.
+    .state-chip--accent { background: var(--surface); }
+}
+
+// A head cell that sorts: a link in the head's own colour and weight, the sorted one marked by its arrow.
+.list-head a { color: inherit; text-decoration: none; &:hover { color: var(--accent-text); } }
+.list-head .list-sort--ascending::after { content: " \2191"; }
+.list-head .list-sort--descending::after { content: " \2193"; }
+
+// The head's select-all box sits where the rows' boxes sit, before the title.
+.list-head .list-identity { gap: 12px; }
 
 // Row controls side by side; a PostForm is only a wrapper.
 .list-actions {

@@ -118,7 +118,7 @@ namespace Jularr.Backend.Logic.Authentication
             return flow;
         }
 
-        public static async Task<PlexCompletionData> CompletePlexAsync(this LogicContext ctx, PlexChallengeParameters parameters, PlexIdentityData identity, PlexRegistrationData registration, TimeSpan sessionLifetime, CancellationToken ct)
+        public static async Task<PlexCompletionData> CompletePlexAsync(this LogicContext ctx, PlexChallengeParameters parameters, PlexIdentityData identity, PlexRegistrationData registration, TimeSpan sessionLifetime, Guid? deviceId, CancellationToken ct)
         {
             // Lock and revalidate completion.
             var flow = await ctx.ReadPlexFlowAsync(parameters, ct);
@@ -198,7 +198,7 @@ namespace Jularr.Backend.Logic.Authentication
                 return new PlexCompletionData(null, requiresApproval: true);
             }
 
-            var session = await ctx.CreateSessionAsync(account, sessionLifetime, ct);
+            var session = await ctx.CreateSessionAsync(account, sessionLifetime, deviceId, ct);
             return new PlexCompletionData(session, requiresApproval: false);
         }
 
