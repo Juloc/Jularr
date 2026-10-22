@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Media.V1
@@ -7,13 +8,15 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     {
     }
 
-    // How long and how much of the images of titles that are not Works Jularr keeps.
+    // How long and how much of the images of titles that are not Works Jularr keeps, and the one format covers are kept in; the active format differs from the chosen one where JPEG XL cannot be made.
     public sealed class CoverCacheV1 : BaseResponse
     {
-        public CoverCacheV1(int keepDays, int maximumMegabytes, long version)
+        public CoverCacheV1(int keepDays, int maximumMegabytes, CoverFormat formatId, CoverFormat activeFormatId, long version)
         {
             KeepDays = keepDays;
             MaximumMegabytes = maximumMegabytes;
+            FormatId = formatId;
+            ActiveFormatId = activeFormatId;
             Version = version;
         }
 
@@ -22,6 +25,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.MaximumMegabytes))]
         public int MaximumMegabytes { get; }
+
+        [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.FormatId))]
+        public CoverFormat FormatId { get; }
+
+        [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.FormatId))]
+        public CoverFormat ActiveFormatId { get; }
 
         [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.Version))]
         public long Version { get; }
@@ -29,10 +38,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class UpdateCoverCacheDataV1 : BaseData
     {
-        public UpdateCoverCacheDataV1(int keepDays, int maximumMegabytes, long version)
+        public UpdateCoverCacheDataV1(int keepDays, int maximumMegabytes, CoverFormat formatId, long version)
         {
             KeepDays = keepDays;
             MaximumMegabytes = maximumMegabytes;
+            FormatId = formatId;
             Version = version;
         }
 
@@ -41,6 +51,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.MaximumMegabytes))]
         public int MaximumMegabytes { get; }
+
+        [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.FormatId))]
+        public CoverFormat FormatId { get; }
 
         [DataField(typeof(CoverCacheFields), nameof(CoverCacheFields.Version))]
         public long Version { get; }

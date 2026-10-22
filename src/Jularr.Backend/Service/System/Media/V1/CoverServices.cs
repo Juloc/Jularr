@@ -41,6 +41,52 @@ namespace Jularr.Backend.Service.System.Media.V1
         }
     }
 
+    // Brings the widths of stored covers, then of the cached images of other titles, into the one format the Owner chose; true while more are waiting. A pass is a few images, paced by its worker.
+    public sealed class ConvertCoversV1 : SystemService<CoverParametersV1, NoData>
+    {
+        private const int PassSize = 5;
+        private readonly CoverStore _covers;
+
+        internal ConvertCoversV1(CoverStore covers)
+        {
+            _covers = covers;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(CoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(CoverParametersV1 parameters, Type resultType) => new("system.media");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // Without a folder or ffmpeg there is nothing to make widths with.
+            if (!_covers.IsEnabled || !_covers.CanScale)
+            {
+                return new UpdateResult(false);
+            }
+
+            var format = _covers.EffectiveFormat((await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadCoverCacheSettingsAsync(ct), CancellationToken)).FormatId);
+            var covers = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadCoversToConvertAsync(new WorkCoverConvertQueryData(format, PassSize), ct), CancellationToken);
+            foreach (var cover in covers)
+            {
+                // A cover that cannot be converted keeps the files it has; it is not tried again until the format changes.
+                await _covers.ConvertAsync(cover, format, CancellationToken);
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.SaveWorkCoverFormatAsync(new WorkCoverFormatData(cover, format), ct);
+                    return true;
+                }, CancellationToken);
+            }
+
+            if (covers.Count == PassSize)
+            {
+                return new UpdateResult(true);
+            }
+
+            return new UpdateResult(await _covers.ConvertExternalAsync(format, PassSize - covers.Count, CancellationToken) > 0);
+        }
+    }
+
     // Removes cover files no stored cover refers to, such as those of deleted Works, and the cached images of titles that are not Works nobody uses any more.
     public sealed class CleanCoversV1 : SystemService<CoverParametersV1, NoData>
     {

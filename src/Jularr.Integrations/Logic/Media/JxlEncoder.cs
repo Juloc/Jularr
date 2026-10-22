@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace Jularr.Integrations.Logic.Media
 {
-    // libjxl's cjxl, shipped in the image: a picture as JPEG XL for the cover cache. Without the tool the cache keeps WebP and JPEG only.
+    // libjxl's cjxl, shipped in the image: a picture as JPEG XL for the cover cache. Without the tool the cache keeps WebP.
     internal sealed class JxlEncoder
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
