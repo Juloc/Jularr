@@ -14,17 +14,22 @@ WireGuard, Konfiguration aus dem Proton-Dashboard.
 | IPv6 | **kein IPv6** – der Gratis-Tarif gibt keines; der Client bleibt sonst an der IPv6-Adresse eines Trackers hängen |
 | Tunnel nach Abbruch | der Container läuft weiter, die Firewall bleibt zu: **keine Verbindung, kein Download** |
 | Torrent-Client im Container | `qBittorrent` v5.3.0, WebUI-API antwortet |
-| Torrent im Tunnel | **läuft**: 517 Peers verbunden, der Fortschritt steigt (0,05 % → 0,14 % in drei Minuten), die Datei wächst |
-| Tempo im Tunnel | Spitzen 90 kB/s, sonst einzelne kB/s – der geteilte Gratis-Server ist langsam; direkt waren es 4–6 MB/s |
-| Torrent ohne Tunnel | 4–6 MB/s (direkt), die Datei landet im gemounteten Ordner |
+
+### Torrent durch den Tunnel
+
+| Anbieter | Peers | Tempo | Fortschritt in drei Minuten |
+| --- | --- | --- | --- |
+| **Proton Plus** (CH#1086, Port-Forwarding an) | **484** | **12-29 MB/s** | 2,3 % -> **93,8 %** |
+| Proton Free (NL-FREE#281) | 517 | Spitzen 90 kB/s, sonst einzelne kB/s | 0,05 % -> 0,14 % |
+| direkt ohne Tunnel | - | 4-6 MB/s | in Sekunden voll |
 
 **Der Kill-Switch hält.** Mit gestopptem Tunnel scheitern die Anfragen der Probe – sie rutschen
 nicht unverschlüsselt hinaus. Im Tunnel-Netzraum gemessen, nicht von außen.
 
-**P2P geht – auch im Gratis-Tarif von Proton.** Proton führt „P2P-Unterstützung" als
-Premium-Funktion; die Messung sagt etwas anderes: der Tracker antwortet, 517 Peers stehen
-bereit, die Datei wächst. Der Engpass ist nicht der Anbieter, sondern das Tempo (und die
-geteilte Adresse des Gratis-Servers).
+**P2P geht – auch im Gratis-Tarif, aber langsam.** Proton führt „P2P-Unterstützung" als
+Premium-Funktion; gemessen geht es auch gratis, nur mit einem geteilten Server und rund einem
+hundertfachen Bruchteil des Tempos. Für den Weg „Torrent in den Container" ist der Plus-Tarif
+(1,11 €/Monat im Aktionspreis) die Antwort: 484 Peers, 12-29 MB/s.
 
 ## Zwei Fehler, die die Messung zunächst verfälscht haben
 

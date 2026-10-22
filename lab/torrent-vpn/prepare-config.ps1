@@ -30,12 +30,36 @@ if (-not $isWireGuard -and -not $isOpenVpn) {
     throw "Die Datei ist weder eine WireGuard- noch eine OpenVPN-Konfiguration."
 }
 
-# WireGuard braucht genau einen Peer; mehrere werden nicht unterstuetzt.
+# WireGuard braucht genau einen Peer. Das Dashboard des Anbieters liefert oft alle Server in
+# einer Datei; dann wird der erste genommen und der Weg zu ihm aufgeschrieben.
 if ($isWireGuard) {
-    $peers = ([regex]::Matches($text, "(?im)^\s*\[Peer\]")).Count
-    if ($peers -ne 1) { throw "Die WireGuard-Konfiguration hat $peers Peer; erwartet wird genau einer." }
+    $blocks = [regex]::Matches($text, "(?im)^\s*\[Peer\].*?(?=^\s*\[|\z)", "Singleline")
+    if ($blocks.Count -gt 1) {
+        $chosen = $blocks[0].Value
+        $endpoint = ""
+        if ($chosen -match "(?im)^\s*Endpoint\s*=?\s*(\S+)") { $endpoint = $Matches[1] }
+        $body = ($chosen -replace "(?im)^\s*\[Peer\]\s*", "").Trim()
+        $text = ($text -replace "(?ims)^\s*\[Peer\].*?(?=^\s*\[|\z)", "")
+        $text = $text.TrimEnd() + "`n`n[Peer]`n" + $body + "`n"
+        Write-Host "Die Datei hatte $($blocks.Count) Server; genommen wurde der erste ($endpoint)."
+    }
     foreach ($needed in @("PrivateKey", "PublicKey", "Endpoint")) {
         if ($text -notmatch "(?im)^\s*$needed\s+\S+") { throw "Die WireGuard-Konfiguration hat kein $needed." }
+    }
+    # Gluetun verlangt fuer den Endpunkt eine Adresse, keinen Namen.
+    if ($text -match "(?im)^\s*Endpoint\s*=?\s*([a-z0-9\.\-]+):(\d+)") {
+        $server = $Matches[1]
+        $port = $Matches[2]
+        if ($server -notmatch "^\d+\.\d+\.\d+\.\d+$") {
+            try {
+                $address = ([System.Net.Dns]::GetHostAddresses($server) | Where-Object { $_.AddressFamily -eq "InterNetwork" } | Select-Object -First 1)
+            } catch {
+                throw "Die Adresse des Servers ($server) liess sich nicht aufloesen: $($_.Exception.Message)"
+            }
+            if (-not $address) { throw "Die Adresse des Servers ($server) liess sich nicht aufloesen." }
+            $text = $text -replace "(?im)^(\s*Endpoint\s*=?\s*)$([regex]::Escape($server)):(\d+)", "`$1$address`:$3"
+            Write-Host "Der Endpunkt $server wurde zu $address aufgeloest (Gluetun will eine Adresse)."
+        }
     }
 }
 
