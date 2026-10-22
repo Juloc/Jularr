@@ -9,6 +9,7 @@ object TvCatalogV1Routes {
     const val Library = "$base/library"
     const val Continue = "$base/continue"
     const val Watchlist = "$base/watchlist"
+    const val WatchlistCount = "$base/watchlist/count"
     const val HomeLayout = "$base/home/layout"
     const val DiscoverScopes = "$base/discover/scopes"
     const val DiscoverShelves = "$base/discover/shelves"
@@ -17,9 +18,22 @@ object TvCatalogV1Routes {
     const val DiscoverCatalogSearch = "$base/discover/catalog/search"
     const val DiscoverCatalogFeed = "$base/discover/catalog/feed"
     const val DiscoverSuggestions = "$base/discover/suggestions"
+    const val DiscoverCatalogEntry = "$base/discover/catalog/entry"
+
+    /** TMDB search result only; catalog results with other namespaces use catalog/entry. */
+    fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): String {
+        require(mediaTypeId == 1 || mediaTypeId == 2) { "TMDB details only support movies or series." }
+        require(tmdbId > 0) { "TMDB id must be positive." }
+        return "$base/discover/$mediaTypeId/$tmdbId"
+    }
 
     fun work(workId: Long): String = "$base/works/${positiveId(workId)}"
     fun seasons(workId: Long): String = "${work(workId)}/seasons"
+    fun editions(workId: Long): String = "${work(workId)}/editions"
+    fun credits(workId: Long): String = "${work(workId)}/credits"
+    fun person(personId: Long): String = "$base/people/${positiveId(personId)}"
+    fun personWorks(personId: Long, page: Int, pageSize: Int): String =
+        "${person(personId)}/works${pageQuery(page, pageSize)}"
     fun episodes(workId: Long, seasonNumber: Int): String {
         require(seasonNumber >= 0) { "Season number cannot be negative." }
         return "${seasons(workId)}/$seasonNumber/episodes"
@@ -34,6 +48,28 @@ object TvCatalogV1Routes {
 
     fun watchlist(page: Int, pageSize: Int, sortTypeId: Int? = null): String =
         Watchlist + pageQuery(page, pageSize) + optionalNumber("librarySortTypeId", sortTypeId)
+
+    fun libraryFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters,
+        query: String? = null, sortTypeId: Int? = null,
+    ): String = library(page, pageSize, query, sortTypeId) + filterQuery(filters, includeProgress = false)
+
+    fun watchlistFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters, sortTypeId: Int? = null,
+    ): String = watchlist(page, pageSize, sortTypeId) + filterQuery(filters, includeProgress = true)
+
+    private fun filterQuery(filters: TvCatalogV1Filters, includeProgress: Boolean): String {
+        require(includeProgress || filters.progressStateId == null) {
+            "The library endpoint does not support progressStateId. Use watchlist filtering instead."
+        }
+        return buildString {
+        filters.mediaTypeIds.forEach { append("&mediaTypeIds=").append(it) }
+        filters.mediaSubtypeIds.forEach { append("&mediaSubtypeIds=").append(it) }
+        filters.releaseYearFrom?.let { append("&releaseYearFrom=").append(it) }
+        filters.releaseYearTo?.let { append("&releaseYearTo=").append(it) }
+        if (includeProgress) filters.progressStateId?.let { append("&progressStateId=").append(it) }
+        }
+    }
 
     private fun positiveId(id: Long): Long {
         require(id > 0) { "A server WorkId must be positive." }

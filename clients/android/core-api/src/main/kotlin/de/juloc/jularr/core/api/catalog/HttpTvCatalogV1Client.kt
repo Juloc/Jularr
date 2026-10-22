@@ -29,11 +29,24 @@ class HttpTvCatalogV1Client(
     override suspend fun library(page: Int, pageSize: Int, query: String?, sortTypeId: Int?): TvPageV1<TvWorkCardV1> =
         readObject(TvCatalogV1Routes.library(page, pageSize, query, sortTypeId)).page { workCard() }
 
+    override suspend fun libraryFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters, query: String?, sortTypeId: Int?,
+    ): TvPageV1<TvWorkCardV1> =
+        readObject(TvCatalogV1Routes.libraryFiltered(page, pageSize, filters, query, sortTypeId)).page { workCard() }
+
     override suspend fun continueWatching(): List<TvContinueItemV1> =
         readArray(TvCatalogV1Routes.Continue).objects { continueItem() }
 
     override suspend fun watchlist(page: Int, pageSize: Int, sortTypeId: Int?): TvPageV1<TvWorkCardV1> =
         readObject(TvCatalogV1Routes.watchlist(page, pageSize, sortTypeId)).page { workCard() }
+
+    override suspend fun watchlistFiltered(
+        page: Int, pageSize: Int, filters: TvCatalogV1Filters, sortTypeId: Int?,
+    ): TvPageV1<TvWorkCardV1> =
+        readObject(TvCatalogV1Routes.watchlistFiltered(page, pageSize, filters, sortTypeId)).page { workCard() }
+
+    override suspend fun watchlistCount(): Int =
+        readObject(TvCatalogV1Routes.WatchlistCount).getInt("total")
 
     override suspend fun setWatchlisted(workId: Long, isWatchlisted: Boolean): Boolean =
         readObject(TvCatalogV1Routes.watchlistItem(workId), "PUT", JSONObject().put("isWatchlisted", isWatchlisted))
@@ -112,8 +125,39 @@ class HttpTvCatalogV1Client(
         ).objects { discoverSuggestion() }
     }
 
+    override suspend fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): TvDiscoverItemV1 =
+        readObject(TvCatalogV1Routes.discoverTmdbItem(mediaTypeId, tmdbId), "POST", JSONObject())
+            .discoverItem()
+
+    override suspend fun discoverCatalogEntry(
+        mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?,
+    ): TvDiscoverCatalogEntryV1 {
+        require(mediaTypeId > 0 && namespace.isNotBlank() && externalId.isNotBlank())
+        require(mediaSubtypeId == null || mediaSubtypeId > 0)
+        return readObject(
+            TvCatalogV1Routes.DiscoverCatalogEntry,
+            "POST",
+            JSONObject().put("mediaTypeId", mediaTypeId).put("namespace", namespace)
+                .put("externalId", externalId).apply {
+                    if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId)
+                },
+        ).discoverCatalogEntry()
+    }
+
     override suspend fun work(workId: Long): TvWorkDetailsV1 =
         readObject(TvCatalogV1Routes.work(workId)).workDetails()
+
+    override suspend fun editions(workId: Long): List<TvWorkEditionV1> =
+        readArray(TvCatalogV1Routes.editions(workId)).objects { workEdition() }
+
+    override suspend fun credits(workId: Long): List<TvWorkCreditV1> =
+        readArray(TvCatalogV1Routes.credits(workId)).objects { workCredit() }
+
+    override suspend fun person(personId: Long): TvPersonV1 =
+        readObject(TvCatalogV1Routes.person(personId)).person()
+
+    override suspend fun personWorks(personId: Long, page: Int, pageSize: Int): TvPageV1<TvWorkCardV1> =
+        readObject(TvCatalogV1Routes.personWorks(personId, page, pageSize)).page { workCard() }
 
     override suspend fun seasons(workId: Long): List<TvWorkSeasonV1> =
         readArray(TvCatalogV1Routes.seasons(workId)).objects { workSeason() }
@@ -132,12 +176,13 @@ class HttpTvCatalogV1Client(
 
     private suspend fun request(method: String, route: String, body: JSONObject?): String = withContext(Dispatchers.IO) {
         runInterruptible {
+            val requestDeviceToken = deviceTokens.current
             val connection = (URL(originUri.toString() + route).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
                 connectTimeout = 15_000
                 readTimeout = 30_000
                 setRequestProperty("Accept", "application/json")
-                deviceTokens.current?.let { setRequestProperty("Authorization", "Bearer $it") }
+                requestDeviceToken?.let { setRequestProperty("Authorization", "Bearer $it") }
                 if (body != null) {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
@@ -150,10 +195,18 @@ class HttpTvCatalogV1Client(
                 val status = connection.responseCode
                 val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
                     ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                    deviceTokens.clear()
-                } else if (status in 200..299) {
-                    deviceTokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                // A parallel request (or profile switch) may already have renewed the
+                // token. Never let a late 401 clear that newer session or a stale
+                // success response roll it back. The store's update/clear methods are
+                // synchronized on this same object, so comparison and mutation are atomic.
+                synchronized(deviceTokens) {
+                    if (deviceTokens.current == requestDeviceToken) {
+                        if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                            deviceTokens.clear()
+                        } else if (status in 200..299) {
+                            deviceTokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                        }
+                    }
                 }
                 if (status !in 200..299) throw appApiException(status, payload)
                 payload
