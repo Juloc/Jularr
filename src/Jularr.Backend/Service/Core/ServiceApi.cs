@@ -243,6 +243,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
             services.TryAddSingleton<SpeechFiles>();
+            services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechCatalogClient>(http => http.Timeout = TimeSpan.FromSeconds(25));
             services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(http => http.Timeout = TimeSpan.FromMinutes(5));
             services.TryAddSingleton<IPageRecognizer, OcrFiles>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);

@@ -2,15 +2,17 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Speech;
+using Jularr.Backend.Data.Enums.Speech;
 
 namespace Jularr.Backend.Logic.Speech
 {
-    internal sealed record SpeechModel(string Id, string Version, string Name, string Language, string Voice, string License, Uri LicenseUrl, Uri Source, long SizeBytes, string Sha256);
+    internal sealed record SpeechModel(string Id, string Version, string Name, string Language, string Voice, string License, Uri LicenseUrl, Uri Source, long SizeBytes, string Sha256,
+        bool RequiresLicenseAcceptance = false, Uri? SampleUrl = null, SpeechVoiceGenderType Gender = SpeechVoiceGenderType.Unknown, Uri? GenderSource = null);
 
     internal static partial class SpeechCatalog
     {
-        public const int MaximumEntries = 64;
-        public const int MaximumCatalogBytes = 1_048_576;
+        public const int MaximumEntries = 1024;
+        public const int MaximumCatalogBytes = 2_097_152;
 
         [GeneratedRegex(@"\A[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}\z")]
         private static partial Regex Identifier();
@@ -48,9 +50,29 @@ namespace Jularr.Backend.Logic.Speech
                 catch (DataValidationException) { continue; }
                 if (language.Length == 0 || language == "und" || identities.Contains(id) || hashes.Contains(hash)) continue;
 
+                var hasAcceptance = item.TryGetProperty("requiresLicenseAcceptance", out var acceptance);
+                if (hasAcceptance && acceptance.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) continue;
+                var requiresAcceptance = hasAcceptance && acceptance.ValueKind == JsonValueKind.True;
+                Uri? sampleUrl = null;
+                if (item.TryGetProperty("sampleUrl", out var sample) && sample.ValueKind != JsonValueKind.Null)
+                {
+                    if (!Address(item, "sampleUrl", out sampleUrl) || sampleUrl!.Host != "k2-fsa.github.io" || !sampleUrl.IsDefaultPort || sampleUrl.Query.Length != 0
+                        || !sampleUrl.AbsolutePath.StartsWith("/sherpa/onnx/tts/all/piper/mp3/", StringComparison.Ordinal)) continue;
+                }
+
+                var gender = SpeechVoiceGenderType.Unknown;
+                Uri? genderSource = null;
+                if (item.TryGetProperty("gender", out var classification))
+                {
+                    if (classification.ValueKind != JsonValueKind.Number || !classification.TryGetByte(out var number)
+                        || !Enum.IsDefined((SpeechVoiceGenderType)number)) continue;
+                    gender = (SpeechVoiceGenderType)number;
+                    if (gender != SpeechVoiceGenderType.Unknown && !Address(item, "genderSource", out genderSource)) continue;
+                }
+
                 identities.Add(id);
                 hashes.Add(hash);
-                result.Add(new SpeechModel(id, version, name, language, voice, license, licenseUrl!, source!, bytes, hash));
+                result.Add(new SpeechModel(id, version, name, language, voice, license, licenseUrl!, source!, bytes, hash, requiresAcceptance, sampleUrl, gender, genderSource));
             }
 
             return result;
