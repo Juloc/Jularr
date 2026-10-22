@@ -88,6 +88,16 @@ jobs:
         run: |
           set -euo pipefail
           FILTER="$(python3 scripts/ci-select-backend-tests.py "$BASE_SHA" "$HEAD_SHA")"
+          if [[ "$FILTER" == *"FullyQualifiedName~Jularr.Backend.Tests.BackupTests."* ]]; then
+            # Backup integration requires pg_dump with the same major as PostgreSQL.
+            sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+            curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo ${VERSION_CODENAME})-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update -qq
+            sudo apt-get install -qq --yes --no-install-recommends postgresql-client-18
+            echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+            export PATH="/usr/lib/postgresql/18/bin:$PATH"
+          fi
           dotnet test tests/Jularr.Backend.Tests --configuration Release --no-build \
             --filter "$FILTER" \
             --logger "trx;LogFileName=backend-pr.trx" \
