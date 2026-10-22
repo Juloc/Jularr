@@ -2480,6 +2480,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, offline.StatusCode);
             Assert.AreEqual(0, sab.Grabbed.Count);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            // The fixture owns this folder and still needs to dispose it.
+            Directory.CreateDirectory(downloads.Path);
         }
 
         [TestMethod]
