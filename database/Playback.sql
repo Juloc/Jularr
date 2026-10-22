@@ -276,6 +276,19 @@ CREATE TABLE "ReadingPreferences" (
     CHECK ("Language" IS NOT NULL OR "ReadingViewTypeId" IS NOT NULL)
 );
 
+-- How a profile's reading text looks on all its devices: typeface (1 serif, 2 sans), size in pixels, line and paragraph spacing in percent, text width in characters and hyphenation.
+-- A profile without a row reads with these defaults.
+CREATE TABLE "ProfileReaderSettings" (
+    "ProfileId" bigint PRIMARY KEY REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    "FontTypeId" smallint NOT NULL DEFAULT 1 CHECK ("FontTypeId" IN (1, 2)),
+    "Size" integer NOT NULL DEFAULT 20 CHECK ("Size" BETWEEN 14 AND 40),
+    "LineSpacing" integer NOT NULL DEFAULT 165 CHECK ("LineSpacing" BETWEEN 120 AND 220),
+    "ParagraphSpacing" integer NOT NULL DEFAULT 100 CHECK ("ParagraphSpacing" BETWEEN 0 AND 200),
+    "TextWidth" integer NOT NULL DEFAULT 68 CHECK ("TextWidth" BETWEEN 40 AND 90),
+    "Hyphenation" boolean NOT NULL DEFAULT TRUE,
+    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
+);
+
 -- What a profile plays by default; a profile without a row plays the file's own audio, shows subtitles while the audio is foreign in the profile's language, at normal speed.
 CREATE TABLE "ProfilePlaybackPreferences" (
     "ProfileId" bigint PRIMARY KEY REFERENCES "Profiles" ("Id") ON DELETE CASCADE,

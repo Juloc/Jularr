@@ -11507,6 +11507,142 @@
   "requests.openWork": [
    "Open title",
    "Titel öffnen"
+  ],
+  "system.performance": [
+   "Performance",
+   "Leistung"
+  ],
+  "system.performance.processor": [
+   "Processor",
+   "Prozessor"
+  ],
+  "system.performance.memory": [
+   "Memory",
+   "Arbeitsspeicher"
+  ],
+  "system.performance.processorHistory": [
+   "Processor use over the last six hours",
+   "Prozessorauslastung der letzten sechs Stunden"
+  ],
+  "system.performance.memoryHistory": [
+   "Memory use over the last six hours",
+   "Speicherauslastung der letzten sechs Stunden"
+  ],
+  "system.performance.service": [
+   "Service",
+   "Dienst"
+  ],
+  "system.performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "system.performance.errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "system.performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "system.performance.maximum": [
+   "Longest",
+   "Längster"
+  ],
+  "system.performance.empty": [
+   "No calls in the last hour.",
+   "Keine Aufrufe in der letzten Stunde."
+  ],
+  "system.logs": [
+   "Recent warnings and errors",
+   "Letzte Warnungen und Fehler"
+  ],
+  "system.logs.empty": [
+   "Nothing went wrong since Jularr started.",
+   "Seit dem Start von Jularr ist nichts schiefgelaufen."
+  ],
+  "system.logs.at": [
+   "Time",
+   "Zeit"
+  ],
+  "system.logs.level": [
+   "Level",
+   "Stufe"
+  ],
+  "system.logs.area": [
+   "Area",
+   "Bereich"
+  ],
+  "system.logs.message": [
+   "Message",
+   "Meldung"
+  ],
+  "system.logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "system.logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "system.logs.level.Critical": [
+   "Critical",
+   "Kritisch"
+  ],
+  "manualImport.import": [
+   "Import",
+   "Importieren"
+  ],
+  "manualImport.run": [
+   "Import",
+   "Importieren"
+  ],
+  "nav.system.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "reader.seek.book": [
+   "Position in the book",
+   "Position im Buch"
+  ],
+  "reader.paragraph": [
+   "Paragraph spacing (%)",
+   "Absatzabstand (%)"
+  ],
+  "reader.language.none": [
+   "No reading language is set up yet. Choose your languages in the profile settings.",
+   "Noch keine Lesesprache eingerichtet. Wähle deine Sprachen in den Profileinstellungen."
+  ],
+  "reader.language.configure": [
+   "Open profile settings",
+   "Profileinstellungen öffnen"
+  ],
+  "reader.chapter.previous": [
+   "Previous chapter",
+   "Vorheriges Kapitel"
+  ],
+  "reader.chapter.next": [
+   "Next chapter",
+   "Nächstes Kapitel"
+  ],
+  "speech.timer": [
+   "Sleep timer",
+   "Einschlaf-Timer"
+  ],
+  "speech.timer.after": [
+   "Stop reading aloud after",
+   "Vorlesen beenden nach"
+  ],
+  "speech.timer.off": [
+   "Off",
+   "Aus"
+  ],
+  "speech.timer.minutes": [
+   "{0} minutes",
+   "{0} Minuten"
+  ],
+  "speech.timer.left": [
+   "{0} min",
+   "{0} Min."
   ]
  }
 }
