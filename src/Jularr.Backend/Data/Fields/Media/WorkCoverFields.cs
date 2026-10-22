@@ -6,6 +6,7 @@ namespace Jularr.Backend.Data.Fields.Media
     public static class WorkCoverFields
     {
         public static readonly EnumField CoverKindId = new(typeof(CoverKind));
+        public static readonly EnumField FormatId = new(typeof(CoverFormat));
         public static readonly LongField WorkUnitId = new() { Minimum = 1, Required = false };
         public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false };
         public static readonly StringField ContentType = new(NpgsqlDbType.Varchar) { MaximumLength = 32, AllowBlank = false };

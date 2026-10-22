@@ -51,6 +51,36 @@ namespace Jularr.Backend.Data.Common
             return formats;
         }
 
+        // The files a width can be kept in, best first: its extension, its content type and what the browser has to name to take it (JPEG always).
+        public static readonly IReadOnlyList<(string Extension, string ContentType, CoverFormats Needs)> WidthFormats =
+        [
+            ("jxl", "image/jxl", CoverFormats.Jxl),
+            ("webp", "image/webp", CoverFormats.WebP),
+            ("jpg", "image/jpeg", CoverFormats.None)
+        ];
+
+        // The extensions a width is tried in: the chosen format, then what the tools can still make; JPEG is always the last resort.
+        public static IReadOnlyList<string> Extensions(CoverFormat format) => format == CoverFormat.Jxl ? ["jxl", "webp", "jpg"] : ["webp", "jpg"];
+
+        // The extension of the stored file that answers: the best one the browser takes, none when every stored file is a format it does not name.
+        public static string? Serve(IEnumerable<string> present, CoverFormats accepts)
+        {
+            var kept = present.ToHashSet(StringComparer.Ordinal);
+            return WidthFormats.FirstOrDefault(format => kept.Contains(format.Extension) && accepts.HasFlag(format.Needs)).Extension;
+        }
+
+        // The extension made on the fly for a browser that takes none of the stored formats.
+        public static string Derive(CoverFormats accepts) => accepts.HasFlag(CoverFormats.WebP) ? "webp" : "jpg";
+
+        // The first bytes of a written file name its format; a file that does not is no result.
+        public static bool IsFormat(ReadOnlySpan<byte> header, string extension) => extension switch
+        {
+            "jxl" => header is [0xFF, 0x0A, ..] || header.Length >= 8 && header[4..8].SequenceEqual("JXL "u8),
+            "webp" => header.Length >= 12 && header[..4].SequenceEqual("RIFF"u8) && header[8..12].SequenceEqual("WEBP"u8),
+            "jpg" => header is [0xFF, 0xD8, 0xFF, ..],
+            _ => false
+        };
+
         // Added to the ETag so each format of one width is its own representation.
         public static string ETagSuffix(string contentType) => contentType switch
         {

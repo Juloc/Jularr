@@ -1112,6 +1112,22 @@
    "Largest size in MB, 0 keeps none",
    "Größte Menge in MB, 0 speichert nichts"
   ],
+  "admin.catalog.coversFormat": [
+   "Cover format",
+   "Titelbild-Format"
+  ],
+  "admin.catalog.coversFormat.jxl": [
+   "JPEG XL",
+   "JPEG XL"
+  ],
+  "admin.catalog.coversFormat.webp": [
+   "WebP",
+   "WebP"
+  ],
+  "admin.catalog.coversFormatFallback": [
+   "JPEG XL is not available here, covers are kept as WebP",
+   "JPEG XL ist hier nicht verfügbar, Titelbilder werden als WebP gespeichert"
+  ],
   "form.time.hour": [
    "Hour",
    "Stunde"
@@ -9900,6 +9916,10 @@
    "Provider covers",
    "Titelbilder der Anbieter"
   ],
+  "jobs.job.coverBackfill": [
+   "Cover conversion",
+   "Titelbilder umwandeln"
+  ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
@@ -10331,6 +10351,10 @@
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",
    "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
+  ],
+  "jobs.about.coverBackfill": [
+   "Converts stored covers into the chosen cover format, a few at a time.",
+   "Wandelt gespeicherte Titelbilder in das gewählte Format um, wenige auf einmal."
   ],
   "jobs.about.storage": [
    "Checks that the mounts and storage paths can be reached.",

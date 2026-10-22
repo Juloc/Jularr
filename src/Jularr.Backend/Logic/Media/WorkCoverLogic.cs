@@ -104,9 +104,9 @@ namespace Jularr.Backend.Logic.Media
                 """
                 WITH saved AS (
                     INSERT INTO
-                        "WorkCovers" ("WorkId", "WorkUnitId", "CoverKindId", "SourceUrl", "ContentType", "Version", "LocalUrl", "StoredAt", "FailedAt")
+                        "WorkCovers" ("WorkId", "WorkUnitId", "CoverKindId", "SourceUrl", "ContentType", "Version", "LocalUrl", "StoredAt", "FailedAt", "FormatId")
                     VALUES
-                        (@WorkId, @WorkUnitId, @CoverKindId, @SourceUrl, @ContentType, @Version, @LocalUrl, now(), NULL)
+                        (@WorkId, @WorkUnitId, @CoverKindId, @SourceUrl, @ContentType, @Version, @LocalUrl, now(), NULL, @FormatId)
                     ON CONFLICT ("WorkId", "CoverKindId", "WorkUnitId") DO UPDATE
                     SET
                         "SourceUrl" = EXCLUDED."SourceUrl",
@@ -114,7 +114,8 @@ namespace Jularr.Backend.Logic.Media
                         "Version" = EXCLUDED."Version",
                         "LocalUrl" = EXCLUDED."LocalUrl",
                         "StoredAt" = now(),
-                        "FailedAt" = NULL
+                        "FailedAt" = NULL,
+                        "FormatId" = EXCLUDED."FormatId"
                     RETURNING
                         "Id"
                 ), facts AS (
@@ -162,7 +163,8 @@ namespace Jularr.Backend.Logic.Media
                     "Version" = NULL,
                     "LocalUrl" = NULL,
                     "StoredAt" = NULL,
-                    "FailedAt" = now();
+                    "FailedAt" = now(),
+                    "FormatId" = NULL;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -176,6 +178,7 @@ namespace Jularr.Backend.Logic.Media
                 SELECT
                     settings."KeepDays"::integer AS "KeepDays",
                     settings."MaximumMegabytes",
+                    settings."FormatId",
                     settings."Version"
                 FROM
                     "CoverCacheSettings" AS settings;
@@ -194,6 +197,7 @@ namespace Jularr.Backend.Logic.Media
                 SET
                     "KeepDays" = @KeepDays,
                     "MaximumMegabytes" = @MaximumMegabytes,
+                    "FormatId" = @FormatId,
                     "Version" = settings."Version" + 1,
                     "UpdatedAt" = now()
                 WHERE
@@ -204,6 +208,51 @@ namespace Jularr.Backend.Logic.Media
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
+        }
+
+        // Stored covers whose widths are not kept in this format yet, oldest first; one the backfill has not seen is always among them.
+        public static async Task<IReadOnlyList<WorkCoverConvertData>> ReadCoversToConvertAsync(this LogicContext ctx, WorkCoverConvertQueryData query, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    cover."WorkId",
+                    cover."CoverKindId",
+                    cover."WorkUnitId",
+                    cover."ContentType",
+                    cover."Version"
+                FROM
+                    "WorkCovers" AS cover
+                WHERE
+                    cover."StoredAt" IS NOT NULL
+                    AND cover."FormatId" IS DISTINCT FROM @FormatId
+                ORDER BY
+                    cover."Id"
+                LIMIT @Limit;
+                """;
+            sql.Parameters.Add(query);
+            return await ctx.ReadSql.ReadListAsync<WorkCoverConvertData>(sql, ct);
+        }
+
+        // The widths were made in this format; a cover that was stored again in the meantime keeps what its own store wrote.
+        public static async Task SaveWorkCoverFormatAsync(this LogicContext ctx, WorkCoverFormatData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WorkCovers" AS cover
+                SET
+                    "FormatId" = @FormatId
+                WHERE
+                    cover."WorkId" = @WorkId
+                    AND cover."CoverKindId" = @CoverKindId
+                    AND cover."WorkUnitId" IS NOT DISTINCT FROM @WorkUnitId
+                    AND cover."Version" = @Version;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         // Every stored cover of these Works, to find the files nobody refers to.
