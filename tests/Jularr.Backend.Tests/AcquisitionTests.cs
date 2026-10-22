@@ -2428,6 +2428,36 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AutomaticGrab_PausedAfterSearch_DoesNotReserveButManualGrabStillWorks()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidate = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!
+                .First(item => item.ReleaseDecisionTypeId == ReleaseDecisionType.Eligible);
+
+            // Simulate a pause while an automatic indexer request is in flight.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"IsPaused\" = TRUE WHERE \"Id\" = " + wantedId);
+            await using (var sql = new SqlContext(host.Fixture.Database))
+            {
+                await sql.BeginAsync(SqlAccessMode.ReadWrite);
+                await Assert.ThrowsAsync<ServiceUnavailableException>(async () =>
+                    await new LogicContext(sql).ReserveDownloadAsync(new AcquisitionGrabData(wantedId, 1, "late-auto", "Late automatic grab", null, 2, null, null, null)
+                    {
+                        RequiresActiveMonitoring = true
+                    }, default));
+            }
+
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            using var manuallyGrabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, manuallyGrabbed.StatusCode, await manuallyGrabbed.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+        }
+
+        [TestMethod]
         public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
         {
             using var storage = new TemporaryDirectory();

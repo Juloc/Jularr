@@ -1590,6 +1590,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.outcome.download_interrupted", "Download interrupted"),
             new("acquisition.outcome.acquisition_unavailable", "Download client unavailable"),
             new("acquisition.outcome.acquisition_no_download_client", "No download client"),
+            new("acquisition.outcome.acquisition_paused", "Monitoring was paused during the search"),
             new("acquisition.outcome.acquisition_grab_failed", "Download client refused"),
             new("acquisition.outcome.acquisition_limit_reached", "Indexer grab limit reached"),
             new("acquisition.outcome.acquisition_download_path_unconfigured", "Download workspace is not configured or is unavailable"),

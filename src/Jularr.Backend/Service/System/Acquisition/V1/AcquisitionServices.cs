@@ -99,7 +99,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 await RecordAsync(target.WantedItemId, result.OutcomeKey, now + Backoff(target.SearchCount));
                 try
                 {
-                    await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken);
+                    await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken, automatic: true);
                 }
                 catch (ServiceUnavailableException exception)
                 {
@@ -136,7 +136,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
                     try
                     {
-                        await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken);
+                        await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken, automatic: true);
                     }
                     catch (ServiceUnavailableException exception)
                     {

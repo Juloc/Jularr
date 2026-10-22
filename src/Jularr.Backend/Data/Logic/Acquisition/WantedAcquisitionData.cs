@@ -284,6 +284,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Where a direct source serves the file.
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl))]
         public string? SourceUrl { get; }
+
+        // An automatic grab must still be monitored when its reservation is made.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
+        public bool RequiresActiveMonitoring { get; init; }
     }
 
     internal sealed class DownloadStartData : BaseData
