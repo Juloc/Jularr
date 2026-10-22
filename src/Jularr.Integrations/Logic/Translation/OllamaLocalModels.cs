@@ -91,7 +91,7 @@ namespace Jularr.Integrations.Logic.Translation
                 + $"Output ONLY the {target} translation. Translate the following {source} text into {target}:\n\n\n{text}";
             var timer = Stopwatch.StartNew();
             using var response = await JsonAsync(server, "api/generate",
-                new { model, prompt, stream = false, keep_alive = "0", options = new { temperature = 0, num_ctx = 3072, num_predict = 1536 } }, ct);
+                new { model, prompt, stream = false, keep_alive = "5m", options = new { temperature = 0, num_ctx = 3072, num_predict = 1536 } }, ct);
             timer.Stop();
             if (!response.RootElement.TryGetProperty("response", out var result) || result.ValueKind != JsonValueKind.String)
                 throw new InvalidDataException("Ollama translation response was invalid.");

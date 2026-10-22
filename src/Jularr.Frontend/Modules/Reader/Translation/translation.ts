@@ -156,6 +156,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     async function translate(target: Language, generation: number) {
         if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
         const shared = await cached(target);
+        if (revision !== generation) return;
         if (shared) { show(shared); return; }
 
         say(reader.dataset.translatingLabel + " 0 %");

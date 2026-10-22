@@ -23,7 +23,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
     internal static class LocalReadingPaths
     {
         public static string Cache(int section, string language, string model) =>
-            ":translation/local-v1/" + model + "/" + language + "/" + section.ToString("D5", System.Globalization.CultureInfo.InvariantCulture);
+            ":translation/local-v1/" + model + "/" + language + "/" + section.ToString("D5", global::System.Globalization.CultureInfo.InvariantCulture);
     }
 
     [ServiceEndpoint("GET", "/api/v1/translation/local/availability")]
@@ -47,7 +47,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
             try
             {
                 var installed = await _models.InstalledAsync(server, CancellationToken);
-                return new LocalTranslationAvailabilityV1(OllamaLocalModels.Candidates.FirstOrDefault(installed.Contains));
+                return new LocalTranslationAvailabilityV1(OllamaLocalModels.Candidates.FirstOrDefault(candidate => installed.Contains(candidate, StringComparer.Ordinal)));
             }
             catch (Exception e) when (e is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException)
             {
