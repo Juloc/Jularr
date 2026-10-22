@@ -58,6 +58,14 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Chapter One", "Part Two" }, entries.Select(entry => entry.Title).ToArray());
             Assert.AreEqual("part", entries[1].Anchor);
 
+            // The progress slider places a position in the whole book by where each section starts.
+            using var offsetResponse = await host.SendAsync(HttpMethod.Get, prefix + "/offsets");
+            var offsets = (await offsetResponse.Content.ReadFromJsonAsync<BaseDataList<ReadingSectionOffsetV1>>())!;
+            Assert.AreEqual(2, offsets.Count);
+            Assert.AreEqual((0, 0L), (offsets[0].SectionIndex, offsets[0].CharactersBefore));
+            Assert.AreEqual((1, offsets[0].Characters), (offsets[1].SectionIndex, offsets[1].CharactersBefore));
+            Assert.AreEqual(section.TotalCharacters, offsets.Sum(offset => offset.Characters));
+
             // Progress is the block locator; the reader continues there.
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + first + "/progress", new SaveReadingProgressDataV1("s1/b1", 0.6m, false));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());

@@ -184,7 +184,7 @@ export function initializeBookPages(reader: HTMLElement, content: HTMLElement) {
         }
         const style = getComputedStyle(content);
         const nextKey = JSON.stringify([next.width, next.height, next.columns, next.gap, next.rtl, style.font, style.letterSpacing,
-            style.getPropertyValue('--reader-text-width'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
+            style.getPropertyValue('--reader-text-width'), style.getPropertyValue('--reader-paragraph'), reader.dataset.indent, reader.dataset.hyphenation, reader.dataset.illustrations, document.documentElement.lang]);
         if (key !== nextKey) {
             cancel(); key = nextKey; failed = false; resetCounts(); clearTotal();
         }
