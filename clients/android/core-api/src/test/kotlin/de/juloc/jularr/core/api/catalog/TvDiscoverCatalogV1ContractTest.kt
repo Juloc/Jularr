@@ -21,7 +21,7 @@ class TvDiscoverCatalogV1ContractTest {
             searchPayload.set(exchange.requestBody.bufferedReader().use { it.readText() })
             bearer.set(exchange.requestHeaders.getFirst("Authorization"))
             exchange.respond(
-                """[{"namespace":"openlibrary","externalId":"OL12345W","title":"Example Light Novel",
+                """[{"namespace":"anilist","externalId":"12345","title":"Example Light Novel",
                 "releaseYear":2024,"author":"Example Author","workId":null,"posterUrl":null,
                 "rating":null,"mediaStateTypeId":null}]""",
             )
@@ -33,7 +33,7 @@ class TvDiscoverCatalogV1ContractTest {
         server.createContext("/api/v1/discover/suggestions") { exchange ->
             suggestionsPayload.set(exchange.requestBody.bufferedReader().use { it.readText() })
             exchange.respond(
-                """[{"scopeSlug":"light-novels","namespace":"openlibrary","externalId":"OL12345W",
+                """[{"scopeSlug":"light-novels","namespace":"anilist","externalId":"12345",
                 "title":"Example Light Novel","releaseYear":2024,"posterUrl":null,"workId":null}]""",
             )
         }
@@ -43,7 +43,7 @@ class TvDiscoverCatalogV1ContractTest {
             runBlocking {
                 val result = api.discoverCatalogSearch(mediaTypeId = 3, query = "Novel", mediaSubtypeId = 3)
                 assertNull(result.single().workId)
-                assertEquals("OL12345W", result.single().externalId)
+                assertEquals("12345", result.single().externalId)
                 assertTrue(api.discoverCatalogFeed(mediaTypeId = 3, feedTypeId = 1, mediaSubtypeId = 3).isEmpty())
                 assertEquals("light-novels", api.discoverSuggestions("Example", "light-novels").single().scopeSlug)
             }
