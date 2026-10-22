@@ -114,41 +114,55 @@ class HttpTvV1ProfileClient(origin: String, private val tokens: DeviceTokenStore
     private suspend fun request(method: String, path: String, body: JSONObject? = null): String =
         withContext(Dispatchers.IO) {
             runInterruptible {
-                // Profile switching rotates credentials. Do NOT retry state-changing operations:
-                // the previous request may have already succeeded on the server.
-                val prior = tokens.current ?: error("Sign in before accessing profiles.")
-                val connection = (URL(base.toString() + path).openConnection() as HttpURLConnection).apply {
-                    requestMethod = method
-                    instanceFollowRedirects = false
-                    connectTimeout = 15_000
-                    readTimeout = 30_000
-                    setRequestProperty("Accept", "application/json")
-                    setRequestProperty("Authorization", "Bearer $prior")
-                    if (body != null) {
-                        setRequestProperty("Content-Type", "application/json")
-                        doOutput = true
-                    }
-                }
-                try {
-                    body?.let { connection.outputStream.use { out ->
-                        out.write(it.toString().toByteArray(Charsets.UTF_8))
-                    } }
-                    val status = connection.responseCode
-                    val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                    synchronized(tokens) {
-                        if (tokens.current == prior) {
-                            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) tokens.clear()
-                            else if (status in 200..299) {
-                                tokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
-                            }
+                // A GET can safely retry after a concurrent profile/token rotation.
+                // Never retry POST/PUT/DELETE: the old operation may already have
+                // committed a profile switch or session revocation on the server.
+                var completed: String? = null
+                val attempts = if (method == "GET") 2 else 1
+                for (attempt in 0 until attempts) {
+                    val prior = tokens.current ?: error("Sign in before accessing profiles.")
+                    val connection = (URL(base.toString() + path).openConnection() as HttpURLConnection).apply {
+                        requestMethod = method
+                        instanceFollowRedirects = false
+                        connectTimeout = 15_000
+                        readTimeout = 30_000
+                        setRequestProperty("Accept", "application/json")
+                        setRequestProperty("Authorization", "Bearer $prior")
+                        if (body != null) {
+                            setRequestProperty("Content-Type", "application/json")
+                            doOutput = true
                         }
                     }
-                    if (status !in 200..299) throw appApiException(status, payload)
-                    payload
-                } finally {
-                    connection.disconnect()
+                    try {
+                        body?.let { connection.outputStream.use { out ->
+                            out.write(it.toString().toByteArray(Charsets.UTF_8))
+                        } }
+                        val status = connection.responseCode
+                        val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                        val stale = synchronized(tokens) {
+                            if (tokens.current != prior) true
+                            else {
+                                if (status == HttpURLConnection.HTTP_UNAUTHORIZED) tokens.clear()
+                                else if (status in 200..299) {
+                                    tokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                                }
+                                false
+                            }
+                        }
+                        if (stale && status == HttpURLConnection.HTTP_UNAUTHORIZED &&
+                            method == "GET" && attempt == 0 && tokens.current != null
+                        ) {
+                            continue
+                        }
+                        if (status !in 200..299) throw appApiException(status, payload)
+                        completed = payload
+                        break
+                    } finally {
+                        connection.disconnect()
+                    }
                 }
+                checkNotNull(completed) { "Profile request was not completed." }
             }
         }
 }
