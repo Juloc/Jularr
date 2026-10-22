@@ -29,6 +29,7 @@ namespace Jularr.Backend.Tests
                 StringAssert.Contains(Read(epub, "OEBPS/toc.xhtml"), "第2話");
                 StringAssert.Contains(Read(epub, "OEBPS/chapters/0001.xhtml"), "第一段落");
                 StringAssert.Contains(Read(epub, "OEBPS/chapters/0002.xhtml"), "続き");
+                Assert.IsFalse(Read(epub, "OEBPS/chapters/0002.xhtml").Contains("無関係な前書き", StringComparison.Ordinal));
             }
             finally
             {
@@ -64,7 +65,7 @@ namespace Jularr.Backend.Tests
                 var html = url.AbsolutePath.EndsWith("/1/", StringComparison.Ordinal)
                     ? noBody ? "<h1>No text</h1>" : "<div id=\"novel_honbun\"><p>第一段落</p><p>第二段落</p></div>"
                     : url.AbsolutePath.EndsWith("/2/", StringComparison.Ordinal)
-                    ? "<div class=\"p-novel__body\">続き</div>"
+                    ? "<div class=\"js-novel-text p-novel__text p-novel__text--preface\">無関係な前書き</div><div class=\"js-novel-text p-novel__text\">続き</div>"
                     : url.Query.Contains("p=2", StringComparison.Ordinal)
                     ? "<a href=\"/n123/2/\">第2話</a>"
                     : "<h1 class=\"p-novel__title\">テスト作品</h1><div class=\"p-novel__author\">著者</div>" +
