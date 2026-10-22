@@ -71,6 +71,14 @@ class JularrMedia3Player(context: Context) : Closeable {
         exoPlayer.playWhenReady = playWhenReady
     }
 
+    /**
+     * Update credentials on the shared Media3 HTTP factory after an API response rotates
+     * the device bearer. This is especially important for subsequent HLS segment requests.
+     */
+    fun updateRequestHeaders(requestHeaders: Map<String, String>) {
+        httpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
+    }
+
     override fun close() {
         mediaSession.release()
         exoPlayer.release()
