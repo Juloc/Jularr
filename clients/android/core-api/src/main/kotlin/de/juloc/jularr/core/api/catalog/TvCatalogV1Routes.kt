@@ -63,6 +63,7 @@ object TvCatalogV1Routes {
         filters.releaseYearFrom?.let { append("&releaseYearFrom=").append(it) }
         filters.releaseYearTo?.let { append("&releaseYearTo=").append(it) }
         if (includeProgress) filters.progressStateId?.let { append("&progressStateId=").append(it) }
+        }
     }
 
     private fun positiveId(id: Long): Long {
