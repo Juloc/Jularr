@@ -49,6 +49,7 @@ class TvV1ParityConnectedJourneyTest {
                 "/api/v1/instance/capabilities", "/api/v1/profiles", "/api/v1/auth/profile/9/pin" ->
                     if (path == "/api/v1/instance/capabilities" && requests.count { it.contains("capabilities") } > 1) "profile-token"
                     else "paired-token"
+                "/api/v1/playback/assets/9002/sessions" -> "profile-token"
                 "/api/v1/playback/sessions/$firstSessionId",
                 "/api/v1/playback/assets/9003/sessions",
                 "/api/v1/playback/sessions/$secondSessionId" -> "stream-token"
