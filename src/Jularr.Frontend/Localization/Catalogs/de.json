@@ -6076,6 +6076,22 @@
    "Add library path",
    "Bibliothekspfad hinzufügen"
   ],
+  "library.add": [
+   "Add library",
+   "Bibliothek hinzufügen"
+  ],
+  "library.added": [
+   "Library added.",
+   "Bibliothek hinzugefügt."
+  ],
+  "library.name": [
+   "Name",
+   "Name"
+  ],
+  "storage.mount": [
+   "Storage",
+   "Speicher"
+  ],
   "library.tab.Overview": [
    "Libraries",
    "Bibliotheken"
