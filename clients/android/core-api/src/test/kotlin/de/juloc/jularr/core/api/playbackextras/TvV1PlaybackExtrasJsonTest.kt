@@ -35,9 +35,9 @@ class TvV1PlaybackExtrasJsonTest {
         ).tvTrickplay()
         assertEquals(20, info.framesPerSheet)
         assertEquals(4, info.sheetCount)
-        assertEquals(TvV1TrickplayTile(0, 0, 0, 0, 160, 90), info.previewAt(0))
-        assertEquals(TvV1TrickplayTile(1, 21, 160, 0, 160, 90), info.previewAt(215_000))
-        assertEquals(TvV1TrickplayTile(3, 72, 320, 180, 160, 90), info.previewAt(10_000_000))
+        assertEquals(TvV1TrickplayTile(1, 0, 0, 0, 160, 90), info.previewAt(0))
+        assertEquals(TvV1TrickplayTile(2, 21, 160, 0, 160, 90), info.previewAt(215_000))
+        assertEquals(TvV1TrickplayTile(4, 72, 320, 180, 160, 90), info.previewAt(10_000_000))
         assertTrue(runCatching { info.previewAt(-1) }.isFailure)
         assertTrue(runCatching { JSONObject("""{"intervalSeconds":0,"frames":8,"columns":5,"rows":4,"tileWidth":160,"tileHeight":90}""").tvTrickplay() }.isFailure)
     }
