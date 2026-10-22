@@ -56,6 +56,9 @@ once that change is explicitly approved.
   approximately 2–5 minutes on ordinary changes; browser smoke 3–5 minutes.
   Larger changes can take longer; the package smoke is conditional.
 - The full suite can take 20–30+ minutes and never blocks normal PR feedback.
+  When several agents merge changes rapidly, newer `clean-start` pushes cancel
+  obsolete branch validation runs; the newest branch revision still receives
+  Full CI, Frontend and container checks. Manual Full CI is not cancelled.
 - Never hide a failed check by changing its filter or marking it successful.
   Store TRX reports, and keep the affected focused tests in the agent PR notes.
 - `scripts/ci-select-backend-tests.py` maps acquisition, storage, authentication,
