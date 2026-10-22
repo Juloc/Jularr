@@ -58,7 +58,11 @@ fun TvV1CatalogHost(
         HttpTvV1PlaybackExtrasClient(serverOrigin, deviceSession.authenticatedTokenStore())
     }
     val focusMemory = remember(serverOrigin) { TvFocusMemory() }
-    var page by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
+    var navigation by remember(serverOrigin) { mutableStateOf(TvV1NavigationState()) }
+    val page = navigation.page
+    fun openPage(next: TvV1CatalogPage) {
+        navigation = TvV1Navigation.open(navigation, next)
+    }
     var searchQuery by remember(serverOrigin) { mutableStateOf("") }
     var category by remember(serverOrigin) { mutableStateOf(TvContentFilter.ALL) }
     var reload by remember(serverOrigin) { mutableIntStateOf(0) }
@@ -83,22 +87,19 @@ fun TvV1CatalogHost(
     var playableMovieAssets by remember(serverOrigin) { mutableStateOf<List<TvWorkAvailabilityV1>>(emptyList()) }
     var selectedEpisodeId by remember(serverOrigin) { mutableStateOf<String?>(null) }
     var selectedAssetId by remember(serverOrigin) { mutableStateOf<Long?>(null) }
-    var returnPage by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Home) }
-    var playbackReturnPage by remember(serverOrigin) { mutableStateOf(TvV1CatalogPage.Details) }
 
     fun playAsset(mediaAssetId: Long?, episodeId: String? = null) {
         selectedEpisodeId = episodeId
         selectedAssetId = mediaAssetId
         if (mediaAssetId == null) {
-            page = TvV1CatalogPage.PlaybackPending
+            openPage(TvV1CatalogPage.PlaybackPending)
             return
         }
         if (!capabilities.hasModule("Playback") || !capabilities.hasPermission("profile.playback")) {
             error = "Dieses Profil hat keine Wiedergabeberechtigung."
             return
         }
-        playbackReturnPage = page
-        page = TvV1CatalogPage.Player
+        openPage(TvV1CatalogPage.Player)
     }
 
     fun openWork(rawId: String) {
@@ -107,29 +108,15 @@ fun TvV1CatalogHost(
             error = "Ungültige Work-ID der Jularr-Instanz."
             return
         }
-        returnPage = when (page) {
-            TvV1CatalogPage.Watchlist -> TvV1CatalogPage.Watchlist
-            TvV1CatalogPage.Search -> TvV1CatalogPage.Search
-            TvV1CatalogPage.Discover -> TvV1CatalogPage.Discover
-            else -> TvV1CatalogPage.Home
-        }
         detailWorkId = workId
         details = null
         error = null
-        page = TvV1CatalogPage.Details
+        openPage(TvV1CatalogPage.Details)
     }
 
     fun back() {
         error = null
-        page = when (page) {
-            TvV1CatalogPage.Settings, TvV1CatalogPage.ProfileSelect -> TvV1CatalogPage.Home
-            TvV1CatalogPage.Discover -> TvV1CatalogPage.Search
-            TvV1CatalogPage.Details -> returnPage
-            TvV1CatalogPage.MovieEditions -> TvV1CatalogPage.Details
-            TvV1CatalogPage.PlaybackPending -> TvV1CatalogPage.Details
-            TvV1CatalogPage.Home -> TvV1CatalogPage.Home
-            else -> TvV1CatalogPage.Home
-        }
+        navigation = TvV1Navigation.back(navigation)
     }
 
     androidx.compose.runtime.LaunchedEffect(settingsSignOutRequested) {
@@ -256,10 +243,10 @@ fun TvV1CatalogHost(
                     focusMemory = focusMemory,
                     onSelect = { route ->
                         when (route) {
-                            TvRoute.Home -> page = TvV1CatalogPage.Home
-                            TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
-                            TvRoute.Settings -> page = TvV1CatalogPage.Settings
-                            TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
+                            TvRoute.Home -> openPage(TvV1CatalogPage.Home)
+                            TvRoute.Watchlist -> openPage(TvV1CatalogPage.Watchlist)
+                            TvRoute.Settings -> openPage(TvV1CatalogPage.Settings)
+                            TvRoute.ProfileSelect -> openPage(TvV1CatalogPage.ProfileSelect)
                             else -> Unit
                         }
                     },
@@ -273,7 +260,7 @@ fun TvV1CatalogHost(
                             requestHeaders = authorization,
                             error = error ?: if (loading) "Bibliothek wird geladen …" else null,
                             focusMemory = focusMemory,
-                            onOpenSearch = { page = TvV1CatalogPage.Search },
+                            onOpenSearch = { openPage(TvV1CatalogPage.Search) },
                             onAnime = { card -> openWork(card.id) },
                             onContinueWatching = { /* Legacy bootstrap is intentionally disconnected. */ },
                             v1ContinueWatching = continueWatching,
@@ -312,9 +299,9 @@ fun TvV1CatalogHost(
                 focusMemory = focusMemory,
                 onSelect = { route ->
                     when (route) {
-                        TvRoute.Home -> page = TvV1CatalogPage.Home
-                        TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
-                        TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
+                        TvRoute.Home -> openPage(TvV1CatalogPage.Home)
+                        TvRoute.Watchlist -> openPage(TvV1CatalogPage.Watchlist)
+                        TvRoute.ProfileSelect -> openPage(TvV1CatalogPage.ProfileSelect)
                         else -> Unit
                     }
                 },
@@ -325,7 +312,7 @@ fun TvV1CatalogHost(
                     error = error,
                     playbackExtras = playbackExtras,
                     onUnauthorized = onAuthenticationExpired,
-                    onSwitchProfile = { page = TvV1CatalogPage.ProfileSelect },
+                    onSwitchProfile = { openPage(TvV1CatalogPage.ProfileSelect) },
                     onSignOut = {
                         if (capabilities.hasPermission("session.self.logout")) {
                             error = null
@@ -348,10 +335,10 @@ fun TvV1CatalogHost(
                 focusMemory = focusMemory,
                 onSelect = { route ->
                     when (route) {
-                        TvRoute.Home -> page = TvV1CatalogPage.Home
-                        TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
-                        TvRoute.Settings -> page = TvV1CatalogPage.Settings
-                        TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
+                        TvRoute.Home -> openPage(TvV1CatalogPage.Home)
+                        TvRoute.Watchlist -> openPage(TvV1CatalogPage.Watchlist)
+                        TvRoute.Settings -> openPage(TvV1CatalogPage.Settings)
+                        TvRoute.ProfileSelect -> openPage(TvV1CatalogPage.ProfileSelect)
                         else -> Unit
                     }
                 },
@@ -371,7 +358,7 @@ fun TvV1CatalogHost(
                         onFilterChange = { category = it },
                         onAnime = { card -> openWork(card.id) },
                         serverQueryResults = true,
-                        onOpenDiscover = { page = TvV1CatalogPage.Discover },
+                        onOpenDiscover = { openPage(TvV1CatalogPage.Discover) },
                     )
                 }
             }
@@ -433,7 +420,7 @@ fun TvV1CatalogHost(
                                     if (playableMovieAssets.size == 1) {
                                         playAsset(playableMovieAssets.single().id)
                                     } else {
-                                        page = TvV1CatalogPage.MovieEditions
+                                        openPage(TvV1CatalogPage.MovieEditions)
                                     }
                                 }
                             } else null,
@@ -479,7 +466,7 @@ fun TvV1CatalogHost(
             mediaAssetId = requireNotNull(selectedAssetId),
             title = detailedTitle,
             onExit = {
-                page = playbackReturnPage
+                navigation = TvV1Navigation.back(navigation)
                 reload += 1
             },
             onUnauthorized = onAuthenticationExpired,
@@ -494,10 +481,6 @@ fun TvV1CatalogHost(
             onBack = ::back,
         )
     }
-}
-
-private enum class TvV1CatalogPage {
-    Home, Search, Discover, Watchlist, Settings, ProfileSelect, Details, MovieEditions, PlaybackPending, Player
 }
 
 /** PageResult<T> has no guaranteed total count: keep requesting until a short page. */
