@@ -37,17 +37,6 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             page.Asset("Framework/Components/Truncated.entry.ts");
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            // The one chip row of the integrations.
-            var tabs = new List<NavigationTab>();
-            if (texts.Can("providers.read"))
-            {
-                tabs.Add(new("admin.providers.title", "/Admin/Providers", false));
-                if (texts.Can(null, "ProgressSync", "Library")) tabs.Add(new("admin.mediaServers.title", "/Admin/Providers?view=servers", false));
-            }
-
-            tabs.Add(new("admin.catalog.title", "/Admin/Catalog", true));
-            page.Content.Add(new NavigationTabs(tabs, "admin.integrations"));
-
             if (!_isOn)
             {
                 page.Content.Add(new P(new Text(_keeps ? "admin.catalog.off" : "admin.catalog.nothingKept"), new ValueText(" "), new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"))

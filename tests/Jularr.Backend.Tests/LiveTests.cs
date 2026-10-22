@@ -209,6 +209,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("2", entities.GetProperty("queue").GetProperty("text").GetProperty("active").GetString());
             Assert.AreEqual("0", entities.GetProperty("queue").GetProperty("text").GetProperty("errors").GetString());
 
+            // The administration menu's figures: two downloads open, no failed job yet.
+            Assert.AreEqual("2", entities.GetProperty("menu").GetProperty("text").GetProperty("downloads").GetString());
+            Assert.IsFalse(entities.GetProperty("menu").GetProperty("text").TryGetProperty("jobs", out _));
+
             // A quiet stream says it is alive.
             await ReadUntilAsync(reader, line => line == ": heartbeat", ending.Token);
 
@@ -235,6 +239,19 @@ namespace Jularr.Backend.Tests
                 if (changed.TryGetProperty("operation:800", out var paused) && paused.GetProperty("text").TryGetProperty("speed", out var speed))
                 {
                     Assert.AreEqual("Paused", speed.GetString());
+                    break;
+                }
+            }
+
+            // A failed job reaches the open stream as the menu's next figure.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"WorkerJobs\" (\"Key\", \"LastResultTypeId\", \"LastErrorKey\", \"LastFinishedAt\") VALUES ('downloads', 2, 'job_failed', now())");
+            while (true)
+            {
+                var (next, changed) = await NextEventAsync(reader, ending.Token);
+                Assert.AreEqual("update", next);
+                if (changed.GetProperty("menu").GetProperty("text").TryGetProperty("jobs", out var failed))
+                {
+                    Assert.AreEqual("1", failed.GetString());
                     break;
                 }
             }

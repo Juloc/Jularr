@@ -160,18 +160,15 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
-- Owner's decision 15 Oct: a page has at most one row of tabs. Administration areas
-  (Media, Library, Requests, Arr+) are groups in the sidebar whose pages are their own
-  addresses; a click on a group goes to its first page (no empty group page, nothing collapses) and the administration lists the pages below it, the current one marked.
-  Spread content over pages rather than
-  stacking tab rows or crowding one page.
+- Owner's decision 15 Oct: a page has at most one row of tabs. Spread content over pages rather than stacking tab rows or crowding one page.
+- Owner's decision 22 Oct, the administration menu: one definition ([AdminMenu](../src/Jularr.Frontend/Framework/AdminMenu.cs): groups, entries with their own icon, the pages of an entry, each page's right and modules, the entry's counter) drives the sidebar, the chip row of every page and the breadcrumb. The sidebar (the owner's proposal, variant B) has a find field that narrows the entries as one types (by the entry's, its pages' and its group's name), then six flat groups, open, each under a thin line with its small name; an entry links to the first of its allowed pages and is hidden when its module is off or the account lacks the right (no tree, nothing collapses). Three entries wear a live figure that hides at zero (Activity: open downloads, Jobs: failed jobs, Users: open requests; the `menu` entity of the live stream). The pages of an entry are reached by **one** row of chips above the page, the same on each of them (a detail page has none; `Page.NoPageRow()`); a page with filter chips of its own shows them in that row after a divider (`AdminMenu.Row`).
 - Tabs and subsection navigation reuse `NavigationTabs`: the mockups' filter row of
   plain pills, the selection the lavender tint with its `--accent-edge` outline. `Tabs` adds only the server-selected content pane.
   Keep the row single-line and horizontally scrollable when necessary, with complete labels. The shell follows the mockups: a 252px sidebar (230px, then
   67px with icons only up to 1120px, the selected area tinted), on a phone (up to 640px) an off-canvas drawer over a dimmed page opened from the header's menu
   button. The admin sidebar has an ADMINISTRATION eyebrow; the header has the trail, the one search with its `/` key hint and shortcut, a light/dark switch,
   the inbox and the avatar (profile initials, linking to the settings). The bottom pill is gone.
-- Owner's decision 21 Oct: the instance settings are five pages below `/Admin/Instance` (Instance, Modules, Media types, Languages, Naming) with one chip row ([SettingsPages](../src/Jularr.Frontend/Framework/SettingsPages.cs)), sections inside a page instead of more tabs, one save pill for all of it. A switch that is a setting is a form field (`Form.Switch`, shown as a [SettingCard](../src/Jularr.Frontend/Framework/Components/SettingCard.cs)), so toggling reloads nothing and saves with the pill; settings of a module appear only while it is on; a module that needs another shows it and cannot be switched on while that is off, and one that others need names them and stays on.
+- Owner's decision 21 Oct: the instance settings are five pages below `/Admin/Instance` (Instance, Modules, Media types, Languages, Naming) with one chip row (the Settings entry of [AdminMenu](../src/Jularr.Frontend/Framework/AdminMenu.cs)), sections inside a page instead of more tabs, one save pill for all of it. A switch that is a setting is a form field (`Form.Switch`, shown as a [SettingCard](../src/Jularr.Frontend/Framework/Components/SettingCard.cs)), so toggling reloads nothing and saves with the pill; settings of a module appear only while it is on; a module that needs another shows it and cannot be switched on while that is off, and one that others need names them and stays on.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.
@@ -223,7 +220,7 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   label; a phone keeps the icons), bulk (shown instead of the actions while rows marked `data-dock-select` are chosen, with their count) and paging (previous, "Page 2 / 9"
   or a range, next, optional page size select; plain GET links with the filters in the address, `pageNumber`). **No infinite scroll on admin pages**: lists are paged,
   25 rows by default. With a visible save pill the dock stacks above it.
-- Related admin list pages are joined by **one** row of section chips whose group is defined once (`DownloadPages` for the acquisition settings), above the list in a `ListToolbar` that may carry the list's one scope menu on its right; such a page has no filter chips of its own. The editor of a list item is a `Modal` that the address opens (`?edit=`, `?new=`, `?AcquisitionConnectionId=`) with the list's address as `returnTo`, so a reload after closing shows the list; it saves on its own with `form.Cancel()` and `form.Submit(...)`, a row switch or test is a `PostForm` and the figures above follow because the page content is swapped. There is no delay, waiting or minimum-age option on any acquisition page.
+- Related admin list pages are joined by **one** row of section chips whose group is defined once (an entry of `AdminMenu`; the quality rules are panes of one address), above the list in a `ListToolbar` that may carry the list's one scope menu on its right; a page without filters of its own (the acquisition lists) has no other chips. The editor of a list item is a `Modal` that the address opens (`?edit=`, `?new=`, `?AcquisitionConnectionId=`) with the list's address as `returnTo`, so a reload after closing shows the list; it saves on its own with `form.Cancel()` and `form.Submit(...)`, a row switch or test is a `PostForm` and the figures above follow because the page content is swapped. There is no delay, waiting or minimum-age option on any acquisition page.
 
 Everything that changes colour with the theme follows the switch with `transition: color var(--transition)` (or the colour it changes), the wordmark and the mark included; no element has a
 colour of its own that skips it.
@@ -244,9 +241,9 @@ SavePill, FolderPicker, IconInfo, TimePicker, FactList, Drawer, FilterDialog, Sh
   group itself; a page names only what lies between with `page.Parent(key, href)` / `page.ParentName(name, href)` and its
   item as `page.Title(key, name)`. Narrow headers show only the last two parts; a longer trail scrolls, never wraps.
   Where the last part equals a heading under it, that heading is dropped (kept visually hidden for assistive technology).
-- Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration areas, all open; the user
+- Owner's decision 20 Oct, sidebar modes: on `/Admin/*` the sidebar shows only the administration menu, all groups open; the user
   entries are not shown, and the Jularr logo (linking to the user home) is the way back. No extra back button.
-  The Instance area exists in admin mode only. On a narrow header a breadcrumb part with sub-pages opens them as a menu.
+  The user menu has one entry, Administration, that opens the first allowed entry. On a narrow header a breadcrumb part with sub-pages opens them as a menu.
   The header is one row at every width: the search shrinks to its icon on a phone, the trail scrolls.
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations

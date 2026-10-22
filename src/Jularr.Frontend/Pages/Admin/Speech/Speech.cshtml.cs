@@ -34,6 +34,7 @@ namespace Jularr.Frontend.Pages.Admin.Speech
         protected override void Define(Page page)
         {
             page.Title("speech.models.title");
+            page.NoPageRow();
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Speech/Speech.entry.scss");
             page.Asset("Pages/Admin/Speech/Speech.entry.ts");

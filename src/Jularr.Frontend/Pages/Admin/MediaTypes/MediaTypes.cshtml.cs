@@ -35,7 +35,6 @@ namespace Jularr.Frontend.Pages.Admin.MediaTypes
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/SettingCard.entry.scss");
             page.Asset("Framework/Components/Truncated.entry.ts");
-            page.Content.Add(SettingsPages.Tabs(texts, SettingsPages.MediaTypes));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             foreach (var area in MediaAreas.All)

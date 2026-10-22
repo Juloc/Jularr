@@ -69,11 +69,12 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
             var isSetup = SetupWizard.IsActive(Request);
             if (isSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
-            if (Tab == DownloadPages.Profiles) page.Content.Add(ProfileFigures());
 
             // One row of navigation; the quality rules are scoped by a media type (tags belong to every type).
-            var chips = DownloadPages.Tabs(Tab, MediaTypeId, Home(Request), isSetup);
+            page.NoPageRow();
+            var chips = isSetup ? DownloadPages.SetupTabs(Tab, MediaTypeId, Home(Request)) : AdminMenu.Row(texts, Request, null, Tab, ((byte)MediaTypeId).ToString(CultureInfo.InvariantCulture));
             page.Content.Add(Tab == DownloadPages.Tags ? new ListToolbar(chips) : new ListToolbar(chips, ScopeMenu()));
+            if (Tab == DownloadPages.Profiles) page.Content.Add(ProfileFigures());
             switch (Tab)
             {
                 case DownloadPages.Profiles: DefineProfiles(page); break;

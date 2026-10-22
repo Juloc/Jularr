@@ -23,6 +23,7 @@ builder.Services.AddJularrServices(builder.Configuration);
 builder.Services.AddJularrWorkers();
 builder.Services.AddJularrLocalization(UiResources.English, UiCatalogs.Load());
 builder.Services.AddScoped<UiText>();
+builder.Services.AddScoped<AdminMenuCounters>();
 builder.Services.AddSingleton<ShellNavigation>();
 builder.Services.AddSingleton<FrontendAssets>();
 

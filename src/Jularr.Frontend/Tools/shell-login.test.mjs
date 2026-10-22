@@ -80,10 +80,11 @@ test("Shell has an admin mode, a linked breadcrumb and a one-row flat header", (
     const shell = load("Pages/Shared/Shell.cs");
     const styles = load("Pages/Shared/Shell.scss");
     assert.match(shell, /adminMode/);
-    assert.match(shell, /expand: true/);
+    assert.match(shell, /AdminNavigation\(menu, current, texts\)/);
     assert.match(shell, /new Ol\(/);
     assert.match(shell, /new LinkMenu\(/);
-    assert.match(shell, /AdministrationLinks\(texts, adminPath\)/);
+    assert.match(shell, /AdminMenu\.For\(texts\)/);
+    assert.match(shell, /AdminMenu\.UserLinks\(texts\)/);
     assert.match(styles, /breadcrumb__item--menu \.link-menu \{ display: block/);
     assert.match(shell, /Add\(new Text\("nav\.admin"\)/);
     assert.match(styles, /\.app-header\s*\{[^}]*height: 78px/);

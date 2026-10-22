@@ -17,6 +17,9 @@
 
         &::placeholder { color: var(--muted); opacity: 1; }
 
+        // The browser's own clear button gives way to the page's (Escape clears a filter field).
+        &::-webkit-search-cancel-button { appearance: none; display: none; }
+
         // The mockups' fields mark focus with the soft purple edge.
         &:focus-visible { outline: none; border-color: var(--accent-outline); }
     }

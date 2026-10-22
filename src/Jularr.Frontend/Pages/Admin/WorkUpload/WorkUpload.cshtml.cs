@@ -20,6 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.WorkUpload
         protected override void Define(Page page)
         {
             page.Title("work.upload");
+            page.NoPageRow();
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/FileInput.entry.ts");
             page.Content.Add(new A(new Text("admin.work.title")).Attribute("href", WorkAddress));

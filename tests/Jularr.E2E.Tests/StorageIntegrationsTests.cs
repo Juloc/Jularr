@@ -60,7 +60,7 @@ namespace Jularr.E2E.Tests
 
                 // Download storage is the other chip of the same row.
                 Assert.AreEqual(1, await page.Locator("main .navigation-tabs").CountAsync());
-                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Navigation, new() { Name = "Storage sections" }).GetByRole(AriaRole.Link, new() { Name = "Download storage", Exact = true }));
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Navigation, new() { Name = "Pages of this area" }).GetByRole(AriaRole.Link, new() { Name = "Download storage", Exact = true }));
                 Assert.IsTrue(page.Url.EndsWith("/Admin/DownloadStorage", StringComparison.Ordinal));
                 Assert.AreEqual(1, await page.Locator("main .navigation-tabs").CountAsync());
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());
@@ -115,9 +115,9 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("#provider-openlibrary")).ToContainTextAsync("Disabled");
                 await Assertions.Expect(page.Locator("#provider-openlibrary").GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-checked", "false");
 
-                // One chip row joins the integrations: providers, media servers and the catalogs.
+                // One chip row joins the integrations: providers and the catalog; the media servers join it once one is set up.
                 var chips = page.GetByRole(AriaRole.Navigation, new() { Name = "Integrations" });
-                await Assertions.Expect(chips.GetByRole(AriaRole.Link)).ToHaveCountAsync(3);
+                await Assertions.Expect(chips.GetByRole(AriaRole.Link)).ToHaveCountAsync(2);
                 Assert.AreEqual(1, await page.Locator("main .navigation-tabs").CountAsync());
                 await Evidence.SaveAsync(page, "provider-cards");
                 CollectionAssert.AreEqual(Array.Empty<string>(), browser.Problems.ToArray());

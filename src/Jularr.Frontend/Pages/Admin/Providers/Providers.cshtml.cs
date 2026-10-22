@@ -72,11 +72,14 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }
             else
             {
-                var tabs = new List<NavigationTab> { new("admin.providers.title", Home, !IsServers, Count: visible.Count(provider => !ServerKeys.Contains(provider.Key))) };
-                var serverCount = visible.Count(provider => ServerKeys.Contains(provider.Key));
-                if (serverCount > 0) tabs.Add(new("admin.mediaServers.title", Home + "?view=servers", IsServers, Count: serverCount));
-                if (texts.CanAdminister()) tabs.Add(new("admin.catalog.title", "/Admin/Catalog", false));
-                page.Content.Add(new NavigationTabs(tabs, "admin.integrations"));
+                // The entry's one row, with how many providers and media servers there are; media servers show once one is set up.
+                page.NoPageRow();
+                var counts = new Dictionary<string, int>
+                {
+                    ["admin.providers.title"] = visible.Count(provider => !ServerKeys.Contains(provider.Key)),
+                    ["admin.mediaServers.title"] = visible.Count(provider => ServerKeys.Contains(provider.Key))
+                };
+                page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, ariaLabelKey: "admin.integrations", counts: counts)));
             }
 
             var shown = IsSetup ? visible : visible.Where(provider => ServerKeys.Contains(provider.Key) == IsServers).ToList();

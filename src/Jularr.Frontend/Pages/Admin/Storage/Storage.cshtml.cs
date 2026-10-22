@@ -106,11 +106,6 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             var mounts = _mounts?.Items ?? [];
-            if (!IsSetup && texts.Can("acquisition.manage", "Acquisition"))
-            {
-                page.Content.Add(new NavigationTabs([new("storage.connections", "/Admin/Storage", true), new("downloadStorage.title", "/Admin/DownloadStorage", false)], "storage.sections"));
-            }
-
             // The figures of the connections on this page.
             var online = mounts.Count(mount => mount.StorageHealthTypeId == StorageHealthType.Online);
             var free = mounts.Where(mount => mount.StorageHealthTypeId == StorageHealthType.Online).Sum(mount => mount.FreeBytes ?? 0);

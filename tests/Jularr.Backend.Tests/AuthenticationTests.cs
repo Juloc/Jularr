@@ -605,6 +605,7 @@ namespace Jularr.Backend.Tests
                     builder.Services.AddAuthorization();
                     builder.Services.AddJularrLocalization(UiResources.English);
                     builder.Services.AddScoped<UiText>();
+                    builder.Services.AddScoped<AdminMenuCounters>();
                     builder.Services.AddSingleton<FrontendAssets>();
                     builder.Services.AddSingleton<ShellNavigation>();
                 }

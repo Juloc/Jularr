@@ -56,7 +56,6 @@ namespace Jularr.Frontend.Pages.Admin.Modules
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Pages/Admin/Modules/Modules.entry.ts");
-            page.Content.Add(SettingsPages.Tabs(texts, SettingsPages.Modules));
             if (_modules.Count == 0) return;
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;

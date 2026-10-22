@@ -107,7 +107,7 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("[data-live=queue][data-live-text=errors]")).ToHaveTextAsync("1");
                 await Steps.FollowAsync(page, page.Locator(".list-toolbar").GetByRole(AriaRole.Link, new() { Name = "Errors", Exact = false }));
                 await Assertions.Expect(Steps.ListRow(page, "Download failed")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".list-toolbar .navigation-tabs__link")).ToHaveCountAsync(6);
+                await Assertions.Expect(page.Locator(".list-toolbar .navigation-tabs__divider ~ .navigation-tabs__link")).ToHaveCountAsync(6);
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
