@@ -4,10 +4,10 @@
 
 ## What exists today
 
-- Jularr's \`clean-start\` main Dockerfile contains no TranslateGemma/Ollama weights; \`compose.yaml\` persists \`/data\` and has no Docker socket.
+- Jularr's `clean-start` main Dockerfile contains no TranslateGemma/Ollama weights; `compose.yaml` persists `/data` and has no Docker socket.
 - Bergamot already downloads verified models to the Jularr data folder on demand and translates in the **browser**, without a heavy runtime.
 - The admin Speech catalog already shows how to manage optional models outside the main application image.
-- The older \`dev\` TranslateGemma translator accepts a separately installed local model endpoint; it is **not** compatible with the new backend merely by copying files.
+- The older `dev` TranslateGemma translator accepts a separately installed local model endpoint; it is **not** compatible with the new backend merely by copying files.
 
 ## Proposed architecture: external runtime + opt-in model management
 
@@ -17,7 +17,7 @@ Owner intent: detect which models a Debian server **could** run, optionally benc
 - Only an explicitly configured private Ollama runtime is managed. Its own service/container holds runtime code and model bytes in a persistent model volume. Jularr has **no Docker socket**, no privileges to create containers, and no model binaries in the application image.
 - Admin-only, disabled-by-default translation-provider module. No runtime polling/download or model loading at startup. Cached translation and Bergamot do not depend on Ollama being online.
 - All operations go via canonical Data/Service/Logic authorization, policy, audit, rate/concurrency budgets and existing translation/Reader contracts. Never send book text to unconfigured clouds.
-- Admin explicitly chooses from a **reviewed allowlist**, sees model download size, approximate RAM, verified available space/licensing, and approves a bounded download. Use only the configured runtime's \`/api/pull\`, with status and progress, no arbitrary registry URLs/model names.
+- Admin explicitly chooses from a **reviewed allowlist**, sees model download size, approximate RAM, verified available space/licensing, and approves a bounded download. Use only the configured runtime's `/api/pull`, with status and progress, no arbitrary registry URLs/model names.
 - After pull, model identity/digest and license are recorded; a **separate** small benchmark produces actual latency/tokens-per-second and manually reviewed quality examples. Do not label a model “great quality” based on size or fluent text alone.
 - Stable semantic block IDs, compact known glossary and target-language context, per-model cache identity, bounded retries, separate variants, source fingerprint and Reader progress are owned by #985/#834. The whole chapter must not be pushed into a single model request.
 
@@ -35,8 +35,8 @@ Owner intent: detect which models a Debian server **could** run, optionally benc
 
 ## Hardware checks: never promise what cannot be proven
 
-1. Read \`/proc/meminfo\` and **cgroup v2 \`memory.max\` / \`memory.current\`**. A Debian VM with 16 GB host RAM can give Jularr much less via its container limit. CPU affinity and \`cpu.max\` show different facets of the CPU quota; neither predicts tokens/s.
-2. An Ollama sidecar may run with **different** cgroup limits from Jularr. Its memory/VRAM must be probed on **that runtime** before claiming fit; the standalone probe reports \`unknown\` by default. Visible GPU nodes do not prove accelerated inference.
+1. Read `/proc/meminfo` and **cgroup v2 `memory.max` / `memory.current`**. A Debian VM with 16 GB host RAM can give Jularr much less via its container limit. CPU affinity and `cpu.max` show different facets of the CPU quota; neither predicts tokens/s.
+2. An Ollama sidecar may run with **different** cgroup limits from Jularr. Its memory/VRAM must be probed on **that runtime** before claiming fit; the standalone probe reports `unknown` by default. Visible GPU nodes do not prove accelerated inference.
 3. Starting reference catalog sizes (Q4; [Ollama model tags](https://ollama.com/library/translategemma/tags)): 4B = **3.3 GB**, 12B = **8.1 GB**, 27B = **17 GB**. Working RAM, KV cache and other processes require **more**. Probe's 6/14/28 GB are **planning heuristics only**, not measured memory requirements or quality scores.
 4. Run a bounded request on an **already installed** model to measure the actual runtime and CPU/GPU combination. Compare multiple distinct language pairs (especially Japanese→German, Indonesian→German and German→Indonesian). These three smoke samples are NOT a novel-quality benchmark; #985 requires long chapters, omitted text checks, references and reviewer assessment.
 5. After explicit selection, pull model into **Ollama's model volume**, verify installed digest and retest. Never modify Jularr's image or switch the default provider automatically.
@@ -45,7 +45,7 @@ Owner intent: detect which models a Debian server **could** run, optionally benc
 
 Uses Python standard library only, outside Jularr's application image. You need an Ollama runtime which you deployed and secured separately; do **not** expose its unauthenticated API publicly.
 
-\`\`\`bash
+```bash
 # Discover existing Ollama models. Does not download or infer.
 python3 tools/translation/model_probe.py --ollama http://ollama:11434
 
@@ -59,9 +59,9 @@ python3 tools/translation/model_probe.py --ollama http://ollama:11434 \
 
 # Offline tests use a fake HTTP Ollama server. No model downloads.
 python3 -m unittest discover -s tools/translation -p 'test_*.py'
-\`\`\`
+```
 
-**Do not use \`--runtime-shares-memory-budget\` merely because Ollama and Jularr are on the same physical Debian VM.** Separate containers normally have distinct cgroups. This flag is for verified shared accounting only.
+**Do not use `--runtime-shares-memory-budget` merely because Ollama and Jularr are on the same physical Debian VM.** Separate containers normally have distinct cgroups. This flag is for verified shared accounting only.
 
 ## Follow-up slices to make this directly available in Jularr
 
