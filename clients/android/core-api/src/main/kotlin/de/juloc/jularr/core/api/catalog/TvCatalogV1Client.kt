@@ -14,6 +14,9 @@ interface TvCatalogV1Client {
     suspend fun discoverShelves(scopeSlug: String? = null): List<TvDiscoverShelfV1>
     suspend fun discoverFeed(mediaTypeId: Int, feedTypeId: Int, page: Int = 1): List<TvDiscoverItemV1>
     suspend fun discoverSearch(query: String, mediaTypeId: Int? = null, page: Int = 1): List<TvDiscoverItemV1>
+    suspend fun discoverCatalogSearch(mediaTypeId: Int, query: String, mediaSubtypeId: Int? = null): List<TvDiscoverCatalogItemV1>
+    suspend fun discoverCatalogFeed(mediaTypeId: Int, feedTypeId: Int, mediaSubtypeId: Int? = null): List<TvDiscoverCatalogItemV1>
+    suspend fun discoverSuggestions(query: String, scopeSlug: String? = null): List<TvDiscoverSuggestionV1>
     suspend fun work(workId: Long): TvWorkDetailsV1
     suspend fun seasons(workId: Long): List<TvWorkSeasonV1>
     suspend fun episodes(workId: Long, seasonNumber: Int): List<TvWorkEpisodeV1>
