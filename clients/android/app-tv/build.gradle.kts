@@ -50,4 +50,5 @@ dependencies {
     implementation("com.google.zxing:core:3.5.4")
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }
