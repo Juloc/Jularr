@@ -25,6 +25,9 @@ plus `src/Jularr.Backend/Data/Pagination.cs` and
 | Discover shelves | POST `/api/v1/discover/shelves` | body optional `scopeSlug`; JSON array of DiscoverShelfV1 |
 | Discover feed | POST `/api/v1/discover/feed` | body `mediaTypeId`, `discoverFeedTypeId`, `page`; JSON array of DiscoverItemV1 |
 | Discover search | POST `/api/v1/discover/search` | body `query`, optional `mediaTypeId`, `page`; JSON array of DiscoverItemV1 |
+| Catalog search (books/manga/light novels/music/games/anime) | POST `/api/v1/discover/catalog/search` | body `mediaTypeId`, `query`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
+| Catalog feed | POST `/api/v1/discover/catalog/feed` | body `mediaTypeId`, `discoverFeedTypeId`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
+| Suggestions | POST `/api/v1/discover/suggestions` | body `query`, optional `scopeSlug`; JSON array of DiscoverSuggestionV1 |
 | Work details | GET `/api/v1/works/{workId}` | WorkDetailsV1 |
 | Seasons | GET `/api/v1/works/{workId}/seasons` | JSON array of WorkSeasonV1 |
 | Episodes | GET `/api/v1/works/{workId}/seasons/{seasonNumber}/episodes` | JSON array of WorkEpisodeV1 |
