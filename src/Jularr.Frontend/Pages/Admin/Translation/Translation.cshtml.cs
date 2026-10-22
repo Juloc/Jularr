@@ -36,11 +36,13 @@ namespace Jularr.Frontend.Pages.Admin.Translation
             }
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            page.Content.Add(new P(new ValueText("Model downloads consume persistent disk space in Ollama. Check free capacity of that runtime volume before downloading.")));
             foreach (var model in _models.Approved)
             {
                 var installed = _models.Installed.Contains(model, StringComparer.Ordinal);
                 var running = _models.Running.Contains(model, StringComparer.Ordinal);
-                var description = model + " — " + (installed ? running ? "loaded" : "installed" : "not installed");
+                var size = model switch { "translategemma:4b" => "3.3 GB", "translategemma:12b" => "8.1 GB", _ => "17 GB" };
+                var description = model + " (approx. " + size + " download, more RAM needed) — " + (installed ? running ? "loaded" : "installed" : "not installed");
                 page.Content.Add(new Div(
                     new P(new ValueText(description)),
                     installed

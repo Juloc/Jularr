@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalTranslationAvailabilityV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalTranslationAvailabilityParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
-        protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override ServicePermission GetPermission(LocalTranslationAvailabilityParametersV1 parameters, Type resultType) => new("instance.settings.update");
         protected override async Task<IServiceOutput> OnRead()
         {
             var server = OllamaLocalModels.Endpoint(_options.Endpoint);
@@ -114,7 +114,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<LocalReadingBlockV1>()];
         protected override ModuleRequirement GetInstanceModules(LocalReadingBlockParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
-        protected override ServicePermission GetPermission(LocalReadingBlockParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override ServicePermission GetPermission(LocalReadingBlockParametersV1 parameters, Type resultType) => new("instance.settings.update");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
