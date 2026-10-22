@@ -74,6 +74,7 @@ internal fun TvV1PlaybackHost(
     var plan by remember(mediaAssetId) { mutableStateOf<TvPlaybackV1Plan?>(null) }
     var loading by remember(mediaAssetId) { mutableStateOf(true) }
     var error by remember(mediaAssetId) { mutableStateOf<String?>(null) }
+    var storageWakeMessage by remember(mediaAssetId) { mutableStateOf<String?>(null) }
     var retry by remember(mediaAssetId) { mutableStateOf(0) }
     var finishing by remember(mediaAssetId) { mutableStateOf(false) }
     var positionMs by remember(mediaAssetId) { mutableStateOf(0L) }
@@ -106,6 +107,7 @@ internal fun TvV1PlaybackHost(
     LaunchedEffect(mediaAssetId, retry) {
         loading = true
         error = null
+        storageWakeMessage = null
         try {
             val oldPlan = plan
             if (oldPlan != null) {
@@ -121,9 +123,13 @@ internal fun TvV1PlaybackHost(
                 )
                 plan = null
             }
-            val current = api.start(
-                mediaAssetId, TvV1PlaybackCapabilities.read(), audioStreamIndex,
+            val current = retryWhileStorageWaking(
+                start = { api.start(mediaAssetId, TvV1PlaybackCapabilities.read(), audioStreamIndex) },
+                onWaiting = { attempt, maximum ->
+                    storageWakeMessage = "NAS wird geweckt – Versuch $attempt von $maximum …"
+                },
             )
+            storageWakeMessage = null
             // The server may rotate credentials in the session-creation response.
             val credential = checkNotNull(tokenStore.current) { "The device token is no longer valid." }
             val uri = Uri.parse(current.streamUrl)
@@ -405,7 +411,7 @@ internal fun TvV1PlaybackHost(
         }
         loading || plan == null -> TvCenteredPanel(
             title = "Jularr TV",
-            description = "Wiedergabesession wird vorbereitet …",
+            description = storageWakeMessage ?: "Wiedergabesession wird vorbereitet …",
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge)
             Button(onClick = { completePlayback(completed = false) }) { Text("Abbrechen") }
