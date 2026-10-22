@@ -30,6 +30,8 @@ progress, per-media/profile visibility and Tracking remain pending.
 
 `Media.sql` also holds `WorkCovers` (the provider address, content type and version of a stored poster, backdrop, season poster or episode still; the files live under `<data>/covers/<WorkId>/`, never in a library) and the singleton `CoverCacheSettings` (days and megabytes of the cache of images of titles that are not Works).
 
+`Media.sql` holds the typed relations between Works as one table, `WorkRelations` (what the related title is to the Work, its source, and whether a person hid a provider's relation), and the view `WorkRelationLinks` that gives each relation to both Works, the other side with the inverse type.
+
 `Media.sql` also holds `WorkExclusions` and their provider identities (`WorkExclusionIdentities`): titles an administrator deleted with an exclusion, which requests refuse until the exclusion is removed.
 
 `Media.sql` follows `Account.sql` in a new installation. It also holds a profile's

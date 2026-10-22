@@ -56,8 +56,7 @@ referenced inside CSS. Do not add a parallel `/assets/` endpoint.
   Wanted, Activity, language and translation administration.
 - Original and Clean share tokens/components, with independent brightness and
   accent controls stored optionally on the device.
-  Appearance choices wrap as whole controls on narrow screens; search and color
-  inputs use the same 44px minimum control height.
+  Appearance choices wrap as whole controls on narrow screens.
 - Shared tabs are the mockups' filter row with a soft accent selection. On a phone the
   sidebar is an off-canvas drawer opened from the header's menu button; the header keeps
   context, the one global Search, the theme switch, the inbox and the avatar.
@@ -86,5 +85,5 @@ Backend owners, not a separate Frontend pipeline.
 
 Development-only `/Design` reuses real components with labeled examples and
 disabled playback; `/ShellPreview` exposes prepared definitions. Neither is
-available in Production. Real browser/layout/accessibility checks are a separate
+available in Production. Real browser/layout checks are a separate
 verification gate; Node and Razor tests do not replace them.

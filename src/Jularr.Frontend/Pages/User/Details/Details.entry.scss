@@ -141,6 +141,34 @@
     a { color: var(--accent-text); font-weight: 700; text-decoration: none; &:hover { text-decoration: underline; } }
 }
 
+// The typed relations: the list kit's rows with a cover on the tile; a title that opens something is one link stretched over its row, the row's own buttons stay above it.
+.relation-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+
+.relation-list,
+.relation-results {
+    .list-row { position: relative; }
+    .icon-tile { width: 46px; height: 69px; overflow: hidden; }
+    .icon-tile .media-image { width: 100%; height: 100%; object-fit: cover; }
+    .list-actions { position: relative; z-index: 1; }
+}
+
+.relation-list {
+    --list-columns: minmax(0, 2.6fr) minmax(130px, 1.1fr) minmax(90px, .8fr) minmax(125px, 1fr) minmax(110px, .9fr);
+    --list-columns-medium: minmax(0, 2.4fr) minmax(125px, 1.1fr) minmax(120px, 1fr) minmax(100px, .9fr);
+}
+
+.relation-results { --list-columns: minmax(0, 1fr) auto; }
+
+.relation__title {
+    color: inherit;
+    text-decoration: none;
+
+    &::after { content: ""; position: absolute; inset: 0; }
+    &:hover { color: var(--accent-text); }
+}
+
+.relation-dialog { display: grid; gap: 16px; }
+
 // The summary and the facts side by side; stacked on narrower screens.
 .details-facts-block { display: grid; gap: 16px; }
 

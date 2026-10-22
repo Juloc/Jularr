@@ -28,10 +28,6 @@
 
     &--saved &__count, &--saved [data-save-discard] { display: none; }
     &--saved [data-save-submit] { border-color: var(--success); background: var(--success); color: var(--surface); }
-
-    @media (prefers-reduced-motion: reduce) {
-        &--bump { animation: none; }
-    }
 }
 
 @keyframes save-pill-bump {

@@ -46,6 +46,5 @@ document.addEventListener('click', event => {
     if (!button || !items || button.hidden) return;
     const direction = getComputedStyle(items).direction === 'rtl' ? -1 : 1;
     const step = button.dataset.shelfDirection === 'previous' ? -1 : 1;
-    items.scrollBy({ left: direction * step * items.clientWidth * .85,
-        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    items.scrollBy({ left: direction * step * items.clientWidth * .85, behavior: 'smooth' });
 });
