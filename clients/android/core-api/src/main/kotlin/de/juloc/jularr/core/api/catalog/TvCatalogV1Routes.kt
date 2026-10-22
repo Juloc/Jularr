@@ -29,6 +29,11 @@ object TvCatalogV1Routes {
 
     fun work(workId: Long): String = "$base/works/${positiveId(workId)}"
     fun seasons(workId: Long): String = "${work(workId)}/seasons"
+    fun editions(workId: Long): String = "${work(workId)}/editions"
+    fun credits(workId: Long): String = "${work(workId)}/credits"
+    fun person(personId: Long): String = "$base/people/${positiveId(personId)}"
+    fun personWorks(personId: Long, page: Int, pageSize: Int): String =
+        "${person(personId)}/works${pageQuery(page, pageSize)}"
     fun episodes(workId: Long, seasonNumber: Int): String {
         require(seasonNumber >= 0) { "Season number cannot be negative." }
         return "${seasons(workId)}/$seasonNumber/episodes"
