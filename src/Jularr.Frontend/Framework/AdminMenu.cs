@@ -129,6 +129,7 @@ namespace Jularr.Frontend.Framework
                     new("settings.tab.modules", "/Admin/Instance/Modules", Admin),
                     new("settings.tab.mediaTypes", "/Admin/Instance/MediaTypes", Admin),
                     new("settings.tab.languages", "/Admin/Instance/Languages", Right("localization.read")),
+                    new("translation.local.title", "/Admin/Instance/Translation", Admin, ["Translation"]),
                     new("settings.tab.naming", "/Admin/Instance/Naming", Right("storage.read"), ["Library"])
                 ]),
                 new("localization", "admin.localization.title", "globe", [new("admin.localization.title", "/Admin/Localization", Right("localization.read"))])
