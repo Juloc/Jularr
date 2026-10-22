@@ -84,7 +84,8 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                 const node = walker.currentNode as Text;
                 if (!node.textContent?.trim()) continue;
                 range.selectNodeContents(node);
-                const lines = Array.from(range.getClientRects()).filter(visible);
+                const rects = Array.from(range.getClientRects());
+                const lines = rects.filter(visible);
                 if (!lines.length) continue;
                 const style = getComputedStyle(node.parentElement!);
                 if (!measurement && style.visibility !== 'visible' || style.display === 'none') continue;
@@ -116,12 +117,17 @@ export function pagePrint(source: HTMLElement, page: number, width: number, heig
                     }
                     return low;
                 };
+                // Every line of the node, on this page or not: a line ends where the next one begins. Its own box height is no
+                // measure of that, because a tight line spacing makes the next line start inside it, and the end of this line
+                // would be printed again as the beginning of the next (a long word broken at the line end showed twice).
+                const keys = Array.from(new Set(rects.map(flow))).sort((a, b) => a - b);
                 const seen = new Set<number>();
                 for (const line of lines) {
                     const key = flow(line);
                     if (seen.has(key)) continue;
                     seen.add(key);
-                    const start = lower(key), end = lower(key + line.height);
+                    const following = keys.find(value => value > key + 1);
+                    const start = lower(key), end = following === undefined ? node.length : lower(following);
                     if (end <= start) continue;
                     range.setStart(node, start); range.setEnd(node, end);
                     // Only the rectangles on this line: the previous line's hyphen is not part of it.

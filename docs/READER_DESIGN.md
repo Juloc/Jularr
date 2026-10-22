@@ -23,11 +23,16 @@ reference is `9cd7fd3`. Later explicit decisions override the earlier mockups:
 - Book thickness follows calculated Reader pages, including typography and page
   width changes, not guessed printed-edition metadata. While whole-book counting
   is incomplete/unavailable, no whole-book total or paper-block thickness is made up.
-- The two pages of a spread are mirror images: both use the cross-section of half the
-  block, so reading position never changes a page's height, vertical position,
-  outline, text box or page number (the number follows the paper's lower contour). Each page's text box and number sit on its own paper:
-  the columns of the two-page view have no gap, so the right column starts where the right paper does.
-  `LocalEpub_BookSpread_PagesAreMirrorImages` and `Tools/book-geometry.test.mjs` check it.
+- The stacks are asymmetric by reading position (the original read effect): the stack of read
+  pages on the left grows, the unread one on the right shrinks, and a thicker stack lifts its
+  sheet higher and narrows it at the outer edge. The text box and the page number follow their
+  own paper (`printPlacement` in `BookGeometry.ts`): the print rises with the paper's edge at its
+  middle and sits centred on the paper's width, so the padding above, below, at the spine and at
+  the outer edge keeps the same ratio on both pages whatever has been read.
+  `LocalEpub_BookSpread_StacksFollowReadingAndTextFollowsEachPaper` and `Tools/book-geometry.test.mjs` check it.
+- The page print takes each line from where the browser puts it, up to where the next line of the
+  same text begins (never by the line's box height), so tight line spacing cannot print the end of a
+  broken word twice; `LocalEpub_PageBreakInsideAWord_NeverRepeatsTheFirstLine` checks it with a generated EPUB.
 
 This package starts from clean-start and carries forward the approved frame work.
 The overlapping #1228 remains untouched; #289 is roadmap context, not permission

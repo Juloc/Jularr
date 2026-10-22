@@ -71,7 +71,6 @@ export class BookLeaf {
         // reflection even though its clip polygon extends beyond that box.
         this.view.style.width = `${this.width}px`; this.view.style.height = `${this.height}px`;
         this.view.style.bottom = 'auto';
-        this.view.style.setProperty('--page-number-rise', `${options.footerRise}px`);
         this.view.style.setProperty('--paper-cross-light', options.lighting);
         this.front = this.view.querySelector('[data-book-front]')!;
         this.back = this.view.querySelector('[data-book-back]')!;
@@ -233,7 +232,7 @@ export class BookLeaf {
         this.view.style.top = `${-mix(this.options.lift, this.landing.lift)}%`;
         this.sourceLight.style.opacity = String(1 - landed); this.landingLight.style.opacity = String(landed);
         this.landingGutter.style.opacity = String(landed * this.options.illumination);
-        const footer = `translateY(${this.height * scaleY - this.landing.height - mix(this.options.footerRise, this.landing.footerRise)}px)`;
+        const footer = `translateY(${this.height * scaleY - this.landing.height - mix(this.options.footerRise, this.landing.footerRise) + this.landing.footerRise}px)`;
         if (this.backNumber) this.backNumber.style.transform = footer;
         this.view.dataset.leafLanding = landed.toFixed(4);
         const bend = this.options.automatic ? .022 : this.middle ? .05 : .04;
@@ -287,7 +286,7 @@ export class BookLeaf {
                 print.replaceChildren(...content ? [content] : []); ink.face = band.back;
             }
             const number = (band.back ? ink.back : ink.front)?.querySelector<HTMLElement>('[data-book-number]');
-            if (number) number.style.transform = band.back ? footer : `translateY(${-this.options.footerRise}px)`;
+            if (number) number.style.transform = band.back ? footer : '';
             // Quantise imperceptible light changes, without freezing a diagonal
             // grip's lighting at its initial crease direction.
             const colour = (value: number) => {
