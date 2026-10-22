@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.IO;
+using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
@@ -25,12 +27,14 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
         ApplyLibraryRenamesV1 applyRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
-        QueueLibraryScanV1 queueScan, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, ReadStorageDirectoriesV1 readDirectories, FrontendAssets assets,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<LibraryOverviewV1>? _overview;
         private ReplacementSettingsV1? _replacement;
         private UpdateReplacementSettingsDataV1? _replacementInput;
         private PageResult<StorageMountDetailsV1>? _mounts;
+        private CreateLibraryRootDataV1? _libraryInput;
         private const int RenamePageSize = 100;
         private PageResult<LibraryFileDetailsV1>? _files;
         private LibraryRenamePlanV1? _renames;
@@ -52,6 +56,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
             page.Title("library.tab." + Tab);
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Library/Library.entry.scss");
+            page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // Every library with what it holds; new ones are added with their storage.
@@ -78,7 +83,11 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 }
 
                 page.Content.Add(libraries.Count == 0 ? new P(new Text("library.overview.empty")) : table);
-                if (CanRename) page.Content.Add(new Div(new A(new Text("library.overview.manage")).Class("button").Attribute("href", "/Admin/Storage")).Class("page-actions"));
+                if (CanRename)
+                {
+                    page.Content.Add(new Div(new A(new Text("library.overview.manage")).Class("button").Attribute("href", "/Admin/Storage")).Class("page-actions"));
+                    page.Content.Add(AddLibraryButton(csrf));
+                }
             }
 
             // Inventory and manual identity.
@@ -248,11 +257,61 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     .Attribute("href", "/Admin/Library/Unmatched?root=" + item.Id.ToString(CultureInfo.InvariantCulture)) : null
             }.OfType<IUiComponent>()]).Class("library-attention");
 
+        // Button + dialog that opens directly on the library page: choose an existing storage mount,
+        // enter a relative folder path, name and media type, then create the library root.
+        private IUiComponent AddLibraryButton(string csrf)
+        {
+            var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            var subtypes = new[] { new SelectOption("", texts["media.subtype.none"]) }
+                .Concat(Enum.GetValues<MediaSubtype>()
+                    .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype])));
+            var mountOptions = (_mounts?.Items ?? []).Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name));
+
+            var relativePath = _libraryInput?.RelativePath ?? "";
+            var browseUrl = Address(handler: "Folders") + "&storageMountId=";
+            return new Div(
+                Modal.Opener(new Button(new Icon("plus", assets, 18), new Text("library.add")).Primary(), "library-add"),
+                new Modal(assets, "library-add", "library.add", [
+                    new Form<CreateLibraryRootDataV1>(form =>
+                    {
+                        form.Select(item => item.StorageMountId, "storage.mount", mountOptions);
+                        form.Text(item => item.Name, "library.name");
+                        form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
+                        form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
+                        form.Hidden(item => item.RelativePath);
+                        form.Content(new FolderPicker(browseUrl, relativePath, nameof(CreateLibraryRootDataV1.RelativePath), browseUrl,
+                            storageMountFieldName: nameof(CreateLibraryRootDataV1.StorageMountId)));
+                        form.Submit("library.add");
+                    }, Address(handler: "CreateLibraryRoot"), csrf, _libraryInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, 0, ""), _libraryInput is null ? null : FormError)
+                ])
+            ).Class("page-actions");
+        }
+
         // A library is read again in the background.
         public async Task<IActionResult> OnPostScanAsync([BindRequired] long libraryRootId)
         {
             await queueScan.ExecuteAsync<QueueLibraryScanResultV1>(new LibraryRootParametersV1(libraryRootId), default, HttpContext.RequestAborted);
             return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostCreateLibraryRootAsync(string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, string relativePath)
+        {
+            _libraryInput = new CreateLibraryRootDataV1(name ?? "", mediaTypeId, storageMountId, relativePath ?? "", mediaSubtypeId);
+            var result = await createLibraryRoot.ExecuteAsync<CreateLibraryRootResultV1>(new CreateLibraryRootParametersV1(), _libraryInput, HttpContext.RequestAborted);
+            Hint("library.added");
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnGetFoldersAsync([BindRequired] long storageMountId, string? path, string? afterName)
+        {
+            Response.Headers.CacheControl = "no-store";
+            var directories = await readDirectories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(storageMountId),
+                new ReadStorageDirectoriesDataV1(path ?? "", afterName), HttpContext.RequestAborted);
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            FolderPicker.Directories(Address(handler: "Folders", storageMountId: storageMountId, path: path ?? ""), path ?? "", directories.Select(directory => directory.Name).ToArray(), texts,
+                afterName, directories.Count == StorageDirectoryV1.PageSize)
+                .WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
         }
 
         public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits)
@@ -275,6 +334,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
             if (Tab == LibraryTab.Overview)
             {
                 _overview = await readOverview.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
+                if (CanRename) _mounts = await readMounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(1, 100), ct);
                 return;
             }
 
@@ -296,8 +356,10 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
         private bool CanRename => texts.CanManageStorage();
 
-        private string Address(int? pageNumber = null, string? handler = null) =>
+        private string Address(int? pageNumber = null, string? handler = null, long? storageMountId = null, string? path = null) =>
             (Tab == LibraryTab.Overview ? "/Admin/Library" : "/Admin/Library/" + Tab) + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture)
-            + (RootId is { } root ? "&root=" + root.ToString(CultureInfo.InvariantCulture) : "") + (handler is null ? "" : "&handler=" + handler);
+            + (RootId is { } root ? "&root=" + root.ToString(CultureInfo.InvariantCulture) : "") + (handler is null ? "" : "&handler=" + handler)
+            + (storageMountId is { } id ? "&storageMountId=" + id.ToString(CultureInfo.InvariantCulture) : "")
+            + (path is { } p ? "&path=" + Uri.EscapeDataString(p) : "");
     }
 }
