@@ -52,6 +52,7 @@ class HttpTvPlaybackV1ClientTest {
                         listOf("h264"),
                         listOf("aac"),
                     ),
+                    audioStreamIndex = 4,
                 )
                 api.update(created.playbackSessionId, 54000, 1400000, isEnded = false, isCompleted = false)
                 created
@@ -67,6 +68,7 @@ class HttpTvPlaybackV1ClientTest {
             val start = JSONObject(startBody.get())
             assertEquals("hls", start.getJSONArray("containers").getString(1))
             assertEquals(1, start.getJSONArray("videoCodecs").length())
+            assertEquals(4, start.getInt("audioStreamIndex"))
             val update = JSONObject(progressBody.get())
             assertEquals(54000L, update.getLong("positionMs"))
             assertFalse(update.getBoolean("isEnded"))
@@ -89,6 +91,13 @@ class HttpTvPlaybackV1ClientTest {
             val api = HttpTvPlaybackV1Client("http://127.0.0.1:${server.address.port}", DeviceTokenStore("token"))
             assertThrows(IllegalArgumentException::class.java) {
                 runBlocking { api.start(0, TvPlaybackV1Capabilities(emptyList(), emptyList(), emptyList())) }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking {
+                    api.start(9002, TvPlaybackV1Capabilities(
+                        listOf("mp4"), listOf("h264"), listOf("aac"),
+                    ), audioStreamIndex = -1)
+                }
             }
             assertThrows(IllegalArgumentException::class.java) {
                 runBlocking { api.start(9002, TvPlaybackV1Capabilities(listOf("mp4"), listOf("h264"), listOf("aac"))) }
