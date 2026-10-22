@@ -32,6 +32,10 @@ plus `src/Jularr.Backend/Data/Pagination.cs` and
 | Catalog feed | POST `/api/v1/discover/catalog/feed` | body `mediaTypeId`, `discoverFeedTypeId`, optional `mediaSubtypeId`; JSON array of DiscoverCatalogItemV1 |
 | Suggestions | POST `/api/v1/discover/suggestions` | body `query`, optional `scopeSlug`; JSON array of DiscoverSuggestionV1 |
 | Work details | GET `/api/v1/works/{workId}` | WorkDetailsV1 |
+| Editions | GET `/api/v1/works/{workId}/editions` | JSON array of WorkEditionV1 |
+| Credits | GET `/api/v1/works/{workId}/credits` | JSON array of WorkCreditV1 |
+| Person | GET `/api/v1/people/{personId}` | PersonV1 |
+| Person works | GET `/api/v1/people/{personId}/works?page=1&pageSize=25` | PageResult<LibraryItemV1> |
 | Seasons | GET `/api/v1/works/{workId}/seasons` | JSON array of WorkSeasonV1 |
 | Episodes | GET `/api/v1/works/{workId}/seasons/{seasonNumber}/episodes` | JSON array of WorkEpisodeV1 |
 | Media inventory | GET `/api/v1/works/{workId}/availability?page=1&pageSize=25` | PageResult<WorkAvailabilityV1> |
@@ -75,8 +79,11 @@ val catalogClient: TvCatalogV1Client = HttpTvCatalogV1Client(serverOrigin, token
   `discoverSearch(text)` searches local + provider catalogs. Call
   `discoverScopes()` before choosing a valid feed or subtype; some feed/type
   combinations are not valid (e.g. upcoming series).
-- Details: `work(workId)` returns WorkDetailsV1, followed by
-  `seasons(workId)` and `episodes(workId, seasonNumber)`.
+- Details: `work(workId)` returns WorkDetailsV1. Use `editions(workId)` for
+  edition descriptors, `credits(workId)` for real Work people, and
+  `person(personId)` / `personWorks(personId, page)` for existing person
+  navigation. Use `seasons(workId)` and `episodes(workId, seasonNumber)`
+  for episodic details. Edition ID is **not** a playable MediaAssetId.
 - Playback selection: `TvWorkEpisodeV1.id` is a **WorkUnitId**, **not**
   a playable asset. `TvWorkEpisodeV1.mediaAssetId` may be null if unavailable.
   Use `playableMediaAssetId()` and pass that actual MediaAssetId to the
@@ -109,6 +116,9 @@ or persist session state.
    `/api/v1/works/{workId}` still requires a genuine non-null WorkId.
 3. **Asset selection:** Episode endpoint exposes one playable MediaAssetId
    when its video is present, whereas availability may list several editions.
+   `editions(workId)` gives WorkEditionIds and real file counts; the separate
+   `availability(workId)` response gives playable MediaAssetIds and their
+   WorkEditionId, so an edition selector can compare IDs without invention.
    The UI must not synthesize a fallback asset id for missing episodes.
 4. **Capabilities/permissions:** Library, Discover, and Works require the
    Library module and `profile.media.read`; watchlist writes require
@@ -139,3 +149,12 @@ owned by the parallel TV agent.
 The foundation branch has additional session/auth changes after this branch's
 creation. **Do not rebase or merge** as long as that parallel work is ongoing;
 the integration owner must verify the latest foundation tip before final merge.
+
+### More Work detail operations
+
+`credits`, `editions`, `person` and `personWorks` were checked against the
+existing `clean-start` service definitions. The responses preserve nullable
+publisher/credit/artwork and the server-provided role/edition enum IDs. Unit
+and local HTTP contract tests use exact field names and bare array versus page
+response shapes. These are optional catalog API calls for the original TV
+Details screen; no UI was modified.
