@@ -130,7 +130,8 @@ fun TvV1CatalogHost(
                 profileApi.signOut()
                 onSignedOut()
             } catch (failure: Exception) {
-                error = failure.message ?: "Die Session konnte nicht abgemeldet werden."
+                if (failure is AppApiException && failure.statusCode == 401) onAuthenticationExpired()
+                else error = failure.message ?: "Die Session konnte nicht abgemeldet werden."
             } finally {
                 settingsSignOutRequested = false
             }
@@ -314,6 +315,7 @@ fun TvV1CatalogHost(
             api = profileApi,
             onSwitched = onProfileChanged,
             onBack = ::back,
+            onUnauthorized = onAuthenticationExpired,
         )
         TvV1CatalogPage.Search -> {
             if (error != null) TvV1ApiMessage("Suche", requireNotNull(error), { reload += 1 }, ::back)
@@ -337,6 +339,7 @@ fun TvV1CatalogHost(
             requestHeaders = authorization,
             onLocalWork = { id -> openWork(id.toString()) },
             onBack = ::back,
+            onUnauthorized = onAuthenticationExpired,
         )
         TvV1CatalogPage.Details -> {
             when {

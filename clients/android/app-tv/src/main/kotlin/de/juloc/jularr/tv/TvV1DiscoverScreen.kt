@@ -39,6 +39,7 @@ internal fun TvV1DiscoverScreen(
     requestHeaders: Map<String, String>,
     onLocalWork: (Long) -> Unit,
     onBack: () -> Unit,
+    onUnauthorized: () -> Unit,
 ) {
     var scopes by remember(catalog) { mutableStateOf<List<TvDiscoverScopeV1>>(emptyList()) }
     var selectedType by remember(catalog) { mutableStateOf<Int?>(null) }
@@ -55,7 +56,8 @@ internal fun TvV1DiscoverScreen(
                 !it.isCatalog && (it.mediaTypeId == 1 || it.mediaTypeId == 2)
             }
         } catch (failure: AppApiException) {
-            error = "Discover: ${failure.code} (HTTP ${failure.statusCode})"
+            if (failure.statusCode == 401) onUnauthorized()
+            else error = "Discover: ${failure.code} (HTTP ${failure.statusCode})"
         } catch (failure: Exception) {
             error = failure.message ?: "Discover-Kategorien konnten nicht geladen werden."
         }
@@ -79,7 +81,8 @@ internal fun TvV1DiscoverScreen(
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (failure: AppApiException) {
-            error = "Discover: ${failure.code} (HTTP ${failure.statusCode})"
+            if (failure.statusCode == 401) onUnauthorized()
+            else error = "Discover: ${failure.code} (HTTP ${failure.statusCode})"
         } catch (failure: Exception) {
             error = failure.message ?: "Discover konnte nicht geladen werden."
         } finally { loading = false }
@@ -93,7 +96,8 @@ internal fun TvV1DiscoverScreen(
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (failure: Exception) {
-                error = failure.message ?: "Externe Details konnten nicht geladen werden."
+                if (failure is AppApiException && failure.statusCode == 401) onUnauthorized()
+                else error = failure.message ?: "Externe Details konnten nicht geladen werden."
             }
         }
     }

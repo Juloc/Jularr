@@ -29,6 +29,7 @@ internal fun TvV1ProfilesScreen(
     api: TvV1ProfileClient,
     onSwitched: () -> Unit,
     onBack: () -> Unit,
+    onUnauthorized: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var profiles by remember(api) { mutableStateOf<List<TvSelectableProfileV1>>(emptyList()) }
@@ -47,7 +48,8 @@ internal fun TvV1ProfilesScreen(
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (failure: Exception) {
-            error = failure.v1ProfilesError()
+            if (failure is AppApiException && failure.statusCode == 401) onUnauthorized()
+            else error = failure.v1ProfilesError()
         } finally {
             loading = false
         }
@@ -65,7 +67,8 @@ internal fun TvV1ProfilesScreen(
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (failure: Exception) {
-                error = failure.v1ProfilesError()
+                if (failure is AppApiException && failure.statusCode == 401) onUnauthorized()
+                else error = failure.v1ProfilesError()
             } finally {
                 busy = false
             }
