@@ -104,7 +104,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                 if (candidates.Any(offer => offer.Guid == "narou:" + item.Ncode + ":epub"))
                                     continue;
                                 candidates.Add(Offer(source, "narou:" + item.Ncode + ":epub", [item.Author], item.Title,
-                                    "ja", "epub", new Uri("https://ncode.syosetu.com/" + item.Ncode + "/"), null, identityBound: true));
+                                    "ja", "epub", new Uri("https://ncode.syosetu.com/" + item.Ncode + "/"), null, identityBound: true, nativeVerified: true));
                             }
                         }
                         return candidates;
