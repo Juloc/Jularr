@@ -20,7 +20,16 @@ data class TvSavedSession(
     val lastActiveAtMillis: Long = System.currentTimeMillis(),
 )
 
-class TvSessionStore(context: Context) {
+/**
+ * Storage boundary for clean-start device credentials. Implementations must encrypt credentials
+ * at rest; app code never places them in the old cookie session map.
+ */
+interface TvDeviceTokenPersistence {
+    fun loadToken(serverOrigin: String): String?
+    fun storeToken(serverOrigin: String, token: String?)
+}
+
+class TvSessionStore(context: Context) : TvDeviceTokenPersistence {
     private val preferences = context.getSharedPreferences(
         PREFS_NAME,
         Context.MODE_PRIVATE,
@@ -133,6 +142,34 @@ class TvSessionStore(context: Context) {
         preferences.edit().clear().apply()
     }
 
+    /**
+     * Paired-device bearer tokens are kept in a separate encrypted object, keyed by server origin.
+     * The legacy account/cookie store remains unchanged while the UI is being migrated.
+     */
+    @Synchronized
+    override fun loadToken(serverOrigin: String): String? =
+        readDeviceTokens().optString(TvServerOrigin.normalize(serverOrigin))
+            .takeIf { it.isNotBlank() }
+
+    @Synchronized
+    override fun storeToken(serverOrigin: String, token: String?) {
+        val origin = TvServerOrigin.normalize(serverOrigin)
+        val saved = readDeviceTokens()
+        if (token.isNullOrBlank()) saved.remove(origin) else saved.put(origin, token)
+        check(preferences.edit()
+            .putString(KEY_ENCRYPTED_DEVICE_TOKENS, encrypt(saved.toString()))
+            .commit()) {
+            "Could not save encrypted TV device tokens."
+        }
+    }
+
+    private fun readDeviceTokens(): JSONObject {
+        val encrypted = preferences.getString(KEY_ENCRYPTED_DEVICE_TOKENS, null)
+            ?: return JSONObject()
+        // An undecryptable credential store is not silently overwritten with empty credentials.
+        return JSONObject(decrypt(encrypted))
+    }
+
     private fun persistSessions(sessions: List<TvSavedSession>) {
         val array = JSONArray()
         for (session in sessions) {
@@ -191,6 +228,7 @@ class TvSessionStore(context: Context) {
         const val PREFS_NAME = "jularr-tv-sessions"
         const val KEY_SESSIONS = "saved_sessions"
         const val KEY_ENCRYPTED_SESSIONS = "encrypted_sessions"
+        const val KEY_ENCRYPTED_DEVICE_TOKENS = "encrypted_device_tokens"
         const val KEY_ACTIVE_ID = "active_session_id"
         const val KEY_ALIAS = "jularr-tv-sessions-key"
         const val NEW_SIGN_IN = "new-sign-in"
