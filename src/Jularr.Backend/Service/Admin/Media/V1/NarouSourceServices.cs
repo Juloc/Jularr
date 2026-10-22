@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Narou;
@@ -10,7 +11,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Explicitly associate a public Narō web novel with a LightNovel Work.
     // This is deliberately NOT an implicit title-based link to a published LN.
-    public sealed record SetNarouSourceDataV1(string Ncode);
+    public sealed class SetNarouSourceDataV1 : BaseData
+    {
+        public SetNarouSourceDataV1(string ncode) => Ncode = ncode;
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MatchKey))]
+        public string Ncode { get; }
+    }
     internal sealed record NarouSourceIdentityData(long WorkId, string Ncode, MediaType MediaTypeId, MediaSubtype MediaSubtypeId);
 
     [ServiceEndpoint("PUT", "/api/v1/admin/works/{workId:long}/narou")]
