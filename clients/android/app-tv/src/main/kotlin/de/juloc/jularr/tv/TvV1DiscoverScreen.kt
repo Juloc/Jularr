@@ -84,6 +84,7 @@ internal fun TvV1DiscoverScreen(
             error = failure.message ?: "Discover konnte nicht geladen werden."
         } finally { loading = false }
     }
+    val external = selectedExternal
     // Provider data is read on demand and replaces search-summary details.
     LaunchedEffect(external?.mediaTypeId, external?.tmdbId) {
         if (external?.workId == null && external?.tmdbId != null) {
@@ -96,7 +97,6 @@ internal fun TvV1DiscoverScreen(
             }
         }
     }
-    val external = selectedExternal
     if (external != null) {
         TvCenteredPanel(title = external.title, description = external.overview.orEmpty()) {
             Text(
