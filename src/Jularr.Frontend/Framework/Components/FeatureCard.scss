@@ -1,0 +1,64 @@
+// The mockups' card grid and its cards: icon tile, name and one line, the state chip on the head's right, rows, and the actions at the foot.
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 13px;
+    min-width: 0;
+}
+
+.feature-card {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    min-width: 0;
+    padding: 17px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    &__title { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+    &__name { font-size: var(--text-body); font-weight: 810; line-height: 1.25; }
+    &__line { color: var(--muted); font-size: var(--text-small); }
+
+    // A row of a card body: a value on the left, one on the right (a state beside its switch).
+    &__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+
+    &__foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: auto;
+    }
+
+    &__group { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    &__group form { display: inline-flex; margin: 0; }
+    &__group--wrap { flex-wrap: wrap; justify-content: center; }
+
+    // A path or address on the field tint, in the monospace of the mockups' file path.
+    &__path {
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-small);
+        background: var(--field);
+        color: var(--muted);
+        font-family: ui-monospace, monospace;
+        font-size: var(--text-small);
+    }
+
+    &__note { min-width: 0; color: var(--muted); font-size: var(--text-body); }
+    &__row strong { font-size: var(--text-body); font-weight: 780; white-space: nowrap; }
+
+    // The add card: the same size as its neighbours, outlined only.
+    &--add { align-items: center; justify-content: center; min-height: 190px; border-style: dashed; box-shadow: none; text-align: center; }
+}

@@ -1558,7 +1558,7 @@ namespace Jularr.Backend.Tests
             // The tab names the film; a film on hand offers no request.
             StringAssert.Contains(detailsHtml, "<title>Example Movie · ");
             Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
-            using var providers = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
+            using var providers = await host.SendAsync(HttpMethod.Get, "/Admin/Providers?view=servers");
             var providersHtml = await providers.Content.ReadAsStringAsync();
             StringAssert.Contains(providersHtml, "3 titles linked");
             Assert.IsFalse(providersHtml.Contains(FakeUsenet.PlexToken, StringComparison.Ordinal));

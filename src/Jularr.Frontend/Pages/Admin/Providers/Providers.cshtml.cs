@@ -17,11 +17,19 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Providers
 {
+    // The registry's providers as cards (state, key, switch, test) whose settings open in a dialog; the media servers' users are mapped to profiles in a list below their cards.
     public sealed class ProvidersModel(ReadProvidersV1 providers, UpdateProviderV1 update, SaveProviderSecretV1 saveSecret, ReadPlexServerV1 readPlex, SavePlexServerV1 savePlex,
         SyncPlexServerV1 syncPlex, DisconnectPlexServerV1 disconnectPlex, ReadPlexSignInV1 readSignIn, UpdatePlexSignInV1 updateSignIn, ReadMediaServerV1 readServer, SaveMediaServerV1 saveServer, SyncMediaServerV1 syncServer,
-        DisconnectMediaServerV1 disconnectServer, ReadMediaServerLinksV1 readLinks, SaveMediaServerLinkV1 saveLink, ReadProfileChoicesV1 readProfiles, IAntiforgery antiforgery,
+        DisconnectMediaServerV1 disconnectServer, ReadMediaServerLinksV1 readLinks, SaveMediaServerLinkV1 saveLink, ReadProfileChoicesV1 readProfiles, FrontendAssets assets, IAntiforgery antiforgery,
         UiText texts, StartPlexServerPinV1 startPin, CompletePlexServerPinV1 completePin) : JularrPage
     {
+        // Providers that take a key (IGDB adds the Twitch application id; Hardcover's token names book series, AcoustID's key untagged music, TVDB's project key episodes).
+        private static readonly string[] KeyProviders = ["tmdb", "tvdb", "igdb", "anilist", "hardcover", "acoustid"];
+        private static readonly string[] ServerKeys = ["plex", "jellyfin", "emby"];
+
+        // The cards follow this order, as in the mockup: movies and series first, then books, music, games, then the servers.
+        private static readonly string[] Order = ["tmdb", "tvdb", "anilist", "openlibrary", "musicbrainz", "igdb", "hardcover", "acoustid", "plex", "jellyfin", "emby"];
+
         private readonly Dictionary<MediaServerType, (MediaServerDetailsV1 Server, BaseDataList<MediaServerLinkV1> Links)> _servers = [];
         private BaseDataList<ProfileChoiceV1>? _profiles;
         private MediaServerType? _serverInput;
@@ -31,95 +39,187 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         private SavePlexServerDataV1? _plexInput;
         private PlexSignInV1? _signIn;
         private SavePlexSignInDataV1? _signInInput;
-        private UpdateProviderDataV1? _input;
-        private long? _providerId;
+        private long? _secretFailedFor;
         private StartPlexResultV1? _pin;
 
+        private bool IsSetup => SetupWizard.IsActive(Request);
+        private bool IsServers => View == "servers" && !IsSetup;
         private string Home => SetupWizard.Address(Request, SetupStepType.Providers, "/Admin/Providers");
+        private string ServersHome => IsSetup ? Home : Home + "?view=servers";
+
+        // The chip: the providers or the media servers (every provider on one page in the setup).
+        [BindProperty(SupportsGet = true, Name = "view")]
+        public string? View { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public int PageNumber { get; set; } = 1;
 
         protected override void Define(Page page)
         {
-            page.Title("admin.providers.title");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, acquisition: texts.Can(null, "Acquisition")));
+            page.Title(IsServers ? "admin.mediaServers.title" : "admin.providers.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Providers/Providers.entry.scss");
+            page.Asset("Framework/Components/Truncated.entry.ts");
+            page.Asset("Framework/Components/ActionDock.entry.ts");
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            // Render only real registry rows.
-            foreach (var provider in (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync", "Library")))
+            // Render only real registry rows; the media servers of Jellyfin and Emby need their modules.
+            var visible = (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync", "Library"))
+                .OrderBy(provider => Rank(provider.Key)).ToList();
+            if (IsSetup)
             {
-                var body = new Page();
-                body.Content.Add(new Form<UpdateProviderDataV1>(form =>
-                {
-                    form.Hidden(item => item.ExpectedIsEnabled);
-                    form.Toggle(item => item.IsEnabled, "admin.providers.state");
-                    form.Save();
-                }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? FormError : null));
-
-                // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id, AniList the application profiles sign in with; Hardcover's token names book series, AcoustID's key untagged music.
-                if (provider.Key is "tmdb" or "igdb" or "anilist" or "hardcover" or "acoustid")
-                {
-                    body.Content.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
-                    body.Content.Add(new Form<SaveProviderSecretDataV1>(form =>
-                    {
-                        if (provider.Key is "igdb" or "anilist")
-                        {
-                            form.Text(item => item.ClientId, "admin.providers.clientId");
-                        }
-
-                        form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
-                        form.Save();
-                    }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        new SaveProviderSecretDataV1(null)));
-                }
-
-                // The owner's Plex server: availability, refresh after import and links.
-                if (provider.Key == "plex" && _plex is { } plex)
-                {
-                    DefinePlex(body, plex);
-                }
-
-                // Jellyfin and Emby users share their progress with the profile an administrator confirmed.
-                if (MediaServerTypes.FromProviderKey(provider.Key) is { } type && _servers.TryGetValue(type, out var server))
-                {
-                    DefineMediaServer(body, type, server.Server, server.Links);
-                }
-
-                var panel = new Details(new Summary(new ValueText(Name(provider.Key))), new Span().Attribute("id", "provider-" + provider.Id.ToString(CultureInfo.InvariantCulture)), new Div([.. body.Content]).Class("providers__body"))
-                    .Class("providers__item").Attribute("id", "provider-" + provider.Key);
-                if (SelectedProvider == provider.Key || ProviderId == provider.Id || _providerId == provider.Id || provider.Key == "plex" && (_plexInput is not null || _pin is not null)) panel.Attribute("open", "open");
-                page.Content.Add(panel);
+                page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, acquisition: texts.Can(null, "Acquisition")));
+            }
+            else
+            {
+                var tabs = new List<NavigationTab> { new("admin.providers.title", Home, !IsServers, Count: visible.Count(provider => !ServerKeys.Contains(provider.Key))) };
+                var serverCount = visible.Count(provider => ServerKeys.Contains(provider.Key));
+                if (serverCount > 0) tabs.Add(new("admin.mediaServers.title", Home + "?view=servers", IsServers, Count: serverCount));
+                if (texts.CanAdminister()) tabs.Add(new("admin.catalog.title", "/Admin/Catalog", false));
+                page.Content.Add(new NavigationTabs(tabs, "admin.integrations"));
             }
 
-            if (_providers?.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Home + "?pageNumber=" + (_providers.Page - 1)));
-            if (_providers is { } && _providers.Items.Count == _providers.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Home + "?pageNumber=" + (_providers.Page + 1)));
-            if (FormError is not null && _providerId is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            var shown = IsSetup ? visible : visible.Where(provider => ServerKeys.Contains(provider.Key) == IsServers).ToList();
+            var cards = new List<IUiComponent>();
+            var dialogs = new List<IUiComponent>();
+            foreach (var provider in shown)
+            {
+                cards.Add(Card(provider, csrf));
+                if (Settings(provider, csrf) is { } dialog) dialogs.Add(dialog);
+            }
+
+            page.Content.Add(new CardGrid([.. cards]));
+            if ((IsServers || IsSetup) && Links(csrf) is { } links) page.Content.Add(links);
+            page.Content.AddRange(dialogs);
+            if (FormError is not null && _secretFailedFor is null && _plexInput is null && _serverInput is null && _signInInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
+
+            // Paging sits in the one floating dock.
+            var previous = _providers is { Page: > 1 } ? Home + "?pageNumber=" + (_providers.Page - 1).ToString(CultureInfo.InvariantCulture) : null;
+            var next = _providers is { } rows && rows.Items.Count == rows.PageSize ? Home + "?pageNumber=" + (rows.Page + 1).ToString(CultureInfo.InvariantCulture) : null;
+            if (previous is not null || next is not null)
+            {
+                page.Content.Add(new ActionDock(assets, "admin.providers.actions", paging: new DockPaging(previous, next, new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.pageNumber"], PageNumber)))));
+            }
         }
 
-        private void DefinePlex(Page page, PlexServerDetailsV1 plex)
+        private static int Rank(string key)
         {
-            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(new P(plex.ExternalId is null
+            var index = Array.IndexOf(Order, key);
+            return index < 0 ? Order.Length : index;
+        }
+
+        // The state says whether the provider is off, still needs its key or server, or is ready.
+        private (string Key, UiTone Tone, string Icon) State(ProviderDetailsV1 provider)
+        {
+            if (!provider.IsEnabled) return ("admin.providers.disabled", UiTone.Neutral, "power");
+            var type = MediaServerTypes.FromProviderKey(provider.Key);
+            var isServer = provider.Key == "plex" || type is not null;
+            var connected = provider.Key == "plex" ? _plex?.ExternalId is not null : type is { } serverType && _servers.TryGetValue(serverType, out var server) && server.Server.ExternalId is not null;
+            if (isServer) return connected ? ("providers.state.connected", UiTone.Success, "check") : ("providers.state.setup", UiTone.Warning, "alert");
+            return KeyProviders.Contains(provider.Key) && !provider.HasSecret ? ("providers.state.setup", UiTone.Warning, "alert") : ("admin.providers.enabled", UiTone.Success, "check");
+        }
+
+        private IUiComponent Card(ProviderDetailsV1 provider, string? csrf)
+        {
+            var id = provider.Id.ToString(CultureInfo.InvariantCulture);
+            var (stateKey, tone, icon) = State(provider);
+            var type = MediaServerTypes.FromProviderKey(provider.Key);
+            var chip = new StateChip(new Text(stateKey), tone, Glyph(icon, 14));
+            var toggle = Post(Home + "?providerId=" + id, csrf, [("isEnabled", provider.IsEnabled ? "false" : "true"), ("expectedIsEnabled", provider.IsEnabled ? "true" : "false")],
+                new SwitchButton(provider.IsEnabled, "admin.providers.state"));
+            var body = new List<IUiComponent> { new Div(chip, toggle).Class("feature-card__row") };
+
+            // A key is never shown, only whether one is stored.
+            if (KeyProviders.Contains(provider.Key))
+            {
+                body.Add(new Div(new Span(new Text("providers.key")).Class("feature-card__note"), provider.HasSecret ? new Tag(new Text("providers.key.saved")).Accent() : new Tag(new Text("providers.key.missing")).Warning()).Class("feature-card__row"));
+            }
+
+            // What a media server did last.
+            DateTime? syncedAt = provider.Key == "plex" ? _plex?.SyncedAt : type is { } serverType && _servers.TryGetValue(serverType, out var server) ? server.Server.SyncedAt : null;
+            if (ServerKeys.Contains(provider.Key) && State(provider).Key == "providers.state.connected")
+            {
+                body.Add(new Div(new Span(new ValueText(syncedAt is { } synced ? string.Format(CultureInfo.CurrentCulture, texts["providers.syncedAt"], synced.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : texts["admin.plex.notSynced"])).Class("feature-card__note")).Class("feature-card__row"));
+            }
+
+            var start = new List<IUiComponent>();
+            if (HasSettings(provider.Key))
+            {
+                start.Add(Modal.Opener(new Button(Glyph("settings", 14), new Text("providers.settings")).Compact(), "provider-settings-" + provider.Key));
+            }
+
+            // Test reads the stored address again and keeps the stored key.
+            var end = new List<IUiComponent>();
+            if (provider.IsEnabled && State(provider).Key == "providers.state.connected")
+            {
+                var handler = provider.Key == "plex" ? "PlexTest" : "MediaServerTest&mediaServerTypeId=" + type;
+                end.Add(Post(Home + "?handler=" + handler, csrf, [], new Button(Glyph("sync", 14), new Text("providers.test")).Compact().Soft().Submit()));
+            }
+
+            var icon2 = provider.Key == "plex" ? "plex" : ServerKeys.Contains(provider.Key) ? "server" : "globe";
+            return new FeatureCard(new IconTile(Glyph(icon2, 18), UiTone.Accent), texts.Has("provider.name." + provider.Key) ? texts["provider.name." + provider.Key] : provider.Key, texts.Has("provider.hint." + provider.Key) ? texts["provider.hint." + provider.Key] : "", null, body, start, end, "provider-" + provider.Key);
+        }
+
+        private bool HasSettings(string key) => KeyProviders.Contains(key) || key == "plex" && _plex is not null || MediaServerTypes.FromProviderKey(key) is { } type && _servers.ContainsKey(type);
+
+        // The provider's connection and protected credentials in one dialog; it opens again with the page when its form came back with an error.
+        private IUiComponent? Settings(ProviderDetailsV1 provider, string? csrf)
+        {
+            var body = new List<IUiComponent>();
+            var open = false;
+            if (KeyProviders.Contains(provider.Key))
+            {
+                body.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
+                body.Add(new Form<SaveProviderSecretDataV1>(form =>
+                {
+                    // IGDB adds the Twitch application id, AniList the application profiles sign in with.
+                    if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, "admin.providers.clientId");
+                    form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
+                    form.Cancel();
+                    form.Submit("common.save");
+                }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", csrf, new SaveProviderSecretDataV1(null), _secretFailedFor == provider.Id ? FormError : null));
+                open = _secretFailedFor == provider.Id;
+            }
+
+            if (provider.Key == "plex" && _plex is { } plex)
+            {
+                // The owner's Plex server: availability, refresh after import and links.
+                DefinePlex(body, plex, csrf);
+                open = _plexInput is not null || _pin is not null || _signInInput is not null;
+            }
+
+            if (MediaServerTypes.FromProviderKey(provider.Key) is { } type && _servers.TryGetValue(type, out var server))
+            {
+                DefineMediaServer(body, type, server.Server, csrf);
+                open = _serverInput == type;
+            }
+
+            return body.Count == 0 ? null : new Modal(assets, "provider-settings-" + provider.Key, texts.Has("provider.name." + provider.Key) ? "provider.name." + provider.Key : "admin.providers.title", body, open);
+        }
+
+        private void DefinePlex(List<IUiComponent> body, PlexServerDetailsV1 plex, string? csrf)
+        {
+            body.Add(new P(plex.ExternalId is null
                 ? new Text("admin.plex.notConnected")
                 : new ValueText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.connected"], plex.LinkedCount,
                     plex.SyncedAt?.ToString("u", CultureInfo.InvariantCulture) ?? texts["admin.plex.notSynced"]))));
-            page.Content.Add(new Form<SavePlexServerDataV1>(form =>
+            body.Add(new Form<SavePlexServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
                 form.Submit("admin.plex.pin.start");
             }, Home + "?handler=PlexPin", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
             if (_pin is { } pin)
             {
-                page.Content.Add(new P(new Text("account.plex.pending")));
-                page.Content.Add(new A(new Text("account.plex.authorize")).Attribute("href", pin.AuthorizationUrl).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
-                page.Content.Add(new Form<CompletePlexParametersV1>(form =>
+                body.Add(new P(new Text("account.plex.pending")));
+                body.Add(new A(new Text("account.plex.authorize")).Attribute("href", pin.AuthorizationUrl).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"));
+                body.Add(new Form<CompletePlexParametersV1>(form =>
                 {
                     form.Hidden(item => item.AuthChallengePublicId);
                     form.Submit("account.plex.complete");
                 }, Home + "?handler=PlexPinComplete", csrf, new CompletePlexParametersV1(pin.AuthChallengePublicId), FormError));
             }
 
-            page.Content.Add(new Form<SavePlexServerDataV1>(form =>
+            body.Add(new Form<SavePlexServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
                 form.Password(item => item.Token, "admin.plex.token", "new-password");
@@ -127,13 +227,13 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }, Home + "?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
             if (plex.ExternalId is not null)
             {
-                page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), Home + "?handler=PlexSync", csrf, new PlexServerParametersV1()));
-                page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.disconnect"), Home + "?handler=PlexDisconnect", csrf, new PlexServerParametersV1()));
+                body.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), Home + "?handler=PlexSync", csrf, new PlexServerParametersV1()));
+                body.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.disconnect"), Home + "?handler=PlexDisconnect", csrf, new PlexServerParametersV1()));
 
                 // Who signs in and registers with Plex; the libraries come from the connected server.
                 if (_signIn is { } signIn)
                 {
-                    page.Content.Add(new Form<SavePlexSignInDataV1>(form =>
+                    body.Add(new Form<SavePlexSignInDataV1>(form =>
                     {
                         form.Toggle(item => item.SignIn, "admin.plex.signIn");
                         form.Toggle(item => item.Registration, "admin.plex.registration");
@@ -144,22 +244,21 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                                 signIn.SectionKeys.Zip(signIn.SectionTitles, (key, title) => new SelectOption(key, title)));
                         }
 
-                        form.Save();
+                        form.Submit("common.save");
                     }, Home + "?handler=PlexSignIn", csrf, _signInInput ?? new SavePlexSignInDataV1(signIn.SignIn, signIn.Registration, signIn.RegistrationApproval, signIn.RegistrationSections),
                         _signInInput is null ? null : FormError));
                 }
             }
         }
 
-        private void DefineMediaServer(Page page, MediaServerType type, MediaServerDetailsV1 server, BaseDataList<MediaServerLinkV1> links)
+        private void DefineMediaServer(List<IUiComponent> body, MediaServerType type, MediaServerDetailsV1 server, string? csrf)
         {
-            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var action = Home + "?mediaServerTypeId=" + type + "&handler=";
-            page.Content.Add(new P(server.ExternalId is null
+            body.Add(new P(server.ExternalId is null
                 ? new Text("admin.mediaServer.notConnected")
                 : new ValueText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.connected"],
                     server.SyncedAt?.ToString("u", CultureInfo.InvariantCulture) ?? texts["admin.plex.notSynced"]))));
-            page.Content.Add(new Form<SaveMediaServerDataV1>(form =>
+            body.Add(new Form<SaveMediaServerDataV1>(form =>
             {
                 form.Text(item => item.BaseUrl, "admin.mediaServer.baseUrl", help: new FieldHelp(Placeholder: "hint.mediaServer.baseUrl.placeholder"));
                 form.Password(item => item.ApiKey, "admin.mediaServer.apiKey", "new-password");
@@ -170,30 +269,38 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 return;
             }
 
-            page.Content.Add(new Form<MediaServerParametersV1>(form => form.Submit("admin.mediaServer.sync"), action + "MediaServerSync", csrf, new MediaServerParametersV1(type)));
-            page.Content.Add(new Form<MediaServerParametersV1>(form => form.Submit("admin.mediaServer.disconnect"), action + "MediaServerDisconnect", csrf, new MediaServerParametersV1(type)));
-            var options = (_profiles?.AsEnumerable() ?? []).Select(profile => new SelectOption(profile.ProfileId.ToString(CultureInfo.InvariantCulture), profile.DisplayName + " (" + profile.AccountName + ")"))
-                .Prepend(new SelectOption("", texts["admin.mediaServer.noProfile"])).ToArray();
-            foreach (var link in links)
-            {
-                var state = link.ProfileName is null ? "admin.mediaServer.unlinked" : link.IsConfirmed ? "admin.mediaServer.linked" : "admin.mediaServer.proposed";
-                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts[state], link.ExternalName, link.ProfileName))));
-                page.Content.Add(new Form<SaveMediaServerLinkDataV1>(form =>
-                {
-                    form.Select(item => item.ProfileId, "admin.mediaServer.profile", options);
-                    form.Submit("admin.mediaServer.confirm");
-                }, action + "MediaServerLink&linkId=" + link.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveMediaServerLinkDataV1(link.ProfileId)));
-            }
+            body.Add(new Form<MediaServerParametersV1>(form => form.Submit("admin.mediaServer.sync"), action + "MediaServerSync", csrf, new MediaServerParametersV1(type)));
+            body.Add(new Form<MediaServerParametersV1>(form => form.Submit("admin.mediaServer.disconnect"), action + "MediaServerDisconnect", csrf, new MediaServerParametersV1(type)));
         }
 
-        [BindProperty(SupportsGet = true)]
-        public int PageNumber { get; set; } = 1;
+        // Which Jularr profile each server user shares progress with: the user, the server, the state and the profile to confirm.
+        private IUiComponent? Links(string? csrf)
+        {
+            var options = (_profiles?.AsEnumerable() ?? []).Select(profile => new SelectOption(profile.ProfileId.ToString(CultureInfo.InvariantCulture), profile.DisplayName + " (" + profile.AccountName + ")"))
+                .Prepend(new SelectOption("", texts["admin.mediaServer.noProfile"])).ToArray();
+            var rows = new List<ListRow>();
+            foreach (var (type, (_, links)) in _servers)
+            {
+                var server = texts["provider.name." + type.ProviderKey()];
+                foreach (var link in links)
+                {
+                    var (stateKey, tone, icon) = link.ProfileName is null ? ("admin.mediaServer.state.unlinked", UiTone.Neutral, "link") : link.IsConfirmed ? ("admin.mediaServer.state.linked", UiTone.Success, "check") : ("admin.mediaServer.state.proposed", UiTone.Info, "clock");
+                    var identity = new ListIdentity(new IconTile(Glyph("user", 18), UiTone.Accent), new ValueText(link.ExternalName), new ValueText(server));
+                    var profile = link.ProfileName is null ? new Span(new ValueText("–")).Class("list-value list-value--dim") : new Span(new ValueText(link.ProfileName)).Class("list-value");
+                    var form = new Form<SaveMediaServerLinkDataV1>(item =>
+                    {
+                        item.Select(data => data.ProfileId, "admin.mediaServer.profile", options);
+                        item.Submit(new Button(new Text("admin.mediaServer.confirm")).Compact().Soft());
+                    }, Home + "?mediaServerTypeId=" + type + "&handler=MediaServerLink&linkId=" + link.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveMediaServerLinkDataV1(link.ProfileId));
+                    rows.Add(new ListRow([identity, new StateChip(new Text(stateKey), tone, Glyph(icon, 14)), profile, new Div(form).Class("list-actions")],
+                        [ListPanel.Fact("admin.mediaServer.profile", link.ProfileName is null ? new ValueText("–") : new ValueText(link.ProfileName))]));
+                }
+            }
 
-        [BindProperty(SupportsGet = true)]
-        public string? SelectedProvider { get; set; }
-
-        [BindProperty(SupportsGet = true)]
-        public long? ProviderId { get; set; }
+            if (rows.Count == 0) return null;
+            var columns = new List<ListColumn> { new("admin.mediaServer.user", ListRole.Main), new("table.status", ListRole.Status), new("admin.mediaServer.profile", ListRole.Data, 1), new("common.actions", ListRole.Actions) };
+            return new ListPanel("admin.mediaServer.links", columns, rows).Modifier("providers-links");
+        }
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -204,17 +311,16 @@ namespace Jularr.Frontend.Pages.Admin.Providers
 
         public async Task<IActionResult> OnPostAsync(long providerId, [BindRequired] bool isEnabled, [BindRequired] bool expectedIsEnabled)
         {
-            _providerId = providerId;
-            _input = new UpdateProviderDataV1(isEnabled, expectedIsEnabled);
-            await update.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), _input, HttpContext.RequestAborted);
-            return LocalRedirect(ProviderAddress(providerId));
+            await update.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), new UpdateProviderDataV1(isEnabled, expectedIsEnabled), HttpContext.RequestAborted);
+            return LocalRedirect(await ProviderAddressAsync(providerId));
         }
+
         public async Task<IActionResult> OnPostSecretAsync(long providerId, string? secret, string? clientId)
         {
-            _providerId = providerId;
+            _secretFailedFor = providerId;
             await saveSecret.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), new SaveProviderSecretDataV1(string.IsNullOrWhiteSpace(secret) ? null : secret,
                 string.IsNullOrWhiteSpace(clientId) ? null : clientId), HttpContext.RequestAborted);
-            return LocalRedirect(ProviderAddress(providerId));
+            return LocalRedirect(await ProviderAddressAsync(providerId));
         }
 
         public async Task<IActionResult> OnPostPlexPinAsync(string? baseUrl)
@@ -224,7 +330,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, _pin, antiforgery);
             TempData["PlexServerPin"] = JsonSerializer.Serialize(_pin);
             NoHint();
-            return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostPlexPinCompleteAsync(Guid authChallengePublicId)
@@ -235,7 +341,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 TempData.Remove("PlexServerPin");
                 Response.Cookies.Delete(ServiceApi.AuthenticationNonceCookieName);
             }
-            return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostPlexAsync(string? baseUrl, string? token)
@@ -243,27 +349,36 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             _plexInput = new SavePlexServerDataV1(baseUrl ?? "", string.IsNullOrWhiteSpace(token) ? null : token);
             var test = await savePlex.ExecuteAsync<PlexServerTestV1>(new PlexServerParametersV1(), _plexInput, HttpContext.RequestAborted);
             HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.tested"], test.Version ?? "?", string.Join(", ", test.Sections)));
-            return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
+            return LocalRedirect(ServersHome);
+        }
+
+        // The stored address and key answer again.
+        public async Task<IActionResult> OnPostPlexTestAsync()
+        {
+            var plex = await readPlex.ExecuteAsync<PlexServerDetailsV1>(new PlexServerParametersV1(), HttpContext.RequestAborted);
+            var test = await savePlex.ExecuteAsync<PlexServerTestV1>(new PlexServerParametersV1(), new SavePlexServerDataV1(plex.BaseUrl ?? "", null), HttpContext.RequestAborted);
+            HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.tested"], test.Version ?? "?", string.Join(", ", test.Sections)));
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostPlexSignInAsync(bool signIn, bool registration, bool registrationApproval, string[]? registrationSections)
         {
             _signInInput = new SavePlexSignInDataV1(signIn, registration, registrationApproval, registrationSections);
             await updateSignIn.ExecuteAsync<UpdateResult>(new PlexServerParametersV1(), _signInInput, HttpContext.RequestAborted);
-            return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostPlexSyncAsync()
         {
             var sync = await syncPlex.ExecuteAsync<PlexSyncResultV1>(new PlexServerParametersV1(), default, HttpContext.RequestAborted);
             HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.plex.synced"], sync.LinkedCount, sync.CreatedCount));
-            return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostPlexDisconnectAsync()
         {
             await disconnectPlex.ExecuteAsync<UpdateResult>(new PlexServerParametersV1(), default, HttpContext.RequestAborted);
-            return LocalRedirect(Home + "?selectedProvider=plex#provider-plex");
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostMediaServerAsync(MediaServerType mediaServerTypeId, string? baseUrl, string? apiKey)
@@ -272,26 +387,36 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             _serverData = new SaveMediaServerDataV1(baseUrl ?? "", apiKey);
             var test = await saveServer.ExecuteAsync<MediaServerTestV1>(new MediaServerParametersV1(mediaServerTypeId), _serverData, HttpContext.RequestAborted);
             HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.tested"], test.Name, test.Version ?? "", test.UserCount));
-            return LocalRedirect(Home);
+            return LocalRedirect(ServersHome);
+        }
+
+        // The stored address and key answer again.
+        public async Task<IActionResult> OnPostMediaServerTestAsync(MediaServerType mediaServerTypeId)
+        {
+            var parameters = new MediaServerParametersV1(mediaServerTypeId);
+            var server = await readServer.ExecuteAsync<MediaServerDetailsV1>(parameters, HttpContext.RequestAborted);
+            var test = await saveServer.ExecuteAsync<MediaServerTestV1>(parameters, new SaveMediaServerDataV1(server.BaseUrl ?? "", null), HttpContext.RequestAborted);
+            HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.tested"], test.Name, test.Version ?? "", test.UserCount));
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostMediaServerSyncAsync(MediaServerType mediaServerTypeId)
         {
             var sync = await syncServer.ExecuteAsync<MediaServerSyncResultV1>(new MediaServerParametersV1(mediaServerTypeId), default, HttpContext.RequestAborted);
             HintText(string.Format(CultureInfo.InvariantCulture, texts["admin.mediaServer.synced"], sync.LocalCount, sync.RemoteCount));
-            return LocalRedirect(Home);
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostMediaServerDisconnectAsync(MediaServerType mediaServerTypeId)
         {
             await disconnectServer.ExecuteAsync<UpdateResult>(new MediaServerParametersV1(mediaServerTypeId), default, HttpContext.RequestAborted);
-            return LocalRedirect(Home);
+            return LocalRedirect(ServersHome);
         }
 
         public async Task<IActionResult> OnPostMediaServerLinkAsync(MediaServerType mediaServerTypeId, long linkId, long? profileId)
         {
             await saveLink.ExecuteAsync<UpdateResult>(new MediaServerLinkParametersV1(mediaServerTypeId, linkId), new SaveMediaServerLinkDataV1(profileId), HttpContext.RequestAborted);
-            return LocalRedirect(Home);
+            return LocalRedirect(ServersHome);
         }
 
         protected override async Task LoadDataAsync()
@@ -321,27 +446,16 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }
         }
 
-        private string ProviderAddress(long id)
+        // A provider's own action answers with the chip its card is on, so the card swaps in place.
+        private async Task<string> ProviderAddressAsync(long id)
         {
-            var key = _providers?.Items.FirstOrDefault(provider => provider.Id == id)?.Key;
-            return key is null ? Home + "?providerId=" + id.ToString(CultureInfo.InvariantCulture) + "#provider-" + id.ToString(CultureInfo.InvariantCulture)
-                : Home + "?selectedProvider=" + Uri.EscapeDataString(key) + "#provider-" + key;
+            var key = _providers?.Items.FirstOrDefault(provider => provider.Id == id)?.Key
+                ?? (await providers.ExecuteAsync<PageResult<ProviderDetailsV1>>(new ReadProvidersParametersV1(1, 100), HttpContext.RequestAborted)).Items.FirstOrDefault(provider => provider.Id == id)?.Key;
+            return key is not null && ServerKeys.Contains(key) ? ServersHome : Home;
         }
 
-        // Provider names are proper names, not translations.
-        private static string Name(string key) => key switch
-        {
-            "tmdb" => "TMDB",
-            "openlibrary" => "Open Library",
-            "anilist" => "AniList",
-            "musicbrainz" => "MusicBrainz",
-            "igdb" => "IGDB",
-            "hardcover" => "Hardcover",
-            "acoustid" => "AcoustID",
-            "plex" => "Plex",
-            "jellyfin" => "Jellyfin",
-            "emby" => "Emby",
-            _ => key
-        };
+        private static IUiComponent Post(string action, string? csrf, (string Name, string Value)[] hidden, IUiComponent control) => new PostForm(action, csrf, hidden, control);
+
+        private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
     }
 }

@@ -10540,185 +10540,289 @@
    "This username is already taken.",
    "Dieser Benutzername ist schon vergeben."
   ],
-  "downloads.sections": [
-   "Acquisition pages",
-   "Seiten der Beschaffung"
+  "storage.connections": [
+   "Connections",
+   "Verbindungen"
   ],
-  "acquisition.kpi.total": [
-   "Total",
-   "Gesamt"
+  "storage.sections": [
+   "Storage sections",
+   "Speicherbereiche"
   ],
-  "acquisition.kpi.reachable": [
-   "Reachable",
-   "Erreichbar"
+  "storage.kpi.connections": [
+   "Connections",
+   "Verbindungen"
   ],
-  "acquisition.kpi.failing": [
-   "Failing",
-   "Fehlerhaft"
+  "storage.kpi.online": [
+   "Online",
+   "Online"
   ],
-  "acquisition.kpi.disabled": [
-   "Disabled",
-   "Ausgeschaltet"
+  "storage.kpi.unreachable": [
+   "Not reachable",
+   "Nicht erreichbar"
   ],
-  "acquisition.connection.lastTest": [
-   "Last test",
-   "Letzter Test"
+  "storage.kpi.free": [
+   "Free space",
+   "Freier Platz"
   ],
-  "acquisition.connection.state.backoff": [
-   "Paused",
-   "Pausiert"
+  "storage.add": [
+   "Add connection",
+   "Verbindung hinzufügen"
   ],
-  "acquisition.connection.state.error": [
-   "Failing",
-   "Fehlerhaft"
+  "storage.used": [
+   "{0} % used",
+   "{0} % belegt"
   ],
-  "acquisition.connection.active": [
-   "Active",
-   "Aktiv"
+  "storage.wake.active": [
+   "WOL active",
+   "WOL aktiv"
   ],
-  "acquisition.actions": [
-   "Page actions",
-   "Aktionen der Seite"
+  "storage.wake.off": [
+   "WOL off",
+   "WOL aus"
   ],
-  "dock.page.single": [
+  "storage.checked": [
+   "Checked: {0}",
+   "Geprüft: {0}"
+  ],
+  "storage.availability.Available": [
+   "Online",
+   "Online"
+  ],
+  "storage.availability.Offline": [
+   "Offline",
+   "Offline"
+  ],
+  "storage.availability.AccessDenied": [
+   "No access",
+   "Kein Zugriff"
+  ],
+  "storage.actions": [
+   "Storage actions",
+   "Speicheraktionen"
+  ],
+  "dock.pageNumber": [
    "Page {0}",
    "Seite {0}"
   ],
-  "arr.scope": [
-   "Media type",
-   "Medientyp"
+  "downloadStorage.free": [
+   "{0} free",
+   "{0} frei"
   ],
-  "arr.actions": [
-   "Page actions",
-   "Aktionen der Seite"
+  "admin.mediaServers.title": [
+   "Media servers",
+   "Medienserver"
   ],
-  "profile.kpi.total": [
-   "Profiles",
-   "Profile"
+  "admin.integrations": [
+   "Integrations",
+   "Integrationen"
   ],
-  "profile.kpi.inUse": [
-   "In use",
-   "In Benutzung"
+  "admin.providers.actions": [
+   "Provider actions",
+   "Provider-Aktionen"
   ],
-  "profile.kpi.scored": [
-   "With format scores",
-   "Mit Format-Scores"
+  "provider.name.tmdb": [
+   "TMDB",
+   "TMDB"
   ],
-  "profile.kpi.upgrading": [
-   "Upgrading",
-   "Mit Upgrades"
+  "provider.name.tvdb": [
+   "TVDB",
+   "TVDB"
   ],
-  "profile.none": [
-   "No profiles for this media type yet.",
-   "Für diesen Medientyp gibt es noch keine Profile."
+  "provider.name.openlibrary": [
+   "Open Library",
+   "Open Library"
   ],
-  "profile.scores": [
-   "Scores",
-   "Scores"
+  "provider.name.anilist": [
+   "AniList",
+   "AniList"
   ],
-  "profile.usedBy": [
-   "In use: {0}",
-   "In Benutzung: {0}"
+  "provider.name.musicbrainz": [
+   "MusicBrainz",
+   "MusicBrainz"
   ],
-  "profile.unused": [
-   "Unused",
-   "Unbenutzt"
+  "provider.name.igdb": [
+   "IGDB",
+   "IGDB"
   ],
-  "profile.new": [
-   "New profile",
-   "Neues Profil"
+  "provider.name.hardcover": [
+   "Hardcover",
+   "Hardcover"
   ],
-  "arr.col.conditions": [
-   "Conditions",
-   "Bedingungen"
+  "provider.name.acoustid": [
+   "AcoustID",
+   "AcoustID"
   ],
-  "arr.col.renaming": [
-   "Renaming",
-   "Umbenennen"
+  "provider.name.plex": [
+   "Plex",
+   "Plex"
   ],
-  "arr.col.renaming.yes": [
-   "Yes",
-   "Ja"
+  "provider.name.jellyfin": [
+   "Jellyfin",
+   "Jellyfin"
   ],
-  "arr.col.profiles": [
-   "Profiles",
-   "Profile"
+  "provider.name.emby": [
+   "Emby",
+   "Emby"
   ],
-  "arr.col.required": [
-   "Required",
-   "Erforderlich"
+  "provider.hint.tmdb": [
+   "Films · TV · posters",
+   "Filme · TV · Poster"
   ],
-  "arr.col.ignored": [
-   "Ignored",
-   "Ignoriert"
+  "provider.hint.tvdb": [
+   "Series · episodes",
+   "Serien · Episoden"
   ],
-  "arr.col.indexer": [
-   "Indexer",
-   "Indexer"
+  "provider.hint.openlibrary": [
+   "Books · covers",
+   "Bücher · Cover"
   ],
-  "arr.formats.none": [
-   "No custom formats for this media type yet.",
-   "Für diesen Medientyp gibt es noch keine Custom Formats."
+  "provider.hint.anilist": [
+   "Anime · manga",
+   "Anime · Manga"
   ],
-  "arr.format.used": [
-   "Used",
-   "Benutzt"
+  "provider.hint.musicbrainz": [
+   "Albums · artists",
+   "Alben · Künstler"
   ],
-  "arr.format.unused": [
-   "Unused",
-   "Unbenutzt"
+  "provider.hint.igdb": [
+   "Games · platforms · client ID",
+   "Games · Plattformen · Client-ID"
   ],
-  "arr.format.title": [
-   "Custom format",
-   "Custom Format"
+  "provider.hint.hardcover": [
+   "Book series · editions",
+   "Buchreihen · Editionen"
   ],
-  "arr.format.add": [
-   "New format",
-   "Neues Format"
+  "provider.hint.acoustid": [
+   "Untagged music",
+   "Musik ohne Tags"
   ],
-  "arr.release.none": [
-   "No release profiles for this media type yet.",
-   "Für diesen Medientyp gibt es noch keine Release-Profile."
+  "provider.hint.plex": [
+   "Library · sign-in",
+   "Mediathek · Anmeldung"
   ],
-  "arr.release.title": [
-   "Release profile",
-   "Release-Profil"
+  "provider.hint.jellyfin": [
+   "Progress sync · profile mapping",
+   "Synchronisierung · Profilzuordnung"
   ],
-  "arr.release.add": [
-   "New release profile",
-   "Neues Release-Profil"
+  "provider.hint.emby": [
+   "Progress sync · profile mapping",
+   "Synchronisierung · Profilzuordnung"
   ],
-  "arr.tags.none": [
-   "No tags yet.",
-   "Es gibt noch keine Tags."
+  "providers.state.connected": [
+   "Connected",
+   "Verbunden"
   ],
-  "arr.tag": [
-   "Tag",
-   "Tag"
+  "providers.state.setup": [
+   "Setup needed",
+   "Einrichtung nötig"
   ],
-  "arr.tag.title": [
-   "Tag",
-   "Tag"
+  "providers.key": [
+   "API key",
+   "API-Schlüssel"
   ],
-  "arr.tag.add": [
-   "New tag",
-   "Neuer Tag"
+  "providers.key.saved": [
+   "Saved",
+   "Gespeichert"
   ],
-  "arr.scores": [
-   "Format scores",
-   "Format-Scores"
+  "providers.key.missing": [
+   "Missing",
+   "Fehlt"
   ],
-  "profile.add.Manga": [
-   "Add manga profile",
-   "Manga-Profil hinzufügen"
+  "providers.syncedAt": [
+   "Last sync {0}",
+   "Letzter Abgleich {0}"
   ],
-  "profile.add.Music": [
-   "Add music profile",
-   "Musik-Profil hinzufügen"
+  "providers.settings": [
+   "Settings",
+   "Einstellungen"
   ],
-  "profile.add.Game": [
-   "Add game profile",
-   "Spiele-Profil hinzufügen"
+  "providers.test": [
+   "Test",
+   "Testen"
+  ],
+  "admin.mediaServer.user": [
+   "Server user",
+   "Servernutzer"
+  ],
+  "admin.mediaServer.links": [
+   "Server users and profiles",
+   "Servernutzer und Profile"
+  ],
+  "admin.mediaServer.state.linked": [
+   "Linked",
+   "Verknüpft"
+  ],
+  "admin.mediaServer.state.proposed": [
+   "Proposed",
+   "Vorgeschlagen"
+  ],
+  "admin.mediaServer.state.unlinked": [
+   "Not linked",
+   "Nicht verknüpft"
+  ],
+  "admin.catalog.kpi.catalogs": [
+   "Catalogs",
+   "Kataloge"
+  ],
+  "admin.catalog.catalog": [
+   "Catalog",
+   "Katalog"
+  ],
+  "admin.catalog.mode": [
+   "Mode",
+   "Modus"
+  ],
+  "admin.catalog.mode.live": [
+   "Live",
+   "Live"
+  ],
+  "admin.catalog.mode.kept": [
+   "Kept",
+   "Gemerkt"
+  ],
+  "admin.catalog.mode.whole": [
+   "Whole",
+   "Komplett"
+  ],
+  "admin.catalog.state.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "admin.catalog.state.off": [
+   "Off",
+   "Aus"
+  ],
+  "admin.catalog.configure": [
+   "Configure",
+   "Konfigurieren"
+  ],
+  "admin.catalog.syncNow": [
+   "Sync now",
+   "Jetzt abgleichen"
+  ],
+  "admin.catalog.syncStarted": [
+   "Catalog sync started.",
+   "Katalogabgleich gestartet."
+  ],
+  "admin.catalog.list": [
+   "Discover catalogs",
+   "Discover-Kataloge"
+  ],
+  "admin.catalog.allDay": [
+   "All day",
+   "Ganztägig"
+  ],
+  "admin.catalog.pace": [
+   "{0} requests/min",
+   "{0} Anfragen/Min."
+  ],
+  "admin.catalog.actions": [
+   "Catalog actions",
+   "Katalogaktionen"
+  ],
+  "downloadStorage.title": [
+   "Download storage",
+   "Download-Speicher"
   ],
   "error.homePage": [
    "Go to home page",
@@ -11931,6 +12035,186 @@
   "errors.anilist_token_expired": [
    "The AniList sign-in has expired; connect again.",
    "Die AniList-Anmeldung ist abgelaufen; verbinde erneut."
+  ],
+  "downloads.sections": [
+   "Acquisition pages",
+   "Seiten der Beschaffung"
+  ],
+  "acquisition.kpi.total": [
+   "Total",
+   "Gesamt"
+  ],
+  "acquisition.kpi.reachable": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "acquisition.kpi.failing": [
+   "Failing",
+   "Fehlerhaft"
+  ],
+  "acquisition.kpi.disabled": [
+   "Disabled",
+   "Ausgeschaltet"
+  ],
+  "acquisition.connection.lastTest": [
+   "Last test",
+   "Letzter Test"
+  ],
+  "acquisition.connection.state.backoff": [
+   "Paused",
+   "Pausiert"
+  ],
+  "acquisition.connection.state.error": [
+   "Failing",
+   "Fehlerhaft"
+  ],
+  "acquisition.connection.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "acquisition.actions": [
+   "Page actions",
+   "Aktionen der Seite"
+  ],
+  "dock.page.single": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "arr.scope": [
+   "Media type",
+   "Medientyp"
+  ],
+  "arr.actions": [
+   "Page actions",
+   "Aktionen der Seite"
+  ],
+  "profile.kpi.total": [
+   "Profiles",
+   "Profile"
+  ],
+  "profile.kpi.inUse": [
+   "In use",
+   "In Benutzung"
+  ],
+  "profile.kpi.scored": [
+   "With format scores",
+   "Mit Format-Scores"
+  ],
+  "profile.kpi.upgrading": [
+   "Upgrading",
+   "Mit Upgrades"
+  ],
+  "profile.none": [
+   "No profiles for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Profile."
+  ],
+  "profile.scores": [
+   "Scores",
+   "Scores"
+  ],
+  "profile.usedBy": [
+   "In use: {0}",
+   "In Benutzung: {0}"
+  ],
+  "profile.unused": [
+   "Unused",
+   "Unbenutzt"
+  ],
+  "profile.new": [
+   "New profile",
+   "Neues Profil"
+  ],
+  "arr.col.conditions": [
+   "Conditions",
+   "Bedingungen"
+  ],
+  "arr.col.renaming": [
+   "Renaming",
+   "Umbenennen"
+  ],
+  "arr.col.renaming.yes": [
+   "Yes",
+   "Ja"
+  ],
+  "arr.col.profiles": [
+   "Profiles",
+   "Profile"
+  ],
+  "arr.col.required": [
+   "Required",
+   "Erforderlich"
+  ],
+  "arr.col.ignored": [
+   "Ignored",
+   "Ignoriert"
+  ],
+  "arr.col.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "arr.formats.none": [
+   "No custom formats for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Custom Formats."
+  ],
+  "arr.format.used": [
+   "Used",
+   "Benutzt"
+  ],
+  "arr.format.unused": [
+   "Unused",
+   "Unbenutzt"
+  ],
+  "arr.format.title": [
+   "Custom format",
+   "Custom Format"
+  ],
+  "arr.format.add": [
+   "New format",
+   "Neues Format"
+  ],
+  "arr.release.none": [
+   "No release profiles for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Release-Profile."
+  ],
+  "arr.release.title": [
+   "Release profile",
+   "Release-Profil"
+  ],
+  "arr.release.add": [
+   "New release profile",
+   "Neues Release-Profil"
+  ],
+  "arr.tags.none": [
+   "No tags yet.",
+   "Es gibt noch keine Tags."
+  ],
+  "arr.tag": [
+   "Tag",
+   "Tag"
+  ],
+  "arr.tag.title": [
+   "Tag",
+   "Tag"
+  ],
+  "arr.tag.add": [
+   "New tag",
+   "Neuer Tag"
+  ],
+  "arr.scores": [
+   "Format scores",
+   "Format-Scores"
+  ],
+  "profile.add.Manga": [
+   "Add manga profile",
+   "Manga-Profil hinzufügen"
+  ],
+  "profile.add.Music": [
+   "Add music profile",
+   "Musik-Profil hinzufügen"
+  ],
+  "profile.add.Game": [
+   "Add game profile",
+   "Spiele-Profil hinzufügen"
   ]
  }
 }

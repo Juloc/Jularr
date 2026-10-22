@@ -3,6 +3,23 @@
     > p { display: flex; min-width: 0; }
     &__selection { flex: 1 1 auto; min-width: 0; margin-inline-start: 0.35em; }
 
+    &__row { display: flex; align-items: center; gap: 7px; }
+    &__path [data-folder-selection] { display: block; flex: 1 1 auto; min-width: 0; }
+
+    // The chosen folder: a path on the field tint in the monospace of the mockups' file path.
+    &__path {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-small);
+        background: var(--field);
+        color: var(--muted);
+        font-family: ui-monospace, monospace;
+        font-size: var(--text-small);
+    }
+
     &__dialog {
         width: min(640px, calc(100% - 32px));
         max-height: calc(100dvh - 32px);

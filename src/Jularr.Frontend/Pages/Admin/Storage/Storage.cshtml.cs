@@ -24,7 +24,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         CreateStorageMountV1 create, UpdateStorageMountV1 update, CheckStorageMountV1 check, ReadStorageMountVolumeV1 readVolume, WakeStorageMountV1 wake, RemoveStorageMountV1 remove,
         UpdateStorageSynologyV1 synology, ReadStorageSynologyStatusV1 synologyStatus, PowerStorageSynologyV1 synologyPower,
         ReadStorageSynologyCertificateV1 synologyCertificate, TrustStorageSynologyCertificateV1 trustCertificate, ReadStorageDirectoriesV1 readDirectories, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, RenameLibraryRootV1 renameRoot, DeleteLibraryRootV1 deleteRoot,
-        QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts) : JularrPage
+        QueueLibraryScanV1 queueScan, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<StorageMountDetailsV1>? _mounts;
         private StorageMountDetailsV1? _mount;
@@ -64,50 +64,186 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         [BindProperty(SupportsGet = true)]
         public SynologyPowerType? Power { get; set; }
 
+        // One connection (or a new one) at a time; otherwise the connections as cards.
+        private bool IsDetail => StorageMountId is not null || _input is not null || Request.Query.ContainsKey("protocol");
+
         protected override void Define(Page page)
         {
-            page.Title(IsSetup ? "setup.storage.title" : "storage.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Storage/Storage.entry.scss");
-            page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
-
-            var split = new Split(content =>
+            if (IsSetup)
             {
-                // Physical connections.
-                content.Primary.Add(new A(new Text("storage.add.Smb")).Attribute("href", Address(protocol: StorageProtocolType.Smb)));
-                content.Primary.Add(new A(new Text("storage.add.Nfs")).Attribute("href", Address(protocol: StorageProtocolType.Nfs)));
-                if (_localPaths.Count > 0) content.Primary.Add(new A(new Text("storage.add.Local")).Attribute("href", Address(protocol: StorageProtocolType.Local)));
-                content.Primary.Add(new Table<StorageMountDetailsV1>(_mounts?.Items ?? [])
-                    .Text(item => item.Name, "storage.name")
-                    .Resource(item => item.StorageProtocolTypeId, "storage.protocol", protocol => "storage.protocol." + protocol)
-                    .Content("storage.location", item => new ValueText(item.Host is null ? item.SharePath : item.Host + item.SharePath))
-                    .Content("storage.health", item => new Text("storage.health." + (item.StorageHealthTypeId?.ToString() ?? "Unknown")))
-                    .Link(item => item.Id, "common.open", id => Address(id), "common.open"));
+                page.Title("setup.storage.title");
+                page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
+            }
+            else if (IsDetail)
+            {
+                page.Title("storage.title", _mount?.Name);
+                page.Parent("storage.title", Address());
+            }
+            else
+            {
+                page.Title("storage.title");
+            }
 
-                if (_mounts?.Page > 1) content.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(pageNumber: PageNumber - 1)));
-                if (_mounts is { } rows && rows.Items.Count == rows.PageSize) content.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
+            if (IsDetail)
+            {
+                page.Asset("Framework/Components/FolderPicker.entry.ts");
+                DefineDetail(page, csrf);
+            }
+            else
+            {
+                DefineGrid(page, csrf);
+            }
 
-                // Shared settings/setup editor.
-                var protocol = _input?.StorageProtocolTypeId ?? _mount?.StorageProtocolTypeId ?? Protocol;
-                content.Secondary.Add(ConnectionForm(protocol, csrf));
-                if (protocol != StorageProtocolType.Local) content.Secondary.Add(new P(new Text("storage.credentialsHint")));
-
-                if (_mount is { } mount)
-                {
-                    content.Secondary.Add(new Div([.. ConnectionActions(mount, csrf)]).Class("storage__actions"));
-                    content.Secondary.Add(Health(mount));
-                    if (_volume is { } volume) content.Secondary.Add(Volume(volume));
-
-                    if (FormError is not null && _failedSection is not ("Save" or "Root" or "Synology")) content.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
-                    content.Secondary.Add(new UiSection("storage.paths", Paths(mount, csrf)));
-                    if (mount.IsNetwork) content.Secondary.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
-                }
-            });
-            var detailOpen = StorageMountId is not null || _input is not null || Request.Query.ContainsKey("protocol");
-            page.Content.Add(split.MasterDetail(detailOpen, Address()));
             DefineFooter(page, csrf);
+        }
+
+        // The connections as cards with their state and space, then the card that adds one.
+        private void DefineGrid(Page page, string? csrf)
+        {
+            page.Asset("Framework/Components/Truncated.entry.ts");
+            page.Asset("Framework/Components/ActionDock.entry.ts");
+            var mounts = _mounts?.Items ?? [];
+            if (!IsSetup && texts.Can("acquisition.manage", "Acquisition"))
+            {
+                page.Content.Add(new NavigationTabs([new("storage.connections", "/Admin/Storage", true), new("downloadStorage.title", "/Admin/DownloadStorage", false)], "storage.sections"));
+            }
+
+            // The figures of the connections on this page.
+            var online = mounts.Count(mount => mount.StorageHealthTypeId == StorageHealthType.Online);
+            var free = mounts.Where(mount => mount.StorageHealthTypeId == StorageHealthType.Online).Sum(mount => mount.FreeBytes ?? 0);
+            var figures = new KpiTiles(
+                new KpiTile("storage.kpi.connections", Figure(mounts.Count.ToString("N0", CultureInfo.CurrentCulture)), Glyph("drive"), UiTone.Accent),
+                new KpiTile("storage.kpi.online", Figure(online.ToString("N0", CultureInfo.CurrentCulture)), Glyph("check"), UiTone.Success),
+                new KpiTile("storage.kpi.unreachable", Figure((mounts.Count - online).ToString("N0", CultureInfo.CurrentCulture)), Glyph("alert"), UiTone.Warning),
+                new KpiTile("storage.kpi.free", Figure(ByteSize.Format(free)), Glyph("server"), UiTone.Info)).Strip();
+
+            var cards = new List<IUiComponent>();
+            var dialogs = new List<IUiComponent>();
+            foreach (var mount in mounts)
+            {
+                cards.Add(MountCard(mount, csrf));
+                dialogs.Add(RemoveDialog(mount, csrf));
+            }
+
+            cards.Add(AddCard());
+
+            // An action of a card swaps the figures and the cards together.
+            page.Content.Add(new Region("storage-connections", figures, new CardGrid([.. cards])).Class("storage__cards"));
+            page.Content.AddRange(dialogs);
+            if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
+
+            // Paging sits in the one floating dock.
+            var previous = _mounts is { Page: > 1 } ? Address(pageNumber: PageNumber - 1) : null;
+            var next = _mounts is { } rows && rows.Items.Count == rows.PageSize ? Address(pageNumber: PageNumber + 1) : null;
+            if (previous is not null || next is not null)
+            {
+                page.Content.Add(new ActionDock(assets, "storage.actions", paging: new DockPaging(previous, next, new ValueText(string.Format(CultureInfo.CurrentCulture, texts["dock.pageNumber"], PageNumber)))));
+            }
+        }
+
+        // The state with its icon, the free space, when it was looked at and what the connection offers.
+        private IUiComponent MountCard(StorageMountDetailsV1 mount, string? csrf)
+        {
+            var health = mount.StorageHealthTypeId;
+            var chip = new StateChip(new Text("storage.health." + (health?.ToString() ?? "Unknown")), HealthTone(health), Glyph(HealthIcon(health), 14));
+            var line = texts["storage.protocol." + mount.StorageProtocolTypeId] + (mount.TotalBytes is { } total ? " · " + ByteSize.Format(total) : "");
+            var location = mount.Host is null ? mount.SharePath : mount.Host + mount.SharePath;
+
+            // A connection that is not online shows why instead of a stale measurement; it is never forgotten.
+            var measured = health == StorageHealthType.Online ? mount : null;
+            var unknown = health is null ? texts["storage.health.Unknown"] : health == StorageHealthType.Sleeping ? texts["storage.health.Sleeping"]
+                : mount.DiagnosticCode is { } code ? texts["storage.problem." + (code is "permission_denied" or "probe_timeout" ? code : "storage_unavailable")] : texts["storage.health." + health];
+            var percent = SpaceBar.Percent(measured?.FreeBytes, measured?.TotalBytes);
+            var space = new SpaceBar(measured?.FreeBytes, measured?.TotalBytes, texts["storage.kpi.free"],
+                measured is { FreeBytes: { } freeBytes, TotalBytes: { } totalBytes } ? string.Format(CultureInfo.CurrentCulture, texts["storage.space"], ByteSize.Format(freeBytes), ByteSize.Format(totalBytes)) : "",
+                string.Format(CultureInfo.CurrentCulture, texts["storage.used"], percent ?? 0), unknown);
+
+            var checkedText = mount.CheckedAt is { } checkedAt ? string.Format(CultureInfo.CurrentCulture, texts["storage.checkedAt"], checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : "";
+            var body = new List<IUiComponent> { new Div(new Truncated(location)).Class("feature-card__path"), space,
+                new Div(new Span(new ValueText(checkedText)).Class("feature-card__note"), mount.IsNetwork ? new Strong(new Text(mount.WakeMacAddress is null ? "storage.wake.off" : "storage.wake.active")) : new Span()).Class("feature-card__row") };
+
+            var start = new List<IUiComponent> { CardAction("Check", mount.Id, new Button(Glyph("sync", 14), new Text("storage.check")).Compact().Submit()) };
+            if (mount.WakeMacAddress is not null) start.Add(CardAction("Wake", mount.Id, new Button(Glyph("power", 16)).IconOnly(texts["storage.wake.send"]).Submit()));
+            var end = new List<IUiComponent>
+            {
+                new A(Glyph("pencil", 14), new Text("common.edit")).Class("button button--compact button--soft").Attribute("href", Address(mount.Id)),
+                Modal.Opener(new Button(Glyph("trash", 16)).IconOnly(texts["storage.remove"]), "storage-remove-" + mount.Id.ToString(CultureInfo.InvariantCulture))
+            };
+
+            return new FeatureCard(new IconTile(Glyph("drive", 18), UiTone.Accent), mount.Name, line, chip, body, start, end);
+        }
+
+        // The card that adds a connection of each kind.
+        private IUiComponent AddCard()
+        {
+            var links = new List<IUiComponent> { AddLink("storage.add.Smb", StorageProtocolType.Smb), AddLink("storage.add.Nfs", StorageProtocolType.Nfs) };
+            if (_localPaths.Count > 0) links.Add(AddLink("storage.add.Local", StorageProtocolType.Local));
+            return new Div(new IconTile(Glyph("plus", 18), UiTone.Accent), new Strong(new Text("storage.add")), new Div([.. links]).Class("feature-card__group feature-card__group--wrap")).Class("feature-card feature-card--add");
+        }
+
+        private IUiComponent AddLink(string labelKey, StorageProtocolType protocol) =>
+            new A(new Text(labelKey)).Class("button button--compact button--soft").Attribute("href", Address(protocol: protocol));
+
+        // Removing asks once; the connection's library paths keep their inventory.
+        private IUiComponent RemoveDialog(StorageMountDetailsV1 mount, string? csrf)
+        {
+            var form = new Form<RemoveStorageMountDataV1>(form =>
+            {
+                form.Content(new P(new ValueText(mount.Name)));
+                form.Hidden(item => item.Version);
+                form.Cancel();
+                form.Submit(new Button(new Text("storage.remove")).Warn());
+            }, Address(mount.Id, handler: "Remove") + "&returnTo=list", csrf, new RemoveStorageMountDataV1(mount.Version));
+            return new Modal(assets, "storage-remove-" + mount.Id.ToString(CultureInfo.InvariantCulture), "storage.remove", [form]);
+        }
+
+        // An action of a card posts through the card's region and answers with the list again.
+        private IUiComponent CardAction(string handler, long id, Button button) =>
+            new PostForm(Address(id, handler: handler) + "&returnTo=list", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, [], button);
+
+        private static UiTone HealthTone(StorageHealthType? health) => health switch
+        {
+            StorageHealthType.Online => UiTone.Success,
+            StorageHealthType.Sleeping => UiTone.Info,
+            StorageHealthType.Offline => UiTone.Danger,
+            StorageHealthType.Error => UiTone.Warning,
+            _ => UiTone.Neutral
+        };
+
+        private static string HealthIcon(StorageHealthType? health) => health switch
+        {
+            StorageHealthType.Online => "check",
+            StorageHealthType.Sleeping => "power",
+            StorageHealthType.Offline => "alert",
+            StorageHealthType.Error => "shield",
+            _ => "clock"
+        };
+
+        private IUiComponent Glyph(string name, int size = 20) => new Icon(name, assets, size);
+
+        private static IUiComponent Figure(string value) => new ValueText(value);
+
+        // One connection: its form, what Jularr last saw, its actions, its library paths and the NAS's own administration.
+        private void DefineDetail(Page page, string? csrf)
+        {
+            // Shared settings/setup editor.
+            var protocol = _input?.StorageProtocolTypeId ?? _mount?.StorageProtocolTypeId ?? Protocol;
+            page.Content.Add(ConnectionForm(protocol, csrf));
+            if (protocol != StorageProtocolType.Local) page.Content.Add(new P(new Text("storage.credentialsHint")));
+
+            if (_mount is { } mount)
+            {
+                page.Content.Add(new Div([.. ConnectionActions(mount, csrf)]).Class("storage__actions"));
+                page.Content.Add(Health(mount));
+                if (_volume is { } volume) page.Content.Add(Volume(volume));
+
+                if (FormError is not null && _failedSection is not ("Save" or "Root" or "Synology")) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+                page.Content.Add(new UiSection("storage.paths", Paths(mount, csrf)));
+                if (mount.IsNetwork) page.Content.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
+            }
         }
 
         protected virtual void DefineFooter(Page page, string? csrf) { }
@@ -402,10 +538,14 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             return LocalRedirect(Address(StorageMountId));
         }
 
-        public async Task<IActionResult> OnPostCheckAsync([BindRequired] long storageMountId)
+        // A card's action answers with the list again, the connection's own page with that page.
+        private string Back(long storageMountId, string? returnTo) => returnTo == "list" ? Address() : Address(storageMountId);
+
+        public async Task<IActionResult> OnPostCheckAsync([BindRequired] long storageMountId, string? returnTo)
         {
-            await check.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
-            return LocalRedirect(Address(storageMountId));
+            var status = await check.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
+            Hint("storage.checked", texts["storage.availability." + status.StorageAvailabilityTypeId]);
+            return LocalRedirect(Back(storageMountId, returnTo));
         }
 
         public async Task<IActionResult> OnPostSynologyAsync([BindRequired] long storageMountId, string? synologyUrl, string? synologyUsername, string? password)
@@ -445,11 +585,11 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             return LocalRedirect(Address(storageMountId));
         }
 
-        public async Task<IActionResult> OnPostWakeAsync([BindRequired] long storageMountId)
+        public async Task<IActionResult> OnPostWakeAsync([BindRequired] long storageMountId, string? returnTo)
         {
             await wake.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
             Hint("storage.wake.sent");
-            return LocalRedirect(Address(storageMountId));
+            return LocalRedirect(Back(storageMountId, returnTo));
         }
 
         public async Task<IActionResult> OnPostRemoveAsync([BindRequired] long storageMountId, [BindRequired] long version)

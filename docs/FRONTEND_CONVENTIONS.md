@@ -213,6 +213,10 @@ adds none of its own colours, radii, shadows or font sizes. Design follows the o
   the start of the synopsis and the facts, the table is the `ListPanel` with the column picker. Boxes of all views belong to the page's one bulk form.
 - Owner's decision 21 Oct: one icon set. Icons come from [Assets/Icons](../src/Jularr.Frontend/Assets/Icons) and are stroke-only (24 box, round caps and joins; no filled
   glyphs, no fills that depend on the surface behind them); a missing icon is drawn in that style and added there, never taken from another set.
+- Owner's decision 21 Oct: things that are few and carry a state (storage connections, providers, media servers) are a `CardGrid` of `FeatureCard`s: icon tile, name and one line, `StateChip` with
+  an icon, rows (a `SpaceBar` for a volume's free space), the actions at the foot (first group at the start, second at the end). A card with an id is a Region: its switch or test swaps just that card.
+  Settings of a card open in the shared `Modal`; a thing with many parts (a storage connection with its library paths) has its own page. One chip row joins the pages of an area (Storage: connections, download storage;
+  Integrations: providers, media servers, catalogs); keys are entered in a masked field and never shown again, only whether one is stored.
 - Owner's decision 21 Oct: admin list pages keep their page actions, bulk actions and paging in the one floating
   [ActionDock](../src/Jularr.Frontend/Framework/Components/ActionDock.cs), never in a page head, toolbar or at the end of the list. It is the save pill's
   floating pill (centred, well above the bottom edge, above the floating bar on a phone, always in view) with three optional zones as slots: actions (icon and short

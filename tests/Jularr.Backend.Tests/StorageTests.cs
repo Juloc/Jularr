@@ -77,7 +77,7 @@ namespace Jularr.Backend.Tests
         public async Task Razor_SettingsAndSetup_UseTheSameStoredConnectionsWithoutExposingPasswords()
         {
             await using var host = await CreateHostAsync(razor: true);
-            using var setup = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
+            using var setup = await host.SendAsync(HttpMethod.Get, "/Setup/Storage?protocol=Smb");
             Assert.AreEqual(HttpStatusCode.OK, setup.StatusCode, await setup.Content.ReadAsStringAsync());
             var html = await setup.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "maxlength=\"253\"");

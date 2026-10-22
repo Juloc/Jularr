@@ -181,6 +181,22 @@
     .button--icon:hover:not(:disabled) { border-color: var(--border); background: transparent; color: var(--accent-text); }
 }
 
+// A form of one field in a row (a select and its button) stays on one line; the column head names the field, so its label is for assistive technology only.
+.list-actions .ui-form--inline {
+    flex-wrap: nowrap;
+    gap: 8px;
+
+    & > .ui-field { flex: 1 1 auto; min-width: 0; }
+    .ui-field__top {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
 .list-empty {
     display: grid;
     justify-items: center;

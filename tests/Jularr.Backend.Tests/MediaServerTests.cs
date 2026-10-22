@@ -93,10 +93,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(5_000_000L, jellyfin.Positions["m603"]);
 
             // The providers page shows who shares progress with which profile.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers?view=servers");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, WebUtility.HtmlEncode(jellyfin.ProfileName + " shares progress with " + jellyfin.ProfileName));
+            // One row per server user: the user, the confirmed profile and the state, in the language of the page (English where no text of the language exists, else the German one).
+            // Every row's profile list names every profile, so the row is the one that also carries the linked state's label.
+            var linked = System.Text.RegularExpressions.Regex.Split(html, "class=\"list-row[\" ]").Skip(1).Any(item => item.Contains(WebUtility.HtmlEncode(jellyfin.ProfileName), StringComparison.Ordinal)
+                && (item.Contains(">Linked<", StringComparison.Ordinal) || item.Contains(">Verknüpft<", StringComparison.Ordinal)));
+            Assert.IsTrue(linked, "The page does not say who shares progress with whom.");
             Assert.IsFalse(html.Contains(FakeServer.ApiKey, StringComparison.Ordinal));
         }
 
