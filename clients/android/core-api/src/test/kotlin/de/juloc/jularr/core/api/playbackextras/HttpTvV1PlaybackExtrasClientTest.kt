@@ -69,7 +69,7 @@ class HttpTvV1PlaybackExtrasClientTest {
                 assertNull(api.chapters(9002).single().title)
                 val trickplay = api.trickplay(9002)
                 assertEquals(3, trickplay.sheetCount)
-                assertEquals(1, trickplay.previewAt(200_000).sheetIndex)
+                assertEquals(2, trickplay.previewAt(200_000).sheetIndex)
                 assertArrayEquals(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte()), api.trickplaySheet(9002, 1))
                 assertEquals("f78", api.tracks(9002).last().key)
                 assertTrue(api.subtitleVtt(9002, "f78").startsWith("WEBVTT\n"))
@@ -103,7 +103,7 @@ class HttpTvV1PlaybackExtrasClientTest {
             assertEquals(404, missing.statusCode)
             assertThrows(IllegalArgumentException::class.java) { runBlocking { api.markers(0) } }
             assertThrows(IllegalArgumentException::class.java) { runBlocking { api.subtitleVtt(9002, "../etc/passwd") } }
-            assertThrows(IllegalArgumentException::class.java) { runBlocking { api.trickplaySheet(9002, -1) } }
+            assertThrows(IllegalArgumentException::class.java) { runBlocking { api.trickplaySheet(9002, 0) } }
             assertThrows(IllegalArgumentException::class.java) { runBlocking { api.saveSpeed(BigDecimal("5")) } }
         } finally {
             server.stop(0)
