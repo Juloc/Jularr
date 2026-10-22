@@ -221,7 +221,6 @@ fun TvSearchScreen(
                         }
                     }
                 }
-            }
                 if (onLoadMore != null) {
                     item(key = "load-more") {
                         Button(onClick = onLoadMore) { Text("Weitere Ergebnisse laden") }
