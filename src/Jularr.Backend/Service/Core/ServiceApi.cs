@@ -120,6 +120,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
+            services.Configure<LocalTranslationOptions>(configuration.GetSection("LocalTranslation"));
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
             services.Configure<MediaOptions>(options =>
             {
@@ -242,6 +243,9 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<ReadingDerivation>();
             services.TryAddSingleton<ReadingActivity>();
             services.TryAddSingleton<TranslationFiles>();
+            services.TryAddSingleton<LocalTranslationGate>();
+            services.AddHttpClient<OllamaLocalModels>(http => http.Timeout = TimeSpan.FromMinutes(65))
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false });
             services.TryAddSingleton<SpeechFiles>();
             services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechCatalogClient>(http => http.Timeout = TimeSpan.FromSeconds(25));
             services.AddHttpClient<Jularr.Integrations.Logic.Speech.SpeechModelClient>(http => http.Timeout = TimeSpan.FromMinutes(5));

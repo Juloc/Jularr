@@ -27,6 +27,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             page.Asset("Framework/Components/Form.entry.ts");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Instance));
 
+            if (texts.Can(null, "Translation"))
+            {
+                page.Content.Add(new A(new ValueText("Local translation models")).Attribute("href", "/Admin/Instance/Translation"));
+            }
+
             if (_settings is { } settings)
             {
                 var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));

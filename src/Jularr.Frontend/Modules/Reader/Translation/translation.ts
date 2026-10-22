@@ -48,6 +48,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     const status = reader.querySelector<HTMLElement>("[data-role=translation-status]");
     const source = languageOf(reader.dataset.language, content.innerText.slice(0, 20_000));
     let current: Language | "" = "";
+    let revision = 0;
     let worker: Worker | undefined;
     let loaded: string | undefined;
 
@@ -111,23 +112,66 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         });
     }
 
+    // Local TranslateGemma uses the same section/block identities. Only validated completed
+    // blocks enter the provider-specific cache; a failed block cannot complete the section.
+    async function translateLocal(target: Language, generation: number) {
+        const model = reader.dataset.localModel;
+        const prefix = reader.dataset.localTranslationUrl;
+        if (!model || !prefix || !source) throw new Error("Local translation is unavailable.");
+        const url = prefix + encodeURIComponent(target) + "/" + encodeURIComponent(model);
+        const list = texts();
+        const result = list.map(() => "");
+        const cached = await fetch(url, { credentials: "same-origin" });
+        if (cached.ok) {
+            const data = await cached.json() as { blocks: string };
+            const saved = JSON.parse(data.blocks) as string[];
+            if (Array.isArray(saved) && saved.length === result.length) saved.forEach((text, i) => {
+                if (typeof text === "string") result[i] = text;
+            });
+        }
+        if (current !== target || revision !== generation) return;
+        show(result);
+        const total = list.filter(text => text.trim().length > 0).length;
+        let completed = list.filter((text, i) => text.trim().length > 0 && result[i].trim().length > 0).length;
+        for (let index = 0; index < list.length && current === target && revision === generation; index++) {
+            if (!list[index].trim() || result[index].trim()) continue;
+            say(`${reader.dataset.translatingLabel} ${Math.round(completed * 100 / Math.max(1, total))} %`);
+            const response = await fetch(url + "/blocks/" + index, {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json", RequestVerificationToken: reader.dataset.antiforgery! },
+                body: JSON.stringify({ sourceLanguage: source })
+            });
+            if (!response.ok) throw new Error("Local model could not translate the requested block.");
+            const translated = await response.json() as { text: string };
+            if (current !== target || revision !== generation) return;
+            if (!translated.text?.trim()) throw new Error("Local model returned an empty block.");
+            result[index] = translated.text;
+            completed++;
+            show(result);
+        }
+        if (current === target && revision === generation) say(undefined);
+    }
+
     // Translated batch by batch so the page fills in while it works; the finished section is shared.
-    async function translate(target: Language) {
+    async function translate(target: Language, generation: number) {
+        if (reader.dataset.translationEngine === "gemma") return translateLocal(target, generation);
         const shared = await cached(target);
+        if (revision !== generation) return;
         if (shared) { show(shared); return; }
 
         say(reader.dataset.translatingLabel + " 0 %");
         const active = await engine(target);
         const list = texts();
         const result: string[] = list.map(() => "");
-        for (let start = 0; start < list.length && current === target; start += Batch) {
+        for (let start = 0; start < list.length && current === target && revision === generation; start += Batch) {
             const part = await run(active, list.slice(start, start + Batch), start);
+            if (revision !== generation) return;
             part.forEach((text, offset) => { result[start + offset] = text; });
             show(result);
             say(`${reader.dataset.translatingLabel} ${Math.min(100, Math.round((start + Batch) * 100 / list.length))} %`);
         }
 
-        if (current !== target) return;
+        if (current !== target || revision !== generation) return;
         say(undefined);
         await fetch(reader.dataset.translationUrl! + target, {
             method: "PUT", credentials: "same-origin",
@@ -137,6 +181,7 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
     }
 
     return async function choose(target: Language | "") {
+        const generation = ++revision;
         current = target;
         restore();
         say(undefined);
@@ -144,10 +189,10 @@ export function translator(reader: HTMLElement, content: HTMLElement, createWork
         if (target === "" || !source || source === target) return;
         reader.dataset.translationState = 'loading';
         try {
-            await translate(target);
-            if (current === target) reader.dataset.translationState = 'ready';
+            await translate(target, generation);
+            if (current === target && generation === revision) reader.dataset.translationState = 'ready';
         } catch {
-            if (current === target) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
+            if (current === target && generation === revision) { reader.dataset.translationState = 'failed'; restore(); say(reader.dataset.translationFailedLabel); }
         }
     };
 }
