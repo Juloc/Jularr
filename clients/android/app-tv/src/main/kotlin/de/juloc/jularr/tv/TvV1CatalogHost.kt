@@ -156,39 +156,6 @@ fun TvV1CatalogHost(
                     // reading/ebook assets out of this TV-video-only Continue row.
                     continueWatching = catalog.continueWatching().filter { it.mediaAssetTypeId == 1 }
                 }
-                TvV1CatalogPage.Settings -> Row(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
-            TvSidebar(
-                selected = TvRoute.Settings,
-                focusMemory = focusMemory,
-                onSelect = { route ->
-                    when (route) {
-                        TvRoute.Home -> page = TvV1CatalogPage.Home
-                        TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
-                        TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
-                        else -> Unit
-                    }
-                },
-            )
-            Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
-                TvV1SettingsHost(
-                    serverOrigin = serverOrigin,
-                    error = error,
-                    onSwitchProfile = { page = TvV1CatalogPage.ProfileSelect },
-                    onSignOut = {
-                        if (capabilities.hasPermission("session.self.logout")) {
-                            error = null
-                            settingsSignOutRequested = true
-                        } else error = "Abmeldung ist für diese Session nicht freigegeben."
-                    },
-                    onChangeServer = onChangeServer,
-                )
-            }
-        }
-        TvV1CatalogPage.ProfileSelect -> TvV1ProfilesScreen(
-            api = profileApi,
-            onSwitched = onProfileChanged,
-            onBack = ::back,
-        )
         TvV1CatalogPage.Search -> {
                     require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
                         "Suche ist für dieses Profil nicht freigegeben."
@@ -206,13 +173,6 @@ fun TvV1CatalogHost(
                         catalog.watchlist(page = pageNumber, pageSize = 100)
                     })
                 }
-                TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
-            catalog = catalog,
-            serverOrigin = serverOrigin,
-            requestHeaders = authorization,
-            onLocalWork = { id -> openWork(id.toString()) },
-            onBack = ::back,
-        )
         TvV1CatalogPage.Details -> {
                     val workId = requireNotNull(detailWorkId)
                     require(capabilities.hasModule("Library") && capabilities.hasPermission("profile.media.read")) {
@@ -322,6 +282,39 @@ fun TvV1CatalogHost(
                 }
             }
         }
+                TvV1CatalogPage.Settings -> Row(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            TvSidebar(
+                selected = TvRoute.Settings,
+                focusMemory = focusMemory,
+                onSelect = { route ->
+                    when (route) {
+                        TvRoute.Home -> page = TvV1CatalogPage.Home
+                        TvRoute.Watchlist -> page = TvV1CatalogPage.Watchlist
+                        TvRoute.ProfileSelect -> page = TvV1CatalogPage.ProfileSelect
+                        else -> Unit
+                    }
+                },
+            )
+            Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                TvV1SettingsHost(
+                    serverOrigin = serverOrigin,
+                    error = error,
+                    onSwitchProfile = { page = TvV1CatalogPage.ProfileSelect },
+                    onSignOut = {
+                        if (capabilities.hasPermission("session.self.logout")) {
+                            error = null
+                            settingsSignOutRequested = true
+                        } else error = "Abmeldung ist für diese Session nicht freigegeben."
+                    },
+                    onChangeServer = onChangeServer,
+                )
+            }
+        }
+        TvV1CatalogPage.ProfileSelect -> TvV1ProfilesScreen(
+            api = profileApi,
+            onSwitched = onProfileChanged,
+            onBack = ::back,
+        )
         TvV1CatalogPage.Search -> {
             if (error != null) TvV1ApiMessage("Suche", requireNotNull(error), { reload += 1 }, ::back)
             else TvSearchScreen(
@@ -338,6 +331,13 @@ fun TvV1CatalogHost(
                 onOpenDiscover = { page = TvV1CatalogPage.Discover },
             )
         }
+                TvV1CatalogPage.Discover -> TvV1DiscoverScreen(
+            catalog = catalog,
+            serverOrigin = serverOrigin,
+            requestHeaders = authorization,
+            onLocalWork = { id -> openWork(id.toString()) },
+            onBack = ::back,
+        )
         TvV1CatalogPage.Details -> {
             when {
                 error != null -> TvV1ApiMessage("Mediendetails", requireNotNull(error), { reload += 1 }, ::back)
