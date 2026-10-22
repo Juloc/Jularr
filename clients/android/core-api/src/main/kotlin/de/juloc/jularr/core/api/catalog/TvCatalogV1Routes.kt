@@ -17,6 +17,14 @@ object TvCatalogV1Routes {
     const val DiscoverCatalogSearch = "$base/discover/catalog/search"
     const val DiscoverCatalogFeed = "$base/discover/catalog/feed"
     const val DiscoverSuggestions = "$base/discover/suggestions"
+    const val DiscoverCatalogEntry = "$base/discover/catalog/entry"
+
+    /** TMDB search result only; catalog results with other namespaces use catalog/entry. */
+    fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): String {
+        require(mediaTypeId == 1 || mediaTypeId == 2) { "TMDB details only support movies or series." }
+        require(tmdbId > 0) { "TMDB id must be positive." }
+        return "$base/discover/$mediaTypeId/$tmdbId"
+    }
 
     fun work(workId: Long): String = "$base/works/${positiveId(workId)}"
     fun seasons(workId: Long): String = "${work(workId)}/seasons"
