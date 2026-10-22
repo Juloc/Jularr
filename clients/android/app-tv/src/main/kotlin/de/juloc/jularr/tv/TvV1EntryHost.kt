@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -159,7 +160,7 @@ fun TvV1EntryHost(
             description = origin.orEmpty(),
         ) {
             Text(error ?: "Unbekannter Verbindungsfehler", color = MaterialTheme.colorScheme.error)
-            Row(horizontalArrangement = Arrangement.spacedBy(androidx.compose.ui.unit.Dp(12f))) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
                     error = null
                     phase = TvV1EntryPhase.Restoring
