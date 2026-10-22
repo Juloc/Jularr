@@ -1,9 +1,11 @@
 import { contrast } from '../Appearance/Palette';
 import { initializeRanges } from '../../Framework/Components/Range';
+import { initializeOverflow } from './Overflow';
 
 export interface ReaderSettings {
     size: number;
     spacing: number;
+    paragraph: number;
     font: 'serif' | 'sans';
     width: number;
     indent: boolean;
@@ -28,6 +30,7 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
         // Existing reader sizes were rem; keep that device preference when opening the new controls.
         size: number(typeof stored.size === 'number' && stored.size > 0 && stored.size <= 3 ? Math.round(stored.size * 16) : stored.size, 14, 40, 20),
         spacing: number(stored.spacing, 120, 220, 165),
+        paragraph: number(stored.paragraph, 0, 200, 100),
         font: stored.font === 'sans' ? 'sans' : 'serif',
         width: number(stored.width, 40, 90, 68),
         indent: stored.indent === true,
@@ -45,12 +48,33 @@ export function readerSettings(value: unknown, rtl = false): ReaderSettings {
     };
 }
 
+// What the profile keeps for every device: the look of the text. The rest of the settings stays with the device.
+const ProfileKeys: (keyof ReaderSettings)[] = ['font', 'size', 'spacing', 'paragraph', 'width', 'hyphenation'];
+
 export function initializeReaderSettings(reader: HTMLElement, changed: () => void): ReaderSettings {
-    let stored: unknown;
+    let stored: unknown, profile: unknown;
     try { stored = JSON.parse(localStorage.getItem(Key) ?? 'null'); } catch { /* Device preferences are optional. */ }
-    const settings = readerSettings(stored, reader.dataset.direction === 'rtl');
+    try { profile = JSON.parse(reader.dataset.profileSettings ?? 'null'); } catch { /* A profile without choices leaves the device's. */ }
+    const settings = readerSettings({ ...(stored as object | null), ...(profile as object | null) }, reader.dataset.direction === 'rtl');
+    let saving = 0;
+    const saveProfile = (now = false): void => {
+        const url = reader.dataset.settingsUrl;
+        if (!url) return;
+        window.clearTimeout(saving);
+        const send = (): void => {
+            saving = 0;
+            void fetch(url, {
+                method: 'PUT', credentials: 'same-origin', keepalive: true,
+                headers: { 'Content-Type': 'application/json', RequestVerificationToken: reader.dataset.antiforgery! },
+                body: JSON.stringify({ fontTypeId: settings.font === 'sans' ? 2 : 1, size: settings.size, lineSpacing: settings.spacing, paragraphSpacing: settings.paragraph,
+                    textWidth: settings.width, hyphenation: settings.hyphenation })
+            }).catch(() => { /* The device keeps its copy; the next change tries again. */ });
+        };
+        if (now) send(); else saving = window.setTimeout(send, 600);
+    };
+    window.addEventListener('pagehide', () => { if (saving) saveProfile(true); });
     const fields = Array.from(reader.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-panel=settings] input:not([type=hidden]), [data-panel=settings] select'));
-    const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', FontFamily: 'font', TextWidth: 'width', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
+    const names: Record<string, keyof ReaderSettings> = { Size: 'size', Spacing: 'spacing', Paragraph: 'paragraph', FontFamily: 'font', TextWidth: 'width', Indent: 'indent', Hyphenation: 'hyphenation', Illustrations: 'illustrations',
         Mode: 'mode', Layout: 'layout', Direction: 'direction', Surface: 'surface', Colour: 'colour', Animation: 'animation', Preset: 'preset', Fit: 'fit' };
     const apply = (): void => {
         reader.dataset.mode = settings.mode;
@@ -65,6 +89,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         reader.style.setProperty('--reader-text-width', `${settings.width}ch`);
         reader.style.setProperty('--reader-size', `${settings.size}px`);
         reader.style.setProperty('--reader-spacing', String(settings.spacing / 100));
+        reader.style.setProperty('--reader-paragraph', String(settings.paragraph / 100));
         reader.style.setProperty('--reader-paper', settings.colour);
         reader.style.setProperty('--reader-ink', contrast(settings.colour, '#000000') > contrast(settings.colour, '#ffffff') ? '#181818' : '#fafafa');
         fields.forEach(field => {
@@ -82,7 +107,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         const key = names[field.name];
         if (!key) return;
         const value = field instanceof HTMLInputElement && field.type === 'checkbox' ? field.checked
-            : key === 'size' || key === 'spacing' || key === 'width' ? Number(field.value) : field.value;
+            : key === 'size' || key === 'spacing' || key === 'paragraph' || key === 'width' ? Number(field.value) : field.value;
         const next = { ...settings, [key]: value };
         if (key === 'preset') {
             next.spacing = next.preset === 'novel' ? 175 : 165;
@@ -92,6 +117,7 @@ export function initializeReaderSettings(reader: HTMLElement, changed: () => voi
         Object.assign(settings, readerSettings(next));
         apply();
         try { localStorage.setItem(Key, JSON.stringify(settings)); } catch { /* Controls still work without storage. */ }
+        if (ProfileKeys.includes(key) || key === 'preset') saveProfile();
         changed();
     });
     reader.querySelector('[data-reader-select]')?.addEventListener('click', event => {
@@ -254,6 +280,7 @@ export function initializeReaderChrome(reader: HTMLElement): void {
         }
     });
     reveal.forEach(button => button.addEventListener('click', () => chrome(reader.dataset.chrome !== 'visible')));
+    initializeOverflow(reader);
     reader.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !event.defaultPrevented && reader.dataset.view === 'fullscreen' && reader.dataset.chrome === 'visible') {
             chrome(false);
