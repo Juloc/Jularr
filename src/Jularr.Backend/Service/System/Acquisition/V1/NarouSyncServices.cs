@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Storage;
+using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
@@ -233,7 +234,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                             WHERE "StoredFileId" = @StoredFileId;
                             """
                     };
-                    sql.Parameters.Add(new { file.StoredFileId });
+                    sql.Parameters.Add(new StoredFileParameters(file.StoredFileId));
                     await ctx.ExecuteAsyncForAffectedRows(sql, token);
                     return true;
                 }, ct);
