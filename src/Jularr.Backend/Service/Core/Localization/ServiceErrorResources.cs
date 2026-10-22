@@ -36,6 +36,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.playback_conversion_failed", "The media conversion failed. Please try again."),
             new("errors.playback_subtitle_unavailable", "This subtitle cannot be shown."),
             new("errors.playback_capacity_exhausted", "Server busy: transcoding is unavailable right now."),
+            new("errors.playback_cache_unavailable", "The playback cache is full or its storage is unavailable. Check the transcode cache path, size budget and free-space reserve."),
             new("errors.playback_evicted", "Playback ended because the server needed the capacity. Try again at a lower quality."),
             new("errors.benchmark_unavailable", "The benchmark needs FFmpeg, which this server does not have."),
             new("errors.benchmark_failed", "No encoder of this server ran the benchmark clips."),

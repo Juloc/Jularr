@@ -65,6 +65,10 @@ connected server. Both kinds of registration remain configurable.
   safe paths and provider access remain Backend-owned. NAS outages leave catalog
   and administration browsing usable. No active database is installed or changed.
 
+## Playback cache safety
+
+Video transcoding uses `Media:TranscodeCachePath` (by default the Jularr subfolder in the system temp directory). `Media:MaxTranscodeCacheBytes` defaults to 2 GiB and `Media:TranscodeCacheFreeSpaceReserveBytes` to 1 GiB; both can be configured through the standard `Media__...` environment variables. FFmpeg jobs are stopped when the cache exceeds its budget or storage becomes unavailable, and further segment requests fail instead of writing unchecked. The periodic check is a runtime safety budget, **not** a filesystem-enforced hard quota; operators must choose a suitable bounded volume for stricter isolation. Full UI selection and a mandatory explicit cache location remain separate pre-release work.
+
 ## Verification
 
 SetupTests cover bootstrap concurrency/closure, generated-language selection,

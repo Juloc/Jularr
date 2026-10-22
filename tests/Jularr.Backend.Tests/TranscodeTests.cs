@@ -202,6 +202,27 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Registry_CacheBudget_PreventsNewConversionWhenDiskBudgetIsExceeded()
+        {
+            using var cache = new LibraryTests.TemporaryDirectory();
+            using var transcodes = new PlaybackTranscodes(new MediaTranscoder(), Microsoft.Extensions.Options.Options.Create(new MediaOptions
+            {
+                TranscodeCachePath = cache.Path,
+                MaxTranscodeCacheBytes = 1024,
+                TranscodeCacheFreeSpaceReserveBytes = 0
+            }));
+            var session = Guid.NewGuid();
+            PlaybackTranscodeSource Source() => new(session, 7, new StorageInput("film.mkv", null), 0, 1, false, true, 60_000);
+            Assert.AreEqual(0, transcodes.Admit([1], false, 2, _ => Source()));
+
+            File.WriteAllBytes(Path.Combine(cache.Path, "large.ts"), new byte[1025]);
+            var error = await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() => transcodes.GetSegmentAsync(session, 7, 0, CancellationToken.None));
+            Assert.AreEqual("playback_cache_unavailable", error.Code);
+            var blocked = Assert.ThrowsExactly<ServiceUnavailableException>(() => transcodes.Admit([1], false, 2, _ => Source()));
+            Assert.AreEqual("playback_cache_unavailable", blocked.Code);
+        }
+
+        [TestMethod]
         public async Task Registry_Admission_StopsTheNewestNormalConversionAndTellsItsPlayer()
         {
             using var cache = new LibraryTests.TemporaryDirectory();

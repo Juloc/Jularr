@@ -1795,6 +1795,7 @@ namespace Jularr.Frontend.Localization
             new("hint.AccountFields.TranscodingPriority.info", "When the server is full, this account's conversion stops the newest one of an account without priority."),
             new("operation.type.TranscodeBenchmark", "Transcoding benchmark"),
             new("player.status.playback_capacity_exhausted", "Server busy: transcoding is unavailable right now."),
+            new("player.status.playback_cache_unavailable", "Playback cache is full or its storage is unavailable"),
             new("player.status.playback_evicted", "Playback ended because the server needed the capacity. Choose a lower quality to continue."),
             new("player.status.playback_reduced", "The server is busy, so this plays in a lower quality."),
             new("system.database", "Database size"),
