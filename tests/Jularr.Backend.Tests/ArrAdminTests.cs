@@ -116,7 +116,8 @@ namespace Jularr.Backend.Tests
                 using var response = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=" + tab + "&mediaTypeId=1");
                 var html = await response.Content.ReadAsStringAsync();
                 Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, html);
-                Assert.AreEqual(2, html.Split("class=\"navigation-tabs\"", StringSplitOptions.None).Length);
+                Assert.AreEqual(2, html.Split("class=\"navigation-tabs navigation-tabs--filters\"", StringSplitOptions.None).Length);
+                Assert.IsFalse(html.Contains("delay", StringComparison.OrdinalIgnoreCase), "A delay is offered on " + tab);
                 Assert.IsFalse(html.Contains("FallbackQualities", StringComparison.Ordinal));
                 if (tab == "tags")
                 {
@@ -126,6 +127,47 @@ namespace Jularr.Backend.Tests
                 }
             }
             Assert.AreEqual(1L, await host.ScalarAsync("""SELECT count(*) FROM "Tags" WHERE "Label" = 'arr-test' """));
+        }
+
+        [TestMethod]
+        public async Task ProfileEditor_ScoresEveryFormat_AndKeepsOnlyScoresThatCount()
+        {
+            await using var host = await CreateAsync(razor: true);
+            using var imported = await host.SendAsync(HttpMethod.Post, Root + "custom-formats/import", new ImportCustomFormatsDataV1(MediaType.Movie, TakeoverSourceType.Radarr,
+                """{"name":"Matrix format","specifications":[{"name":"Title","implementation":"ReleaseTitleSpecification","fields":{"value":"HDR"}}]}"""));
+            var format = (await imported.Content.ReadFromJsonAsync<BaseDataList<SavedCustomFormatV1>>())!.Single();
+            var profileId = (long)(await host.ScalarAsync("""SELECT "Id" FROM "AcquisitionProfiles" WHERE "MediaTypeId" = 1 AND "IsDefault" """))!;
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = " + profileId))!;
+
+            // The editor lists every format of the media type with its score, not only those already scored.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Matrix format");
+            StringAssert.Contains(html, "name=\"FormatScores[0].Score\"");
+            Assert.IsFalse(html.Contains("addFormatId", StringComparison.Ordinal));
+
+            // A score is saved with the profile; a format left at zero is not stored.
+            using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", "Matrix"), new("IsDefault", "True"), new("AllowedQualities", "WEBDL-1080p"), new("MinimumFormatScore", "10"),
+                new("FormatScores[0].FormatId", format.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), new("FormatScores[0].Score", "75"),
+                new("FormatScores[1].FormatId", "999999"), new("FormatScores[1].Score", "0")
+            ]));
+            Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var stored = await host.SendAsync(HttpMethod.Get, Root + "profiles/" + profileId);
+            var scores = (await stored.Content.ReadFromJsonAsync<AcquisitionProfileDetailsV1>())!.FormatScores;
+            Assert.AreEqual(1, scores.Count);
+            Assert.AreEqual((format.Id, 75), (scores[0].FormatId, scores[0].Score));
+
+            // The format list shows it as used and its editor is a dialog; no page offers a waiting time.
+            using var formats = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?tab=formats&mediaTypeId=1&edit=" + format.Id);
+            var list = await formats.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, formats.StatusCode, list);
+            StringAssert.Contains(list, "data-open=\"true\"");
+            StringAssert.Contains(list, "id=\"format-editor\"");
+            Assert.IsFalse(list.Contains("delay", StringComparison.OrdinalIgnoreCase));
         }
 
         [TestMethod]

@@ -5384,6 +5384,86 @@
    "Series",
    "Serien"
   ],
+  "system.performance": [
+   "Performance",
+   "Leistung"
+  ],
+  "system.performance.processor": [
+   "Processor",
+   "Prozessor"
+  ],
+  "system.performance.memory": [
+   "Memory",
+   "Arbeitsspeicher"
+  ],
+  "system.performance.processorHistory": [
+   "Processor use over the last six hours",
+   "Prozessorauslastung der letzten sechs Stunden"
+  ],
+  "system.performance.memoryHistory": [
+   "Memory use over the last six hours",
+   "Speicherauslastung der letzten sechs Stunden"
+  ],
+  "system.performance.service": [
+   "Service",
+   "Dienst"
+  ],
+  "system.performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "system.performance.errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "system.performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "system.performance.maximum": [
+   "Longest",
+   "Längster"
+  ],
+  "system.performance.empty": [
+   "No calls in the last hour.",
+   "Keine Aufrufe in der letzten Stunde."
+  ],
+  "system.logs": [
+   "Recent warnings and errors",
+   "Letzte Warnungen und Fehler"
+  ],
+  "system.logs.empty": [
+   "Nothing went wrong since Jularr started.",
+   "Seit dem Start von Jularr ist nichts schiefgelaufen."
+  ],
+  "system.logs.at": [
+   "Time",
+   "Zeit"
+  ],
+  "system.logs.level": [
+   "Level",
+   "Stufe"
+  ],
+  "system.logs.area": [
+   "Area",
+   "Bereich"
+  ],
+  "system.logs.message": [
+   "Message",
+   "Meldung"
+  ],
+  "system.logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "system.logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "system.logs.level.Critical": [
+   "Critical",
+   "Kritisch"
+  ],
   "calendar.view.Month": [
    "Month",
    "Monat"
@@ -9584,6 +9664,10 @@
    "System",
    "System"
   ],
+  "nav.system.overview": [
+   "Overview",
+   "Übersicht"
+  ],
   "operation.type.Job": [
    "Background job",
    "Hintergrundjob"
@@ -10456,309 +10540,185 @@
    "This username is already taken.",
    "Dieser Benutzername ist schon vergeben."
   ],
-  "nav.group.overview": [
-   "Overview",
-   "Übersicht"
+  "downloads.sections": [
+   "Acquisition pages",
+   "Seiten der Beschaffung"
   ],
-  "nav.system.server": [
-   "Server",
-   "Server"
+  "acquisition.kpi.total": [
+   "Total",
+   "Gesamt"
   ],
-  "admin.dashboard.title": [
-   "Dashboard",
-   "Dashboard"
-  ],
-  "admin.performance.title": [
-   "Performance",
-   "Performance"
-  ],
-  "admin.logs.title": [
-   "Logs",
-   "Logs"
-  ],
-  "dashboard.kpi.status": [
-   "System status",
-   "Systemstatus"
-  ],
-  "dashboard.kpi.media": [
-   "Media",
-   "Medien"
-  ],
-  "dashboard.kpi.downloads": [
-   "Downloads",
-   "Downloads"
-  ],
-  "dashboard.kpi.requests": [
-   "Open requests",
-   "Offene Requests"
-  ],
-  "dashboard.status.stable": [
-   "Stable",
-   "Stabil"
-  ],
-  "dashboard.status.warning": [
-   "Warning",
-   "Warnung"
-  ],
-  "dashboard.status.stable.foot": [
-   "All services answer",
-   "Alle Dienste erreichbar"
-  ],
-  "dashboard.status.warning.foot": [
-   "{0} service(s) do not answer",
-   "{0} Dienst(e) nicht erreichbar"
-  ],
-  "dashboard.status.unchecked": [
-   "Not checked yet",
-   "Noch nicht geprüft"
-  ],
-  "dashboard.media.files": [
-   "{0} files managed",
-   "{0} Dateien verwaltet"
-  ],
-  "dashboard.downloads.failed": [
-   " with errors",
-   " mit Fehler"
-  ],
-  "dashboard.requests.foot": [
-   "Waiting for a decision",
-   "Warten auf Freigabe"
-  ],
-  "dashboard.performance": [
-   "System performance",
-   "Systemleistung"
-  ],
-  "dashboard.performance.window": [
-   "Last 24 hours",
-   "Letzte 24 Stunden"
-  ],
-  "dashboard.activity": [
-   "Activity & downloads",
-   "Aktivität & Downloads"
-  ],
-  "dashboard.activity.open": [
-   "To the queue",
-   "Zur Queue"
-  ],
-  "dashboard.activity.empty": [
-   "Nothing is downloading right now.",
-   "Gerade läuft kein Download."
-  ],
-  "dashboard.services": [
-   "Available services",
-   "Verfügbare Dienste"
-  ],
-  "dashboard.services.check": [
-   "Check now",
-   "Jetzt prüfen"
-  ],
-  "dashboard.services.empty": [
-   "No service is set up yet.",
-   "Es ist noch kein Dienst eingerichtet."
-  ],
-  "dashboard.services.checked": [
-   "Last checked {0}",
-   "Zuletzt geprüft {0}"
-  ],
-  "dashboard.services.never": [
-   "Not checked yet",
-   "Noch nicht geprüft"
-  ],
-  "dashboard.storage": [
-   "Storage",
-   "Speicher"
-  ],
-  "dashboard.storage.open": [
-   "Open storage",
-   "Speicher öffnen"
-  ],
-  "dashboard.storage.unchecked": [
-   "Not checked yet",
-   "Noch nicht geprüft"
-  ],
-  "dashboard.storage.video": [
-   "Video",
-   "Videos"
-  ],
-  "dashboard.storage.books": [
-   "Books",
-   "Bücher"
-  ],
-  "dashboard.storage.music": [
-   "Music",
-   "Musik"
-  ],
-  "dashboard.storage.games": [
-   "Games",
-   "Games"
-  ],
-  "dashboard.storage.other": [
-   "Other data",
-   "Andere Daten"
-  ],
-  "health.type.Database": [
-   "Database",
-   "Datenbank"
-  ],
-  "health.type.Storage": [
-   "Storage",
-   "Speicher"
-  ],
-  "health.type.Provider": [
-   "Provider",
-   "Anbieter"
-  ],
-  "health.type.MediaServer": [
-   "Media server",
-   "Medienserver"
-  ],
-  "health.type.DownloadClient": [
-   "Download client",
-   "Download-Client"
-  ],
-  "health.type.Indexer": [
-   "Indexer",
-   "Indexer"
-  ],
-  "health.state.Available": [
+  "acquisition.kpi.reachable": [
    "Reachable",
    "Erreichbar"
   ],
-  "health.state.Unavailable": [
-   "Not reachable",
-   "Nicht erreichbar"
+  "acquisition.kpi.failing": [
+   "Failing",
+   "Fehlerhaft"
   ],
-  "health.state.Unknown": [
-   "Not checked",
-   "Nicht geprüft"
+  "acquisition.kpi.disabled": [
+   "Disabled",
+   "Ausgeschaltet"
   ],
-  "resource.now": [
-   "Now",
-   "Jetzt"
+  "acquisition.connection.lastTest": [
+   "Last test",
+   "Letzter Test"
   ],
-  "resource.chart": [
-   "Processor and memory use over the last 24 hours",
-   "Prozessor- und Speichernutzung der letzten 24 Stunden"
+  "acquisition.connection.state.backoff": [
+   "Paused",
+   "Pausiert"
   ],
-  "resource.processor": [
-   "CPU",
-   "CPU"
+  "acquisition.connection.state.error": [
+   "Failing",
+   "Fehlerhaft"
   ],
-  "resource.memory": [
-   "RAM",
-   "RAM"
+  "acquisition.connection.active": [
+   "Active",
+   "Aktiv"
   ],
-  "performance.kpi.processor": [
-   "CPU",
-   "CPU"
+  "acquisition.actions": [
+   "Page actions",
+   "Aktionen der Seite"
   ],
-  "performance.kpi.memory": [
-   "RAM",
-   "RAM"
+  "dock.page.single": [
+   "Page {0}",
+   "Seite {0}"
   ],
-  "performance.kpi.response": [
-   "Response time",
-   "Antwortzeit"
+  "arr.scope": [
+   "Media type",
+   "Medientyp"
   ],
-  "performance.kpi.errors": [
-   "Error rate",
-   "Fehlerquote"
+  "arr.actions": [
+   "Page actions",
+   "Aktionen der Seite"
   ],
-  "performance.window": [
-   "Period: 24 hours",
-   "Zeitraum: 24 Stunden"
+  "profile.kpi.total": [
+   "Profiles",
+   "Profile"
   ],
-  "performance.history": [
-   "Load and memory use",
-   "Leistung und Speichernutzung"
+  "profile.kpi.inUse": [
+   "In use",
+   "In Benutzung"
   ],
-  "performance.services": [
-   "Services by runtime",
-   "Services nach Laufzeit"
+  "profile.kpi.scored": [
+   "With format scores",
+   "Mit Format-Scores"
   ],
-  "performance.service": [
-   "Service",
-   "Service"
+  "profile.kpi.upgrading": [
+   "Upgrading",
+   "Mit Upgrades"
   ],
-  "performance.calls": [
-   "Calls",
-   "Aufrufe"
+  "profile.none": [
+   "No profiles for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Profile."
   ],
-  "performance.average": [
-   "Average",
-   "Durchschnitt"
+  "profile.scores": [
+   "Scores",
+   "Scores"
   ],
-  "performance.maximum": [
-   "Longest",
-   "Max."
+  "profile.usedBy": [
+   "In use: {0}",
+   "In Benutzung: {0}"
   ],
-  "performance.errorCount": [
-   "Errors",
-   "Fehler"
+  "profile.unused": [
+   "Unused",
+   "Unbenutzt"
   ],
-  "performance.empty": [
-   "No service was called in the last 24 hours.",
-   "In den letzten 24 Stunden wurde kein Service aufgerufen."
+  "profile.new": [
+   "New profile",
+   "Neues Profil"
   ],
-  "logs.level.All": [
-   "All",
-   "Alle"
+  "arr.col.conditions": [
+   "Conditions",
+   "Bedingungen"
   ],
-  "logs.level.Error": [
-   "Error",
-   "Fehler"
+  "arr.col.renaming": [
+   "Renaming",
+   "Umbenennen"
   ],
-  "logs.level.Warning": [
-   "Warning",
-   "Warnung"
+  "arr.col.renaming.yes": [
+   "Yes",
+   "Ja"
   ],
-  "logs.level.Info": [
-   "Info",
-   "Info"
+  "arr.col.profiles": [
+   "Profiles",
+   "Profile"
   ],
-  "logs.source": [
-   "Source",
-   "Quelle"
+  "arr.col.required": [
+   "Required",
+   "Erforderlich"
   ],
-  "logs.source.All": [
-   "All sources",
-   "Alle Quellen"
+  "arr.col.ignored": [
+   "Ignored",
+   "Ignoriert"
   ],
-  "logs.source.Activity": [
-   "Activity",
-   "Aktivität"
+  "arr.col.indexer": [
+   "Indexer",
+   "Indexer"
   ],
-  "logs.source.Job": [
-   "Jobs",
-   "Jobs"
+  "arr.formats.none": [
+   "No custom formats for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Custom Formats."
   ],
-  "logs.source.Application": [
-   "Application",
-   "Anwendung"
+  "arr.format.used": [
+   "Used",
+   "Benutzt"
   ],
-  "logs.search": [
-   "Filter messages",
-   "Meldungen filtern"
+  "arr.format.unused": [
+   "Unused",
+   "Unbenutzt"
   ],
-  "logs.empty": [
-   "No messages for this filter.",
-   "Keine Meldungen für diesen Filter."
+  "arr.format.title": [
+   "Custom format",
+   "Custom Format"
   ],
-  "jobs.job.health": [
-   "Health check",
-   "Gesundheitsprüfung"
+  "arr.format.add": [
+   "New format",
+   "Neues Format"
   ],
-  "jobs.worker.Health": [
-   "Health",
-   "Gesundheit"
+  "arr.release.none": [
+   "No release profiles for this media type yet.",
+   "Für diesen Medientyp gibt es noch keine Release-Profile."
   ],
-  "jobs.health.summary": [
-   "{0} of {1} services reachable",
-   "{0} von {1} Diensten erreichbar"
+  "arr.release.title": [
+   "Release profile",
+   "Release-Profil"
   ],
-  "jobs.about.health": [
-   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
-   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
+  "arr.release.add": [
+   "New release profile",
+   "Neues Release-Profil"
+  ],
+  "arr.tags.none": [
+   "No tags yet.",
+   "Es gibt noch keine Tags."
+  ],
+  "arr.tag": [
+   "Tag",
+   "Tag"
+  ],
+  "arr.tag.title": [
+   "Tag",
+   "Tag"
+  ],
+  "arr.tag.add": [
+   "New tag",
+   "Neuer Tag"
+  ],
+  "arr.scores": [
+   "Format scores",
+   "Format-Scores"
+  ],
+  "profile.add.Manga": [
+   "Add manga profile",
+   "Manga-Profil hinzufügen"
+  ],
+  "profile.add.Music": [
+   "Add music profile",
+   "Musik-Profil hinzufügen"
+  ],
+  "profile.add.Game": [
+   "Add game profile",
+   "Spiele-Profil hinzufügen"
   ],
   "error.homePage": [
    "Go to home page",
@@ -11124,73 +11084,65 @@
    "Mark unheard",
    "Als ungehört markieren"
   ],
-  "jobs.job.aniListSync": [
-   "AniList sync",
-   "AniList-Abgleich"
+  "sortable.handle": [
+   "Reorder",
+   "Verschieben"
   ],
-  "jobs.about.aniListSync": [
-   "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",
-   "Liest die AniList-Liste jedes verbundenen Profils, übernimmt, was dort gesehen oder gelesen ist, und sendet den hier gemachten Fortschritt."
+  "sortable.menu": [
+   "Row actions",
+   "Zeilenaktionen"
   ],
-  "settings.anilist.title": [
-   "AniList",
-   "AniList"
+  "sortable.top": [
+   "Move to top",
+   "Ganz nach oben"
   ],
-  "settings.anilist.open": [
-   "Open AniList",
-   "AniList öffnen"
+  "sortable.up": [
+   "Move up",
+   "Nach oben"
   ],
-  "settings.anilist.code": [
-   "Code from AniList",
-   "Code von AniList"
+  "sortable.down": [
+   "Move down",
+   "Nach unten"
   ],
-  "settings.anilist.connect": [
-   "Connect AniList",
-   "AniList verbinden"
+  "sortable.bottom": [
+   "Move to bottom",
+   "Ganz nach unten"
   ],
-  "settings.anilist.connected": [
-   "Connected as {0}",
-   "Verbunden als {0}"
+  "sortable.position": [
+   "Position {0} of {1}",
+   "Position {0} von {1}"
   ],
-  "settings.anilist.push": [
-   "Send my progress to AniList",
-   "Meinen Fortschritt an AniList senden"
+  "form.number.decrease": [
+   "Decrease value",
+   "Wert verringern"
   ],
-  "settings.anilist.disconnect": [
-   "Disconnect",
-   "Trennen"
+  "form.number.increase": [
+   "Increase value",
+   "Wert erhöhen"
   ],
-  "hint.AniListFields.Code.info": [
-   "After you allow Jularr at AniList, its page shows a code. Paste it here once.",
-   "Nachdem du Jularr bei AniList erlaubt hast, zeigt die Seite einen Code. Füge ihn hier einmal ein."
+  "unit.megabytes": [
+   "MB",
+   "MB"
   ],
-  "hint.AniListFields.IsPushEnabled.info": [
-   "Only progress you make after switching this on is sent. Jularr never lowers progress, changes a status or a score, or adds titles to your list.",
-   "Gesendet wird nur Fortschritt, den du nach dem Einschalten machst. Jularr senkt nie einen Fortschritt, ändert keinen Status und keine Wertung und fügt keine Titel zu deiner Liste hinzu."
+  "unit.hours": [
+   "hours",
+   "Stunden"
   ],
-  "errors.anilist_unavailable": [
-   "AniList could not be reached.",
-   "AniList war nicht erreichbar."
+  "unit.minutes": [
+   "min",
+   "min"
   ],
-  "errors.anilist_authentication_failed": [
-   "AniList did not accept this sign-in.",
-   "AniList hat diese Anmeldung nicht akzeptiert."
+  "unit.days": [
+   "days",
+   "Tage"
   ],
-  "errors.anilist_invalid_response": [
-   "AniList returned an invalid response.",
-   "AniList hat eine ungültige Antwort geliefert."
+  "unit.perMinute": [
+   "per min",
+   "pro Min."
   ],
-  "errors.anilist_rate_limited": [
-   "AniList limits requests right now. Please try again shortly.",
-   "AniList begrenzt gerade die Anfragen. Bitte versuche es gleich noch einmal."
-  ],
-  "errors.anilist_not_configured": [
-   "AniList is not set up by the administrator yet.",
-   "AniList ist vom Administrator noch nicht eingerichtet."
-  ],
-  "errors.anilist_token_expired": [
-   "The AniList sign-in has expired; connect again.",
-   "Die AniList-Anmeldung ist abgelaufen; verbinde erneut."
+  "unit.times": [
+   "×",
+   "×"
   ],
   "settings.tabs": [
    "Settings",
@@ -11264,65 +11216,309 @@
    "Page {0}",
    "Seite {0}"
   ],
-  "sortable.handle": [
-   "Reorder",
-   "Verschieben"
+  "nav.group.overview": [
+   "Overview",
+   "Übersicht"
   ],
-  "sortable.menu": [
-   "Row actions",
-   "Zeilenaktionen"
+  "nav.system.server": [
+   "Server",
+   "Server"
   ],
-  "sortable.top": [
-   "Move to top",
-   "Ganz nach oben"
+  "admin.dashboard.title": [
+   "Dashboard",
+   "Dashboard"
   ],
-  "sortable.up": [
-   "Move up",
-   "Nach oben"
+  "admin.performance.title": [
+   "Performance",
+   "Performance"
   ],
-  "sortable.down": [
-   "Move down",
-   "Nach unten"
+  "admin.logs.title": [
+   "Logs",
+   "Logs"
   ],
-  "sortable.bottom": [
-   "Move to bottom",
-   "Ganz nach unten"
+  "dashboard.kpi.status": [
+   "System status",
+   "Systemstatus"
   ],
-  "sortable.position": [
-   "Position {0} of {1}",
-   "Position {0} von {1}"
+  "dashboard.kpi.media": [
+   "Media",
+   "Medien"
   ],
-  "form.number.decrease": [
-   "Decrease value",
-   "Wert verringern"
+  "dashboard.kpi.downloads": [
+   "Downloads",
+   "Downloads"
   ],
-  "form.number.increase": [
-   "Increase value",
-   "Wert erhöhen"
+  "dashboard.kpi.requests": [
+   "Open requests",
+   "Offene Requests"
   ],
-  "unit.megabytes": [
-   "MB",
-   "MB"
+  "dashboard.status.stable": [
+   "Stable",
+   "Stabil"
   ],
-  "unit.hours": [
-   "hours",
-   "Stunden"
+  "dashboard.status.warning": [
+   "Warning",
+   "Warnung"
   ],
-  "unit.minutes": [
-   "min",
-   "min"
+  "dashboard.status.stable.foot": [
+   "All services answer",
+   "Alle Dienste erreichbar"
   ],
-  "unit.days": [
-   "days",
-   "Tage"
+  "dashboard.status.warning.foot": [
+   "{0} service(s) do not answer",
+   "{0} Dienst(e) nicht erreichbar"
   ],
-  "unit.perMinute": [
-   "per min",
-   "pro Min."
+  "dashboard.status.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
   ],
-  "unit.times": [
-   "×",
-   "×"
+  "dashboard.media.files": [
+   "{0} files managed",
+   "{0} Dateien verwaltet"
+  ],
+  "dashboard.downloads.failed": [
+   " with errors",
+   " mit Fehler"
+  ],
+  "dashboard.requests.foot": [
+   "Waiting for a decision",
+   "Warten auf Freigabe"
+  ],
+  "dashboard.performance": [
+   "System performance",
+   "Systemleistung"
+  ],
+  "dashboard.performance.window": [
+   "Last 24 hours",
+   "Letzte 24 Stunden"
+  ],
+  "dashboard.activity": [
+   "Activity & downloads",
+   "Aktivität & Downloads"
+  ],
+  "dashboard.activity.open": [
+   "To the queue",
+   "Zur Queue"
+  ],
+  "dashboard.activity.empty": [
+   "Nothing is downloading right now.",
+   "Gerade läuft kein Download."
+  ],
+  "dashboard.services": [
+   "Available services",
+   "Verfügbare Dienste"
+  ],
+  "dashboard.services.check": [
+   "Check now",
+   "Jetzt prüfen"
+  ],
+  "dashboard.services.empty": [
+   "No service is set up yet.",
+   "Es ist noch kein Dienst eingerichtet."
+  ],
+  "dashboard.services.checked": [
+   "Last checked {0}",
+   "Zuletzt geprüft {0}"
+  ],
+  "dashboard.services.never": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "dashboard.storage.open": [
+   "Open storage",
+   "Speicher öffnen"
+  ],
+  "dashboard.storage.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage.video": [
+   "Video",
+   "Videos"
+  ],
+  "dashboard.storage.books": [
+   "Books",
+   "Bücher"
+  ],
+  "dashboard.storage.music": [
+   "Music",
+   "Musik"
+  ],
+  "dashboard.storage.games": [
+   "Games",
+   "Games"
+  ],
+  "dashboard.storage.other": [
+   "Other data",
+   "Andere Daten"
+  ],
+  "health.type.Database": [
+   "Database",
+   "Datenbank"
+  ],
+  "health.type.Storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "health.type.Provider": [
+   "Provider",
+   "Anbieter"
+  ],
+  "health.type.MediaServer": [
+   "Media server",
+   "Medienserver"
+  ],
+  "health.type.DownloadClient": [
+   "Download client",
+   "Download-Client"
+  ],
+  "health.type.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "health.state.Available": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "health.state.Unavailable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "health.state.Unknown": [
+   "Not checked",
+   "Nicht geprüft"
+  ],
+  "resource.now": [
+   "Now",
+   "Jetzt"
+  ],
+  "resource.chart": [
+   "Processor and memory use over the last 24 hours",
+   "Prozessor- und Speichernutzung der letzten 24 Stunden"
+  ],
+  "resource.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "resource.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "performance.kpi.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.response": [
+   "Response time",
+   "Antwortzeit"
+  ],
+  "performance.kpi.errors": [
+   "Error rate",
+   "Fehlerquote"
+  ],
+  "performance.window": [
+   "Period: 24 hours",
+   "Zeitraum: 24 Stunden"
+  ],
+  "performance.history": [
+   "Load and memory use",
+   "Leistung und Speichernutzung"
+  ],
+  "performance.services": [
+   "Services by runtime",
+   "Services nach Laufzeit"
+  ],
+  "performance.service": [
+   "Service",
+   "Service"
+  ],
+  "performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "performance.maximum": [
+   "Longest",
+   "Max."
+  ],
+  "performance.errorCount": [
+   "Errors",
+   "Fehler"
+  ],
+  "performance.empty": [
+   "No service was called in the last 24 hours.",
+   "In den letzten 24 Stunden wurde kein Service aufgerufen."
+  ],
+  "logs.level.All": [
+   "All",
+   "Alle"
+  ],
+  "logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "logs.level.Info": [
+   "Info",
+   "Info"
+  ],
+  "logs.source": [
+   "Source",
+   "Quelle"
+  ],
+  "logs.source.All": [
+   "All sources",
+   "Alle Quellen"
+  ],
+  "logs.source.Activity": [
+   "Activity",
+   "Aktivität"
+  ],
+  "logs.source.Job": [
+   "Jobs",
+   "Jobs"
+  ],
+  "logs.source.Application": [
+   "Application",
+   "Anwendung"
+  ],
+  "logs.search": [
+   "Filter messages",
+   "Meldungen filtern"
+  ],
+  "logs.empty": [
+   "No messages for this filter.",
+   "Keine Meldungen für diesen Filter."
+  ],
+  "jobs.job.health": [
+   "Health check",
+   "Gesundheitsprüfung"
+  ],
+  "jobs.worker.Health": [
+   "Health",
+   "Gesundheit"
+  ],
+  "jobs.health.summary": [
+   "{0} of {1} services reachable",
+   "{0} von {1} Diensten erreichbar"
+  ],
+  "jobs.about.health": [
+   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
+   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
   ],
   "admin.catalog.tvdb": [
    "TVDB",
@@ -11508,86 +11704,6 @@
    "Open title",
    "Titel öffnen"
   ],
-  "system.performance": [
-   "Performance",
-   "Leistung"
-  ],
-  "system.performance.processor": [
-   "Processor",
-   "Prozessor"
-  ],
-  "system.performance.memory": [
-   "Memory",
-   "Arbeitsspeicher"
-  ],
-  "system.performance.processorHistory": [
-   "Processor use over the last six hours",
-   "Prozessorauslastung der letzten sechs Stunden"
-  ],
-  "system.performance.memoryHistory": [
-   "Memory use over the last six hours",
-   "Speicherauslastung der letzten sechs Stunden"
-  ],
-  "system.performance.service": [
-   "Service",
-   "Dienst"
-  ],
-  "system.performance.calls": [
-   "Calls",
-   "Aufrufe"
-  ],
-  "system.performance.errors": [
-   "Errors",
-   "Fehler"
-  ],
-  "system.performance.average": [
-   "Average",
-   "Durchschnitt"
-  ],
-  "system.performance.maximum": [
-   "Longest",
-   "Längster"
-  ],
-  "system.performance.empty": [
-   "No calls in the last hour.",
-   "Keine Aufrufe in der letzten Stunde."
-  ],
-  "system.logs": [
-   "Recent warnings and errors",
-   "Letzte Warnungen und Fehler"
-  ],
-  "system.logs.empty": [
-   "Nothing went wrong since Jularr started.",
-   "Seit dem Start von Jularr ist nichts schiefgelaufen."
-  ],
-  "system.logs.at": [
-   "Time",
-   "Zeit"
-  ],
-  "system.logs.level": [
-   "Level",
-   "Stufe"
-  ],
-  "system.logs.area": [
-   "Area",
-   "Bereich"
-  ],
-  "system.logs.message": [
-   "Message",
-   "Meldung"
-  ],
-  "system.logs.level.Warning": [
-   "Warning",
-   "Warnung"
-  ],
-  "system.logs.level.Error": [
-   "Error",
-   "Fehler"
-  ],
-  "system.logs.level.Critical": [
-   "Critical",
-   "Kritisch"
-  ],
   "manualImport.import": [
    "Import",
    "Importieren"
@@ -11595,10 +11711,6 @@
   "manualImport.run": [
    "Import",
    "Importieren"
-  ],
-  "nav.system.overview": [
-   "Overview",
-   "Übersicht"
   ],
   "reader.seek.book": [
    "Position in the book",
@@ -11751,6 +11863,74 @@
   "details.relation.request": [
    "Request",
    "Anfragen"
+  ],
+  "jobs.job.aniListSync": [
+   "AniList sync",
+   "AniList-Abgleich"
+  ],
+  "jobs.about.aniListSync": [
+   "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",
+   "Liest die AniList-Liste jedes verbundenen Profils, übernimmt, was dort gesehen oder gelesen ist, und sendet den hier gemachten Fortschritt."
+  ],
+  "settings.anilist.title": [
+   "AniList",
+   "AniList"
+  ],
+  "settings.anilist.open": [
+   "Open AniList",
+   "AniList öffnen"
+  ],
+  "settings.anilist.code": [
+   "Code from AniList",
+   "Code von AniList"
+  ],
+  "settings.anilist.connect": [
+   "Connect AniList",
+   "AniList verbinden"
+  ],
+  "settings.anilist.connected": [
+   "Connected as {0}",
+   "Verbunden als {0}"
+  ],
+  "settings.anilist.push": [
+   "Send my progress to AniList",
+   "Meinen Fortschritt an AniList senden"
+  ],
+  "settings.anilist.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "hint.AniListFields.Code.info": [
+   "After you allow Jularr at AniList, its page shows a code. Paste it here once.",
+   "Nachdem du Jularr bei AniList erlaubt hast, zeigt die Seite einen Code. Füge ihn hier einmal ein."
+  ],
+  "hint.AniListFields.IsPushEnabled.info": [
+   "Only progress you make after switching this on is sent. Jularr never lowers progress, changes a status or a score, or adds titles to your list.",
+   "Gesendet wird nur Fortschritt, den du nach dem Einschalten machst. Jularr senkt nie einen Fortschritt, ändert keinen Status und keine Wertung und fügt keine Titel zu deiner Liste hinzu."
+  ],
+  "errors.anilist_unavailable": [
+   "AniList could not be reached.",
+   "AniList war nicht erreichbar."
+  ],
+  "errors.anilist_authentication_failed": [
+   "AniList did not accept this sign-in.",
+   "AniList hat diese Anmeldung nicht akzeptiert."
+  ],
+  "errors.anilist_invalid_response": [
+   "AniList returned an invalid response.",
+   "AniList hat eine ungültige Antwort geliefert."
+  ],
+  "errors.anilist_rate_limited": [
+   "AniList limits requests right now. Please try again shortly.",
+   "AniList begrenzt gerade die Anfragen. Bitte versuche es gleich noch einmal."
+  ],
+  "errors.anilist_not_configured": [
+   "AniList is not set up by the administrator yet.",
+   "AniList ist vom Administrator noch nicht eingerichtet."
+  ],
+  "errors.anilist_token_expired": [
+   "The AniList sign-in has expired; connect again.",
+   "Die AniList-Anmeldung ist abgelaufen; verbinde erneut."
   ]
  }
 }

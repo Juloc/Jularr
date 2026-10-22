@@ -54,16 +54,16 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator("[name=TmdbKey]")).ToHaveValueAsync("");
 
                 await OpenSourceTabAsync(page, "/Setup/Indexers");
-                await SaveConnectionAsync(page, "Setup indexer", "https://indexer.example.test");
+                await SaveConnectionAsync(page, "Setup indexer", "https://indexer.example.test", "Add indexer");
                 await CheckViewportAsync(page, "indexers", width);
                 await OpenSourceTabAsync(page, "/Setup/Downloads");
                 await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Configure download storage", Exact = true })).ToBeVisibleAsync();
-                await SaveConnectionAsync(page, "Setup downloader", "https://downloader.example.test");
+                await SaveConnectionAsync(page, "Setup downloader", "https://downloader.example.test", "Add download client");
                 await CheckViewportAsync(page, "downloads", width);
                 await OpenSourceTabAsync(page, "/Setup/Profiles");
-                await Assertions.Expect(page.Locator(".acquisition-settings")).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".profiles-list")).ToBeVisibleAsync();
                 await CheckViewportAsync(page, "profiles", width);
-                await page.Locator("a[href^='/Setup/Profiles/']").Filter(new() { HasText = "Edit" }).First.ClickAsync();
+                await page.Locator(".profiles-list a[href^='/Setup/Profiles/']").First.ClickAsync();
                 await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", "/Setup/Profiles");
                 await Assertions.Expect(page.Locator("[name=Name]")).ToBeVisibleAsync();
                 await OpenSourceTabAsync(page, "/Setup/Takeover");
@@ -95,17 +95,17 @@ namespace Jularr.E2E.Tests
             await Assertions.Expect(page.Locator(".setup-wizard .navigation-tabs").Nth(1).Locator("a[aria-current=page]")).ToHaveAttributeAsync("href", path);
         }
 
-        private static async Task SaveConnectionAsync(IPage page, string name, string address)
+        // The connection is added in the dialog of its list.
+        private static async Task SaveConnectionAsync(IPage page, string name, string address, string add)
         {
-            var form = page.Locator("form").Filter(new() { Has = page.Locator("[name=AcquisitionConnectionTypeId]") });
+            await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = add, Exact = true }));
+            var form = page.Locator("dialog#connection-editor form").Filter(new() { Has = page.Locator("[name=AcquisitionConnectionTypeId]") });
             await form.Locator("[name=Name]").FillAsync(name);
             await form.Locator("[name=BaseUrl]").FillAsync(address);
             await form.Locator("[name=ApiKey]").FillAsync("browser-test-key");
             await form.Locator("[name=IsEnabled][value=False]").CheckAsync();
-            await Steps.SaveAsync(page);
-            await Assertions.Expect(page.Locator("[name=Name]")).ToHaveValueAsync(name);
-            await Assertions.Expect(page.Locator("[name=ApiKey]")).ToHaveValueAsync("");
-            await Assertions.Expect(page.GetByRole(AriaRole.Cell, new() { Name = name }).First).ToBeVisibleAsync();
+            await Steps.SubmitAsync(page, form);
+            await Assertions.Expect(page.Locator(".list-row", new() { HasText = name })).ToBeVisibleAsync();
             Assert.IsTrue(new Uri(page.Url).AbsolutePath.StartsWith("/Setup/", StringComparison.Ordinal));
         }
 
