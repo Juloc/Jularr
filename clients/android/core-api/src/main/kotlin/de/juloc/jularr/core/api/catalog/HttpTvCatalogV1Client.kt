@@ -164,12 +164,13 @@ class HttpTvCatalogV1Client(
 
     private suspend fun request(method: String, route: String, body: JSONObject?): String = withContext(Dispatchers.IO) {
         runInterruptible {
+            val requestDeviceToken = deviceTokens.current
             val connection = (URL(originUri.toString() + route).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
                 connectTimeout = 15_000
                 readTimeout = 30_000
                 setRequestProperty("Accept", "application/json")
-                deviceTokens.current?.let { setRequestProperty("Authorization", "Bearer $it") }
+                requestDeviceToken?.let { setRequestProperty("Authorization", "Bearer $it") }
                 if (body != null) {
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
@@ -182,10 +183,18 @@ class HttpTvCatalogV1Client(
                 val status = connection.responseCode
                 val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
                     ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                    deviceTokens.clear()
-                } else if (status in 200..299) {
-                    deviceTokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                // A parallel request (or profile switch) may already have renewed the
+                // token. Never let a late 401 clear that newer session or a stale
+                // success response roll it back. The store's update/clear methods are
+                // synchronized on this same object, so comparison and mutation are atomic.
+                synchronized(deviceTokens) {
+                    if (deviceTokens.current == requestDeviceToken) {
+                        if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                            deviceTokens.clear()
+                        } else if (status in 200..299) {
+                            deviceTokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                        }
+                    }
                 }
                 if (status !in 200..299) throw appApiException(status, payload)
                 payload
