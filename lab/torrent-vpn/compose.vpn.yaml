@@ -3,15 +3,39 @@
 #
 #   docker compose -f lab/torrent-vpn/compose.yaml -f lab/torrent-vpn/compose.vpn.yaml up -d
 services:
+  vpn:
+    # The tunnel belongs to this file only, so it starts without naming a profile.
+    profiles: !reset []
+    # The client shares this network space, so its web interface is published here.
+    ports: !reset
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8080:8080"
+    # The free tier of the provider has no IPv6. Left on, the client tries the IPv6 address of a
+    # tracker, waits for a reply that never comes and only then tries IPv4. Off, the attempt fails
+    # at once and the client goes to IPv4.
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+
   qbittorrent:
     depends_on:
       vpn:
-        condition: service_healthy
+        condition: service_started
     network_mode: "service:vpn"
-    ports: []
-    volumes:
-      - ./qbittorrent/config:/config
-      - ./qbittorrent/downloads:/downloads
+    # The client shares the tunnel's network; it may not have ports of its own then.
+    ports: !reset []
 
-  vpn:
-    profiles: []
+  probe:
+    # The measurement runs inside the tunnel's network space, so every request it makes goes
+    # through the tunnel. That is what shows the kill switch: without a tunnel the requests
+    # fail instead of slipping out unencrypted.
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        # Not "healthy": a tunnel that does not come up is one of the cases to measure.
+        condition: service_started
+    environment:
+      # Inside the tunnel the name server is Gluetun's, so the names of the services do not
+      # resolve any more; the client and the control server share this network space.
+      QBITTORRENT_URL: http://127.0.0.1:8080
+      VPN_CONTROL_URL: http://127.0.0.1:8000

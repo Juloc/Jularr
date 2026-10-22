@@ -184,7 +184,7 @@
         margin-top: 4px;
     }
 
-    // Controls of the actions are translucent white too; the heart turns white with the soft red of the mockup when it is set.
+    // Controls of the actions are translucent white too.
     .media-hero__actions .button:not(.button--primary, .button--soft, .live-phase-button) {
         border-color: rgb(255 255 255 / 22%);
         background: rgb(255 255 255 / 14%);
@@ -197,7 +197,16 @@
     .media-hero__actions .live-phase-button:hover:not(:disabled) { border-color: transparent; background: #fff; color: #5b24c9; }
     // One family of controls: the icon buttons are as high as the others.
     .media-hero__actions .button--icon { width: var(--control-height); min-height: var(--control-height); }
-    .media-hero__actions .button--icon[aria-pressed="true"] { border-color: #fff; background: #fff; color: #d6366b; .ui-icon { fill: currentColor; } }
+    // A set favorite stays in that family: the accent fill of the primary button and a filled heart.
+    .media-hero__actions .button--icon[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--accent-contrast);
+
+        .ui-icon { fill: currentColor; }
+
+        &:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); color: var(--accent-contrast); }
+    }
 
     .media-hero__corner { position: absolute; top: 18px; right: 20px; z-index: 2; display: flex; align-items: center; gap: 8px; }
 

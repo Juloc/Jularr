@@ -63,9 +63,9 @@ namespace Jularr.Frontend.Pages.Account.Register
                     form.Content(new Div(
                         new Span(new Icon("shield-check", assets, 18)).Class("auth-note__icon"),
                         new Span(new Strong(new Text("account.register.approvalTitle")), new Small(new Text("account.register.approvalText")))).Class("auth-note"));
-                    form.Submit(Styled(new Button(new Text("account.register.submit"), new Span(new ValueText("→")).Attribute("aria-hidden", "true")), "auth-submit"));
+                    form.Submit(Styled(new Button(new Text("account.register.submit"), new Icon("arrow-right", assets, 16)), "auth-submit"));
                 }, Url.Page("/Account/Register/Register")!, antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError),
-                new A(new Span(new ValueText("←")).Attribute("aria-hidden", "true"), new Text("account.register.backToSignIn")).Class("auth-back").Attribute("href", "/Account/Login"))
+                new A(new Icon("arrow-left", assets, 16), new Text("account.register.backToSignIn")).Class("auth-back").Attribute("href", "/Account/Login"))
                 .Class("login-card login-card--register"));
             page.Content.Add(new AppearanceDock(assets));
         }

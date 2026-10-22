@@ -22,15 +22,27 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    # prepare-config.ps1 writes this file: the type of the tunnel and, when the configuration
+    # asks for them, the access data. It is not in the repository.
+    env_file:
+      - path: ./vpn/vpn.env
+        required: false
     environment:
-      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:-custom}
-      VPN_TYPE: ${VPN_TYPE:-wireguard}
-      # A provider that gives a configuration file; the file itself is not in the repository.
-      VPN_CUSTOM_CONFIG_PATH: /vpn/jularr.conf
+      # The name server of the provider from the configuration, inside the tunnel: nothing
+      # goes out unencrypted, and no name server outside the tunnel is needed.
+      DNS_SERVER: "off"
+      DNS_UPSTREAM_RESOLVER_TYPE: plain
+      DNS_UPSTREAM_PLAIN_ADDRESSES: ${VPN_DNS:-10.2.0.1:53}
+      # The path to the server is narrower than the discovery suggests: with 1320 the handshake
+      # of larger sites breaks, with 1280 it does not.
+      WIREGUARD_MTU: ${VPN_MTU:-1280}
+      # The control server of the tunnel is private: the measurement needs it to close the tunnel.
+      HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE: '{"auth":"apikey","apikey":"${VPN_API_KEY}"}'
       FIREWALL_INPUT_PORTS: ${VPN_INPUT_PORTS:-6881}
       FIREWALL_OUTBOUND_BLOCKED_PORTS: 6881
-      DOT: "off"
     volumes:
+      # The configuration of the provider, in the place Gluetun reads it from.
+      - ./vpn/jularr.conf:/gluetun/wireguard/wg0.conf:ro
       - ./vpn:/vpn:ro
     ports:
       - "127.0.0.1:8888:8888" # http proxy
@@ -55,8 +67,12 @@ services:
 
   # The measurements: the public address, the leaks, the torrent and the kill switch.
   probe:
-    image: alpine:3.20
+    # The image carries curl; nothing is installed at run time, because a tunnel that is down
+    # must not reach a package mirror either.
+    image: curlimages/curl:latest
     profiles: ["probe"]
+    entrypoint: ["sh"]
+    command: ["/app/run.sh"]
     depends_on:
       - qbittorrent
     environment:
@@ -64,13 +80,13 @@ services:
       QBITTORRENT_URL: http://qbittorrent:8080
       QBITTORRENT_USER: ${QBITTORRENT_USER:-admin}
       QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD}
+      API_KEY: ${VPN_API_KEY:-}
       TORRENT_URL: ${TORRENT_URL:-https://releases.ubuntu.com/24.04/ubuntu-24.04.5-live-server-amd64.iso.torrent}
       DOWNLOAD_DIR: /downloads
     volumes:
       - ./qbittorrent/downloads:/downloads
       - ./run.sh:/app/run.sh:ro
     working_dir: /app
-    command: ["sh", "-c", "apk add --no-cache curl >/dev/null && sh run.sh"]
 
 networks:
   default:

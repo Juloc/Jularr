@@ -38,7 +38,7 @@ namespace Jularr.Frontend.Pages.Shared
 
             if (texts.CanRequest())
             {
-                primary.Add(new ShellLink("requests.title", "/Requests", "home"));
+                primary.Add(new ShellLink("requests.title", "/Requests", "requests"));
             }
 
             // Administration is its own sidebar mode: every group open, the user entries out of the way; the user menu has one link per area, taken from the same menu.

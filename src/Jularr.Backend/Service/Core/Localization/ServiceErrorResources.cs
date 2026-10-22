@@ -9,6 +9,13 @@ namespace Jularr.Backend.Service.Core.Localization
         internal static IReadOnlyList<UiTextResource> English { get; } =
         [
             new("errors.invalid_data", "Please check the supplied values."),
+            new("errors.translation_local_busy", "The local translation model is busy."),
+            new("errors.translation_local_not_installed", "Install the selected model on the private server first."),
+            new("errors.translation_local_unavailable", "The local translation server is unavailable."),
+            new("errors.translation_local_unverified", "The generated block did not pass basic completion checks."),
+            new("errors.translation_local_space_unverified", "Verify the available storage space of the external Ollama volume before downloading."),
+            new("errors.translation_local_busy_or_capacity", "A download is already running or the verified storage budget is insufficient."),
+            new("errors.validation.unknown_model", "Select an approved local translation model."),
             new("errors.speech_catalog_unavailable", "The speech model catalog could not be read. Check its format and file permissions."),
             new("errors.speech_download_failed", "The speech package could not be downloaded and verified. It was not activated."),
             new("errors.speech_discovery_failed", "The voice sources could not be refreshed. The saved catalog and activated packages are unchanged. Try again in a minute."),

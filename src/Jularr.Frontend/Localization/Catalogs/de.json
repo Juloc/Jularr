@@ -114,7 +114,7 @@
   ],
   "media.preview.runtime": [
    "{0}h {1}m",
-   "{0}h {1}m"
+   "{0} Std. {1} Min."
   ],
   "media.preview.playTrailer": [
    "Play trailer",
@@ -3406,19 +3406,19 @@
   ],
   "discover.area.watch": [
    "Watch",
-   "Watch"
+   "Schauen"
   ],
   "discover.area.read": [
    "Read",
-   "Read"
+   "Lesen"
   ],
   "discover.area.hear": [
    "Hear",
-   "Hear"
+   "Hören"
   ],
   "discover.area.play": [
    "Game",
-   "Game"
+   "Spielen"
   ],
   "discover.pickAll": [
    "Select all",
@@ -10158,7 +10158,7 @@
   ],
   "reader.view.smart": [
    "Smart Book",
-   "Smart Book"
+   "Smart-Buch"
   ],
   "reader.view.original": [
    "Original pages",
@@ -10990,7 +10990,7 @@
   ],
   "details.tab.tracks": [
    "Tracks",
-   "Tracks"
+   "Titel"
   ],
   "details.tab.people": [
    "People",
@@ -11450,7 +11450,7 @@
   ],
   "dashboard.storage.games": [
    "Games",
-   "Games"
+   "Spiele"
   ],
   "dashboard.storage.other": [
    "Other data",
@@ -11538,7 +11538,7 @@
   ],
   "performance.service": [
    "Service",
-   "Service"
+   "Dienst"
   ],
   "performance.calls": [
    "Calls",
@@ -12118,7 +12118,7 @@
   ],
   "profile.scores": [
    "Scores",
-   "Scores"
+   "Punkte"
   ],
   "profile.usedBy": [
    "In use: {0}",
@@ -12418,7 +12418,7 @@
   ],
   "setup.type.name.Game": [
    "Games",
-   "Games"
+   "Spiele"
   ],
   "setup.step.Begin": [
    "Start",
@@ -12636,74 +12636,6 @@
    "Set",
    "Gesetzt"
   ],
-  "admin.providers.anilistClientId": [
-   "Client ID for the profiles' sign-in",
-   "Client-ID für die Anmeldung der Profile"
-  ],
-  "admin.providers.anilistClientSecret": [
-   "Client secret for the profiles' sign-in",
-   "Client-Secret für die Anmeldung der Profile"
-  ],
-  "setup.overview.missing": [
-   "Missing",
-   "Fehlt"
-  ],
-  "setup.overview.skipped": [
-   "Skipped",
-   "Übersprungen"
-  ],
-  "setup.overview.attention": [
-   "Check",
-   "Prüfen"
-  ],
-  "setup.finish.anyway": [
-   "Finish anyway",
-   "Abschließen trotzdem"
-  ],
-  "setup.finish.confirm": [
-   "Something required is missing. Finish setup anyway?",
-   "Etwas Erforderliches fehlt. Die Einrichtung trotzdem abschließen?"
-  ],
-  "setup.check.indexer.failing": [
-   "An indexer failed its last test.",
-   "Ein Indexer hat seinen letzten Test nicht bestanden."
-  ],
-  "setup.check.downloader.failing": [
-   "A download client failed its last test.",
-   "Ein Download-Client hat seinen letzten Test nicht bestanden."
-  ],
-  "setup.check.storage": [
-   "No storage connection yet; libraries and downloads need one.",
-   "Noch keine Speicherverbindung; Bibliotheken und Downloads brauchen eine."
-  ],
-  "setup.check.storage.unavailable": [
-   "A storage connection does not answer.",
-   "Eine Speicherverbindung antwortet nicht."
-  ],
-  "setup.check.takeover": [
-   "Nothing was taken over yet.",
-   "Es wurde noch nichts übernommen."
-  ],
-  "setup.check.modules": [
-   "No function is switched on.",
-   "Keine Funktion ist eingeschaltet."
-  ],
-  "setup.check.library.none": [
-   "No library yet; the library stays empty.",
-   "Noch keine Bibliothek; die Mediathek bleibt leer."
-  ],
-  "setup.check.requests.default": [
-   "The request rule still has its preset values.",
-   "Die Anfrageregel hat noch ihre Voreinstellung."
-  ],
-  "setup.check.igdb": [
-   "Games need the IGDB client ID and secret.",
-   "Spiele brauchen die IGDB-Client-ID und das Secret."
-  ],
-  "setup.check.anilist": [
-   "Profiles cannot sign in to AniList without the application's client ID and secret.",
-   "Ohne Client-ID und Secret der Anwendung können sich Profile nicht bei AniList anmelden."
-  ],
   "setup.check.downloadStorage.Usenet": [
    "Choose and confirm download storage for the Jularr Usenet downloader.",
    "Wähle den Download-Speicher für den Usenet-Downloader von Jularr und bestätige ihn."
@@ -12899,6 +12831,550 @@
   "folderPicker.end": [
    "No more folders.",
    "Keine weiteren Ordner."
+  ],
+  "admin.providers.anilistClientId": [
+   "Client ID for the profiles' sign-in",
+   "Client-ID für die Anmeldung der Profile"
+  ],
+  "admin.providers.anilistClientSecret": [
+   "Client secret for the profiles' sign-in",
+   "Client-Secret für die Anmeldung der Profile"
+  ],
+  "setup.overview.missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "setup.overview.skipped": [
+   "Skipped",
+   "Übersprungen"
+  ],
+  "setup.overview.attention": [
+   "Check",
+   "Prüfen"
+  ],
+  "setup.finish.anyway": [
+   "Finish anyway",
+   "Abschließen trotzdem"
+  ],
+  "setup.finish.confirm": [
+   "Something required is missing. Finish setup anyway?",
+   "Etwas Erforderliches fehlt. Die Einrichtung trotzdem abschließen?"
+  ],
+  "setup.check.indexer.failing": [
+   "An indexer failed its last test.",
+   "Ein Indexer hat seinen letzten Test nicht bestanden."
+  ],
+  "setup.check.downloader.failing": [
+   "A download client failed its last test.",
+   "Ein Download-Client hat seinen letzten Test nicht bestanden."
+  ],
+  "setup.check.storage": [
+   "No storage connection yet; libraries and downloads need one.",
+   "Noch keine Speicherverbindung; Bibliotheken und Downloads brauchen eine."
+  ],
+  "setup.check.storage.unavailable": [
+   "A storage connection does not answer.",
+   "Eine Speicherverbindung antwortet nicht."
+  ],
+  "setup.check.takeover": [
+   "Nothing was taken over yet.",
+   "Es wurde noch nichts übernommen."
+  ],
+  "setup.check.modules": [
+   "No function is switched on.",
+   "Keine Funktion ist eingeschaltet."
+  ],
+  "setup.check.library.none": [
+   "No library yet; the library stays empty.",
+   "Noch keine Bibliothek; die Mediathek bleibt leer."
+  ],
+  "setup.check.requests.default": [
+   "The request rule still has its preset values.",
+   "Die Anfrageregel hat noch ihre Voreinstellung."
+  ],
+  "setup.check.igdb": [
+   "Games need the IGDB client ID and secret.",
+   "Spiele brauchen die IGDB-Client-ID und das Secret."
+  ],
+  "setup.check.anilist": [
+   "Profiles cannot sign in to AniList without the application's client ID and secret.",
+   "Ohne Client-ID und Secret der Anwendung können sich Profile nicht bei AniList anmelden."
+  ],
+  "speech.models.title": [
+   "Speech models",
+   "Sprachmodelle"
+  ],
+  "speech.models.explanation": [
+   "Refresh to discover compatible Piper packages from sherpa-onnx and the Piper voice index. Samples are prerecorded and contact the sample host only when played. Activation verifies a package on this server; install it separately on each device. No spoken text leaves the device. Deactivation stops delivery but retains the file. Newly discovered model conditions must be reviewed before activation. Gender is unknown unless documented by a source; it is never guessed from a name or sample.",
+   "Aktualisiere, um kompatible Piper-Pakete aus sherpa-onnx und dem Piper-Stimmenindex zu finden. Hörproben sind vorab aufgenommen und kontaktieren den Hörproben-Host nur beim Abspielen. Die Aktivierung prüft ein Paket auf diesem Server; installiere es separat auf jedem Gerät. Gesprochener Text verlässt das Gerät nicht. Das Deaktivieren stoppt die Auslieferung, behält aber die Datei. Die Bedingungen neu gefundener Modelle müssen vor der Aktivierung geprüft werden. Das Geschlecht ist unbekannt, sofern keine Quelle es angibt; es wird nie aus einem Namen oder einer Hörprobe erraten."
+  ],
+  "speech.models.empty": [
+   "No packages match this search. Clear the search or refresh the catalog.",
+   "Keine Pakete passen zu dieser Suche. Lösche die Suche oder aktualisiere den Katalog."
+  ],
+  "speech.models.search": [
+   "Search voices, languages or quality…",
+   "Stimmen, Sprachen oder Qualität suchen…"
+  ],
+  "speech.models.allLanguages": [
+   "All languages",
+   "Alle Sprachen"
+  ],
+  "speech.models.allGenders": [
+   "All genders",
+   "Alle Geschlechter"
+  ],
+  "speech.models.allInstallations": [
+   "All installation states",
+   "Alle Installationsstatus"
+  ],
+  "speech.models.gender": [
+   "Voice gender",
+   "Stimmgeschlecht"
+  ],
+  "speech.models.male": [
+   "Male",
+   "Männlich"
+  ],
+  "speech.models.female": [
+   "Female",
+   "Weiblich"
+  ],
+  "speech.models.unknownGender": [
+   "Unknown gender",
+   "Unbekanntes Geschlecht"
+  ],
+  "speech.models.installation": [
+   "Installation on server",
+   "Installation auf dem Server"
+  ],
+  "speech.models.installed": [
+   "Installed",
+   "Installiert"
+  ],
+  "speech.models.notInstalled": [
+   "Not installed",
+   "Nicht installiert"
+  ],
+  "speech.models.refresh": [
+   "Refresh voice catalog",
+   "Stimmenkatalog aktualisieren"
+  ],
+  "speech.models.refreshed": [
+   "Voice catalog refreshed. No models were installed.",
+   "Stimmenkatalog aktualisiert. Es wurden keine Modelle installiert."
+  ],
+  "speech.models.review": [
+   "Review model conditions",
+   "Modellbedingungen prüfen"
+  ],
+  "speech.models.acceptLicense": [
+   "Accept the model's conditions",
+   "Bedingungen des Modells akzeptieren"
+  ],
+  "speech.models.sample": [
+   "Sample",
+   "Hörprobe"
+  ],
+  "speech.models.samplePlay": [
+   "Play sample",
+   "Hörprobe abspielen"
+  ],
+  "speech.models.sampleStop": [
+   "Stop sample",
+   "Hörprobe stoppen"
+  ],
+  "speech.models.noSample": [
+   "No sample listed",
+   "Keine Hörprobe angegeben"
+  ],
+  "speech.models.sampleFailed": [
+   "The sample is unavailable. No model was installed.",
+   "Die Hörprobe ist nicht verfügbar. Es wurde kein Modell installiert."
+  ],
+  "speech.models.deviceNotice": [
+   "Activation makes this package available from the server. Install it on this device in Reader → Voice and speed before using it. Packages with multiple speakers currently use speaker 0.",
+   "Die Aktivierung stellt dieses Paket über den Server bereit. Installiere es vor der Nutzung auf diesem Gerät unter Reader → Stimme und Tempo. Pakete mit mehreren Sprechern verwenden derzeit Sprecher 0."
+  ],
+  "speech.model": [
+   "Model",
+   "Modell"
+  ],
+  "speech.voice": [
+   "Voice",
+   "Stimme"
+  ],
+  "speech.title": [
+   "Read aloud",
+   "Vorlesen"
+  ],
+  "speech.settings": [
+   "Voice and speed",
+   "Stimme und Tempo"
+  ],
+  "speech.pause": [
+   "Pause read-aloud",
+   "Vorlesen pausieren"
+  ],
+  "speech.resume": [
+   "Resume read-aloud",
+   "Vorlesen fortsetzen"
+  ],
+  "speech.stop": [
+   "Stop read-aloud",
+   "Vorlesen beenden"
+  ],
+  "speech.speaking": [
+   "Reading aloud",
+   "Wird vorgelesen"
+  ],
+  "speech.paused": [
+   "Read-aloud paused",
+   "Vorlesen pausiert"
+  ],
+  "speech.unavailable": [
+   "The preferred neural model is not installed on this device. Install it in Voice and speed, or choose a device voice.",
+   "Das bevorzugte neuronale Modell ist auf diesem Gerät nicht installiert. Installiere es unter Stimme und Tempo oder wähle eine Gerätestimme."
+  ],
+  "speech.failed": [
+   "Read-aloud could not continue. Check the selected voice or installed model and try again.",
+   "Das Vorlesen konnte nicht fortgesetzt werden. Prüfe die gewählte Stimme oder das installierte Modell und versuche es erneut."
+  ],
+  "speech.loading": [
+   "Preparing local read-aloud…",
+   "Lokales Vorlesen wird vorbereitet…"
+  ],
+  "speech.translationPending": [
+   "Please wait until the section has finished translating before starting read-aloud.",
+   "Warte, bis der Abschnitt fertig übersetzt ist, bevor du das Vorlesen startest."
+  ],
+  "speech.provider": [
+   "Speech provider",
+   "Sprachanbieter"
+  ],
+  "speech.provider.device": [
+   "Device voices",
+   "Gerätestimmen"
+  ],
+  "speech.provider.neural": [
+   "Offline neural",
+   "Neuronal (offline)"
+  ],
+  "speech.voice.choose": [
+   "Choose a voice",
+   "Stimme wählen"
+  ],
+  "speech.model.choose": [
+   "Choose a model",
+   "Modell wählen"
+  ],
+  "speech.model.install": [
+   "Install or update on this device",
+   "Auf diesem Gerät installieren oder aktualisieren"
+  ],
+  "speech.model.remove": [
+   "Remove from this device",
+   "Von diesem Gerät entfernen"
+  ],
+  "speech.model.installed": [
+   "Installed on this device",
+   "Auf diesem Gerät installiert"
+  ],
+  "speech.model.notInstalled": [
+   "Not installed on this device. Installation downloads the activated package, verifies it and prepares it once. No model is installed automatically.",
+   "Auf diesem Gerät nicht installiert. Die Installation lädt das aktivierte Paket herunter, prüft es und bereitet es einmalig vor. Es wird nie automatisch ein Modell installiert."
+  ],
+  "speech.model.installing": [
+   "Preparing the device model… Downloading, verifying and unpacking may take a minute.",
+   "Gerätemodell wird vorbereitet… Herunterladen, Prüfen und Entpacken kann eine Minute dauern."
+  ],
+  "speech.model.failed": [
+   "The device model could not be prepared or removed. Check the connection, package and available storage, then try again.",
+   "Das Gerätemodell konnte nicht vorbereitet oder entfernt werden. Prüfe Verbindung, Paket und verfügbaren Speicher und versuche es erneut."
+  ],
+  "speech.model.removed": [
+   "Model removed from this device.",
+   "Modell von diesem Gerät entfernt."
+  ],
+  "speech.model.storageFailed": [
+   "Local model storage is unavailable. Device voices can still be used.",
+   "Der lokale Modellspeicher ist nicht verfügbar. Gerätestimmen lassen sich weiterhin nutzen."
+  ],
+  "speech.pitchUnavailable": [
+   "Neural voices do not support independent pitch. The saved device-voice pitch is retained. Neural read-aloud highlights the spoken section, not individual words.",
+   "Neuronale Stimmen unterstützen keine eigene Tonhöhe. Die gespeicherte Tonhöhe der Gerätestimme bleibt erhalten. Neuronales Vorlesen hebt den gesprochenen Abschnitt hervor, nicht einzelne Wörter."
+  ],
+  "speech.runtimeLicenses": [
+   "Speech source and licenses",
+   "Sprachquelle und Lizenzen"
+  ],
+  "speech.runtimeNotices": [
+   "Browser license and complete notices",
+   "Browser-Lizenz und vollständige Hinweise"
+  ],
+  "speech.voice.default": [
+   "Automatic device voice",
+   "Automatische Gerätestimme"
+  ],
+  "speech.voice.missing": [
+   "Saved voice (not available here)",
+   "Gespeicherte Stimme (hier nicht verfügbar)"
+  ],
+  "speech.rate": [
+   "Speech speed",
+   "Sprechtempo"
+  ],
+  "speech.pitch": [
+   "Pitch",
+   "Tonhöhe"
+  ],
+  "speech.volume": [
+   "Speech volume",
+   "Sprachlautstärke"
+  ],
+  "speech.privacy": [
+   "Read-aloud sends no text to Jularr and stores no speech history. Device voices may use their provider's online service. Neural synthesis runs locally after you explicitly install a model on this device. Installation and removal do not save your profile's voice choice.",
+   "Das Vorlesen sendet keinen Text an Jularr und speichert keinen Sprechverlauf. Gerätestimmen nutzen unter Umständen den Online-Dienst ihres Anbieters. Neuronale Synthese läuft lokal, nachdem du ein Modell ausdrücklich auf diesem Gerät installiert hast. Installieren und Entfernen speichern nicht die Stimmenwahl deines Profils."
+  ],
+  "speech.voicesUnavailable": [
+   "No compatible device voice has been reported yet. The platform default may be available.",
+   "Es wurde noch keine kompatible Gerätestimme gemeldet. Möglicherweise ist die Plattform-Standardstimme verfügbar."
+  ],
+  "speech.language": [
+   "Language",
+   "Sprache"
+  ],
+  "speech.license": [
+   "License and attribution",
+   "Lizenz und Quellenangabe"
+  ],
+  "speech.size": [
+   "Download size",
+   "Download-Größe"
+  ],
+  "speech.models.active": [
+   "Available to devices",
+   "Für Geräte verfügbar"
+  ],
+  "speech.models.inactive": [
+   "Not activated",
+   "Nicht aktiviert"
+  ],
+  "speech.models.metadata": [
+   "Package details",
+   "Paketdetails"
+  ],
+  "speech.models.source": [
+   "Download source",
+   "Download-Quelle"
+  ],
+  "reader.previousPage": [
+   "Previous page",
+   "Vorherige Seite"
+  ],
+  "reader.nextPage": [
+   "Next page",
+   "Nächste Seite"
+  ],
+  "reader.selectText": [
+   "Select text",
+   "Text markieren"
+  ],
+  "reader.preset": [
+   "Reading preset",
+   "Lesevorlage"
+  ],
+  "reader.preset.book": [
+   "Book",
+   "Buch"
+  ],
+  "reader.preset.novel": [
+   "Light novel",
+   "Light Novel"
+  ],
+  "reader.preset.manga": [
+   "Manga / comic",
+   "Manga / Comic"
+  ],
+  "reader.layout": [
+   "Pages on screen",
+   "Seiten auf dem Bildschirm"
+  ],
+  "reader.layout.auto": [
+   "Automatic · one or two pages",
+   "Automatisch · eine oder zwei Seiten"
+  ],
+  "reader.layout.single": [
+   "One page",
+   "Eine Seite"
+  ],
+  "reader.layout.spread": [
+   "Two pages",
+   "Zwei Seiten"
+  ],
+  "reader.direction.ltr": [
+   "Left to right",
+   "Von links nach rechts"
+  ],
+  "reader.direction.rtl": [
+   "Right to left",
+   "Von rechts nach links"
+  ],
+  "reader.surface": [
+   "Reading surface",
+   "Leseoberfläche"
+  ],
+  "reader.surface.clean": [
+   "Clean",
+   "Schlicht"
+  ],
+  "reader.surface.paper": [
+   "Paper",
+   "Papier"
+  ],
+  "reader.colour": [
+   "Paper colour",
+   "Papierfarbe"
+  ],
+  "reader.animation": [
+   "Page turn animation",
+   "Animation beim Umblättern"
+  ],
+  "reader.animation.system": [
+   "Follow system preference",
+   "Systemeinstellung befolgen"
+  ],
+  "reader.animation.on": [
+   "On · turn paper",
+   "An · Papier blättern"
+  ],
+  "reader.animation.off": [
+   "Off · instant pages",
+   "Aus · sofortige Seiten"
+  ],
+  "reader.animation.hint": [
+   "System mode respects reduced motion. Choose On to enable paper folding. Switch off Select text before dragging a page.",
+   "Der Systemmodus berücksichtigt reduzierte Bewegung. Wähle An, um das Papierfalten zu aktivieren. Schalte „Text markieren“ aus, bevor du eine Seite ziehst."
+  ],
+  "reader.sizePixels": [
+   "Text size (px)",
+   "Textgröße (px)"
+  ],
+  "reader.spacing": [
+   "Line spacing (%)",
+   "Zeilenabstand (%)"
+  ],
+  "reader.font": [
+   "Font family",
+   "Schriftfamilie"
+  ],
+  "reader.font.serif": [
+   "Serif",
+   "Serif"
+  ],
+  "reader.font.sans": [
+   "Sans serif",
+   "Serifenlos"
+  ],
+  "reader.textWidth": [
+   "Text width (characters)",
+   "Textbreite (Zeichen)"
+  ],
+  "reader.indent": [
+   "Indent paragraphs",
+   "Absätze einrücken"
+  ],
+  "reader.hyphenation": [
+   "Hyphenation",
+   "Silbentrennung"
+  ],
+  "reader.illustrations": [
+   "Show illustrations",
+   "Illustrationen anzeigen"
+  ],
+  "reader.pagePosition": [
+   "Pages {0}–{1} of {2}",
+   "Seiten {0}–{1} von {2}"
+  ],
+  "reader.seek.pages": [
+   "Page position",
+   "Seitenposition"
+  ],
+  "reader.bookPages.calculating": [
+   "Calculating book pages…",
+   "Buchseiten werden berechnet…"
+  ],
+  "reader.bookPages.paused": [
+   "Book page calculation paused while you read.",
+   "Die Berechnung der Buchseiten pausiert, während du liest."
+  ],
+  "reader.bookPages.ready": [
+   "Book pages: {0}",
+   "Buchseiten: {0}"
+  ],
+  "reader.bookPages.unavailable": [
+   "Book page count is unavailable for this view. Reading is unaffected.",
+   "Die Buchseitenzahl ist für diese Ansicht nicht verfügbar. Das Lesen bleibt unberührt."
+  ],
+  "reader.animationUnavailable": [
+   "Paper animation is unavailable. You can still read and turn pages with the controls.",
+   "Die Papieranimation ist nicht verfügbar. Du kannst weiterhin lesen und mit den Bedienelementen umblättern."
+  ],
+  "reader.fullscreenUnavailable": [
+   "Fullscreen is unavailable in this browser.",
+   "Vollbild ist in diesem Browser nicht verfügbar."
+  ],
+  "reader.appearance": [
+   "Appearance",
+   "Darstellung"
+  ],
+  "reader.more": [
+   "More",
+   "Mehr"
+  ],
+  "reader.pageNavigation": [
+   "Page navigation",
+   "Seitennavigation"
+  ],
+  "reader.chapterNavigation": [
+   "Chapter navigation",
+   "Kapitelnavigation"
+  ],
+  "reader.chapterPosition": [
+   "Chapter {0} / {1}",
+   "Kapitel {0} / {1}"
+  ],
+  "reader.settings.navigation": [
+   "Reading & pages",
+   "Lesen & Seiten"
+  ],
+  "reader.settings.text": [
+   "Text & spacing",
+   "Text & Abstände"
+  ],
+  "reader.settings.paper": [
+   "Paper & colour",
+   "Papier & Farbe"
+  ],
+  "reader.settings.motion": [
+   "Page movement",
+   "Seitenbewegung"
+  ],
+  "reader.presentation": [
+   "Reader view",
+   "Reader-Ansicht"
+  ],
+  "reader.theater": [
+   "Theater mode",
+   "Theatermodus"
+  ],
+  "reader.showControls": [
+   "Show reader controls",
+   "Reader-Steuerung anzeigen"
+  ],
+  "reader.hideControls": [
+   "Hide reader controls",
+   "Reader-Steuerung ausblenden"
   ]
  }
 }
