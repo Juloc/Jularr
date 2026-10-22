@@ -48,9 +48,12 @@ fun TvSearchScreen(
     onQueryChange: (String) -> Unit,
     onFilterChange: (TvContentFilter) -> Unit,
     onAnime: (AnimeSummary) -> Unit,
+    serverQueryResults: Boolean = false,
 ) {
-    val results = remember(library, query, selectedFilter) {
-        TvSearchFilter.matches(library.anime, query, selectedFilter)
+    // clean-start performs query matching server-side, including aliases not present
+    // in the summary card. Do not discard valid server results with a second local match.
+    val results = remember(library, query, selectedFilter, serverQueryResults) {
+        TvSearchFilter.matches(library.anime, if (serverQueryResults) "" else query, selectedFilter)
     }
     val focusColor = rememberTvFocusColor()
     val searchFocus = remember { FocusRequester() }

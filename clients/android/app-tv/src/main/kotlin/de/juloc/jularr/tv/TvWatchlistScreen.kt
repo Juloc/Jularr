@@ -126,6 +126,7 @@ fun TvWatchlistScreen(
     requestHeaders: Map<String, String>,
     focusMemory: TvFocusMemory,
     onOpenAnime: (animeId: String) -> Unit,
+    onOpenVideoWork: ((workId: String) -> Unit)? = null,
 ) {
     if (!supported) {
         TvCenteredPanel(
@@ -300,7 +301,9 @@ fun TvWatchlistScreen(
                                         entry.mediaType.equals("anime", ignoreCase = true)
                                     }
                                     if (playableId != null) onOpenAnime(playableId)
-                                    else infoEntry = entry
+                                    else if (entry.localMediaId != null && onOpenVideoWork != null) {
+                                        onOpenVideoWork(entry.localMediaId)
+                                    } else infoEntry = entry
                                 },
                             )
                         }

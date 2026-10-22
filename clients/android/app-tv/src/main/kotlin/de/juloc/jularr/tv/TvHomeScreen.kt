@@ -82,8 +82,8 @@ fun TvHomeScreen(
             formats[item.animeId]?.let { filter.includes(it.format) } ?: (filter == TvContentFilter.ALL)
         }
     }
-    val movies = selected.filter { it.format.equals("MOVIE", ignoreCase = true) }
-    val series = selected.filterNot { it.format.equals("MOVIE", ignoreCase = true) }
+    val movies = selected.filter { it.format.equals("MOVIE", ignoreCase = true) || it.format.equals("ANIME_MOVIE", ignoreCase = true) }
+    val series = selected.filterNot { it.format.equals("MOVIE", ignoreCase = true) || it.format.equals("ANIME_MOVIE", ignoreCase = true) }
     val rows = buildList {
         add("filters")
         if (featured != null) add("hero")
@@ -192,7 +192,9 @@ fun TvHomeScreen(
                                 text = listOfNotNull(
                                     featured.seasonYear?.toString(),
                                     featured.format,
-                                    stringResource(R.string.tv_anime_episode_count, featured.episodeCount),
+                                    featured.episodeCount.takeIf { it > 0 }?.let {
+                                        stringResource(R.string.tv_anime_episode_count, it)
+                                    },
                                 ).joinToString(" · "),
                                 color = Color.White.copy(alpha = 0.8f),
                                 style = MaterialTheme.typography.bodyLarge,
