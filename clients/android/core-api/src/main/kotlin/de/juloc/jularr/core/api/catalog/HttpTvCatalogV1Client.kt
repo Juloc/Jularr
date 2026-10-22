@@ -147,6 +147,18 @@ class HttpTvCatalogV1Client(
     override suspend fun work(workId: Long): TvWorkDetailsV1 =
         readObject(TvCatalogV1Routes.work(workId)).workDetails()
 
+    override suspend fun editions(workId: Long): List<TvWorkEditionV1> =
+        readArray(TvCatalogV1Routes.editions(workId)).objects { workEdition() }
+
+    override suspend fun credits(workId: Long): List<TvWorkCreditV1> =
+        readArray(TvCatalogV1Routes.credits(workId)).objects { workCredit() }
+
+    override suspend fun person(personId: Long): TvPersonV1 =
+        readObject(TvCatalogV1Routes.person(personId)).person()
+
+    override suspend fun personWorks(personId: Long, page: Int, pageSize: Int): TvPageV1<TvWorkCardV1> =
+        readObject(TvCatalogV1Routes.personWorks(personId, page, pageSize)).page { workCard() }
+
     override suspend fun seasons(workId: Long): List<TvWorkSeasonV1> =
         readArray(TvCatalogV1Routes.seasons(workId)).objects { workSeason() }
 
