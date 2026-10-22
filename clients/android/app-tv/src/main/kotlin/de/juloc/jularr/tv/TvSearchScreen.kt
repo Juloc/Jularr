@@ -52,6 +52,7 @@ fun TvSearchScreen(
     serverQueryResults: Boolean = false,
     onOpenDiscover: (() -> Unit)? = null,
     onLoadMore: (() -> Unit)? = null,
+    pagingError: String? = null,
 ) {
     // clean-start performs query matching server-side, including aliases not present
     // in the summary card. Do not discard valid server results with a second local match.
@@ -146,6 +147,9 @@ fun TvSearchScreen(
             style = MaterialTheme.typography.titleLarge,
         )
 
+        if (pagingError != null) {
+            Text(pagingError, color = MaterialTheme.colorScheme.error)
+        }
         if (results.isEmpty()) {
             Text(
                 if (query.isBlank()) stringResource(R.string.tv_search_empty_library)

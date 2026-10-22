@@ -128,6 +128,7 @@ fun TvWatchlistScreen(
     onOpenAnime: (animeId: String) -> Unit,
     onOpenVideoWork: ((workId: String) -> Unit)? = null,
     onLoadMore: (() -> Unit)? = null,
+    pagingError: String? = null,
 ) {
     if (!supported) {
         TvCenteredPanel(
@@ -259,6 +260,9 @@ fun TvWatchlistScreen(
                     }
                 }
 
+                if (pagingError != null) {
+                    Text(pagingError, color = MaterialTheme.colorScheme.error)
+                }
                 if (entries.isEmpty()) {
                     TvCenteredPanel(
                         title = stringResource(R.string.tv_watchlist_title),

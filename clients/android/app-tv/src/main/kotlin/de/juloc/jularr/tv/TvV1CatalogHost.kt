@@ -327,13 +327,16 @@ fun TvV1CatalogHost(
                             continueWatching = emptyList(), // Explicitly deferred: no invented WorkUnit / playback timestamps.
                             serverOrigin = serverOrigin,
                             requestHeaders = authorization,
-                            error = error ?: if (loading) "Bibliothek wird geladen …" else null,
+                            error = error ?: pagingError ?: if (loading) "Bibliothek wird geladen …" else null,
                             focusMemory = focusMemory,
                             onOpenSearch = { openPage(TvV1CatalogPage.Search) },
                             onAnime = { card -> openWork(card.id) },
                             onContinueWatching = { /* Legacy bootstrap is intentionally disconnected. */ },
                             v1ContinueWatching = continueWatching,
                             showV1Continue = showContinueWatching,
+                            onLoadMoreVideos = if (homeNextPage != null && !fetchingNextPage) {
+                                { loadNextPage(TvV1CatalogPage.Home) }
+                            } else null,
                             onContinueWork = { item ->
                                 detailWorkId = item.workId
                                 detailedTitle = item.title
@@ -356,6 +359,10 @@ fun TvV1CatalogHost(
                                 focusMemory = focusMemory,
                                 onOpenAnime = ::openWork,
                                 onOpenVideoWork = ::openWork,
+                                onLoadMore = if (watchlistNextPage != null && !fetchingNextPage) {
+                                    { loadNextPage(TvV1CatalogPage.Watchlist) }
+                                } else null,
+                                pagingError = pagingError,
                             )
                         }
                         else -> Unit
@@ -447,6 +454,7 @@ fun TvV1CatalogHost(
                         onFilterChange = { category = it },
                         onAnime = { card -> openWork(card.id) },
                         serverQueryResults = true,
+                        pagingError = pagingError,
                         onOpenDiscover = { openPage(TvV1CatalogPage.Discover) },
                         onLoadMore = if (searchNextPage != null && !fetchingNextPage) {
                             { loadNextPage(TvV1CatalogPage.Search) }
