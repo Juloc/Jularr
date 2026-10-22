@@ -30,6 +30,10 @@ interface TvCatalogV1Client {
     suspend fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): TvDiscoverItemV1
     suspend fun discoverCatalogEntry(mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int? = null): TvDiscoverCatalogEntryV1
     suspend fun work(workId: Long): TvWorkDetailsV1
+    suspend fun editions(workId: Long): List<TvWorkEditionV1>
+    suspend fun credits(workId: Long): List<TvWorkCreditV1>
+    suspend fun person(personId: Long): TvPersonV1
+    suspend fun personWorks(personId: Long, page: Int = 1, pageSize: Int = 25): TvPageV1<TvWorkCardV1>
     suspend fun seasons(workId: Long): List<TvWorkSeasonV1>
     suspend fun episodes(workId: Long, seasonNumber: Int): List<TvWorkEpisodeV1>
     suspend fun availability(workId: Long, page: Int = 1, pageSize: Int = 25): TvPageV1<TvWorkAvailabilityV1>
