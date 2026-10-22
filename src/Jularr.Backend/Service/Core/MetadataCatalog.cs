@@ -3,6 +3,8 @@ using System.Text.Json;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -22,7 +24,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.Core
 {
     // Provider search and import of every media type, for the Works page and for Discover.
-    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, IMemoryCache cache, TimeProvider time)
+    internal sealed class MetadataCatalog(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games, NarouCatalog narou, IMemoryCache cache, TimeProvider time)
     {
         // Ranked lists of one provider are read one after the other.
         private static readonly SemaphoreSlim BooksGate = new(1, 1);
@@ -48,6 +50,19 @@ namespace Jularr.Backend.Service.Core
                 if (subtype is MediaSubtype.Manga or MediaSubtype.LightNovel)
                 {
                     results.AddRange((await aniList.SearchBooksAsync(subtype.Value, query, year, ct)).Select(AniListBook));
+                    if (subtype == MediaSubtype.LightNovel && await HasNarouAsync(context, ct))
+                    {
+                        try
+                        {
+                            results.AddRange((await narou.SearchAsync(query, ct)).Select(novel =>
+                                new MetadataSearchResultV1(NarouCatalog.Namespace, novel.Ncode, TextLimit.Cut(novel.Title, 500)!,
+                                    TextLimit.Cut(novel.Title, 500), null, "Japanese web novel (Narō)", null, TextLimit.Cut(novel.Author, 300))));
+                        }
+                        catch (Jularr.Integrations.Logic.Narou.NarouException)
+                        {
+                            // Narō's failure must not suppress the official book catalogs.
+                        }
+                    }
                 }
                 else if (failure is not null)
                 {
@@ -95,6 +110,8 @@ namespace Jularr.Backend.Service.Core
                 entry = (mediaType, @namespace) switch
                 {
                     (MediaType.Book, BookMetadata.Namespace) => Book(await books.ReadAsync(externalId, ct)),
+                    (MediaType.Book, NarouCatalog.Namespace) when subtype == MediaSubtype.LightNovel && await HasNarouAsync(context, ct) =>
+                        NarouEntry(await narou.ReadAsync(externalId, ct)),
                     (MediaType.Book, AniListMetadata.Namespace) when subtype is MediaSubtype.Manga or MediaSubtype.LightNovel =>
                         AniListBook(await aniList.ReadAsync(AniListMediaType.Manga, AniListId(externalId), ct)),
                     (MediaType.Music, MusicMetadata.Namespace) => Album((await music.ReadAsync(externalId, ct)).Album),
@@ -300,6 +317,10 @@ namespace Jularr.Backend.Service.Core
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));
 
+        private static MetadataSearchResultV1 NarouEntry(Jularr.Integrations.Logic.Narou.NarouWork novel) =>
+            new(NarouCatalog.Namespace, novel.Ncode, TextLimit.Cut(novel.Title, 500)!, TextLimit.Cut(novel.Title, 500), null,
+                "Japanese web novel (Narō)", null, TextLimit.Cut(novel.Author, 300));
+
         private static MetadataSearchResultV1 AniListBook(AniListMedia result) => new(AniListMetadata.Namespace, result.Id.ToString(CultureInfo.InvariantCulture),
             TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null,
             TextLimit.Cut(result.Description, 4000), null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), result.CoverUrl);
@@ -360,8 +381,18 @@ namespace Jularr.Backend.Service.Core
         private int? AnimeSeries(MetadataSearchResultV1 result) =>
             result.Namespace == AniListMetadata.Namespace && cache.TryGetValue("metadata.anime.series." + result.ExternalId, out int? series) ? series : null;
 
+        private static async Task<bool> HasNarouAsync(LogicContext context, CancellationToken ct) =>
+            (await context.ExecuteBatchAsync((ctx, token) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, token), ct))
+                .Any(connection => connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou);
+
         public async Task<long> ImportAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string? @namespace, string externalId, CancellationToken ct)
         {
+            if (mediaType == MediaType.Book && subtype == MediaSubtype.LightNovel && @namespace == NarouCatalog.Namespace)
+            {
+                if (!await HasNarouAsync(context, ct)) throw new ServiceUnavailableException("acquisition_unavailable");
+                return await narou.ImportAsync(context, externalId, ct);
+            }
+
             // An anime season is requested as its TMDB series.
             if (mediaType == MediaType.Series && @namespace == AniListMetadata.Namespace)
             {
