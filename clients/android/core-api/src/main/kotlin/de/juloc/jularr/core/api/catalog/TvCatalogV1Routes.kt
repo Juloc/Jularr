@@ -14,6 +14,9 @@ object TvCatalogV1Routes {
     const val DiscoverShelves = "$base/discover/shelves"
     const val DiscoverFeed = "$base/discover/feed"
     const val DiscoverSearch = "$base/discover/search"
+    const val DiscoverCatalogSearch = "$base/discover/catalog/search"
+    const val DiscoverCatalogFeed = "$base/discover/catalog/feed"
+    const val DiscoverSuggestions = "$base/discover/suggestions"
 
     fun work(workId: Long): String = "$base/works/${positiveId(workId)}"
     fun seasons(workId: Long): String = "${work(workId)}/seasons"
