@@ -10895,6 +10895,442 @@
   "dock.pageOnly": [
    "Page {0}",
    "Seite {0}"
+  ],
+  "manualImport.list.works": [
+   "Films and series",
+   "Filme und Serien"
+  ],
+  "manualImport.list.target": [
+   "Import target",
+   "Importziel"
+  ],
+  "manualImport.list.files": [
+   "Files",
+   "Dateien"
+  ],
+  "manualImport.list.report": [
+   "Result",
+   "Ergebnis"
+  ],
+  "manualImport.col.file": [
+   "File",
+   "Datei"
+  ],
+  "manualImport.col.series": [
+   "Film or series",
+   "Film oder Serie"
+  ],
+  "manualImport.col.episode": [
+   "Episode",
+   "Episode"
+  ],
+  "manualImport.col.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "manualImport.col.language": [
+   "Language",
+   "Sprache"
+  ],
+  "manualImport.col.size": [
+   "Size",
+   "Größe"
+  ],
+  "manualImport.col.reason": [
+   "Reason",
+   "Grund"
+  ],
+  "manualImport.select": [
+   "Choose this file",
+   "Diese Datei wählen"
+  ],
+  "manualImport.selectAll": [
+   "All files",
+   "Alle Dateien"
+  ],
+  "manualImport.state.ready": [
+   "Ready",
+   "Bereit"
+  ],
+  "manualImport.state.needs": [
+   "Needs episode",
+   "Episode fehlt"
+  ],
+  "manualImport.state.left": [
+   "Left out",
+   "Ausgelassen"
+  ],
+  "manualImport.state.imported": [
+   "Imported",
+   "Importiert"
+  ],
+  "manualImport.state.failed": [
+   "Not imported",
+   "Nicht importiert"
+  ],
+  "manualImport.match": [
+   "Match",
+   "Zuordnen"
+  ],
+  "manualImport.matchTitle": [
+   "Match file",
+   "Datei zuordnen"
+  ],
+  "manualImport.matchQuery": [
+   "Search the library",
+   "Bibliothek durchsuchen"
+  ],
+  "manualImport.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "manualImport.qualityFromName": [
+   "From the file name",
+   "Aus dem Dateinamen"
+  ],
+  "manualImport.apply": [
+   "Apply",
+   "Übernehmen"
+  ],
+  "manualImport.runSelected": [
+   "Import selected",
+   "Auswahl importieren"
+  ],
+  "manualImport.changeFolder": [
+   "Another folder",
+   "Anderer Ordner"
+  ],
+  "manualImport.backToQueue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "manualImport.more": [
+   "Import more",
+   "Weiter importieren"
+  ],
+  "manualImport.actions": [
+   "Manual import actions",
+   "Aktionen des manuellen Imports"
+  ],
+  "manualImport.incomplete": [
+   "Every chosen episode needs its season and episode.",
+   "Jede gewählte Episode braucht ihre Staffel und Episode."
+  ],
+  "manualImport.kpi.imported": [
+   "Imported",
+   "Importiert"
+  ],
+  "manualImport.kpi.failed": [
+   "Not imported",
+   "Nicht importiert"
+  ],
+  "manualImport.kpi.left": [
+   "Left out",
+   "Ausgelassen"
+  ],
+  "nav.group.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "nav.system.server": [
+   "Server",
+   "Server"
+  ],
+  "admin.dashboard.title": [
+   "Dashboard",
+   "Dashboard"
+  ],
+  "admin.performance.title": [
+   "Performance",
+   "Performance"
+  ],
+  "admin.logs.title": [
+   "Logs",
+   "Logs"
+  ],
+  "dashboard.kpi.status": [
+   "System status",
+   "Systemstatus"
+  ],
+  "dashboard.kpi.media": [
+   "Media",
+   "Medien"
+  ],
+  "dashboard.kpi.downloads": [
+   "Downloads",
+   "Downloads"
+  ],
+  "dashboard.kpi.requests": [
+   "Open requests",
+   "Offene Requests"
+  ],
+  "dashboard.status.stable": [
+   "Stable",
+   "Stabil"
+  ],
+  "dashboard.status.warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "dashboard.status.stable.foot": [
+   "All services answer",
+   "Alle Dienste erreichbar"
+  ],
+  "dashboard.status.warning.foot": [
+   "{0} service(s) do not answer",
+   "{0} Dienst(e) nicht erreichbar"
+  ],
+  "dashboard.status.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.media.files": [
+   "{0} files managed",
+   "{0} Dateien verwaltet"
+  ],
+  "dashboard.downloads.failed": [
+   " with errors",
+   " mit Fehler"
+  ],
+  "dashboard.requests.foot": [
+   "Waiting for a decision",
+   "Warten auf Freigabe"
+  ],
+  "dashboard.performance": [
+   "System performance",
+   "Systemleistung"
+  ],
+  "dashboard.performance.window": [
+   "Last 24 hours",
+   "Letzte 24 Stunden"
+  ],
+  "dashboard.activity": [
+   "Activity & downloads",
+   "Aktivität & Downloads"
+  ],
+  "dashboard.activity.open": [
+   "To the queue",
+   "Zur Queue"
+  ],
+  "dashboard.activity.empty": [
+   "Nothing is downloading right now.",
+   "Gerade läuft kein Download."
+  ],
+  "dashboard.services": [
+   "Available services",
+   "Verfügbare Dienste"
+  ],
+  "dashboard.services.check": [
+   "Check now",
+   "Jetzt prüfen"
+  ],
+  "dashboard.services.empty": [
+   "No service is set up yet.",
+   "Es ist noch kein Dienst eingerichtet."
+  ],
+  "dashboard.services.checked": [
+   "Last checked {0}",
+   "Zuletzt geprüft {0}"
+  ],
+  "dashboard.services.never": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "dashboard.storage.open": [
+   "Open storage",
+   "Speicher öffnen"
+  ],
+  "dashboard.storage.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage.video": [
+   "Video",
+   "Videos"
+  ],
+  "dashboard.storage.books": [
+   "Books",
+   "Bücher"
+  ],
+  "dashboard.storage.music": [
+   "Music",
+   "Musik"
+  ],
+  "dashboard.storage.games": [
+   "Games",
+   "Games"
+  ],
+  "dashboard.storage.other": [
+   "Other data",
+   "Andere Daten"
+  ],
+  "health.type.Database": [
+   "Database",
+   "Datenbank"
+  ],
+  "health.type.Storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "health.type.Provider": [
+   "Provider",
+   "Anbieter"
+  ],
+  "health.type.MediaServer": [
+   "Media server",
+   "Medienserver"
+  ],
+  "health.type.DownloadClient": [
+   "Download client",
+   "Download-Client"
+  ],
+  "health.type.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "health.state.Available": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "health.state.Unavailable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "health.state.Unknown": [
+   "Not checked",
+   "Nicht geprüft"
+  ],
+  "resource.now": [
+   "Now",
+   "Jetzt"
+  ],
+  "resource.chart": [
+   "Processor and memory use over the last 24 hours",
+   "Prozessor- und Speichernutzung der letzten 24 Stunden"
+  ],
+  "resource.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "resource.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "performance.kpi.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.response": [
+   "Response time",
+   "Antwortzeit"
+  ],
+  "performance.kpi.errors": [
+   "Error rate",
+   "Fehlerquote"
+  ],
+  "performance.window": [
+   "Period: 24 hours",
+   "Zeitraum: 24 Stunden"
+  ],
+  "performance.history": [
+   "Load and memory use",
+   "Leistung und Speichernutzung"
+  ],
+  "performance.services": [
+   "Services by runtime",
+   "Services nach Laufzeit"
+  ],
+  "performance.service": [
+   "Service",
+   "Service"
+  ],
+  "performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "performance.maximum": [
+   "Longest",
+   "Max."
+  ],
+  "performance.errorCount": [
+   "Errors",
+   "Fehler"
+  ],
+  "performance.empty": [
+   "No service was called in the last 24 hours.",
+   "In den letzten 24 Stunden wurde kein Service aufgerufen."
+  ],
+  "logs.level.All": [
+   "All",
+   "Alle"
+  ],
+  "logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "logs.level.Info": [
+   "Info",
+   "Info"
+  ],
+  "logs.source": [
+   "Source",
+   "Quelle"
+  ],
+  "logs.source.All": [
+   "All sources",
+   "Alle Quellen"
+  ],
+  "logs.source.Activity": [
+   "Activity",
+   "Aktivität"
+  ],
+  "logs.source.Job": [
+   "Jobs",
+   "Jobs"
+  ],
+  "logs.source.Application": [
+   "Application",
+   "Anwendung"
+  ],
+  "logs.search": [
+   "Filter messages",
+   "Meldungen filtern"
+  ],
+  "logs.empty": [
+   "No messages for this filter.",
+   "Keine Meldungen für diesen Filter."
+  ],
+  "jobs.job.health": [
+   "Health check",
+   "Gesundheitsprüfung"
+  ],
+  "jobs.worker.Health": [
+   "Health",
+   "Gesundheit"
+  ],
+  "jobs.health.summary": [
+   "{0} of {1} services reachable",
+   "{0} von {1} Diensten erreichbar"
+  ],
+  "jobs.about.health": [
+   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
+   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
   ]
  }
 }

@@ -6,7 +6,7 @@ using Jularr.Integrations.Data.Storage;
 namespace Jularr.Backend.Logic.Acquisition
 {
     // A video of a folder with what its name says it is and the name the library would give it.
-    internal sealed record ManualImportProposal(string Path, long SizeBytes, int? Season, int? Episode, string? QualityKey, string? TargetName);
+    internal sealed record ManualImportProposal(string Path, long SizeBytes, int? Season, int? Episode, string? QualityKey, string? TargetName, string? Languages);
 
     // What a person sees and decides when a folder is imported by hand.
     internal static class ManualImportLogic
@@ -31,7 +31,19 @@ namespace Jularr.Backend.Logic.Acquisition
             var named = ImportPlacementLogic.PlanChosen(mediaType, subtype, title, year, files, [.. guesses.Select(guess => (guess.RelativePath, guess.Season, guess.Episode))], patterns, episodes)
                 .Where(placement => placement.IsMedia).ToDictionary(placement => placement.SourcePath, placement => placement.TargetStem + placement.Extension, StringComparer.Ordinal);
             return [.. videos.Zip(guesses, (video, guess) => new ManualImportProposal(video.RelativePath, video.SizeBytes, guess.Season, guess.Episode,
-                ReleaseFacts.OfPath(video.RelativePath, isMovie)?.QualityKey, named.GetValueOrDefault(video.RelativePath)))];
+                ReleaseFacts.OfPath(video.RelativePath, isMovie)?.QualityKey, named.GetValueOrDefault(video.RelativePath), Languages(video.RelativePath)))];
         }
+
+        // The names the library would give the chosen videos, with the numbers and qualities their owners set.
+        public static IReadOnlyDictionary<string, string> NameChosen(MediaType mediaType, MediaSubtype? subtype, string title, int? year, IReadOnlyList<(string Path, int? Season, int? Episode)> choices,
+            IReadOnlyDictionary<string, string> qualities, NamingSet patterns, IReadOnlyList<TargetUnit> episodes)
+        {
+            var files = choices.Select(choice => new StorageFile(choice.Path, 0, DateTime.UnixEpoch)).ToArray();
+            return ImportPlacementLogic.PlanChosen(mediaType, subtype, title, year, files, choices, patterns, episodes, qualities).Where(placement => placement.IsMedia)
+                .ToDictionary(placement => placement.SourcePath, placement => placement.TargetStem + placement.Extension, StringComparer.Ordinal);
+        }
+
+        // The audio languages a name states, as the acquisition reads them (an untagged name is English), such as DE+EN.
+        private static string? Languages(string path) => ReleaseParser.TryParse(Path.GetFileNameWithoutExtension(path), out var parsed) ? string.Join('+', VideoReleaseJudge.Languages(parsed)) : null;
     }
 }

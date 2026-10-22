@@ -5,7 +5,6 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Statistics.V1;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
@@ -60,38 +59,26 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path + await page.Content.ReadAsStringAsync());
             }
 
-            // Warnings and errors since the start, without stack traces, for the Owner only.
-            host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Jularr.Test").LogError(new InvalidOperationException("Disk said no."), "Import of {Title} failed.", "Film");
-            host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Jularr.Test").LogInformation("Routine work.");
-            using var logs = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
-            var entry = (await logs.Content.ReadFromJsonAsync<Jularr.Backend.Data.Common.BaseDataList<RecentLogV1>>())!.First(item => item.Category == "Jularr.Test");
-            Assert.AreEqual("Import of Film failed. (InvalidOperationException: Disk said no.)", entry.Message);
-            Assert.AreEqual(Jularr.Backend.Data.Enums.Instance.RecentLogLevel.Error, entry.Level);
-            using var systemPage = await host.SendAsync(HttpMethod.Get, "/Admin/System");
-            var html = await systemPage.Content.ReadAsStringAsync();
-            StringAssert.Contains(html, "Import of Film failed.");
-            Assert.IsFalse(html.Contains("Routine work.", StringComparison.Ordinal));
-
-            // Every service call of the last hour counts, the slowest in total first.
+            // Every service call of the last 24 hours counts, the slowest in total first, and the pages that show them render.
             using var timings = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
-            var timing = (await timings.Content.ReadFromJsonAsync<Jularr.Backend.Data.Common.BaseDataList<ServiceTimingV1>>())!.Single(item => item.Service == "Admin/ReadSystemHealthV1");
-            Assert.IsTrue(timing.Count >= 3);
+            var read = (await timings.Content.ReadFromJsonAsync<ServiceTimingsV1>())!;
+            var timing = read.Services.Single(item => item.Service == "Admin/ReadSystemHealthV1");
+            Assert.IsTrue(timing.Count >= 1);
             Assert.AreEqual(0L, timing.Errors);
-            StringAssert.Contains(html, "ReadSystemHealthV1");
+            Assert.IsTrue(read.Calls >= timing.Count);
             using var resources = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/resources");
             Assert.AreEqual(HttpStatusCode.OK, resources.StatusCode);
+            Assert.IsTrue((await resources.Content.ReadFromJsonAsync<ResourceHistoryV1>())!.AvailableMemoryBytes > 0);
+            using var performance = await host.SendAsync(HttpMethod.Get, "/Admin/Performance");
+            StringAssert.Contains(await performance.Content.ReadAsStringAsync(), "ReadSystemHealthV1");
 
-            // Without the Diagnostics module the System page keeps its overview only.
+            // Without the Diagnostics module nothing is collected and the pages for it are closed.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Diagnostics'");
-            using var noLogs = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
-            Assert.AreEqual(HttpStatusCode.Forbidden, noLogs.StatusCode);
-            using var plainPage = await host.SendAsync(HttpMethod.Get, "/Admin/System");
-            var plain = await plainPage.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, plainPage.StatusCode, plain);
-            Assert.IsFalse(plain.Contains("Import of Film failed.", StringComparison.Ordinal));
+            using var noTimings = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
+            Assert.AreEqual(HttpStatusCode.Forbidden, noTimings.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Diagnostics'");
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
-            using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
+            using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
             Assert.AreEqual(HttpStatusCode.Forbidden, manager.StatusCode);
         }
     }

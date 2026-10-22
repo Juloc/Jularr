@@ -56,5 +56,18 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(".en.srt", placements[1].Extension);
             Assert.AreEqual(placements[0].TargetStem, placements[1].TargetStem);
         }
+
+        [TestMethod]
+        public void NameChosen_UsesTheQualityAPersonGave_AndShowsTheLanguagesItsName_States()
+        {
+            var names = ManualImportLogic.NameChosen(MediaType.Movie, null, "Example Movie", 2020, [("a.1080p.WEB-DL.H264-GRP.mkv", null, null), ("b.mkv", null, null)],
+                new Dictionary<string, string> { ["a.1080p.WEB-DL.H264-GRP.mkv"] = "Bluray-720p", ["b.mkv"] = "DVD" }, NamingPatternTests.Defaults, []);
+            StringAssert.Contains(names["a.1080p.WEB-DL.H264-GRP.mkv"], "720p");
+            StringAssert.Contains(names["b.mkv"], "DVD");
+
+            var proposals = ManualImportLogic.Propose(MediaType.Movie, null, "Example Movie", 2020, Files("Example.Movie.2020.GERMAN.1080p.WEB-DL.H264-GRP.mkv", "plain.mkv"), NamingPatternTests.Defaults, []);
+            Assert.AreEqual("DE+EN", proposals.Single(file => file.Path.StartsWith("Example", StringComparison.Ordinal)).Languages);
+            Assert.AreEqual("EN", proposals.Single(file => file.Path == "plain.mkv").Languages);
+        }
     }
 }
