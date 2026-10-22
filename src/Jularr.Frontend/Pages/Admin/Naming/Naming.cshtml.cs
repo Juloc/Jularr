@@ -35,7 +35,6 @@ namespace Jularr.Frontend.Pages.Admin.Naming
             page.Asset("Pages/Admin/Naming/Naming.entry.ts");
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
-            page.Content.Add(SettingsPages.Tabs(texts, SettingsPages.Naming));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var colons = Enum.GetValues<ColonReplacement>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.naming.colon." + mode]));
 

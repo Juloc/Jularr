@@ -112,6 +112,14 @@ namespace Jularr.Frontend.Framework
         {
             var page = new Page();
             Define(page);
+
+            // A top page of an administration entry opens with the entry's row of sibling pages (a page that merges it with its own filters, or is a detail, says so).
+            if (page.Shell && !page.SuppressPageRow && page.Parents.Count == 0 && Request.Path.StartsWithSegments("/Admin")
+                && AdminMenu.Siblings(HttpContext.RequestServices.GetRequiredService<UiText>(), Request) is { } row)
+            {
+                page.Content.Insert(0, new ListToolbar(row));
+            }
+
             if (_error is not null && HttpMethods.IsGet(Request.Method))
             {
                 // Failed reads always explain why.
@@ -145,6 +153,10 @@ namespace Jularr.Frontend.Framework
         public List<IUiComponent> Content { get; } = [];
         public List<string> AssetEntries { get; } = [];
 
+        // Set by a page that draws the row of its administration entry itself (merged with its filters) or has none (a detail page).
+        public bool SuppressPageRow { get; private set; }
+        public void NoPageRow() => SuppressPageRow = true;
+
         // The breadcrumb names the page; a document title names the shown item in the browser tab.
         public void Title(string key, string? documentTitle = null)
         {
@@ -167,6 +179,7 @@ namespace Jularr.Frontend.Framework
         public void Use(Page definition)
         {
             Shell = definition.Shell;
+            SuppressPageRow = definition.SuppressPageRow;
             IsPlayer = definition.IsPlayer;
             IsReader = definition.IsReader;
             TitleKey = definition.TitleKey;

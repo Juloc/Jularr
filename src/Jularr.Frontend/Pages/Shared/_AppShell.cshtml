@@ -2,9 +2,12 @@
 @inject UiText T
 @inject ShellNavigation Navigation
 @inject FrontendAssets Assets
+@inject AdminMenuCounters MenuCounters
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
     var definition = (ViewContext.ViewData.Model as JularrPage)?.Definition;
     var titleKey = definition?.TitleKey ?? "nav.home";
+    // The figures of the administration menu are read only for an administration page.
+    var counts = currentPath.StartsWith("/Admin", StringComparison.OrdinalIgnoreCase) ? await MenuCounters.ReadAsync(T, Context.RequestAborted) : null;
 }
-@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" && Context.Request.Query["type"].ToString() is { Length: > 0 } scopes ? scopes : null, definition?.Parents, definition?.DocumentTitle), T))
+@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets, Context.Request.Query["q"].FirstOrDefault(), currentPath == "/" && Context.Request.Query["type"].ToString() is { Length: > 0 } scopes ? scopes : null, definition?.Parents, definition?.DocumentTitle, counts, Context.Request.Query), T))

@@ -29,7 +29,7 @@ function inspect(directory) {
       // Razor Tag Helper model expressions are C# property access, not UI keys.
       if (source.slice(Math.max(0, match.index - 6), match.index).endsWith("model=")) continue;
       // Backend permission identifiers are not visible UI text.
-      if (/(?:\.Permissions\.Contains|\.Can)\(\s*$/.test(source.slice(Math.max(0, match.index - 50), match.index))) continue;
+      if (/(?:\.Permissions\.Contains|\.Can|\bRight)\(\s*$/.test(source.slice(Math.max(0, match.index - 50), match.index))) continue;
       // Asset/file extensions are not localization keys.
       if (/\.(?:json|css|scss|js|mjs|ts|svg|png|webp|avif|cs|cshtml)$/.test(match[1])) continue;
       if (!declared.has(match[1])) {

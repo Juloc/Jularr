@@ -93,6 +93,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             if (TempData["WorksReport"] is string report) page.Content.Add(Report(report));
 
             // One row of filter chips with the title field and the view switch, then the titles in the chosen view; the chosen titles belong to one form that the dock's bulk zone and the change drawer post.
+            page.NoPageRow();
             page.Content.Add(Toolbar());
             if (_works is { } works)
             {

@@ -50,10 +50,10 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual("999px", await page.Locator(".nav-link").First.EvaluateAsync<string>("link => getComputedStyle(link).borderRadius"));
                 StringAssert.Contains(await page.Locator(".sidebar-brand .shell-brand__name").EvaluateAsync<string>("name => getComputedStyle(name).transitionProperty"), "color");
 
-                // An administration area opens its first page at once, in the user menu as in the administration.
-                await page.Locator(".sidebar-secondary .nav-link", new() { HasText = "System" }).ClickAsync();
-                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/System$"));
-                await page.Locator(".app-sidebar--admin .nav-group > .nav-link", new() { HasText = "Media" }).ClickAsync();
+                // The user menu has one way into the administration, which opens with its first entry; there an entry opens its first page at once.
+                await page.Locator(".sidebar-secondary .nav-link", new() { HasText = "Administration" }).ClickAsync();
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Dashboard$"));
+                await page.Locator(".app-sidebar--admin .menu-entry", new() { HasText = "Media" }).ClickAsync();
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex("/Admin/Works$"));
 
                 // The calendar shows its month, switches to the week and the day in place, and opens its filter as a dialog.

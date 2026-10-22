@@ -84,16 +84,17 @@ namespace Jularr.Frontend.Pages.Admin.Jobs
             var shown = _jobs.Where(job => (state is null || GroupOf(job.WorkerJobStateTypeId) == state) && words.All(word => FilterText(job).Contains(word, StringComparison.CurrentCultureIgnoreCase))).ToList();
             var allPaused = _jobs.Count > 0 && _jobs.All(job => job.IsPaused);
 
-            // What the last health check found; the Health check job below runs it again.
-            if (_health is { Services.Count: > 0 } health) page.Content.Add(Health(health));
-
             // One row of filter chips (the state's icon, its name and how many) with the list's own filter.
             var chips = new List<NavigationTab> { new("common.all", Link(null, QueryFilter), state is null, Count: _jobs.Count, Icon: Glyph("layers", 14)) };
             chips.AddRange(Groups.Where(group => group is "ready" or "waiting" or "paused" or "running" or "failed" || counts[group] > 0 || group == state)
                 .Select(group => new NavigationTab(ChipKey(group), Link(group, QueryFilter), group == state, Count: counts[group], Icon: Glyph(ChipIcon(group), 14))));
             var keep = state is null ? null : new Dictionary<string, string> { ["state"] = state };
-            page.Content.Add(new ListToolbar(new NavigationTabs(chips, "jobs.filters", "filters"), new SearchBox(Address, "jobs.filter", QueryFilter, keep, ".jobs-list", Glyph("search", 15)),
+            page.NoPageRow();
+            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, chips, ariaLabelKey: "jobs.filters"), new SearchBox(Address, "jobs.filter", QueryFilter, keep, ".jobs-list", Glyph("search", 15)),
                 ListToolbar.Count(string.Format(CultureInfo.CurrentCulture, texts["jobs.count"], shown.Count), texts["jobs.count"])));
+
+            // What the last health check found; the Health check job below runs it again.
+            if (_health is { Services.Count: > 0 } health) page.Content.Add(Health(health));
 
             // The jobs, a drawer of details for each of them.
             var columns = new List<ListColumn> { new("jobs.job", ListRole.Main), new("table.status", ListRole.Status), new("jobs.last"), new("jobs.next", ListRole.Data, 2), new("jobs.use", ListRole.Data, 1), new("common.actions", ListRole.Actions) };

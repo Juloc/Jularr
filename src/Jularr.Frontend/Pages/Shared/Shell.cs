@@ -1,13 +1,14 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
 using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Http;
 
 namespace Jularr.Frontend.Pages.Shared
 {
     // Shared application shell: header with the page's breadcrumb, and a sidebar in user or admin mode (icon-only on a tablet,
     // off-canvas on a phone, as in the mockups).
     public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets, string? searchQuery = null, string? searchType = null,
-        IReadOnlyList<Crumb>? parents = null, string? currentLabel = null) : IUiComponent
+        IReadOnlyList<Crumb>? parents = null, string? currentLabel = null, AdminCounts? counts = null, IQueryCollection? query = null) : IUiComponent
     {
         private const string AdminPrefix = "/Admin";
 
@@ -40,12 +41,12 @@ namespace Jularr.Frontend.Pages.Shared
                 primary.Add(new ShellLink("requests.title", "/Requests", "home"));
             }
 
-            // Administration is its own sidebar mode: every area open, the user entries out of the way.
-            // The Instance area belongs to admin mode only; the user menu keeps the other areas as entry points.
+            // Administration is its own sidebar mode: every group open, the user entries out of the way; the user menu has one way in.
             var adminPath = currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
-            var administration = AdministrationLinks(texts, adminPath);
-            secondary.AddRange(administration);
-            var adminMode = administration.Count > 0 && adminPath;
+            var menu = AdminMenu.For(texts);
+            var current = AdminMenu.Current(menu, currentPath, key => query?[key].ToString());
+            if (menu.Count > 0) secondary.Add(new ShellLink("nav.administration", menu[0].Entries[0].Href, "admin"));
+            var adminMode = menu.Count > 0 && adminPath;
 
             // The menu button of the phone, then the trail, the one global search, the theme switch, the inbox and the avatar.
             var header = new List<IUiComponent>
@@ -53,7 +54,7 @@ namespace Jularr.Frontend.Pages.Shared
                 new Button(new Icon("menu", assets)).IconOnly(texts["nav.menu"]).Attribute("class", "button button--icon app-menu-toggle")
                     .Attribute("data-sidebar-toggle", "true").Attribute("aria-controls", "app-sidebar").Attribute("aria-expanded", "false"),
                 new Brand(assets, compact: true),
-                Breadcrumb(administration, texts)
+                Breadcrumb(menu, current, texts)
             };
             if (texts.CanReadMedia())
             {
@@ -87,7 +88,7 @@ namespace Jularr.Frontend.Pages.Shared
 
             if (adminMode)
             {
-                new Aside(new Brand(assets), new Div(new Text("nav.administration")).Class("nav-eyebrow"), Links(administration, "nav.admin", "sidebar-navigation", texts, expand: true))
+                new Aside(new Brand(assets), new Div(new Text("nav.administration")).Class("nav-eyebrow"), AdminNavigation(menu, current, texts))
                     .Class("app-sidebar app-sidebar--admin").Attribute("id", "app-sidebar").WriteTo(writer, encoder, texts);
                 return;
             }
@@ -103,67 +104,47 @@ namespace Jularr.Frontend.Pages.Shared
         private static string Initials(string name) => string.Concat(name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Take(2)
             .Select(part => new System.Globalization.StringInfo(part).SubstringByTextElements(0, 1))).ToUpperInvariant();
 
-        // Administration areas open into their pages; an area with one page is a plain link.
-        private static List<ShellLink> AdministrationLinks(UiText texts, bool withInstance)
+        // The administration as the sidebar shows it: a find field, then every group open under a thin line with its small name, each entry with its own icon
+        // and, for three of them, the figure of what waits.
+        private IUiComponent AdminNavigation(IReadOnlyList<AdminMenuGroupView> menu, (AdminMenuEntryView Entry, AdminMenuPage Page)? current, UiText texts)
         {
-            var links = new List<ShellLink>();
-            if (texts.CanAdminister())
+            var find = new Div(new SearchBox("/Admin", "admin.menu.find", null, null, null, new Icon("search", assets, 16), scripted: true)).Class("menu-find").Attribute("data-menu-find", "");
+            var groups = menu.Select(group =>
             {
-                links.Add(Group("nav.group.overview", "status", new ShellLink("admin.dashboard.title", "/Admin/Dashboard", "")));
-                links.Add(Group("nav.group.system", "server", [new("nav.system.server", "/Admin/System", ""), .. texts.CanDiagnose() ? new ShellLink[] { new("admin.performance.title", "/Admin/Performance", "") } : [],
-                    new("admin.logs.title", "/Admin/Logs", ""), new("admin.jobs.title", "/Admin/Jobs", ""), new("admin.transcoding.title", "/Admin/Transcoding", "")]));
-            }
-
-            if (texts.CanManageMedia())
-            {
-                links.Add(Group("nav.group.media", "books", [
-                    new("admin.works.title", "/Admin/Works", ""), new("admin.matches.title", "/Admin/Works/Matches", ""), new("admin.activity.title", "/Admin/Activity", ""),
-                    new("admin.manualImport.title", "/Admin/ManualImport", ""),
-                    .. texts.CanImportMedia() ? new ShellLink[] { new("admin.import.title", "/Admin/Import", "") } : [],
-                    new("admin.history.title", "/Admin/History", "")]));
-                links.Add(Group("nav.group.library", "library", [new("library.tab.Overview", "/Admin/Library", ""), new("library.tab.Unmatched", "/Admin/Library/Unmatched", ""),
-                    new("library.tab.Files", "/Admin/Library/Files", ""),
-                    .. texts.CanManageStorage() ? new ShellLink[] { new("library.tab.Rename", "/Admin/Library/Rename", ""), new("library.tab.Versions", "/Admin/Library/Versions", "") } : []]));
-            }
-
-            if (texts.CanManageRequests())
-            {
-                links.Add(Group("nav.group.requests", "requests", [new("admin.requests.title", "/Admin/Requests", ""),
-                    .. texts.CanReadRequestRules() ? new ShellLink[] { new("admin.rules.title", "/Admin/Rules", ""), new("admin.users.title", "/Admin/Requests/Users", "") } : []]));
-            }
-
-            var acquisition = new List<ShellLink>();
-            if (texts.CanManageWanted()) acquisition.Add(new("admin.wanted.title", "/Admin/Wanted", ""));
-            if (texts.CanConfigureAcquisition())
-            {
-                acquisition.AddRange([new("acquisition.role.Search", "/Admin/Acquisition", ""), new("acquisition.role.Download", "/Admin/Acquisition/Downloads", ""),
-                    new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", ""), new("admin.profiles.title", "/Admin/Acquisition/Profiles", ""),
-                    new("admin.sources.title", "/Admin/Acquisition/Sources", ""), new("admin.takeover.title", "/Admin/Acquisition/Takeover", ""), new("admin.browser.title", "/Admin/Browser", "")]);
-            }
-
-            if (acquisition.Count > 0) links.Add(Group("nav.group.acquisition", "download", [.. acquisition]));
-
-            // The instance's own pages, each by its permission (otherwise only the Settings page lists them).
-            var instance = new List<ShellLink>();
-            if (texts.CanAdminister()) instance.Add(new("admin.instance.title", "/Admin/Instance", ""));
-            if (texts.Can("storage.read")) instance.Add(new("storage.title", "/Admin/Storage", ""));
-            if (texts.Can("providers.read")) instance.Add(new("admin.providers.title", "/Admin/Providers", ""));
-            if (texts.Can("accounts.read")) instance.Add(new("admin.accounts.title", "/Admin/Accounts", ""));
-            if (texts.Can("localization.read")) instance.Add(new("admin.localization.title", "/Admin/Localization", ""));
-            if (texts.CanAdminister()) instance.Add(new("admin.catalog.title", "/Admin/Catalog", ""));
-            if (texts.Can("backup.read")) instance.Add(new("admin.backup.title", "/Admin/Backup", ""));
-            if (withInstance && instance.Count > 0) links.Add(Group("nav.group.instance", "settings", [.. instance]));
-
-            return links;
+                var entries = group.Entries.Select(entry => Entry(entry, entry == current?.Entry, texts));
+                return (IUiComponent)new Section(new H3(new Span(new Text(group.Group.LabelKey))).Class("menu-group__label"), new Div([.. entries]).Class("menu-group__entries"))
+                    .Class(group.Entries.Any(entry => entry == current?.Entry) ? "menu-group menu-group--current" : "menu-group")
+                    .Attribute("aria-label", texts[group.Group.LabelKey]).Attribute("data-menu-text", texts[group.Group.LabelKey]);
+            });
+            return new Nav([find, .. groups]).Class("menu").Attribute("aria-label", texts["nav.admin"]);
         }
 
-        // Area > Group > Page > Title: the area and group come from the sidebar's own structure, the parents from the page.
+        private IUiComponent Entry(AdminMenuEntryView view, bool active, UiText texts)
+        {
+            var label = texts[view.Entry.LabelKey];
+            var children = new List<IUiComponent> { new Span(new Icon(view.Entry.Icon, assets, 16)).Class("menu-entry__icon"), new Span(new Truncated(label)).Class("menu-entry__label") };
+
+            // The figure of the entry, kept current by the live stream; it shows only while it is not zero.
+            if (view.Entry.Counter != AdminCounter.None && counts?.Of(view.Entry.Counter) is { } count)
+            {
+                var badge = new Span(new ValueText(count.ToString(CultureInfo.CurrentCulture))).Class("menu-badge")
+                    .Attribute("data-live", LiveKeys.Menu).Attribute("data-live-text", AdminCounts.Name(view.Entry.Counter));
+                children.Add(count > 0 ? badge : badge.Attribute("hidden", ""));
+            }
+
+            // What the find field looks for: the entry and the pages behind it.
+            var text = string.Join(" ", view.Pages.Select(page => texts[page.LabelKey]).Prepend(label));
+            var anchor = new A([.. children]).Class(active ? "menu-entry is-active" : "menu-entry").Attribute("href", view.Href).Attribute("data-menu-text", text);
+            return active ? anchor.Attribute("aria-current", "page") : anchor;
+        }
+
+        // Area > Entry > Page > Title: the entry comes from the administration menu, the parents from the page; an entry that is named like the page is left out.
         // The last part names the page (or its item) and is no link; narrow screens show only the last two (CSS).
-        private IUiComponent Breadcrumb(IReadOnlyList<ShellLink> administration, UiText texts)
+        private IUiComponent Breadcrumb(IReadOnlyList<AdminMenuGroupView> menu, (AdminMenuEntryView Entry, AdminMenuPage Page)? current, UiText texts)
         {
             var trail = new List<IUiComponent>();
             // A part with sub-pages is also a menu of them; a phone shows the menu instead of the link (CSS).
-            void Add(IUiComponent label, string? href, IReadOnlyList<ShellLink>? menu = null)
+            void Add(IUiComponent label, string? href, IReadOnlyList<LinkMenuItem>? items = null)
             {
                 if (href is null)
                 {
@@ -172,74 +153,60 @@ namespace Jularr.Frontend.Pages.Shared
                 }
 
                 var link = new A(label).Attribute("href", href);
-                trail.Add(menu is { Count: > 1 }
-                    ? new Li(link.Class("breadcrumb__link"), new LinkMenu(label, [.. menu.Select(entry => new LinkMenuItem(new Text(entry.Key), entry.Href, IsActive(entry)))])).Class("breadcrumb__item breadcrumb__item--menu")
+                trail.Add(items is { Count: > 1 }
+                    ? new Li(link.Class("breadcrumb__link"), new LinkMenu(label, items)).Class("breadcrumb__item breadcrumb__item--menu")
                     : new Li(link).Class("breadcrumb__item"));
             }
 
-            var adminTrail = administration.Count > 0 && currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
+            var title = parents is { Count: > 0 } && currentLabel is not null ? currentLabel : texts[pageTitleKey];
+            var adminTrail = menu.Count > 0 && currentPath.StartsWith(AdminPrefix, StringComparison.OrdinalIgnoreCase);
+            var entries = menu.SelectMany(group => group.Entries).ToList();
             if (adminTrail)
             {
-                Add(new Text("nav.admin"), administration[0].Href, administration);
-                var group = administration.FirstOrDefault(link => link.Children is not null && Current(link.Children) is not null);
-                if (group is not null) Add(new Text(group.Key), group.Href, group.Children);
+                Add(new Text("nav.admin"), entries[0].Href, [.. entries.Select(entry => new LinkMenuItem(new Text(entry.Entry.LabelKey), entry.Href, entry == current?.Entry))]);
+                if (current is { } place)
+                {
+                    var names = (parents ?? []).Select(parent => parent.IsKey ? texts[parent.Text] : parent.Text).Append(title);
+                    if (!names.Contains(texts[place.Entry.Entry.LabelKey], StringComparer.CurrentCultureIgnoreCase))
+                    {
+                        Add(new Text(place.Entry.Entry.LabelKey), place.Entry.Href, PageItems(place.Entry, place.Page));
+                    }
+                }
             }
 
             foreach (var parent in parents ?? [])
             {
-                // A parent that is a page of an area offers that area's pages.
-                var area = adminTrail ? administration.FirstOrDefault(link => link.Children?.Any(page => page.Href == parent.Href) == true)?.Children : null;
-                Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href, area);
+                // A parent that is a page of an entry offers that entry's pages.
+                var entry = adminTrail ? entries.FirstOrDefault(candidate => candidate.Pages.Any(page => page.Href() == parent.Href)) : null;
+                Add(parent.IsKey ? new Text(parent.Text) : new ValueText(parent.Text), parent.Href, entry is null ? null : PageItems(entry, null));
             }
 
             Add(parents is { Count: > 0 } && currentLabel is not null ? new ValueText(currentLabel) : new Text(pageTitleKey), null);
             return new Nav(new Ol([.. trail]).Class("breadcrumb")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"]);
         }
 
-        private IUiComponent Links(IReadOnlyList<ShellLink> links, string titleKey, string cssClass, UiText texts, bool expand = false)
+        private static IReadOnlyList<LinkMenuItem> PageItems(AdminMenuEntryView entry, AdminMenuPage? current) =>
+            [.. entry.Pages.Select(page => new LinkMenuItem(new Text(page.LabelKey), page.Href(), page == current))];
+
+        private IUiComponent Links(IReadOnlyList<ShellLink> links, string titleKey, string cssClass, UiText texts)
         {
             var children = links.Select(link =>
             {
-                const string className = "nav-link";
-                if (link.Children is { } pages)
-                {
-                    // An area is a link to its first page, so no click lands on an empty group; the administration lists the pages below it and marks the current one.
-                    var current = Current(pages);
-                    var heading = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key))).Class(current is null ? className : className + " is-active").Attribute("href", pages[0].Href);
-                    if (!expand) return new Div(heading).Class("nav-group");
-                    return new Div(heading, new Div([.. pages.Select(page =>
-                    {
-                        var anchor = new A(new Span(new Text(page.Key))).Class(page == current ? "nav-link nav-link--sub is-active" : "nav-link nav-link--sub").Attribute("href", page.Href);
-                        return page == current ? anchor.Attribute("aria-current", "page") : anchor;
-                    })]).Class("nav-group__pages")).Class("nav-group");
-                }
-
-                var active = IsActive(link);
+                var active = Matches(link);
                 var anchor = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key)))
-                    .Class(active ? className + " is-active" : className)
+                    .Class(active ? "nav-link is-active" : "nav-link")
                     .Attribute("href", link.Href);
-                if (active) anchor.Attribute("aria-current", "page");
-                return (IUiComponent)anchor;
+                return (IUiComponent)(active ? anchor.Attribute("aria-current", "page") : anchor);
             }).ToArray();
 
             return new Nav(children).Class(cssClass)
                 .Attribute("aria-label", texts[titleKey]);
         }
 
-        // An area is current when one of its pages is.
-        private bool IsActive(ShellLink link) => link.Children is { } area ? Current(area) is not null : Matches(link);
-
         private bool Matches(ShellLink link) => link.Href == "/"
             ? currentPath == "/"
             : string.Equals(currentPath, link.Href, StringComparison.OrdinalIgnoreCase)
                 || currentPath.StartsWith(link.Href + "/", StringComparison.OrdinalIgnoreCase);
-
-        // The most specific page of an area, so /Admin/Acquisition/Profiles is not also the indexers.
-        private ShellLink? Current(IReadOnlyList<ShellLink> pages) => pages.Where(Matches).MaxBy(page => page.Href.Length);
-
-        // An area with one page is a plain link.
-        private static ShellLink Group(string key, string icon, params ShellLink[] pages) =>
-            pages.Length == 1 ? pages[0] with { Icon = icon } : new ShellLink(key, pages[0].Href, icon, pages);
 
         private sealed class Aside(params IUiComponent[] children) : HtmlElement("aside", children);
 
@@ -250,7 +217,7 @@ namespace Jularr.Frontend.Pages.Shared
         private sealed class Kbd(params IUiComponent[] children) : HtmlElement("kbd", children);
     }
 
-    public sealed record ShellLink(string Key, string Href, string Icon, IReadOnlyList<ShellLink>? Children = null);
+    public sealed record ShellLink(string Key, string Href, string Icon);
 
     // Required destinations; Services determine optional links.
     public sealed class ShellNavigation

@@ -120,7 +120,7 @@ namespace Jularr.Backend.Tests
             html = await settings.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "lang=\"de-DE\"");
             StringAssert.Contains(html, "href=\"/Favorites\"");
-            StringAssert.Contains(html, "href=\"/Admin/Works\"");
+            StringAssert.Contains(html, "href=\"/Admin/Dashboard\"");
 
             // Library and the modules that build on it go off in one save of the Modules page.
             using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Modules");
@@ -132,6 +132,7 @@ namespace Jularr.Backend.Tests
             using var updated = await host.SendAsync(HttpMethod.Get, "/Settings");
             html = await updated.Content.ReadAsStringAsync();
             Assert.IsFalse(html.Contains("href=\"/Favorites\"", StringComparison.Ordinal));
+            StringAssert.Contains(html, "href=\"/Admin/Dashboard\"");
             Assert.IsFalse(html.Contains("href=\"/Admin/Works\"", StringComparison.Ordinal));
             using var denied = await host.SendAsync(HttpMethod.Get, "/Favorites");
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);

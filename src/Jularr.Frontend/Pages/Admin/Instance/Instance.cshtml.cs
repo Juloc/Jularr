@@ -26,7 +26,6 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/Form.entry.ts");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Instance));
-            else page.Content.Add(SettingsPages.Tabs(texts, SettingsPages.Instance));
 
             if (_settings is { } settings)
             {

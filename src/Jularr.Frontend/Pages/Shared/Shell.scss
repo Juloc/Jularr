@@ -278,15 +278,92 @@ html[data-skin="original"] .sidebar-secondary {
 .nav-link:hover { background-color: var(--surface-hover); }
 .nav-link.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
 
-// An area links to its first page; in the administration its pages stay listed below it and the current page is marked.
-.nav-group {
-    & > .nav-link.is-active { background-color: transparent; color: var(--text); }
+// The administration menu (the owner's proposal, variant B): a find field, then every group open under a thin line and a small name, an icon tile on each entry
+// (the current one in the accent), and a figure on the three entries whose work waits.
+.menu { display: block; padding: 12px 11px 22px; }
+.menu-find {
+    margin: 0 2px 14px;
 
-    &__pages { display: grid; gap: 2px; padding: 2px 0 8px 37px; }
+    .search-box { max-width: none; }
+    .search-box--inline .search-box__input { min-height: 37px; padding: 0 13px 0 38px; background: var(--field); font-size: var(--text-control); }
+    .search-box__icon { left: 13px; .ui-icon { width: 16px; height: 16px; } }
 }
-.nav-link--sub { min-height: 35px; padding: 0 12px; color: var(--muted); font-weight: 400; }
-.nav-link--sub:hover { color: var(--accent-text); }
-.nav-link--sub.is-active { font-weight: 810; }
+.menu-group {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+
+    &:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+    &[hidden] { display: none; }
+
+    &__label {
+        display: flex;
+        align-items: center;
+        margin: 0;
+        padding: 0 12px 6px;
+        color: var(--muted);
+        font-size: var(--text-small);
+        font-weight: 800;
+        letter-spacing: 1.15px;
+        text-transform: uppercase;
+        transition: color var(--transition);
+    }
+    &--current &__label { color: var(--accent-text); }
+    &__entries { display: grid; gap: 2px; }
+}
+.menu-entry {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 34px;
+    padding: 0 10px 0 8px;
+    border-radius: var(--radius-control);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 11.5px;
+    font-weight: 600;
+    transition: background-color var(--transition), color var(--transition);
+
+    &[hidden] { display: none; }
+    &:hover { background: var(--field); }
+
+    &__icon {
+        display: grid;
+        flex: none;
+        box-sizing: content-box;
+        padding: 5px;
+        border-radius: 9px;
+        color: var(--muted);
+        transition: background-color var(--transition), color var(--transition);
+    }
+    &:hover &__icon { color: var(--accent-text); }
+    &:not(.is-active):hover &__icon { background: var(--accent-soft); }
+
+    &__label {
+        flex: 1 1 auto;
+        min-width: 0;
+
+        .truncated__tip { max-width: 190px; }
+    }
+
+    &.is-active { background: var(--accent-soft); color: var(--accent-text); font-weight: 810; }
+    &.is-active &__icon { background: var(--accent); color: var(--accent-contrast); }
+}
+.menu-badge {
+    flex: none;
+    min-width: 20px;
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: var(--text-small);
+    font-weight: 800;
+    text-align: center;
+
+    &[hidden] { display: none; }
+}
+.menu-entry.is-active .menu-badge { background: var(--surface); }
 
 // The area of the administration: a small caps eyebrow above the areas.
 .nav-eyebrow {
@@ -310,15 +387,17 @@ html[data-skin="original"] .sidebar-secondary {
     .app-layout { --side: 67px; }
     .app-sidebar { overflow-x: clip; }
     .sidebar-brand { justify-content: center; padding: 0 15px; }
-    .sidebar-brand .shell-brand__name, .sidebar-brand .shell-brand__attribution, .nav-eyebrow, .nav-link > span, .nav-group__pages { display: none; }
+    .sidebar-brand .shell-brand__name, .sidebar-brand .shell-brand__attribution, .nav-eyebrow, .nav-link > span { display: none; }
     .sidebar-navigation { padding: 20px 8px; }
     .nav-eyebrow + .sidebar-navigation { padding-top: 20px; }
     .nav-link { justify-content: center; padding: 0; }
     .nav-link > .ui-icon { width: 21px; height: 21px; }
-}
-// Where the sidebar is narrow or a drawer, the area of the current page is tinted.
-@media (max-width: 1120px) {
-    .nav-group > .nav-link.is-active { background-color: var(--accent-soft); color: var(--accent-text); }
+
+    // The menu keeps its groups, thin lines and icon tiles; the find field, names and figures give way.
+    .menu { padding: 20px 8px 22px; }
+    .menu-find, .menu-group__label, .menu-entry__label, .menu-badge { display: none; }
+    .menu-group { margin-top: 8px; padding-top: 8px; }
+    .menu-entry { justify-content: center; padding: 0; min-height: 40px; }
 }
 
 // Phone: the sidebar is a drawer over a dimmed page, opened from the header's menu button; the header is one row of 65px.

@@ -1217,8 +1217,8 @@
    "Kontozuweisungen und Anfrageberechtigungen"
   ],
   "admin.users.title": [
-   "Users",
-   "Benutzer"
+   "Request users",
+   "Anfragende"
   ],
   "admin.wanted.description": [
    "Acquisition needs after request approval",
@@ -2716,10 +2716,6 @@
    "Media",
    "Medien"
   ],
-  "nav.group.requests": [
-   "Requests",
-   "Anfragen"
-  ],
   "nav.group.acquisition": [
    "Arr+",
    "Arr+"
@@ -2727,6 +2723,50 @@
   "nav.group.instance": [
    "Instance",
    "Instanz"
+  ],
+  "admin.menu.group.operations": [
+   "Operations",
+   "Betrieb"
+  ],
+  "admin.menu.group.content": [
+   "Content",
+   "Inhalt"
+  ],
+  "admin.menu.group.connections": [
+   "Connections",
+   "Anbindungen"
+  ],
+  "admin.menu.group.maintenance": [
+   "Maintenance",
+   "Wartung"
+  ],
+  "admin.menu.activity": [
+   "Activity",
+   "Aktivität"
+  ],
+  "admin.menu.downloads": [
+   "Downloads",
+   "Downloads"
+  ],
+  "admin.menu.integrations": [
+   "Integrations",
+   "Integrationen"
+  ],
+  "admin.menu.users": [
+   "Users",
+   "Benutzer"
+  ],
+  "admin.menu.settings": [
+   "Settings",
+   "Einstellungen"
+  ],
+  "admin.menu.find": [
+   "Find a page",
+   "Seite suchen"
+  ],
+  "admin.menu.pages": [
+   "Pages of this area",
+   "Seiten dieses Bereichs"
   ],
   "acquisition.role.Search": [
    "Indexers",
@@ -10544,10 +10584,6 @@
    "Connections",
    "Verbindungen"
   ],
-  "storage.sections": [
-   "Storage sections",
-   "Speicherbereiche"
-  ],
   "storage.kpi.connections": [
    "Connections",
    "Verbindungen"
@@ -11248,10 +11284,6 @@
    "×",
    "×"
   ],
-  "settings.tabs": [
-   "Settings",
-   "Einstellungen"
-  ],
   "settings.tab.instance": [
    "Instance",
    "Instanz"
@@ -11319,10 +11351,6 @@
   "dock.pageOnly": [
    "Page {0}",
    "Seite {0}"
-  ],
-  "nav.group.overview": [
-   "Overview",
-   "Übersicht"
   ],
   "nav.system.server": [
    "Server",

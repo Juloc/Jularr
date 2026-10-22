@@ -1,4 +1,6 @@
-// The shell's own interactions, installed once for the document: the phone's menu drawer and the slash key for the search.
+import { applyMenuFilter } from "../../Framework/Components/ListFilter";
+
+// The shell's own interactions, installed once for the document: the phone's menu drawer, the slash key for the search and the find field of the administration menu.
 // The shell itself is swapped with every page, so the handlers are delegated.
 const phone = window.matchMedia("(max-width: 640px)");
 
@@ -27,6 +29,31 @@ document.addEventListener("keydown", event => {
     if (search) {
         event.preventDefault();
         search.focus();
+    }
+});
+
+// The find field narrows the entries as one types (the group names count too); Enter opens the first one left, Escape clears the field.
+function menuFind(target: EventTarget | null): HTMLInputElement | null {
+    return target instanceof HTMLInputElement && target.closest("[data-menu-find]") ? target : null;
+}
+
+document.addEventListener("input", event => {
+    const field = menuFind(event.target);
+    if (field) applyMenuFilter(field.closest(".menu") ?? document, field.value);
+});
+
+document.addEventListener("submit", event => {
+    if (event.target instanceof HTMLFormElement && event.target.closest("[data-menu-find]")) {
+        event.preventDefault();
+        event.target.closest(".menu")?.querySelector<HTMLElement>(".menu-entry:not([hidden])")?.click();
+    }
+});
+
+document.addEventListener("keydown", event => {
+    const field = menuFind(event.target);
+    if (event.key === "Escape" && field?.value) {
+        field.value = "";
+        applyMenuFilter(field.closest(".menu") ?? document, "");
     }
 });
 

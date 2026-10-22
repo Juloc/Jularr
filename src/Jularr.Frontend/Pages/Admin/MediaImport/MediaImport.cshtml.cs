@@ -24,7 +24,6 @@ namespace Jularr.Frontend.Pages.Admin.MediaImport
         protected override void Define(Page page)
         {
             page.Title("admin.import.title");
-            page.Parent("admin.works.title", "/Admin/Works");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/MediaImport/MediaImport.entry.scss");
             page.Asset("Pages/Admin/MediaImport/MediaImport.entry.ts");

@@ -23,6 +23,7 @@ namespace Jularr.Frontend.Pages.Admin.Subtitles
         protected override void Define(Page page)
         {
             page.Title("details.subtitles");
+            page.NoPageRow();
             page.Navigation("nav.admin");
             if (_file is not { } file)
             {

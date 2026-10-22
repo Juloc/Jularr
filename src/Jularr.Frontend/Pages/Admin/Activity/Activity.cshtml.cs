@@ -42,11 +42,10 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             page.Asset("Framework/Components/ActionDock.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            if (_summary is { } numbers)
-            {
-                page.Content.Add(Kpis(numbers));
-                page.Content.Add(new ListToolbar(Chips(numbers)));
-            }
+            // The row of the entry's pages with the queue's own filters, then the figures.
+            page.NoPageRow();
+            page.Content.Add(new ListToolbar(Chips(_summary)));
+            if (_summary is { } numbers) page.Content.Add(Kpis(numbers));
 
             if (_items is { } items)
             {
@@ -72,14 +71,15 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         private static IUiComponent Live(string name, string text) => new Span(new ValueText(text)).Attribute("data-live", LiveKeys.Queue).Attribute("data-live-text", name);
 
         // One chip per part of the queue with how many entries it holds.
-        private NavigationTabs Chips(ActivitySummaryV1 numbers)
+        private NavigationTabs Chips(ActivitySummaryV1? numbers)
         {
+            if (numbers is null) return AdminMenu.Row(texts, Request);
             var filters = new (ActivityFilterType Filter, int Count)[]
             {
                 (ActivityFilterType.All, numbers.AllCount), (ActivityFilterType.Active, numbers.ActiveCount), (ActivityFilterType.Waiting, numbers.WaitingCount),
                 (ActivityFilterType.Import, numbers.UnpackingCount), (ActivityFilterType.Errors, numbers.ErrorCount), (ActivityFilterType.History, numbers.HistoryCount)
             };
-            return new NavigationTabs([.. filters.Select(entry => new NavigationTab("activity.filter." + entry.Filter, Address(filter: entry.Filter), entry.Filter == Filter, Count: entry.Count, Icon: Glyph(FilterIcon(entry.Filter), 14)))], "activity.filters", "filters");
+            return AdminMenu.Row(texts, Request, [.. filters.Select(entry => new NavigationTab("activity.filter." + entry.Filter, Address(filter: entry.Filter), entry.Filter == Filter, Count: entry.Count, Icon: Glyph(FilterIcon(entry.Filter), 14)))], ariaLabelKey: "activity.filters");
         }
 
         private static string FilterIcon(ActivityFilterType filter) => filter switch

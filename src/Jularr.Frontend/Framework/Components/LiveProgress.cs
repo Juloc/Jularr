@@ -18,6 +18,9 @@ namespace Jularr.Frontend.Framework
 
         // The numbers of the queue's tiles.
         public const string Queue = "queue";
+
+        // The figures of the administration menu: open downloads, failed jobs, requests that wait.
+        public const string Menu = "menu";
     }
 
     // Phase names, percent, speed and time left as text, the same for a page's first rendering and for every stream event.

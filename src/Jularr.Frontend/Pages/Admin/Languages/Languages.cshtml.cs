@@ -30,7 +30,6 @@ namespace Jularr.Frontend.Pages.Admin.Languages
             page.Asset("Framework/Components/Drawer.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
-            page.Content.Add(SettingsPages.Tabs(texts, SettingsPages.Languages));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var states = new[] { new SelectOption("True", texts["admin.languages.enabled"]), new SelectOption("False", texts["admin.languages.disabled"]) };
             var directions = new[] { new SelectOption("False", texts["admin.languages.leftToRight"]), new SelectOption("True", texts["admin.languages.rightToLeft"]) };

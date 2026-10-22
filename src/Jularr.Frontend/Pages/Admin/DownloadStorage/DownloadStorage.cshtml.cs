@@ -31,7 +31,6 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/FolderPicker.entry.ts");
             if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.DownloadStorage));
-            else if (texts.Can("storage.read")) page.Content.Add(new NavigationTabs([new("storage.connections", "/Admin/Storage", false), new("downloadStorage.title", "/Admin/DownloadStorage", true)], "storage.sections"));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             page.Content.Add(new P(new Text("downloadStorage.purpose")));
             foreach (var area in Enum.GetValues<DownloadStorageArea>())

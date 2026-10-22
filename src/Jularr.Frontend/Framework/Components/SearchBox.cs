@@ -3,7 +3,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // A GET search; the target page reads the query from the address. With a list selector it also narrows that list as the person types (ListFilter), and an icon makes it a field of a page's toolbar.
-    public sealed class SearchBox(string action, string labelKey, string? value, IReadOnlyDictionary<string, string>? keep = null, string? listFilter = null, IUiComponent? icon = null) : IUiComponent
+    public sealed class SearchBox(string action, string labelKey, string? value, IReadOnlyDictionary<string, string>? keep = null, string? listFilter = null, IUiComponent? icon = null, bool scripted = false) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -21,7 +21,11 @@ namespace Jularr.Frontend.Framework
                 children.Add(new Input().Attribute("type", "hidden").Attribute("name", name).Attribute("value", scope));
             }
 
-            new SearchForm([.. children]).Class(icon is null ? "search-box" : "search-box search-box--inline").Attribute("action", action).Attribute("method", "get").Attribute("role", "search").WriteTo(writer, encoder, texts);
+            var form = new SearchForm([.. children]).Class(icon is null ? "search-box" : "search-box search-box--inline").Attribute("action", action).Attribute("method", "get").Attribute("role", "search");
+
+            // A field that a script handles itself (the menu's find field) is no in-place navigation.
+            if (scripted) form.Attribute("data-navigation", "full");
+            form.WriteTo(writer, encoder, texts);
         }
 
         // Other chrome (the header's icon) points its label at the field.

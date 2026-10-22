@@ -87,6 +87,9 @@
         }
     }
 
+    // The thin line between a page's sibling pages and its own filters.
+    &__divider { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+
     // A count after the label, in the muted type of the mockups' tab counts.
     &__count {
         margin-inline-start: 6px;

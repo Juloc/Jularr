@@ -47,9 +47,9 @@ namespace Jularr.E2E.Tests
                 await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
 
-                // The page sits in the Media area of the administration; the file input shows its drop zone, the field behind it stays out of sight.
+                // The page is one of the Media entry's pages, reached by its row of chips; the file input shows its drop zone, the field behind it stays out of sight.
                 await page.GotoAsync("/Admin/Import");
-                await Assertions.Expect(page.Locator(".app-sidebar a[href='/Admin/Import']")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".navigation-tabs a[href='/Admin/Import'][aria-current=page]")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("[name=Json]")).ToBeVisibleAsync();
                 var input = page.Locator(".file-input[data-file-ready]");
                 await Assertions.Expect(input.Locator(".file-input__zone")).ToBeVisibleAsync();

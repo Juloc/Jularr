@@ -100,7 +100,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var views = new ViewSwitch("works.views", [new ViewChoice("works.view.Posters", Address(view: WorksViewType.Posters), Glyph("grid", 16), _view == WorksViewType.Posters),
                 new ViewChoice("works.view.Overview", Address(view: WorksViewType.Overview), Glyph("overview", 16), _view == WorksViewType.Overview),
                 new ViewChoice("works.view.Table", Address(view: WorksViewType.Table), Glyph("table", 16), _view == WorksViewType.Table)]);
-            return new ListToolbar(new NavigationTabs(chips, "works.filters", "filters"), new SearchBox("/Admin/Works", "works.search", QueryFilter, keep, null, Glyph("search", 15)), views, filters);
+            return new ListToolbar(AdminMenu.Row(texts, Request, chips, ariaLabelKey: "works.filters"), new SearchBox("/Admin/Works", "works.search", QueryFilter, keep, null, Glyph("search", 15)), views, filters);
         }
 
         // The icon and tone of a state, as its chip and its chips' filter say it.

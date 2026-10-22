@@ -15,3 +15,23 @@ export function applyFilter(list: ParentNode, query: string): number {
     if (empty) empty.hidden = shown > 0;
     return shown;
 }
+
+// The find field of the administration menu: an entry stays while every word occurs in its text (its name and the pages behind it) or in its group's name;
+// a group with no entry left is hidden. Returns how many entries are shown.
+export function applyMenuFilter(menu: ParentNode, query: string): number {
+    let shown = 0;
+    menu.querySelectorAll<HTMLElement>('.menu-group').forEach(group => {
+        const groupText = group.dataset.menuText ?? '';
+        let any = false;
+        group.querySelectorAll<HTMLElement>('.menu-entry').forEach(entry => {
+            const visible = matches(((entry.dataset.menuText ?? '') + ' ' + groupText).toLowerCase(), query);
+            entry.hidden = !visible;
+            if (visible) {
+                any = true;
+                shown++;
+            }
+        });
+        group.hidden = !any;
+    });
+    return shown;
+}

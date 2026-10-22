@@ -84,7 +84,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var type = _selected?.AcquisitionConnectionTypeId ?? Type;
             var items = _connections?.Items ?? [];
 
-            // The figures, then the page's one row of navigation.
+            // The page's one row of navigation, then the figures.
+            page.NoPageRow();
+            if (!isSetup) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             page.Content.Add(new KpiTiles(
@@ -92,7 +94,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 new KpiTile("acquisition.kpi.reachable", Number(reachable), Glyph("check"), UiTone.Success),
                 new KpiTile("acquisition.kpi.failing", Number(failing), Glyph("alert"), UiTone.Danger),
                 new KpiTile("acquisition.kpi.disabled", Number(items.Count(item => !item.IsEnabled)), Glyph("power"), UiTone.Neutral)).Strip());
-            if (!isSetup) page.Content.Add(new ListToolbar(DownloadPages.Tabs(Role switch { AcquisitionConnectionRole.Download => DownloadPages.Clients, AcquisitionConnectionRole.Subtitles => DownloadPages.Subtitles, _ => DownloadPages.Indexers })));
 
             // The connections; an action on a row swaps the page content, so the figures follow.
             if (_connections is { } list)

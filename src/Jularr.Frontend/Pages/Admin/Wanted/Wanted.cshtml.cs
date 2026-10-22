@@ -38,7 +38,8 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             var acquire = texts.CanAcquire();
 
             if (TempData["WantedBulk"] is string done) page.Content.Add(new P(new Text(done)).Class("list-notice").Attribute("role", "status"));
-            page.Content.Add(new ListToolbar(new NavigationTabs([.. Enum.GetValues<WantedViewType>().Select(view => new NavigationTab("wanted.view." + view, ViewAddress(view), view == View, Count: CountOf(view), Icon: Glyph(ViewIcon(view), 14)))], "wanted.views", "filters")));
+            page.NoPageRow();
+            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request, [.. Enum.GetValues<WantedViewType>().Select(view => new NavigationTab("wanted.view." + view, ViewAddress(view), view == View, Count: CountOf(view), Icon: Glyph(ViewIcon(view), 14)))], ariaLabelKey: "wanted.views")));
             if (_wanted is { } wanted)
             {
                 var empty = new Div(new IconTile(Glyph("search", 22), UiTone.Neutral), new P(new Text("wanted.empty")));
