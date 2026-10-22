@@ -84,7 +84,7 @@ namespace Jularr.E2E.Tests
             var button = language.Locator(".ui-dropdown__button");
             await Assertions.Expect(button).ToBeVisibleAsync();
             Assert.IsFalse(await language.Locator("select").EvaluateAsync<bool>("select => select.getBoundingClientRect().width > 2"), "The system's select shows.");
-            Assert.AreEqual("11px", await language.Locator(".ui-field__control").EvaluateAsync<string>("control => getComputedStyle(control).borderRadius"));
+            Assert.AreEqual("999px", await language.Locator(".ui-field__control").EvaluateAsync<string>("control => getComputedStyle(control).borderRadius"));
             await button.ClickAsync();
             var list = page.Locator(".ui-dropdown__popup:popover-open");
             await Assertions.Expect(list.GetByRole(AriaRole.Option)).ToHaveCountAsync(2);
