@@ -2,15 +2,15 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // The indexers and the download clients as lists of their own: added in a dialog, tested and switched in place, one row of navigation.
+    // The indexers and the download clients as cards of their own: added in a dialog with Cancel, their settings inputs inside the card saved by the page's pill, tested and switched in place, one row of navigation.
     [TestClass]
     public sealed class DownloadPagesTests
     {
-        private static ILocator Row(IPage page, string name) => page.Locator(".list-body .list-row", new() { HasText = name });
+        private static ILocator Row(IPage page, string name) => page.Locator(".card-grid .feature-card", new() { HasText = name });
 
         [TestMethod]
         [Timeout(300_000)]
-        public async Task IndexersAndClients_AreAddedInDialogs_TestedAndSwitchedWithoutReload()
+        public async Task IndexersAndClients_AreAddedInDialogs_EditedInline_TestedAndSwitchedWithoutReload()
         {
             using var folders = new Folders("Movies");
             await using var fakes = await FakeServices.StartAsync(folders.Downloads);
@@ -28,6 +28,7 @@ namespace Jularr.E2E.Tests
 
                 // The indexer is added in a dialog and shows as not tested.
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add indexer", Exact = true }));
+                Assert.AreEqual(1, await page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).CountAsync());
                 var form = page.Locator("dialog#connection-editor form").First;
                 await form.Locator("[name=Name]").FillAsync("Fake indexer");
                 await form.Locator("[name=BaseUrl]").FillAsync(new Uri(fakes.Address, "newznab/").ToString());
@@ -50,14 +51,30 @@ namespace Jularr.E2E.Tests
                 await Assertions.Expect(page.Locator(".kpi-tile", new() { HasText = "Disabled" }).Locator(".kpi-tile__value")).ToHaveTextAsync("1");
                 Assert.AreEqual(7, await page.EvaluateAsync<int>("window.__downloadsProbe"));
 
-                // Editing opens the same dialog; closing it leaves the address of the item.
-                await Steps.FollowAsync(page, Row(page, "Fake indexer").GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }));
-                await Assertions.Expect(page.Locator("dialog#connection-editor [name=Name]")).ToHaveValueAsync("Fake indexer");
-                await Assertions.Expect(page.Locator("dialog#connection-editor [name=ApiKey]")).ToHaveValueAsync("");
-                await page.Locator("dialog#connection-editor").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
-                await Assertions.Expect(page).Not.ToHaveURLAsync(new System.Text.RegularExpressions.Regex("AcquisitionConnectionId"));
+                // Editing is typing in the card: no Edit button, no dialog. The stored key is not echoed; a new key and priority are saved by the page's pill.
+                var card = Row(page, "Fake indexer");
+                Assert.AreEqual(0, await page.GetByRole(AriaRole.Link, new() { Name = "Edit", Exact = true }).CountAsync());
+                await Assertions.Expect(card.Locator("[name=Name]")).ToHaveValueAsync("Fake indexer");
+                await Assertions.Expect(card.Locator("[name=ApiKey]")).ToHaveValueAsync("");
+                await Assertions.Expect(card.Locator("[name=ApiKey]")).ToHaveAttributeAsync("type", "password");
+                Assert.IsFalse((await page.ContentAsync()).Contains(FakeServices.IndexerKey, StringComparison.Ordinal), "The page shows the stored key.");
+                await Assertions.Expect(page.Locator("[data-save-pill]")).ToBeHiddenAsync();
+                await card.Locator("[name=ApiKey]").FillAsync("another-key");
+                await card.Locator("[name=Priority]").FillAsync("7");
+                await Assertions.Expect(page.Locator("[data-save-pill] .save-pill__count")).ToHaveTextAsync("2 changes");
+                await Steps.SaveAsync(page);
+                Assert.AreEqual(0, await page.GetByRole(AriaRole.Dialog).CountAsync(), "Saving inline opens no dialog.");
+                await Assertions.Expect(Row(page, "Fake indexer").Locator("[name=Priority]")).ToHaveValueAsync("7");
+                await Assertions.Expect(Row(page, "Fake indexer").Locator("[name=ApiKey]")).ToHaveValueAsync("");
+                Assert.IsFalse((await page.ContentAsync()).Contains("another-key", StringComparison.Ordinal), "The page shows the new key.");
+                await Assertions.Expect(Row(page, "Fake indexer").GetByRole(AriaRole.Switch)).ToHaveAttributeAsync("aria-checked", "false");
 
-                // The download client has its own page, the same list and a dialog of its own fields.
+                // Deleting asks in a dialog with Cancel; Cancel keeps the indexer.
+                await Steps.FollowAsync(page, Row(page, "Fake indexer").GetByRole(AriaRole.Link, new() { Name = "Delete", Exact = true }));
+                await page.Locator("dialog#connection-delete").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+                await Assertions.Expect(Row(page, "Fake indexer")).ToHaveCountAsync(1);
+
+                // The download client has its own page, the same cards and a dialog of its own fields.
                 await page.GotoAsync("/Admin/Acquisition/Downloads");
                 await Steps.FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add download client", Exact = true }));
                 form = page.Locator("dialog#connection-editor form").First;
@@ -82,7 +99,7 @@ namespace Jularr.E2E.Tests
             }
             catch
             {
-                await Evidence.SaveAsync(page, nameof(IndexersAndClients_AreAddedInDialogs_TestedAndSwitchedWithoutReload));
+                await Evidence.SaveAsync(page, nameof(IndexersAndClients_AreAddedInDialogs_EditedInline_TestedAndSwitchedWithoutReload));
                 throw;
             }
         }

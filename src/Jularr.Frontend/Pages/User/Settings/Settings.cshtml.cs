@@ -131,6 +131,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 if (_aniList is { } aniList && (aniList.IsConnected || aniList.IsConfigured))
                 {
                     page.Asset("Pages/User/Settings/AniList.entry.scss");
+                    page.Asset("Framework/Components/Modal.entry.ts");
                     page.Asset("Framework/Components/Truncated.entry.ts");
                     page.Content.Add(new UiSection("settings.anilist.title", [AniListCard(aniList)]));
                 }
@@ -292,7 +293,8 @@ namespace Jularr.Frontend.Pages.User.Settings
                 form.Toggle(item => item.IsPushEnabled, "settings.anilist.push");
                 form.Save();
             }, Url.Page("/User/Settings/Settings", "AniListPush"), csrf, new UpdateAniListPushDataV1(account.IsPushEnabled), error));
-            items.Add(new Form<AniListParametersV1>(form => form.Submit("settings.anilist.disconnect"), Url.Page("/User/Settings/Settings", "AniListDisconnect"), csrf, new AniListParametersV1()));
+            items.Add(Modal.Opener(new Button(new Text("settings.anilist.disconnect")).Warn(), "anilist-disconnect"));
+            items.Add(Modal.Confirm(assets, "anilist-disconnect", "settings.anilist.disconnectConfirm", "settings.anilist.disconnect", Url.Page("/User/Settings/Settings", "AniListDisconnect")!, csrf, new AniListParametersV1()));
             return new Div([.. items]).Class("anilist-card");
         }
 

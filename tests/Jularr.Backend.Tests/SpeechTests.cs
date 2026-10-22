@@ -97,7 +97,9 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Instance/Speech");
             var markup = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, markup);
-            StringAssert.Contains(markup, "Download and activate");
+            StringAssert.Contains(markup, "Available to devices");
+            StringAssert.Contains(markup, "name=\"IsEnabled\"");
+            Assert.IsFalse(markup.Contains("Download and activate", StringComparison.Ordinal), "Activation is a switch in the row, not a button.");
             StringAssert.Contains(markup, "CC-BY-NC-SA-4.0");
             StringAssert.Contains(markup, Hash);
             Assert.AreEqual(0, source.Downloads);

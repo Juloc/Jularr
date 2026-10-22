@@ -1,4 +1,5 @@
 using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Common;
 
 namespace Jularr.Frontend.Framework
 {
@@ -9,6 +10,10 @@ namespace Jularr.Frontend.Framework
     public sealed class Modal(FrontendAssets assets, string id, string titleKey, IReadOnlyList<IUiComponent> body, bool open = false, string? returnTo = null) : IUiComponent
     {
         public static HtmlElement Opener(HtmlElement button, string id) => button.Attribute("data-dialog-open", id).Attribute("aria-haspopup", "dialog").Attribute("aria-controls", id);
+
+        // A destructive confirmation: the question as the title, Cancel and the warning action (one short form that posts to its own handler).
+        public static Modal Confirm<TData>(FrontendAssets assets, string id, string titleKey, string confirmKey, string action, string? csrf, TData data) where TData : BaseData =>
+            new(assets, id, titleKey, [new Form<TData>(form => form.Cancel().Submit(new Button(new Text(confirmKey)).Warn()), action, csrf, data)]);
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {

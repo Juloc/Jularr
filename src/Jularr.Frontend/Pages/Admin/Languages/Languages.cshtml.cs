@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Languages
 {
-    // The interface languages as a list of the list kit: a row each with its state and an edit drawer; adding one and the text catalog are actions of the dock.
+    // The interface languages as cards: each holds its name, state and direction as inputs, saved by the page's pill; adding one is a dialog and the text catalog an action of the dock.
     public sealed class LanguagesModel(ReadUiLocalesV1 locales, CreateUiLocaleV1 create, UpdateUiLocaleV1 update, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string Address = "/Admin/Instance/Languages";
@@ -26,66 +26,51 @@ namespace Jularr.Frontend.Pages.Admin.Languages
         {
             page.Title("admin.languages.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Languages/Languages.entry.scss");
-            page.Asset("Framework/Components/Drawer.entry.ts");
+            page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/ActionDock.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            var states = new[] { new SelectOption("True", texts["admin.languages.enabled"]), new SelectOption("False", texts["admin.languages.disabled"]) };
             var directions = new[] { new SelectOption("False", texts["admin.languages.leftToRight"]), new SelectOption("True", texts["admin.languages.rightToLeft"]) };
 
-            // One row per language; its drawer edits the name, the state and the direction.
+            // One card per language; its inputs are the name, the state and the direction.
             var items = _locales?.Items ?? [];
-            var columns = new List<ListColumn> { new("admin.languages.title", ListRole.Main), new("table.status", ListRole.Status), new("admin.languages.direction", ListRole.Data, 1), new("common.actions", ListRole.Actions) };
-            page.Content.Add(new ListPanel("admin.languages.list", columns, [.. items.Select(Row)]).Modifier("languages-list").Paged());
-            page.Content.AddRange(items.Select(locale => Edit(locale, csrf, states, directions)));
+            page.Content.Add(new CardGrid([.. items.Select(locale => Card(locale, csrf, directions))]).Paged(items.Count, _locales?.PageSize ?? 25));
 
             // A new language starts with its code, name and direction.
             var added = _creation is not null;
-            page.Content.Add(new Drawer(assets, "locale-new", [new DrawerPane("add", "admin.languages.add", "admin.languages.add", "plus", [new Form<CreateUiLocaleDataV1>(form =>
+            page.Content.Add(new Modal(assets, "locale-new", "admin.languages.add", [new Form<CreateUiLocaleDataV1>(form =>
             {
                 form.Text(item => item.Locale, "admin.languages.code");
                 form.Text(item => item.Name, "admin.languages.name");
                 form.Select(item => item.IsRightToLeft, "admin.languages.direction", directions);
+                form.Cancel();
                 form.Submit("admin.languages.add");
-            }, Address + "?handler=Create", csrf, _creation ?? new CreateUiLocaleDataV1("", "", false), added ? FormError : null)], [])], sheet: true, openOnLoad: added && FormError is not null));
+            }, Address + "?handler=Create", csrf, _creation ?? new CreateUiLocaleDataV1("", "", false), added ? FormError : null)], open: added && FormError is not null));
             if (FormError is not null && _localeId is null && _creation is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
 
-            var actions = new List<IUiComponent> { Drawer.Opener(new Button(new Icon("plus", assets, 16), new Span(new Text("admin.languages.add")).Class("action-dock__text")).Primary(), "locale-new") };
+            var actions = new List<IUiComponent> { Modal.Opener(new Button(new Icon("plus", assets, 16), new Span(new Text("admin.languages.add")).Class("action-dock__text")).Primary(), "locale-new") };
             if (texts.Can("localization.read")) actions.Add(new A(new Icon("globe", assets, 16), new Span(new Text("admin.localization.title")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Localization"));
             page.Content.Add(new ActionDock(assets, "admin.languages.actions", actions));
         }
 
-        private ListRow Row(UiLocaleDetailsV1 locale)
+        // One language: its name and code and its state in the head, the inputs under them; a card with an id swaps alone.
+        private IUiComponent Card(UiLocaleDetailsV1 locale, string? csrf, SelectOption[] directions)
         {
-            var drawer = "locale-" + locale.Id.ToString(CultureInfo.InvariantCulture);
-            var identity = new ListIdentity(new IconTile(new Icon("globe", assets, 18), UiTone.Accent), ListIdentity.TitleButton(new ValueText(locale.Name), drawer), new ValueText(locale.Locale));
+            var failed = _localeId == locale.Id;
             var state = locale.IsEnabled
                 ? new StateChip(new Text("admin.languages.enabled"), UiTone.Success, new Icon("check", assets, 14))
                 : new StateChip(new Text("admin.languages.disabled"), UiTone.Neutral, new Icon("power", assets, 14));
-            var direction = new Text(locale.IsRightToLeft ? "admin.languages.rightToLeft" : "admin.languages.leftToRight");
-            var edit = Drawer.Opener(new Button(new Icon("pencil", assets, 14), new Text("common.edit")).Compact(), drawer);
-            return new ListRow([identity, state, direction, new Div(edit).Class("list-actions")], [ListPanel.Fact("admin.languages.direction", direction)]);
-        }
-
-        // The drawer of one language: the same form as ever, with the item named by the drawer's title row.
-        private IUiComponent Edit(UiLocaleDetailsV1 locale, string csrf, SelectOption[] states, SelectOption[] directions)
-        {
-            var failed = _localeId == locale.Id;
             var form = new Form<UpdateUiLocaleDataV1>(fields =>
             {
                 fields.Hidden(item => item.CatalogVersion);
                 fields.Text(item => item.Name, "admin.languages.name");
-                fields.Select(item => item.IsEnabled, "admin.languages.state", states);
+                fields.Toggle(item => item.IsEnabled, "admin.languages.enabled");
                 fields.Select(item => item.IsRightToLeft, "admin.languages.direction", directions);
-                fields.Submit("common.save");
+                fields.Save();
             }, Address + "?uiLocaleId=" + locale.Id.ToString(CultureInfo.InvariantCulture), csrf,
                 failed ? _update : new UpdateUiLocaleDataV1(locale.Name, locale.IsEnabled, locale.IsRightToLeft, locale.CatalogVersion), failed ? FormError : null);
-            var body = new List<IUiComponent> { Drawer.State("admin.languages.code", new ValueText(locale.Locale)), form };
-            return new Drawer(assets, "locale-" + locale.Id.ToString(CultureInfo.InvariantCulture), [new DrawerPane("edit", "admin.languages.edit", "admin.languages.edit", "pencil", body, [])], sheet: true, openOnLoad: failed && FormError is not null);
+            return new FeatureCard(new IconTile(new Icon("globe", assets, 18), UiTone.Accent), locale.Name, locale.Locale, state, [form], [], null, "locale-" + locale.Id.ToString(CultureInfo.InvariantCulture));
         }
-
-        private static string Link(int page) => page > 1 ? Address + "?pageNumber=" + page.ToString(CultureInfo.InvariantCulture) : Address;
 
         public async Task<IActionResult> OnGetAsync()
         {
