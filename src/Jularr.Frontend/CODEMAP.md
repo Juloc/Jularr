@@ -80,6 +80,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 ## Admin pages
 
+- [Local translation models](Pages/Admin/Translation/Translation.cshtml.cs): Owner-only model inventory, explicit Ollama pull and speed smoke with a runtime-volume verification gate; [Reader option](Modules/Reader/reader.entry.ts) uses the canonical Reader blocks with distinct TranslateGemma cache and Bergamot as standard. [model client](../Jularr.Integrations/Logic/Translation/OllamaLocalModels.cs), [module/permissions](../Jularr.Backend/Service/Admin/Translation/V1/LocalTranslationModelServices.cs).
 - [Speech models](Pages/Admin/Speech/Speech.cshtml.cs): `/Admin/Instance/Speech`, reached from module administration; shared list/drawer/Form, paged search, explicit source refresh, model-card confirmation and verified activation. [Sample playback](Pages/Admin/Speech/Speech.entry.ts) loads one official prerecorded clip only on Play; no synthesis or weights. [Speech scope](../../docs/SPEECH.md); tests `SpeechTests`, `SpeechDiscoveryTests`, `SpeechPathTests`.
 
 - [Download storage](Pages/Admin/DownloadStorage/DownloadStorage.cshtml.cs), also `/Setup/DownloadStorage` after library storage with Acquisition: per-area Incomplete/Complete folder dialogs, reserve, optional limits and parallel jobs. The chip row joins Storage; each folder shows the free space last measured on its connection. Uses the canonical Storage services; browser tests: `DownloadStorageTests`.

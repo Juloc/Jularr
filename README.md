@@ -27,6 +27,31 @@ Keine automatische Modellinstallation und keine serverseitige Sprachsynthese.
 [Verhalten, Prüfungen und offene Anschlüsse](docs/SPEECH.md),
 [Lizenzumfang des Browser-Clients](src/Jularr.Frontend/BROWSER-LICENSE.md).
 
+### Optionale TranslateGemma-Übersetzung
+
+Bergamot bleibt die kostenlose Browser-Standardübersetzung. Ein Owner kann zusätzlich
+TranslateGemma in einem **separat bereitgestellten, privaten Ollama-Dienst** verwenden.
+Dessen Modellgewichte und Modell-Laufzeit sind **nicht** Teil des Jularr-Images.
+In `.env` kann `JULARR_OLLAMA_ENDPOINT=http://ollama:11434` gesetzt werden, wenn
+der Dienst unter diesem Namen aus dem Jularr-Container erreichbar ist. Der
+Ollama-Port darf nicht öffentlich freigegeben sein. Nach Neustart des Jularr-Dienstes:
+`/Admin/Instance/Translation` öffnen, Speicherbedarf des persistenten Ollama-Volumes
+prüfen, `JULARR_OLLAMA_VERIFIED_FREE_BYTES` mit den dort wirklich freien Bytes konfigurieren
+(Nullwert sperrt jeden Download; mindestens 2 GB Reserve) und Jularr danach neu
+starten. Download in der Modellansicht ausdrücklich auslösen; der Vorgang läuft
+im begrenzten Host-Worker weiter und der Status ist durch Aktualisieren sichtbar.
+Nach einer Jularr-Unterbrechung kann ein angehaltener Pull erneut gestartet werden;
+dies ist noch keine dauerhafte Job-Historie. Anschließend den kurzen Benchmark ausführen.
+
+Zusätzliche lokale Übersetzungen werden im Reader blockweise separat gespeichert;
+Bergamot-Übersetzungen werden nicht überschrieben. Generierung über den Server ist
+vorerst nur für Owner freigegeben; ein echter Modellserver und die Hardwarequalität
+müssen vor produktiver Verwendung geprüft werden. **Der Benchmark ist nur ein
+Geschwindigkeits-/Smoke-Test**, keine Prüfung literarischer Genauigkeit. Automatische
+Runtime-Installation, dauerhafte Downloadfortschrittsanzeige und erweiterte
+Glossar-/QA-Regeln bleiben unter [#881](https://github.com/Juloc/Jularr/issues/881)
+und [#985](https://github.com/Juloc/Jularr/issues/985) geplant.
+
 ## Docker Compose
 
 [compose.yaml](compose.yaml) braucht nur Image, Port und Volumes; `.env.example` nach `.env`
