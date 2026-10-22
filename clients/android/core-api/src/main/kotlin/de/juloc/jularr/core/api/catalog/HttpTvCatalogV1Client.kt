@@ -176,43 +176,51 @@ class HttpTvCatalogV1Client(
 
     private suspend fun request(method: String, route: String, body: JSONObject?): String = withContext(Dispatchers.IO) {
         runInterruptible {
-            val requestDeviceToken = deviceTokens.current
-            val connection = (URL(originUri.toString() + route).openConnection() as HttpURLConnection).apply {
-                requestMethod = method
-                connectTimeout = 15_000
-                readTimeout = 30_000
-                setRequestProperty("Accept", "application/json")
-                requestDeviceToken?.let { setRequestProperty("Authorization", "Bearer $it") }
-                if (body != null) {
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                }
-            }
-            try {
-                body?.let { json ->
-                    connection.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
-                }
-                val status = connection.responseCode
-                val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                    ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                // A parallel request (or profile switch) may already have renewed the
-                // token. Never let a late 401 clear that newer session or a stale
-                // success response roll it back. The store's update/clear methods are
-                // synchronized on this same object, so comparison and mutation are atomic.
-                synchronized(deviceTokens) {
-                    if (deviceTokens.current == requestDeviceToken) {
-                        if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                            deviceTokens.clear()
-                        } else if (status in 200..299) {
-                            deviceTokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
-                        }
+            var answer: String? = null
+            for (attempt in 0..1) {
+                val requestDeviceToken = deviceTokens.current
+                val connection = (URL(originUri.toString() + route).openConnection() as HttpURLConnection).apply {
+                    requestMethod = method
+                    connectTimeout = 15_000
+                    readTimeout = 30_000
+                    instanceFollowRedirects = false
+                    setRequestProperty("Accept", "application/json")
+                    requestDeviceToken?.let { setRequestProperty("Authorization", "Bearer $it") }
+                    if (body != null) {
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json")
                     }
                 }
-                if (status !in 200..299) throw appApiException(status, payload)
-                payload
-            } finally {
-                connection.disconnect()
+                try {
+                    body?.let { json ->
+                        connection.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
+                    }
+                    val status = connection.responseCode
+                    val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    val obsolete = synchronized(deviceTokens) {
+                        if (deviceTokens.current != requestDeviceToken) true
+                        else {
+                            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) deviceTokens.clear()
+                            else if (status in 200..299) deviceTokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                            false
+                        }
+                    }
+                    // A late 401 cannot sign out the profile switched in the meantime.
+                    // Read/PUT catalog operations are safe to retry once with the new bearer.
+                    if (obsolete && status == HttpURLConnection.HTTP_UNAUTHORIZED && attempt == 0 &&
+                        deviceTokens.current != null
+                    ) {
+                        continue
+                    }
+                    if (status !in 200..299) throw appApiException(status, payload)
+                    answer = payload
+                    break
+                } finally {
+                    connection.disconnect()
+                }
             }
+            checkNotNull(answer) { "Catalog request did not complete." }
         }
     }
 
