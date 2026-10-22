@@ -424,10 +424,14 @@ namespace Jularr.Backend.Logic.Acquisition
                     "WantedItems" AS wanted
                 WHERE
                     wanted."Id" = @WantedItemId
+                    AND (NOT @RequiresActiveMonitoring OR NOT wanted."IsPaused")
                 FOR UPDATE;
                 """;
             sql.Parameters.Add(data);
-            await ctx.ReadRequiredAsync<WantedItemParameters>(sql, ct);
+            if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is null)
+            {
+                throw new ServiceUnavailableException("acquisition_paused");
+            }
 
             // A whole Work downloads once; episode and volume downloads must not overlap.
             sql = new SqlStatement();

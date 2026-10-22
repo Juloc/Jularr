@@ -198,7 +198,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
-            long? accountId = null)
+            long? accountId = null, bool automatic = false)
         {
             // A direct-source book writes to Jularr's own workspace. Check the actual path
             // before creating an operation; a missing mount must never fall back to the VM.
@@ -206,7 +206,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 var paths = await _downloads.OpenAsync(context, DownloadStorageArea.Direct, ct);
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
-                    source.ToString(), accountId);
+                    source.ToString(), accountId) { RequiresActiveMonitoring = automatic };
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.RequireDownloadStorageSettingsAsync(paths.Settings, token);
@@ -261,7 +261,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
-                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags] };
+                requestedByAccountId: accountId) { IndexerFlags = [.. offer.IndexerFlags], RequiresActiveMonitoring = automatic };
             var operationId = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 if (nativePaths is not null) await ctx.RequireDownloadStorageSettingsAsync(nativePaths.Settings, token);

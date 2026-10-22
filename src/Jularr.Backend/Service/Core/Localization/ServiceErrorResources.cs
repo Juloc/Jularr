@@ -94,6 +94,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.acquisition_query_limit_reached", "The indexer's daily query limit is reached."),
             new("errors.acquisition_invalid_response", "The indexer or download client returned an invalid response."),
             new("errors.acquisition_no_download_client", "No enabled download client is configured."),
+            new("errors.acquisition_paused", "Automatic download was stopped because this title is paused."),
             new("errors.acquisition_import_path_unconfigured", "Set up and verify the SABnzbd Complete folder before starting downloads."),
             new("errors.acquisition_download_path_unconfigured", "Download workspace is not configured or is unavailable"),
             new("errors.acquisition_grab_failed", "The download client did not accept the release."),
