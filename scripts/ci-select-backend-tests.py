@@ -75,7 +75,7 @@ def choose(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             stem = PurePosixPath(low).stem
             found = False
             if low.startswith("database/"):
-                classes.add("SqlContextTests")
+                classes.update(("SqlContextTests", "DatabaseBaselineTests", "DatabaseMigrationTests"))
                 found = True
             for words, test_classes in AREAS:
                 if any(word in parts[:-1] or stem.startswith(word) for word in words):
@@ -116,7 +116,7 @@ def self_test() -> None:
     _, classes = choose(["src/Jularr.Backend/Logic/Speech/SpeechCatalog.cs"])
     assert classes == ("SpeechDiscoveryTests", "SpeechTests"), classes
     _, classes = choose(["database/Account.sql"])
-    assert classes == ("AuthenticationTests", "DeviceTests", "SqlContextTests"), classes
+    assert classes == ("AuthenticationTests", "DatabaseBaselineTests", "DatabaseMigrationTests", "DeviceTests", "SqlContextTests"), classes
 
 
 def main() -> int:

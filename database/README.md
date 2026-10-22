@@ -1,13 +1,12 @@
-# Fresh PostgreSQL baselines
+# PostgreSQL baseline (schema version 1, frozen)
 
-`Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
+`Account.sql` installs one PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql`. The host applies all baselines in installation order
 in one transaction when its database has no table yet ([DatabaseBaseline.cs](../src/Jularr.Backend/Service/Core/DatabaseBaseline.cs)).
-`Schema.sql` records the installation's ordered schema history. Existing unversioned
-pre-release databases keep their current startup behavior and are not adopted or migrated.
-Explicitly versioned release schemas use the same startup owner for backup-first upgrades;
-see [release upgrades](../docs/DATABASE_UPGRADES.md).
-`Media.sql` also holds the provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) and its full-sync state `ExternalWorkSyncs`. Until the first release schema changes go into these baselines; `DatabaseBaseline.Migrations` stays empty.
+`Schema.sql` records the installation's ordered schema history (`DatabaseSchemaVersions`). The baseline is frozen from the first release:
+`baseline.sha256` is its hash, the test `Baseline_MatchesTheFrozenHash` fails on any edit, and later schema changes are numbered, embedded
+migrations in `migrations/` (`NNNN_short_name.sql`, from `0002`) applied after a backup; see [database migrations](../docs/DATABASE_MIGRATIONS.md).
+`Media.sql` also holds the provider catalog `ExternalWorks` (titles known from TMDB, AniList and the other catalogs, Works or not) and its full-sync state `ExternalWorkSyncs`.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as

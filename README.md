@@ -442,9 +442,11 @@ Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
 
 Der Update-Pfad ab dem ersten offiziellen Clean-Start-Release verwendet eine versionierte
-Schemahistorie und erstellt vor unterstützten Migrationen ein Backup. Scheitert es,
-startet keine Schemaänderung. Bestehende unversionierte Testdatenbanken werden nicht
-automatisch übernommen. Ablauf und verbleibende Release-Abnahme: [Datenbank-Updates](docs/DATABASE_UPGRADES.md).
+Schemahistorie: das Schema ist eingefroren, Änderungen sind nummerierte Migrationen
+(`database/migrations`). Neue Migrationen laufen beim Start automatisch, nach einem
+automatischen Backup (Datenbank und Schlüssel); ohne Backup oder bei einer fehlgeschlagenen
+Migration wird alles zurückgerollt, Jularr startet nicht und zeigt eine Wartungsseite. Ablauf und
+verbleibende Release-Abnahme: [Datenbank-Migrationen](docs/DATABASE_MIGRATIONS.md).
 
 Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` samt
 Schlüsselbund in `DataPath/backups` (abweichend `Backup:Path`); automatisch im

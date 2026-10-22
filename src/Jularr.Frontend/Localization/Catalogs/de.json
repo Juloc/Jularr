@@ -10936,6 +10936,14 @@
    "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly.",
    "Jularr ist gerade nicht verfügbar, etwa bei Wartung oder wenn der Speicher offline ist. Bitte versuche es gleich erneut."
   ],
+  "maintenance.databaseUpdate.title": [
+   "Database update failed",
+   "Datenbank-Update fehlgeschlagen"
+  ],
+  "maintenance.databaseUpdate.text": [
+   "The update {0} could not be applied. See the log; the previous version can be started again.",
+   "Das Update {0} konnte nicht angewendet werden. Siehe Log; die vorherige Version kann wieder gestartet werden."
+  ],
   "profile.section.languages": [
    "Languages",
    "Sprachen"

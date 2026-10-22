@@ -1,3 +1,4 @@
+using Jularr.Backend.Tests.Infrastructure;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Common;
@@ -178,7 +179,7 @@ namespace Jularr.Backend.Tests
             builder.WebHost.UseTestServer();
             builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
             builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
-            builder.Services.AddJularrServices(builder.Configuration);
+            builder.Services.AddJularrServices(builder.Configuration).WithTestInstalledSchema(fixture.ConnectionString);
             await using var app = builder.Build();
             app.UseExceptionHandler();
             app.UseRateLimiter();

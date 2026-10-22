@@ -22,7 +22,7 @@ isolated PostgreSQL tests and updated navigation in one reviewable change.
 External I/O stays outside long database transactions; final mutations revalidate
 and commit together. No unapproved legacy database migration or changes to
 an active Owner database. Supported release upgrades use the single
-[backup-first schema owner](DATABASE_UPGRADES.md).
+[backup-first schema owner](DATABASE_MIGRATIONS.md).
 
 ## Boundaries already decided
 
@@ -84,7 +84,7 @@ an active Owner database. Supported release upgrades use the single
   through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
   a Jularr backup restore; legacy migrations require separate approval, while
-  supported release upgrades follow [the versioned startup contract](DATABASE_UPGRADES.md); the AI step waits
+  supported release upgrades follow [the versioned startup contract](DATABASE_MIGRATIONS.md); the AI step waits
   for its own package.
 - Owner decisions of 14 October 2026: order is the running Arr+ packages, then Playwright
   browser and end-to-end tests (agents check important changes with them), then K24 and

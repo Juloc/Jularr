@@ -101,7 +101,8 @@ namespace Jularr.Backend.Service.Core
             }
 
             services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
-            services.AddHostedService(provider => new DatabaseBaseline(connectionString, provider.GetRequiredService<IOptions<BackupOptions>>().Value, provider.GetRequiredService<PostgresBackupTools>()));
+            services.AddSingleton(provider => new DatabaseBaseline(connectionString, provider.GetRequiredService<IOptions<BackupOptions>>().Value, provider.GetRequiredService<PostgresBackupTools>()));
+            services.AddHostedService(provider => provider.GetRequiredService<DatabaseBaseline>());
 
             // Persistent state lives under one folder, /data in the image; every feature works without further settings.
             var data = configuration["DataPath"] is { Length: > 0 } dataPath ? dataPath
