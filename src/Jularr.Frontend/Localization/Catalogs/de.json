@@ -8021,7 +8021,7 @@
    "Wird geladen"
   ],
   "works.status.Unmonitored": [
-   "Not monitored",
+   "Unmonitored",
    "Nicht überwacht"
   ],
   "works.filter.type": [
@@ -10300,6 +10300,178 @@
    "Pages",
    "Seiten"
   ],
+  "works.kpi.total": [
+   "Titles",
+   "Titel"
+  ],
+  "works.filters": [
+   "Library states",
+   "Bibliothekszustände"
+  ],
+  "works.views": [
+   "Library views",
+   "Ansichten der Bibliothek"
+  ],
+  "works.view.Posters": [
+   "Posters",
+   "Poster"
+  ],
+  "works.view.Overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "works.view.Table": [
+   "Table",
+   "Tabelle"
+  ],
+  "works.search": [
+   "Search titles",
+   "Titel suchen"
+  ],
+  "works.filter.drawer": [
+   "Filters",
+   "Filter"
+  ],
+  "works.list": [
+   "Library titles",
+   "Bibliothekstitel"
+  ],
+  "works.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "works.bulk.title": [
+   "Change titles",
+   "Titel ändern"
+  ],
+  "works.bulk.change": [
+   "Change",
+   "Ändern"
+  ],
+  "works.bar.keep": [
+   "Keep",
+   "Beibehalten"
+  ],
+  "dock.pageOnly": [
+   "Page {0}",
+   "Seite {0}"
+  ],
+  "activity.list": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "activity.filters": [
+   "Queue states",
+   "Zustände der Warteschlange"
+  ],
+  "activity.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "activity.source.check": [
+   "Source check",
+   "Prüfung der Quelle"
+  ],
+  "wanted.kpi.total": [
+   "Targets",
+   "Ziele"
+  ],
+  "wanted.views": [
+   "Views",
+   "Ansichten"
+  ],
+  "wanted.list": [
+   "Wanted targets",
+   "Gesuchte Ziele"
+  ],
+  "wanted.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "wanted.priority.setHigh": [
+   "High priority",
+   "Hohe Priorität"
+  ],
+  "wanted.priority.setNormal": [
+   "Normal priority",
+   "Normale Priorität"
+  ],
+  "history.kpi.total": [
+   "Events",
+   "Ereignisse"
+  ],
+  "history.group.Grabbed": [
+   "Grabbed",
+   "Geholt"
+  ],
+  "history.group.Arrived": [
+   "Arrived",
+   "Angekommen"
+  ],
+  "history.group.Failed": [
+   "Failed",
+   "Fehlgeschlagen"
+  ],
+  "history.group.Files": [
+   "Files and titles",
+   "Dateien und Titel"
+  ],
+  "history.filters": [
+   "Event groups",
+   "Ereignisgruppen"
+  ],
+  "history.list": [
+   "History",
+   "Verlauf"
+  ],
+  "history.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "history.details": [
+   "Event details",
+   "Details des Ereignisses"
+  ],
+  "history.unit": [
+   "Unit",
+   "Einheit"
+  ],
+  "history.quality": [
+   "Quality",
+   "Qualität"
+  ],
+  "history.reason": [
+   "Reason",
+   "Grund"
+  ],
+  "history.openWork": [
+   "Open title",
+   "Titel öffnen"
+  ],
+  "requests.kpi.total": [
+   "Requests",
+   "Anfragen"
+  ],
+  "requests.list": [
+   "Requests",
+   "Anfragen"
+  ],
+  "request.tabs": [
+   "Request states",
+   "Anfragezustände"
+  ],
+  "requests.actions": [
+   "Page actions",
+   "Seitenaktionen"
+  ],
+  "requests.details": [
+   "Request details",
+   "Details der Anfrage"
+  ],
+  "requests.openWork": [
+   "Open title",
+   "Titel öffnen"
+  ],
   "jobs.runAgain": [
    "Run again",
    "Erneut ausführen"
@@ -11251,10 +11423,6 @@
   "library.naming.actions": [
    "Naming actions",
    "Aktionen für die Benennung"
-  ],
-  "dock.pageOnly": [
-   "Page {0}",
-   "Seite {0}"
   ]
  }
 }

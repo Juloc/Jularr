@@ -153,13 +153,13 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Works");
                 foreach (var title in new[] { FakeServices.MovieTitle, FakeServices.SeriesTitle, FakeServices.BookTitle, FakeServices.AlbumTitle })
                 {
-                    await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = title })).ToHaveCountAsync(1);
+                    await Assertions.Expect(page.Locator("main .list-row", new() { HasText = title })).ToHaveCountAsync(1);
                 }
 
                 await page.GotoAsync("/Admin/Wanted");
                 foreach (var title in new[] { FakeServices.MovieTitle, FakeServices.SeriesTitle, FakeServices.BookTitle, FakeServices.AlbumTitle })
                 {
-                    await Assertions.Expect(page.Locator("main table tbody tr", new() { HasText = title })).ToHaveCountAsync(1);
+                    await Assertions.Expect(page.Locator("main .list-row", new() { HasText = title })).ToHaveCountAsync(1);
                 }
 
                 // The same list again, pasted, finds everything in the library; importing it changes nothing.
@@ -173,7 +173,7 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Import selected"));
                 await Assertions.Expect(page.Locator(".media-import__summary .tag").Filter(new() { HasText = "Skipped" })).ToContainTextAsync("6");
                 await page.GotoAsync("/Admin/Works");
-                await Assertions.Expect(page.Locator("main table tbody tr")).ToHaveCountAsync(4);
+                await Assertions.Expect(page.Locator("main .list-row")).ToHaveCountAsync(4);
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)

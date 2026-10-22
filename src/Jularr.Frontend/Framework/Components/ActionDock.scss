@@ -4,6 +4,9 @@
 
     &__zone { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
+    // A PostForm around an action is only a wrapper.
+    form { display: inline-flex; margin: 0; }
+
     &__divider { flex: none; align-self: center; width: 1px; height: 22px; margin: 0 4px; background: var(--border); }
 
     &__count { padding: 0 8px; color: var(--muted); font-size: var(--text-body); white-space: nowrap; }

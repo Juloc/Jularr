@@ -53,7 +53,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("about:blank");
                 await jularr.RestartAsync();
                 await page.GotoAsync("/Admin/Wanted");
-                var monitored = page.Locator("main tr", new() { HasText = FakeServices.SeriesTitle });
+                var monitored = Steps.ListRow(page, FakeServices.SeriesTitle);
                 await Assertions.Expect(monitored).ToContainTextAsync("Paused");
                 Assert.AreEqual(0, fakes.Grabbed.Count, "Taking over inventory or restarting must not start downloads.");
                 await Steps.SubmitAsync(page, monitored.Locator("form").Filter(new()
@@ -113,25 +113,25 @@ namespace Jularr.E2E.Tests
                 await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
                 await page.GotoAsync("/Admin/Wanted");
-                var filmRow = page.Locator("main tr", new() { HasText = FakeServices.MovieTitle });
-                var seriesRow = page.Locator("main tr", new() { HasText = FakeServices.SeriesTitle });
-                await Assertions.Expect(filmRow).ToContainTextAsync("Normal");
-                await Assertions.Expect(seriesRow).ToContainTextAsync("Normal");
+                var filmRow = Steps.ListRow(page, FakeServices.MovieTitle);
+                var seriesRow = Steps.ListRow(page, FakeServices.SeriesTitle);
+                await Assertions.Expect(filmRow).ToBeVisibleAsync();
+                await Assertions.Expect(seriesRow).Not.ToContainTextAsync("High");
 
-                // Priorities are for chosen rows: the bar says how many are chosen.
-                var bar = page.Locator("#wanted-bulk");
-                await Assertions.Expect(bar.GetByRole(AriaRole.Button, new() { Name = "High", Exact = true })).ToBeDisabledAsync();
+                // Priorities are for chosen rows: the dock shows its bulk zone, with how many are chosen, only while rows are chosen.
+                var dock = page.Locator(".action-dock");
+                await Assertions.Expect(dock.GetByRole(AriaRole.Button, new() { Name = "High priority", Exact = true })).ToBeHiddenAsync();
                 await seriesRow.GetByRole(AriaRole.Checkbox, new() { Name = "Select" }).CheckAsync();
-                await Assertions.Expect(bar).ToContainTextAsync("1 selected");
+                await Assertions.Expect(dock).ToContainTextAsync("1 selected");
                 await Evidence.SaveAsync(page, "wanted-bulk");
-                await Steps.FollowAsync(page, bar.GetByRole(AriaRole.Button, new() { Name = "High", Exact = true }));
+                await Steps.FollowAsync(page, dock.GetByRole(AriaRole.Button, new() { Name = "High priority", Exact = true }));
                 await Assertions.Expect(seriesRow).ToContainTextAsync("High");
-                await Assertions.Expect(filmRow).ToContainTextAsync("Normal");
+                await Assertions.Expect(filmRow).Not.ToContainTextAsync("High");
 
                 // One search of both: the high title is searched first, so its release is taken first.
                 fakes.Offer(film, episode);
-                await page.Locator("#wanted-bulk").GetByRole(AriaRole.Checkbox, new() { Name = "Select all" }).CheckAsync();
-                await Steps.FollowAsync(page, bar.GetByRole(AriaRole.Button, new() { Name = "Search selected", Exact = true }));
+                await page.Locator(".list-head").GetByRole(AriaRole.Checkbox, new() { Name = "Select all" }).CheckAsync();
+                await Steps.FollowAsync(page, dock.GetByRole(AriaRole.Button, new() { Name = "Search selected", Exact = true }));
                 await Assertions.Expect(page.Locator("main [role=status]")).ToContainTextAsync("The search has started.");
                 await WaitForGrabsAsync(fakes, episode, film);
                 CollectionAssert.AreEqual(new[] { fakes.NzbAddress(episode).ToString(), fakes.NzbAddress(film).ToString() }, fakes.Grabbed.ToArray());
@@ -337,7 +337,7 @@ namespace Jularr.E2E.Tests
         private static async Task ApproveAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Requests");
-            await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = title }).Locator("form")
+            await Steps.SubmitAsync(page, Steps.ListRow(page, title).Locator("form")
                 .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
         }
 

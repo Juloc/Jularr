@@ -38,7 +38,7 @@ namespace Jularr.Frontend.Modules.Live
             var phase = operation.IsWaiting ? "waiting" : (running && operation.DownloadStateTypeId is { } state ? state.ToString() : operation.OperationStatusTypeId.ToString()).ToLowerInvariant();
             return new LiveEntity(phase, null, operation.ProgressPercent, Texts(("status", OperationStatus(texts, operation.IsWaiting, operation.OperationStatusTypeId, says || !running ? null : operation.DownloadStateTypeId)),
                 ("reason", says ? Reason(texts, operation.OperationTypeId, operation.ReasonKey) : null),
-                ("speed", says ? null : LiveFacts.Speed(operation.BytesPerSecond)),
+                ("speed", says ? null : OperationSpeed(texts, operation.OperationStatusTypeId, operation.DownloadStateTypeId, operation.BytesPerSecond)),
                 ("detail", says ? null : OperationDetail(operation.ProgressPercent, operation.SizeBytes, operation.RemainingBytes, operation.EtaSeconds))));
         }
 
@@ -59,6 +59,10 @@ namespace Jularr.Frontend.Modules.Live
                 ("facts", LiveFacts.Join(LiveFacts.Progress(null, wanted.SizeBytes, wanted.RemainingBytes), LiveFacts.Speed(wanted.BytesPerSecond), LiveFacts.Eta(wanted.EtaSeconds))),
                 ("release", wanted.ReleaseTitle), ("source", LiveFacts.Join(wanted.IndexerName, wanted.ClientName))));
         }
+
+        // The pace of a running download; a paused one says so in the same place and style, so the column never loses its value.
+        public static string OperationSpeed(UiText texts, OperationStatusType status, DownloadStateType? state, long? bytesPerSecond) =>
+            status is OperationStatusType.Queued or OperationStatusType.Running && state == DownloadStateType.Paused ? texts["activity.state.Paused"] : LiveFacts.Speed(bytesPerSecond);
 
         // The queue's size and time left: "42 % · 3.1 GB / 7.4 GB · 12 min".
         public static string OperationDetail(int? percent, long? sizeBytes, long? remainingBytes, int? etaSeconds) =>

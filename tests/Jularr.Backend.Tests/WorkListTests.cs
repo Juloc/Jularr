@@ -254,7 +254,7 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
-            foreach (var expected in new[] { "data-work-table=\"works\"", "name=\"type\"", "name=\"status\"", "name=\"library\"", "name=\"profile\"", "data-works-bar", "data-works-select-all", ">Alpha<", ">Zeta<", "href=\"/Admin/Works/901\"" })
+            foreach (var expected in new[] { "data-work-table=\"works\"", "name=\"type\"", "name=\"library\"", "name=\"profile\"", "id=\"works-bulk\"", "data-dock-select-all", "view-switch", ">Alpha<", ">Zeta<", "href=\"/Admin/Works/901\"" })
             {
                 StringAssert.Contains(html, expected);
             }

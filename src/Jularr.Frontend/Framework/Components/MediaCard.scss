@@ -131,6 +131,21 @@
         }
     }
 
+    // The box of a chosen card sits top left on a white disc, as the bookmark does on the right.
+    &__select {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        z-index: 4;
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 50%;
+        background: rgb(255 255 255 / 90%);
+        .list-select { margin: 0; }
+    }
+
     // A short label over the cover, bottom left.
     &__label { position: absolute; bottom: 14px; left: 6px; z-index: 3; max-width: calc(100% - 12px); pointer-events: none; }
 
