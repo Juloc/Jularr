@@ -3,6 +3,7 @@ using Jularr.Backend.Service.Core.Localization;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Localization;
 using Jularr.Frontend.Modules.Live;
+using Jularr.Frontend.Modules.Pwa;
 using Jularr.Frontend.Pages.Shared;
 using Jularr.Workers;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -88,6 +89,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapJularrServices();
 app.MapJularrLive();
+app.MapJularrPwa();
 app.MapRazorPages();
 app.Run();
 
