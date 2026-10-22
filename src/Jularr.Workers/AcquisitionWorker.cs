@@ -21,6 +21,7 @@ namespace Jularr.Workers
 
             // Custom formats of the files, metadata of wanted titles and the searches in small passes.
             await Runner.RunAsync("wantedSearch", (services, token) => RunAllAsync(token, Step<RefreshStoredFileFormatsV1>(services), Step<RefreshWantedMetadataV1>(services), Step<SearchDueWantedV1>(services)), ct);
+            await Runner.RunAsync("narouSync", (services, token) => Step<SyncNarouChaptersV1>(services)(token), ct);
         }
 
         protected override IEnumerable<Task<bool>> Wakeups(CancellationToken ct) => [signal.WaitForRequestAsync(ct).AsTask()];
