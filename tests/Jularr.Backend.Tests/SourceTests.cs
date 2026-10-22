@@ -50,7 +50,7 @@ namespace Jularr.Backend.Tests
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
             Assert.AreEqual(HttpStatusCode.OK, setUp.StatusCode, await setUp.Content.ReadAsStringAsync());
             var result = (await setUp.Content.ReadFromJsonAsync<SourceSetupResultV1>())!;
-            CollectionAssert.AreEqual(new[] { "gutenberg" }, result.Added);
+            CollectionAssert.AreEqual(new[] { "gutenberg", "narou" }, result.Added);
             CollectionAssert.IsSubsetOf(new[] { "annasarchive", "standardebooks", "newznab" }, result.NeedsAccount);
             Assert.IsTrue((await ReadCatalogAsync(host)).Single(item => item.Key == "gutenberg").IsConfigured);
             using var standard = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Standard Ebooks", AcquisitionConnectionType.Opds,
