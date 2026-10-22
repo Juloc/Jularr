@@ -17,7 +17,55 @@ namespace Jularr.Backend.Service.Core
         private readonly IReadOnlyList<DatabaseMigration> _migrations;
 
         // Releases add their embedded upgrade scripts here from version 2; until the first release the baselines change instead.
-        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } = [];
+        internal static IReadOnlyList<DatabaseMigration> Migrations { get; } =
+        [
+
+            new(2, """
+                INSERT INTO "AcquisitionConnectionTypes" ("Id", "Key", "AcquisitionConnectionRoleId")
+                    VALUES (9, 'Narou', 1);
+
+                DO $migration$
+                DECLARE
+                    key_constraint text;
+                    identity_constraint text;
+                BEGIN
+                    SELECT conname INTO key_constraint
+                    FROM pg_constraint
+                    WHERE conrelid = '"AcquisitionConnections"'::regclass AND contype = 'c'
+                      AND position('ProtectedApiKey' in pg_get_constraintdef(oid)) > 0
+                      AND position('IS NOT NULL' in pg_get_constraintdef(oid)) > 0
+                      AND position('AcquisitionConnectionTypeId' in pg_get_constraintdef(oid)) > 0
+                    LIMIT 1;
+                    IF key_constraint IS NULL THEN
+                        RAISE EXCEPTION 'Acquisition connection key constraint not found';
+                    END IF;
+                    EXECUTE format('ALTER TABLE "AcquisitionConnections" DROP CONSTRAINT %I', key_constraint);
+
+                    SELECT conname INTO identity_constraint
+                    FROM pg_constraint
+                    WHERE conrelid = '"WorkExternalIdentities"'::regclass AND contype = 'c'
+                      AND position('Namespace' in pg_get_constraintdef(oid)) > 0
+                      AND position('anilist' in pg_get_constraintdef(oid)) > 0
+                    LIMIT 1;
+                    IF identity_constraint IS NULL THEN
+                        RAISE EXCEPTION 'Work identity namespace constraint not found';
+                    END IF;
+                    EXECUTE format('ALTER TABLE "WorkExternalIdentities" DROP CONSTRAINT %I', identity_constraint);
+                END $migration$;
+
+                ALTER TABLE "AcquisitionConnections"
+                    ADD CONSTRAINT "CK_AcquisitionConnections_NarouCredentials"
+                    CHECK ("AcquisitionConnectionTypeId" IN (1, 3, 4, 5, 6, 9) OR "ProtectedApiKey" IS NOT NULL);
+                ALTER TABLE "AcquisitionConnections"
+                    ADD CONSTRAINT "CK_AcquisitionConnections_NarouHttps"
+                    CHECK ("AcquisitionConnectionTypeId" <> 9 OR "BaseUrl" ~ '^https://');
+
+                ALTER TABLE "WorkExternalIdentities"
+                    ADD CONSTRAINT "CK_WorkExternalIdentities_NarouNamespace"
+                    CHECK ("Namespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'imdb', 'plex', 'openlibrary',
+                        'isbn', 'gutenberg', 'anilist', 'musicbrainz', 'igdb', 'syosetu'));
+                """)
+        ];
 
         public static int CurrentVersion => 1 + Migrations.Count;
         public static string CurrentFingerprint => Fingerprint(CurrentVersion, Migrations);
