@@ -3,10 +3,12 @@ package de.juloc.jularr.tv
 import de.juloc.jularr.core.api.playbackextras.TvV1MarkerKinds
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackMarker
 import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackPreferences
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackTrack
 import de.juloc.jularr.core.api.playbackextras.TvV1SkipModes
 import de.juloc.jularr.core.api.playbackextras.TvV1Trickplay
 import de.juloc.jularr.core.model.ClientMediaSegment
 import de.juloc.jularr.core.model.ClientTrickplayDescriptor
+import de.juloc.jularr.core.model.MediaTrack
 
 /** Actual V1 server markers into the original player's Skip controls. */
 internal object TvV1PlayerUiMapping {
@@ -57,6 +59,24 @@ internal object TvV1PlayerUiMapping {
             },
         )
     }
+
+    /**
+     * Legacy UI's streamIndex is meaningful only for embedded 'sN' tracks.
+     * Sidecar 'fN' tracks carry the real key as id, and -1 means no stream index.
+     */
+    fun trackForDisplay(track: TvV1PlaybackTrack): MediaTrack = MediaTrack(
+        id = track.key,
+        streamIndex = if (track.key.startsWith("s")) {
+            track.key.drop(1).toInt()
+        } else -1,
+        kind = if (track.isAudio) "audio" else "subtitle",
+        codec = null, // V1 track endpoint does not provide codec metadata.
+        language = track.language,
+        title = track.title,
+        isDefault = track.isDefault,
+        isForced = track.isForced,
+        isText = track.isSubtitle && track.isSupported,
+    )
 
     private fun modeFor(kind: Int, p: TvV1PlaybackPreferences?): Int =
         when (kind) {
