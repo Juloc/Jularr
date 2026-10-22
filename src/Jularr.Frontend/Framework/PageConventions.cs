@@ -21,10 +21,8 @@ namespace Jularr.Frontend.Framework
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Indexers");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Downloads");
             conventions.AddPageRoute("/Admin/DownloadStorage/DownloadStorage", "/Setup/DownloadStorage");
-            conventions.AddPageRoute("/Admin/Providers/Providers", "/Setup/Providers");
             conventions.AddPageRoute("/Admin/Profiles/Profiles", "/Setup/Profiles");
             conventions.AddPageRoute("/Admin/Profile/Profile", "/Setup/Profiles/{id}");
-            conventions.AddPageRoute("/Admin/Takeover/Takeover", "/Setup/Takeover");
             conventions.AddPageRoute("/Admin/Backup/Backup", "/Setup/Backup");
             conventions.AuthorizePage("/Admin/Requests/Requests", ServiceApi.RequestsReadPolicyName);
             conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);

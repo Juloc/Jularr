@@ -11,9 +11,10 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
     // Where the wizard resumes and what still blocks or deserves a look before it finishes.
     public sealed class SetupProgressV1 : BaseResponse
     {
-        public SetupProgressV1(SetupStepType setupStepTypeId, bool isCompleted, long version, string[] blockers, string[] warnings)
+        public SetupProgressV1(SetupStepType setupStepTypeId, SetupStartType setupStartTypeId, bool isCompleted, long version, string[] blockers, string[] warnings)
         {
             SetupStepTypeId = setupStepTypeId;
+            SetupStartTypeId = setupStartTypeId;
             IsCompleted = isCompleted;
             Version = version;
             Blockers = blockers;
@@ -22,6 +23,9 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStepTypeId))]
         public SetupStepType SetupStepTypeId { get; }
+
+        [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStartTypeId))]
+        public SetupStartType SetupStartTypeId { get; }
 
         [DataField(typeof(SetupProgressFields), nameof(SetupProgressFields.IsCompleted))]
         public bool IsCompleted { get; }
@@ -46,6 +50,18 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStepTypeId))]
         public SetupStepType SetupStepTypeId { get; }
+    }
+
+    // How the instance starts; taking over opens the Takeover step.
+    public sealed class UpdateSetupStartDataV1 : BaseData
+    {
+        public UpdateSetupStartDataV1(SetupStartType setupStartTypeId)
+        {
+            SetupStartTypeId = setupStartTypeId;
+        }
+
+        [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStartTypeId))]
+        public SetupStartType SetupStartTypeId { get; }
     }
 
     public sealed class CompleteSetupDataV1 : BaseData

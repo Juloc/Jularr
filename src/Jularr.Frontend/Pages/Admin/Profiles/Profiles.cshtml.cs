@@ -31,7 +31,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         ];
 
         [BindProperty(SupportsGet = true, Name = "tab")] public string? SelectedTab { get; set; }
-        private string Tab { get => SelectedTab ?? DownloadPages.Profiles; set => SelectedTab = value; }
+        // The setup step shows the quality profiles only; the other panes belong to the administration.
+        private string Tab { get => SetupWizard.IsActive(Request) ? DownloadPages.Profiles : SelectedTab ?? DownloadPages.Profiles; set => SelectedTab = value; }
         [BindProperty(SupportsGet = true)] public MediaType MediaTypeId { get; set; } = MediaType.Movie;
         [BindProperty(SupportsGet = true)] public long? Edit { get; set; }
         [BindProperty(SupportsGet = true, Name = "new")] public bool IsNew { get; set; }
@@ -70,11 +71,10 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Asset("Framework/Components/Truncated.entry.ts");
             page.Asset("Framework/Components/SelectLinkMenu.entry.ts");
             var isSetup = SetupWizard.IsActive(Request);
-            if (isSetup) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Profiles));
 
             // One row of navigation; the quality rules are scoped by a media type (tags belong to every type).
             page.NoPageRow();
-            var chips = isSetup ? DownloadPages.SetupTabs(Tab, MediaTypeId, Home(Request)) : AdminMenu.Row(texts, Request, null, Tab, ((byte)MediaTypeId).ToString(CultureInfo.InvariantCulture));
+            IUiComponent chips = isSetup ? new Span() : AdminMenu.Row(texts, Request, null, Tab, ((byte)MediaTypeId).ToString(CultureInfo.InvariantCulture));
             page.Content.Add(Tab == DownloadPages.Tags ? new ListToolbar(chips) : new ListToolbar(chips, ScopeMenu()));
             if (Tab == DownloadPages.Profiles) page.Content.Add(ProfileFigures());
             switch (Tab)

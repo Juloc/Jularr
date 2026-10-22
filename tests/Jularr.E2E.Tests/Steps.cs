@@ -122,8 +122,7 @@ namespace Jularr.E2E.Tests
         // The local folder as a writable connection with one library path per media type folder.
         public static async Task AddLibraryAsync(IPage page, string localPath, params LibraryPath[] roots)
         {
-            await page.GotoAsync("/Admin/Storage");
-            await FollowAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }));
+            await page.GotoAsync("/Admin/Storage?protocol=Local");
             await page.FillAsync("form [name=Name]", "Library");
             await page.SelectOptionAsync("form [name=SharePath]", localPath);
             await page.Locator("form [name=IsReadOnly][value=False]").CheckAsync();

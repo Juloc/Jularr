@@ -23,7 +23,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Setup");
 
                 // The steps stand at the top, the first one current and nothing else marked, and the page has no heading of its own.
-                await Assertions.Expect(page.Locator(".stepper__step")).ToHaveCountAsync(5);
+                await Assertions.Expect(page.Locator(".stepper__step")).ToHaveCountAsync(12);
                 await Assertions.Expect(page.Locator(".stepper__step--current")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".stepper__step--done")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator(".stepper a[aria-current=step], .stepper span[aria-current=step]")).ToContainTextAsync("Owner");
@@ -53,17 +53,22 @@ namespace Jularr.E2E.Tests
                 await page.FillAsync("[name=Username]", "login_name");
                 await page.FillAsync("[name=ProfileName]", "Julia at home");
                 await page.GetByRole(AriaRole.Button, new() { Name = "Create Owner", Exact = true }).ClickAsync();
-                await page.WaitForURLAsync("**/Setup/Instance");
+                await page.WaitForURLAsync("**/Setup/Begin");
                 Assert.AreEqual("login_name", await jularr.ScalarAsync("SELECT \"Username\" FROM \"Accounts\""));
                 Assert.AreEqual("login_name", await jularr.ScalarAsync("SELECT \"DisplayName\" FROM \"Accounts\""));
                 Assert.AreEqual("Julia at home", await jularr.ScalarAsync("SELECT \"DisplayName\" FROM \"Profiles\""));
                 Assert.AreEqual(1L, await jularr.ScalarAsync("SELECT count(*) FROM \"Profiles\""));
 
-                // The next step is current, the first one is marked done and the ones after it wait.
+                // The first choice is the next step: the Owner is marked done, the ones after it wait.
                 await Assertions.Expect(page.Locator(".stepper__step--done")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".stepper__step--done .stepper__bubble .ui-icon")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".stepper__step--current a")).ToHaveAttributeAsync("href", "/Setup/Instance");
-                await Assertions.Expect(page.Locator(".stepper__step:not(.stepper__step--done):not(.stepper__step--current)")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".stepper__step:not(.stepper__step--done):not(.stepper__step--current)")).ToHaveCountAsync(10);
+                await page.GetByRole(AriaRole.Button, new() { Name = "New setup", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync("**/Setup/Storage");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Continue", Exact = true }).Last.ClickAsync();
+                await page.WaitForURLAsync("**/Setup/Instance");
+                await Assertions.Expect(page.Locator(".stepper__step--done")).ToHaveCountAsync(3);
+                await Assertions.Expect(page.Locator(".stepper__step--current")).ToHaveCountAsync(1);
                 await Evidence.SaveAsync(page, "setup-modules-" + width + (dark ? "-dark" : "-light"));
 
                 // Three starting sets; the choices of a media type sit under it, and a switch that needs another one turns it on or says why it stays.

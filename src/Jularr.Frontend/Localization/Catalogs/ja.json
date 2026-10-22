@@ -1444,10 +1444,6 @@
    "Setup steps",
    "セットアップの手順"
   ],
-  "setup.step.Instance": [
-   "Instance",
-   "インスタンス"
-  ],
   "setup.step.Storage": [
    "Storage",
    "ストレージ"
@@ -1468,14 +1464,6 @@
    "Profiles",
    "プロファイル"
   ],
-  "setup.step.Media": [
-   "Existing media",
-   "既存のメディア"
-  ],
-  "setup.step.Finish": [
-   "Finish",
-   "完了"
-  ],
   "setup.next": [
    "Continue",
    "続ける"
@@ -1483,14 +1471,6 @@
   "setup.finish": [
    "Finish setup",
    "セットアップを完了"
-  ],
-  "setup.blockers": [
-   "Before finishing",
-   "完了する前に"
-  ],
-  "setup.warnings": [
-   "Worth a look",
-   "確認しておきたい点"
   ],
   "setup.check.library": [
    "no library yet",
@@ -4180,10 +4160,6 @@
    "Delete",
    "削除"
   ],
-  "setup.restore": [
-   "Restore a backup instead",
-   "代わりにバックアップを復元"
-  ],
   "storage.synology.title": [
    "Synology",
    "Synology"
@@ -6392,14 +6368,6 @@
    "Owner & language",
    "オーナーと言語"
   ],
-  "setup.step.Sources": [
-   "Sources",
-   "ソース"
-  ],
-  "setup.sources.back": [
-   "Back to sources",
-   "ソースに戻る"
-  ],
   "admin.plex.pin.start": [
    "Connect through plex.tv",
    "plex.tv 経由で接続"
@@ -6431,30 +6399,6 @@
   "setup.modules.operations": [
    "Administration",
    "管理"
-  ],
-  "setup.sources.metadata": [
-   "Metadata",
-   "メタデータ"
-  ],
-  "setup.sources.tmdbKey": [
-   "TMDB API key",
-   "TMDB API キー"
-  ],
-  "setup.sources.tmdbAccount": [
-   "Get a TMDB API key",
-   "TMDB API キーを取得"
-  ],
-  "setup.sources.acquisition": [
-   "Search & downloads",
-   "検索とダウンロード"
-  ],
-  "setup.sources.providers": [
-   "Provider connections",
-   "プロバイダー接続"
-  ],
-  "setup.sources.plex": [
-   "Plex and other providers",
-   "Plex とその他のプロバイダー"
   ],
   "arr.settings": [
    "Arr+ settings",

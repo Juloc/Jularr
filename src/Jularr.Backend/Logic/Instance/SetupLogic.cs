@@ -13,6 +13,7 @@ namespace Jularr.Backend.Logic.Instance
                 """
                 SELECT
                     setup."SetupStepTypeId",
+                    setup."SetupStartTypeId",
                     setup."CompletedAt" IS NOT NULL AS "IsCompleted",
                     setup."Version"
                 FROM
@@ -33,6 +34,7 @@ namespace Jularr.Backend.Logic.Instance
                 """
                 SELECT
                     setup."SetupStepTypeId",
+                    setup."SetupStartTypeId",
                     setup."CompletedAt" IS NOT NULL AS "IsCompleted",
                     setup."Version"
                 FROM
@@ -136,11 +138,7 @@ namespace Jularr.Backend.Logic.Instance
                 UPDATE
                     "InstanceSetupState" AS setup
                 SET
-                    "SetupStepTypeId" = CASE
-                        WHEN @SetupStepTypeId = 9 THEN CASE WHEN setup."SetupStepTypeId" IN (1, 2) THEN 9 ELSE setup."SetupStepTypeId" END
-                        WHEN setup."SetupStepTypeId" = 9 THEN CASE WHEN @SetupStepTypeId IN (1, 2) THEN 9 ELSE @SetupStepTypeId END
-                        ELSE greatest(setup."SetupStepTypeId", @SetupStepTypeId)
-                    END,
+                    "SetupStepTypeId" = greatest(setup."SetupStepTypeId", @SetupStepTypeId),
                     "Version" = setup."Version" + 1
                 WHERE
                     setup."Id" = 1
@@ -154,6 +152,29 @@ namespace Jularr.Backend.Logic.Instance
             }
         }
 
+        public static async Task UpdateSetupStartAsync(this LogicContext ctx, SetupStartData data, CancellationToken ct)
+        {
+            // The start is chosen while the wizard runs.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "InstanceSetupState" AS setup
+                SET
+                    "SetupStartTypeId" = @SetupStartTypeId,
+                    "Version" = setup."Version" + 1
+                WHERE
+                    setup."Id" = 1
+                    AND setup."OwnerCreatedAt" IS NOT NULL
+                    AND setup."CompletedAt" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.SetupStartTypeId), "invalid_transition");
+            }
+        }
+
         public static async Task CompleteSetupAsync(this LogicContext ctx, SetupVersionData data, CancellationToken ct)
         {
             // Lock, then recheck.
@@ -162,6 +183,7 @@ namespace Jularr.Backend.Logic.Instance
                 """
                 SELECT
                     setup."SetupStepTypeId",
+                    setup."SetupStartTypeId",
                     setup."CompletedAt" IS NOT NULL AS "IsCompleted",
                     setup."Version"
                 FROM

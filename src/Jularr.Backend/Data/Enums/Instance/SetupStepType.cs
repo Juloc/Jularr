@@ -1,16 +1,26 @@
 namespace Jularr.Backend.Data.Enums.Instance
 {
-    // Persisted wizard identifiers; navigation defines their display order.
+    // Persisted wizard steps in the order of the flow; the wizard resumes at the furthest one reached.
     public enum SetupStepType : byte
     {
-        Instance = 1,
+        Begin = 1,
         Storage = 2,
-        Indexers = 3,
-        Downloads = 4,
-        Providers = 5,
-        Profiles = 6,
-        Media = 7,
-        Finish = 8,
-        DownloadStorage = 9
+        Takeover = 3,
+        Modules = 4,
+        Profiles = 5,
+        Libraries = 6,
+        Requests = 7,
+        DownloadStorage = 8,
+        Downloads = 9,
+        Indexers = 10,
+        Providers = 11,
+        Overview = 12
+    }
+
+    // How the instance starts: empty, or filled from existing Sonarr, Radarr, Readarr and Lidarr systems.
+    public enum SetupStartType : byte
+    {
+        New = 1,
+        Takeover = 2
     }
 }

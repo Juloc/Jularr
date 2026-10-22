@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             }
             catch (ServarrException exception)
             {
-                throw new ServiceUnavailableException(exception.Failure == ServarrFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable");
+                throw new ServiceUnavailableException(exception.Failure == ServarrFailure.Unauthorized ? "takeover_authentication_failed" : "takeover_unreachable");
             }
 
             var (known, jularrProfiles, libraries) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
@@ -195,6 +195,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     items.AddRange(mapped.SkippedFormats.Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format, 500), "takeover_format_skipped", null)));
                 }
             }
+
+            // The custom formats found, besides the ones listed above as not taken over; the quality profiles bring the others along.
+            var notTaken = items.Where(item => item.TakeoverItemTypeId == TakeoverItemType.Format).Select(item => item.Name).ToHashSet(StringComparer.Ordinal);
+            items.AddRange(formats.Where(format => !notTaken.Contains(Limit(format.Name, 500))).Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format.Name, 500), "takeover_found", null)));
 
             // Each root folder goes to a chosen library of its type. A library named like the folder, or the only one, is suggested.
             var chosen = (Data.RootFolders ?? []).Select(Choice).OfType<(long LibraryRootId, string Path)>().GroupBy(choice => Folder(choice.Path), StringComparer.Ordinal)

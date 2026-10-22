@@ -2,12 +2,9 @@ using System.Globalization;
 using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Storage.V1;
-using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Service.Admin.Storage.V1;
-using Jularr.Backend.Service.Admin.Instance.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -17,7 +14,7 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace Jularr.Frontend.Pages.Admin.DownloadStorage
 {
     public sealed class DownloadStorageModel(ReadDownloadStorageSettingsV1 read, SaveDownloadStorageSettingsV1 save, ReadStorageMountsV1 mounts,
-        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, UpdateSetupProgressV1 progress, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadStorageMountV1 mount, ReadStorageDirectoriesV1 directories, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private readonly Dictionary<DownloadStorageArea, DownloadStorageSettingsV1> _settings = [];
         private readonly Dictionary<long, StorageMountDetailsV1> _mounts = [];
@@ -30,7 +27,6 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             page.Title("downloadStorage.title");
             page.Navigation("nav.admin");
             page.Asset("Framework/Components/FolderPicker.entry.ts");
-            if (IsSetup) page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.DownloadStorage));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (!IsSetup) page.Content.Add(new P(new Text("downloadStorage.purpose")));
             foreach (var area in Enum.GetValues<DownloadStorageArea>())
@@ -63,14 +59,6 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
                 ]));
             }
 
-            if (IsSetup)
-            {
-                page.Content.Add(new Form<UpdateSetupProgressDataV1>(form =>
-                {
-                    form.Hidden(item => item.SetupStepTypeId);
-                    form.Submit("setup.next");
-                }, Address("Next"), csrf, new UpdateSetupProgressDataV1(SetupStepType.Providers), FormError));
-            }
             if (FormError is not null && _failedArea is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
 
@@ -90,7 +78,7 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (!texts.Can("acquisition.manage", "Acquisition")) return LocalRedirect(IsSetup ? "/Setup/Sources" : "/Settings");
+            if (!texts.Can("acquisition.manage", "Acquisition")) return LocalRedirect(IsSetup ? "/Setup/Progress" : "/Settings");
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -107,43 +95,9 @@ namespace Jularr.Frontend.Pages.Admin.DownloadStorage
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostNextAsync()
-        {
-            if (!IsSetup) return NotFound();
-            await progress.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new UpdateSetupProgressDataV1(SetupStepType.Providers), HttpContext.RequestAborted);
-            return LocalRedirect("/Setup/Sources");
-        }
-
         public async Task<IActionResult> OnGetFoldersAsync(long? storageMountId, string? path, string? afterName, int mountPage = 1)
         {
-            IUiComponent content;
-            var ct = HttpContext.RequestAborted;
-            var home = Address("Folders");
-            if (storageMountId is { } id)
-            {
-                var connection = await mount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), ct);
-                var items = await directories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(id), new ReadStorageDirectoriesDataV1(path ?? "", afterName), ct);
-                var browse = QueryHelpers.AddQueryString(home, "storageMountId", id.ToString(CultureInfo.InvariantCulture));
-                var warning = connection.IsReadOnly ? "downloadStorage.readOnly" : connection.StorageProtocolTypeId == StorageProtocolType.Smb && !connection.IsVolume
-                    ? "downloadStorage.mountRequired" : null;
-                content = FolderPicker.Directories(browse, path ?? "", items.Select(item => item.Name).ToArray(), texts, afterName, items.Count == StorageDirectoryV1.PageSize,
-                    home, id, connection.Name + " /" + path, warning);
-            }
-            else
-            {
-                var configured = await mounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(mountPage), ct);
-                var entries = configured.Items.Select(item => (IUiComponent)new Li(new A(new ValueText(item.Name + " · " + item.SharePath))
-                    .Attribute("href", QueryHelpers.AddQueryString(home, "storageMountId", item.Id.ToString(CultureInfo.InvariantCulture)))
-                    .Attribute("data-folder-navigate", ""))).ToArray();
-                var list = new List<IUiComponent> { new H3(new Text("folderPicker.storageConnections")) };
-                list.Add(entries.Length == 0 ? new P(new Text("downloadStorage.noStorage")) : new Ul(entries).Class("folder-picker__folders"));
-                if (mountPage > 1) list.Add(new A(new Text("common.previous")).Attribute("href", QueryHelpers.AddQueryString(home, "mountPage", (mountPage - 1).ToString(CultureInfo.InvariantCulture)))
-                    .Attribute("data-folder-navigate", ""));
-                if (configured.Items.Count == configured.PageSize) list.Add(new A(new Text("common.next")).Attribute("href", QueryHelpers.AddQueryString(home, "mountPage", (mountPage + 1).ToString(CultureInfo.InvariantCulture)))
-                    .Attribute("data-folder-navigate", ""));
-                content = new Div([.. list]).Attribute("data-folder-fragment", "");
-            }
-
+            var content = await StorageBrowser.FragmentAsync(Address("Folders"), storageMountId, path, afterName, mountPage, true, mounts, mount, directories, texts, HttpContext.RequestAborted);
             using var writer = new StringWriter(CultureInfo.InvariantCulture);
             content.WriteTo(writer, HtmlEncoder.Default, texts);
             Response.Headers.CacheControl = "no-store";

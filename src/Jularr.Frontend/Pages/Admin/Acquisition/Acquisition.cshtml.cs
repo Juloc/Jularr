@@ -83,12 +83,17 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (Role == AcquisitionConnectionRole.Download) page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var isSetup = SetupWizard.IsActive(Request);
-            if (isSetup) page.Content.Add(SetupWizard.Frame(HttpContext, Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             var items = _connections?.Items ?? [];
 
             // The page's one row of navigation, then the figures.
             page.NoPageRow();
-            if (!isSetup) page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
+            if (isSetup)
+            {
+                DefineCards(page, csrf, items);
+                return;
+            }
+
+            page.Content.Add(new ListToolbar(AdminMenu.Row(texts, Request)));
             var reachable = items.Count(item => State(item) == "healthy");
             var failing = items.Count(item => State(item) is "error" or "backoff");
             var figures = new KpiTiles(
@@ -106,15 +111,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 page.Content.Add(new Region("connections", figures, cards).Class("connections__cards").Paged(items.Count, list.PageSize));
             }
 
-            // A new connection is added in a dialog; deleting and the test search are dialogs of the opened connection.
-            if (_selected is null && Type is { } addedType) page.Content.Add(AddDialog(addedType, csrf));
-            if (_selected is { } opened)
-            {
-                if (ConfirmDelete) page.Content.Add(DeleteDialog(opened, csrf));
-                else if (opened.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
-            }
-
-            if (FormError is not null && _searchInput is null && _input is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
+            AddDialogs(page, csrf);
 
             // The page's actions and the paging float at the bottom.
             var actions = new List<IUiComponent>();
@@ -126,7 +123,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             if (Role == AcquisitionConnectionRole.Search)
             {
                 actions.Add(new A(Glyph("swap", 16), new Span(new Text("acquisition.connection.importProwlarr")).Class("action-dock__text")).Class("button button--soft")
-                    .Attribute("href", isSetup ? SetupWizard.Paths[SetupStepType.Media] : "/Admin/Acquisition/Takeover"));
+                    .Attribute("href", "/Admin/Acquisition/Takeover"));
             }
             else if (Role == AcquisitionConnectionRole.Subtitles)
             {
@@ -135,10 +132,38 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             else
             {
                 actions.Add(new A(Glyph("drive", 16), new Span(new Text("downloadStorage.configure")).Class("action-dock__text")).Class("button button--soft")
-                    .Attribute("href", isSetup ? "/Setup/DownloadStorage" : "/Admin/DownloadStorage"));
+                    .Attribute("href", "/Admin/DownloadStorage"));
             }
 
             page.Content.Add(new ActionDock(assets, "acquisition.actions", actions));
+        }
+
+        // A new connection is added in a dialog; deleting and the test search are dialogs of the opened connection.
+        private void AddDialogs(Page page, string? csrf)
+        {
+            if (_selected is null && Type is { } addedType) page.Content.Add(AddDialog(addedType, csrf));
+            if (_selected is { } opened)
+            {
+                if (ConfirmDelete) page.Content.Add(DeleteDialog(opened, csrf));
+                else if (opened.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && (ShowSearch || _searchInput is not null)) page.Content.Add(SearchDialog(opened, csrf));
+            }
+
+            if (FormError is not null && _searchInput is null && _input is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
+        }
+
+        // The setup shows the same cards as the admin page, their settings inline and saved by the pill; a new one is added in a dialog.
+        private void DefineCards(Page page, string? csrf, IReadOnlyList<AcquisitionConnectionDetailsV1> items)
+        {
+            var cards = new List<IUiComponent>([.. items.Select(item => Card(item, csrf))]);
+
+            // The card that adds one: each kind opens its dialog.
+            var adds = Additions[Role].Select(addition => (IUiComponent)new A(Glyph("plus", 14), new Text(addition.LabelKey)).Class("button button--compact button--soft").Attribute("href", Address(type: addition.Type))).ToList();
+            adds.Add(Role == AcquisitionConnectionRole.Search
+                ? new A(Glyph("swap", 14), new Text("acquisition.connection.importProwlarr")).Class("button button--compact").Attribute("href", SetupWizard.Paths[SetupStepType.Takeover])
+                : new A(Glyph("drive", 14), new Text("downloadStorage.configure")).Class("button button--compact").Attribute("href", SetupWizard.Paths[SetupStepType.DownloadStorage]));
+            cards.Add(new Div(new IconTile(Glyph("plus", 18), UiTone.Accent), new Div([.. adds]).Class("feature-card__group feature-card__group--wrap")).Class("feature-card feature-card--add"));
+            page.Content.Add(new CardGrid([.. cards]).Class("card-grid setup-connections"));
+            AddDialogs(page, csrf);
         }
 
         // One connection: its state in the head, the facts of its use, its settings as inputs and its direct actions (test, search, delete, the switch).

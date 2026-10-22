@@ -11,12 +11,16 @@ namespace Jularr.Backend.Data.Public.Setup.V1
 
     public sealed class ReadSetupResultV1 : BaseResponse
     {
-        public ReadSetupResultV1(bool requiresOwner)
+        public ReadSetupResultV1(bool requiresOwner, bool isCompleted)
         {
             RequiresOwner = requiresOwner;
+            IsCompleted = isCompleted;
         }
 
         public bool RequiresOwner { get; }
+
+        // Setup is finished and the instance is in use.
+        public bool IsCompleted { get; }
     }
 
     public sealed class CreateOwnerDataV1 : BaseData

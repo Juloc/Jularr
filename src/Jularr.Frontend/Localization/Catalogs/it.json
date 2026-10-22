@@ -1444,10 +1444,6 @@
    "Setup steps",
    "Passaggi della configurazione"
   ],
-  "setup.step.Instance": [
-   "Instance",
-   "Istanza"
-  ],
   "setup.step.Storage": [
    "Storage",
    "Archiviazione"
@@ -1468,14 +1464,6 @@
    "Profiles",
    "Profili"
   ],
-  "setup.step.Media": [
-   "Existing media",
-   "Media esistenti"
-  ],
-  "setup.step.Finish": [
-   "Finish",
-   "Fine"
-  ],
   "setup.next": [
    "Continue",
    "Continua"
@@ -1483,14 +1471,6 @@
   "setup.finish": [
    "Finish setup",
    "Termina la configurazione"
-  ],
-  "setup.blockers": [
-   "Before finishing",
-   "Prima di terminare"
-  ],
-  "setup.warnings": [
-   "Worth a look",
-   "Da controllare"
   ],
   "setup.check.library": [
    "no library yet",
@@ -4180,10 +4160,6 @@
    "Delete",
    "Elimina"
   ],
-  "setup.restore": [
-   "Restore a backup instead",
-   "Ripristina invece un backup"
-  ],
   "storage.synology.title": [
    "Synology",
    "Synology"
@@ -6392,14 +6368,6 @@
    "Owner & language",
    "Proprietario e lingua"
   ],
-  "setup.step.Sources": [
-   "Sources",
-   "Fonti"
-  ],
-  "setup.sources.back": [
-   "Back to sources",
-   "Torna alle fonti"
-  ],
   "admin.plex.pin.start": [
    "Connect through plex.tv",
    "Connetti tramite plex.tv"
@@ -6431,30 +6399,6 @@
   "setup.modules.operations": [
    "Administration",
    "Amministrazione"
-  ],
-  "setup.sources.metadata": [
-   "Metadata",
-   "Metadati"
-  ],
-  "setup.sources.tmdbKey": [
-   "TMDB API key",
-   "Chiave API TMDB"
-  ],
-  "setup.sources.tmdbAccount": [
-   "Get a TMDB API key",
-   "Ottieni una chiave API TMDB"
-  ],
-  "setup.sources.acquisition": [
-   "Search & downloads",
-   "Ricerca e download"
-  ],
-  "setup.sources.providers": [
-   "Provider connections",
-   "Connessioni ai fornitori"
-  ],
-  "setup.sources.plex": [
-   "Plex and other providers",
-   "Plex e altri fornitori"
   ],
   "arr.settings": [
    "Arr+ settings",

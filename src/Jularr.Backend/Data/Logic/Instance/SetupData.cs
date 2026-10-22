@@ -6,15 +6,19 @@ namespace Jularr.Backend.Data.Logic.Instance
 {
     internal sealed class SetupStateData : BaseData
     {
-        public SetupStateData(SetupStepType setupStepTypeId, bool isCompleted, long version)
+        public SetupStateData(SetupStepType setupStepTypeId, SetupStartType setupStartTypeId, bool isCompleted, long version)
         {
             SetupStepTypeId = setupStepTypeId;
+            SetupStartTypeId = setupStartTypeId;
             IsCompleted = isCompleted;
             Version = version;
         }
 
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStepTypeId))]
         public SetupStepType SetupStepTypeId { get; }
+
+        [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStartTypeId))]
+        public SetupStartType SetupStartTypeId { get; }
 
         [DataField(typeof(SetupProgressFields), nameof(SetupProgressFields.IsCompleted))]
         public bool IsCompleted { get; }
@@ -32,6 +36,17 @@ namespace Jularr.Backend.Data.Logic.Instance
 
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStepTypeId))]
         public SetupStepType SetupStepTypeId { get; }
+    }
+
+    internal sealed class SetupStartData : BaseData
+    {
+        public SetupStartData(SetupStartType setupStartTypeId)
+        {
+            SetupStartTypeId = setupStartTypeId;
+        }
+
+        [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.SetupStartTypeId))]
+        public SetupStartType SetupStartTypeId { get; }
     }
 
     internal sealed class SetupVersionData : BaseData

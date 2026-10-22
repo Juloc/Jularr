@@ -176,7 +176,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             if (_authentication?.Permissions.Contains("storage.read", StringComparer.Ordinal) is true)
             {
                 administration.Add(new A(new Text("storage.title")).Class("button").Attribute("href", "/Admin/Storage"));
-                administration.Add(new A(new Text("setup.storage.title")).Class("button").Attribute("href", "/Setup/Storage"));
+                administration.Add(new A(new Text("setup.storage.title")).Class("button").Attribute("href", "/Admin/Storage"));
             }
 
             if (_authentication?.Permissions.Contains("acquisition.manage", StringComparer.Ordinal) is true)

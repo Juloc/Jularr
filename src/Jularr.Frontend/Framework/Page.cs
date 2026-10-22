@@ -137,6 +137,9 @@ namespace Jularr.Frontend.Framework
                 // Failed reads always explain why.
                 page.Content.Insert(0, new P(ErrorText.Of(_error)).Class("ui-page-error").Attribute("role", "alert"));
             }
+
+            // Setup pages are standalone: the steps of the flow on top, Back and Next below, no application menus.
+            if (SetupWizard.IsActive(Request)) SetupWizard.Frame(page, HttpContext);
             return page;
         }
     }

@@ -34,6 +34,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         private PageResult<LibraryRootDetailsV1>? _roots;
         private IReadOnlyList<StorageDirectoryV1>? _directories;
         private SaveStorageMountDataV1? _input;
+        private SaveStorageMountDataV1? _addInput;
         private CreateLibraryRootDataV1? _rootInput;
         private string? _failedSection;
         private bool IsSetup => Request.Path.StartsWithSegments("/Setup");
@@ -74,8 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (IsSetup)
             {
-                page.Title("setup.storage.title");
-                page.Content.Add(SetupWizard.Frame(HttpContext, SetupStepType.Storage, acquisition: texts.Can("acquisition.manage", "Acquisition")));
+                page.Title("setup.step.Storage");
             }
             else if (IsDetail)
             {
@@ -97,7 +97,6 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 DefineGrid(page, csrf);
             }
 
-            DefineFooter(page, csrf);
         }
 
         // The connections as cards with their state and space, then the card that adds one.
@@ -123,7 +122,11 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 dialogs.Add(RemoveDialog(mount, csrf));
             }
 
+            // The folders this installation offers (Storage__LocalPaths) are listed as they are, ready to connect; nothing has to be typed.
+            var connected = mounts.Where(mount => mount.StorageProtocolTypeId == StorageProtocolType.Local).Select(mount => mount.SharePath).ToHashSet(StringComparer.Ordinal);
+            cards.AddRange(_localPaths.Where(path => !connected.Contains(path.LocalPath)).Select(path => LocalPathCard(path, csrf)));
             cards.Add(AddCard());
+            foreach (var protocol in AddProtocols()) dialogs.Add(AddDialog(protocol, csrf));
 
             // An action of a card swaps the figures and the cards together.
             page.Content.Add(new Region("storage-connections", figures, new CardGrid([.. cards])).Class("storage__cards").Paged(mounts.Count, _mounts?.PageSize ?? 25));
@@ -164,16 +167,64 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             return new FeatureCard(new IconTile(Glyph("drive", 18), UiTone.Accent), mount.Name, line, chip, body, start, end);
         }
 
-        // The card that adds a connection of each kind.
-        private IUiComponent AddCard()
+        // A folder of this installation that is not connected yet: one click connects it.
+        private IUiComponent LocalPathCard(StorageLocalPathV1 path, string? csrf)
         {
-            var links = new List<IUiComponent> { AddLink("storage.add.Smb", StorageProtocolType.Smb), AddLink("storage.add.Nfs", StorageProtocolType.Nfs) };
-            if (_localPaths.Count > 0) links.Add(AddLink("storage.add.Local", StorageProtocolType.Local));
-            return new Div(new IconTile(Glyph("plus", 18), UiTone.Accent), new Strong(new Text("storage.add")), new Div([.. links]).Class("feature-card__group feature-card__group--wrap")).Class("feature-card feature-card--add");
+            var name = path.LocalPath.TrimEnd('/', '\\').Split('/', '\\')[^1];
+            var chip = new StateChip(new Text("storage.available"), UiTone.Info, Glyph("link", 14));
+            var connect = new PostForm(Address(handler: "ConnectLocal"), csrf, [("localPath", path.LocalPath)], new Button(Glyph("plus", 14), new Text("storage.connect")).Compact().Soft().Submit());
+            return new FeatureCard(new IconTile(Glyph("drive", 18), UiTone.Accent), name.Length == 0 ? path.LocalPath : name, texts["storage.protocol.Local"], chip,
+                [new Div(new Truncated(path.LocalPath)).Class("feature-card__path")], [connect]);
         }
 
-        private IUiComponent AddLink(string labelKey, StorageProtocolType protocol) =>
-            new A(new Text(labelKey)).Class("button button--compact button--soft").Attribute("href", Address(protocol: protocol));
+        // The card that adds a connection of each kind; each one opens its dialog, which can be cancelled.
+        private IUiComponent AddCard()
+        {
+            var buttons = AddProtocols().Select(protocol => Modal.Opener(new Button(new Text("storage.add." + protocol)).Compact().Soft(), "storage-add-" + protocol)).ToArray();
+            return new Div(new IconTile(Glyph("plus", 18), UiTone.Accent), new Strong(new Text("storage.add")), new Div(buttons).Class("feature-card__group feature-card__group--wrap")).Class("feature-card feature-card--add");
+        }
+
+        private IEnumerable<StorageProtocolType> AddProtocols()
+        {
+            yield return StorageProtocolType.Smb;
+            yield return StorageProtocolType.Nfs;
+            if (_localPaths.Count > 0) yield return StorageProtocolType.Local;
+        }
+
+        // A new connection in a dialog: its own form, Cancel closes it; an error opens it again with what was typed.
+        private IUiComponent AddDialog(StorageProtocolType protocol, string? csrf)
+        {
+            var versions = _protocols.Where(item => item.StorageProtocolTypeId == protocol).Select(item => new SelectOption(item.ProtocolVersion, item.ProtocolVersion)).ToArray();
+            var failed = _failedSection == "Add" && _addInput?.StorageProtocolTypeId == protocol;
+            var input = failed ? _addInput! : new SaveStorageMountDataV1("", protocol, protocol == StorageProtocolType.Local ? null : "", "", versions.FirstOrDefault()?.Value, null, null, true, null);
+            var form = new Form<SaveStorageMountDataV1>(form =>
+            {
+                form.Hidden(item => item.StorageProtocolTypeId);
+                form.Text(item => item.Name, "storage.name");
+                if (protocol == StorageProtocolType.Local)
+                {
+                    form.Select(item => item.SharePath, "storage.localPath", _localPaths.Select(path => new SelectOption(path.LocalPath, path.LocalPath)));
+                }
+                else
+                {
+                    form.Text(item => item.Host, "storage.host");
+                    form.Text(item => item.SharePath, "storage.sharePath");
+                    form.Select(item => item.ProtocolVersion, "storage.protocolVersion", versions);
+                }
+
+                if (protocol == StorageProtocolType.Smb)
+                {
+                    form.Text(item => item.Username, "storage.username");
+                    form.Text(item => item.Domain, "storage.domain");
+                    form.Password(item => item.Password, "storage.password", "new-password");
+                }
+
+                form.Select(item => item.IsReadOnly, "storage.access", [new SelectOption("True", texts["storage.readOnly"]), new SelectOption("False", texts["storage.readWrite"])]);
+                form.Cancel();
+                form.Submit("storage.add.confirm");
+            }, Address(handler: "Add"), csrf, input, failed ? FormError : null);
+            return new Modal(assets, "storage-add-" + protocol, "storage.add." + protocol, [form], failed);
+        }
 
         // Removing asks once; the connection's library paths keep their inventory.
         private IUiComponent RemoveDialog(StorageMountDetailsV1 mount, string? csrf)
@@ -233,8 +284,6 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 if (mount.IsNetwork) page.Content.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
             }
         }
-
-        protected virtual void DefineFooter(Page page, string? csrf) { }
 
         private Form<SaveStorageMountDataV1> ConnectionForm(StorageProtocolType protocol, string? csrf)
         {
@@ -527,6 +576,26 @@ namespace Jularr.Frontend.Pages.Admin.Storage
 
         // A card's action answers with the list again, the connection's own page with that page.
         private string Back(long storageMountId, string? returnTo) => returnTo == "list" ? Address() : Address(storageMountId);
+
+        // The dialog of a new connection saves and leads back to the connections.
+        public async Task<IActionResult> OnPostAddAsync(string? name, StorageProtocolType storageProtocolTypeId, string? host, string? sharePath, string? protocolVersion, string? username, string? domain,
+            string? password, [BindRequired] bool isReadOnly)
+        {
+            _failedSection = "Add";
+            _addInput = new SaveStorageMountDataV1(name ?? "", storageProtocolTypeId, Blank(host), sharePath ?? "", Blank(protocolVersion), Blank(username), Blank(domain), isReadOnly, Blank(password));
+            var created = await create.ExecuteAsync<CreateStorageMountResultV1>(_addInput, HttpContext.RequestAborted);
+            await check.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(created.Id), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        // A folder the installation offers becomes a connection as it is, named like the folder.
+        public async Task<IActionResult> OnPostConnectLocalAsync([BindRequired] string localPath)
+        {
+            var name = localPath.TrimEnd('/', '\\').Split('/', '\\')[^1];
+            var created = await create.ExecuteAsync<CreateStorageMountResultV1>(new SaveStorageMountDataV1(name.Length == 0 ? localPath : name, StorageProtocolType.Local, null, localPath, null, null, null, false, null), HttpContext.RequestAborted);
+            await check.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(created.Id), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
 
         public async Task<IActionResult> OnPostCheckAsync([BindRequired] long storageMountId, string? returnTo)
         {

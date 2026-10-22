@@ -1444,10 +1444,6 @@
    "Setup steps",
    "Langkah penyiapan"
   ],
-  "setup.step.Instance": [
-   "Instance",
-   "Instans"
-  ],
   "setup.step.Storage": [
    "Storage",
    "Penyimpanan"
@@ -1468,14 +1464,6 @@
    "Profiles",
    "Profil"
   ],
-  "setup.step.Media": [
-   "Existing media",
-   "Media yang ada"
-  ],
-  "setup.step.Finish": [
-   "Finish",
-   "Selesai"
-  ],
   "setup.next": [
    "Continue",
    "Lanjutkan"
@@ -1483,14 +1471,6 @@
   "setup.finish": [
    "Finish setup",
    "Selesaikan penyiapan"
-  ],
-  "setup.blockers": [
-   "Before finishing",
-   "Sebelum selesai"
-  ],
-  "setup.warnings": [
-   "Worth a look",
-   "Perlu diperhatikan"
   ],
   "setup.check.library": [
    "no library yet",
@@ -4180,10 +4160,6 @@
    "Delete",
    "Hapus"
   ],
-  "setup.restore": [
-   "Restore a backup instead",
-   "Pulihkan cadangan saja"
-  ],
   "storage.synology.title": [
    "Synology",
    "Synology"
@@ -6392,14 +6368,6 @@
    "Owner & language",
    "Pemilik dan bahasa"
   ],
-  "setup.step.Sources": [
-   "Sources",
-   "Sumber"
-  ],
-  "setup.sources.back": [
-   "Back to sources",
-   "Kembali ke sumber"
-  ],
   "admin.plex.pin.start": [
    "Connect through plex.tv",
    "Hubungkan melalui plex.tv"
@@ -6431,30 +6399,6 @@
   "setup.modules.operations": [
    "Administration",
    "Administrasi"
-  ],
-  "setup.sources.metadata": [
-   "Metadata",
-   "Metadata"
-  ],
-  "setup.sources.tmdbKey": [
-   "TMDB API key",
-   "Kunci API TMDB"
-  ],
-  "setup.sources.tmdbAccount": [
-   "Get a TMDB API key",
-   "Dapatkan kunci API TMDB"
-  ],
-  "setup.sources.acquisition": [
-   "Search & downloads",
-   "Pencarian dan unduhan"
-  ],
-  "setup.sources.providers": [
-   "Provider connections",
-   "Koneksi penyedia"
-  ],
-  "setup.sources.plex": [
-   "Plex and other providers",
-   "Plex dan penyedia lainnya"
   ],
   "arr.settings": [
    "Arr+ settings",
