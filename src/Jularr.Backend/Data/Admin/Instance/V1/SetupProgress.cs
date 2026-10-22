@@ -74,4 +74,20 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.Version))]
         public long Version { get; }
     }
+
+    // Finishing; with required things missing it succeeds only when the Owner accepted that.
+    public sealed class FinishSetupDataV1 : BaseData
+    {
+        public FinishSetupDataV1(long version, bool acceptMissing = false)
+        {
+            Version = version;
+            AcceptMissing = acceptMissing;
+        }
+
+        [DataField(typeof(InstanceSetupStateFields), nameof(InstanceSetupStateFields.Version))]
+        public long Version { get; }
+
+        [DataField(typeof(SetupProgressFields), nameof(SetupProgressFields.AcceptMissing))]
+        public bool AcceptMissing { get; }
+    }
 }

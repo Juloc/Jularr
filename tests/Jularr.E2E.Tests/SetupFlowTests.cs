@@ -271,12 +271,15 @@ namespace Jularr.E2E.Tests
                 await page.WaitForURLAsync("**/Setup/Overview");
                 Assert.AreEqual(true, await jularr.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
 
-                // The overview has a row for every step with the way back to it; nothing blocks, so Finish closes the setup and the application opens.
+                // The overview has a row for every step with the way back to it; the one thing missing (a download client) is accepted with Finish anyway, which closes the setup and opens the application.
                 await Assertions.Expect(page.Locator(".setup-overview__row")).ToHaveCountAsync(StepsInOrder.Length - 2);
                 await Assertions.Expect(page.Locator(".setup-overview__row a[href='/Setup/Libraries']")).ToHaveCountAsync(1);
                 Assert.IsFalse(await page.Locator("body").EvaluateAsync<bool>("body => body.scrollWidth > innerWidth + 1"), "The overview overflows its viewport.");
                 await Evidence.SaveAsync(page, "setup-overview-" + width);
-                await page.GetByRole(AriaRole.Button, new() { Name = "Finish setup", Exact = true }).ClickAsync();
+                await Assertions.Expect(Row(page, "Indexers")).ToHaveAttributeAsync("data-state", "ready");
+                await Assertions.Expect(Row(page, "Download clients")).ToHaveAttributeAsync("data-state", "missing");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Finish anyway", Exact = true }).ClickAsync();
+                await page.Locator("dialog#finish-anyway").GetByRole(AriaRole.Button, new() { Name = "Finish anyway", Exact = true }).ClickAsync();
                 await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/");
                 await page.GotoAsync("/Setup/Storage");
                 await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/");
@@ -287,6 +290,104 @@ namespace Jularr.E2E.Tests
             catch
             {
                 await Evidence.SaveAsync(page, "setup-flow-failed-" + width);
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task ClickingThroughWithNothingEntered_MarksSkippedStepsAndTheOverviewSaysWhatIsMissing_FinishAnywayAsks()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            try
+            {
+                await Owner.CreateAsync(page);
+                await page.GetByRole(AriaRole.Button, new() { Name = "New setup", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync("**/Setup/Storage");
+                await NextAsync(page, "/Setup/Instance");
+                await NextAsync(page, "/Setup/Profiles");
+                await NextAsync(page, "/Setup/Libraries");
+                await NextAsync(page, "/Setup/Requests");
+                await NextAsync(page, "/Setup/DownloadStorage");
+                await NextAsync(page, "/Setup/Downloads");
+                await NextAsync(page, "/Setup/Indexers");
+                await NextAsync(page, "/Setup/Providers");
+
+                // AniList's catalog needs no key: its card has no inputs without the AniList module, and with it the pair the profiles sign in with.
+                var anilist = page.Locator(".setup-providers .feature-card", new() { HasText = "AniList" });
+                await Assertions.Expect(anilist.Locator("input[type=password], input[type=text]")).ToHaveCountAsync(0);
+                var igdb = page.Locator(".setup-providers .feature-card", new() { HasText = "IGDB" });
+                await Assertions.Expect(igdb.Locator("input[type=password], input[type=text]")).ToHaveCountAsync(2);
+                await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'AniList'");
+                await page.ReloadAsync();
+                await Assertions.Expect(anilist.Locator("input[type=password], input[type=text]")).ToHaveCountAsync(2);
+                await Assertions.Expect(anilist.GetByText("Client ID for the profiles' sign-in")).ToHaveCountAsync(1);
+                await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'AniList'");
+                await NextAsync(page, "/Setup/Overview");
+
+                // Nothing was entered: storage, libraries and the Arr+ connections are missing, the steps left empty carry the skipped marker, the others the check.
+                var storage = Row(page, "Storage");
+                await Assertions.Expect(storage).ToHaveAttributeAsync("data-state", "missing");
+                await Assertions.Expect(storage).ToContainTextAsync("No storage connection yet");
+                await Assertions.Expect(Row(page, "Indexers")).ToHaveAttributeAsync("data-state", "missing");
+                await Assertions.Expect(Row(page, "Download clients")).ToHaveAttributeAsync("data-state", "missing");
+                await Assertions.Expect(Row(page, "Libraries")).ToHaveAttributeAsync("data-state", "skipped");
+                await Assertions.Expect(Row(page, "Start").And(page.Locator("[data-state=ready]"))).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".setup-overview__row a[href='/Setup/Storage']")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".stepper__step--skipped .stepper__label", new() { HasText = "Storage" })).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".stepper__step--skipped .stepper__label", new() { HasText = "Indexers" })).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".stepper__step--done .stepper__label", new() { HasText = "Modules" })).ToHaveCountAsync(1);
+
+                await Evidence.SaveAsync(page, "setup-honest-overview");
+
+                // Finishing is still possible, but only after saying so: Cancel keeps the setup open, the confirmation closes it.
+                await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Finish setup", Exact = true })).ToHaveCountAsync(0);
+                await page.GetByRole(AriaRole.Button, new() { Name = "Finish anyway", Exact = true }).ClickAsync();
+                var dialog = page.Locator("dialog#finish-anyway");
+                await Assertions.Expect(dialog).ToBeVisibleAsync();
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+                await Assertions.Expect(dialog).ToBeHiddenAsync();
+                Assert.AreEqual(false, await jularr.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
+                await page.GetByRole(AriaRole.Button, new() { Name = "Finish anyway", Exact = true }).ClickAsync();
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Finish anyway", Exact = true }).ClickAsync();
+                await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/");
+                Assert.AreEqual(true, await jularr.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "setup-honest-overview-failed");
+                throw;
+            }
+        }
+
+        [TestMethod]
+        [Timeout(300_000)]
+        public async Task Providers_AniListKeyFieldsAppearOnlyWithTheModule_InTheAdministrationToo()
+        {
+            await using var jularr = await JularrInstance.StartAsync();
+            await using var browser = await BrowserSession.StartAsync(jularr);
+            var page = browser.Page;
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await page.GotoAsync("/Admin/Providers");
+                var anilist = page.Locator("#provider-anilist");
+                await Assertions.Expect(anilist).ToBeVisibleAsync();
+                await Assertions.Expect(anilist.Locator("[name=ClientId], [name=Secret]")).ToHaveCountAsync(0);
+                await Assertions.Expect(anilist).ToContainTextAsync("Enabled");
+                await Assertions.Expect(page.Locator("#provider-igdb [name=ClientId], #provider-igdb [name=Secret]")).ToHaveCountAsync(2);
+
+                await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('AniList')");
+                await page.ReloadAsync();
+                await Assertions.Expect(anilist.Locator("[name=ClientId], [name=Secret]")).ToHaveCountAsync(2);
+                await Assertions.Expect(anilist.GetByText("Client secret for the profiles' sign-in")).ToHaveCountAsync(1);
+                await Assertions.Expect(anilist).ToContainTextAsync("Setup needed");
+            }
+            catch
+            {
+                await Evidence.SaveAsync(page, "setup-anilist-fields-failed");
                 throw;
             }
         }
@@ -364,6 +465,9 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        // A step's row of the overview, found by its name at the start.
+        private static ILocator Row(IPage page, string name) => page.Locator(".setup-overview__row", new() { HasTextRegex = new Regex("^\\s*" + Regex.Escape(name)) });
 
         // The Next button of a step without a form of its own; the step after it opens.
         private static async Task NextAsync(IPage page, string next, string label = "Continue")

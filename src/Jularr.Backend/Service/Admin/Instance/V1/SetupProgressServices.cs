@@ -92,7 +92,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
     }
 
     [ServiceEndpoint("PUT", "/api/v1/admin/setup/completion")]
-    public sealed class CompleteSetupV1 : AdminService<SetupProgressParametersV1, CompleteSetupDataV1>
+    public sealed class CompleteSetupV1 : AdminService<SetupProgressParametersV1, FinishSetupDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
@@ -101,7 +101,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.CompleteSetupAsync(new SetupVersionData(Data.Version), CancellationToken);
+            await Context.CompleteSetupAsync(new SetupFinishData(Data.Version, Data.AcceptMissing), CancellationToken);
             return new UpdateResult(true);
         }
     }

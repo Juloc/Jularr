@@ -10936,14 +10936,6 @@
    "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly.",
    "Jularr ist gerade nicht verfügbar, etwa bei Wartung oder wenn der Speicher offline ist. Bitte versuche es gleich erneut."
   ],
-  "maintenance.databaseUpdate.title": [
-   "Database update failed",
-   "Datenbank-Update fehlgeschlagen"
-  ],
-  "maintenance.databaseUpdate.text": [
-   "The update {0} could not be applied. See the log; the previous version can be started again.",
-   "Das Update {0} konnte nicht angewendet werden. Siehe Log; die vorherige Version kann wieder gestartet werden."
-  ],
   "profile.section.languages": [
    "Languages",
    "Sprachen"
@@ -12605,16 +12597,8 @@
    "Erneut verbinden"
   ],
   "setup.overview.ready": [
-   "Ready",
-   "Bereit"
-  ],
-  "setup.overview.needed": [
-   "Needed",
-   "Erforderlich"
-  ],
-  "setup.overview.optional": [
-   "Optional",
-   "Optional"
+   "Set up",
+   "Eingerichtet"
   ],
   "setup.overview.connections": [
    "{0} connections",
@@ -13323,6 +13307,82 @@
   "common.close": [
    "Close",
    "Schließen"
+  ],
+  "admin.providers.anilistClientId": [
+   "Client ID for the profiles' sign-in",
+   "Client-ID für die Anmeldung der Profile"
+  ],
+  "admin.providers.anilistClientSecret": [
+   "Client secret for the profiles' sign-in",
+   "Client-Secret für die Anmeldung der Profile"
+  ],
+  "setup.overview.missing": [
+   "Missing",
+   "Fehlt"
+  ],
+  "setup.overview.skipped": [
+   "Skipped",
+   "Übersprungen"
+  ],
+  "setup.overview.attention": [
+   "Check",
+   "Prüfen"
+  ],
+  "setup.finish.anyway": [
+   "Finish anyway",
+   "Abschließen trotzdem"
+  ],
+  "setup.finish.confirm": [
+   "Something required is missing. Finish setup anyway?",
+   "Etwas Erforderliches fehlt. Die Einrichtung trotzdem abschließen?"
+  ],
+  "setup.check.indexer.failing": [
+   "An indexer failed its last test.",
+   "Ein Indexer hat seinen letzten Test nicht bestanden."
+  ],
+  "setup.check.downloader.failing": [
+   "A download client failed its last test.",
+   "Ein Download-Client hat seinen letzten Test nicht bestanden."
+  ],
+  "setup.check.storage": [
+   "No storage connection yet; libraries and downloads need one.",
+   "Noch keine Speicherverbindung; Bibliotheken und Downloads brauchen eine."
+  ],
+  "setup.check.storage.unavailable": [
+   "A storage connection does not answer.",
+   "Eine Speicherverbindung antwortet nicht."
+  ],
+  "setup.check.takeover": [
+   "Nothing was taken over yet.",
+   "Es wurde noch nichts übernommen."
+  ],
+  "setup.check.modules": [
+   "No function is switched on.",
+   "Keine Funktion ist eingeschaltet."
+  ],
+  "setup.check.library.none": [
+   "No library yet; the library stays empty.",
+   "Noch keine Bibliothek; die Mediathek bleibt leer."
+  ],
+  "setup.check.requests.default": [
+   "The request rule still has its preset values.",
+   "Die Anfrageregel hat noch ihre Voreinstellung."
+  ],
+  "setup.check.igdb": [
+   "Games need the IGDB client ID and secret.",
+   "Spiele brauchen die IGDB-Client-ID und das Secret."
+  ],
+  "setup.check.anilist": [
+   "Profiles cannot sign in to AniList without the application's client ID and secret.",
+   "Ohne Client-ID und Secret der Anwendung können sich Profile nicht bei AniList anmelden."
+  ],
+  "maintenance.databaseUpdate.title": [
+   "Database update failed",
+   "Datenbank-Update fehlgeschlagen"
+  ],
+  "maintenance.databaseUpdate.text": [
+   "The update {0} could not be applied. See the log; the previous version can be started again.",
+   "Das Update {0} konnte nicht angewendet werden. Siehe Log; die vorherige Version kann wieder gestartet werden."
   ],
   "translation.local.title": [
    "Local translation models",

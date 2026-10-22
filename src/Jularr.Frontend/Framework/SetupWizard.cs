@@ -44,6 +44,28 @@ namespace Jularr.Frontend.Framework
             [SetupStepType.Overview] = Overview.Path
         };
 
+        // The step a check of the backend belongs to; none for what concerns the whole instance.
+        public static string? StepOf(string check) => check.Split('.')[0] switch
+        {
+            "storage" => "Storage",
+            "takeover" => "Takeover",
+            "modules" => "Modules",
+            "requests" => "Requests",
+            "tmdb" or "igdb" or "anilist" => "Providers",
+            "indexer" => "Indexers",
+            "downloader" => "Downloads",
+            "library" => "Libraries",
+            "downloadStorage" => "DownloadStorage",
+            _ => null
+        };
+
+        // Something that is there but does not work, as against a step left empty.
+        public static bool IsAttention(string check) => check.EndsWith(".unavailable", StringComparison.Ordinal) || check.EndsWith(".failing", StringComparison.Ordinal);
+
+        // The steps still empty (required or not): what the stepper marks as skipped once they are passed.
+        public static IReadOnlySet<string> Empty(SetupProgressV1 progress) => progress.Blockers.Concat(progress.Warnings).Where(check => !IsAttention(check))
+            .Select(StepOf).OfType<string>().ToHashSet(StringComparer.Ordinal);
+
         public static bool IsActive(HttpRequest request) => request.Path.StartsWithSegments("/Setup");
 
         // The address an editor was opened under.
@@ -108,9 +130,10 @@ namespace Jularr.Frontend.Framework
 
             // Only the steps already reached can be opened again; before the Owner exists nothing can.
             var reached = progress?.SetupStepTypeId;
+            var empty = progress is null ? new HashSet<string>() : Empty(progress);
             var steps = active.Select((place, index) => new StepperStep(place.LabelKey,
                 reached is null || place.Step is null || place.Step > reached || index == position ? null : place.Path,
-                index == position ? StepState.Current : index < position ? StepState.Done : StepState.Upcoming)).ToList();
+                index == position ? StepState.Current : index < position ? empty.Contains(place.Key) ? StepState.Skipped : StepState.Done : StepState.Upcoming)).ToList();
             page.Content.Insert(0, new Div(new Stepper(steps, "setup.steps", assets)).Class("setup-wizard"));
             page.Asset("Framework/Components/Modal.entry.ts");
             page.Asset("Framework/Components/Truncated.entry.ts");

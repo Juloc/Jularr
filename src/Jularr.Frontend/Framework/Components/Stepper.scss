@@ -69,6 +69,8 @@
 
     &__step--done &__bubble { border-color: transparent; background: var(--success-soft); color: var(--success); }
     &__step--done &__item { color: var(--text); }
+    &__step--skipped &__bubble { border-color: transparent; background: var(--warning-soft); color: var(--warning); }
+    &__step--skipped &__item { color: var(--text); }
     &__step--current &__item { background: var(--accent-soft); color: var(--accent-text); }
     &__step--current &__bubble { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
 

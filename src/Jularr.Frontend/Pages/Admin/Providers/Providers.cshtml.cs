@@ -99,7 +99,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             var isServer = provider.Key == "plex" || type is not null;
             var connected = provider.Key == "plex" ? _plex?.ExternalId is not null : type is { } serverType && _servers.TryGetValue(serverType, out var server) && server.Server.ExternalId is not null;
             if (isServer) return connected ? ("providers.state.connected", UiTone.Success, "check") : ("providers.state.setup", UiTone.Warning, "alert");
-            return KeyProviders.Contains(provider.Key) && !provider.HasSecret ? ("providers.state.setup", UiTone.Warning, "alert") : ("admin.providers.enabled", UiTone.Success, "check");
+            return NeedsKey(provider.Key) && !provider.HasSecret ? ("providers.state.setup", UiTone.Warning, "alert") : ("admin.providers.enabled", UiTone.Success, "check");
         }
 
         private IUiComponent Card(ProviderDetailsV1 provider, string? csrf)
@@ -113,7 +113,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             var body = new List<IUiComponent> { new Div(chip, toggle).Class("feature-card__row") };
 
             // A key is never shown, only whether one is stored.
-            if (KeyProviders.Contains(provider.Key))
+            if (NeedsKey(provider.Key))
             {
                 body.Add(new Div(new Span(new Text("providers.key")).Class("feature-card__note"), provider.HasSecret ? new Tag(new Text("providers.key.saved")).Accent() : new Tag(new Text("providers.key.missing")).Warning()).Class("feature-card__row"));
             }
@@ -130,7 +130,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             }
 
             // The settings are inputs of the card itself: the protected key, the Plex server or the Jellyfin/Emby connection.
-            if (KeyProviders.Contains(provider.Key)) body.Add(SecretForm(provider, csrf));
+            if (NeedsKey(provider.Key)) body.Add(SecretForm(provider, csrf));
             if (provider.Key == "plex" && _plex is { } plex) DefinePlex(body, plex, csrf);
             if (type is { } serverKind && _servers.TryGetValue(serverKind, out var connection)) DefineMediaServer(body, serverKind, connection.Server, csrf);
 
@@ -157,12 +157,16 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             return ServerKeys.Contains(provider.Key) ? card.Wide() : card;
         }
 
+        // AniList's catalog needs no key; its application is the one the profiles sign in with, so it is asked only with the AniList module.
+        private bool NeedsKey(string key) => KeyProviders.Contains(key) && (key != "anilist" || texts.Can(null, "AniList"));
+
         // The protected key (IGDB adds the Twitch application id, AniList the application profiles sign in with); it is never written back.
         private IUiComponent SecretForm(ProviderDetailsV1 provider, string? csrf) =>
             new Form<SaveProviderSecretDataV1>(form =>
             {
-                if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, "admin.providers.clientId");
-                form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
+                var anilist = provider.Key == "anilist";
+                if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, anilist ? "admin.providers.anilistClientId" : "admin.providers.clientId");
+                form.Password(item => item.Secret, anilist ? "admin.providers.anilistClientSecret" : provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
                 form.Save();
             }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", csrf, new SaveProviderSecretDataV1(null), _secretFailedFor == provider.Id ? FormError : null);
 
