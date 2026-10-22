@@ -14,14 +14,14 @@ object TvV1PlaybackExtrasRoutes {
     fun chapters(assetId: Long): String = "${asset(assetId)}/chapters"
     fun trickplay(assetId: Long): String = "${asset(assetId)}/trickplay"
     fun trickplaySheet(assetId: Long, sheetIndex: Int): String {
-        require(sheetIndex >= 0)
+        require(sheetIndex >= 1) { "Trickplay sheet number starts at 1." }
         return "${trickplay(assetId)}/$sheetIndex"
     }
     fun tracks(assetId: Long): String = "${asset(assetId)}/tracks"
 
     /** Backend PlaybackTracks.ParseKey recognises only s{streamIndex} and f{storedFileId}. */
     fun subtitle(assetId: Long, key: String): String {
-        require(Regex("^[sf](0|[1-9][0-9]*)$").matches(key)) { "Invalid subtitle track key." }
+        require(Regex("^(s(0|[1-9][0-9]*)|f[1-9][0-9]*)$").matches(key)) { "Invalid subtitle track key." }
         return "${asset(assetId)}/subtitles/$key"
     }
 }
