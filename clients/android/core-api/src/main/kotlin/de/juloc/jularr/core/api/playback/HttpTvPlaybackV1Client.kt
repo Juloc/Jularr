@@ -77,27 +77,54 @@ class HttpTvPlaybackV1Client(
     private suspend fun request(method: String, path: String, body: JSONObject): JSONObject =
         withContext(Dispatchers.IO) {
             runInterruptible {
-                val connection = (serverOrigin.resolve(path).toURL().openConnection() as HttpURLConnection).apply {
-                    requestMethod = method
-                    connectTimeout = 15_000
-                    readTimeout = 30_000
-                    setRequestProperty("Accept", "application/json")
-                    setRequestProperty("Content-Type", "application/json")
-                    tokens.current?.let { setRequestProperty("Authorization", "Bearer $it") }
-                    doOutput = true
+                var completed: JSONObject? = null
+                for (attempt in 0..1) {
+                    val sentToken = tokens.current
+                    val connection = (serverOrigin.resolve(path).toURL().openConnection() as HttpURLConnection).apply {
+                        requestMethod = method
+                        connectTimeout = 15_000
+                        readTimeout = 30_000
+                        instanceFollowRedirects = false
+                        setRequestProperty("Accept", "application/json")
+                        setRequestProperty("Content-Type", "application/json")
+                        sentToken?.let { setRequestProperty("Authorization", "Bearer $it") }
+                        doOutput = true
+                    }
+                    try {
+                        connection.outputStream.use {
+                            it.write(body.toString().toByteArray(Charsets.UTF_8))
+                        }
+                        val status = connection.responseCode
+                        val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+
+                        // A concurrent profile switch/rotation can supersede this request.
+                        // A stale response must neither revoke nor overwrite the new token.
+                        val tokenChanged = synchronized(tokens) {
+                            if (tokens.current == sentToken) {
+                                if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                                    tokens.clear()
+                                } else if (status in 200..299) {
+                                    tokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
+                                }
+                            }
+                            tokens.current != sentToken
+                        }
+                        // A 401 for a *previous* credential is not a new sign-out.
+                        // Retry once with the active credential instead of leaving playback.
+                        if (status == HttpURLConnection.HTTP_UNAUTHORIZED && tokenChanged && attempt == 0 &&
+                            tokens.current != null
+                        ) {
+                            continue
+                        }
+                        if (status !in 200..299) throw appApiException(status, payload)
+                        completed = JSONObject(payload)
+                        break
+                    } finally {
+                        connection.disconnect()
+                    }
                 }
-                try {
-                    connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-                    val status = connection.responseCode
-                    val payload = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                    if (status == 401) tokens.clear()
-                    else if (status in 200..299) tokens.update(connection.getHeaderField(AppApiRoutes.DeviceTokenHeader))
-                    if (status !in 200..299) throw appApiException(status, payload)
-                    JSONObject(payload)
-                } finally {
-                    connection.disconnect()
-                }
+                checkNotNull(completed) { "Playback request was not completed." }
             }
         }
 }
