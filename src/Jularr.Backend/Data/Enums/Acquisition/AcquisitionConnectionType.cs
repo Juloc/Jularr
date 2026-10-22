@@ -10,6 +10,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Usenet = 6,
         OpenSubtitles = 7,
         SubDl = 8,
-        Qbittorrent = 9
+        Qbittorrent = 9,
+        Nyaa = 10
     }
 }

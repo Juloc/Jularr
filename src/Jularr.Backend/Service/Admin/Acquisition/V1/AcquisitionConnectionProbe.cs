@@ -23,11 +23,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         private readonly SabnzbdClient _sabnzbd;
         private readonly QbittorrentClient _qbittorrent;
         private readonly DirectSources _direct;
+        private readonly NyaaSources _nyaa;
         private readonly UsenetJob _usenet;
         private readonly SubtitleProviders _subtitles;
         private readonly IDataProtector _protector;
 
-        public AcquisitionConnectionProbe(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, UsenetJob usenet, SubtitleProviders subtitles, IDataProtectionProvider protection)
+        public AcquisitionConnectionProbe(NewznabClient newznab, SabnzbdClient sabnzbd, QbittorrentClient qbittorrent, DirectSources direct, NyaaSources nyaa, UsenetJob usenet, SubtitleProviders subtitles, IDataProtectionProvider protection)
         {
             _subtitles = subtitles;
             _usenet = usenet;
@@ -35,6 +36,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             _sabnzbd = sabnzbd;
             _qbittorrent = qbittorrent;
             _direct = direct;
+            _nyaa = nyaa;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -51,6 +53,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             if (DirectSources.IsDirect(connection.AcquisitionConnectionTypeId))
             {
                 var error = await _direct.TestAsync(connection, ct);
+                return (new AcquisitionConnectionTestV1(error is null, error, null, error is null ? ["Book"] : []), null);
+            }
+
+            if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Nyaa)
+            {
+                // One search proves the index of the torrents.
+                var error = await _nyaa.TestAsync(connection, ct);
                 return (new AcquisitionConnectionTestV1(error is null, error, null, error is null ? ["Book"] : []), null);
             }
 

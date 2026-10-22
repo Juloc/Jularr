@@ -33,6 +33,7 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Nyaa;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Qbittorrent;
 using Jularr.Integrations.Logic.Servarr;
@@ -228,6 +229,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<MusicMetadata>();
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
+            services.TryAddTransient<NyaaSources>();
             services.TryAddTransient<SubtitleProviders>();
             services.TryAddTransient<Jularr.Backend.Service.Admin.Acquisition.V1.AcquisitionConnectionProbe>();
             services.TryAddTransient<HealthProbes>();
@@ -342,6 +344,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<QbittorrentClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);
+    AddClient<NyaaClient>(services, 30, 16, agent: true, handler: PublicNetwork.CreateHandler);
 
             // Covers come from the providers' image hosts only, over public addresses.
             var covers = new CoverMirrors(new Dictionary<string, Uri>(providers.Images, StringComparer.OrdinalIgnoreCase));
