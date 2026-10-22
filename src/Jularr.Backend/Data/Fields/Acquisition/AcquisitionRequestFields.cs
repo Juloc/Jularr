@@ -18,6 +18,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsBlocked = new();
         public static readonly BoolField IsProfileAllowed = new();
         public static readonly LongField RecentCount = new() { Minimum = 0 };
+        public static readonly IntField RequestCount = new() { Minimum = 0 };
     }
 
     public static class WantedItemFields
@@ -38,6 +39,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsCovered = new();
         public static readonly EnumField WantedViewTypeId = new(typeof(WantedViewType));
+        public static readonly IntField TargetCount = new() { Minimum = 0 };
         public static readonly EnumField WantedPriorityTypeId = new(typeof(WantedPriorityType));
         public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 500, IsSet = true };
     }

@@ -1,0 +1,25 @@
+// The switch between the views of a list: a small capsule of icon links, the chosen one in the soft accent with its outline.
+.view-switch {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--field);
+
+    &__link {
+        display: inline-grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        color: var(--muted);
+        transition: background-color var(--transition), color var(--transition);
+
+        &:hover { background: var(--surface); color: var(--accent-text); }
+        &--active, &--active:hover { border-color: var(--accent-outline); background: var(--accent-soft); color: var(--accent-text); }
+    }
+}

@@ -226,6 +226,19 @@ namespace Jularr.Backend.Tests
                 }
             }
 
+            // A download the client holds paused says so in the place of its pace, so the queue's column keeps a value.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"DownloadStateTypeId\" = 3 WHERE \"Id\" = 800");
+            while (true)
+            {
+                var (next, changed) = await NextEventAsync(reader, ending.Token);
+                Assert.AreEqual("update", next);
+                if (changed.TryGetProperty("operation:800", out var paused) && paused.GetProperty("text").TryGetProperty("speed", out var speed))
+                {
+                    Assert.AreEqual("Paused", speed.GetString());
+                    break;
+                }
+            }
+
             // A person's stream carries their own request and nothing of the queue, release, indexer or client.
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 2 WHERE \"Id\" = 41");
             using var personResponse = await host.OpenStreamAsync("/live/events", ending.Token);

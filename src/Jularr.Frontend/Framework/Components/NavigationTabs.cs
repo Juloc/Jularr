@@ -3,8 +3,8 @@ using System.Text.Encodings.Web;
 
 namespace Jularr.Frontend.Framework
 {
-    // The label is a UI resource key, or a value of the data (a season, an edition) when IsValue is set; a count follows it in muted type.
-    public sealed record NavigationTab(string LabelKey, string Href, bool Selected, bool IsValue = false, int? Count = null)
+    // The label is a UI resource key, or a value of the data (a season, an edition) when IsValue is set; a count follows it in muted type, an icon leads it (the state a filter chip stands for).
+    public sealed record NavigationTab(string LabelKey, string Href, bool Selected, bool IsValue = false, int? Count = null, IUiComponent? Icon = null)
     {
         public IUiComponent Label() => IsValue ? new ValueText(LabelKey) : new Text(LabelKey);
     }
@@ -18,10 +18,11 @@ namespace Jularr.Frontend.Framework
 
             var links = tabs.Select(tab =>
             {
-                var label = tab.Count is { } count
-                    ? new IUiComponent[] { tab.Label(), new Span(new ValueText(count.ToString(CultureInfo.CurrentCulture))).Class("navigation-tabs__count") }
-                    : [tab.Label()];
-                var link = new A(label).Attribute("href", tab.Href)
+                var parts = new List<IUiComponent>();
+                if (tab.Icon is not null) parts.Add(new Span(tab.Icon).Class("navigation-tabs__icon"));
+                parts.Add(tab.Label());
+                if (tab.Count is { } count) parts.Add(new Span(new ValueText(count.ToString(System.Globalization.CultureInfo.CurrentCulture))).Class("navigation-tabs__count"));
+                var link = new A([.. parts]).Attribute("href", tab.Href)
                     .Class(tab.Selected ? "navigation-tabs__link navigation-tabs__link--active"
                                         : "navigation-tabs__link");
                 if (tab.Selected) link.Attribute("aria-current", "page");
