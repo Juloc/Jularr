@@ -1,8 +1,10 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Worker;
 using Jularr.Backend.Data.System.Media.V1;
+using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Media.V1;
+using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Workers
@@ -12,6 +14,9 @@ namespace Jularr.Workers
     {
         protected override async Task RunOnceAsync(CancellationToken ct)
         {
+            await Runner.RunIfConnectedAsync("aniListSync", async (services, token) =>
+                (await services.GetRequiredService<SyncAniListV1>().ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default, token)).Success, ct);
+
             await Runner.RunAsync("aniListMatching", (services, token) =>
                 services.GetRequiredService<MatchAniListV1>().ExecuteAsync<UpdateResult>(new MediaMatchParametersV1(), default, token), ct);
 

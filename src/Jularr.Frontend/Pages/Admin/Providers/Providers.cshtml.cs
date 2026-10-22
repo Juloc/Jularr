@@ -24,7 +24,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         UiText texts, StartPlexServerPinV1 startPin, CompletePlexServerPinV1 completePin) : JularrPage
     {
         // Providers that take a key (IGDB adds the Twitch application id; Hardcover's token names book series, AcoustID's key untagged music, TVDB's project key episodes).
-        private static readonly string[] KeyProviders = ["tmdb", "tvdb", "igdb", "hardcover", "acoustid"];
+        private static readonly string[] KeyProviders = ["tmdb", "tvdb", "igdb", "anilist", "hardcover", "acoustid"];
         private static readonly string[] ServerKeys = ["plex", "jellyfin", "emby"];
 
         // The cards follow this order, as in the mockup: movies and series first, then books, music, games, then the servers.
@@ -172,8 +172,9 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 body.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
                 body.Add(new Form<SaveProviderSecretDataV1>(form =>
                 {
-                    if (provider.Key == "igdb") form.Text(item => item.ClientId, "admin.providers.clientId");
-                    form.Password(item => item.Secret, provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
+                    // IGDB adds the Twitch application id, AniList the application profiles sign in with.
+                    if (provider.Key is "igdb" or "anilist") form.Text(item => item.ClientId, "admin.providers.clientId");
+                    form.Password(item => item.Secret, provider.Key is "igdb" or "anilist" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
                     form.Cancel();
                     form.Submit("common.save");
                 }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", csrf, new SaveProviderSecretDataV1(null), _secretFailedFor == provider.Id ? FormError : null));

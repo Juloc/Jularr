@@ -11967,6 +11967,74 @@
   "details.relation.request": [
    "Request",
    "Anfragen"
+  ],
+  "jobs.job.aniListSync": [
+   "AniList sync",
+   "AniList-Abgleich"
+  ],
+  "jobs.about.aniListSync": [
+   "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",
+   "Liest die AniList-Liste jedes verbundenen Profils, übernimmt, was dort gesehen oder gelesen ist, und sendet den hier gemachten Fortschritt."
+  ],
+  "settings.anilist.title": [
+   "AniList",
+   "AniList"
+  ],
+  "settings.anilist.open": [
+   "Open AniList",
+   "AniList öffnen"
+  ],
+  "settings.anilist.code": [
+   "Code from AniList",
+   "Code von AniList"
+  ],
+  "settings.anilist.connect": [
+   "Connect AniList",
+   "AniList verbinden"
+  ],
+  "settings.anilist.connected": [
+   "Connected as {0}",
+   "Verbunden als {0}"
+  ],
+  "settings.anilist.push": [
+   "Send my progress to AniList",
+   "Meinen Fortschritt an AniList senden"
+  ],
+  "settings.anilist.disconnect": [
+   "Disconnect",
+   "Trennen"
+  ],
+  "hint.AniListFields.Code.info": [
+   "After you allow Jularr at AniList, its page shows a code. Paste it here once.",
+   "Nachdem du Jularr bei AniList erlaubt hast, zeigt die Seite einen Code. Füge ihn hier einmal ein."
+  ],
+  "hint.AniListFields.IsPushEnabled.info": [
+   "Only progress you make after switching this on is sent. Jularr never lowers progress, changes a status or a score, or adds titles to your list.",
+   "Gesendet wird nur Fortschritt, den du nach dem Einschalten machst. Jularr senkt nie einen Fortschritt, ändert keinen Status und keine Wertung und fügt keine Titel zu deiner Liste hinzu."
+  ],
+  "errors.anilist_unavailable": [
+   "AniList could not be reached.",
+   "AniList war nicht erreichbar."
+  ],
+  "errors.anilist_authentication_failed": [
+   "AniList did not accept this sign-in.",
+   "AniList hat diese Anmeldung nicht akzeptiert."
+  ],
+  "errors.anilist_invalid_response": [
+   "AniList returned an invalid response.",
+   "AniList hat eine ungültige Antwort geliefert."
+  ],
+  "errors.anilist_rate_limited": [
+   "AniList limits requests right now. Please try again shortly.",
+   "AniList begrenzt gerade die Anfragen. Bitte versuche es gleich noch einmal."
+  ],
+  "errors.anilist_not_configured": [
+   "AniList is not set up by the administrator yet.",
+   "AniList ist vom Administrator noch nicht eingerichtet."
+  ],
+  "errors.anilist_token_expired": [
+   "The AniList sign-in has expired; connect again.",
+   "Die AniList-Anmeldung ist abgelaufen; verbinde erneut."
   ]
  }
 }
