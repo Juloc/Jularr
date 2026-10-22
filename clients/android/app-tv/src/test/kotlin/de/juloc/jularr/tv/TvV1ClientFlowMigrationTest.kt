@@ -22,7 +22,7 @@ import java.math.BigDecimal
 
 class TvV1ClientFlowMigrationTest {
     private val permissions = InstanceCapabilities(
-        permissions = listOf("profile.media.read"),
+        permissions = listOf("profile.media.read", "profile.playback"),
         modules = listOf("Library", "Playback", "HomeLayout"),
     )
     private val fallback = HttpTvCatalogV1Client(
