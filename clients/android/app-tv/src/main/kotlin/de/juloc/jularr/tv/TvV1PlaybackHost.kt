@@ -276,7 +276,6 @@ internal fun TvV1PlaybackHost(
             } catch (_: Exception) {
                 // No alternate/legacy progress endpoint or fabricated success.
             }
-            }
         }
     }
 
