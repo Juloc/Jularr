@@ -112,6 +112,25 @@ class HttpTvCatalogV1Client(
         ).objects { discoverSuggestion() }
     }
 
+    override suspend fun discoverTmdbItem(mediaTypeId: Int, tmdbId: Int): TvDiscoverItemV1 =
+        readObject(TvCatalogV1Routes.discoverTmdbItem(mediaTypeId, tmdbId), "POST", JSONObject())
+            .discoverItem()
+
+    override suspend fun discoverCatalogEntry(
+        mediaTypeId: Int, namespace: String, externalId: String, mediaSubtypeId: Int?,
+    ): TvDiscoverCatalogEntryV1 {
+        require(mediaTypeId > 0 && namespace.isNotBlank() && externalId.isNotBlank())
+        require(mediaSubtypeId == null || mediaSubtypeId > 0)
+        return readObject(
+            TvCatalogV1Routes.DiscoverCatalogEntry,
+            "POST",
+            JSONObject().put("mediaTypeId", mediaTypeId).put("namespace", namespace)
+                .put("externalId", externalId).apply {
+                    if (mediaSubtypeId != null) put("mediaSubtypeId", mediaSubtypeId)
+                },
+        ).discoverCatalogEntry()
+    }
+
     override suspend fun work(workId: Long): TvWorkDetailsV1 =
         readObject(TvCatalogV1Routes.work(workId)).workDetails()
 
