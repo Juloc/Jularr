@@ -2832,8 +2832,12 @@ namespace Jularr.Backend.Tests
 
             // A news server is entered as server, port and SSL; the fields show their form and explain themselves behind the (i).
             using var newsForm = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads?Type=Usenet");
-            var news = await newsForm.Content.ReadAsStringAsync();
-            Assert.AreEqual(HttpStatusCode.OK, newsForm.StatusCode, news);
+            var page = await newsForm.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, newsForm.StatusCode, page);
+            // The page also carries the cards of the configured clients (with their web address); the new server lives in its dialog.
+            var dialogStart = page.IndexOf("id=\"connection-editor\"", StringComparison.Ordinal);
+            Assert.IsTrue(dialogStart >= 0, "The add dialog is open.");
+            var news = page[dialogStart..page.IndexOf("</dialog>", dialogStart, StringComparison.Ordinal)];
             StringAssert.Contains(news, "placeholder=\"news.newshosting.com\"");
             StringAssert.Contains(news, "placeholder=\"563 with SSL, 119 without\"");
             StringAssert.Contains(news, "role=\"tooltip\"");
