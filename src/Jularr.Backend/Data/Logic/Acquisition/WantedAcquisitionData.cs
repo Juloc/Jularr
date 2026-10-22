@@ -530,6 +530,22 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? AttentionProposal { get; }
     }
 
+    // What a waiting download keeps after some of its files were imported by hand.
+    internal sealed class ManualImportProgressData : BaseData
+    {
+        public ManualImportProgressData(long operationId, string attentionProposal)
+        {
+            OperationId = operationId;
+            AttentionProposal = attentionProposal;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionProposal))]
+        public string AttentionProposal { get; }
+    }
+
     internal sealed class ActivityOperationData : BaseData
     {
         public ActivityOperationData(long operationId)

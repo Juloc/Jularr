@@ -186,7 +186,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         var relativePath = stem + placement.Extension;
                         var placed = await StorageFileTransfer.PlaceAsync(source, StoragePath.Combine(sourceDirectory, placement.SourcePath), library, StoragePath.Combine(directory, relativePath), ct,
                             allowLink: request.Mode != ImportTransferMode.Copy);
-                        imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), request.FactsFor(placement.SourcePath)));
+                        imported.Add(new ImportedFile(relativePath, placed.Length, StoredFileLogic.StoredTime(placed.ModifiedAt), request.FactsFor(placement.SourcePath), request.Languages?.GetValueOrDefault(placement.SourcePath)));
                         if (placement.IsMedia)
                         {
                             media.Add((relativePath, placement));
@@ -226,12 +226,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, request.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
                             placement.ParentUnitNumber, request.GamePlatformId, false), token)).Id);
 
-                        // A download's import is recorded with its operation, a manual one with the person who made it.
-                        await ctx.RecordActivityAsync(request.OperationId is { } operationId ? new ActivityEventData(ActivityEventType.Imported, operationId: operationId, storedFileId: file.Id)
-                            : new ActivityEventData(ActivityEventType.ManualImport, storedFileId: file.Id, accountId: request.AccountId), token);
+                        // An import by itself is recorded with its operation, one by hand with the person who made it (and the download it was made for).
+                        await ctx.RecordActivityAsync(request.AccountId is { } accountId ? new ActivityEventData(ActivityEventType.ManualImport, operationId: request.OperationId, storedFileId: file.Id, accountId: accountId)
+                            : new ActivityEventData(ActivityEventType.Imported, operationId: request.OperationId, storedFileId: file.Id), token);
                     }
 
-                    if (request.OperationId is { } finished)
+                    if (request.OperationId is { } finished && request.FinishesDownload)
                     {
                         await ctx.CompleteDownloadAsync(new DownloadOperationParameters(finished), token);
                     }
@@ -375,8 +375,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         private sealed class ImportedFile
         {
-            public ImportedFile(string relativePath, long sizeBytes, DateTime modifiedAt, ReleaseFact? facts)
+            public ImportedFile(string relativePath, long sizeBytes, DateTime modifiedAt, ReleaseFact? facts, ChosenLanguages? languages)
             {
+                ChosenAudioLanguages = languages is { Audio.Length: > 0 } ? languages.Audio : null;
+                ChosenSubtitleLanguages = languages is { Subtitles.Length: > 0 } ? languages.Subtitles : null;
                 RelativePath = relativePath;
                 SizeBytes = sizeBytes;
                 ModifiedAt = modifiedAt;
@@ -395,13 +397,16 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             public string? QualityKey { get; }
             public string? Edition { get; }
             public int Revision { get; }
+            public string[]? ChosenAudioLanguages { get; }
+            public string[]? ChosenSubtitleLanguages { get; }
         }
     }
 
-    // What an import places and where it takes it from; a download names its operation, a manual import the person who made it.
+    // What an import places and where it takes it from; a download names its operation, a manual import the person who made it. Languages, by source path, are the ones a person chose for a file.
+    // An import by hand of a download leaves it waiting (FinishesDownload false) until its last group of files is placed or the person finishes it.
     internal sealed record ImportCommitRequest(LibraryRootLocationData Root, long WorkId, long? GamePlatformId, IReadOnlyList<ImportPlacementData> Placements, StorageFiles Source,
         string SourceDirectory, IReadOnlyList<StorageFile> Files, Func<string, ReleaseFact?> FactsFor, ImportTransferMode Mode, long? OperationId, long? AccountId, MediaType MediaTypeId,
-        QualityProfile? Profile);
+        QualityProfile? Profile, IReadOnlyDictionary<string, ChosenLanguages>? Languages = null, bool FinishesDownload = true);
 
     // The reason a person must settle, or null once the library holds the files.
     internal sealed record ImportCommit(string? FailureKey, IReadOnlyList<long> Assets);

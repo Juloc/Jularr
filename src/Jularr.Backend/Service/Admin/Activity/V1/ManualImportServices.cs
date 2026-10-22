@@ -21,6 +21,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     // What a manual import needs of its film or series.
     internal sealed record ManualImportTarget(WantedTargetData Target, NamingSet Patterns, IReadOnlyList<TargetUnit> Episodes, LibraryRootLocationData? Root);
 
+    // The waiting download an import by hand is for: the files already imported, whether the person finishes it now, and the proposal it keeps them in.
+    internal sealed record ManualImportDownload(long OperationId, IReadOnlyList<string> Handled, bool Finishes, string Proposal);
+
     internal static class ManualImport
     {
         public static async Task<ManualImportTarget> ReadTargetAsync(LogicContext context, long wantedItemId, CancellationToken ct)
@@ -107,35 +110,49 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             return qualities;
         }
 
+        // The languages a person chose, by file, each one the language catalog knows.
+        public static Dictionary<string, ChosenLanguages> ReadLanguages(IEnumerable<ManualImportChoiceV1> choices)
+        {
+            var languages = new Dictionary<string, ChosenLanguages>(StringComparer.Ordinal);
+            foreach (var choice in choices)
+            {
+                if (FileLanguageChoice.Read(nameof(ManualImportChoiceV1.AudioLanguages), choice.AudioLanguages, choice.SubtitleLanguages) is { } chosen)
+                {
+                    languages[choice.Path] = chosen;
+                }
+            }
+
+            return languages;
+        }
+
         // The numbers of a series' files, the way every plan takes them; a film needs none.
         public static (string Path, int? Season, int? Episode)[] Numbers(IEnumerable<ManualImportChoiceV1> choices) => [.. choices.Select(choice => (choice.Path, choice.Season, choice.Episode))];
 
-        // Places the chosen files, each as the film or episode its owner says, grouped by the film or series they go to. What a person must settle comes back as an unavailable service when nothing
-        // was placed, a mistake in the choice as invalid data; when some files were placed, each file's outcome says what became of it.
-        public static async Task<ManualImportResultV1> RunAsync(LogicContext context, DownloadImport import, long wantedItemId, bool keepsTarget, StorageFiles source, string directory,
-            IReadOnlyList<StorageFile> files, bool isReadOnly, ImportTransferMode mode, BaseDataList<ManualImportChoiceV1> choices, long? accountId, long? operationId, CancellationToken ct)
+        // Places the chosen files, each as the film or episode its owner says, grouped by the film or series they go to; the files of one waiting download may go to several. What a person must settle
+        // comes back as an unavailable service when nothing was placed, a mistake in the choice as invalid data; when some files were placed, each file's outcome says what became of it. A waiting download
+        // leaves the queue once every video of it is imported or the person finishes it; until then it keeps the files already imported.
+        public static async Task<ManualImportResultV1> RunAsync(LogicContext context, DownloadImport import, long wantedItemId, StorageFiles source, string directory,
+            IReadOnlyList<StorageFile> files, bool isReadOnly, ImportTransferMode mode, BaseDataList<ManualImportChoiceV1> choices, long? accountId, ManualImportDownload? download, CancellationToken ct)
         {
-            // A move deletes from the source, which a read-only connection does not allow.
-            if (mode == ImportTransferMode.Move && isReadOnly)
-            {
-                throw new DataValidationException(nameof(RunManualImportDataV1.ImportTransferModeId), "invalid_transition");
-            }
-
             var chosen = choices.Where(choice => choice.Imports).ToArray();
-            if (chosen.Length == 0 || chosen.Select(choice => choice.Path).Distinct(StringComparer.Ordinal).Count() != chosen.Length)
+
+            // A download may be finished without a further file once a person imported some of it.
+            var finishOnly = chosen.Length == 0 && download is { Finishes: true, Handled.Count: > 0 };
+            if (!finishOnly && (chosen.Length == 0 || chosen.Select(choice => choice.Path).Distinct(StringComparer.Ordinal).Count() != chosen.Length))
             {
                 throw new DataValidationException(nameof(RunManualImportDataV1.Files), "unknown_reference");
             }
 
-            // A download belongs to its wanted target; only a folder can be sorted to several.
-            if (keepsTarget && chosen.Any(choice => choice.WantedItemId is { } other && other != wantedItemId))
+            // A move deletes from the source, which a read-only connection does not allow.
+            if (mode == ImportTransferMode.Move && isReadOnly && !finishOnly)
             {
-                throw new DataValidationException(nameof(RunManualImportDataV1.Files), "invalid_value");
+                throw new DataValidationException(nameof(RunManualImportDataV1.ImportTransferModeId), "invalid_transition");
             }
 
             // Plan every group before anything is placed.
             var targets = await ReadTargetsAsync(context, wantedItemId, chosen, ct);
-            var plans = new List<(ManualImportTarget Loaded, ManualImportChoiceV1[] Choices, IReadOnlyList<ImportPlacementData> Placements, Dictionary<string, string> Qualities)>();
+            var plans = new List<(ManualImportTarget Loaded, ManualImportChoiceV1[] Choices, IReadOnlyList<ImportPlacementData> Placements, Dictionary<string, string> Qualities,
+                Dictionary<string, ChosenLanguages> Languages)>();
             foreach (var group in chosen.GroupBy(choice => choice.WantedItemId ?? wantedItemId))
             {
                 var loaded = targets[group.Key];
@@ -149,27 +166,65 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     throw new DataValidationException(nameof(RunManualImportDataV1.Files), "unknown_reference");
                 }
 
-                plans.Add((loaded, members, placements, qualities));
+                plans.Add((loaded, members, placements, qualities, ReadLanguages(members)));
             }
 
             var outcomes = new List<ManualImportOutcomeV1>();
+            var handled = new List<string>(download?.Handled ?? []);
             var imported = 0;
+            var finished = false;
             string? firstFailure = null;
-            foreach (var (loaded, members, placements, qualities) in plans)
+            var finishes = download is not null && ManualImportLogic.CompletesDownload(files, handled.Concat(chosen.Select(choice => choice.Path)), download.Finishes);
+            for (var index = 0; index < plans.Count; index++)
             {
+                var (loaded, members, placements, qualities, languages) = plans[index];
                 var target = loaded.Target;
                 var isMovie = target.MediaTypeId == MediaType.Movie;
+
+                // Only the last group finishes the download, and only when nothing before it went wrong.
+                var finishesHere = finishes && index == plans.Count - 1 && firstFailure is null;
                 var commit = loaded.Root is { } root
                     ? await import.CommitAsync(context, new ImportCommitRequest(root, target.WorkId, null, placements, source, directory, files,
-                        path => ReleaseFacts.WithQuality(ReleaseFacts.OfPath(path, isMovie), path, qualities.GetValueOrDefault(path)), mode, operationId, accountId, target.MediaTypeId,
-                        target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target)), ct)
+                        path => ReleaseFacts.WithQuality(ReleaseFacts.OfPath(path, isMovie), path, qualities.GetValueOrDefault(path)), mode, download?.OperationId, accountId, target.MediaTypeId,
+                        target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target), languages, finishesHere), ct)
                     : new ImportCommit("import_no_library", []);
                 firstFailure ??= commit.FailureKey;
-                imported += commit.FailureKey is null ? commit.Assets.Count : 0;
-                outcomes.AddRange(members.Select(member => new ManualImportOutcomeV1(member.Path, target.CanonicalTitle, commit.FailureKey)));
+                if (commit.FailureKey is null)
+                {
+                    imported += commit.Assets.Count;
+                    handled.AddRange(members.Select(member => member.Path));
+                    finished |= finishesHere;
+                }
+
+                outcomes.AddRange(members.Select(member => new ManualImportOutcomeV1(member.Path, target.CanonicalTitle, commit.FailureKey, languages.GetValueOrDefault(member.Path)?.Audio,
+                    languages.GetValueOrDefault(member.Path)?.Subtitles)));
             }
 
-            return imported == 0 && firstFailure is not null ? throw new ServiceUnavailableException(firstFailure) : new ManualImportResultV1(imported, new BaseDataList<ManualImportOutcomeV1>(outcomes));
+            if (imported == 0 && firstFailure is not null)
+            {
+                throw new ServiceUnavailableException(firstFailure);
+            }
+
+            if (download is not null && finishOnly)
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), token);
+                    return true;
+                }, ct);
+                finished = true;
+            }
+            else if (download is not null && !finished && imported > 0)
+            {
+                // The download keeps waiting, and remembers what was imported.
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.SaveManualImportProgressAsync(new ManualImportProgressData(download.OperationId, ImportProposal.WithHandled(download.Proposal, handled)), token);
+                    return true;
+                }, ct);
+            }
+
+            return new ManualImportResultV1(imported, new BaseDataList<ManualImportOutcomeV1>(outcomes), finished);
         }
     }
 
@@ -293,6 +348,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                 var members = group.ToArray();
                 var named = ManualImportLogic.NameChosen(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle, target.ReleaseYear, ManualImport.Numbers(members),
                     ManualImport.ReadQualities(members, target), loaded.Patterns, loaded.Episodes);
+                ManualImport.ReadLanguages(members);
                 names.AddRange(members.Select(member => new ManualImportNameV1(member.Path, group.Key, target.MediaTypeId, target.CanonicalTitle, named.GetValueOrDefault(member.Path))));
             }
 
@@ -322,7 +378,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         {
             var loaded = await ManualImport.ReadTargetAsync(Context, Parameters.WantedItemId, CancellationToken);
             var (source, files, isReadOnly) = await ManualImport.ReadFolderAsync(Context, _storage, loaded.Target, Data.StorageMountId, Data.RelativePath, CancellationToken);
-            return await ManualImport.RunAsync(Context, _import, Parameters.WantedItemId, false, source, Data.RelativePath, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId, null, CancellationToken);
+            return await ManualImport.RunAsync(Context, _import, Parameters.WantedItemId, source, Data.RelativePath, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId, null, CancellationToken);
         }
     }
     // The finished files of a download that waits for a person.
@@ -347,9 +403,10 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
             var target = loaded.Target;
             var files = await ManualImport.ListFolderAsync(source, target, reference.Directory, CancellationToken);
+            var handled = ImportProposal.ReadHandled(download.AttentionProposal).ToHashSet(StringComparer.Ordinal);
             return new ManualImportDownloadV1(download.WantedItemId, new BaseDataList<ManualImportFileV1>(ManualImportLogic.Propose(target.MediaTypeId, target.MediaSubtypeId, target.CanonicalTitle,
                 target.ReleaseYear, files, loaded.Patterns, loaded.Episodes).Select(proposal => new ManualImportFileV1(proposal.Path, proposal.SizeBytes, proposal.Season, proposal.Episode,
-                    proposal.QualityKey, proposal.TargetName, proposal.Languages))));
+                    proposal.QualityKey, proposal.TargetName, proposal.Languages, handled.Contains(proposal.Path)))));
         }
     }
 
@@ -376,9 +433,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             var (download, reference, source, isReadOnly) = await ManualImport.OpenDownloadAsync(Context, _storage, Parameters.OperationId, CancellationToken);
             var loaded = await ManualImport.ReadTargetAsync(Context, download.WantedItemId, CancellationToken);
             var files = await ManualImport.ListFolderAsync(source, loaded.Target, reference.Directory, CancellationToken);
-            var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, true, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId, download.OperationId,
-                CancellationToken);
-            await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
+            var result = await ManualImport.RunAsync(Context, _import, download.WantedItemId, source, reference.Directory, files, isReadOnly, Data.ImportTransferModeId, Data.Files, Auth.AccountId,
+                new ManualImportDownload(download.OperationId, ImportProposal.ReadHandled(download.AttentionProposal), Data.FinishesDownload, download.AttentionProposal), CancellationToken);
+            if (result.FinishedDownload)
+            {
+                await _import.RemoveFromClientAsync(Context, download.AcquisitionConnectionId, download.ExternalId, CancellationToken);
+            }
+
             return result;
         }
     }

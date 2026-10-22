@@ -94,6 +94,109 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        // The two files of one waiting download are matched to two titles (a film and an episode of a series), one with the languages a person chose; the download finishes and the history assigns both by hand.
+        [TestMethod]
+        [Timeout(600_000)]
+        public async Task WaitingDownload_WithTwoFiles_IsMatchedToTwoTitlesWithALanguage()
+        {
+            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
+            using var folders = new Folders("Movies", "Series");
+            var video = await Steps.WriteVideoAsync(ffmpeg, Path.Combine(folders.Fixtures, "video.webm"));
+            var pack = Path.Combine(folders.Fixtures, "pack");
+            Directory.CreateDirectory(pack);
+            File.Copy(video, Path.Combine(pack, "Big.Buck.Bunny.2005.1080p.WEB-DL.H264-JLR.webm"));
+            File.WriteAllBytes(Path.Combine(pack, "second.webm"), new byte[2048]);
+            var film = new FakeRelease("Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR", "bunny", 2040, pack);
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:Images:image.tmdb.org"] = fakes.Images.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library,
+                ["Media:FfmpegPath"] = ffmpeg ?? "",
+                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.SetTmdbKeyAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"), new LibraryPath("Series", "Series"));
+                await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5040", searchesAutomatically: true);
+                fakes.Offer(film);
+                await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
+                await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
+
+                ILocator? waiting = null;
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (waiting is null)
+                {
+                    Assert.IsTrue(deadline.Elapsed < TimeSpan.FromMinutes(6), "The download did not wait in the queue within six minutes.");
+                    await page.GotoAsync("/Admin/Activity");
+                    var row = Steps.ListRow(page, "does not clearly match the film");
+                    if (await row.CountAsync() > 0) waiting = row.First;
+                    else await page.WaitForTimeoutAsync(3000);
+                }
+
+                await Steps.FollowAsync(page, waiting.GetByRole(AriaRole.Link, new() { Name = "Import by hand", Exact = true }));
+                var rows = page.Locator(".manual-import-files .list-row");
+                await Assertions.Expect(rows).ToHaveCountAsync(2);
+                var filmRow = rows.Filter(new() { HasText = "Big.Buck.Bunny.2005" });
+                var secondRow = rows.Filter(new() { HasText = "second.webm" });
+                await Assertions.Expect(filmRow.Locator("input[type=checkbox]")).ToBeCheckedAsync();
+
+                // The film keeps its title; its audio is English and its subtitles German.
+                await Steps.FollowAsync(page, filmRow.GetByRole(AriaRole.Button, new() { Name = "Match", Exact = true }));
+                var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Match file", Exact = true });
+                await dialog.Locator("fieldset", new() { HasText = "Audio languages" }).Locator("label", new() { HasText = "English" }).ClickAsync();
+                await dialog.Locator("fieldset", new() { HasText = "Subtitle languages" }).Locator("label", new() { HasText = "German" }).ClickAsync();
+                await Evidence.SaveAsync(page, "manual-import-multi-language");
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
+                await Assertions.Expect(filmRow).ToContainTextAsync("EN · subtitles DE");
+
+                // The second file is the second episode of the series.
+                await Steps.FollowAsync(page, secondRow.GetByRole(AriaRole.Button, new() { Name = "Match", Exact = true }));
+                dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Match file", Exact = true });
+                await dialog.Locator("input[name=MatchQuery]").FillAsync("Test Series");
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }));
+                dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Match file", Exact = true });
+                var series = dialog.Locator("select[name=MatchedWantedItemId]");
+                await series.SelectOptionAsync(await series.Locator("option", new() { HasText = FakeServices.SeriesTitle }).First.GetAttributeAsync("value") ?? "");
+                await dialog.Locator("input[name=MatchedSeason]").FillAsync("1");
+                await dialog.Locator("input[name=MatchedEpisode]").FillAsync("2");
+                await Steps.FollowAsync(page, dialog.GetByRole(AriaRole.Button, new() { Name = "Apply", Exact = true }));
+                await Assertions.Expect(page.Locator(".manual-import-files .list-row", new() { HasText = "second.webm" })).ToContainTextAsync("S01E02");
+                await Assertions.Expect(page.Locator(".manual-import-files .list-row", new() { HasText = "second.webm" }).Locator("input[type=checkbox]")).ToBeCheckedAsync();
+                await Evidence.SaveAsync(page, "manual-import-multi-title");
+
+                // Both are imported; the report names each title and the languages kept with the file.
+                await Steps.FollowAsync(page, page.GetByRole(AriaRole.Button, new() { Name = "Import selected", Exact = true }));
+                var report = page.Locator(".manual-import-report .list-row");
+                await Assertions.Expect(report).ToHaveCountAsync(2);
+                await Assertions.Expect(report.Filter(new() { HasText = FakeServices.MovieTitle })).ToContainTextAsync("EN · subtitles DE");
+                await Assertions.Expect(report.Filter(new() { HasText = FakeServices.SeriesTitle })).ToContainTextAsync("Imported");
+                await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Import the rest", Exact = true })).ToHaveCountAsync(0);
+                await Evidence.SaveAsync(page, "manual-import-multi-report");
+
+                // The download is out of the queue, both titles are in the library and the history assigns each by hand.
+                await page.GotoAsync("/Admin/Activity");
+                await Assertions.Expect(Steps.ListRow(page, "does not clearly match the film")).ToHaveCountAsync(0);
+                await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
+                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
+                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count());
+                await page.GotoAsync("/Admin/History");
+                await Assertions.Expect(Steps.ListRow(page, "Assigned by hand")).ToHaveCountAsync(2);
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "failure-manual-import-multi");
+                throw;
+            }
+        }
+
         // A download whose file names another year waits in the queue; the person imports its file by hand from there, and it finishes like any import.
         [TestMethod]
         [Timeout(600_000)]

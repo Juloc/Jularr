@@ -11,11 +11,21 @@ namespace Jularr.Backend.Logic.Acquisition
     // What a person sees and decides when a folder is imported by hand.
     internal static class ManualImportLogic
     {
+        // The videos a person can import: no samples or extras, in the order of their names.
+        public static StorageFile[] Importable(IEnumerable<StorageFile> files) => [.. files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video
+            && !MediaPathParser.IsSample(file.RelativePath) && !ImportJudgement.IsExtra(file.RelativePath)).OrderBy(file => ImportPlacementLogic.NaturalKey(file.RelativePath), StringComparer.OrdinalIgnoreCase)];
+
+        // A download is finished once every video it holds is imported, or when the person says so after they imported or left out what they wanted.
+        public static bool CompletesDownload(IEnumerable<StorageFile> files, IEnumerable<string> handled, bool finishes)
+        {
+            var done = handled.ToHashSet(StringComparer.Ordinal);
+            return finishes || Importable(files).All(file => done.Contains(file.RelativePath));
+        }
+
         public static IReadOnlyList<ManualImportProposal> Propose(MediaType mediaType, MediaSubtype? subtype, string title, int? year, IReadOnlyList<StorageFile> files, NamingSet patterns,
             IReadOnlyList<TargetUnit> episodes)
         {
-            var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)
-                && !ImportJudgement.IsExtra(file.RelativePath)).OrderBy(file => ImportPlacementLogic.NaturalKey(file.RelativePath), StringComparer.OrdinalIgnoreCase).ToArray();
+            var videos = Importable(files);
             var isMovie = mediaType == MediaType.Movie;
             var guesses = videos.Select(video =>
             {

@@ -5,11 +5,13 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Service.Admin.Activity.V1;
 using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Pages.Admin.Work;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -80,6 +82,13 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
         [BindProperty]
         public string? MatchedQualityKey { get; set; }
+
+        // The languages the match dialog's boxes chose; the ones not ticked are not sent.
+        [BindProperty]
+        public string[]? MatchedAudioLanguages { get; set; }
+
+        [BindProperty]
+        public string[]? MatchedSubtitleLanguages { get; set; }
 
         private bool IsDownload => OperationId is not null;
 
@@ -183,7 +192,17 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 : new A(Glyph("folder", 16), new Span(new Text("manualImport.changeFolder")).Class("action-dock__text")).Class("button").Attribute("href", Address(wantedItemId: _work.WantedItemId));
             var runChosen = new Button(Glyph("download", 16), new Span(new Text("manualImport.runSelected")).Class("action-dock__text")).Primary().Submit().Attribute("form", "manual-import")
                 .Attribute("name", "Intent").Attribute("value", "run");
-            page.Content.Add(new ActionDock(assets, "manualImport.actions", [more], [runChosen]));
+
+            // A waiting download leaves the queue by itself once every file is imported; the person can end it sooner, with the chosen files or without any.
+            if (!IsDownload)
+            {
+                page.Content.Add(new ActionDock(assets, "manualImport.actions", [more], [runChosen]));
+                return;
+            }
+
+            IUiComponent Finish() => new Button(Glyph("check", 16), new Span(new Text("manualImport.finish")).Class("action-dock__text")).Submit().Attribute("form", "manual-import")
+                .Attribute("name", "Intent").Attribute("value", "finish");
+            page.Content.Add(new ActionDock(assets, "manualImport.actions", [more, Finish()], [runChosen, Finish()]));
         }
 
         // How the chosen files are placed, and one switch for all of them.
@@ -210,7 +229,8 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             {
                 Hidden(name + "Path", choice.Path), Hidden(name + "WantedItemId", choice.WantedItemId?.ToString(CultureInfo.InvariantCulture) ?? ""),
                 Hidden(name + "Season", choice.Season?.ToString(CultureInfo.InvariantCulture) ?? ""), Hidden(name + "Episode", choice.Episode?.ToString(CultureInfo.InvariantCulture) ?? ""),
-                Hidden(name + "QualityKey", choice.QualityKey ?? "")
+                Hidden(name + "QualityKey", choice.QualityKey ?? ""), Hidden(name + "AudioLanguages", string.Join(',', choice.AudioLanguages)),
+                Hidden(name + "SubtitleLanguages", string.Join(',', choice.SubtitleLanguages))
             };
             var folder = Path.GetDirectoryName(choice.Path.Replace('/', Path.DirectorySeparatorChar))?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
             var sub = line.TargetName is { } target ? new Truncated("→ " + target) : new Truncated(folder.Length > 0 ? folder : "/");
@@ -219,7 +239,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
             var episode = line.MediaType == MediaType.Series ? EpisodeLabel(choice.Season, choice.Episode) : "–";
             var quality = choice.QualityKey ?? line.File.QualityKey ?? "–";
-            var language = line.File.Languages ?? "–";
+            var language = LanguageText(choice.AudioLanguages, choice.SubtitleLanguages, line.File.Languages);
             var size = ByteSize.Format(line.File.SizeBytes);
             var match = new Button(Glyph("link", 14), new Text("manualImport.match")).Compact().Soft().Submit().Attribute("name", "Intent")
                 .Attribute("value", "match:" + index.ToString(CultureInfo.InvariantCulture)).Attribute("formnovalidate", "formnovalidate");
@@ -228,12 +248,22 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             caption.Add(ListPanel.Fact("manualImport.col.quality", new ValueText(quality)));
             caption.Add(ListPanel.Fact("manualImport.col.language", new ValueText(language)));
             caption.Add(ListPanel.Fact("manualImport.col.size", new ValueText(size)));
-            var row = new ListRow([main, LineState(choice.Imports, needsEpisode), new Truncated(line.WorkTitle), Plain(episode), Plain(quality), Plain(language), Plain(size), new Div(match).Class("list-actions")], caption,
+            var row = new ListRow([main, LineState(choice.Imports, needsEpisode, line.File.IsHandled), new Truncated(line.WorkTitle), Plain(episode), Plain(quality), Plain(language), Plain(size), new Div(match).Class("list-actions")], caption,
                 Path.GetFileName(choice.Path));
             return needsEpisode ? row.Tinted(UiTone.Warning) : row;
         }
 
-        private IUiComponent LineState(bool chosen, bool needsEpisode) => needsEpisode ? new StateChip(new Text("manualImport.state.needs"), UiTone.Warning, Glyph("alert", 14))
+        // What the language column says: the languages a person chose, else the ones the file name states; chosen subtitles follow.
+        private string LanguageText(string[] audio, string[] subtitles, string? fromName)
+        {
+            var spoken = audio.Length > 0 ? string.Join('+', audio.Select(ShortLanguage)) : fromName ?? "–";
+            return subtitles.Length > 0 ? string.Format(CultureInfo.CurrentCulture, texts["manualImport.languageWithSubtitles"], spoken, string.Join('+', subtitles.Select(ShortLanguage))) : spoken;
+        }
+
+        private static string ShortLanguage(string code) => FileLanguages.Known.Where(known => known.Three == code).Select(known => known.Two.ToUpperInvariant()).FirstOrDefault(code.ToUpperInvariant())!;
+
+        private IUiComponent LineState(bool chosen, bool needsEpisode, bool handled = false) => needsEpisode ? new StateChip(new Text("manualImport.state.needs"), UiTone.Warning, Glyph("alert", 14))
+            : handled && !chosen ? new StateChip(new Text("manualImport.state.imported"), UiTone.Success, Glyph("check", 14))
             : chosen ? new StateChip(new Text("manualImport.state.ready"), UiTone.Success, Glyph("check", 14)) : new StateChip(new Text("manualImport.state.left"), UiTone.Neutral, Glyph("close", 14));
 
         // What one file is: its film or series, the numbers and the quality; searched, chosen, applied, all on the server.
@@ -252,7 +282,9 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var type = types.GetValueOrDefault(chosen, line.MediaType);
             var qualities = new List<SelectOption> { new("", texts["manualImport.qualityFromName"]) };
             qualities.AddRange(ProfileQualities.For(type, null).Select(key => new SelectOption(key, key)));
-            var data = new ManualImportMatchV1(MatchQuery, chosen, MatchedSeason ?? line.Choice.Season, MatchedEpisode ?? line.Choice.Episode, MatchedQualityKey ?? line.Choice.QualityKey);
+            var data = new ManualImportMatchV1(MatchQuery, chosen, MatchedSeason ?? line.Choice.Season, MatchedEpisode ?? line.Choice.Episode, MatchedQualityKey ?? line.Choice.QualityKey,
+                MatchedAudioLanguages ?? [], MatchedSubtitleLanguages ?? []);
+            var languages = FileLanguages.Known.Select(language => new SelectOption(language.Three, WorkLanguages.Name(language.Two))).ToArray();
             var form = new Form<ManualImportMatchV1>(fields =>
             {
                 fields.Content(new Div(new Strong(new Truncated(Path.GetFileName(line.Choice.Path)))).Class("manual-import__file ui-field--wide"));
@@ -265,6 +297,8 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 }
 
                 fields.Select(item => item.MatchedQualityKey, "manualImport.quality", qualities, NoHelp);
+                fields.Choices(item => item.MatchedAudioLanguages, "manualImport.audioLanguages", languages, NoHelp);
+                fields.Choices(item => item.MatchedSubtitleLanguages, "manualImport.subtitleLanguages", languages, NoHelp);
                 fields.Cancel();
                 fields.Action(new Button(Glyph("search", 14), new Text("manualImport.find")).Soft().Attribute("name", "Intent").Attribute("value", "searchMatch").Attribute("formnovalidate", "formnovalidate"));
                 fields.Action(new Button(Glyph("check", 14), new Text("manualImport.apply")).Primary().Attribute("name", "Intent").Attribute("value", "applyMatch"));
@@ -285,19 +319,27 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var rows = result.Files.Select(file =>
             {
                 lines.TryGetValue(file.Path, out var line);
+                var language = LanguageText(file.AudioLanguages, file.SubtitleLanguages, line?.File.Languages);
                 var identity = new ListIdentity(new IconTile(Glyph("play", 18), file.FailureKey is null ? UiTone.Success : UiTone.Danger), new Truncated(Path.GetFileName(file.Path)),
                     new Truncated(file.FailureKey is null && line?.TargetName is { } target ? "→ " + target : file.Path));
                 var reason = file.FailureKey is { } key ? texts.Has("acquisition.outcome." + key) ? texts["acquisition.outcome." + key] : "" : "";
                 var chip = file.FailureKey is null ? new StateChip(new Text("manualImport.state.imported"), UiTone.Success, Glyph("check", 14))
                     : new StateChip(new Text("manualImport.state.failed"), UiTone.Danger, Glyph("alert", 14));
-                var row = new ListRow([identity, chip, new Truncated(file.WorkTitle), reason.Length > 0 ? new Truncated(reason) : Plain("–")], [ListPanel.Fact("manualImport.col.series", new ValueText(file.WorkTitle))]);
+                var row = new ListRow([identity, chip, new Truncated(file.WorkTitle), Plain(language), reason.Length > 0 ? new Truncated(reason) : Plain("–")],
+                    [ListPanel.Fact("manualImport.col.series", new ValueText(file.WorkTitle)), ListPanel.Fact("manualImport.col.language", new ValueText(language))]);
                 return file.FailureKey is null ? row : row.Tinted(UiTone.Danger);
             }).ToList();
             page.Content.Add(new ListPanel("manualImport.list.report", [new ListColumn("manualImport.col.file", ListRole.Main), new ListColumn("table.status", ListRole.Status),
-                new ListColumn("manualImport.col.series", ListRole.Data, 1), new ListColumn("manualImport.col.reason", ListRole.Data, 1)], rows).Modifier("manual-import-report"));
+                new ListColumn("manualImport.col.series", ListRole.Data, 1), new ListColumn("manualImport.col.language", ListRole.Data, 1), new ListColumn("manualImport.col.reason", ListRole.Data, 1)],
+                rows).Modifier("manual-import-report"));
             var again = IsDownload ? new A(Glyph("activity", 16), new Span(new Text("manualImport.backToQueue")).Class("action-dock__text")).Class("button").Attribute("href", "/Admin/Activity")
                 : new A(Glyph("folder", 16), new Span(new Text("manualImport.more")).Class("action-dock__text")).Class("button").Attribute("href", Address(wantedItemId: _work!.WantedItemId, storageMountId: StorageMountId, relativePath: RelativePath));
-            page.Content.Add(new ActionDock(assets, "manualImport.actions", [again]));
+
+            // A download that was not finished keeps waiting; the rest of its files are imported from the same page.
+            var rest = IsDownload && !result.FinishedDownload
+                ? new A(Glyph("folder", 16), new Span(new Text("manualImport.importRest")).Class("action-dock__text")).Class("button").Attribute("href", Address(operationId: OperationId))
+                : null;
+            page.Content.Add(new ActionDock(assets, "manualImport.actions", rest is null ? [again] : [again, rest]));
         }
 
         private FolderPicker Picker()
@@ -352,7 +394,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             await LoadDataAsync();
             var ct = HttpContext.RequestAborted;
             var intent = Intent ?? "";
-            if (intent == "run") return await RunAsync(ct);
+            if (intent is "run" or "finish") return await RunAsync(intent == "finish", ct);
 
             if (intent.StartsWith("match:", StringComparison.Ordinal) && int.TryParse(intent["match:".Length..], CultureInfo.InvariantCulture, out var line) && line >= 0 && line < _lines.Count)
             {
@@ -362,6 +404,8 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
                 MatchedSeason = current.Choice.Season;
                 MatchedEpisode = current.Choice.Episode;
                 MatchedQualityKey = current.Choice.QualityKey;
+                MatchedAudioLanguages = current.Choice.AudioLanguages;
+                MatchedSubtitleLanguages = current.Choice.SubtitleLanguages;
                 MatchQuery = null;
             }
             else if (intent == "searchMatch" && MatchRow is { } searching && searching >= 0 && searching < _lines.Count)
@@ -390,16 +434,18 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var type = target == current.WantedItemId ? current.MediaType : (await readWork.ExecuteAsync<ManualImportWorkV1>(new ManualImportParametersV1(target), ct)).MediaTypeId;
             var isSeries = type == MediaType.Series;
             var quality = string.IsNullOrWhiteSpace(MatchedQualityKey) || !ProfileQualities.For(type, null).Contains(MatchedQualityKey) ? null : MatchedQualityKey;
-            var changed = new FileRow(current.Choice.Path, true, isSeries ? MatchedSeason : null, isSeries ? MatchedEpisode : null, target == _work!.WantedItemId ? null : target, quality);
+            var changed = new FileRow(current.Choice.Path, true, isSeries ? MatchedSeason : null, isSeries ? MatchedEpisode : null, target == _work!.WantedItemId ? null : target, quality,
+                string.Join(',', MatchedAudioLanguages ?? []), string.Join(',', MatchedSubtitleLanguages ?? []));
             Files = [.. _lines.Select((line, position) => position == index ? changed : ToRow(line.Choice))];
             _lines = await BuildLinesAsync(ct);
             _matching = null;
         }
 
-        private static FileRow ToRow(ManualImportChoiceV1 choice) => new(choice.Path, choice.Imports, choice.Season, choice.Episode, choice.WantedItemId, choice.QualityKey);
+        private static FileRow ToRow(ManualImportChoiceV1 choice) => new(choice.Path, choice.Imports, choice.Season, choice.Episode, choice.WantedItemId, choice.QualityKey,
+            string.Join(',', choice.AudioLanguages), string.Join(',', choice.SubtitleLanguages));
 
         // The chosen files go in; a series file without its numbers is first asked for.
-        private async Task<IActionResult> RunAsync(CancellationToken ct)
+        private async Task<IActionResult> RunAsync(bool finishes, CancellationToken ct)
         {
             if (_lines.Any(line => line.Choice.Imports && line.MediaType == MediaType.Series && (line.Choice.Season is null || line.Choice.Episode is null)))
             {
@@ -410,7 +456,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
             var choices = new BaseDataList<ManualImportChoiceV1>(_lines.Select(line => line.Choice));
             _result = OperationId is { } operationId
-                ? await runDownload.ExecuteAsync<ManualImportResultV1>(new ActivityOperationParametersV1(operationId), new RunManualImportDownloadDataV1(ImportTransferModeId, choices), ct)
+                ? await runDownload.ExecuteAsync<ManualImportResultV1>(new ActivityOperationParametersV1(operationId), new RunManualImportDownloadDataV1(ImportTransferModeId, choices, finishes), ct)
                 : await run.ExecuteAsync<ManualImportResultV1>(new ManualImportParametersV1(_work!.WantedItemId), new RunManualImportDataV1(StorageMountId!.Value, RelativePath ?? "", ImportTransferModeId, choices), ct);
             Hint("manualImport.done", _result.Imported);
             PreparePage();
@@ -489,9 +535,12 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             var isMovie = _work!.MediaTypeId == MediaType.Movie;
 
             // A film takes its largest video; a series every file whose name already says which episode it is.
-            var largest = _files.Count == 0 ? null : _files.MaxBy(file => file.SizeBytes)!.Path;
-            var choices = _files.Select(file => posted.TryGetValue(file.Path, out var row) ? new ManualImportChoiceV1(file.Path, row.Imports, row.Season, row.Episode, row.WantedItemId, BlankToNull(row.QualityKey))
-                : new ManualImportChoiceV1(file.Path, isMovie ? file.Path == largest : file.Season is not null && file.Episode is not null, file.Season, file.Episode)).ToList();
+            // A file of a waiting download that was imported already is not chosen again.
+            var open = _files.Where(file => !file.IsHandled).ToArray();
+            var largest = open.Length == 0 ? null : open.MaxBy(file => file.SizeBytes)!.Path;
+            var choices = _files.Select(file => posted.TryGetValue(file.Path, out var row) ? new ManualImportChoiceV1(file.Path, row.Imports, row.Season, row.Episode, row.WantedItemId, BlankToNull(row.QualityKey),
+                    Codes(row.AudioLanguages), Codes(row.SubtitleLanguages))
+                : new ManualImportChoiceV1(file.Path, !file.IsHandled && (isMovie ? file.Path == largest : file.Season is not null && file.Episode is not null), file.Season, file.Episode)).ToList();
 
             // Until a person changed something the folder's own proposals are the names.
             Dictionary<string, ManualImportNameV1> names = [];
@@ -508,6 +557,9 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
 
         private static string? BlankToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
+        // The codes of a hidden field, as the language catalog knows them.
+        private static string[] Codes(string? value) => [.. (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(code => FileLanguages.Known.Any(known => known.Three == code))];
+
         private string Address(string? handler = null, long? wantedItemId = null, long? storageMountId = null, string? relativePath = null, string? query = null, long? operationId = null) =>
             QueryHelpers.AddQueryString(Route, new Dictionary<string, string?>
             {
@@ -520,7 +572,7 @@ namespace Jularr.Frontend.Pages.Admin.ManualImport
             });
 
         // What the form sends of one file.
-        public sealed record FileRow(string? Path, bool Imports, int? Season, int? Episode, long? WantedItemId, string? QualityKey);
+        public sealed record FileRow(string? Path, bool Imports, int? Season, int? Episode, long? WantedItemId, string? QualityKey, string? AudioLanguages = null, string? SubtitleLanguages = null);
 
         // A file with what a person chose for it and the film or series that choice leads to.
         private sealed record FileLine(ManualImportFileV1 File, ManualImportChoiceV1 Choice, long WantedItemId, string WorkTitle, MediaType MediaType, string? TargetName);

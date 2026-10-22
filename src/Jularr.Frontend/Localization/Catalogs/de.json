@@ -7384,6 +7384,26 @@
    "Left out",
    "Ausgelassen"
   ],
+  "manualImport.audioLanguages": [
+   "Audio languages",
+   "Tonspuren"
+  ],
+  "manualImport.subtitleLanguages": [
+   "Subtitle languages",
+   "Untertitel"
+  ],
+  "manualImport.languageWithSubtitles": [
+   "{0} · subtitles {1}",
+   "{0} · Untertitel {1}"
+  ],
+  "manualImport.finish": [
+   "Finish download",
+   "Download abschließen"
+  ],
+  "manualImport.importRest": [
+   "Import the rest",
+   "Rest importieren"
+  ],
   "activity.importManually": [
    "Import by hand",
    "Von Hand importieren"

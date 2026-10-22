@@ -76,9 +76,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // A video of the folder with what its name says it is and the name it would be given in the library.
     public sealed class ManualImportFileV1 : BaseResponse
     {
-        public ManualImportFileV1(string path, long sizeBytes, int? season, int? episode, string? qualityKey, string? targetName, string? languages = null)
+        public ManualImportFileV1(string path, long sizeBytes, int? season, int? episode, string? qualityKey, string? targetName, string? languages = null, bool isHandled = false)
         {
             Languages = languages;
+            IsHandled = isHandled;
             Path = path;
             SizeBytes = sizeBytes;
             Season = season;
@@ -108,6 +109,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // The audio languages its name states, such as "DE+EN"; a name that states none leaves it empty.
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.Languages))]
         public string? Languages { get; }
+
+        // Of a waiting download: a person imported this file already, so it is not chosen again.
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.IsHandled))]
+        public bool IsHandled { get; }
     }
 
     public sealed class ManualImportFolderV1 : BaseResponse
@@ -123,8 +128,11 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // What a person decided for one file.
     public sealed class ManualImportChoiceV1 : BaseData
     {
-        public ManualImportChoiceV1(string path, bool imports, int? season, int? episode, long? wantedItemId = null, string? qualityKey = null)
+        public ManualImportChoiceV1(string path, bool imports, int? season, int? episode, long? wantedItemId = null, string? qualityKey = null, string[]? audioLanguages = null,
+            string[]? subtitleLanguages = null)
         {
+            AudioLanguages = audioLanguages ?? [];
+            SubtitleLanguages = subtitleLanguages ?? [];
             Path = path;
             Imports = imports;
             Season = season;
@@ -153,6 +161,13 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         // The quality the person says the file has; without one its name decides.
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey), false)]
         public string? QualityKey { get; }
+
+        // The languages the person says the file has (three-letter codes); the scan after the import keeps them. None leaves it to the streams.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] SubtitleLanguages { get; }
     }
 
     // The names the library would give files as their owners decided, to show before anything is placed.
@@ -196,8 +211,11 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // The fields of the match dialog: the film or series, the numbers and the quality a person sets for one file, and the words to search them by.
     public sealed class ManualImportMatchV1 : BaseData
     {
-        public ManualImportMatchV1(string? matchQuery, long? matchedWantedItemId, int? matchedSeason, int? matchedEpisode, string? matchedQualityKey)
+        public ManualImportMatchV1(string? matchQuery, long? matchedWantedItemId, int? matchedSeason, int? matchedEpisode, string? matchedQualityKey, string[]? matchedAudioLanguages = null,
+            string[]? matchedSubtitleLanguages = null)
         {
+            MatchedAudioLanguages = matchedAudioLanguages ?? [];
+            MatchedSubtitleLanguages = matchedSubtitleLanguages ?? [];
             MatchQuery = matchQuery;
             MatchedWantedItemId = matchedWantedItemId;
             MatchedSeason = matchedSeason;
@@ -219,6 +237,12 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey), false)]
         public string? MatchedQualityKey { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] MatchedAudioLanguages { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] MatchedSubtitleLanguages { get; }
     }
 
     public sealed class RunManualImportDataV1 : BaseData
@@ -260,11 +284,16 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
     public sealed class RunManualImportDownloadDataV1 : BaseData
     {
-        public RunManualImportDownloadDataV1(ImportTransferMode importTransferModeId, BaseDataList<ManualImportChoiceV1> files)
+        public RunManualImportDownloadDataV1(ImportTransferMode importTransferModeId, BaseDataList<ManualImportChoiceV1> files, bool finishesDownload = false)
         {
             ImportTransferModeId = importTransferModeId;
             Files = files;
+            FinishesDownload = finishesDownload;
         }
+
+        // The person ends the download now, whatever else its folder still holds; without it the download waits until every video is imported.
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FinishesDownload))]
+        public bool FinishesDownload { get; }
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.ImportTransferModeId))]
         public ImportTransferMode ImportTransferModeId { get; }
@@ -275,8 +304,10 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     // What became of one chosen file: the name it has in the library, or the reason a person must settle.
     public sealed class ManualImportOutcomeV1 : BaseResponse
     {
-        public ManualImportOutcomeV1(string path, string workTitle, string? failureKey)
+        public ManualImportOutcomeV1(string path, string workTitle, string? failureKey, string[]? audioLanguages = null, string[]? subtitleLanguages = null)
         {
+            AudioLanguages = audioLanguages ?? [];
+            SubtitleLanguages = subtitleLanguages ?? [];
             Path = path;
             WorkTitle = workTitle;
             FailureKey = failureKey;
@@ -290,12 +321,20 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FailureKey))]
         public string? FailureKey { get; }
+
+        // The languages a person chose for the file, as stored with it.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] AudioLanguages { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] SubtitleLanguages { get; }
     }
 
     public sealed class ManualImportResultV1 : BaseResponse
     {
-        public ManualImportResultV1(int imported, BaseDataList<ManualImportOutcomeV1>? files = null)
+        public ManualImportResultV1(int imported, BaseDataList<ManualImportOutcomeV1>? files = null, bool finishedDownload = false)
         {
+            FinishedDownload = finishedDownload;
             Imported = imported;
             Files = files ?? new([]);
         }
@@ -304,5 +343,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(ManualImportFields), nameof(ManualImportFields.ImportedCount))]
         public int Imported { get; }
+
+        // A waiting download left the queue; otherwise it keeps waiting for the files nobody imported yet.
+        [DataField(typeof(ManualImportFields), nameof(ManualImportFields.FinishedDownload))]
+        public bool FinishedDownload { get; }
     }
 }
