@@ -96,6 +96,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.acquisition_no_download_client", "No enabled download client is configured."),
             new("errors.acquisition_paused", "Automatic download was stopped because this title is paused."),
             new("errors.acquisition_import_path_unconfigured", "Set up and verify the SABnzbd Complete folder before starting downloads."),
+            new("errors.playback_cache_unavailable", "The playback cache is full or its storage is unavailable. Check the transcode cache path, size budget and free-space reserve."),
             new("errors.acquisition_download_path_unconfigured", "Download workspace is not configured or is unavailable"),
             new("errors.acquisition_grab_failed", "The download client did not accept the release."),
             new("errors.concurrent_change", "Another change was made at the same time. Please reload and try again."),
