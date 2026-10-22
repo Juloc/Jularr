@@ -91,6 +91,8 @@ namespace Jularr.Frontend.Pages.User.Details
                 var blocks = Blocks(work);
                 var shown = blocks.FirstOrDefault(block => block.TabKey == TabKey);
 
+                // A refused action of the page that no form of it shows (a relation added twice) says why above the page.
+                if (FormError is { } refused && _requestInput is null && _relationSearch is null) page.Content.Add(new P(ErrorText.Of(refused)).Class("ui-page-error").Attribute("role", "alert"));
                 page.Content.Add(Hero(work, page));
                 page.Content.Add(new Div(new NavigationTabs([new NavigationTab("details.tab.overview", Address(query => query["tab"] = null), shown is null),
                     .. blocks.Select(block => new NavigationTab(block.LabelKey, Address(query => query["tab"] = block.TabKey), block == shown, false, block.Count))], "details.tabs")).Class("details-tabs"));
