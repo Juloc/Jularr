@@ -7,6 +7,7 @@ namespace Jularr.E2E.Tests
     {
         [TestMethod]
         [DataRow("/Admin/Storage", 1440, 900)]
+        [DataRow("/Admin/Storage", 390, 844)]
         [DataRow("/Setup/Storage", 390, 844)]
         [Timeout(180_000)]
         public async Task FolderDialog_PreservesDraftAndSelectsWithoutPageNavigation(string address, int width, int height)

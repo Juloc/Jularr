@@ -343,7 +343,7 @@ namespace Jularr.Backend.Tests
             // The Owner's settings: unused images leave after their days, used ones stay.
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/covers");
             var settings = (await read.Content.ReadFromJsonAsync<CoverCacheV1>())!;
-            Assert.AreEqual((7, 200), (settings.KeepDays, settings.MaximumMegabytes));
+            Assert.AreEqual((14, 500), (settings.KeepDays, settings.MaximumMegabytes));
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 50, settings.Version));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 50, settings.Version));

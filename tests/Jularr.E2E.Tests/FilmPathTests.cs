@@ -222,6 +222,11 @@ namespace Jularr.E2E.Tests
             await speeds.Locator("[data-setting=speed-number]").BlurAsync();
             Assert.AreEqual(3, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
             Assert.AreEqual("3", await settings.Locator("[data-panel=basic] [data-setting=speed-range]").InputValueAsync());
+            foreach (var edge in new[] { "0.25", "4" })
+            {
+                await speeds.Locator($"[data-speed='{edge}']").ClickAsync();
+                Assert.AreEqual(double.Parse(edge, System.Globalization.CultureInfo.InvariantCulture), await video.EvaluateAsync<double>("video => video.playbackRate"), .001);
+            }
             await speeds.Locator("[data-speed='1']").ClickAsync();
             Assert.AreEqual(1, await video.EvaluateAsync<double>("video => video.playbackRate"), .01);
 

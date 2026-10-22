@@ -162,7 +162,7 @@ namespace Jularr.Backend.Logic.Session
             }
         }
 
-        public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext ctx, AccountAuthenticationData account, TimeSpan lifetime, CancellationToken ct)
+        public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext ctx, AccountAuthenticationData account, TimeSpan lifetime, Guid? deviceId, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -199,20 +199,34 @@ namespace Jularr.Backend.Logic.Session
             var credentials = new SessionCredentialsData(Guid.NewGuid(), account.Id, profileId,
                 SHA256.HashData(Encoding.UTF8.GetBytes(token)), token, account.CredentialRevision, DateTime.UtcNow.Add(lifetime));
 
-            await ctx.InsertSessionAsync(credentials, new SessionDeviceData(null, null), ct);
+            await ctx.InsertSessionAsync(credentials, new SessionDeviceData(null, null, deviceId), ct);
             return credentials;
         }
 
-        // Only the hash is stored; a paired device adds its name and platform.
+        // Only the hash is stored; a paired device adds its name and platform. A browser's session starts with the playback quality the same
+        // account chose in its latest earlier session on that browser, so signing out and in again does not forget the device's choice.
         public static async Task InsertSessionAsync(this LogicContext ctx, SessionCredentialsData credentials, SessionDeviceData device, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
-                    "AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "CredentialRevision", "ExpiresAt", "DeviceName", "DevicePlatform")
+                    "AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "CredentialRevision", "ExpiresAt", "DeviceName", "DevicePlatform", "DeviceId", "PlaybackQuality")
                 VALUES
-                    (@PublicId, @AccountId, @ProfileId, @TokenHash, @CredentialRevision, @ExpiresAt, @DeviceName, @DevicePlatform);
+                    (@PublicId, @AccountId, @ProfileId, @TokenHash, @CredentialRevision, @ExpiresAt, @DeviceName, @DevicePlatform, @DeviceId,
+                        coalesce((
+                            SELECT
+                                earlier."PlaybackQuality"
+                            FROM
+                                "AccountSessions" AS earlier
+                            WHERE
+                                earlier."AccountId" = @AccountId
+                                AND earlier."DeviceId" = @DeviceId
+                            ORDER BY
+                                earlier."CreatedAt" DESC,
+                                earlier."Id" DESC
+                            LIMIT 1
+                        ), 1));
                 """;
             sql.Parameters.Add(credentials);
             sql.Parameters.Add(device);

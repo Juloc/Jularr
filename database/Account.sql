@@ -181,6 +181,8 @@ CREATE TABLE "AccountSessions" (
     -- A paired TV, phone or app has a platform; browser sign-ins have none. A device without its own name shows the default.
     "DeviceName" varchar(100),
     "DevicePlatform" varchar(32),
+    -- The random identifier a browser keeps beyond sign-out; the next session of the same account on it starts with the playback quality chosen before.
+    "DeviceId" uuid,
     -- How this device plays: 1 automatic, 2 the original, 3 capped to 1080p and 256 kbit/s audio, 4 capped to 480p and 128 kbit/s.
     "PlaybackQuality" smallint NOT NULL DEFAULT 1 CHECK ("PlaybackQuality" BETWEEN 1 AND 4),
     CONSTRAINT "PK_AccountSessions" PRIMARY KEY ("Id"),
@@ -201,6 +203,7 @@ CREATE TABLE "AccountSessions" (
 );
 CREATE INDEX "IX_AccountSessions_AccountId_ExpiresAt" ON "AccountSessions" ("AccountId", "ExpiresAt");
 CREATE INDEX "IX_AccountSessions_Account_Created" ON "AccountSessions" ("AccountId", "CreatedAt" DESC, "Id" DESC);
+CREATE INDEX "IX_AccountSessions_Account_Device" ON "AccountSessions" ("AccountId", "DeviceId", "CreatedAt" DESC, "Id" DESC) WHERE "DeviceId" IS NOT NULL;
 
 -- A device asking to be paired: it shows the code, a signed-in profile confirms it, then the device fetches its session once.
 CREATE TABLE "DevicePairings" (

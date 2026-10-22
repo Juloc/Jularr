@@ -676,8 +676,8 @@ CREATE INDEX "IX_ExternalWorkSyncWindows_Namespace" ON "ExternalWorkSyncWindows"
 -- and, the least recently used first, whatever lies above MaximumMegabytes (0 keeps none).
 CREATE TABLE "CoverCacheSettings" (
     "Id" boolean PRIMARY KEY DEFAULT TRUE CHECK ("Id"),
-    "KeepDays" smallint NOT NULL DEFAULT 7 CHECK ("KeepDays" BETWEEN 1 AND 365),
-    "MaximumMegabytes" integer NOT NULL DEFAULT 200 CHECK ("MaximumMegabytes" BETWEEN 0 AND 1000000),
+    "KeepDays" smallint NOT NULL DEFAULT 14 CHECK ("KeepDays" BETWEEN 1 AND 365),
+    "MaximumMegabytes" integer NOT NULL DEFAULT 500 CHECK ("MaximumMegabytes" BETWEEN 0 AND 1000000),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now()
 );
