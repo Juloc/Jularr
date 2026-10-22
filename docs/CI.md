@@ -25,7 +25,8 @@ smoke (build once + critical tests + frontend tests, ~5 min)
 ```
 
 - `smoke` compiles both test projects once, runs startup/schema/migration/session/setup-gate
-  tests (`ci-select-backend-tests.py --boot-filter`) and `npm test`, then publishes the compiled
+  tests (`ci-select-backend-tests.py --boot-filter`; the upgrade test needs the PostgreSQL 18
+  client, so smoke runs `install-tools` too) and `npm test`, then publishes the compiled
   workspace as the `jularr-build` artifact (about 220 MB, 1 day). Shards only unpack it
   (`.github/actions/restore-build`) and run `dotnet test --no-build`; none compiles.
 - The shards are one matrix with `fail-fast: true`: the first failing shard cancels all others,
