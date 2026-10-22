@@ -97,6 +97,25 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
         public string SidecarMarkers { get; }
+
+        // The same analysis with other tracks, such as ones that carry the languages a person chose.
+        public StoredFileProbeData WithTracks(string tracks) => new(Id, SizeBytes, ModifiedAt, ProbedAt, Container, DurationMs, BitRate, tracks, Chapters, SidecarMarkers);
+    }
+
+    // The languages a person chose for a file; empty where nothing was chosen.
+    internal sealed class StoredFileChosenLanguagesData : BaseData
+    {
+        public StoredFileChosenLanguagesData(string[] chosenAudioLanguages, string[] chosenSubtitleLanguages)
+        {
+            ChosenAudioLanguages = chosenAudioLanguages;
+            ChosenSubtitleLanguages = chosenSubtitleLanguages;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] ChosenAudioLanguages { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ChosenLanguages))]
+        public string[] ChosenSubtitleLanguages { get; }
     }
 
     internal sealed class StoredFileCandidateData : BaseData

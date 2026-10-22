@@ -17,13 +17,17 @@ using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Provider;
+using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Data.System.Provider.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.System.Provider.V1;
 using Jularr.Frontend.Framework;
@@ -295,12 +299,164 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 3"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7"));
             CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
 
             // Once finished it is no longer in the queue to be imported again.
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
+        }
+
+        // A download that waits for a person, its folder holding the given files; the first of them is the largest and names another year.
+        private static async Task<long> WaitingDownloadAsync(Host host, string downloads, FakeUsenet usenet, params (string Name, int Size)[] files)
+        {
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            var completed = Path.Combine(downloads, "movies", Feature);
+            Directory.CreateDirectory(completed);
+            foreach (var (name, size) in files)
+            {
+                File.WriteAllBytes(Path.Combine(completed, name), new byte[size]);
+            }
+
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/movies/FEATURE"}]}}""".Replace("FEATURE", Feature, StringComparison.Ordinal);
+            await RunAsync<MonitorDownloadsV1>(host);
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+            Assert.AreEqual("import_ambiguous_title", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+            return operationId;
+        }
+
+        private static async Task<ManualImportResultV1> RunDownloadAsync(Host host, long operationId, bool finishes, params ManualImportChoiceV1[] choices)
+        {
+            using var response = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>(choices), finishes));
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<ManualImportResultV1>())!;
+        }
+
+        // The files of one waiting download go to two titles, each with the languages a person chose: the download finishes once, its job leaves the client once, and the history assigns each file by hand.
+        [TestMethod]
+        public async Task WaitingDownload_ImportedByHandToSeveralTitles_FinishesOnceWhenEveryVideoIsHandled()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            const string first = "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv";
+            var operationId = await WaitingDownloadAsync(host, downloads.Path, usenet, (first, 4096), ("unknown-rip.mkv", 2048));
+            var otherId = await CreateWantedMovieAsync(host, "Other Movie", 2019, 501, 601);
+
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
+            var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
+            Assert.AreEqual(2, files.Count);
+            Assert.IsTrue(files.All(file => !file.IsHandled));
+
+            // The second file is another title, as a 720p Bluray with its own audio and subtitle language; an unknown language is refused before anything is placed.
+            using var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import", new RunManualImportDownloadDataV1(ImportTransferMode.Link,
+                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(first, true, null, null, null, null, ["xxx"])])));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+
+            var result = await RunDownloadAsync(host, operationId, false, new ManualImportChoiceV1(first, true, null, null, null, null, ["ger", "eng"]),
+                new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId, "Bluray-720p", ["fre"], ["ger"]));
+            Assert.AreEqual(2, result.Imported);
+            Assert.IsTrue(result.FinishedDownload);
+            CollectionAssert.AreEquivalent(new[] { "Example Movie", "Other Movie" }, result.Files.Select(file => file.WorkTitle).ToArray());
+            CollectionAssert.AreEqual(new[] { "fre" }, result.Files.Single(file => file.Path == "unknown-rip.mkv").AudioLanguages);
+            CollectionAssert.AreEqual(new[] { "ger" }, result.Files.Single(file => file.Path == "unknown-rip.mkv").SubtitleLanguages);
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(DISTINCT \"WorkId\") FROM \"MediaAssets\""));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 7 AND \"ReleaseTitle\" IS NOT NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ActivityEvents\" WHERE \"ActivityEventTypeId\" = 3"));
+            Assert.AreEqual("eng,ger", await host.ScalarAsync("SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Example Movie%'"));
+            Assert.AreEqual("fre", await host.ScalarAsync("SELECT array_to_string(\"ChosenAudioLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
+            Assert.AreEqual("ger", await host.ScalarAsync("SELECT array_to_string(\"ChosenSubtitleLanguages\", ',') FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Other Movie%'"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"ChosenSubtitleLanguages\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'Example Movie%'"));
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+        }
+
+        // A download imported in parts keeps waiting with what was imported; it finishes when the person says so, and not before there is something imported.
+        [TestMethod]
+        public async Task WaitingDownload_ImportedInParts_WaitsUntilThePersonFinishesIt()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            const string first = "Example.Movie.2005.1080p.WEB-DL.H264-GRP.mkv";
+            var operationId = await WaitingDownloadAsync(host, downloads.Path, usenet, (first, 4096), ("second.mkv", 2048), ("third.mkv", 1024));
+            var otherId = await CreateWantedMovieAsync(host, "Other Movie", 2019, 501, 601);
+
+            // Nothing imported yet: finishing would end a download that gave the library nothing.
+            using var empty = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import",
+                new RunManualImportDownloadDataV1(ImportTransferMode.Link, new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(first, false, null, null)]), true));
+            Assert.AreEqual(HttpStatusCode.BadRequest, empty.StatusCode);
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+
+            // One file imported: the download waits, remembers it and stays with its client.
+            var one = await RunDownloadAsync(host, operationId, false, new ManualImportChoiceV1(first, true, null, null));
+            Assert.AreEqual(1, one.Imported);
+            Assert.IsFalse(one.FinishedDownload);
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+            Assert.AreEqual(0, usenet.Commands.Count);
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/manual-import/files");
+            var files = (await read.Content.ReadFromJsonAsync<ManualImportDownloadV1>())!.Files;
+            CollectionAssert.AreEqual(new[] { first }, files.Where(file => file.IsHandled).Select(file => file.Path).ToArray());
+
+            // A second part, to another title; the third file is left out, and the person finishes the download without importing it.
+            var two = await RunDownloadAsync(host, operationId, false, new ManualImportChoiceV1("second.mkv", true, null, null, otherId));
+            Assert.IsFalse(two.FinishedDownload);
+            var finished = await RunDownloadAsync(host, operationId, true);
+            Assert.IsTrue(finished.FinishedDownload);
+            Assert.AreEqual(0, finished.Imported);
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"Id\" = " + operationId));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
+            CollectionAssert.AreEqual(new[] { "queue:delete:SABnzbd_nzo_1:1", "history:delete:SABnzbd_nzo_1:1" }, usenet.Commands);
+            Assert.IsTrue(File.Exists(Path.Combine(downloads.Path, "movies", Feature, "third.mkv")), "A file nobody imported stays where it is.");
+        }
+
+        // A language a person chose stays through the scan that analyses the file; the streams only decide for files nobody chose for.
+        [TestMethod]
+        public async Task ManualImport_LanguagesAPersonChose_SurviveTheScanOfTheStreams()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet());
+            var wantedId = await CreateWantedMovieAsync(host);
+            var otherId = await CreateWantedMovieAsync(host, "Other Movie", 2019, 501, 601);
+            var folder = Path.Combine(storage.Path, "1", "Incoming");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, Feature + ".mkv"), new byte[4096]);
+            File.WriteAllBytes(Path.Combine(folder, "unknown-rip.mkv"), new byte[2048]);
+            using var imported = await host.SendAsync(HttpMethod.Post, ManualImport + "/" + wantedId + "/import", new RunManualImportDataV1(1, "Incoming", ImportTransferMode.Link,
+                new BaseDataList<ManualImportChoiceV1>([new ManualImportChoiceV1(Feature + ".mkv", true, null, null, null, null, ["ger"], ["fre"]), new ManualImportChoiceV1("unknown-rip.mkv", true, null, null, otherId)])));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+
+            // The scan reads English audio and subtitles in both files.
+            const string tracks = """
+                [{"StreamIndex":0,"MediaTrackTypeId":1,"Codec":"h264","IsDefault":true,"IsForced":false},
+                 {"StreamIndex":1,"MediaTrackTypeId":2,"Codec":"aac","Language":"eng","IsDefault":true,"IsForced":false},
+                 {"StreamIndex":2,"MediaTrackTypeId":2,"Codec":"aac","Language":"eng","IsDefault":false,"IsForced":false},
+                 {"StreamIndex":3,"MediaTrackTypeId":3,"Codec":"subrip","Language":"eng","IsDefault":false,"IsForced":false}]
+                """;
+            foreach (var like in new[] { "Example Movie%", "Other Movie%" })
+            {
+                var id = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '" + like + "'"))!;
+                var size = (long)(await host.ScalarAsync("SELECT \"SizeBytes\" FROM \"StoredFiles\" WHERE \"Id\" = " + id))!;
+                var modified = (DateTime)(await host.ScalarAsync("SELECT \"ModifiedAt\" FROM \"StoredFiles\" WHERE \"Id\" = " + id))!;
+                await using var sql = new SqlContext(host.Fixture.Database);
+                await sql.BeginAsync(SqlAccessMode.ReadWrite);
+                await new LogicContext(sql).SaveStoredFileProbeAsync(new StoredFileProbeData(id, size, modified, DateTime.UtcNow, "matroska", 1000, null, tracks, "[]", "[]"), default);
+                await sql.CommitAsync();
+            }
+
+            async Task<object?> LanguagesAsync(string like, int type) => await host.ScalarAsync("SELECT string_agg(track.\"Language\", ',' ORDER BY track.\"StreamIndex\") FROM \"MediaTracks\" AS track "
+                + "JOIN \"StoredFiles\" AS file ON file.\"Id\" = track.\"StoredFileId\" WHERE file.\"RelativePath\" LIKE '" + like + "' AND track.\"MediaTrackTypeId\" = " + type);
+            Assert.AreEqual("ger,ger", await LanguagesAsync("Example Movie%", 2));
+            Assert.AreEqual("fre", await LanguagesAsync("Example Movie%", 3));
+            Assert.AreEqual("eng,eng", await LanguagesAsync("Other Movie%", 2));
+            Assert.AreEqual("eng", await LanguagesAsync("Other Movie%", 3));
         }
 
         private static async Task<long> GrabbedOperationAsync(Host host, FakeUsenet usenet)

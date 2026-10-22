@@ -847,6 +847,26 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadOptionalAsync<ManualImportDownloadData>(sql, ct);
         }
 
+        // The files a person imported so far stay with the download that keeps waiting for the others.
+        public static async Task SaveManualImportProgressAsync(this LogicContext ctx, ManualImportProgressData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "AttentionProposal" = @AttentionProposal::jsonb
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionProposal" IS NOT NULL;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // Taken out of the queue: it finishes as removed, its release is blocked or may be taken again, and the target is searched from the given time.
         public static async Task RemoveDownloadAsync(this LogicContext ctx, DownloadRemovalData data, CancellationToken ct)
         {

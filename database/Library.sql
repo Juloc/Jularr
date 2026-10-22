@@ -38,6 +38,9 @@ CREATE TABLE "StoredFiles" (
     "BitRate" bigint NULL CHECK ("BitRate" >= 0),
     "ReleaseLanguages" varchar(16)[] NULL,
     "ReleaseLanguageEvidence" jsonb NULL,
+    -- The languages a person chose by hand (three-letter codes); the scan fills the tracks from these and never from the streams alone.
+    "ChosenAudioLanguages" varchar(3)[] NULL CHECK (cardinality("ChosenAudioLanguages") > 0),
+    "ChosenSubtitleLanguages" varchar(3)[] NULL CHECK (cardinality("ChosenSubtitleLanguages") > 0),
     "Sha1" varchar(40) NULL CHECK ("Sha1" ~ '^[0-9a-f]{40}$'),
     -- What the release name says: group, quality, edition and revision (2 for a proper or repack); the probe reports the streams.
     "ReleaseName" varchar(500) NULL,
