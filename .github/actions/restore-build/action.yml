@@ -9,12 +9,6 @@ runs:
     - uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
-    - uses: actions/cache/restore@v6
-      with:
-        path: ~/.nuget/packages
-        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
-        restore-keys: |
-          nuget-${{ runner.os }}-
     - uses: actions/download-artifact@v8
       with:
         name: jularr-build
@@ -22,3 +16,10 @@ runs:
     - name: Unpack the build into the workspace
       shell: bash
       run: tar -xzf "${RUNNER_TEMP}/jularr-build/jularr-build.tgz" -C "${GITHUB_WORKSPACE}"
+    # After the unpack, so the project files exist and the key equals the one smoke saved.
+    - uses: actions/cache/restore@v6
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
