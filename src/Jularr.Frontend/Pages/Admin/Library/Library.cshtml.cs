@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.IO;
+using System.Text.Encodings.Web;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
@@ -25,7 +27,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
         ApplyLibraryRenamesV1 applyRenames, ReadReplacementSettingsV1 readReplacement, UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
-        QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, FrontendAssets assets, IAntiforgery antiforgery, UiText texts) : JularrPage
+        QueueLibraryScanV1 queueScan, CreateLibraryRootV1 createLibraryRoot, ReadStorageDirectoriesV1 readDirectories, FrontendAssets assets,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private IReadOnlyList<LibraryOverviewV1>? _overview;
         private ReplacementSettingsV1? _replacement;
@@ -53,6 +56,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
             page.Title("library.tab." + Tab);
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Library/Library.entry.scss");
+            page.Asset("Framework/Components/FolderPicker.entry.ts");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // Every library with what it holds; new ones are added with their storage.
@@ -263,6 +267,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype])));
             var mountOptions = (_mounts?.Items ?? []).Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name));
 
+            var relativePath = _libraryInput?.RelativePath ?? "";
+            var browseUrl = Address(handler: "Folders") + "&storageMountId=";
             return new Div(
                 Modal.Opener(new Button(new Icon("plus", assets, 18), new Text("library.add")).Primary(), "library-add"),
                 new Modal(assets, "library-add", "library.add", [
@@ -272,7 +278,9 @@ namespace Jularr.Frontend.Pages.Admin.Library
                         form.Text(item => item.Name, "library.name");
                         form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
                         form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
-                        form.Text(item => item.RelativePath, "library.path");
+                        form.Hidden(item => item.RelativePath);
+                        form.Content(new FolderPicker(browseUrl, relativePath, nameof(CreateLibraryRootDataV1.RelativePath), browseUrl,
+                            storageMountFieldName: nameof(CreateLibraryRootDataV1.StorageMountId)));
                         form.Submit("library.add");
                     }, Address(handler: "CreateLibraryRoot"), csrf, _libraryInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, 0, ""), _libraryInput is null ? null : FormError)
                 ])
@@ -292,6 +300,18 @@ namespace Jularr.Frontend.Pages.Admin.Library
             var result = await createLibraryRoot.ExecuteAsync<CreateLibraryRootResultV1>(new CreateLibraryRootParametersV1(), _libraryInput, HttpContext.RequestAborted);
             Hint("library.added");
             return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnGetFoldersAsync([BindRequired] long storageMountId, string? path, string? afterName)
+        {
+            Response.Headers.CacheControl = "no-store";
+            var directories = await readDirectories.ExecuteAsync<BaseDataList<StorageDirectoryV1>>(new StorageMountParametersV1(storageMountId),
+                new ReadStorageDirectoriesDataV1(path ?? "", afterName), HttpContext.RequestAborted);
+            using var writer = new StringWriter(CultureInfo.InvariantCulture);
+            FolderPicker.Directories(Address(handler: "Folders", storageMountId: storageMountId, path: path ?? ""), path ?? "", directories.Select(directory => directory.Name).ToArray(), texts,
+                afterName, directories.Count == StorageDirectoryV1.PageSize)
+                .WriteTo(writer, HtmlEncoder.Default, texts);
+            return Content(writer.ToString(), "text/html; charset=utf-8");
         }
 
         public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version, bool unmonitorsDeletedUnits)
@@ -336,8 +356,10 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
         private bool CanRename => texts.CanManageStorage();
 
-        private string Address(int? pageNumber = null, string? handler = null) =>
+        private string Address(int? pageNumber = null, string? handler = null, long? storageMountId = null, string? path = null) =>
             (Tab == LibraryTab.Overview ? "/Admin/Library" : "/Admin/Library/" + Tab) + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture)
-            + (RootId is { } root ? "&root=" + root.ToString(CultureInfo.InvariantCulture) : "") + (handler is null ? "" : "&handler=" + handler);
+            + (RootId is { } root ? "&root=" + root.ToString(CultureInfo.InvariantCulture) : "") + (handler is null ? "" : "&handler=" + handler)
+            + (storageMountId is { } id ? "&storageMountId=" + id.ToString(CultureInfo.InvariantCulture) : "")
+            + (path is { } p ? "&path=" + Uri.EscapeDataString(p) : "");
     }
 }
