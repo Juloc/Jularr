@@ -72,15 +72,15 @@ namespace Jularr.E2E.Tests
                 """);
             await page.GotoAsync("/Admin/Catalog");
 
-            // Seven catalogs, each a section with an icon tile and its display name; no section is headed by a raw key.
-            var titles = page.Locator(".ui-section__title");
-            await Assertions.Expect(titles).ToHaveCountAsync(7);
+            // Seven catalogs, each a row with an icon tile and its display name; no row is named by a raw key.
+            var catalogRows = page.Locator(".list-body .list-row");
+            await Assertions.Expect(catalogRows).ToHaveCountAsync(7);
             foreach (var name in new[] { "TMDB films", "TMDB series", "AniList", "TVDB", "Open Library", "MusicBrainz", "IGDB" })
             {
-                await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = name, Exact = true })).ToHaveCountAsync(1);
+                await Assertions.Expect(catalogRows.Filter(new() { HasText = name })).ToHaveCountAsync(1);
             }
 
-            await Assertions.Expect(page.Locator(".ui-section__title .icon-tile .ui-icon")).ToHaveCountAsync(7);
+            await Assertions.Expect(catalogRows.Locator(".icon-tile .ui-icon")).ToHaveCountAsync(7);
             var text = await page.Locator("#app-content").InnerTextAsync();
             foreach (var key in new[] { "tmdb_movie", "tmdb_tv", "tvdb", "openlibrary", "musicbrainz", "igdb", "anilist", "admin.catalog." })
             {
