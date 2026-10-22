@@ -25,15 +25,14 @@ function showModal(dialog: HTMLDialogElement): void {
 }
 
 onPage(import.meta.url, () => {
-    document.querySelectorAll<HTMLDialogElement>('dialog.drawer[open]').forEach(showModal);
-});
+    document.querySelectorAll<HTMLDialogElement>('dialog.drawer[open], dialog.drawer[data-drawer-auto]').forEach(showModal);
+}, { partial: true });
 
 // A panel that belongs to an address (a row's `?operation=`) leaves it behind when it closes, without loading the page again.
 document.addEventListener('close', event => {
     const dialog = event.target;
     if (dialog instanceof HTMLDialogElement && dialog.dataset.drawerReturn) history.replaceState(history.state, '', dialog.dataset.drawerReturn);
 }, true);
-
 document.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const opener = event.target.closest<HTMLElement>('[data-drawer-open]');
@@ -70,8 +69,3 @@ document.addEventListener('click', event => {
         dialog.close();
     }
 }, true);
-
-// A drawer whose form the server answered with an error opens again, so the error is seen where it was made.
-onPage(import.meta.url, () => {
-    document.querySelectorAll<HTMLDialogElement>('dialog.drawer[data-drawer-auto]').forEach(dialog => { if (!dialog.open) dialog.showModal(); });
-});

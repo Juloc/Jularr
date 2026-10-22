@@ -32,7 +32,7 @@ namespace Jularr.Backend.Service.User.Media.V1
         {
             var settings = await Context.ReadCoverCacheSettingsAsync(CancellationToken);
             var accepts = CoverPaths.Accepts(_http.HttpContext?.Request.Headers.Accept.ToString());
-            var found = await _covers.ReadExternalAsync(Parameters.U, Parameters.W, accepts, settings.MaximumMegabytes > 0, CancellationToken);
+            var found = await _covers.ReadExternalAsync(Parameters.U, Parameters.W, accepts, settings.FormatId, settings.MaximumMegabytes > 0, CancellationToken);
             Stream content = found.Path is { } path ? File.OpenRead(path) : new MemoryStream(found.Bytes!);
             return new WorkCoverFileV1(content, found.ContentType, found.ETag, found.LastModified, false, TimeSpan.FromHours(1));
         }
@@ -81,10 +81,10 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             var info = await Context.ReadSql.ReadOptionalAsync<WorkCoverFileInfoData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The cover was not found.");
             var accepts = CoverPaths.Accepts(_http.HttpContext?.Request.Headers.Accept.ToString());
-            var found = _covers.Find(Parameters.WorkId, kind, unitId, width, info.ContentType, accepts) ?? throw new KeyNotFoundException("The cover was not found.");
-            var written = new DateTimeOffset(File.GetLastWriteTimeUtc(found.Path), TimeSpan.Zero);
+            var found = await _covers.FindAsync(Parameters.WorkId, kind, unitId, width, info.ContentType, accepts, CancellationToken) ?? throw new KeyNotFoundException("The cover was not found.");
+            Stream content = found.Path is { } path ? File.OpenRead(path) : new MemoryStream(found.Bytes!);
             var tag = "\"" + info.Version + (width?.ToString(CultureInfo.InvariantCulture) ?? "o") + CoverPaths.ETagSuffix(found.ContentType) + "\"";
-            return new WorkCoverFileV1(File.OpenRead(found.Path), found.ContentType, tag, written, Parameters.V == info.Version);
+            return new WorkCoverFileV1(content, found.ContentType, tag, found.LastModified, Parameters.V == info.Version);
         }
     }
 }

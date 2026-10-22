@@ -12,6 +12,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField SeasonNumber = new() { Minimum = 1 };
         public static readonly IntField Episodes = new() { Minimum = 0 };
         public static readonly IntArrayField CandidateIds = new();
+        public static readonly IntArrayField ProviderIds = new() { Minimum = 1 };
         public static readonly StringArrayField CandidateLabels = new() { ItemMaximumLength = 500 };
         public static readonly BoolField IsDismissed = new();
         public static readonly BoolField IsManual = new();

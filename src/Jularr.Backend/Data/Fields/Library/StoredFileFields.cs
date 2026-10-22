@@ -39,6 +39,8 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly IntField UpdatedCount = new() { Minimum = 0 };
         public static readonly IntField PageCount = new() { Minimum = 1, Required = false };
         public static readonly StringField TrackLanguages = new() { MaximumLength = 4000, Required = false };
+        // The languages a person chose for a file, three-letter codes of FileLanguages.
+        public static readonly StringArrayField ChosenLanguages = new() { ItemMaximumLength = 3, MaximumLength = 12 };
         public static readonly StringField AudioLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 3, MinimumLength = 3, Required = false, Trim = true };
 
         // Subtitles searched by hand.

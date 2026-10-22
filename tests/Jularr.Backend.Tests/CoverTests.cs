@@ -6,6 +6,7 @@ using System.Text;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
@@ -77,7 +78,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Cover_WithFfmpeg_KeepsJpegWidthsBesideTheOriginal()
+        public async Task Cover_WithFfmpeg_KeepsOneWebPWidthBesideTheOriginal_AndConvertsOlderFormats()
         {
             // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable.
             var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
@@ -87,29 +88,45 @@ namespace Jularr.Backend.Tests
                 return;
             }
 
-            var images = new FakeImages { Payload = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==") };
-            await using var host = await CreateHostAsync(images, new Dictionary<string, string> { ["Media:FfmpegPath"] = ffmpeg });
+            var images = new FakeImages { Payload = Convert.FromBase64String(OnePixelPng) };
+            await using var host = await CreateHostAsync(images, new Dictionary<string, string> { ["Media:FfmpegPath"] = ffmpeg, ["Media:CjxlPath"] = "" });
             var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
-            foreach (var name in new[] { "poster.png", "poster-250.jpg", "poster-250.webp", "poster-500.jpg", "backdrop-500.webp", "backdrop-1280.jpg" })
+            var folder = Path.Combine(root, workId.ToString());
+
+            // Without cjxl the one format is WebP: no JPEG XL and no JPEG beside it.
+            foreach (var name in new[] { "poster.png", "poster-250.webp", "poster-500.webp", "backdrop-500.webp", "backdrop-1280.webp" })
             {
-                Assert.IsTrue(File.Exists(Path.Combine(root, workId.ToString(), name)), name);
+                Assert.IsTrue(File.Exists(Path.Combine(folder, name)), name);
             }
 
+            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jxl").Count() + Directory.EnumerateFiles(folder, "*.jpg").Count());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
+
+            // A browser that names WebP is given the stored file; one that does not gets a JPEG made for that answer, kept nowhere.
             var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
             var narrowAddress = poster.Replace("poster?", "poster-250?", StringComparison.Ordinal);
-            using var narrow = await host.SendAsync(HttpMethod.Get, narrowAddress);
-            Assert.AreEqual("image/jpeg", narrow.Content.Headers.ContentType!.MediaType);
-
-            // A browser that takes WebP is given WebP; the format is chosen by its Accept header.
-            using var request = new HttpRequestMessage(HttpMethod.Get, narrowAddress);
-            request.Headers.Accept.ParseAdd("image/avif,image/webp,*/*");
-            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
-            using var modern = await host.Client.SendAsync(request);
+            using var modern = await GetAsync(host, narrowAddress, "image/avif,image/webp,*/*");
             Assert.AreEqual("image/webp", modern.Content.Headers.ContentType!.MediaType);
             Assert.AreEqual("Accept", modern.Headers.Vary.Single());
+            using var plain = await host.SendAsync(HttpMethod.Get, narrowAddress);
+            Assert.AreEqual("image/jpeg", plain.Content.Headers.ContentType!.MediaType);
+            Assert.IsTrue(CoverPaths.IsFormat(await plain.Content.ReadAsByteArrayAsync(), "jpg"));
+            Assert.AreNotEqual(modern.Headers.ETag, plain.Headers.ETag);
+            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jpg").Count());
+
+            // The backfill makes a width kept in an older format into the chosen one: the JPEG leaves once the WebP is written and checked.
+            var poster250 = Path.Combine(folder, "poster-250.webp");
+            File.Delete(poster250);
+            await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.jpg"), [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
+            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = NULL WHERE \"CoverKindId\" = 1");
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<ConvertCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default));
+            Assert.IsTrue(CoverPaths.IsFormat(await File.ReadAllBytesAsync(poster250), "webp"));
+            Assert.IsFalse(File.Exists(Path.Combine(folder, "poster-250.jpg")));
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
         }
 
         [TestMethod]
@@ -151,7 +168,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Cover_WithFfmpegAndCjxl_KeepsJxlWidthsBesideWebPAndJpeg()
+        public async Task Cover_WithFfmpegAndCjxl_KeepsOnlyJxlWidths_AndAnswersOtherBrowsersWithWebPOrJpeg()
         {
             // Opt-in: JULARR_TEST_FFMPEG and JULARR_TEST_CJXL name the executables; CI and the image have them.
             var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
@@ -168,19 +185,60 @@ namespace Jularr.Backend.Tests
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
-            foreach (var name in new[] { "poster-250.jxl", "poster-250.webp", "poster-250.jpg", "poster-500.jxl", "backdrop-500.jxl", "backdrop-1280.jxl" })
+            var folder = Path.Combine(root, workId.ToString());
+            foreach (var name in new[] { "poster-250.jxl", "poster-500.jxl", "backdrop-500.jxl", "backdrop-1280.jxl" })
             {
-                Assert.IsTrue(File.Exists(Path.Combine(root, workId.ToString(), name)), name);
+                Assert.IsTrue(File.Exists(Path.Combine(folder, name)), name);
             }
 
-            Assert.IsFalse(Directory.EnumerateFiles(Path.Combine(root, workId.ToString()), "*.partial*").Any());
+            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.webp").Count() + Directory.EnumerateFiles(folder, "*.jpg").Count());
+            Assert.IsFalse(Directory.EnumerateFiles(folder, "*.partial*").Any());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 1"));
             var poster = (string)(await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"))!;
-            using var request = new HttpRequestMessage(HttpMethod.Get, poster.Replace("poster?", "poster-250?", StringComparison.Ordinal));
-            request.Headers.Accept.ParseAdd("image/jxl,image/webp,*/*");
-            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
-            using var served = await host.Client.SendAsync(request);
+            var narrowAddress = poster.Replace("poster?", "poster-250?", StringComparison.Ordinal);
+            using var served = await GetAsync(host, narrowAddress, "image/jxl,image/webp,*/*");
             Assert.AreEqual("image/jxl", served.Content.Headers.ContentType!.MediaType);
             Assert.IsTrue(IsJxl(await served.Content.ReadAsByteArrayAsync()));
+
+            // A browser without JPEG XL is answered by conversion on the fly, WebP when it names it, else JPEG; nothing of it is kept.
+            using var webp = await GetAsync(host, narrowAddress, "image/webp,*/*");
+            Assert.AreEqual("image/webp", webp.Content.Headers.ContentType!.MediaType);
+            using var jpeg = await GetAsync(host, narrowAddress, null);
+            Assert.AreEqual("image/jpeg", jpeg.Content.Headers.ContentType!.MediaType);
+            Assert.AreEqual(3, new[] { served, webp, jpeg }.Select(response => response.Headers.ETag!.Tag).Distinct().Count());
+            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.webp").Count() + Directory.EnumerateFiles(folder, "*.jpg").Count());
+
+            // Choosing WebP makes the backfill re-encode the JPEG XL widths and remove them once the WebP files are written and checked.
+            using var current = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/covers");
+            var settings = (await current.Content.ReadFromJsonAsync<CoverCacheV1>())!;
+            Assert.AreEqual((CoverFormat.Jxl, CoverFormat.Jxl), (settings.FormatId, settings.ActiveFormatId));
+            using var chosen = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(settings.KeepDays, settings.MaximumMegabytes, CoverFormat.WebP, settings.Version));
+            Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
+            for (var pass = 0; pass < 4; pass++)
+            {
+                await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<ConvertCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default));
+            }
+
+            foreach (var name in new[] { "poster-250.webp", "poster-500.webp", "backdrop-500.webp", "backdrop-1280.webp" })
+            {
+                Assert.IsTrue(File.Exists(Path.Combine(folder, name)), name);
+            }
+
+            Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jxl").Count());
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
+        }
+
+        private static async Task<HttpResponseMessage> GetAsync(Host host, string address, string? accept)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, address);
+            if (accept is not null)
+            {
+                request.Headers.Accept.ParseAdd(accept);
+            }
+
+            request.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            return await host.Client.SendAsync(request);
         }
 
         [TestMethod]
@@ -344,9 +402,9 @@ namespace Jularr.Backend.Tests
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/covers");
             var settings = (await read.Content.ReadFromJsonAsync<CoverCacheV1>())!;
             Assert.AreEqual((14, 500), (settings.KeepDays, settings.MaximumMegabytes));
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 50, settings.Version));
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 50, CoverFormat.Jxl, settings.Version));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 50, settings.Version));
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 50, CoverFormat.Jxl, settings.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             File.SetLastWriteTimeUtc(kept, DateTime.UtcNow.AddDays(-2));
             await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<CleanCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default));
@@ -361,11 +419,184 @@ namespace Jularr.Backend.Tests
             // With a size of zero nothing is kept, the image is still passed on.
             using var current = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/catalog/covers");
             var version = (await current.Content.ReadFromJsonAsync<CoverCacheV1>())!.Version;
-            using var none = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 0, version));
+            using var none = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/catalog/covers", new UpdateCoverCacheDataV1(3, 0, CoverFormat.Jxl, version));
             Assert.AreEqual(HttpStatusCode.OK, none.StatusCode);
             using var passed = await host.SendAsync(HttpMethod.Get, address);
             Assert.AreEqual(HttpStatusCode.OK, passed.StatusCode);
             Assert.IsFalse(Directory.EnumerateFiles(Path.Combine(root, "external"), "*", SearchOption.AllDirectories).Any());
+        }
+
+        [TestMethod]
+        public void CoverPaths_StoredFormat_IsServedToBrowsersThatTakeIt_AndDerivedForTheOthers()
+        {
+            // One stored file answers when its format is taken; the older triple still resolves to the best taken one.
+            Assert.AreEqual("jxl", CoverPaths.Serve(["jxl"], CoverFormats.Jxl));
+            Assert.AreEqual("jxl", CoverPaths.Serve(["jpg", "webp", "jxl"], CoverFormats.Jxl | CoverFormats.WebP));
+            Assert.AreEqual("webp", CoverPaths.Serve(["webp"], CoverFormats.WebP));
+            Assert.AreEqual("jpg", CoverPaths.Serve(["webp", "jpg"], CoverFormats.Jxl));
+            Assert.IsNull(CoverPaths.Serve(["jxl"], CoverFormats.None));
+            Assert.IsNull(CoverPaths.Serve(["webp"], CoverFormats.Jxl));
+            Assert.IsNull(CoverPaths.Serve([], CoverFormats.Jxl | CoverFormats.WebP));
+
+            // What a browser that takes none of them gets: WebP when it names it, else JPEG.
+            Assert.AreEqual("webp", CoverPaths.Derive(CoverFormats.WebP));
+            Assert.AreEqual("webp", CoverPaths.Derive(CoverFormats.Jxl | CoverFormats.WebP));
+            Assert.AreEqual("jpg", CoverPaths.Derive(CoverFormats.Jxl));
+            Assert.AreEqual("jpg", CoverPaths.Derive(CoverFormats.None));
+
+            // A width is made in the chosen format, then in what the tools can still make, never in a better one.
+            CollectionAssert.AreEqual(new[] { "jxl", "webp", "jpg" }, CoverPaths.Extensions(CoverFormat.Jxl).ToArray());
+            CollectionAssert.AreEqual(new[] { "webp", "jpg" }, CoverPaths.Extensions(CoverFormat.WebP).ToArray());
+
+            // A written file counts only when its first bytes name its format.
+            Assert.IsTrue(CoverPaths.IsFormat([0xFF, 0x0A, 1, 2], "jxl"));
+            Assert.IsTrue(CoverPaths.IsFormat([0, 0, 0, 12, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 0x0D], "jxl"));
+            Assert.IsTrue(CoverPaths.IsFormat("RIFF\0\0\0\0WEBPVP8 "u8, "webp"));
+            Assert.IsTrue(CoverPaths.IsFormat([0xFF, 0xD8, 0xFF, 0xE0], "jpg"));
+            Assert.IsFalse(CoverPaths.IsFormat([0xFF, 0xD8, 0xFF, 0xE0], "webp"));
+            Assert.IsFalse(CoverPaths.IsFormat("RIFF\0\0\0\0WAVEfmt "u8, "webp"));
+            Assert.IsFalse(CoverPaths.IsFormat([], "jxl"));
+        }
+
+        [TestMethod]
+        public void CoverStore_EffectiveFormat_IsJxlOnlyWhereCjxlIsThere_ElseWebP()
+        {
+            CoverStore Store(JxlEncoder encoder) => new(Options.Create(new MediaOptions()), null!, new MediaTranscoder(), encoder, Microsoft.Extensions.Logging.Abstractions.NullLogger<CoverStore>.Instance);
+            Assert.AreEqual(CoverFormat.WebP, Store(new JxlEncoder()).EffectiveFormat(CoverFormat.Jxl));
+            Assert.AreEqual(CoverFormat.Jxl, Store(new JxlEncoder { ExecutablePath = "cjxl" }).EffectiveFormat(CoverFormat.Jxl));
+            Assert.AreEqual(CoverFormat.WebP, Store(new JxlEncoder { ExecutablePath = "cjxl" }).EffectiveFormat(CoverFormat.WebP));
+            Assert.IsFalse(Store(new JxlEncoder()).CanScale);
+        }
+
+        [TestMethod]
+        public async Task CoverStore_WithFfmpeg_ConvertsAWidthToWebP_ServesItAndDerivesForOtherBrowsers()
+        {
+            // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable; no database needed.
+            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
+            if (string.IsNullOrEmpty(ffmpeg))
+            {
+                Assert.Inconclusive("JULARR_TEST_FFMPEG is not configured.");
+                return;
+            }
+
+            var root = Directory.CreateTempSubdirectory("jularr-covers").FullName;
+            try
+            {
+                var store = new CoverStore(Options.Create(new MediaOptions { CoversPath = root }), null!, new MediaTranscoder { ExecutablePath = ffmpeg }, new JxlEncoder(),
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<CoverStore>.Instance);
+                var folder = Directory.CreateDirectory(Path.Combine(root, "7")).FullName;
+                await File.WriteAllBytesAsync(Path.Combine(folder, "poster.png"), Convert.FromBase64String(OnePixelPng));
+                await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.jpg"), [0xFF, 0xD8, 0xFF, 0xE0, 1]);
+                await File.WriteAllBytesAsync(Path.Combine(folder, "poster-500.jpg"), [0xFF, 0xD8, 0xFF, 0xE0, 1]);
+
+                // Both widths are made in WebP from the download, then the JPEGs leave; the download stays.
+                var cover = new WorkCoverConvertData(7, CoverKind.Poster, null, "image/png", "abc");
+                Assert.IsTrue(await store.ConvertAsync(cover, store.EffectiveFormat(CoverFormat.Jxl), default));
+                foreach (var width in new[] { "250", "500" })
+                {
+                    Assert.IsTrue(CoverPaths.IsFormat(await File.ReadAllBytesAsync(Path.Combine(folder, "poster-" + width + ".webp")), "webp"));
+                    Assert.IsFalse(File.Exists(Path.Combine(folder, "poster-" + width + ".jpg")));
+                }
+
+                Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
+                Assert.IsFalse(Directory.EnumerateFiles(folder, "*.partial*").Any());
+
+                // Converting again changes nothing; a browser that names WebP gets the file, any other a JPEG made for it and kept nowhere.
+                Assert.IsTrue(await store.ConvertAsync(cover, CoverFormat.WebP, default));
+                var webp = await store.FindAsync(7, CoverKind.Poster, null, 250, "image/png", CoverFormats.WebP, default);
+                Assert.AreEqual("image/webp", webp!.ContentType);
+                Assert.IsNotNull(webp.Path);
+                var plain = await store.FindAsync(7, CoverKind.Poster, null, 250, "image/png", CoverFormats.None, default);
+                Assert.AreEqual("image/jpeg", plain!.ContentType);
+                Assert.IsNull(plain.Path);
+                Assert.IsTrue(CoverPaths.IsFormat(plain.Bytes!, "jpg"));
+                Assert.AreEqual(0, Directory.EnumerateFiles(folder, "*.jpg").Count());
+                var original = await store.FindAsync(7, CoverKind.Poster, null, null, "image/png", CoverFormats.None, default);
+                Assert.AreEqual("image/png", original!.ContentType);
+            }
+            finally
+            {
+                Directory.Delete(root, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task CoverBackfill_ConvertsOnlyWhatIsNotInTheChosenFormat_AndNeverRemovesBeforeTheNewFileExists()
+        {
+            // Tools that cannot run: the files are fakes, the job's decisions are what is checked. Without a cjxl that runs, the one format the widths are kept in is WebP.
+            var missing = Path.Combine(Path.GetTempPath(), "jularr-no-tool-" + Guid.NewGuid().ToString("N"));
+            await using var host = await CreateHostAsync(new FakeImages(), new Dictionary<string, string> { ["Media:FfmpegPath"] = missing, ["Media:CjxlPath"] = missing });
+            var root = host.Services.GetRequiredService<IOptions<MediaOptions>>().Value.CoversPath;
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            var folder = Path.Combine(root, workId.ToString());
+
+            // New covers are recorded in the format they were made for, even when no tool could make the widths.
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
+
+            // Covers from before: the triple of formats, no recorded format.
+            foreach (var name in new[] { "poster-250.webp", "poster-250.jpg", "poster-500.webp", "poster-500.jpg", "poster-250.jxl", "poster-500.jxl" })
+            {
+                await File.WriteAllBytesAsync(Path.Combine(folder, name), [1, 2, 3]);
+            }
+
+            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = NULL WHERE \"CoverKindId\" = 1");
+            Assert.IsFalse((await ConvertAsync(host)).Success, "One pass takes the whole cover and nothing else is waiting.");
+
+            // The poster's widths are already WebP: the other formats of them leave, the download stays, the cover is recorded.
+            foreach (var name in new[] { "poster-250.webp", "poster-500.webp", "poster.png" })
+            {
+                Assert.IsTrue(File.Exists(Path.Combine(folder, name)), name);
+            }
+
+            foreach (var name in new[] { "poster-250.jxl", "poster-250.jpg", "poster-500.jxl", "poster-500.jpg" })
+            {
+                Assert.IsFalse(File.Exists(Path.Combine(folder, name)), name);
+            }
+
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" IS NULL"));
+
+            // A width in JPEG XL only, WebP chosen, and no tool that can make it: nothing is removed, the cover is recorded and not tried again until the choice changes.
+            File.Delete(Path.Combine(folder, "poster-250.webp"));
+            await File.WriteAllBytesAsync(Path.Combine(folder, "poster-250.jxl"), [1, 2, 3]);
+            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = 1 WHERE \"CoverKindId\" = 1");
+            await ConvertAsync(host);
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster-250.jxl")), "The old width stays when the new one could not be written.");
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster.png")));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
+            await ConvertAsync(host);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" = 2"));
+
+            // The sweep knows every extension a width may have and still removes what no cover refers to.
+            var stale = Path.Combine(folder, "unit-77-250.jxl");
+            await File.WriteAllBytesAsync(stale, [1]);
+            File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddDays(-1));
+            File.SetLastWriteTimeUtc(Path.Combine(folder, "poster-250.jxl"), DateTime.UtcNow.AddDays(-1));
+            await RunAsync(host, scope => scope.ServiceProvider.GetRequiredService<CleanCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default));
+            Assert.IsFalse(File.Exists(stale));
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "poster-250.jxl")));
+        }
+
+        [TestMethod]
+        public async Task CoverBackfill_WithoutFfmpeg_ChangesNothing_AndIsAnOwnerVisibleJob()
+        {
+            await using var host = await CreateHostAsync(new FakeImages(), new Dictionary<string, string> { ["Media:FfmpegPath"] = "" });
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            await host.ScalarAsync("UPDATE \"WorkCovers\" SET \"FormatId\" = NULL");
+            Assert.IsFalse((await ConvertAsync(host)).Success);
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkCovers\" WHERE \"FormatId\" IS NULL"));
+
+            // The job is listed and may be run on request, paused while Jularr is used, like the other heavy ones.
+            var job = WorkerJobs.Definition("coverBackfill");
+            Assert.IsTrue(job.CanRunNow && job.CanPauseWhileUsed && job.PausesWhileUsedByDefault);
+        }
+
+        private static async Task<Jularr.Backend.Data.Common.UpdateResult> ConvertAsync(Host host)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<ConvertCoversV1>().ExecuteAsync<Jularr.Backend.Data.Common.UpdateResult>(new CoverParametersV1(), default);
         }
 
         [TestMethod]

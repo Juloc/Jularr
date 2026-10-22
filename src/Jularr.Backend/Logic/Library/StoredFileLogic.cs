@@ -16,7 +16,8 @@ namespace Jularr.Backend.Logic.Library
             sql.Statement =
                 """
                 INSERT INTO
-                    "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "ReleaseName", "ReleaseGroup", "QualityKey", "Edition", "Revision")
+                    "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "ReleaseName", "ReleaseGroup", "QualityKey", "Edition", "Revision", "ChosenAudioLanguages",
+                        "ChosenSubtitleLanguages")
                 SELECT
                     @LibraryRootId,
                     item."RelativePath",
@@ -27,10 +28,12 @@ namespace Jularr.Backend.Logic.Library
                     item."ReleaseGroup",
                     item."QualityKey",
                     item."Edition",
-                    item."Revision"
+                    item."Revision",
+                    item."ChosenAudioLanguages",
+                    item."ChosenSubtitleLanguages"
                 FROM
                     jsonb_to_recordset(@Files::jsonb) AS item("RelativePath" text, "SizeBytes" bigint, "ModifiedAt" timestamptz, "ReleaseName" text, "ReleaseGroup" text, "QualityKey" text,
-                        "Edition" text, "Revision" smallint)
+                        "Edition" text, "Revision" smallint, "ChosenAudioLanguages" varchar(3)[], "ChosenSubtitleLanguages" varchar(3)[])
                 ON CONFLICT ("LibraryRootId", "RelativePath") DO UPDATE
                 SET
                     "SizeBytes" = EXCLUDED."SizeBytes",
@@ -56,6 +59,14 @@ namespace Jularr.Backend.Logic.Library
                     "Revision" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" AND "StoredFiles"."ReleaseName" IS NOT NULL THEN "StoredFiles"."Revision"
                         ELSE EXCLUDED."Revision"
+                    END,
+                    "ChosenAudioLanguages" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN COALESCE(EXCLUDED."ChosenAudioLanguages", "StoredFiles"."ChosenAudioLanguages")
+                        ELSE EXCLUDED."ChosenAudioLanguages"
+                    END,
+                    "ChosenSubtitleLanguages" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN COALESCE(EXCLUDED."ChosenSubtitleLanguages", "StoredFiles"."ChosenSubtitleLanguages")
+                        ELSE EXCLUDED."ChosenSubtitleLanguages"
                     END,
                     "ProbedAt" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."ProbedAt"
@@ -244,12 +255,21 @@ namespace Jularr.Backend.Logic.Library
                 WHERE
                     file."Id" = @Id
                     AND file."SizeBytes" = @SizeBytes
-                    AND file."ModifiedAt" = @ModifiedAt;
+                    AND file."ModifiedAt" = @ModifiedAt
+                RETURNING
+                    COALESCE(file."ChosenAudioLanguages", '{}')::text[] AS "ChosenAudioLanguages",
+                    COALESCE(file."ChosenSubtitleLanguages", '{}')::text[] AS "ChosenSubtitleLanguages";
                 """;
             sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            if (await ctx.ReadOptionalAsync<StoredFileChosenLanguagesData>(sql, ct) is not { } chosen)
             {
                 return;
+            }
+
+            // What a person chose for the file outranks the languages its streams state.
+            if (FileLanguageChoice.Read(nameof(StoredFileProbeData.Tracks), chosen.ChosenAudioLanguages, chosen.ChosenSubtitleLanguages) is { } choice)
+            {
+                data = data.WithTracks(FileLanguageChoice.ApplyToTracks(data.Tracks, choice));
             }
 
             sql = new SqlStatement();

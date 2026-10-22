@@ -1,4 +1,22 @@
+.speech-models-toolbar {
+    .list-toolbar__tools { flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+    .search-box { flex: 1 1 14rem; }
+    .choice-select { flex: 1 1 9rem; min-width: 0; }
+    .choice-select__control { width: 100%; max-width: none; }
+}
+
+.speech-models {
+    --list-columns: minmax(12rem, 1fr) 5rem 5rem 11rem minmax(18rem, auto);
+    --list-columns-medium: minmax(12rem, 1fr) 11rem minmax(16rem, auto);
+    --list-columns-narrow: minmax(12rem, 1fr) 11rem minmax(16rem, auto);
+}
+
 .speech-models__metadata {
-    max-inline-size: 18rem;
     overflow-wrap: anywhere;
+}
+
+.speech-models__sample {
+    display: grid;
+    gap: .35rem;
+    justify-items: start;
 }

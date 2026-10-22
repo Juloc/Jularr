@@ -38,7 +38,8 @@ namespace Jularr.Backend.Service.User.Speech.V1
             return new BaseDataList<SpeechModelV1>(catalog.Where(model => states.ContainsKey(model.Sha256) && File.Exists(_files.PathFor(model.Sha256))
                 && new FileInfo(_files.PathFor(model.Sha256)).Length == model.SizeBytes)
                 .Select(model => new SpeechModelV1(model.Id, model.Version, model.Name, model.Language, model.Voice, model.License, model.LicenseUrl.AbsoluteUri,
-                    model.Source.AbsoluteUri, model.SizeBytes, model.Sha256, true, states[model.Sha256].Version)));
+                    model.Source.AbsoluteUri, model.SizeBytes, model.Sha256, true, states[model.Sha256].Version, model.RequiresLicenseAcceptance, model.SampleUrl?.AbsoluteUri,
+                    model.Gender, model.GenderSource?.AbsoluteUri, isInstalled: true)));
         }
     }
 

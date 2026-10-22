@@ -28,7 +28,7 @@ Playback gates playback. Disabling a module retains data. Public presentation ex
 capabilities expose implemented grants, and Razor consumes both. Setup module
 progress, per-media/profile visibility and Tracking remain pending.
 
-`Media.sql` also holds `WorkCovers` (the provider address, content type and version of a stored poster, backdrop, season poster or episode still; the files live under `<data>/covers/<WorkId>/`, never in a library) and the singleton `CoverCacheSettings` (days and megabytes of the cache of images of titles that are not Works).
+`Media.sql` also holds `WorkCovers` (the provider address, content type and version of a stored poster, backdrop, season poster or episode still; the files live under `<data>/covers/<WorkId>/`, never in a library) and the singleton `CoverCacheSettings` (days and megabytes of the cache of images of titles that are not Works, and the one format covers are kept in).
 
 `Media.sql` holds the typed relations between Works as one table, `WorkRelations` (what the related title is to the Work, its source, and whether a person hid a provider's relation), and the view `WorkRelationLinks` that gives each relation to both Works, the other side with the inverse type.
 
@@ -107,7 +107,7 @@ GameSaves keep a profile's save memory and one save state per game file, opaque 
 server; a game's play time is its MediaProgress of type Game. Instance.sql seeds the
 Emulation module for them. ProviderProfileLinks tie a Jellyfin or Emby user to the profile
 it shares progress with, and ProviderProgress keeps the state last agreed per server item
-(ProgressSync module, off by default).
+(ProgressSync module, off by default). The AniList module (off by default, needs Library) holds the relations read for matched titles; with ProgressSync also on, it holds each profile's AniList account.
 
 `Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative

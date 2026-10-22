@@ -29,7 +29,7 @@ namespace Jularr.Frontend.Pages.User.Details
         ReadUiLocalesV1 locales, ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
         ReadWorkRecommendationsV1 readRecommendations, ReadWorkRelationsV1 readRelations, AdminServices.CreateWorkRelationV1 createRelation, AdminServices.DeleteWorkRelationV1 deleteRelation, SuggestDiscoverV1 suggest,
-        ReadDiscoverScopesV1 readScopes, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        ReadDiscoverScopesV1 readScopes, RequestDiscoverCatalogItemV1 requestCatalog, RequestDiscoverItemV1 requestTmdb, UpdateWorkProgressV1 updateProgress, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
         private IReadOnlyList<DiscoverScopeV1> _scopes = [];
@@ -163,6 +163,30 @@ namespace Jularr.Frontend.Pages.User.Details
             await deleteRelation.ExecuteAsync<UpdateResult>(new AdminMedia.WorkRelationParametersV1(Id, workRelationId), default, HttpContext.RequestAborted);
             Hint("details.relation.removed");
             return LocalRedirect(Address(query => query["tab"] = "related"));
+        }
+
+        // A related title that is no Work is requested from its row as Discover would, in the profile's language; the row then shows the Work with its state.
+        public async Task<IActionResult> OnPostRequestRelatedAsync([BindRequired] string @namespace, [BindRequired] string externalId)
+        {
+            var ct = HttpContext.RequestAborted;
+            var related = (await readRelations.ExecuteAsync<BaseDataList<WorkRelationV1>>(new WorkParametersV1(Id), ct))
+                .FirstOrDefault(relation => relation.RelatedWorkId is null && relation.Namespace == @namespace && relation.ExternalId == externalId) ?? throw new KeyNotFoundException("The relation was not found.");
+            var languages = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: ct);
+            var language = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase)) ?? languages.First();
+            if (@namespace is "tmdb_movie" or "tmdb_tv" && int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId))
+            {
+                await requestTmdb.ExecuteAsync<CreateRequestResultV1>(new DiscoverItemParametersV1(related.MediaTypeId, tmdbId), new CreateRequestDataV1(language.Id), ct);
+            }
+            else
+            {
+                await requestCatalog.ExecuteAsync<CreateRequestResultV1>(new DiscoverParametersV1(), new RequestDiscoverCatalogDataV1(related.MediaTypeId, @namespace, externalId, language.Id, related.MediaSubtypeId), ct);
+            }
+
+            Hint("details.relation.requested");
+            _requestedRelation = (@namespace, externalId);
+            await LoadDataAsync();
+            PreparePage();
+            return Page();
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted, string? returnUrl = null)

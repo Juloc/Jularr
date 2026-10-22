@@ -79,9 +79,13 @@ namespace Jularr.Backend.Service.Core
             new("providerSyncEmby", WorkerGroupType.Provider, null, TimeSpan.Zero, canRunNow: false, parentKey: "providerSync"),
             new("usenet", WorkerGroupType.Usenet, null, TimeSpan.FromSeconds(6), canRunNow: false),
             new("aniListMatching", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(30), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
+            // The relations of the matched anime, manga and light novels; skipped while the AniList module is off.
+            new("aniListRelations", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(32), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Every profile's own AniList list and progress; waits while Jularr is used, as the other syncs do.
             new("aniListSync", WorkerGroupType.Media, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(45), canPauseWhileUsed: true),
             new("covers", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(35), canPauseWhileUsed: true),
+            // Brings stored covers into the Owner's format, a few at a time, and only while nobody uses Jularr.
+            new("coverBackfill", WorkerGroupType.Media, TimeSpan.FromMinutes(10), TimeSpan.FromSeconds(55), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             new("storage", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)),
             new("scanScheduling", WorkerGroupType.Storage, TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(15), canPauseWhileUsed: true, pausesWhileUsedByDefault: true),
             // Looks every half hour whether a backup is due; the Owner's interval says how old the newest may get.

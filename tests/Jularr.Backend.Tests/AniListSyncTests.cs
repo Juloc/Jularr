@@ -98,7 +98,12 @@ namespace Jularr.Backend.Tests
             // Off by default, and a profile needs the Owner's application.
             using var off = await host.SendAsync(HttpMethod.Get, Route);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('ProgressSync', 'Library')");
+
+            // The account part also needs the progress sync: AniList alone offers no account.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'AniList'");
+            using var withoutSync = await host.SendAsync(HttpMethod.Get, Route);
+            Assert.AreEqual(HttpStatusCode.Forbidden, withoutSync.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('ProgressSync', 'AniList', 'Library')");
             var unset = await ReadAsync(host);
             Assert.IsFalse(unset.IsConfigured);
             Assert.IsNull(unset.AuthorizationUrl);
@@ -240,7 +245,7 @@ namespace Jularr.Backend.Tests
                 Assert.IsFalse((await sync.ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default)).Success, "Nothing is connected, nothing to do.");
 
                 // Off, nothing is called and nothing is shown.
-                await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'ProgressSync'");
+                await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'AniList'");
                 var calls = anilist.Calls;
                 await Assert.ThrowsExactlyAsync<SecurityException>(() => sync.ExecuteAsync<UpdateResult>(new AniListSyncParametersV1(), default));
                 Assert.AreEqual(calls, anilist.Calls);

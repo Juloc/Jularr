@@ -2,7 +2,7 @@ using System.Text.Encodings.Web;
 
 namespace Jularr.Frontend.Framework
 {
-    public sealed record ChoiceOption(string LabelKey, string Value, bool Selected);
+    public sealed record ChoiceOption(string LabelKey, string Value, bool Selected, string? LabelValue = null);
 
     // One select in a GET form that reloads the page with the choice; other address values stay as hidden fields.
     // Script submits on change and hides the button, which keeps the select usable without it.
@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Framework
             parts.Add(new Label(new Text(labelKey)).Class("visually-hidden").Attribute("for", id));
             parts.Add(new Select([.. options.Select(option =>
             {
-                var item = new Option(new Text(option.LabelKey)).Attribute("value", option.Value);
+                var item = new Option(option.LabelValue is { } value ? new ValueText(value) : new Text(option.LabelKey)).Attribute("value", option.Value);
                 return (IUiComponent)(option.Selected ? item.Attribute("selected", "selected") : item);
             })]).Class("choice-select__control").Attribute("id", id).Attribute("name", name));
             parts.Add(new Button(new Text("common.apply")).Submit().Class("button button--compact choice-select__apply"));

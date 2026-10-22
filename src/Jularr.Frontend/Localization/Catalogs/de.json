@@ -1112,6 +1112,22 @@
    "Largest size in MB, 0 keeps none",
    "Größte Menge in MB, 0 speichert nichts"
   ],
+  "admin.catalog.coversFormat": [
+   "Cover format",
+   "Titelbild-Format"
+  ],
+  "admin.catalog.coversFormat.jxl": [
+   "JPEG XL",
+   "JPEG XL"
+  ],
+  "admin.catalog.coversFormat.webp": [
+   "WebP",
+   "WebP"
+  ],
+  "admin.catalog.coversFormatFallback": [
+   "JPEG XL is not available here, covers are kept as WebP",
+   "JPEG XL ist hier nicht verfügbar, Titelbilder werden als WebP gespeichert"
+  ],
   "form.time.hour": [
    "Hour",
    "Stunde"
@@ -6768,6 +6784,10 @@
    "Share watch progress with Jellyfin and Emby",
    "Wiedergabefortschritt mit Jellyfin und Emby teilen"
   ],
+  "instance.module.AniList": [
+   "Connect AniList accounts and keep AniList's relations of titles",
+   "AniList-Konten verbinden und die Beziehungen von AniList zu Titeln pflegen"
+  ],
   "unitGroups.title": [
    "Sections",
    "Abschnitte"
@@ -7423,6 +7443,26 @@
   "manualImport.kpi.left": [
    "Left out",
    "Ausgelassen"
+  ],
+  "manualImport.audioLanguages": [
+   "Audio languages",
+   "Tonspuren"
+  ],
+  "manualImport.subtitleLanguages": [
+   "Subtitle languages",
+   "Untertitel"
+  ],
+  "manualImport.languageWithSubtitles": [
+   "{0} · subtitles {1}",
+   "{0} · Untertitel {1}"
+  ],
+  "manualImport.finish": [
+   "Finish download",
+   "Download abschließen"
+  ],
+  "manualImport.importRest": [
+   "Import the rest",
+   "Rest importieren"
   ],
   "activity.importManually": [
    "Import by hand",
@@ -9940,6 +9980,10 @@
    "Provider covers",
    "Titelbilder der Anbieter"
   ],
+  "jobs.job.coverBackfill": [
+   "Cover conversion",
+   "Titelbilder umwandeln"
+  ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
@@ -10371,6 +10415,10 @@
   "jobs.about.covers": [
    "Fetches and renews the covers of titles from their providers.",
    "Lädt und erneuert die Cover von Titeln bei ihren Anbietern."
+  ],
+  "jobs.about.coverBackfill": [
+   "Converts stored covers into the chosen cover format, a few at a time.",
+   "Wandelt gespeicherte Titelbilder in das gewählte Format um, wenige auf einmal."
   ],
   "jobs.about.storage": [
    "Checks that the mounts and storage paths can be reached.",
@@ -11996,9 +12044,21 @@
    "Request",
    "Anfragen"
   ],
+  "details.relation.requested": [
+   "Requested",
+   "Angefragt"
+  ],
   "jobs.job.aniListSync": [
    "AniList sync",
    "AniList-Abgleich"
+  ],
+  "jobs.job.aniListRelations": [
+   "AniList relations",
+   "AniList-Beziehungen"
+  ],
+  "jobs.about.aniListRelations": [
+   "Reads the relations AniList names for matched titles and adds them to the library's relations.",
+   "Liest die Beziehungen, die AniList für zugeordnete Titel nennt, und ergänzt damit die Beziehungen der Bibliothek."
   ],
   "jobs.about.aniListSync": [
    "Reads each connected profile's AniList list, takes over what is watched or read there and sends the progress made here.",

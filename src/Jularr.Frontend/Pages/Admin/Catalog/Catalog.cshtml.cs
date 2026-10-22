@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Worker.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Instance.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Admin.Worker.V1;
@@ -57,13 +58,18 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             page.Content.AddRange(_syncs.Select(sync => Dialog(sync, token)));
 
             // The images of titles that are not Works are kept for a while and up to a size.
-            var covers = _coversDraft ?? new UpdateCoverCacheDataV1(_covers!.KeepDays, _covers.MaximumMegabytes, _covers.Version);
+            var covers = _coversDraft ?? new UpdateCoverCacheDataV1(_covers!.KeepDays, _covers.MaximumMegabytes, _covers.FormatId, _covers.Version);
             page.Content.Add(new UiSection("admin.catalog.covers", [
                 new Form<UpdateCoverCacheDataV1>(form =>
                 {
                     form.Hidden(item => item.Version);
                     form.Number(item => item.KeepDays, "admin.catalog.coversKeepDays", affix: FieldAffix.Unit("unit.days"));
                     form.Number(item => item.MaximumMegabytes, "admin.catalog.coversMaximumMegabytes", affix: FieldAffix.Unit("unit.megabytes"));
+                    form.Select(item => item.FormatId, "admin.catalog.coversFormat", [new(((byte)CoverFormat.Jxl).ToString(CultureInfo.InvariantCulture), texts["admin.catalog.coversFormat.jxl"]),
+                        new(((byte)CoverFormat.WebP).ToString(CultureInfo.InvariantCulture), texts["admin.catalog.coversFormat.webp"])]);
+
+                    // Where cjxl cannot run, the state says which format is really kept.
+                    if (_covers!.ActiveFormatId != _covers.FormatId) form.Note(new StateChip(new Text("admin.catalog.coversFormatFallback"), UiTone.Warning));
                     form.Save();
                 }, "/Admin/Catalog?handler=Covers", token, covers, _coversDraft is null ? null : FormError)]));
 
@@ -141,9 +147,9 @@ namespace Jularr.Frontend.Pages.Admin.Catalog
             return LocalRedirect("/Admin/Catalog");
         }
 
-        public async Task<IActionResult> OnPostCoversAsync(int keepDays, int maximumMegabytes, long version)
+        public async Task<IActionResult> OnPostCoversAsync(int keepDays, int maximumMegabytes, CoverFormat formatId, long version)
         {
-            _coversDraft = new UpdateCoverCacheDataV1(keepDays, maximumMegabytes, version);
+            _coversDraft = new UpdateCoverCacheDataV1(keepDays, maximumMegabytes, formatId, version);
             await updateCovers.ExecuteAsync<UpdateResult>(new ReadCoverCacheParametersV1(), _coversDraft, HttpContext.RequestAborted);
             return LocalRedirect("/Admin/Catalog");
         }
