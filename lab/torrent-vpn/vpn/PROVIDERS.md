@@ -53,11 +53,33 @@ Anbieter) oder ein anderer Anbieter mit Konfiguration im Gratis-Tarif.
 
 | Anbieter | Kostenlos | Konfigurationsdatei | Linux-Client | P2P im Gratis-Tarif | Bemerkung |
 | --- | --- | --- | --- | --- | --- |
-| Privado | 10 GB/Monat | nur Premium | nein, nur manuell | nicht zugesagt | die App baut die Konfiguration selbst |
-| hide.me | unbegrenzt | **ja** | App | prüfen | gut für den Konfigurationsweg |
-| Windscribe | begrenzt | **ja** | App und CLI | **nein** (im Gratis-Tarif deaktiviert) | gut für den Konfigurationsweg, nicht für Torrents |
-| Proton | unbegrenzt | **ja** | App und CLI | **nein** | dito |
+| Privado | 10 GB/Monat | nur Premium | nein, nur manuell | nicht zugesagt | aus Deutschland ist das Portal nicht erreichbar |
+| hide.me | unbegrenzt | **ja** | App und manuell (OpenVPN, IKEv2, WireGuard) | im Lab messen | Konto und Anleitungen aus Deutschland erreichbar |
+| Windscribe | begrenzt | **ja** | App und CLI | **nein** (im Gratis-Tarif deaktiviert) | der Konto-Host ist aus Deutschland blockiert |
+| Proton | unbegrenzt | **ja** | App und CLI | **nein** | Konto aus Deutschland erreichbar |
 | beliebiger Anbieter | je nach Anbieter | **ja** | – | je nach Anbieter | der tragfähige Weg für Gluetun |
+
+## Erreichbarkeit aus Deutschland (gemessen am 2026-10-22, Vodafone BW)
+
+Gemessen von diesem Rechner aus (öffentliche IP in Deutschland). TCP-Verbindung und
+TLS-Handshake wurden getrennt geprüft, weil ein Block sich je nach Ort unterschiedlich zeigt.
+
+| Anbieter | Website | Konto/Dashboard | Befund |
+| --- | --- | --- | --- |
+| Privado | ✓ | **✗** | `app.privadovpn.com`: TCP und TLS gehen, aber die HTTP-Antwort kommt nie – 25 s ohne Antwort. Marketingseite und Support-KB antworten. |
+| Windscribe | ✓ | **✗** | `my.windscribe.com`: der TLS-Handshake wird abgebrochen. |
+| hide.me | ✓ | ✓ | `member.hide.me` antwortet, die Linux-Anleitungen (OpenVPN, IKEv2, WireGuard) sind erreichbar |
+| Proton | ✓ | ✓ | `account.protonvpn.com` antwortet |
+| Mullvad, IVPN | ✓ | - | Seiten erreichbar, aber kein Gratis-Tarif |
+
+**Folge für Privado:** Das Portal antwortet aus Deutschland nicht – weder die App noch das
+Dashboard lassen sich anmelden. Damit ist die Frage nach der Konfiguration für Privado aus
+Deutschland praktisch erledigt: Der Generator nützt nichts, wenn das Konto nicht erreichbar ist.
+Der Weg für dieses Lab führt über einen Anbieter, dessen Konto erreichbar ist (hide.me, Proton)
+oder über eine fremde Leitung.
+
+Ob ein Anbieter Torrents durchlässt, misst das Lab selbst: der Torrent-Client im Tunnel zeigt
+es in den Raten und in der Anzahl der Peers.
 
 ## Der Weg, den das Lab prüft
 
