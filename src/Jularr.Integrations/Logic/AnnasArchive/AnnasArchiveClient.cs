@@ -20,6 +20,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         // The official mirrors of the source (https://annas-archive.gl/faq#mirrors); all of them are tried, the one
         // of the connection first. Others carry the name without permission and steal donations: never use them.
+        private const string LegacyDefaultHost = "annas-archive.org";
         private static readonly string[] OfficialMirrors =
         [
             "https://annas-archive.gl",
@@ -44,9 +45,13 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
 
             return configured.IsDefaultPort && candidate.IsDefaultPort
-                && OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, configured.Host, StringComparison.OrdinalIgnoreCase))
-                && OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, candidate.Host, StringComparison.OrdinalIgnoreCase));
+                && IsFallbackOrigin(configured)
+                && IsFallbackOrigin(candidate);
         }
+
+        private static bool IsFallbackOrigin(Uri site) =>
+            string.Equals(site.Host, LegacyDefaultHost, StringComparison.OrdinalIgnoreCase)
+            || OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, site.Host, StringComparison.OrdinalIgnoreCase));
 
         // The public waiting page of one download server.
         public static Uri SlowPageUri(Uri site, string md5, int server = 0) => new(site, "slow_download/" + md5 + "/0/" + server.ToString(CultureInfo.InvariantCulture));
@@ -134,7 +139,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         private static IReadOnlyList<Uri> Mirrors(Uri site)
         {
             var mirrors = new List<Uri> { site };
-            if (!OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, site.Host, StringComparison.OrdinalIgnoreCase)))
+            if (!site.IsDefaultPort || !IsFallbackOrigin(site))
             {
                 return mirrors;
             }

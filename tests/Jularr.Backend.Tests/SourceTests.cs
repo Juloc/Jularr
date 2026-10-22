@@ -143,6 +143,30 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_KeyedMirrorFallbackDownloadsWithoutLeakingKey()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { MirrorOnlyPk = true, OriginalMemberUnavailable = true, SlowWaitSeconds = 0 };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas-archive.org", FakeSources.MemberKey, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host);
+
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidate = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(item => item.ConnectionName == "Anna");
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas-archive.org/dyn/api/fast_download.json", StringComparison.Ordinal)
+                && request.Contains(FakeSources.MemberKey)));
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas-archive.pk/slow_download/", StringComparison.Ordinal)));
+            Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("annas-archive.pk/", StringComparison.Ordinal) && request.Contains(FakeSources.MemberKey)));
+            Assert.IsTrue(Directory.EnumerateFiles(storage.Path, "*.epub", SearchOption.AllDirectories).Any());
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_MirrorSearchNeverMovesMemberKeyToAnotherHost()
         {
             using var storage = new TemporaryDirectory();
@@ -368,6 +392,16 @@ namespace Jularr.Backend.Tests
             var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
             await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 client.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice", CancellationToken.None));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_LegacyDefaultSearchFallsBackToAvailableMirror()
+        {
+            var sources = new FakeSources { MirrorOnlyPk = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var record = (await client.SearchAsync(new Uri("https://annas-archive.org/"), "Pride and Prejudice", CancellationToken.None)).Single();
+            Assert.AreEqual("annas-archive.pk", record.Site.Host);
+            Assert.IsTrue(AnnasArchiveClient.IsTrustedSource(new Uri("https://annas-archive.org/"), record.Site));
         }
 
         [TestMethod]
@@ -802,6 +836,7 @@ namespace Jularr.Backend.Tests
             public bool HtmlGate { get; set; }
             public bool OversizedSearch { get; set; }
             public bool MirrorOnlyPk { get; set; }
+            public bool OriginalMemberUnavailable { get; set; }
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
             public bool RealRows { get; set; }
@@ -831,7 +866,7 @@ namespace Jularr.Backend.Tests
                 {
                     "opds.example.test" => Opds(request),
                     "cdn.example.test" => Signed(uri),
-                    "annas.example.test" or "other.example.test" or "annas-archive.gl" or "annas-archive.pk" => Annas(request),
+                    "annas.example.test" or "other.example.test" or "annas-archive.gl" or "annas-archive.pk" or "annas-archive.org" => Annas(request),
                     "files.example.test" when uri.AbsolutePath == "/expired.epub" => new HttpResponseMessage(HttpStatusCode.Gone),
                     "files.example.test" => Bytes(ReadingTests.BuildEpub("Pride and Prejudice")),
                     _ => Text("""{"queue":{"paused":false,"slots":[]},"history":{"slots":[]},"version":"4.5.0"}""", "application/json")
@@ -887,6 +922,11 @@ namespace Jularr.Backend.Tests
                 if (HtmlGate && uri.AbsolutePath == "/search")
                 {
                     return Text("<html><head><title>Just a moment...</title></head><body>challenge-platform</body></html>", "text/html");
+                }
+
+                if (OriginalMemberUnavailable && uri.Host == "annas-archive.org" && uri.AbsolutePath == "/dyn/api/fast_download.json")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 }
 
                 if (MirrorOnlyPk && uri.AbsolutePath == "/search" && uri.Host != "annas-archive.pk")

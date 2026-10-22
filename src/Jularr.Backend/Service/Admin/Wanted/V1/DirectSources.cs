@@ -131,8 +131,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
                         if (source.ProtectedApiKey is { } memberKey)
                         {
-                            await _annas.DownloadAsync(configured, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
-                            break;
+                            try
+                            {
+                                await _annas.DownloadAsync(configured, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                                break;
+                            }
+                            catch (AnnasArchiveException exception) when (exception.Failure == AnnasArchiveFailure.Unavailable
+                                && !string.Equals(configured.Host, site.Host, StringComparison.OrdinalIgnoreCase))
+                            {
+                                // The configured member API is down. Retry via the public slow path of the responding mirror, never send the key there.
+                            }
                         }
 
                         // Without a key: the person's file link, else the slow download; a check or a dead link goes to a person.
