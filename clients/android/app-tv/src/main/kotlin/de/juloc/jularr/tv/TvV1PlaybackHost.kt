@@ -141,8 +141,14 @@ internal fun TvV1PlaybackHost(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: AppApiException) {
-            if (failure.statusCode == 401) onUnauthorized()
-            else error = "Jularr Playback: ${failure.code} (HTTP ${failure.statusCode})"
+            when {
+                failure.statusCode == 401 -> onUnauthorized()
+                failure.code == "storage_waking" -> error =
+                    "Der Medienspeicher wird vom Server aufgeweckt. Versuche es anschließend erneut."
+                failure.code == "storage_unavailable" -> error =
+                    "Der Medienspeicher ist derzeit nicht erreichbar. NAS-Verbindung prüfen und erneut versuchen."
+                else -> error = "Jularr Playback: ${failure.code} (HTTP ${failure.statusCode})"
+            }
         } catch (failure: Exception) {
             error = failure.message ?: "Die Wiedergabe konnte nicht gestartet werden."
         } finally {
@@ -265,11 +271,11 @@ internal fun TvV1PlaybackHost(
                     onUnauthorized()
                     return@LaunchedEffect
                 }
-                error = "Fortschritt konnte nicht gespeichert werden: ${failure.code}"
-                return@LaunchedEffect
-            } catch (failure: Exception) {
-                error = "Fortschritt konnte nicht gespeichert werden: ${failure.message.orEmpty()}"
-                return@LaunchedEffect
+                // Transient progress failures must not replace an otherwise healthy video
+                // with an error panel. Retry at the next heartbeat and again on exit.
+            } catch (_: Exception) {
+                // No alternate/legacy progress endpoint or fabricated success.
+            }
             }
         }
     }
@@ -389,6 +395,14 @@ internal fun TvV1PlaybackHost(
             Button(onClick = {
                 if (plan != null) completePlayback(completed = false) else onExit()
             }) { Text("Zurück") }
+            if (plan != null) {
+                Button(onClick = {
+                    // Explicit escape route when session close is blocked by a network error.
+                    // Do not mark the media completed or claim that progress was saved.
+                    player.player.stop()
+                    onExit()
+                }) { Text("Ohne Speicherung beenden") }
+            }
         }
         loading || plan == null -> TvCenteredPanel(
             title = "Jularr TV",
