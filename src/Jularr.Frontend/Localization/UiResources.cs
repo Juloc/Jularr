@@ -1122,6 +1122,7 @@ namespace Jularr.Frontend.Localization
             new("arr.tag", "Tag"),
             new("arr.tag.title", "Tag"),
             new("arr.tag.add", "New tag"),
+            new("arr.removeConfirm", "Remove this? Searches stop using it."),
             new("arr.scores", "Format scores"),
             new("profile.add.Manga", "Add manga profile"),
             new("profile.add.Music", "Add music profile"),

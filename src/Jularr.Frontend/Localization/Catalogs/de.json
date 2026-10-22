@@ -12256,6 +12256,10 @@
    "New tag",
    "Neuer Tag"
   ],
+  "arr.removeConfirm": [
+   "Remove this? Searches stop using it.",
+   "Entfernen? Suchen nutzen es dann nicht mehr."
+  ],
   "arr.scores": [
    "Format scores",
    "Format-Scores"

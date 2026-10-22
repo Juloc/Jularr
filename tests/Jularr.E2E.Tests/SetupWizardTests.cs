@@ -105,7 +105,7 @@ namespace Jularr.E2E.Tests
             await form.Locator("[name=ApiKey]").FillAsync("browser-test-key");
             await form.Locator("[name=IsEnabled][value=False]").CheckAsync();
             await Steps.SubmitAsync(page, form);
-            await Assertions.Expect(page.Locator(".list-row", new() { HasText = name })).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".feature-card", new() { HasText = name })).ToBeVisibleAsync();
             Assert.IsTrue(new Uri(page.Url).AbsolutePath.StartsWith("/Setup/", StringComparison.Ordinal));
         }
 
