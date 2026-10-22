@@ -482,6 +482,8 @@ internal fun TvSettingsPanel(
     playbackSpeed: Float,
     hasSpeedOptions: Boolean,
     canLearn: Boolean,
+    chaptersAvailable: Boolean = false,
+    onOpenChapters: () -> Unit = {},
     onOpenSpeed: () -> Unit,
     onRepeatLine: () -> Unit,
     onLearn: () -> Unit,
@@ -510,6 +512,12 @@ internal fun TvSettingsPanel(
                 ) {
                     Text(stringResource(R.string.tv_player_speed_value, playbackSpeed.toString()))
                 }
+            }
+            if (chaptersAvailable) {
+                Button(
+                    onClick = onOpenChapters,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Kapitel") }
             }
             if (canLearn) {
                 Button(

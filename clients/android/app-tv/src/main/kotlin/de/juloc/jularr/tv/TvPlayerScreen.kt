@@ -51,6 +51,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import de.juloc.jularr.core.api.playbackextras.TvV1PlaybackChapter
 import de.juloc.jularr.core.model.MediaTrack
 import de.juloc.jularr.core.model.ClientMediaSegment
 import de.juloc.jularr.core.model.ClientTrickplayDescriptor
@@ -59,7 +60,7 @@ import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.session.PlaybackCommand
 import kotlinx.coroutines.delay
 
-private enum class TvPlayerPanel { AUDIO, SUBTITLES, SETTINGS, SPEED }
+private enum class TvPlayerPanel { AUDIO, SUBTITLES, SETTINGS, SPEED, CHAPTERS }
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -69,6 +70,7 @@ fun TvPlayerScreen(
     currentCue: SubtitleCue?,
     skipSegments: List<ClientMediaSegment> = emptyList(),
     trickplay: ClientTrickplayDescriptor? = null,
+    chapters: List<TvV1PlaybackChapter> = emptyList(),
     playbackSpeeds: List<Float> = emptyList(),
     defaultPlaybackSpeed: Float = 1f,
     preferredAudioLanguage: String? = null,
@@ -568,6 +570,8 @@ fun TvPlayerScreen(
                     playbackSpeed = playbackSpeed,
                     hasSpeedOptions = playbackSpeeds.size > 1,
                     canLearn = currentCue != null,
+                    chaptersAvailable = chapters.isNotEmpty(),
+                    onOpenChapters = { trackPanel = TvPlayerPanel.CHAPTERS },
                     onOpenSpeed = { trackPanel = TvPlayerPanel.SPEED },
                     onRepeatLine = {
                         trackPanel = null
@@ -601,6 +605,15 @@ fun TvPlayerScreen(
                     },
                     onBack = { trackPanel = TvPlayerPanel.SETTINGS },
                     modifier = Modifier.align(Alignment.Center),
+                )
+            } else if (trackPanel == TvPlayerPanel.CHAPTERS) {
+                TvV1ChapterPanel(
+                    chapters = chapters,
+                    onSeekTo = { chapter ->
+                        player.player.seekTo(chapter.startMs)
+                        trackPanel = null
+                    },
+                    onBack = { trackPanel = TvPlayerPanel.SETTINGS },
                 )
             } else if (trackPanel != null) {
                 TvTrackSelectionPanel(
