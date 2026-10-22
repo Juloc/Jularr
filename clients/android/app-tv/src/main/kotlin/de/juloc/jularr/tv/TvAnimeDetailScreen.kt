@@ -79,6 +79,7 @@ fun TvAnimeScreen(
     onEpisode: (EpisodeSummary) -> Unit,
     onPlayEpisode: (EpisodeSummary) -> Unit,
     onBack: () -> Unit,
+    onPlayMovie: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
@@ -203,10 +204,18 @@ fun TvAnimeScreen(
                                     ),
                                 )
                             }
+                        } else if (onPlayMovie != null) {
+                            Button(
+                                onClick = onPlayMovie,
+                                modifier = Modifier.focusRequester(heroFocus),
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                Text(" " + stringResource(R.string.tv_anime_play))
+                            }
                         }
                         Button(
                             onClick = onBack,
-                            modifier = if (activeEpisode == null)
+                            modifier = if (activeEpisode == null && onPlayMovie == null)
                                 Modifier.focusRequester(heroFocus) else Modifier,
                         ) {
                             Text(stringResource(R.string.tv_action_back))
