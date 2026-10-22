@@ -19,9 +19,11 @@ namespace Jularr.E2E.Tests
 
             await jularr.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear") VALUES (8001, 1, 'Source Film', 2001), (8002, 1, 'Linked Sequel', 2004);
-                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear") VALUES
-                    (8101, 'tmdb_movie', '555', 1, 'Outside Remake', 2020),
-                    (8102, 'tmdb_movie', '556', 1, 'Third Film', 2010);
+                INSERT INTO "ExternalWorks" ("Id", "Namespace", "Value", "MediaTypeId", "Title", "ReleaseYear", "ImageUrl") VALUES
+                    (8101, 'tmdb_movie', '555', 1, 'Outside Remake', 2020, NULL),
+                    (8102, 'tmdb_movie', '556', 1, 'Third Film', 2010, 'https://image.tmdb.org/t/p/w342/third.jpg'),
+                    (8103, 'tmdb_movie', '557', 1, 'Linked Sequel', 2004, 'https://image.tmdb.org/t/p/w342/linked.jpg');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (8002, 'tmdb_movie', '557');
                 INSERT INTO "WorkRelations" ("WorkId", "RelatedWorkId", "ExternalWorkId", "WorkRelationTypeId", "SourceKey") VALUES
                     (8001, 8002, NULL, 1, 'tmdb'),
                     (8001, NULL, 8101, 8, 'anilist');

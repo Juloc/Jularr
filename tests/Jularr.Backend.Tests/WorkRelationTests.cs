@@ -97,6 +97,7 @@ namespace Jularr.Backend.Tests
             using var hidden = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/works/" + manga + "/relations/" + sequelRow.WorkRelationId);
             Assert.AreEqual(HttpStatusCode.OK, hidden.StatusCode, await hidden.Content.ReadAsStringAsync());
             Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == sequel));
+            ForgetAniListReads(host);
             await ImportAsync(host, 101);
             Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == sequel || relation.ExternalId == "102"));
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkRelations\" WHERE \"WorkId\" = {manga} AND \"IsSuppressed\""));
@@ -109,6 +110,7 @@ namespace Jularr.Backend.Tests
 
             // A provider that no longer names a relation takes its rows away, and a person's own stay.
             aniList.Remove(101, "ADAPTATION");
+            ForgetAniListReads(host);
             await ImportAsync(host, 101);
             Assert.IsFalse((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == 900));
             Assert.IsTrue((await ReadAsync(host, manga)).Any(relation => relation.RelatedWorkId == sequel));
@@ -169,6 +171,9 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("DELETE FROM \"Works\" WHERE \"Id\" = 20");
             Assert.IsFalse((await ReadAsync(host, 10)).Any(relation => relation.RelatedWorkId == 20));
         }
+
+        // AniList reads are cached; a sync that must see the changed answer reads again.
+        private static void ForgetAniListReads(Host host) => ((Microsoft.Extensions.Caching.Memory.MemoryCache)host.Services.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>()).Clear();
 
         private static async Task<long> ImportAsync(Host host, int id)
         {
