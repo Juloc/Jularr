@@ -30,6 +30,9 @@ namespace Jularr.Integrations.Logic.Narou
         private static Uri WorkUri(string ncode) =>
             new("https://ncode.syosetu.com/" + ncode.ToLowerInvariant() + "/");
 
+        public async Task ProbeAsync(CancellationToken ct) =>
+            _ = await GetPageAsync(new Uri("https://ncode.syosetu.com/"), ct);
+
         public async Task<NarouWork> ReadWorkAsync(string ncode, CancellationToken ct)
         {
             if (!IsNcode(ncode)) throw new NarouException("Invalid Narō ncode.");
