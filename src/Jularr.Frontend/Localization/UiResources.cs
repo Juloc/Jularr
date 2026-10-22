@@ -960,6 +960,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.type.Usenet", "News server"),
             new("acquisition.connection.type.OpenSubtitles", "OpenSubtitles.com"),
             new("acquisition.connection.type.SubDl", "SubDL"),
+            new("acquisition.connection.type.Narou", "Shōsetsuka ni Narō (Japanese web novels)"),
             new("acquisition.connection.username", "User name"),
             new("acquisition.connection.password", "Password"),
             new("acquisition.connection.memberKey", "Member key"),
