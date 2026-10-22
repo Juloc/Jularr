@@ -43,7 +43,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(NarouClient.IsNcode("../n123"));
             using var http = new HttpClient(new NarouHandler(noBody: true));
             var client = new NarouClient(http);
-            await Assert.ThrowsExceptionAsync<NarouException>(() =>
+            await Assert.ThrowsExactlyAsync<NarouException>(() =>
                 client.WriteEpubAsync("n123", Path.GetTempFileName(), 1024 * 1024, _ => new Reservation(), CancellationToken.None));
         }
 
