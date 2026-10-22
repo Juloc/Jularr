@@ -19,7 +19,11 @@ data class TvPlaybackV1Capabilities(
 )
 
 interface TvPlaybackV1Client {
-    suspend fun start(mediaAssetId: Long, capabilities: TvPlaybackV1Capabilities): TvPlaybackV1Plan
+    suspend fun start(
+        mediaAssetId: Long,
+        capabilities: TvPlaybackV1Capabilities,
+        audioStreamIndex: Int? = null,
+    ): TvPlaybackV1Plan
     suspend fun update(
         playbackSessionId: String,
         positionMs: Long,

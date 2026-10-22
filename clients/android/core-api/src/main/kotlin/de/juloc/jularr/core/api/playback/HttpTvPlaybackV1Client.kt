@@ -25,12 +25,20 @@ class HttpTvPlaybackV1Client(
         require(uri.rawPath.isNullOrBlank() || uri.rawPath == "/") { "Only the server origin is allowed." }
     }
 
-    override suspend fun start(mediaAssetId: Long, capabilities: TvPlaybackV1Capabilities): TvPlaybackV1Plan {
+    override suspend fun start(
+        mediaAssetId: Long,
+        capabilities: TvPlaybackV1Capabilities,
+        audioStreamIndex: Int?,
+    ): TvPlaybackV1Plan {
         require(mediaAssetId > 0) { "Playback requires a positive MediaAssetId." }
+        require(audioStreamIndex == null || audioStreamIndex >= 0) {
+            "An audio stream index cannot be negative."
+        }
         val payload = JSONObject()
             .put("containers", JSONArray(capabilities.containers))
             .put("videoCodecs", JSONArray(capabilities.videoCodecs))
             .put("audioCodecs", JSONArray(capabilities.audioCodecs))
+            .apply { if (audioStreamIndex != null) put("audioStreamIndex", audioStreamIndex) }
         val json = request("POST", "/api/v1/playback/assets/$mediaAssetId/sessions", payload)
         val sessionId = json.getString("playbackSessionId")
         require(runCatching { java.util.UUID.fromString(sessionId) }.isSuccess) { "Invalid playback session id." }
