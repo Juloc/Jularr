@@ -120,22 +120,6 @@
    "Play trailer",
    "Trailer abspielen"
   ],
-  "media.preview.trailer": [
-   "Trailer",
-   "Trailer"
-  ],
-  "media.preview.pauseTrailer": [
-   "Pause trailer",
-   "Trailer anhalten"
-  ],
-  "media.preview.muteTrailer": [
-   "Mute trailer",
-   "Trailer stummschalten"
-  ],
-  "media.preview.unmuteTrailer": [
-   "Unmute trailer",
-   "Trailer-Ton einschalten"
-  ],
   "media.preview.noTrailer": [
    "No trailer available",
    "Kein Trailer verfügbar"
@@ -832,133 +816,25 @@
    "Notes",
    "Notizen"
   ],
+  "reader.bookmark": [
+   "Bookmark",
+   "Lesezeichen"
+  ],
+  "reader.bookmarks": [
+   "Bookmarks",
+   "Lesezeichen"
+  ],
+  "reader.bookmarkDelete": [
+   "Delete bookmark",
+   "Lesezeichen löschen"
+  ],
+  "reader.openPdf": [
+   "Open in a new tab",
+   "In neuem Tab öffnen"
+  ],
   "reader.originalPdf": [
    "Original PDF",
    "Original-PDF"
-  ],
-  "reader.smart.preparing": [
-   "A reading copy of this PDF is being prepared in the background.",
-   "Eine Lesekopie dieses PDFs wird im Hintergrund vorbereitet."
-  ],
-  "reader.smart.failed": [
-   "The reading copy of this PDF could not be created. Reading is not affected.",
-   "Die Lesekopie dieses PDFs konnte nicht erstellt werden. Das Lesen bleibt unberührt."
-  ],
-  "reader.figure.open": [
-   "Open full screen",
-   "Im Vollbild öffnen"
-  ],
-  "reader.figure.view": [
-   "Figure",
-   "Abbildung"
-  ],
-  "reader.figure.zoomIn": [
-   "Zoom in",
-   "Vergrößern"
-  ],
-  "reader.figure.zoomOut": [
-   "Zoom out",
-   "Verkleinern"
-  ],
-  "reader.figure.fit": [
-   "Fit to screen",
-   "An den Bildschirm anpassen"
-  ],
-  "reader.figure.original": [
-   "Page {0} is only shown in the original pages.",
-   "Seite {0} wird nur in den Originalseiten angezeigt."
-  ],
-  "reader.settings.view": [
-   "View",
-   "Ansicht"
-  ],
-  "reader.settings.pages": [
-   "Pages",
-   "Seiten"
-  ],
-  "reader.view.auto": [
-   "Automatic",
-   "Automatisch"
-  ],
-  "reader.view.smart": [
-   "Smart Book",
-   "Smart Book"
-  ],
-  "reader.view.original": [
-   "Original pages",
-   "Originalseiten"
-  ],
-  "reader.view.failed": [
-   "The view could not be saved.",
-   "Die Ansicht konnte nicht gespeichert werden."
-  ],
-  "reader.view.smartUnavailable": [
-   "The Smart Book is not ready yet; the original pages are shown.",
-   "Das Smart Book ist noch nicht fertig; die Originalseiten werden angezeigt."
-  ],
-  "reader.offer.smart": [
-   "The Smart Book of this book is ready.",
-   "Das Smart Book dieses Buchs ist fertig."
-  ],
-  "reader.offer.open": [
-   "Open",
-   "Öffnen"
-  ],
-  "reader.original.loading": [
-   "Loading the pages…",
-   "Seiten werden geladen …"
-  ],
-  "reader.original.failed": [
-   "The original pages could not be shown.",
-   "Die Originalseiten konnten nicht angezeigt werden."
-  ],
-  "reader.original.page": [
-   "Page",
-   "Seite"
-  ],
-  "reader.original.zoom": [
-   "Zoom",
-   "Zoom"
-  ],
-  "reader.original.fit": [
-   "Fit",
-   "Anpassung"
-  ],
-  "reader.original.fit.page": [
-   "Whole page",
-   "Ganze Seite"
-  ],
-  "reader.original.fit.width": [
-   "Page width",
-   "Seitenbreite"
-  ],
-  "reader.recognition.progress": [
-   "Reading the scanned pages: {0} of {1}",
-   "Gescannte Seiten werden gelesen: {0} von {1}"
-  ],
-  "reader.pageNote.label": [
-   "Note on this page",
-   "Notiz zu dieser Seite"
-  ],
-  "reader.pageNote.save": [
-   "Save note",
-   "Notiz speichern"
-  ],
-  "reader.pageNote.page": [
-   "Page {0}",
-   "Seite {0}"
-  ],
-  "reader.figure.originalPages": [
-   "Open the original pages",
-   "Originalseiten öffnen"
-  ],
-  "reader.figure.originalAlt": [
-   "Original page {0}",
-   "Originalseite {0}"
-  ],
-  "reader.download.omitted": [
-   "{0} pages are only in the original and are not part of this EPUB.",
-   "{0} Seiten gibt es nur im Original; sie sind nicht Teil dieses EPUBs."
   ],
   "reader.download": [
    "Download",
@@ -1119,6 +995,22 @@
   "admin.instance.libraryScanIntervalHours": [
    "Library scan interval (hours)",
    "Intervall der Bibliotheksscans (Stunden)"
+  ],
+  "admin.instance.backupIntervalHours": [
+   "Automatic backup interval (hours)",
+   "Intervall der automatischen Backups (Stunden)"
+  ],
+  "admin.instance.backupKeep": [
+   "Backups to keep",
+   "Backups behalten"
+  ],
+  "admin.instance.providerSyncIntervalMinutes": [
+   "Plex, Jellyfin and Emby sync interval (minutes)",
+   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
+  ],
+  "admin.instance.wantedSearchIntervalMinutes": [
+   "Wanted search period (minutes)",
+   "Suchintervall für Gesuchtes (Minuten)"
   ],
   "admin.instance.historyRetentionDays": [
    "Keep finished activity for days",
@@ -1321,8 +1213,8 @@
    "Importierte Medien und Dateiverfügbarkeit"
   ],
   "admin.activity.title": [
-   "Activity",
-   "Aktivität"
+   "Queue",
+   "Warteschlange"
   ],
   "admin.requests.title": [
    "Requests",
@@ -1595,154 +1487,6 @@
   "player.next.cancel": [
    "Cancel",
    "Abbrechen"
-  ],
-  "playback.introSkipMode": [
-   "Intro and recap",
-   "Vorspann und Rückblick"
-  ],
-  "playback.outroSkipMode": [
-   "Credits and preview",
-   "Abspann und Vorschau"
-  ],
-  "playback.skipMode.Off": [
-   "Off",
-   "Aus"
-  ],
-  "playback.skipMode.Button": [
-   "Show button",
-   "Schaltfläche zeigen"
-  ],
-  "playback.skipMode.Automatic": [
-   "Automatic",
-   "Automatisch"
-  ],
-  "player.skip.Intro": [
-   "Skip intro",
-   "Intro überspringen"
-  ],
-  "player.skip.Credits": [
-   "Skip credits",
-   "Abspann überspringen"
-  ],
-  "player.skip.Recap": [
-   "Skip recap",
-   "Rückblick überspringen"
-  ],
-  "player.skip.Preview": [
-   "Skip preview",
-   "Vorschau überspringen"
-  ],
-  "player.skipped.Intro": [
-   "Intro skipped",
-   "Intro übersprungen"
-  ],
-  "player.skipped.Credits": [
-   "Credits skipped",
-   "Abspann übersprungen"
-  ],
-  "player.skipped.Recap": [
-   "Recap skipped",
-   "Rückblick übersprungen"
-  ],
-  "player.skipped.Preview": [
-   "Preview skipped",
-   "Vorschau übersprungen"
-  ],
-  "player.skipped.next": [
-   "Next episode starts",
-   "Nächste Folge startet"
-  ],
-  "player.skipped.undo": [
-   "Undo",
-   "Rückgängig"
-  ],
-  "player.tab.chapters": [
-   "Chapters",
-   "Kapitel"
-  ],
-  "player.chapter": [
-   "Chapter {0}",
-   "Kapitel {0}"
-  ],
-  "work.tab.markers": [
-   "Markers",
-   "Marker"
-  ],
-  "marker.title": [
-   "Skip markers",
-   "Überspring-Marker"
-  ],
-  "marker.empty": [
-   "No episode has a file yet.",
-   "Noch keine Folge hat eine Datei."
-  ],
-  "marker.seasons": [
-   "Seasons",
-   "Staffeln"
-  ],
-  "marker.copied": [
-   "Copied to {0} files.",
-   "Auf {0} Dateien kopiert."
-  ],
-  "marker.episode": [
-   "Episode",
-   "Folge"
-  ],
-  "marker.kind.Intro": [
-   "Intro",
-   "Intro"
-  ],
-  "marker.kind.Credits": [
-   "Credits",
-   "Abspann"
-  ],
-  "marker.kind.Recap": [
-   "Recap",
-   "Rückblick"
-  ],
-  "marker.kind.Preview": [
-   "Preview",
-   "Vorschau"
-  ],
-  "marker.chapters": [
-   "Chapters",
-   "Kapitel"
-  ],
-  "marker.source.Manual": [
-   "By hand",
-   "Von Hand"
-  ],
-  "marker.source.Sidecar": [
-   "Sidecar file",
-   "Begleitdatei"
-  ],
-  "marker.source.Chapter": [
-   "Chapter",
-   "Kapitel"
-  ],
-  "marker.source.Detected": [
-   "Detected",
-   "Erkannt"
-  ],
-  "marker.start": [
-   "Start (s)",
-   "Start (s)"
-  ],
-  "marker.end": [
-   "End (s)",
-   "Ende (s)"
-  ],
-  "marker.offset": [
-   "Offset (s)",
-   "Versatz (s)"
-  ],
-  "marker.copy": [
-   "Copy to season",
-   "In Staffel kopieren"
-  ],
-  "marker.delete": [
-   "Delete",
-   "Löschen"
   ],
   "progress.watched": [
    "Watched",
@@ -2217,8 +1961,8 @@
    "name@example.com"
   ],
   "hint.AccountFields.Email.info": [
-   "Optional. Can be used to sign in instead of the username.",
-   "Optional. Kann statt des Benutzernamens zur Anmeldung dienen."
+   "Used to sign in and for password resets.",
+   "Dient zur Anmeldung und zum Zurücksetzen des Passworts."
   ],
   "hint.AccountFields.DisplayName.info": [
    "Shown to other users, for example on requests.",
@@ -2257,8 +2001,8 @@
    "Drei bis sechs Ziffern, die beim Wechsel zu diesem Profil abgefragt werden."
   ],
   "hint.AuthenticationFields.NewPassword.info": [
-   "At least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters. A passphrase of several words is easiest to remember.",
-   "Mindestens 12 Zeichen, davon mindestens drei der Arten: Kleinbuchstaben, Großbuchstaben, Ziffern und Sonderzeichen. Eine Passphrase aus mehreren Wörtern merkt man sich am leichtesten."
+   "At least 12 characters; a passphrase of several words is easiest to remember.",
+   "Mindestens 12 Zeichen; eine Passphrase aus mehreren Wörtern merkt man sich am leichtesten."
   ],
   "hint.DevicePairingFields.Code.placeholder": [
    "123456",
@@ -2535,6 +2279,38 @@
   "hint.InstanceSettingsFields.LibraryScanIntervalHours.info": [
    "Hours between automatic library scans; 0 switches them off. Sleeping NAS are not woken.",
    "Stunden zwischen automatischen Bibliotheksscans; 0 schaltet sie aus. Schlafende NAS werden nicht geweckt."
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.placeholder": [
+   "24",
+   "24"
+  ],
+  "hint.InstanceSettingsFields.BackupIntervalHours.info": [
+   "Hours between automatic backups; 0 switches them off.",
+   "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.placeholder": [
+   "7",
+   "7"
+  ],
+  "hint.InstanceSettingsFields.BackupKeep.info": [
+   "The newest backups stay, older ones are removed.",
+   "Die neuesten Backups bleiben, ältere werden entfernt."
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
+   "30",
+   "30"
+  ],
+  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.info": [
+   "Minutes between two reads of the connected Plex, Jellyfin and Emby servers.",
+   "Minuten zwischen zwei Abgleichen der verbundenen Plex-, Jellyfin- und Emby-Server."
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.placeholder": [
+   "2",
+   "2"
+  ],
+  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.info": [
+   "Minutes between two searches of the wanted titles that are due.",
+   "Minuten zwischen zwei Suchen nach fälligen gesuchten Titeln."
   ],
   "hint.InstanceSettingsFields.HistoryRetentionDays.placeholder": [
    "30",
@@ -5580,10 +5356,6 @@
    "Recognize the text of scanned books",
    "Text gescannter Bücher erkennen"
   ],
-  "instance.module.SmartPdf": [
-   "Prepare EPUB reading copies of PDF books",
-   "EPUB-Lesekopien von PDF-Büchern vorbereiten"
-  ],
   "instance.module.DiscoverCache": [
    "Keep Discover's titles locally",
    "Discover-Titel lokal speichern"
@@ -5627,86 +5399,6 @@
   "instance.module.Franchises": [
    "Series",
    "Serien"
-  ],
-  "system.performance": [
-   "Performance",
-   "Leistung"
-  ],
-  "system.performance.processor": [
-   "Processor",
-   "Prozessor"
-  ],
-  "system.performance.memory": [
-   "Memory",
-   "Arbeitsspeicher"
-  ],
-  "system.performance.processorHistory": [
-   "Processor use over the last six hours",
-   "Prozessorauslastung der letzten sechs Stunden"
-  ],
-  "system.performance.memoryHistory": [
-   "Memory use over the last six hours",
-   "Speicherauslastung der letzten sechs Stunden"
-  ],
-  "system.performance.service": [
-   "Service",
-   "Dienst"
-  ],
-  "system.performance.calls": [
-   "Calls",
-   "Aufrufe"
-  ],
-  "system.performance.errors": [
-   "Errors",
-   "Fehler"
-  ],
-  "system.performance.average": [
-   "Average",
-   "Durchschnitt"
-  ],
-  "system.performance.maximum": [
-   "Longest",
-   "Längster"
-  ],
-  "system.performance.empty": [
-   "No calls in the last hour.",
-   "Keine Aufrufe in der letzten Stunde."
-  ],
-  "system.logs": [
-   "Recent warnings and errors",
-   "Letzte Warnungen und Fehler"
-  ],
-  "system.logs.empty": [
-   "Nothing went wrong since Jularr started.",
-   "Seit dem Start von Jularr ist nichts schiefgelaufen."
-  ],
-  "system.logs.at": [
-   "Time",
-   "Zeit"
-  ],
-  "system.logs.level": [
-   "Level",
-   "Stufe"
-  ],
-  "system.logs.area": [
-   "Area",
-   "Bereich"
-  ],
-  "system.logs.message": [
-   "Message",
-   "Meldung"
-  ],
-  "system.logs.level.Warning": [
-   "Warning",
-   "Warnung"
-  ],
-  "system.logs.level.Error": [
-   "Error",
-   "Fehler"
-  ],
-  "system.logs.level.Critical": [
-   "Critical",
-   "Kritisch"
   ],
   "calendar.view.Month": [
    "Month",
@@ -5968,15 +5660,7 @@
    "Filter",
    "Filter"
   ],
-  "library.filter.open": [
-   "Open filter",
-   "Filter öffnen"
-  ],
-  "library.filter.title": [
-   "Filter",
-   "Filter"
-  ],
-  "list.layout.toggle": [
+  "favorites.layout.toggle": [
    "Switch between grid and list",
    "Zwischen Raster und Liste wechseln"
   ],
@@ -6744,13 +6428,9 @@
    "Queued at",
    "Eingereiht um"
   ],
-  "activity.tab.Queue": [
-   "Queue",
-   "Warteschlange"
-  ],
   "activity.empty.Queue": [
-   "Nothing is running or waiting.",
-   "Nichts läuft oder wartet."
+   "Nothing here.",
+   "Hier ist nichts."
   ],
   "activity.waiting": [
    "Waiting",
@@ -6799,10 +6479,6 @@
   "acquisition.outcome.download_removed": [
    "Removed from the queue",
    "Aus der Warteschlange entfernt"
-  ],
-  "activity.tab.History": [
-   "History",
-   "Verlauf"
   ],
   "activity.item": [
    "Item",
@@ -7091,6 +6767,62 @@
   "player.speed": [
    "Playback speed",
    "Wiedergabegeschwindigkeit"
+  ],
+  "player.speedValue": [
+   "Speed value",
+   "Geschwindigkeit"
+  ],
+  "player.picture": [
+   "Picture",
+   "Bild"
+  ],
+  "player.fit": [
+   "Picture fit",
+   "Bildanpassung"
+  ],
+  "player.fit.contain": [
+   "Fit",
+   "Einpassen"
+  ],
+  "player.fit.cover": [
+   "Fill",
+   "Füllen"
+  ],
+  "player.fit.original": [
+   "Original size",
+   "Originalgröße"
+  ],
+  "player.settings": [
+   "Player settings",
+   "Player-Einstellungen"
+  ],
+  "player.currentPlayback": [
+   "Current playback",
+   "Aktuelle Wiedergabe"
+  ],
+  "player.theater": [
+   "Wide view",
+   "Breite Ansicht"
+  ],
+  "player.tab.basic": [
+   "Basic",
+   "Basis"
+  ],
+  "player.tab.audio": [
+   "Audio",
+   "Audio"
+  ],
+  "player.tab.subtitles": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "player.tab.playback": [
+   "Playback",
+   "Wiedergabe"
+  ],
+  "player.tab.info": [
+   "Info",
+   "Info"
   ],
   "player.audio": [
    "Audio",
@@ -7591,6 +7323,106 @@
   "activity.importManually": [
    "Import by hand",
    "Von Hand importieren"
+  ],
+  "activity.filter.All": [
+   "All",
+   "Alle"
+  ],
+  "activity.filter.Active": [
+   "Active",
+   "Aktiv"
+  ],
+  "activity.filter.Waiting": [
+   "Waiting",
+   "Wartend"
+  ],
+  "activity.filter.Import": [
+   "Import",
+   "Import"
+  ],
+  "activity.filter.Errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "activity.filter.History": [
+   "History",
+   "Verlauf"
+  ],
+  "activity.kpi.active": [
+   "Active",
+   "Aktiv"
+  ],
+  "activity.kpi.speed": [
+   "Speed",
+   "Tempo"
+  ],
+  "activity.kpi.import": [
+   "Import waiting",
+   "Import wartet"
+  ],
+  "activity.kpi.errors": [
+   "Errors",
+   "Fehler"
+  ],
+  "activity.source": [
+   "Source",
+   "Quelle"
+  ],
+  "activity.transfer": [
+   "Speed and size",
+   "Tempo und Größe"
+  ],
+  "activity.release": [
+   "Release",
+   "Release"
+  ],
+  "activity.indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "wanted.select": [
+   "Select",
+   "Auswählen"
+  ],
+  "wanted.selectAll": [
+   "Select all",
+   "Alle auswählen"
+  ],
+  "wanted.selected": [
+   "{0} selected",
+   "{0} ausgewählt"
+  ],
+  "wanted.priority": [
+   "Priority",
+   "Priorität"
+  ],
+  "wanted.priority.Normal": [
+   "Normal",
+   "Normal"
+  ],
+  "wanted.priority.High": [
+   "High",
+   "Hoch"
+  ],
+  "wanted.priority.done": [
+   "The priority was set.",
+   "Die Priorität wurde gesetzt."
+  ],
+  "wanted.search.all": [
+   "Search all due",
+   "Alle fälligen suchen"
+  ],
+  "wanted.search.selected": [
+   "Search selected",
+   "Auswahl suchen"
+  ],
+  "wanted.search.started": [
+   "The search has started.",
+   "Die Suche wurde gestartet."
+  ],
+  "wanted.edit": [
+   "Edit target",
+   "Ziel bearbeiten"
   ],
   "work.tabs": [
    "Sections of this title",
@@ -8465,16 +8297,16 @@
    "Übersetzungsdateien lassen sich gerade nicht abrufen; das Buch bleibt in seiner Sprache."
   ],
   "errors.reading_pdf_without_text": [
-   "This PDF holds scanned pages without text; it opens as its original pages.",
-   "Dieses PDF enthält gescannte Seiten ohne Text; es öffnet sich als seine Originalseiten."
+   "This PDF holds scanned pages without text; it opens as a PDF.",
+   "Dieses PDF enthält gescannte Seiten ohne Text; es wird als PDF geöffnet."
   ],
   "errors.reading_translation_incomplete": [
    "This book is not translated into that language in every section yet.",
    "Dieses Buch ist noch nicht in jedem Abschnitt in diese Sprache übersetzt."
   ],
   "errors.reading_pdf_recognizing": [
-   "The scanned pages are being turned into text; until then the book opens as its original pages.",
-   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als seine Originalseiten."
+   "The scanned pages are being turned into text; until then the book opens as a PDF.",
+   "Die gescannten Seiten werden gerade in Text umgewandelt; bis dahin öffnet sich das Buch als PDF."
   ],
   "errors.ocr_unavailable": [
    "The text recognition models cannot be fetched right now.",
@@ -8691,6 +8523,10 @@
   "errors.validation.annotation_limit": [
    "A profile keeps at most 1000 highlights per book.",
    "Ein Profil behält höchstens 1000 Markierungen pro Buch."
+  ],
+  "errors.validation.bookmark_limit": [
+   "A profile keeps at most 200 bookmarks per book.",
+   "Ein Profil behält höchstens 200 Lesezeichen pro Buch."
   ],
   "errors.validation.overlapping_group": [
    "These units already belong to another section.",
@@ -9228,350 +9064,6 @@
    "The source does not answer:",
    "Die Quelle antwortet nicht:"
   ],
-  "admin.jobs.title": [
-   "Jobs",
-   "Jobs"
-  ],
-  "nav.group.system": [
-   "System",
-   "System"
-  ],
-  "nav.system.overview": [
-   "Overview",
-   "Übersicht"
-  ],
-  "operation.type.Job": [
-   "Background job",
-   "Hintergrundjob"
-  ],
-  "jobs.worker.Operation": [
-   "Operations",
-   "Vorgänge"
-  ],
-  "jobs.worker.Acquisition": [
-   "Acquisition",
-   "Beschaffung"
-  ],
-  "jobs.worker.Usenet": [
-   "Usenet",
-   "Usenet"
-  ],
-  "jobs.worker.Media": [
-   "Media",
-   "Medien"
-  ],
-  "jobs.worker.Storage": [
-   "Storage",
-   "Speicher"
-  ],
-  "jobs.worker.Backup": [
-   "Backup",
-   "Backup"
-  ],
-  "jobs.worker.Maintenance": [
-   "Maintenance",
-   "Wartung"
-  ],
-  "jobs.worker.Trickplay": [
-   "Trickplay",
-   "Trickplay"
-  ],
-  "jobs.worker.Subtitle": [
-   "Subtitles",
-   "Untertitel"
-  ],
-  "jobs.worker.Recognition": [
-   "Recognition",
-   "Texterkennung"
-  ],
-  "jobs.worker.Catalog": [
-   "Catalog",
-   "Katalog"
-  ],
-  "jobs.worker.Sampler": [
-   "Sampler",
-   "Messung"
-  ],
-  "jobs.job": [
-   "Job",
-   "Job"
-  ],
-  "jobs.job.operations": [
-   "Scans and backups",
-   "Scans und Backups"
-  ],
-  "jobs.job.downloads": [
-   "Download tracking",
-   "Download-Verfolgung"
-  ],
-  "jobs.job.wantedSearch": [
-   "Wanted search",
-   "Suche nach Gesuchtem"
-  ],
-  "jobs.job.plexSync": [
-   "Plex sync",
-   "Plex-Abgleich"
-  ],
-  "jobs.job.usenet": [
-   "Usenet downloads",
-   "Usenet-Downloads"
-  ],
-  "jobs.job.aniListMatching": [
-   "AniList matching",
-   "AniList-Zuordnung"
-  ],
-  "jobs.job.mediaServerSync": [
-   "Jellyfin and Emby sync",
-   "Jellyfin- und Emby-Abgleich"
-  ],
-  "jobs.job.storage": [
-   "Storage check",
-   "Speicherprüfung"
-  ],
-  "jobs.job.scanScheduling": [
-   "Scan scheduling",
-   "Scan-Planung"
-  ],
-  "jobs.job.backup": [
-   "Automatic backup",
-   "Automatisches Backup"
-  ],
-  "jobs.job.maintenance": [
-   "Housekeeping",
-   "Aufräumen"
-  ],
-  "jobs.job.trickplay": [
-   "Seek thumbnails",
-   "Vorschaubilder"
-  ],
-  "jobs.job.subtitles": [
-   "Subtitles",
-   "Untertitel"
-  ],
-  "jobs.job.recognition": [
-   "Text recognition",
-   "Texterkennung"
-  ],
-  "jobs.job.catalog": [
-   "Catalog sync",
-   "Katalog-Abgleich"
-  ],
-  "jobs.job.resources": [
-   "Resource sampling",
-   "Ressourcenmessung"
-  ],
-  "jobs.state.Running": [
-   "Running",
-   "Läuft"
-  ],
-  "jobs.state.Paused": [
-   "Paused",
-   "Pausiert"
-  ],
-  "jobs.state.WaitingForUse": [
-   "Waiting",
-   "Wartet"
-  ],
-  "jobs.state.Failed": [
-   "Failed",
-   "Fehler"
-  ],
-  "jobs.state.Off": [
-   "Off",
-   "Aus"
-  ],
-  "jobs.state.Idle": [
-   "Idle",
-   "Bereit"
-  ],
-  "jobs.state.Pending": [
-   "Pending",
-   "Ausstehend"
-  ],
-  "jobs.continuous": [
-   "Continuous",
-   "Dauerhaft"
-  ],
-  "jobs.last": [
-   "Last run",
-   "Letzter Lauf"
-  ],
-  "jobs.next": [
-   "Next run",
-   "Nächster Lauf"
-  ],
-  "jobs.use": [
-   "While in use",
-   "Bei Nutzung"
-  ],
-  "jobs.use.waits": [
-   "Waits",
-   "Wartet"
-  ],
-  "jobs.use.runs": [
-   "Runs",
-   "Läuft"
-  ],
-  "jobs.pause": [
-   "Pause",
-   "Pausieren"
-  ],
-  "jobs.resume": [
-   "Resume",
-   "Fortsetzen"
-  ],
-  "jobs.run": [
-   "Run now",
-   "Jetzt ausführen"
-  ],
-  "jobs.open": [
-   "Open Jobs",
-   "Jobs öffnen"
-  ],
-  "jobs.history": [
-   "History",
-   "Verlauf"
-  ],
-  "jobs.when": [
-   "When",
-   "Zeit"
-  ],
-  "jobs.allActivity": [
-   "All activity",
-   "Gesamte Aktivität"
-  ],
-  "jobs.history.empty": [
-   "No finished operations yet.",
-   "Noch keine abgeschlossenen Vorgänge."
-  ],
-  "jobs.job.covers": [
-   "Provider covers",
-   "Titelbilder der Anbieter"
-  ],
-  "jobs.worker.Derivation": [
-   "Reading copies",
-   "Lesekopien"
-  ],
-  "jobs.job.readingCopies": [
-   "Reading copies",
-   "Lesekopien"
-  ],
-  "reader.bookmark": [
-   "Bookmark",
-   "Lesezeichen"
-  ],
-  "reader.bookmarks": [
-   "Bookmarks",
-   "Lesezeichen"
-  ],
-  "reader.bookmarkDelete": [
-   "Delete bookmark",
-   "Lesezeichen löschen"
-  ],
-  "activity.filter.All": [
-   "All",
-   "Alle"
-  ],
-  "activity.filter.Active": [
-   "Active",
-   "Aktiv"
-  ],
-  "activity.filter.Waiting": [
-   "Waiting",
-   "Wartend"
-  ],
-  "activity.filter.Import": [
-   "Import",
-   "Import"
-  ],
-  "activity.filter.Errors": [
-   "Errors",
-   "Fehler"
-  ],
-  "activity.filter.History": [
-   "History",
-   "Verlauf"
-  ],
-  "activity.kpi.active": [
-   "Active",
-   "Aktiv"
-  ],
-  "activity.kpi.speed": [
-   "Speed",
-   "Tempo"
-  ],
-  "activity.kpi.import": [
-   "Import waiting",
-   "Import wartet"
-  ],
-  "activity.kpi.errors": [
-   "Errors",
-   "Fehler"
-  ],
-  "activity.source": [
-   "Source",
-   "Quelle"
-  ],
-  "activity.transfer": [
-   "Speed and size",
-   "Tempo und Größe"
-  ],
-  "activity.release": [
-   "Release",
-   "Release"
-  ],
-  "activity.indexer": [
-   "Indexer",
-   "Indexer"
-  ],
-  "wanted.select": [
-   "Select",
-   "Auswählen"
-  ],
-  "wanted.selectAll": [
-   "Select all",
-   "Alle auswählen"
-  ],
-  "wanted.selected": [
-   "{0} selected",
-   "{0} ausgewählt"
-  ],
-  "wanted.priority": [
-   "Priority",
-   "Priorität"
-  ],
-  "wanted.priority.Normal": [
-   "Normal",
-   "Normal"
-  ],
-  "wanted.priority.High": [
-   "High",
-   "Hoch"
-  ],
-  "wanted.priority.done": [
-   "The priority was set.",
-   "Die Priorität wurde gesetzt."
-  ],
-  "wanted.search.all": [
-   "Search all due",
-   "Alle fälligen suchen"
-  ],
-  "wanted.search.selected": [
-   "Search selected",
-   "Auswahl suchen"
-  ],
-  "wanted.search.started": [
-   "The search has started.",
-   "Die Suche wurde gestartet."
-  ],
-  "wanted.edit": [
-   "Edit target",
-   "Ziel bearbeiten"
-  ],
-  "errors.validation.bookmark_limit": [
-   "A profile keeps at most 200 bookmarks per book.",
-   "Ein Profil behält höchstens 200 Lesezeichen pro Buch."
-  ],
   "admin.import.title": [
    "Import",
    "Import"
@@ -9952,6 +9444,394 @@
    "The list has more than 2000 items.",
    "Die Liste hat mehr als 2000 Einträge."
   ],
+  "playback.introSkipMode": [
+   "Intro and recap",
+   "Vorspann und Rückblick"
+  ],
+  "playback.outroSkipMode": [
+   "Credits and preview",
+   "Abspann und Vorschau"
+  ],
+  "playback.skipMode.Off": [
+   "Off",
+   "Aus"
+  ],
+  "playback.skipMode.Button": [
+   "Show button",
+   "Schaltfläche zeigen"
+  ],
+  "playback.skipMode.Automatic": [
+   "Automatic",
+   "Automatisch"
+  ],
+  "player.skip.Intro": [
+   "Skip intro",
+   "Intro überspringen"
+  ],
+  "player.skip.Credits": [
+   "Skip credits",
+   "Abspann überspringen"
+  ],
+  "player.skip.Recap": [
+   "Skip recap",
+   "Rückblick überspringen"
+  ],
+  "player.skip.Preview": [
+   "Skip preview",
+   "Vorschau überspringen"
+  ],
+  "player.skipped.Intro": [
+   "Intro skipped",
+   "Intro übersprungen"
+  ],
+  "player.skipped.Credits": [
+   "Credits skipped",
+   "Abspann übersprungen"
+  ],
+  "player.skipped.Recap": [
+   "Recap skipped",
+   "Rückblick übersprungen"
+  ],
+  "player.skipped.Preview": [
+   "Preview skipped",
+   "Vorschau übersprungen"
+  ],
+  "player.skipped.next": [
+   "Next episode starts",
+   "Nächste Folge startet"
+  ],
+  "player.skipped.undo": [
+   "Undo",
+   "Rückgängig"
+  ],
+  "player.tab.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "player.chapter": [
+   "Chapter {0}",
+   "Kapitel {0}"
+  ],
+  "work.tab.markers": [
+   "Markers",
+   "Marker"
+  ],
+  "marker.title": [
+   "Skip markers",
+   "Überspring-Marker"
+  ],
+  "marker.empty": [
+   "No episode has a file yet.",
+   "Noch keine Folge hat eine Datei."
+  ],
+  "marker.seasons": [
+   "Seasons",
+   "Staffeln"
+  ],
+  "marker.copied": [
+   "Copied to {0} files.",
+   "Auf {0} Dateien kopiert."
+  ],
+  "marker.episode": [
+   "Episode",
+   "Folge"
+  ],
+  "marker.kind.Intro": [
+   "Intro",
+   "Intro"
+  ],
+  "marker.kind.Credits": [
+   "Credits",
+   "Abspann"
+  ],
+  "marker.kind.Recap": [
+   "Recap",
+   "Rückblick"
+  ],
+  "marker.kind.Preview": [
+   "Preview",
+   "Vorschau"
+  ],
+  "marker.chapters": [
+   "Chapters",
+   "Kapitel"
+  ],
+  "marker.source.Manual": [
+   "By hand",
+   "Von Hand"
+  ],
+  "marker.source.Sidecar": [
+   "Sidecar file",
+   "Begleitdatei"
+  ],
+  "marker.source.Chapter": [
+   "Chapter",
+   "Kapitel"
+  ],
+  "marker.source.Detected": [
+   "Detected",
+   "Erkannt"
+  ],
+  "marker.start": [
+   "Start (s)",
+   "Start (s)"
+  ],
+  "marker.end": [
+   "End (s)",
+   "Ende (s)"
+  ],
+  "marker.offset": [
+   "Offset (s)",
+   "Versatz (s)"
+  ],
+  "marker.copy": [
+   "Copy to season",
+   "In Staffel kopieren"
+  ],
+  "marker.delete": [
+   "Delete",
+   "Löschen"
+  ],
+  "admin.jobs.title": [
+   "Jobs",
+   "Jobs"
+  ],
+  "nav.group.system": [
+   "System",
+   "System"
+  ],
+  "operation.type.Job": [
+   "Background job",
+   "Hintergrundjob"
+  ],
+  "jobs.worker.Operation": [
+   "Operations",
+   "Vorgänge"
+  ],
+  "jobs.worker.Acquisition": [
+   "Acquisition",
+   "Beschaffung"
+  ],
+  "jobs.worker.Usenet": [
+   "Usenet",
+   "Usenet"
+  ],
+  "jobs.worker.Media": [
+   "Media",
+   "Medien"
+  ],
+  "jobs.worker.Storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "jobs.worker.Backup": [
+   "Backup",
+   "Backup"
+  ],
+  "jobs.worker.Maintenance": [
+   "Maintenance",
+   "Wartung"
+  ],
+  "jobs.worker.Trickplay": [
+   "Trickplay",
+   "Trickplay"
+  ],
+  "jobs.worker.Subtitle": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "jobs.worker.Recognition": [
+   "Recognition",
+   "Texterkennung"
+  ],
+  "jobs.worker.Catalog": [
+   "Catalog",
+   "Katalog"
+  ],
+  "jobs.worker.Sampler": [
+   "Sampler",
+   "Messung"
+  ],
+  "jobs.worker.Download": [
+   "Downloads",
+   "Downloads"
+  ],
+  "jobs.worker.Provider": [
+   "Providers",
+   "Anbieter"
+  ],
+  "jobs.job": [
+   "Job",
+   "Job"
+  ],
+  "jobs.job.operations": [
+   "Library scans",
+   "Bibliotheksscans"
+  ],
+  "jobs.job.backupQueue": [
+   "Backups",
+   "Backups"
+  ],
+  "jobs.job.downloads": [
+   "Download tracking",
+   "Download-Verfolgung"
+  ],
+  "jobs.job.wantedSearch": [
+   "Wanted search",
+   "Suche nach Gesuchtem"
+  ],
+  "jobs.job.providerSync": [
+   "Provider sync",
+   "Anbieter-Abgleich"
+  ],
+  "jobs.job.providerSyncPlex": [
+   "Plex sync",
+   "Plex-Abgleich"
+  ],
+  "jobs.job.providerSyncJellyfin": [
+   "Jellyfin sync",
+   "Jellyfin-Abgleich"
+  ],
+  "jobs.job.providerSyncEmby": [
+   "Emby sync",
+   "Emby-Abgleich"
+  ],
+  "jobs.job.usenet": [
+   "Usenet downloads",
+   "Usenet-Downloads"
+  ],
+  "jobs.job.aniListMatching": [
+   "AniList matching",
+   "AniList-Zuordnung"
+  ],
+  "jobs.job.storage": [
+   "Storage check",
+   "Speicherprüfung"
+  ],
+  "jobs.job.scanScheduling": [
+   "Scan scheduling",
+   "Scan-Planung"
+  ],
+  "jobs.job.backup": [
+   "Automatic backup",
+   "Automatisches Backup"
+  ],
+  "jobs.job.maintenance": [
+   "Housekeeping",
+   "Aufräumen"
+  ],
+  "jobs.job.trickplay": [
+   "Seek thumbnails",
+   "Vorschaubilder"
+  ],
+  "jobs.job.subtitles": [
+   "Subtitles",
+   "Untertitel"
+  ],
+  "jobs.job.recognition": [
+   "Text recognition",
+   "Texterkennung"
+  ],
+  "jobs.job.catalog": [
+   "Catalog sync",
+   "Katalog-Abgleich"
+  ],
+  "jobs.job.resources": [
+   "Resource sampling",
+   "Ressourcenmessung"
+  ],
+  "jobs.state.Running": [
+   "Running",
+   "Läuft"
+  ],
+  "jobs.state.Paused": [
+   "Paused",
+   "Pausiert"
+  ],
+  "jobs.state.WaitingForUse": [
+   "Waiting",
+   "Wartet"
+  ],
+  "jobs.state.Failed": [
+   "Failed",
+   "Fehler"
+  ],
+  "jobs.state.Off": [
+   "Off",
+   "Aus"
+  ],
+  "jobs.state.Idle": [
+   "Idle",
+   "Bereit"
+  ],
+  "jobs.state.Pending": [
+   "Pending",
+   "Ausstehend"
+  ],
+  "jobs.continuous": [
+   "On demand",
+   "Bei Bedarf"
+  ],
+  "jobs.off": [
+   "Off",
+   "Aus"
+  ],
+  "jobs.last": [
+   "Last run",
+   "Letzter Lauf"
+  ],
+  "jobs.next": [
+   "Next run",
+   "Nächster Lauf"
+  ],
+  "jobs.use": [
+   "While in use",
+   "Bei Nutzung"
+  ],
+  "jobs.use.waits": [
+   "Waits",
+   "Wartet"
+  ],
+  "jobs.use.runs": [
+   "Runs",
+   "Läuft"
+  ],
+  "jobs.pause": [
+   "Pause",
+   "Pausieren"
+  ],
+  "jobs.resume": [
+   "Resume",
+   "Fortsetzen"
+  ],
+  "jobs.run": [
+   "Run now",
+   "Jetzt ausführen"
+  ],
+  "jobs.open": [
+   "Open Jobs",
+   "Jobs öffnen"
+  ],
+  "jobs.history": [
+   "History",
+   "Verlauf"
+  ],
+  "jobs.when": [
+   "When",
+   "Zeit"
+  ],
+  "jobs.allActivity": [
+   "All activity",
+   "Gesamte Aktivität"
+  ],
+  "jobs.history.empty": [
+   "No finished operations yet.",
+   "Noch keine abgeschlossenen Vorgänge."
+  ],
+  "jobs.job.covers": [
+   "Provider covers",
+   "Titelbilder der Anbieter"
+  ],
   "errors.playback_evicted": [
    "Playback ended because the server needed the capacity. Try again at a lower quality.",
    "Die Wiedergabe wurde beendet, weil der Server die Kapazität brauchte. Versuche es mit niedrigerer Qualität."
@@ -10108,257 +9988,17 @@
    "The server is busy, so this plays in a lower quality.",
    "Der Server ist ausgelastet, deshalb läuft dies in niedrigerer Qualität."
   ],
-  "account.login.userPlaceholder": [
-   "Your username",
-   "Dein Benutzername"
-  ],
-  "account.login.forgot": [
-   "Forgot password?",
-   "Passwort vergessen?"
-  ],
-  "account.login.forgotHint": [
-   "An administrator resets passwords. Jularr sends no emails.",
-   "Passwörter setzt ein Administrator zurück. Jularr verschickt keine E-Mails."
-  ],
-  "account.login.providers": [
-   "Or continue with",
-   "Oder weiter mit"
-  ],
-  "account.login.newHere": [
-   "New to Jularr?",
-   "Neu bei Jularr?"
-  ],
-  "account.login.requestAccess": [
-   "Request access",
-   "Zugang anfragen"
-  ],
-  "account.register.passwordPlaceholder": [
-   "At least 12 characters",
-   "Mindestens 12 Zeichen"
-  ],
-  "account.register.confirmPlaceholder": [
-   "Repeat your password",
-   "Passwort wiederholen"
-  ],
-  "account.register.approvalTitle": [
-   "Admin approval required",
-   "Freigabe durch einen Administrator nötig"
-  ],
-  "account.register.approvalText": [
-   "No email needed. Your account becomes active when an administrator approves it.",
-   "Keine E-Mail nötig. Dein Konto wird aktiv, sobald ein Administrator es freigibt."
-  ],
-  "account.register.backToSignIn": [
-   "Back to sign in",
-   "Zurück zur Anmeldung"
-  ],
-  "account.pending.status": [
-   "Approval pending",
-   "Freigabe ausstehend"
-  ],
-  "account.pending.title": [
-   "Account created",
-   "Konto erstellt"
-  ],
-  "account.pending.waiting": [
-   "{0}, your registration is waiting for an administrator to approve it.",
-   "{0}, deine Registrierung wartet auf die Freigabe durch einen Administrator."
-  ],
-  "account.pending.nextTitle": [
-   "What happens next?",
-   "Wie geht es weiter?"
-  ],
-  "account.pending.nextText": [
-   "Your admin reviews the request and activates the account. You can then sign in with the username and password you chose.",
-   "Dein Admin prüft die Anfrage und aktiviert das Konto. Danach kannst du dich mit dem gewählten Benutzernamen und Passwort anmelden."
-  ],
-  "account.pending.noEmail": [
-   "No email notifications are sent.",
-   "Es werden keine E-Mail-Benachrichtigungen verschickt."
-  ],
-  "appearance.design": [
-   "Design",
-   "Design"
-  ],
-  "appearance.theme": [
-   "Theme",
-   "Farbschema"
-  ],
-  "account.field.username": [
-   "Username",
-   "Benutzername"
-  ],
-  "account.register.usernamePlaceholder": [
-   "Choose a username",
-   "Benutzernamen wählen"
-  ],
-  "account.register.usernameHelp": [
-   "3–32 characters · letters, numbers, dots, _ or -",
-   "3–32 Zeichen · Buchstaben, Zahlen, Punkte, _ oder -"
-  ],
-  "hint.AccountFields.Username.placeholder": [
-   "Choose a username",
-   "Benutzernamen wählen"
-  ],
-  "hint.AccountFields.Username.info": [
-   "3–32 characters: letters, numbers, dots, underscores or hyphens. This is what you sign in with.",
-   "3–32 Zeichen: Buchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche. Damit meldest du dich an."
-  ],
-  "errors.validation.password_weak": [
-   "Use at least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters.",
-   "Nimm mindestens 12 Zeichen, davon mindestens drei der Arten: Kleinbuchstaben, Großbuchstaben, Ziffern und Sonderzeichen."
-  ],
-  "errors.validation.invalid_username": [
-   "Use letters, numbers, dots, underscores or hyphens.",
-   "Nimm Buchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche."
-  ],
-  "errors.validation.username_taken": [
-   "This username is already taken.",
-   "Dieser Benutzername ist schon vergeben."
-  ],
-  "reader.openPdf": [
-   "Open in a new tab",
-   "In neuem Tab öffnen"
-  ],
-  "admin.instance.backupIntervalHours": [
-   "Automatic backup interval (hours)",
-   "Intervall der automatischen Backups (Stunden)"
-  ],
-  "admin.instance.backupKeep": [
-   "Backups to keep",
-   "Backups behalten"
-  ],
-  "admin.instance.providerSyncIntervalMinutes": [
-   "Plex, Jellyfin and Emby sync interval (minutes)",
-   "Intervall des Plex-, Jellyfin- und Emby-Abgleichs (Minuten)"
-  ],
-  "admin.instance.wantedSearchIntervalMinutes": [
-   "Wanted search period (minutes)",
-   "Suchintervall für Gesuchtes (Minuten)"
-  ],
-  "hint.InstanceSettingsFields.BackupIntervalHours.placeholder": [
-   "24",
-   "24"
-  ],
-  "hint.InstanceSettingsFields.BackupIntervalHours.info": [
-   "Hours between automatic backups; 0 switches them off.",
-   "Stunden zwischen automatischen Backups; 0 schaltet sie aus."
-  ],
-  "hint.InstanceSettingsFields.BackupKeep.placeholder": [
-   "7",
-   "7"
-  ],
-  "hint.InstanceSettingsFields.BackupKeep.info": [
-   "The newest backups stay, older ones are removed.",
-   "Die neuesten Backups bleiben, ältere werden entfernt."
-  ],
-  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.placeholder": [
-   "30",
-   "30"
-  ],
-  "hint.InstanceSettingsFields.ProviderSyncIntervalMinutes.info": [
-   "Minutes between two reads of the connected Plex, Jellyfin and Emby servers.",
-   "Minuten zwischen zwei Abgleichen der verbundenen Plex-, Jellyfin- und Emby-Server."
-  ],
-  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.placeholder": [
-   "2",
-   "2"
-  ],
-  "hint.InstanceSettingsFields.WantedSearchIntervalMinutes.info": [
-   "Minutes between two searches of the wanted titles that are due.",
-   "Minuten zwischen zwei Suchen nach fälligen gesuchten Titeln."
-  ],
-  "player.speedValue": [
-   "Speed value",
-   "Geschwindigkeit"
-  ],
-  "player.picture": [
-   "Picture",
-   "Bild"
-  ],
-  "player.fit": [
-   "Picture fit",
-   "Bildanpassung"
-  ],
-  "player.fit.contain": [
-   "Fit",
-   "Einpassen"
-  ],
-  "player.fit.cover": [
-   "Fill",
-   "Füllen"
-  ],
-  "player.fit.original": [
-   "Original size",
-   "Originalgröße"
-  ],
-  "player.settings": [
-   "Player settings",
-   "Player-Einstellungen"
-  ],
-  "player.currentPlayback": [
-   "Current playback",
-   "Aktuelle Wiedergabe"
-  ],
-  "player.theater": [
-   "Wide view",
-   "Breite Ansicht"
-  ],
-  "player.tab.basic": [
-   "Basic",
-   "Basis"
-  ],
-  "player.tab.audio": [
-   "Audio",
-   "Audio"
-  ],
-  "player.tab.subtitles": [
-   "Subtitles",
-   "Untertitel"
-  ],
-  "player.tab.playback": [
-   "Playback",
-   "Wiedergabe"
-  ],
-  "player.tab.info": [
-   "Info",
-   "Info"
-  ],
-  "jobs.worker.Download": [
-   "Downloads",
-   "Downloads"
-  ],
-  "jobs.worker.Provider": [
-   "Providers",
-   "Anbieter"
-  ],
-  "jobs.job.backupQueue": [
-   "Backups",
-   "Backups"
-  ],
-  "jobs.job.providerSync": [
-   "Provider sync",
-   "Anbieter-Abgleich"
-  ],
-  "jobs.job.providerSyncPlex": [
-   "Plex sync",
-   "Plex-Abgleich"
-  ],
-  "jobs.job.providerSyncJellyfin": [
-   "Jellyfin sync",
-   "Jellyfin-Abgleich"
-  ],
-  "jobs.job.providerSyncEmby": [
-   "Emby sync",
-   "Emby-Abgleich"
-  ],
-  "jobs.off": [
-   "Off",
-   "Aus"
-  ],
   "jobs.job.benchmarkQueue": [
    "Transcoding benchmark",
    "Transcoding-Benchmark"
+  ],
+  "reader.smart.preparing": [
+   "A reading copy of this PDF is being prepared in the background.",
+   "Eine Lesekopie dieses PDFs wird im Hintergrund vorbereitet."
+  ],
+  "reader.smart.failed": [
+   "The reading copy of this PDF could not be created. Reading is not affected.",
+   "Die Lesekopie dieses PDFs konnte nicht erstellt werden. Das Lesen bleibt unberührt."
   ],
   "reader.smart.declined.scan": [
    "No reading copy was made: this PDF consists of scanned pages.",
@@ -10372,113 +10012,145 @@
    "No reading copy was made: the text of this PDF is unreliable.",
    "Es wurde keine Lesekopie erstellt: Der Text dieses PDFs ist unzuverlässig."
   ],
+  "reader.figure.open": [
+   "Open full screen",
+   "Im Vollbild öffnen"
+  ],
+  "reader.figure.view": [
+   "Figure",
+   "Abbildung"
+  ],
+  "reader.figure.zoomIn": [
+   "Zoom in",
+   "Vergrößern"
+  ],
+  "reader.figure.zoomOut": [
+   "Zoom out",
+   "Verkleinern"
+  ],
+  "reader.figure.fit": [
+   "Fit to screen",
+   "An den Bildschirm anpassen"
+  ],
+  "reader.figure.original": [
+   "Page {0} is only shown in the original PDF.",
+   "Seite {0} wird nur im Original-PDF angezeigt."
+  ],
+  "instance.module.SmartPdf": [
+   "Prepare EPUB reading copies of PDF books",
+   "EPUB-Lesekopien von PDF-Büchern vorbereiten"
+  ],
+  "activity.tab.Queue": [
+   "Queue",
+   "Warteschlange"
+  ],
+  "activity.tab.History": [
+   "History",
+   "Verlauf"
+  ],
   "errors.reading_pdf_unfit": [
    "This PDF is mostly pictures or its text is unreliable; it opens as a PDF.",
    "Dieses PDF besteht überwiegend aus Bildern oder sein Text ist unzuverlässig; es wird als PDF geöffnet."
   ],
-  "error.homePage": [
-   "Go to home page",
-   "Zur Startseite"
+  "jobs.worker.Derivation": [
+   "Reading copies",
+   "Lesekopien"
   ],
-  "error.page": [
-   "Error",
-   "Fehler"
+  "jobs.job.readingCopies": [
+   "Reading copies",
+   "Lesekopien"
   ],
-  "error.reference": [
-   "Reference {0}",
-   "Referenz {0}"
+  "reader.settings.view": [
+   "View",
+   "Ansicht"
   ],
-  "error.retry": [
-   "Try again",
-   "Erneut versuchen"
+  "reader.settings.pages": [
+   "Pages",
+   "Seiten"
   ],
-  "error.signIn": [
-   "Sign in",
-   "Anmelden"
+  "reader.view.auto": [
+   "Automatic",
+   "Automatisch"
   ],
-  "error.400.title": [
-   "400 Bad Request",
-   "400 Ungültige Anfrage"
+  "reader.view.smart": [
+   "Smart Book",
+   "Smart Book"
   ],
-  "error.400.text": [
-   "Jularr could not understand this request. Go back and try again.",
-   "Jularr konnte diese Anfrage nicht verstehen. Gehe zurück und versuche es erneut."
+  "reader.view.original": [
+   "Original pages",
+   "Originalseiten"
   ],
-  "error.401.title": [
-   "401 Unauthorized",
-   "401 Nicht angemeldet"
+  "reader.view.failed": [
+   "The view could not be saved.",
+   "Die Ansicht konnte nicht gespeichert werden."
   ],
-  "error.401.text": [
-   "Sign in to open this page.",
-   "Melde dich an, um diese Seite zu öffnen."
+  "reader.view.smartUnavailable": [
+   "The Smart Book is not ready yet; the original pages are shown.",
+   "Das Smart Book ist noch nicht fertig; die Originalseiten werden angezeigt."
   ],
-  "error.403.title": [
-   "403 Forbidden",
-   "403 Kein Zugriff"
+  "reader.offer.smart": [
+   "The Smart Book of this book is ready.",
+   "Das Smart Book dieses Buchs ist fertig."
   ],
-  "error.403.text": [
-   "You do not have permission to open this area.",
-   "Du hast keine Berechtigung, diesen Bereich zu öffnen."
+  "reader.offer.open": [
+   "Open",
+   "Öffnen"
   ],
-  "error.404.title": [
-   "404 Not Found",
-   "404 Nicht gefunden"
+  "reader.original.loading": [
+   "Loading the pages…",
+   "Seiten werden geladen …"
   ],
-  "error.404.text": [
-   "This page was not found or is not available for this profile.",
-   "Diese Seite wurde nicht gefunden oder ist für dieses Profil nicht verfügbar."
+  "reader.original.failed": [
+   "The original pages could not be shown.",
+   "Die Originalseiten konnten nicht angezeigt werden."
   ],
-  "error.408.title": [
-   "408 Request Timeout",
-   "408 Zeitüberschreitung"
+  "reader.original.page": [
+   "Page",
+   "Seite"
   ],
-  "error.408.text": [
-   "The request took too long. Please try again.",
-   "Die Anfrage hat zu lange gedauert. Bitte versuche es erneut."
+  "reader.original.zoom": [
+   "Zoom",
+   "Zoom"
   ],
-  "error.410.title": [
-   "410 Gone",
-   "410 Nicht mehr vorhanden"
+  "reader.original.fit": [
+   "Fit",
+   "Anpassung"
   ],
-  "error.410.text": [
-   "The requested content no longer exists or was removed.",
-   "Der angeforderte Inhalt existiert nicht mehr oder wurde entfernt."
+  "reader.original.fit.page": [
+   "Whole page",
+   "Ganze Seite"
   ],
-  "error.429.title": [
-   "429 Too Many Requests",
-   "429 Zu viele Anfragen"
+  "reader.original.fit.width": [
+   "Page width",
+   "Seitenbreite"
   ],
-  "error.429.text": [
-   "Please wait a moment before trying again.",
-   "Bitte warte einen Moment, bevor du es erneut versuchst."
+  "reader.recognition.progress": [
+   "Reading the scanned pages: {0} of {1}",
+   "Gescannte Seiten werden gelesen: {0} von {1}"
   ],
-  "error.500.title": [
-   "500 Internal Server Error",
-   "500 Interner Serverfehler"
+  "reader.pageNote.label": [
+   "Note on this page",
+   "Notiz zu dieser Seite"
   ],
-  "error.500.text": [
-   "Something went wrong while loading. Please try again.",
-   "Beim Laden ist ein interner Fehler aufgetreten. Bitte versuche es erneut."
+  "reader.pageNote.save": [
+   "Save note",
+   "Notiz speichern"
   ],
-  "error.502.title": [
-   "502 Bad Gateway",
-   "502 Fehlerhaftes Gateway"
+  "reader.pageNote.page": [
+   "Page {0}",
+   "Seite {0}"
   ],
-  "error.502.text": [
-   "Jularr could not reach a service it needs. Please try again shortly.",
-   "Jularr konnte einen benötigten Dienst nicht erreichen. Bitte versuche es gleich erneut."
+  "reader.figure.originalPages": [
+   "Open the original pages",
+   "Originalseiten öffnen"
   ],
-  "error.503.title": [
-   "503 Service Unavailable",
-   "503 Dienst nicht verfügbar"
+  "reader.figure.originalAlt": [
+   "Original page {0}",
+   "Originalseite {0}"
   ],
-  "error.503.text": [
-   "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly.",
-   "Jularr ist gerade nicht verfügbar, etwa bei Wartung oder wenn der Speicher offline ist. Bitte versuche es gleich erneut."
-  ],
-  "favorites.layout.toggle": [
-   "Switch between grid and list",
-   "Zwischen Raster und Liste wechseln"
+  "reader.download.omitted": [
+   "{0} pages are only in the original and are not part of this EPUB.",
+   "{0} Seiten gibt es nur im Original; sie sind nicht Teil dieses EPUBs."
   ],
   "jobs.kpi.total": [
    "Jobs",
@@ -10655,6 +10327,554 @@
   "jobs.about.readingCopies": [
    "Writes a reading copy (an EPUB) beside digital PDFs, so they read like a book.",
    "Schreibt neben digitale PDFs eine Lesekopie (EPUB), damit sie sich wie ein Buch lesen lassen."
+  ],
+  "media.preview.trailer": [
+   "Trailer",
+   "Trailer"
+  ],
+  "media.preview.pauseTrailer": [
+   "Pause trailer",
+   "Trailer anhalten"
+  ],
+  "media.preview.muteTrailer": [
+   "Mute trailer",
+   "Trailer stummschalten"
+  ],
+  "media.preview.unmuteTrailer": [
+   "Unmute trailer",
+   "Trailer-Ton einschalten"
+  ],
+  "library.filter.open": [
+   "Open filter",
+   "Filter öffnen"
+  ],
+  "library.filter.title": [
+   "Filter",
+   "Filter"
+  ],
+  "list.layout.toggle": [
+   "Switch between grid and list",
+   "Zwischen Raster und Liste wechseln"
+  ],
+  "jobs.job.plexSync": [
+   "Plex sync",
+   "Plex-Abgleich"
+  ],
+  "jobs.job.mediaServerSync": [
+   "Jellyfin and Emby sync",
+   "Jellyfin- und Emby-Abgleich"
+  ],
+  "account.login.userPlaceholder": [
+   "Your username",
+   "Dein Benutzername"
+  ],
+  "account.login.forgot": [
+   "Forgot password?",
+   "Passwort vergessen?"
+  ],
+  "account.login.forgotHint": [
+   "An administrator resets passwords. Jularr sends no emails.",
+   "Passwörter setzt ein Administrator zurück. Jularr verschickt keine E-Mails."
+  ],
+  "account.login.providers": [
+   "Or continue with",
+   "Oder weiter mit"
+  ],
+  "account.login.newHere": [
+   "New to Jularr?",
+   "Neu bei Jularr?"
+  ],
+  "account.login.requestAccess": [
+   "Request access",
+   "Zugang anfragen"
+  ],
+  "account.register.passwordPlaceholder": [
+   "At least 12 characters",
+   "Mindestens 12 Zeichen"
+  ],
+  "account.register.confirmPlaceholder": [
+   "Repeat your password",
+   "Passwort wiederholen"
+  ],
+  "account.register.approvalTitle": [
+   "Admin approval required",
+   "Freigabe durch einen Administrator nötig"
+  ],
+  "account.register.approvalText": [
+   "No email needed. Your account becomes active when an administrator approves it.",
+   "Keine E-Mail nötig. Dein Konto wird aktiv, sobald ein Administrator es freigibt."
+  ],
+  "account.register.backToSignIn": [
+   "Back to sign in",
+   "Zurück zur Anmeldung"
+  ],
+  "account.pending.status": [
+   "Approval pending",
+   "Freigabe ausstehend"
+  ],
+  "account.pending.title": [
+   "Account created",
+   "Konto erstellt"
+  ],
+  "account.pending.waiting": [
+   "{0}, your registration is waiting for an administrator to approve it.",
+   "{0}, deine Registrierung wartet auf die Freigabe durch einen Administrator."
+  ],
+  "account.pending.nextTitle": [
+   "What happens next?",
+   "Wie geht es weiter?"
+  ],
+  "account.pending.nextText": [
+   "Your admin reviews the request and activates the account. You can then sign in with the username and password you chose.",
+   "Dein Admin prüft die Anfrage und aktiviert das Konto. Danach kannst du dich mit dem gewählten Benutzernamen und Passwort anmelden."
+  ],
+  "account.pending.noEmail": [
+   "No email notifications are sent.",
+   "Es werden keine E-Mail-Benachrichtigungen verschickt."
+  ],
+  "appearance.design": [
+   "Design",
+   "Design"
+  ],
+  "appearance.theme": [
+   "Theme",
+   "Farbschema"
+  ],
+  "account.field.username": [
+   "Username",
+   "Benutzername"
+  ],
+  "account.register.usernamePlaceholder": [
+   "Choose a username",
+   "Benutzernamen wählen"
+  ],
+  "account.register.usernameHelp": [
+   "3–32 characters · letters, numbers, dots, _ or -",
+   "3–32 Zeichen · Buchstaben, Zahlen, Punkte, _ oder -"
+  ],
+  "hint.AccountFields.Username.placeholder": [
+   "Choose a username",
+   "Benutzernamen wählen"
+  ],
+  "hint.AccountFields.Username.info": [
+   "3–32 characters: letters, numbers, dots, underscores or hyphens. This is what you sign in with.",
+   "3–32 Zeichen: Buchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche. Damit meldest du dich an."
+  ],
+  "errors.validation.password_weak": [
+   "Use at least 12 characters with at least three of: lowercase letters, uppercase letters, digits and special characters.",
+   "Nimm mindestens 12 Zeichen, davon mindestens drei der Arten: Kleinbuchstaben, Großbuchstaben, Ziffern und Sonderzeichen."
+  ],
+  "errors.validation.invalid_username": [
+   "Use letters, numbers, dots, underscores or hyphens.",
+   "Nimm Buchstaben, Zahlen, Punkte, Unterstriche oder Bindestriche."
+  ],
+  "errors.validation.username_taken": [
+   "This username is already taken.",
+   "Dieser Benutzername ist schon vergeben."
+  ],
+  "nav.group.overview": [
+   "Overview",
+   "Übersicht"
+  ],
+  "nav.system.server": [
+   "Server",
+   "Server"
+  ],
+  "admin.dashboard.title": [
+   "Dashboard",
+   "Dashboard"
+  ],
+  "admin.performance.title": [
+   "Performance",
+   "Performance"
+  ],
+  "admin.logs.title": [
+   "Logs",
+   "Logs"
+  ],
+  "dashboard.kpi.status": [
+   "System status",
+   "Systemstatus"
+  ],
+  "dashboard.kpi.media": [
+   "Media",
+   "Medien"
+  ],
+  "dashboard.kpi.downloads": [
+   "Downloads",
+   "Downloads"
+  ],
+  "dashboard.kpi.requests": [
+   "Open requests",
+   "Offene Requests"
+  ],
+  "dashboard.status.stable": [
+   "Stable",
+   "Stabil"
+  ],
+  "dashboard.status.warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "dashboard.status.stable.foot": [
+   "All services answer",
+   "Alle Dienste erreichbar"
+  ],
+  "dashboard.status.warning.foot": [
+   "{0} service(s) do not answer",
+   "{0} Dienst(e) nicht erreichbar"
+  ],
+  "dashboard.status.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.media.files": [
+   "{0} files managed",
+   "{0} Dateien verwaltet"
+  ],
+  "dashboard.downloads.failed": [
+   " with errors",
+   " mit Fehler"
+  ],
+  "dashboard.requests.foot": [
+   "Waiting for a decision",
+   "Warten auf Freigabe"
+  ],
+  "dashboard.performance": [
+   "System performance",
+   "Systemleistung"
+  ],
+  "dashboard.performance.window": [
+   "Last 24 hours",
+   "Letzte 24 Stunden"
+  ],
+  "dashboard.activity": [
+   "Activity & downloads",
+   "Aktivität & Downloads"
+  ],
+  "dashboard.activity.open": [
+   "To the queue",
+   "Zur Queue"
+  ],
+  "dashboard.activity.empty": [
+   "Nothing is downloading right now.",
+   "Gerade läuft kein Download."
+  ],
+  "dashboard.services": [
+   "Available services",
+   "Verfügbare Dienste"
+  ],
+  "dashboard.services.check": [
+   "Check now",
+   "Jetzt prüfen"
+  ],
+  "dashboard.services.empty": [
+   "No service is set up yet.",
+   "Es ist noch kein Dienst eingerichtet."
+  ],
+  "dashboard.services.checked": [
+   "Last checked {0}",
+   "Zuletzt geprüft {0}"
+  ],
+  "dashboard.services.never": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "dashboard.storage.open": [
+   "Open storage",
+   "Speicher öffnen"
+  ],
+  "dashboard.storage.unchecked": [
+   "Not checked yet",
+   "Noch nicht geprüft"
+  ],
+  "dashboard.storage.video": [
+   "Video",
+   "Videos"
+  ],
+  "dashboard.storage.books": [
+   "Books",
+   "Bücher"
+  ],
+  "dashboard.storage.music": [
+   "Music",
+   "Musik"
+  ],
+  "dashboard.storage.games": [
+   "Games",
+   "Games"
+  ],
+  "dashboard.storage.other": [
+   "Other data",
+   "Andere Daten"
+  ],
+  "health.type.Database": [
+   "Database",
+   "Datenbank"
+  ],
+  "health.type.Storage": [
+   "Storage",
+   "Speicher"
+  ],
+  "health.type.Provider": [
+   "Provider",
+   "Anbieter"
+  ],
+  "health.type.MediaServer": [
+   "Media server",
+   "Medienserver"
+  ],
+  "health.type.DownloadClient": [
+   "Download client",
+   "Download-Client"
+  ],
+  "health.type.Indexer": [
+   "Indexer",
+   "Indexer"
+  ],
+  "health.state.Available": [
+   "Reachable",
+   "Erreichbar"
+  ],
+  "health.state.Unavailable": [
+   "Not reachable",
+   "Nicht erreichbar"
+  ],
+  "health.state.Unknown": [
+   "Not checked",
+   "Nicht geprüft"
+  ],
+  "resource.now": [
+   "Now",
+   "Jetzt"
+  ],
+  "resource.chart": [
+   "Processor and memory use over the last 24 hours",
+   "Prozessor- und Speichernutzung der letzten 24 Stunden"
+  ],
+  "resource.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "resource.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.processor": [
+   "CPU",
+   "CPU"
+  ],
+  "performance.kpi.memory": [
+   "RAM",
+   "RAM"
+  ],
+  "performance.kpi.response": [
+   "Response time",
+   "Antwortzeit"
+  ],
+  "performance.kpi.errors": [
+   "Error rate",
+   "Fehlerquote"
+  ],
+  "performance.window": [
+   "Period: 24 hours",
+   "Zeitraum: 24 Stunden"
+  ],
+  "performance.history": [
+   "Load and memory use",
+   "Leistung und Speichernutzung"
+  ],
+  "performance.services": [
+   "Services by runtime",
+   "Services nach Laufzeit"
+  ],
+  "performance.service": [
+   "Service",
+   "Service"
+  ],
+  "performance.calls": [
+   "Calls",
+   "Aufrufe"
+  ],
+  "performance.average": [
+   "Average",
+   "Durchschnitt"
+  ],
+  "performance.maximum": [
+   "Longest",
+   "Max."
+  ],
+  "performance.errorCount": [
+   "Errors",
+   "Fehler"
+  ],
+  "performance.empty": [
+   "No service was called in the last 24 hours.",
+   "In den letzten 24 Stunden wurde kein Service aufgerufen."
+  ],
+  "logs.level.All": [
+   "All",
+   "Alle"
+  ],
+  "logs.level.Error": [
+   "Error",
+   "Fehler"
+  ],
+  "logs.level.Warning": [
+   "Warning",
+   "Warnung"
+  ],
+  "logs.level.Info": [
+   "Info",
+   "Info"
+  ],
+  "logs.source": [
+   "Source",
+   "Quelle"
+  ],
+  "logs.source.All": [
+   "All sources",
+   "Alle Quellen"
+  ],
+  "logs.source.Activity": [
+   "Activity",
+   "Aktivität"
+  ],
+  "logs.source.Job": [
+   "Jobs",
+   "Jobs"
+  ],
+  "logs.source.Application": [
+   "Application",
+   "Anwendung"
+  ],
+  "logs.search": [
+   "Filter messages",
+   "Meldungen filtern"
+  ],
+  "logs.empty": [
+   "No messages for this filter.",
+   "Keine Meldungen für diesen Filter."
+  ],
+  "jobs.job.health": [
+   "Health check",
+   "Gesundheitsprüfung"
+  ],
+  "jobs.worker.Health": [
+   "Health",
+   "Gesundheit"
+  ],
+  "jobs.health.summary": [
+   "{0} of {1} services reachable",
+   "{0} von {1} Diensten erreichbar"
+  ],
+  "jobs.about.health": [
+   "Asks every configured service whether it answers. A service that does not makes the pass fail, and Activity tells you.",
+   "Fragt jeden eingerichteten Dienst, ob er antwortet. Antwortet einer nicht, schlägt der Lauf fehl und die Aktivität meldet es."
+  ],
+  "error.homePage": [
+   "Go to home page",
+   "Zur Startseite"
+  ],
+  "error.page": [
+   "Error",
+   "Fehler"
+  ],
+  "error.reference": [
+   "Reference {0}",
+   "Referenz {0}"
+  ],
+  "error.retry": [
+   "Try again",
+   "Erneut versuchen"
+  ],
+  "error.signIn": [
+   "Sign in",
+   "Anmelden"
+  ],
+  "error.400.title": [
+   "400 Bad Request",
+   "400 Ungültige Anfrage"
+  ],
+  "error.400.text": [
+   "Jularr could not understand this request. Go back and try again.",
+   "Jularr konnte diese Anfrage nicht verstehen. Gehe zurück und versuche es erneut."
+  ],
+  "error.401.title": [
+   "401 Unauthorized",
+   "401 Nicht angemeldet"
+  ],
+  "error.401.text": [
+   "Sign in to open this page.",
+   "Melde dich an, um diese Seite zu öffnen."
+  ],
+  "error.403.title": [
+   "403 Forbidden",
+   "403 Kein Zugriff"
+  ],
+  "error.403.text": [
+   "You do not have permission to open this area.",
+   "Du hast keine Berechtigung, diesen Bereich zu öffnen."
+  ],
+  "error.404.title": [
+   "404 Not Found",
+   "404 Nicht gefunden"
+  ],
+  "error.404.text": [
+   "This page was not found or is not available for this profile.",
+   "Diese Seite wurde nicht gefunden oder ist für dieses Profil nicht verfügbar."
+  ],
+  "error.408.title": [
+   "408 Request Timeout",
+   "408 Zeitüberschreitung"
+  ],
+  "error.408.text": [
+   "The request took too long. Please try again.",
+   "Die Anfrage hat zu lange gedauert. Bitte versuche es erneut."
+  ],
+  "error.410.title": [
+   "410 Gone",
+   "410 Nicht mehr vorhanden"
+  ],
+  "error.410.text": [
+   "The requested content no longer exists or was removed.",
+   "Der angeforderte Inhalt existiert nicht mehr oder wurde entfernt."
+  ],
+  "error.429.title": [
+   "429 Too Many Requests",
+   "429 Zu viele Anfragen"
+  ],
+  "error.429.text": [
+   "Please wait a moment before trying again.",
+   "Bitte warte einen Moment, bevor du es erneut versuchst."
+  ],
+  "error.500.title": [
+   "500 Internal Server Error",
+   "500 Interner Serverfehler"
+  ],
+  "error.500.text": [
+   "Something went wrong while loading. Please try again.",
+   "Beim Laden ist ein interner Fehler aufgetreten. Bitte versuche es erneut."
+  ],
+  "error.502.title": [
+   "502 Bad Gateway",
+   "502 Fehlerhaftes Gateway"
+  ],
+  "error.502.text": [
+   "Jularr could not reach a service it needs. Please try again shortly.",
+   "Jularr konnte einen benötigten Dienst nicht erreichen. Bitte versuche es gleich erneut."
+  ],
+  "error.503.title": [
+   "503 Service Unavailable",
+   "503 Dienst nicht verfügbar"
+  ],
+  "error.503.text": [
+   "Jularr is not available right now, for example during maintenance or while its storage is offline. Please try again shortly.",
+   "Jularr ist gerade nicht verfügbar, etwa bei Wartung oder wenn der Speicher offline ist. Bitte versuche es gleich erneut."
   ],
   "profile.section.languages": [
    "Languages",

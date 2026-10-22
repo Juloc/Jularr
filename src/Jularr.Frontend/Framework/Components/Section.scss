@@ -7,6 +7,19 @@
     box-shadow: var(--shadow);
 
     h2 { margin: 0 0 12px; }
+
+    // The heading with an action at its end.
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 15px;
+
+        h2 { margin: 0; }
+        > span { color: var(--muted); font-size: var(--text-small); }
+    }
 }
 
 // A heading with its icon tile: one line, the text cut with an ellipsis.

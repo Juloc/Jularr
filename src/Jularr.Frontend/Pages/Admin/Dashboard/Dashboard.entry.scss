@@ -1,0 +1,121 @@
+@use "../../../Framework/Components/KpiTile";
+@use "../../../Framework/Components/ResourceChart";
+@use "../../../Framework/Components/ShareBar";
+
+// Two columns, the wider one first; one column on a narrow screen.
+.dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(265px, 1fr);
+    gap: 16px;
+    align-items: start;
+
+    &__stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+    @media (max-width: 990px) { grid-template-columns: minmax(0, 1fr); gap: 12px; &__stack { gap: 12px; } }
+}
+
+// The last downloads: a tinted symbol, the work with where it comes from, and how far it is.
+.dashboard-recent {
+    display: flex;
+    flex-direction: column;
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 11px 0;
+        border-bottom: 1px solid var(--border);
+
+        &:last-child { border-bottom: 0; }
+    }
+
+    &__symbol {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 29px;
+        height: 29px;
+        border-radius: var(--radius-small);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+
+    &__text {
+        flex: 1;
+        min-width: 0;
+
+        strong { display: block; max-width: 100%; font-size: var(--text-control); line-height: 1.4; }
+    }
+
+    &__facts { display: block; margin-top: 4px; color: var(--muted); font-size: var(--text-small); }
+
+    &__state {
+        flex: none;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        font-size: var(--text-small);
+
+        .live-progress__bar { flex: none; width: 96px; min-width: 0; height: 7px; }
+    }
+}
+
+// The configured services: an icon on a tinted tile, the name with its kind and last check, the state as a pill.
+.dashboard-services {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+
+    &__row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding-bottom: 11px;
+        border-bottom: 1px solid var(--border);
+
+        &:last-child { padding-bottom: 0; border-bottom: 0; }
+        .state-chip { flex: none; margin-left: auto; align-self: center; }
+    }
+
+    &__icon {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-small);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+
+        &--good { background: var(--success-soft); color: var(--success); }
+        &--warn { background: var(--warning-soft); color: var(--warning); }
+    }
+
+    &__text {
+        min-width: 0;
+
+        strong { display: block; max-width: 100%; font-size: var(--text-control); }
+    }
+
+    &__facts { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-small); }
+    &__error { color: var(--warning); }
+}
+
+// Each connection: its name and use, the bar and what the parts are.
+.dashboard-storage {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+
+    &__line {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 0 0 10px;
+        font-size: 12px;
+
+        > span:first-child { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+        > strong { flex: none; font-size: 12px; }
+    }
+}
