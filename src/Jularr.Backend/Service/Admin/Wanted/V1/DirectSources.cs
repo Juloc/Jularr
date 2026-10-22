@@ -109,6 +109,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public async Task<string?> TestAsync(AcquisitionConnectionData source, CancellationToken ct)
         {
+            // Narō without an explicit ncode is not searchable: probe the provider itself.
+            if (source.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou)
+            {
+                try
+                {
+                    await _narou.ProbeAsync(ct);
+                    return null;
+                }
+                catch (NarouException)
+                {
+                    return "acquisition_unavailable";
+                }
+            }
+
             // A search that answers proves the source; null means healthy.
             var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, null, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null, null, null);
             return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
