@@ -227,7 +227,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(data.Host), "invalid_transition");
             }
 
-            var secure = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl;
+            var secure = data.AcquisitionConnectionTypeId is AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl or AcquisitionConnectionType.Narou;
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Narou && new Uri(baseUrl).Host != "ncode.syosetu.com")
+            {
+                throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
+            }
+
             if (secure && new Uri(baseUrl).Scheme != "https")
             {
                 throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
