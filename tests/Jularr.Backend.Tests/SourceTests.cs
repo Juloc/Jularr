@@ -431,6 +431,26 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_FailedDownloadPreservesAnExistingFile()
+        {
+            var sources = new FakeSources();
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver(), NoBrowser());
+            var destination = Path.Combine(Path.GetTempPath(), "anna-existing-" + Guid.NewGuid().ToString("N") + ".epub");
+            var original = Encoding.UTF8.GetBytes("keep-this-existing-file");
+            File.WriteAllBytes(destination, original);
+            try
+            {
+                await Assert.ThrowsExactlyAsync<IOException>(() =>
+                    client.DownloadFileAsync(new Uri("https://files.example.test/0123.epub"), destination, CancellationToken.None, null, _ => new MemoryStream()));
+                CollectionAssert.AreEqual(original, File.ReadAllBytes(destination));
+            }
+            finally
+            {
+                File.Delete(destination);
+            }
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_BrowserHtmlIsRejectedAndIncompleteFileRemoved()
         {
             var sources = new FakeSources();

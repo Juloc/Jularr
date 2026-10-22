@@ -233,6 +233,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct, long? maximumBytes = null, Func<long, IDisposable>? reserveWrite = null)
         {
             var complete = false;
+            var destinationExisted = File.Exists(destination);
             try
             {
                 await DirectDownload.SaveFileAsync(http, file, destination, gates, browser, maximumBytes, reserveWrite, ct);
@@ -258,7 +259,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
             finally
             {
-                if (!complete)
+                if (!complete && !destinationExisted)
                 {
                     try
                     {
