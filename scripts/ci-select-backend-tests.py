@@ -27,7 +27,7 @@ AREAS = (
       "radarr", "lidarr", "readarr", "usenet", "torrent", "arrplus"),
      ("AcquisitionTests", "UsenetTests", "ManualImportLogicTests")),
     (("storage", "mount", "smb", "filesystem", "fileimport"),
-     ("StorageTests", "BackupTests")),
+     ("StorageTests",)),
     (("authentication", "session", "account", "permission", "device", "profile", "servicegate"),
      ("AuthenticationTests", "DeviceTests")),
     (("library", "media", "catalog", "metadata", "provider", "discover", "tmdb", "anilist"),
