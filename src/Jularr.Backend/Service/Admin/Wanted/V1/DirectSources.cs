@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         // *native Japanese* aliases. Cross-language guesses are not identities.
                         // Never auto-grab a web-novel counterpart without exact Japanese title
                         // and author evidence; a published edition remains a separate source.
-                        var wantedAuthor = NativeKey(target.Author);
+                        var wantedAuthor = NativeKey(BookReleaseJudge.Authors(target.Author).FirstOrDefault());
                         if (wantedAuthor.Length == 0) return [];
                         var candidates = new List<ReleaseOffer>();
                         var nativeNames = new[] { target.CanonicalTitle }
