@@ -122,10 +122,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         break;
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = new Uri(address.GetLeftPart(UriPartial.Authority) + "/");
+                        var configured = Catalog(source);
+                        if (!AnnasArchiveClient.IsTrustedSource(configured, site))
+                        {
+                            throw new DirectSourceException("acquisition_grab_failed");
+                        }
+
                         var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
                         if (source.ProtectedApiKey is { } memberKey)
                         {
-                            await _annas.DownloadAsync(site, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
+                            await _annas.DownloadAsync(configured, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct, paths.Settings.MaxJobBytes, Reserve);
                             break;
                         }
 

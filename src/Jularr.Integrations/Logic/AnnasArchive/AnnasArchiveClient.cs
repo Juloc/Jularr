@@ -29,6 +29,24 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
 
+        public static bool IsTrustedSource(Uri configured, Uri candidate)
+        {
+            if (candidate.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(candidate.UserInfo))
+            {
+                return false;
+            }
+
+            if (string.Equals(configured.Scheme, candidate.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(configured.Host, candidate.Host, StringComparison.OrdinalIgnoreCase) && configured.Port == candidate.Port)
+            {
+                return true;
+            }
+
+            return configured.IsDefaultPort && candidate.IsDefaultPort
+                && OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, configured.Host, StringComparison.OrdinalIgnoreCase))
+                && OfficialMirrors.Any(mirror => string.Equals(new Uri(mirror).Host, candidate.Host, StringComparison.OrdinalIgnoreCase));
+        }
+
         // The public waiting page of one download server.
         public static Uri SlowPageUri(Uri site, string md5, int server = 0) => new(site, "slow_download/" + md5 + "/0/" + server.ToString(CultureInfo.InvariantCulture));
 
@@ -61,6 +79,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
                 page = read.Html;
                 answered = new Uri(read.Address.GetLeftPart(UriPartial.Authority) + "/");
+                if (!IsTrustedSource(site, answered))
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The browser returned an untrusted source.");
+                }
             }
 
             var records = new List<AnnasArchiveRecord>();
@@ -256,6 +278,10 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             catch (DirectDownloadException exception) when (exception.Failure != DirectDownloadFailure.TooLarge)
             {
                 throw new AnnasArchiveException(Failure(exception), "The file could not be downloaded.", exception);
+            }
+            catch (SourceBrowserException exception)
+            {
+                throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "The browser could not fetch the file.", exception);
             }
             finally
             {

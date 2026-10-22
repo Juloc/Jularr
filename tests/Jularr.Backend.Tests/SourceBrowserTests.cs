@@ -20,7 +20,7 @@ namespace Jularr.Backend.Tests
 
             using var folder = new TemporaryDirectory();
             using var server = new CheckPage();
-            using var source = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var source = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
             Assert.IsTrue(source.IsAvailable);
 
             // The page answers a browser that passed its own check.
@@ -55,7 +55,7 @@ namespace Jularr.Backend.Tests
             try
             {
                 // The browser that already runs is used as it is; its profile is its own.
-                using var source = new SourceBrowser(new BrowserOptions { RemoteAddress = $"http://127.0.0.1:{port}", ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+                using var source = new SourceBrowser(new BrowserOptions { RemoteAddress = $"http://127.0.0.1:{port}", ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
                 Assert.IsTrue(source.IsAvailable);
                 var page = await source.ReadPageAsync(server.Address, CancellationToken.None);
                 Assert.IsNotNull(page);
@@ -79,12 +79,12 @@ namespace Jularr.Backend.Tests
 
             using var folder = new TemporaryDirectory();
             using var server = new CheckPage();
-            using var first = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var first = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
             var page = await first.ReadPageAsync(server.Address, CancellationToken.None);
             Assert.IsNotNull(page);
 
             // A browser that still runs with this profile is used as it is; a second one is not started.
-            using var second = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var second = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
             var again = await second.ReadPageAsync(server.Address, CancellationToken.None);
             Assert.IsNotNull(again);
             StringAssert.Contains(again, "The page behind the check");
@@ -101,16 +101,16 @@ namespace Jularr.Backend.Tests
 
             using var folder = new TemporaryDirectory();
             using var server = new CheckPage();
-            using var first = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var first = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
             var page = await first.ReadPageAsync(server.Address, CancellationToken.None);
             Assert.IsNotNull(page);
 
             // A browser that runs with the profile is used as it is; the reset ends it, so a new one can start.
-            using var second = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var second = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
             await second.ResetAsync();
             Assert.IsFalse(Directory.Exists(Path.Combine(folder.Path, "profile")));
 
-            using var third = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var third = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
             var again = await third.ReadPageAsync(server.Address, CancellationToken.None);
             Assert.IsNotNull(again);
             StringAssert.Contains(again, "The page behind the check");
@@ -127,12 +127,29 @@ namespace Jularr.Backend.Tests
 
             using var folder = new TemporaryDirectory();
             using var server = new CheckPage();
-            using var source = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60 });
+            using var source = new SourceBrowser(new BrowserOptions { Path = browser, ProfilePath = folder.Path, PageTimeoutSeconds = 60, AllowPrivateAddressesForTests = true });
 
             // The first address that answers wins; the mirrors are read at the same time.
             var page = await source.ReadPagesAsync([server.Address, new Uri(server.Address, "/other")], CancellationToken.None);
             Assert.IsNotNull(page);
             StringAssert.Contains(page.Html, "The page behind the check");
+        }
+
+        [TestMethod]
+        public async Task Browser_PrivateNavigationIsRejectedBeforeConnecting()
+        {
+            using var folder = new TemporaryDirectory();
+            using var source = new SourceBrowser(new BrowserOptions
+            {
+                Path = "",
+                RemoteAddress = "http://127.0.0.1:1",
+                ProfilePath = folder.Path
+            });
+
+            Assert.IsNull(await source.ReadPageAsync(new Uri("https://127.0.0.1/private"), CancellationToken.None));
+            Assert.IsNull(await source.ReadPagesAsync([new Uri("https://10.0.0.2/private")], CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<Integrations.Data.Browser.SourceBrowserException>(() =>
+                source.SaveFileAsync(new Uri("https://192.168.1.2/file.epub"), Path.Combine(folder.Path, "book.epub"), null, null, CancellationToken.None));
         }
 
         [TestMethod]

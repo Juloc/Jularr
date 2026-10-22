@@ -19,6 +19,9 @@ namespace Jularr.Integrations.Logic.Browser
         public int PageTimeoutSeconds { get; set; } = 30;
         public int DownloadTimeoutSeconds { get; set; } = 600;
         public bool NoSandbox { get; set; }
+
+        // Local HTTP test fixtures need access that production source navigation must not have.
+        internal bool AllowPrivateAddressesForTests { get; set; }
     }
 
     // A real browser reads the pages and files a plain request cannot: the source answers with a browser check.
@@ -196,6 +199,11 @@ namespace Jularr.Integrations.Logic.Browser
                 return null;
             }
 
+            if (!await IsSafeSourceAsync(uri, ct))
+            {
+                return null;
+            }
+
             await _gate.WaitAsync(ct);
             try
             {
@@ -248,12 +256,26 @@ namespace Jularr.Integrations.Logic.Browser
                 return null;
             }
 
+            var safe = new List<Uri>();
+            foreach (var address in addresses)
+            {
+                if (await IsSafeSourceAsync(address, ct))
+                {
+                    safe.Add(address);
+                }
+            }
+
+            if (safe.Count == 0)
+            {
+                return null;
+            }
+
             await _gate.WaitAsync(ct);
             var opened = new List<OpenPage>();
             try
             {
                 await StartBrowserAsync(ct);
-                foreach (var address in addresses)
+                foreach (var address in safe)
                 {
                     var page = await OpenPageAsync(address, ct);
                     if (page is not null)
@@ -338,6 +360,11 @@ namespace Jularr.Integrations.Logic.Browser
                 throw new SourceBrowserException("No browser is configured.");
             }
 
+            if (!await IsSafeSourceAsync(file, ct))
+            {
+                throw new SourceBrowserException("The browser cannot visit a private or insecure source.");
+            }
+
             await _gate.WaitAsync(ct);
             try
             {
@@ -364,6 +391,30 @@ namespace Jularr.Integrations.Logic.Browser
             finally
             {
                 _gate.Release();
+            }
+        }
+
+        private async Task<bool> IsSafeSourceAsync(Uri uri, CancellationToken ct)
+        {
+            if (_options.AllowPrivateAddressesForTests)
+            {
+                return true;
+            }
+
+            try
+            {
+                await PublicNetwork.EnsurePublicHttpsAsync(uri, ct);
+                return true;
+            }
+            catch (HttpRequestException)
+            {
+                Note("refused", "the source is not a public HTTPS address");
+                return false;
+            }
+            catch (SocketException)
+            {
+                Note("refused", "the source address could not be resolved");
+                return false;
             }
         }
 

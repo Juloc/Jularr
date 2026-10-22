@@ -143,6 +143,31 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_MirrorSearchNeverMovesMemberKeyToAnotherHost()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { MirrorOnlyPk = true };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas-archive.gl", FakeSources.MemberKey, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host);
+
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidate = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(item => item.ConnectionName == "Anna");
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas-archive.pk/search?", StringComparison.Ordinal)));
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas-archive.gl/dyn/api/fast_download.json", StringComparison.Ordinal)
+                && request.Contains(FakeSources.MemberKey)));
+            Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("annas-archive.pk/dyn/api/fast_download.json", StringComparison.Ordinal)));
+            Assert.IsTrue(Directory.EnumerateFiles(storage.Path, "*.epub", SearchOption.AllDirectories).Any());
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_WithoutKeyWaitsBetweenJobsAndImports()
         {
             using var storage = new TemporaryDirectory();
@@ -356,6 +381,41 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow("https://annas-archive.gl/", "https://annas-archive.pk/md5/0123456789abcdef0123456789abcdef", true)]
+        [DataRow("https://annas-archive.gl/", "https://not-anna.example/md5/0123456789abcdef0123456789abcdef", false)]
+        [DataRow("https://annas.example.test/", "https://annas.example.test/md5/0123456789abcdef0123456789abcdef", true)]
+        [DataRow("https://annas.example.test/", "https://annas-archive.gl/md5/0123456789abcdef0123456789abcdef", false)]
+        [DataRow("https://annas.example.test/", "http://annas.example.test/md5/0123456789abcdef0123456789abcdef", false)]
+        [DataRow("https://annas.example.test/", "https://annas.example.test:9443/md5/0123456789abcdef0123456789abcdef", false)]
+        public void AnnasArchive_KeyedDownloadsAcceptOnlyConfiguredOrKnownMirrorOrigins(string configured, string candidate, bool trusted) =>
+            Assert.AreEqual(trusted, AnnasArchiveClient.IsTrustedSource(new Uri(configured), new Uri(candidate)));
+
+        [TestMethod]
+        public async Task DirectDownload_OversizedHtmlIsRejectedBeforeReading()
+        {
+            var sources = new FakeSources { OversizedSearch = true };
+            using var http = new HttpClient(sources);
+            var failure = await Assert.ThrowsExactlyAsync<DirectDownloadException>(() => DirectDownload.ReadPageAsync(http,
+                new Uri("https://annas.example.test/search?q=book"), new NoSourceGateResolver(), NoBrowser(), CancellationToken.None));
+            Assert.AreEqual(DirectDownloadFailure.TooLarge, failure.Failure);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_CaptchaWordInBookTitleIsNotAChallenge()
+        {
+            var sources = new FakeSources();
+            sources.SearchPages["captcha"] = """
+                <html><body><a href="/md5/0123456789abcdef0123456789abcdef">
+                <h3>Solving the Captcha Mystery</h3><div class="italic">Example Author</div>
+                <div>English [en], .epub, 1MB</div></a></body></html>
+                """;
+            using var http = new HttpClient(sources);
+            var client = new AnnasArchiveClient(http, new NoSourceGateResolver(), NoBrowser());
+            var results = await client.SearchAsync(new Uri("https://annas.example.test/"), "captcha", CancellationToken.None);
+            Assert.AreEqual("Solving the Captcha Mystery", results.Single().Title);
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_FileThatIsOnlyAPartIsMarked()
         {
             // A file that names a part of a work is only that part.
@@ -523,6 +583,25 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 wrong.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None));
             Assert.IsFalse(new DirectCredentials(new Uri("https://opds.example.test/opds"), "Basic x").Covers(new Uri("https://cdn.example.test/file")));
+        }
+
+        [TestMethod]
+        [DataRow("https://127.0.0.1/book", false)]
+        [DataRow("https://[::1]/book", false)]
+        [DataRow("https://192.168.1.3/book", false)]
+        [DataRow("http://93.184.216.34/book", false)]
+        [DataRow("https://93.184.216.34/book", true)]
+        public async Task PublicNetwork_BrowserTargetsAreHttpsAndPublic(string address, bool allowed)
+        {
+            var action = () => PublicNetwork.EnsurePublicHttpsAsync(new Uri(address), CancellationToken.None);
+            if (allowed)
+            {
+                await action();
+            }
+            else
+            {
+                await Assert.ThrowsExactlyAsync<HttpRequestException>(action);
+            }
         }
 
         [TestMethod]
@@ -704,6 +783,7 @@ namespace Jularr.Backend.Tests
 
             public bool Challenge { get; set; }
             public bool HtmlGate { get; set; }
+            public bool OversizedSearch { get; set; }
             public bool MirrorOnlyPk { get; set; }
             public bool SlowGate { get; set; }
             public bool SlowWithoutFile { get; set; }
@@ -780,6 +860,11 @@ namespace Jularr.Backend.Tests
                     gate.Headers.Add("cf-mitigated", "challenge");
                     gate.Headers.Add("X-Challenge-Token", ChallengeToken);
                     return gate;
+                }
+
+                if (OversizedSearch && uri.AbsolutePath == "/search")
+                {
+                    return Text(new string('A', 4 * 1024 * 1024 + 1), "text/html");
                 }
 
                 if (HtmlGate && uri.AbsolutePath == "/search")
