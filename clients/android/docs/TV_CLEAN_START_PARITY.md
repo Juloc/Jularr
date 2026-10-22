@@ -81,3 +81,41 @@ Do not replace the original TV screens or add a backend endpoint without owner d
 4. D-pad focus and Back behavior on original screens; no hidden/discarded feature.
 5. Confirm user decisions on missing learning/companion/storage/image subtitles.
 6. No unreviewed backend or Phone code changes, no invented Work/WorkUnit/Asset identity.
+
+
+## PR #1493 integration (current TV branch)
+
+All 10 self-contained files from PR #1493 are copied into the TV integration by
+their original Git blob IDs. **No merge or rebase** of the parallel PR was done.
+
+- `GET /api/v1/playback/assets/{mediaAssetId}`: the original Media3 player's
+  previous/next controls now use the *actual server-supplied neighbouring asset
+  IDs*. Each neighbour's metadata is separately verified; missing neighbours
+  are hidden. The active session is ended before starting another. The original
+  `workId` on navigation is updated from the server's asset record; no
+  `WorkUnitId` is fabricated from a MediaAssetId or decimal episode number.
+- Autoplay-next respects the profile's actual `autoplayNext` setting and only
+  advances when a verified next asset exists. The server still decides the new
+  stream format and resume position.
+- `GET /api/v1/statistics?days=N`: an optional, explicitly labelled **aggregate
+  statistics** panel is reachable from the original TV Settings when the
+  `Statistics` module and `profile.media.read` permission are present.
+  It shows actual watched time, sessions, completed counts, and top Works.
+  It is **not** labelled or presented as the old chronological Activity timeline.
+- Playback `storage_waking` and `storage_unavailable` failures are shown as
+  actionable messages and permit explicit retry. The client does **not** call the
+  admin-only NAS wake/check APIs. Transient progress-update failure does not
+  forcibly replace the playing stream with an error screen; final saving remains
+  attempted, with an explicit exit without a success claim if the connection
+  cannot be restored.
+- The source PR #1493 backend gap audit remains authoritative:
+  `clients/android/core-api/docs/TV_LEGACY_FEATURES_V1_GAPS.md`.
+
+**Still unimplemented:** old companion session/control/phone handoff,
+word-level video learning cues, regular-profile manual NAS wake, offline video
+manifest/sync, and chronological per-playback history. The APIs required for
+these functions are not present in the reviewed V1 user services; no old
+`/api/client/v1` fallback is permitted. User decisions are needed before
+planning any new backend contracts.
+
+The latest Android CI and live hardware tests remain separate quality gates.
